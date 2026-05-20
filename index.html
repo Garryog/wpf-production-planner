@@ -242,6 +242,7 @@ function renderBoard(app){
     </select>
     <button class="btn btn-s" id="btn-clf">Clear filters</button>
     <span style="margin-left:auto;font-size:12px;color:var(--t2)">${orders.length} shown · ${DB.orders.filter(o=>o.plannedWeek).length} scheduled · ${unschCnt} unscheduled</span>
+    <button class="btn btn-s" id="btn-clearall" style="border-color:var(--red);color:var(--red)">Clear All Orders</button>
   </div>
 
   <div class="wo-table-wrap">
@@ -277,7 +278,8 @@ function renderBoard(app){
           <td><input class="notes-inp" data-ni="${o.wo}" value="${(o.notes||'').replace(/"/g,'&quot;')}" placeholder="Note…"></td>
           <td><div style="display:flex;gap:3px;align-items:center">
             ${['red','amber','green','blue','purple'].map(c=>`<span class="cdot" style="background:var(--${c})" data-dc="${o.wo}" data-cv="${c}"></span>`).join('')}
-            <span class="cdot" style="background:#e5e8ed;font-size:10px;line-height:13px;text-align:center;color:var(--t3)" data-dc="${o.wo}" data-cv="" title="Clear">×</span>
+            <span class="cdot" style="background:#e5e8ed;font-size:10px;line-height:13px;text-align:center;color:var(--t3)" data-dc="${o.wo}" data-cv="" title="Clear colour">×</span>
+            <button style="background:none;border:none;color:var(--t3);font-size:14px;padding:0 2px;cursor:pointer;line-height:1;margin-left:4px" data-del="${o.wo}" title="Delete order">🗑</button>
           </div></td>
         </tr>`).join('')}
       </tbody>
@@ -296,10 +298,23 @@ function renderBoard(app){
   const fw=document.getElementById('fwk');if(fw)fw.onchange=function(){fWeek=this.value;render();};
   const fc=document.getElementById('fcust');if(fc)fc.onchange=function(){fCust=this.value;render();};
   const cf=document.getElementById('btn-clf');if(cf)cf.onclick=()=>{fWeek='';fCust='';srch='';render();};
+  const ca=document.getElementById('btn-clearall');
+  if(ca)ca.onclick=()=>{
+    if(!confirm('Delete ALL '+DB.orders.length+' orders from the planner? This cannot be undone.'))return;
+    DB.orders=[];
+    Object.keys(orig).forEach(k=>delete orig[k]);
+    sched();render();toast('All orders cleared');
+  };
   document.querySelectorAll('[data-s]').forEach(th=>th.onclick=()=>{const s=th.dataset.s;if(sortCol===s)sortDir*=-1;else{sortCol=s;sortDir=1;}render();});
   document.querySelectorAll('[data-wsel]').forEach(sel=>sel.onchange=function(){const o=DB.orders.find(x=>x.wo===this.dataset.wsel);if(o){o.plannedWeek=this.value;sched();render();}});
   document.querySelectorAll('[data-ni]').forEach(inp=>inp.oninput=function(){const o=DB.orders.find(x=>x.wo===this.dataset.ni);if(o){o.notes=this.value;sched();}});
   document.querySelectorAll('[data-dc]').forEach(dot=>dot.onclick=()=>{const o=DB.orders.find(x=>x.wo===dot.dataset.dc);if(o){o.colour=dot.dataset.cv;sched();render();}});
+  document.querySelectorAll('[data-del]').forEach(btn=>btn.onclick=()=>{
+    if(!confirm('Delete '+btn.dataset.del+' from the planner?'))return;
+    DB.orders=DB.orders.filter(o=>o.wo!==btn.dataset.del);
+    delete orig[btn.dataset.del];
+    sched();render();toast('Order removed');
+  });
   // Drag & drop to swap weeks
   const tbody=document.getElementById('tbody');
   if(tbody){
@@ -396,6 +411,7 @@ function doImport(file){
       let dueDate='';
       const rd=row['Due Date'];
       if(rd){try{dueDate=typeof rd==='number'?new Date(Math.round((rd-25569)*86400*1000)).toISOString().split('T')[0]:new Date(rd).toISOString().split('T')[0];}catch(ex){}}
+      // Skip if WO already exists (prevent duplicates)
       const ex=DB.orders.find(o=>o.wo===wo);
       if(ex){
         if(ex.hours!==hours||ex.dueDate!==dueDate){
