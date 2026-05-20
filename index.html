@@ -152,14 +152,20 @@ function wkNum(d){const s=new Date(new Date(d).getFullYear(),0,1);return Math.ce
 function wkLbl(k){if(!k)return'—';const d=new Date(k);return'Wk '+wkNum(d)+' · '+d.toLocaleDateString('en-IE',{day:'numeric',month:'short'});}
 function get8Wks(){const w=[];let d=getMonday(new Date());for(let i=0;i<8;i++){w.push(wkKey(d));d=new Date(d);d.setDate(d.getDate()+7);}return w;}
 function wkHrs(k){return DB.orders.filter(o=>o.plannedWeek===k).reduce((a,o)=>a+o.hours,0);}
+function wkVal(k){return DB.orders.filter(o=>o.plannedWeek===k).reduce((a,o)=>a+(o.value||0),0);}
 function wkCnt(k){return DB.orders.filter(o=>o.plannedWeek===k).length;}
-function dueBadge(due,pw){
+const VCAP=250000;
+function fmtVal(v){return'€'+Math.round(v/1000)+'k';}
+function dueBadge(due,pw,origDue){
   if(!due)return'<span class="due-badge due-ok">—</span>';
   const d=new Date(due),now=new Date(),diff=(d-now)/86400000;
-  if(pw){const pe=new Date(pw);pe.setDate(pe.getDate()+4);if(pe>d)return`<span class="due-badge due-late">LATE</span>`;}
-  if(diff<0)return`<span class="due-badge due-late">OVERDUE</span>`;
-  if(diff<14)return`<span class="due-badge due-soon">${fmt(due)}</span>`;
-  return`<span class="due-badge due-ok">${fmt(due)}</span>`;
+  const wk='Wk'+wkNum(d);
+  const origStr=origDue&&origDue!==due?` <span style="font-size:10px;color:var(--t3)">(orig: ${fmt(origDue)} Wk${wkNum(new Date(origDue))})</span>`:'';
+  const label=`${fmt(due)} ${wk}`;
+  if(pw){const pe=new Date(pw);pe.setDate(pe.getDate()+4);if(pe>d)return`<span class="due-badge due-late">${label}</span>${origStr}`;}
+  if(diff<0)return`<span class="due-badge due-late">OVERDUE ${label}</span>${origStr}`;
+  if(diff<14)return`<span class="due-badge due-soon">${label}</span>${origStr}`;
+  return`<span class="due-badge due-ok">${label}</span>${origStr}`;
 }
 function changes(){return DB.orders.filter(o=>orig[o.wo]!==undefined&&orig[o.wo]!==(o.plannedWeek||''));}
 
@@ -198,19 +204,26 @@ function renderBoard(app){
     <div class="cap-title">8-Week Assembly Capacity — ${WCAP}h per week</div>
     <div class="week-caps">
       ${weeks.map(wk=>{
-        const h=wkHrs(wk),cnt=wkCnt(wk),pct=Math.min(100,Math.round(h/WCAP*100));
+        const h=wkHrs(wk),cnt=wkCnt(wk),v=wkVal(wk);
+        const pct=Math.min(100,Math.round(h/WCAP*100));
+        const vpct=Math.min(100,Math.round(v/VCAP*100));
         const cls=pct>=100?'over':pct>=80?'warn':'ok';
+        const vcls=vpct>=100?'over':vpct>=80?'warn':'ok';
         return`<div class="wk-cap${fWeek===wk?' selected':''}" data-wk="${wk}">
           <div class="wk-label">${wkLbl(wk)}</div>
+          <div style="font-size:9px;color:var(--t3);margin-bottom:2px">HOURS</div>
           <div class="wk-bar-wrap"><div class="wk-bar ${cls}" style="width:${pct}%"></div></div>
           <div class="wk-hours ${cls}">${h}h / ${WCAP}h</div>
+          <div style="font-size:9px;color:var(--t3);margin:4px 0 2px">VALUE</div>
+          <div class="wk-bar-wrap"><div class="wk-bar ${vcls}" style="width:${vpct}%"></div></div>
+          <div class="wk-hours ${vcls}">${fmtVal(v)} / €250k</div>
           <div class="wk-count">${cnt} order${cnt!==1?'s':''}</div>
         </div>`;
       }).join('')}
       <div class="wk-cap${fWeek==='unscheduled'?' selected':''}" data-wk="unscheduled">
         <div class="wk-label" style="color:var(--amber)">Unscheduled</div>
         <div class="wk-bar-wrap"><div class="wk-bar warn" style="width:100%"></div></div>
-        <div class="wk-hours warn">${unschHrs}h</div>
+        <div class="wk-hours warn">${unschHrs}h · ${fmtVal(DB.orders.filter(o=>!o.plannedWeek).reduce((a,o)=>a+(o.value||0),0))}</div>
         <div class="wk-count">${unschCnt} order${unschCnt!==1?'s':''}</div>
       </div>
     </div>
@@ -240,6 +253,7 @@ function renderBoard(app){
         <th data-s="customer" class="${sortCol==='customer'?sortDir>0?'asc':'desc':''}">Customer</th>
         <th data-s="hours" class="${sortCol==='hours'?sortDir>0?'asc':'desc':''}" style="text-align:right">Hrs</th>
         <th data-s="dueDate" class="${sortCol==='dueDate'?sortDir>0?'asc':'desc':''}">Due Date</th>
+        <th data-s="value" class="${sortCol==='value'?sortDir>0?'asc':'desc':''}" style="text-align:right">Value</th>
         <th data-s="step">Step</th>
         <th data-s="plannedWeek">Planned Week</th>
         <th>Notes</th>
@@ -253,7 +267,8 @@ function renderBoard(app){
           <td><span class="wo-title" title="${o.title}">${o.title}</span></td>
           <td><span class="wo-cust" title="${o.customer}">${o.customer}</span></td>
           <td style="text-align:right;font-weight:600">${o.hours}h</td>
-          <td>${dueBadge(o.dueDate,o.plannedWeek)}</td>
+          <td>${dueBadge(o.dueDate,o.plannedWeek,o.origDueDate)}</td>
+          <td style="text-align:right;font-size:12px;color:var(--t2)">€${Math.round(o.value||0).toLocaleString()}</td>
           <td><span class="step-badge">${o.step.replace(/^\d\.\s*/,'')}</span></td>
           <td><select class="week-sel" data-wsel="${o.wo}">
             <option value="">— Unscheduled —</option>
@@ -384,11 +399,12 @@ function doImport(file){
       const ex=DB.orders.find(o=>o.wo===wo);
       if(ex){
         if(ex.hours!==hours||ex.dueDate!==dueDate){
+          if(!ex.origDueDate)ex.origDueDate=ex.dueDate;
           ex.hours=hours;ex.dueDate=dueDate;ex.step=String(row['Step']||ex.step);
           updated++;prev.push({wo,status:'updated',title:ex.title,hours,dueDate,pw:ex.plannedWeek});
         } else skipped++;
       } else {
-        const newO={wo,ref:String(row['Reference']||''),title:String(row['Title']||wo),customer:String(row['Customer']||''),hours,dueDate,step:String(row['Step']||''),salesRep:String(row['Sales Rep']||''),orderNo:String(row['Order #']||''),value:parseFloat(row['Sub-total']||0),plannedWeek:'',notes:'',colour:''};
+        const newO={wo,ref:String(row['Reference']||''),title:String(row['Title']||wo),customer:String(row['Customer']||''),hours,dueDate,origDueDate:dueDate,step:String(row['Step']||''),salesRep:String(row['Sales Rep']||''),orderNo:String(row['Order #']||''),value:parseFloat(row['Sub-total']||0),plannedWeek:'',notes:'',colour:''};
         newOrders.push(newO);
         if(orig[wo]===undefined)orig[wo]='';
         added++;
@@ -399,6 +415,7 @@ function doImport(file){
     autoSchedule(newOrders);
     newOrders.forEach(o=>{
       DB.orders.push(o);
+      orig[o.wo]=o.plannedWeek||''; // set baseline AFTER auto-schedule so auto-assignments don't show as changes
       prev.push({wo:o.wo,status:'new',title:o.title,hours:o.hours,dueDate:o.dueDate,pw:o.plannedWeek});
     });
 
@@ -433,14 +450,16 @@ function renderExport(app){
     ${!chg.length?`<div class="empty">No changes yet. Go to the Capacity Board and assign or move work orders between weeks.</div>`:`
     <div class="wo-table-wrap" style="margin-bottom:14px">
       <table class="wo-table">
-        <thead><tr><th>WO #</th><th>Title</th><th>Customer</th><th style="text-align:right">Hrs</th><th>Was</th><th>Now</th><th>Due</th><th>Notes</th></tr></thead>
+        <thead><tr><th>WO #</th><th>Title</th><th>Customer</th><th style="text-align:right">Hrs</th><th style="text-align:right">Value</th><th>Was</th><th>Now</th><th>Orig Due</th><th>New Due</th><th>Notes</th></tr></thead>
         <tbody>${chg.map(o=>`<tr>
           <td><span class="wo-num">${o.wo}</span></td>
           <td>${o.title}</td><td style="color:var(--t2)">${o.customer}</td>
           <td style="text-align:right;font-weight:600">${o.hours}h</td>
+          <td style="text-align:right;font-size:12px">€${Math.round(o.value||0).toLocaleString()}</td>
           <td style="color:var(--t3)">${wkLbl(orig[o.wo])||'Unscheduled'}</td>
           <td style="font-weight:600;color:var(--blue)">${wkLbl(o.plannedWeek)||'Unscheduled'}</td>
-          <td>${fmt(o.dueDate)}</td>
+          <td style="font-size:12px;color:var(--t3)">${o.origDueDate&&o.origDueDate!==o.dueDate?fmt(o.origDueDate)+' Wk'+wkNum(new Date(o.origDueDate)):fmt(o.dueDate)+' Wk'+wkNum(new Date(o.dueDate))}</td>
+          <td style="font-size:12px">${fmt(o.dueDate)} Wk${wkNum(new Date(o.dueDate))}</td>
           <td style="color:var(--t3);font-size:12px">${o.notes||'—'}</td>
         </tr>`).join('')}</tbody>
       </table>
