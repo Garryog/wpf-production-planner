@@ -471,39 +471,32 @@ function renderImport(app){
 }
 
 function autoSchedule(newOrders){
-  // Build current week loads from already-scheduled existing orders
+  const weeks=get8Wks();
+  const currentWeek=weeks[0];
   const wkLoad={};
   DB.orders.forEach(o=>{if(o.plannedWeek)wkLoad[o.plannedWeek]=(wkLoad[o.plannedWeek]||0)+o.hours;});
-  // Add new orders too (in case multiple imported at once)
   newOrders.forEach(o=>{if(o.plannedWeek)wkLoad[o.plannedWeek]=(wkLoad[o.plannedWeek]||0)+o.hours;});
-
-  // Sort new orders by due date ascending (most urgent first)
   newOrders.sort((a,b)=>(a.dueDate||'9999').localeCompare(b.dueDate||'9999'));
-
   newOrders.forEach(o=>{
-    if(o.plannedWeek)return; // already scheduled — keep it
-    const weeks=get8Wks();
-    let due=o.dueDate?new Date(o.dueDate+'T12:00:00Z'):null; // noon UTC avoids timezone day boundary issues
-
-    // Find eligible weeks (week starts on or before due date)
-    let eligible=due?weeks.filter(w=>new Date(w+'T12:00:00Z')<=due):weeks;
-    if(!eligible.length)eligible=[weeks[0]];
-
-    // Try latest eligible week first (latest possible = best for capacity spread)
+    if(o.plannedWeek)return;
     let assigned=null;
-    for(let i=eligible.length-1;i>=0;i--){
-      const w=eligible[i];
-      if((wkLoad[w]||0)+o.hours<=wkCap(w)){assigned=w;break;}
-    }
-    // If all eligible full, try any week
-    if(!assigned){
-      for(const w of weeks){
-        if((wkLoad[w]||0)+o.hours<=wkCap(w)){assigned=w;break;}
+    if(!o.dueDate){
+      assigned=currentWeek;
+    } else {
+      const due=o.dueDate;
+      if(due<currentWeek){
+        // Overdue — put in current week
+        assigned=currentWeek;
+      } else {
+        // Match to the exact week the due date falls in
+        for(let i=0;i<weeks.length;i++){
+          const wkStart=weeks[i];
+          const wkEnd=i<weeks.length-1?weeks[i+1]:null;
+          if(due>=wkStart&&(!wkEnd||due<wkEnd)){assigned=wkStart;break;}
+        }
+        if(!assigned)assigned=weeks[weeks.length-1];
       }
     }
-    // If still nothing (all weeks over capacity), put in due week
-    if(!assigned)assigned=eligible[eligible.length-1];
-
     o.plannedWeek=assigned;
     wkLoad[assigned]=(wkLoad[assigned]||0)+o.hours;
   });
@@ -523,8 +516,15 @@ function doImport(file){
       const wo=String(row['# WO']||'').trim();if(!wo||wo==='NaT'||wo==='nan'||wo==='undefined')return;
       const rawHours=parseFloat(row['Hours assembly time ']||row['To process']||row['Hours']||0);
       const rowVal=parseFloat(row['Sub-total']||0);
-      const hours=rawHours>0?rawHours:estimateHours(rowVal);
-      const hoursEstimated=rawHours===0;
+      // Hours rules: WO-S, WO-BI, WO-PF prefixes and zero value all get 1h
+      let hours, hoursEstimated;
+      if(wo.startsWith('WO-S-')||wo.startsWith('WO-BI-')||wo.startsWith('WO-PF-')||rowVal===0){
+        hours=1; hoursEstimated=false;
+      } else if(rawHours>0){
+        hours=rawHours; hoursEstimated=false;
+      } else {
+        hours=estimateHours(rowVal); hoursEstimated=true;
+      }
       let dueDate='';
       const rd=row['Due Date'];
       if(rd){try{
