@@ -119,7 +119,7 @@ const SUPA_HDR={'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Ty
 const SUPA_WHDR={'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=minimal'};
 const WCAP=350;
 
-let DB={orders:[],nid:1};
+let DB={orders:[],nid:1,weekCaps:{}};
 // Default value-to-hours scale (editable in Settings tab)
 let HOUR_SCALE=[
   {maxVal:5000,  hours:7},
@@ -151,6 +151,7 @@ async function loadDB(){
     if(d&&d[0]){
       if(d[0].orders)DB.orders=d[0].orders;
       if(d[0].nid)DB.nid=d[0].nid;
+      if(d[0].settings&&d[0].settings.weekCaps)DB.weekCaps=d[0].settings.weekCaps||{};
     }
     DB.orders.forEach(o=>{orig[o.wo]=o.plannedWeek||'';});
   }catch(e){setSS('e');}
@@ -159,7 +160,7 @@ async function loadDB(){
 async function saveDB(){
   setSS('s');
   try{
-    await fetch(SUPA_URL+'/production_planner?id=eq.main',{method:'PATCH',headers:SUPA_WHDR,body:JSON.stringify({orders:DB.orders,nid:DB.nid})});
+    await fetch(SUPA_URL+'/production_planner?id=eq.main',{method:'PATCH',headers:SUPA_WHDR,body:JSON.stringify({orders:DB.orders,nid:DB.nid,settings:{weekCaps:DB.weekCaps||{}}})});
     setSS('ok');
   }catch(e){setSS('e');}
 }
@@ -172,6 +173,7 @@ function wkKey(d){return getMonday(d).toISOString().split('T')[0];}
 function wkNum(d){const s=new Date(new Date(d).getFullYear(),0,1);return Math.ceil(((new Date(d)-s)/86400000+s.getDay()+1)/7);}
 function wkLbl(k){if(!k)return'—';const d=new Date(k);return'Wk '+wkNum(d)+' · '+d.toLocaleDateString('en-IE',{day:'numeric',month:'short'});}
 function get8Wks(){const w=[];let d=getMonday(new Date());for(let i=0;i<8;i++){w.push(wkKey(d));d=new Date(d);d.setDate(d.getDate()+7);}return w;}
+function wkCap(k){return DB.weekCaps&&DB.weekCaps[k]?DB.weekCaps[k]:WCAP;}
 function wkHrs(k){return DB.orders.filter(o=>o.plannedWeek===k).reduce((a,o)=>a+o.hours,0);}
 function wkVal(k){return DB.orders.filter(o=>o.plannedWeek===k).reduce((a,o)=>a+(o.value||0),0);}
 function wkCnt(k){return DB.orders.filter(o=>o.plannedWeek===k).length;}
@@ -286,8 +288,8 @@ function renderBoard(app){
     <div class="cap-title">8-Week Assembly Capacity — ${WCAP}h per week</div>
     <div class="week-caps">
       ${weeks.map(wk=>{
-        const h=wkHrs(wk),cnt=wkCnt(wk),v=wkVal(wk);
-        const pct=Math.min(100,Math.round(h/WCAP*100));
+        const h=wkHrs(wk),cnt=wkCnt(wk),v=wkVal(wk),cap=wkCap(wk);
+        const pct=Math.min(100,Math.round(h/cap*100));
         const vpct=Math.min(100,Math.round(v/VCAP*100));
         const cls=pct>=100?'over':pct>=80?'warn':'ok';
         const vcls=vpct>=100?'over':vpct>=80?'warn':'ok';
@@ -295,11 +297,12 @@ function renderBoard(app){
           <div class="wk-label">${wkLbl(wk)}</div>
           <div style="font-size:9px;color:var(--t3);margin-bottom:2px">HOURS</div>
           <div class="wk-bar-wrap"><div class="wk-bar ${cls}" style="width:${pct}%"></div></div>
-          <div class="wk-hours ${cls}">${h}h / ${WCAP}h</div>
+          <div class="wk-hours ${cls}">${h}h / ${cap}h${cap!==WCAP?'<span style="font-size:9px;color:var(--amber)"> ✎</span>':''}</div>
           <div style="font-size:9px;color:var(--t3);margin:4px 0 2px">VALUE</div>
           <div class="wk-bar-wrap"><div class="wk-bar ${vcls}" style="width:${vpct}%"></div></div>
           <div class="wk-hours ${vcls}">${fmtVal(v)} / €250k</div>
           <div class="wk-count">${cnt} order${cnt!==1?'s':''}</div>
+          <input type="number" class="wk-cap-inp" data-wk-c="${wk}" value="${cap}" min="1" step="10" title="Set capacity for this week" style="width:52px;font-size:10px;padding:2px 4px;border:1px solid var(--b2);border-radius:3px;text-align:center;margin-top:4px;background:${cap!==WCAP?'#fffbeb':'#fff'}">
         </div>`;
       }).join('')}
       <div class="wk-cap${fWeek==='unscheduled'?' selected':''}" data-wk="unscheduled">
@@ -376,6 +379,17 @@ function renderBoard(app){
 
   // Bind events
   document.querySelectorAll('[data-wk]').forEach(el=>el.onclick=()=>{fWeek=fWeek===el.dataset.wk?'':el.dataset.wk;render();});
+  document.querySelectorAll('.wk-cap-inp').forEach(inp=>{
+    inp.onclick=e=>e.stopPropagation(); // prevent week filter toggle
+    inp.onchange=function(){
+      const wk=this.dataset.wkC;
+      const v=parseInt(this.value)||WCAP;
+      if(!DB.weekCaps)DB.weekCaps={};
+      if(v===WCAP)delete DB.weekCaps[wk]; // reset to default
+      else DB.weekCaps[wk]=v;
+      sched();render();
+    };
+  });
   const si=document.getElementById('srch');if(si)si.oninput=function(){srch=this.value;render();};
   const fw=document.getElementById('fwk');if(fw)fw.onchange=function(){fWeek=this.value;render();};
   const fc=document.getElementById('fcust');if(fc)fc.onchange=function(){fCust=this.value;render();};
@@ -465,12 +479,12 @@ function autoSchedule(newOrders){
     let assigned=null;
     for(let i=eligible.length-1;i>=0;i--){
       const w=eligible[i];
-      if((wkLoad[w]||0)+o.hours<=WCAP){assigned=w;break;}
+      if((wkLoad[w]||0)+o.hours<=wkCap(w)){assigned=w;break;}
     }
     // If all eligible full, try any week
     if(!assigned){
       for(const w of weeks){
-        if((wkLoad[w]||0)+o.hours<=WCAP){assigned=w;break;}
+        if((wkLoad[w]||0)+o.hours<=wkCap(w)){assigned=w;break;}
       }
     }
     // If still nothing (all weeks over capacity), put in due week
