@@ -298,9 +298,11 @@ function renderBoard(app){
           <div style="font-size:9px;color:var(--t3);margin-bottom:2px">HOURS</div>
           <div class="wk-bar-wrap"><div class="wk-bar ${cls}" style="width:${pct}%"></div></div>
           <div class="wk-hours ${cls}">${h}h / ${cap}h${cap!==WCAP?'<span style="font-size:9px;color:var(--amber)"> ✎</span>':''}</div>
+          ${h>cap?'<div style="font-size:11px;font-weight:700;color:var(--red);background:var(--rl);border-radius:3px;padding:1px 5px;margin-top:2px">+' + (h-cap) + 'h OVER</div>':''}
           <div style="font-size:9px;color:var(--t3);margin:4px 0 2px">VALUE</div>
           <div class="wk-bar-wrap"><div class="wk-bar ${vcls}" style="width:${vpct}%"></div></div>
-          <div class="wk-hours ${vcls}">${fmtVal(v)} / €250k</div>
+          <div class="wk-hours ${vcls}">${fmtVal(v)} / ${fmtVal(VCAP)}</div>
+          ${v>VCAP?'<div style="font-size:11px;font-weight:700;color:var(--red);background:var(--rl);border-radius:3px;padding:1px 5px;margin-top:2px">+' + fmtVal(v-VCAP) + ' OVER</div>':''}
           <div class="wk-count">${cnt} order${cnt!==1?'s':''}</div>
           <input type="number" class="wk-cap-inp" data-wk-c="${wk}" value="${cap}" min="1" step="10" title="Set capacity for this week" style="width:52px;font-size:10px;padding:2px 4px;border:1px solid var(--b2);border-radius:3px;text-align:center;margin-top:4px;background:${cap!==WCAP?'#fffbeb':'#fff'}">
         </div>`;
@@ -373,6 +375,9 @@ function renderBoard(app){
       <span>Shown: <strong>${orders.reduce((a,o)=>a+o.hours,0)}h</strong></span>
       <span>Total orders: <strong>${DB.orders.length}</strong></span>
       <span>Total hours: <strong>${DB.orders.reduce((a,o)=>a+o.hours,0)}h</strong></span>
+      <span>Total value: <strong>${fmtVal(DB.orders.reduce((a,o)=>a+(o.value||0),0))}</strong></span>
+      ${(()=>{const weeks=get8Wks();const overH=weeks.filter(w=>wkHrs(w)>wkCap(w));const overV=weeks.filter(w=>wkVal(w)>VCAP);return overH.length>0?'<span style="color:var(--red);font-weight:600">⚠ '+overH.length+' week'+(overH.length!==1?'s':'')+' over hours capacity</span>':'';})()} 
+      ${(()=>{const weeks=get8Wks();const overV=weeks.filter(w=>wkVal(w)>VCAP);return overV.length>0?'<span style="color:var(--red);font-weight:600">⚠ '+overV.length+' week'+(overV.length!==1?'s':'')+' over value capacity</span>':'';})()} 
     </div>
   </div>
   </div>`;
