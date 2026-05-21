@@ -520,8 +520,8 @@ function doImport(file){
     const newOrders=[];
 
     rows.forEach(row=>{
-      const wo=String(row['# WO']||'').trim();if(!wo)return;
-      const rawHours=parseFloat(row['Hours assembly time ']||row['Hours']||0);
+      const wo=String(row['# WO']||'').trim();if(!wo||wo==='NaT'||wo==='nan'||wo==='undefined')return;
+      const rawHours=parseFloat(row['Hours assembly time ']||row['To process']||row['Hours']||0);
       const rowVal=parseFloat(row['Sub-total']||0);
       const hours=rawHours>0?rawHours:estimateHours(rowVal);
       const hoursEstimated=rawHours===0;
@@ -529,14 +529,19 @@ function doImport(file){
       const rd=row['Due Date'];
       if(rd){try{
         if(typeof rd==='number'){
-          // Excel serial date — convert directly to YYYY-MM-DD without timezone offset
+          // Excel serial date
           const d=new Date(Math.round((rd-25569)*86400*1000));
           dueDate=d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0')+'-'+String(d.getUTCDate()).padStart(2,'0');
         } else if(rd instanceof Date){
-          // XLSX gave us a Date object — use UTC date parts to avoid timezone shift
+          // XLSX Date object — use UTC to avoid timezone shift
           dueDate=rd.getUTCFullYear()+'-'+String(rd.getUTCMonth()+1).padStart(2,'0')+'-'+String(rd.getUTCDate()).padStart(2,'0');
+        } else if(typeof rd==='string'&&rd.match(/^\d{4}-\d{2}-\d{2}/)){
+          // Already a YYYY-MM-DD string
+          dueDate=rd.substring(0,10);
         } else {
-          dueDate=new Date(rd).toISOString().split('T')[0];
+          // Try parsing as date using UTC
+          const parsed=new Date(rd);
+          if(!isNaN(parsed))dueDate=parsed.getUTCFullYear()+'-'+String(parsed.getUTCMonth()+1).padStart(2,'0')+'-'+String(parsed.getUTCDate()).padStart(2,'0');
         }
       }catch(ex){}}
       // Skip if WO already exists (prevent duplicates)
@@ -548,7 +553,7 @@ function doImport(file){
           updated++;prev.push({wo,status:'updated',title:ex.title,hours,dueDate,pw:ex.plannedWeek});
         } else skipped++;
       } else {
-        const newO={wo,ref:String(row['Reference']||''),title:String(row['Title']||wo),customer:String(row['Customer']||''),hours,hoursEstimated,dueDate,origDueDate:dueDate,step:String(row['Step']||''),salesRep:String(row['Sales Rep']||''),orderNo:String(row['Order #']||''),value:parseFloat(row['Sub-total']||0),plannedWeek:'',notes:'',colour:''};
+        const newO={wo,ref:String(row['Reference']||''),title:String(row['Title']||row['Reference']||wo),customer:String(row['Customer']||''),hours,hoursEstimated,dueDate,origDueDate:dueDate,step:String(row['Step']||''),salesRep:String(row['Sales Rep']||''),orderNo:String(row['Order #']||''),value:parseFloat(row['Sub-total']||0),plannedWeek:'',notes:'',colour:''};
         newOrders.push(newO);
         if(orig[wo]===undefined)orig[wo]='';
         added++;
