@@ -108,6 +108,7 @@ button,input,select{font-family:inherit;cursor:pointer}
   <button class="tab on" id="t-b">Capacity Board</button>
   <button class="tab" id="t-i">Import Work Orders</button>
   <button class="tab" id="t-x">Export Changes</button>
+  <button class="tab" id="t-s">⚙ Settings</button>
 </div></div>
 <div id="app"><div style="padding:60px;text-align:center"><div class="spin"></div></div></div>
 <div class="toast" id="toast"></div>
@@ -119,6 +120,26 @@ const SUPA_WHDR={'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-T
 const WCAP=350;
 
 let DB={orders:[],nid:1};
+// Default value-to-hours scale (editable in Settings tab)
+let HOUR_SCALE=[
+  {maxVal:5000,  hours:7},
+  {maxVal:6000,  hours:8},
+  {maxVal:7000,  hours:9},
+  {maxVal:8000,  hours:10},
+  {maxVal:9000,  hours:11},
+  {maxVal:10000, hours:12},
+  {maxVal:12000, hours:14},
+  {maxVal:15000, hours:16},
+  {maxVal:20000, hours:20},
+  {maxVal:30000, hours:26},
+  {maxVal:999999,hours:32},
+];
+function estimateHours(value){
+  const v=parseFloat(value)||0;
+  if(v===0)return 1;
+  const tier=HOUR_SCALE.find(t=>v<=t.maxVal);
+  return tier?tier.hours:32;
+}
 let orig={};
 let tab='b',sortCol='dueDate',sortDir=1,fWeek='',fCust='',srch='';
 let saveT=null,dragSrc=null;
@@ -175,7 +196,68 @@ function render(){
   const app=document.getElementById('app');
   if(tab==='b')renderBoard(app);
   else if(tab==='i')renderImport(app);
-  else renderExport(app);
+  else if(tab==='x')renderExport(app);
+  else renderSettings(app);
+}
+
+function renderSettings(app){
+  const scaleRows=HOUR_SCALE.map((tier,i)=>{
+    const prevVal=i===0?'Up to':'&euro;'+HOUR_SCALE[i-1].maxVal.toLocaleString()+' &mdash; ';
+    const maxNote=i===HOUR_SCALE.length-1?' (max)':'';
+    return '<tr>'
+      +'<td style="padding:5px 12px;border-bottom:1px solid var(--border)">'+prevVal
+      +' <input type="number" id="hs-v-'+i+'" value="'+tier.maxVal+'" step="500" min="0" style="width:90px;padding:3px 6px;border:1px solid var(--b2);border-radius:4px;font-size:13px">'+maxNote+'</td>'
+      +'<td style="padding:5px 12px;border-bottom:1px solid var(--border)">'
+      +'<input type="number" id="hs-h-'+i+'" value="'+tier.hours+'" step="0.5" min="1" style="width:70px;padding:3px 6px;border:1px solid var(--b2);border-radius:4px;font-size:13px"> hours</td>'
+      +'</tr>';
+  }).join('');
+
+  app.innerHTML='<div class="pg">'
+    +'<div class="exp-panel">'
+    +'<div style="font-size:14px;font-weight:600;margin-bottom:6px">Value &rarr; Assembly Hours Scale</div>'
+    +'<p style="font-size:12px;color:var(--t3);margin-bottom:14px">When Cienapps hours field is zero, hours are estimated from order value. Edit thresholds and click Save. Applies to next import only.</p>'
+    +'<table style="border-collapse:collapse;font-size:13px;margin-bottom:14px">'
+    +'<thead><tr>'
+    +'<th style="padding:6px 12px;border-bottom:1px solid var(--border);text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--t3)">Order Value Up To</th>'
+    +'<th style="padding:6px 12px;border-bottom:1px solid var(--border);text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--t3)">Assembly Hours</th>'
+    +'</tr></thead><tbody>'+scaleRows+'</tbody></table>'
+    +'<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">'
+    +'<button class="btn btn-g" id="btn-save-scale">Save Scale</button>'
+    +'<button class="btn btn-s" id="btn-reestimate">Re-estimate all estimated orders</button>'
+    +'<span style="font-size:12px;color:var(--t3)">Amber hours = estimated from value</span>'
+    +'</div></div>'
+    +'<div class="exp-panel">'
+    +'<div style="font-size:14px;font-weight:600;margin-bottom:6px">Capacity Settings</div>'
+    +'<div style="display:flex;gap:20px;flex-wrap:wrap;margin-bottom:12px">'
+    +'<div><label style="font-size:12px;color:var(--t2);display:block;margin-bottom:4px">Weekly Assembly Hours</label>'
+    +'<input type="number" id="s-wcap" value="'+WCAP+'" step="10" min="1" style="padding:6px 10px;border:1px solid var(--b2);border-radius:6px;font-size:14px;width:120px"></div>'
+    +'<div><label style="font-size:12px;color:var(--t2);display:block;margin-bottom:4px">Weekly Value Capacity (&euro;)</label>'
+    +'<input type="number" id="s-vcap" value="'+VCAP+'" step="10000" min="1" style="padding:6px 10px;border:1px solid var(--b2);border-radius:6px;font-size:14px;width:140px"></div>'
+    +'</div>'
+    +'<button class="btn btn-g" id="btn-save-cap">Save Capacity</button>'
+    +'</div></div>';
+
+  document.getElementById('btn-save-scale')?.addEventListener('click',()=>{
+    HOUR_SCALE.forEach((tier,i)=>{
+      tier.maxVal=parseFloat(document.getElementById('hs-v-'+i)?.value)||tier.maxVal;
+      tier.hours=parseFloat(document.getElementById('hs-h-'+i)?.value)||tier.hours;
+    });
+    toast('Scale saved ✓ — applies to next import');
+  });
+
+  document.getElementById('btn-reestimate')?.addEventListener('click',()=>{
+    let count=0;
+    DB.orders.forEach(o=>{if(o.hoursEstimated){o.hours=estimateHours(o.value);count++;}});
+    sched();toast(count+' orders re-estimated');render();
+  });
+
+  document.getElementById('btn-save-cap')?.addEventListener('click',()=>{
+    const newWcap=parseFloat(document.getElementById('s-wcap')?.value);
+    const newVcap=parseFloat(document.getElementById('s-vcap')?.value);
+    if(newWcap>0)Object.defineProperty(window,'WCAP',{value:newWcap,writable:true,configurable:true});
+    if(newVcap>0)Object.defineProperty(window,'VCAP',{value:newVcap,writable:true,configurable:true});
+    toast('Capacity updated ✓');
+  });
 }
 
 function renderBoard(app){
@@ -267,7 +349,7 @@ function renderBoard(app){
           <td><span class="wo-num">${o.wo}</span></td>
           <td><span class="wo-title" title="${o.title}">${o.title}</span></td>
           <td><span class="wo-cust" title="${o.customer}">${o.customer}</span></td>
-          <td style="text-align:right;font-weight:600">${o.hours}h</td>
+          <td style="text-align:right"><input type="number" step="0.5" min="0" style="width:52px;text-align:right;border:1px solid ${o.hoursEstimated?'#f59e0b':'var(--b2)'};border-radius:4px;padding:2px 4px;font-size:12px;font-weight:600;background:${o.hoursEstimated?'#fffbeb':'#fff'}" title="${o.hoursEstimated?'Estimated from value — verify':'Actual hours from Cienapps'}" data-hi="${o.wo}" value="${o.hours}"></td>
           <td>${dueBadge(o.dueDate,o.plannedWeek,o.origDueDate)}</td>
           <td style="text-align:right;font-size:12px;color:var(--t2)">€${Math.round(o.value||0).toLocaleString()}</td>
           <td><span class="step-badge">${o.step.replace(/^\d\.\s*/,'')}</span></td>
@@ -308,6 +390,7 @@ function renderBoard(app){
   document.querySelectorAll('[data-s]').forEach(th=>th.onclick=()=>{const s=th.dataset.s;if(sortCol===s)sortDir*=-1;else{sortCol=s;sortDir=1;}render();});
   document.querySelectorAll('[data-wsel]').forEach(sel=>sel.onchange=function(){const o=DB.orders.find(x=>x.wo===this.dataset.wsel);if(o){o.plannedWeek=this.value;sched();render();}});
   document.querySelectorAll('[data-ni]').forEach(inp=>inp.oninput=function(){const o=DB.orders.find(x=>x.wo===this.dataset.ni);if(o){o.notes=this.value;sched();}});
+  document.querySelectorAll('[data-hi]').forEach(inp=>inp.onchange=function(){const o=DB.orders.find(x=>x.wo===this.dataset.hi);if(o){o.hours=parseFloat(this.value)||0;o.hoursEstimated=false;sched();render();}});
   document.querySelectorAll('[data-dc]').forEach(dot=>dot.onclick=()=>{const o=DB.orders.find(x=>x.wo===dot.dataset.dc);if(o){o.colour=dot.dataset.cv;sched();render();}});
   document.querySelectorAll('[data-del]').forEach(btn=>btn.onclick=()=>{
     if(!confirm('Delete '+btn.dataset.del+' from the planner?'))return;
@@ -338,7 +421,10 @@ function renderImport(app){
   app.innerHTML=`<div class="pg">
   <div class="import-panel">
     <div style="font-size:14px;font-weight:600;margin-bottom:6px">Import Work Orders from Cienapps</div>
-    <p style="font-size:12px;color:var(--t3);margin-bottom:14px">Export your work orders from Cienapps and drop the Excel file here. New orders are added. Existing orders (matched by WO number) have hours and due dates updated but keep their planned week assignment.</p>
+    <p style="font-size:12px;color:var(--t3);margin-bottom:10px">Export your work orders from Cienapps and drop the Excel file here. New orders are added. Existing orders (matched by WO number) have their due dates updated but keep their planned week. Hours are estimated from order value if not provided by Cienapps.</p>
+    <div style="background:var(--bl);border:1px solid #b0c8e8;border-radius:6px;padding:9px 12px;font-size:12px;color:var(--blue);margin-bottom:14px">
+      <strong>Weekly workflow:</strong> Export work orders from Cienapps → Drop file here → Review auto-scheduled capacity board → Move orders as needed in production meeting → Export Changes → Update Cienapps. Note: date changes made directly in Cienapps between meetings will update on next import.
+    </div>
     <div class="drop-zone" id="dz">
       <div style="font-size:28px;margin-bottom:8px">📂</div>
       <div style="font-size:14px;font-weight:500;margin-bottom:4px">Drop Cienapps Excel file here</div>
@@ -407,7 +493,10 @@ function doImport(file){
 
     rows.forEach(row=>{
       const wo=String(row['# WO']||'').trim();if(!wo)return;
-      const hours=parseFloat(row['Hours assembly time ']||row['Hours']||0);
+      const rawHours=parseFloat(row['Hours assembly time ']||row['Hours']||0);
+      const rowVal=parseFloat(row['Sub-total']||0);
+      const hours=rawHours>0?rawHours:estimateHours(rowVal);
+      const hoursEstimated=rawHours===0;
       let dueDate='';
       const rd=row['Due Date'];
       if(rd){try{dueDate=typeof rd==='number'?new Date(Math.round((rd-25569)*86400*1000)).toISOString().split('T')[0]:new Date(rd).toISOString().split('T')[0];}catch(ex){}}
@@ -420,7 +509,7 @@ function doImport(file){
           updated++;prev.push({wo,status:'updated',title:ex.title,hours,dueDate,pw:ex.plannedWeek});
         } else skipped++;
       } else {
-        const newO={wo,ref:String(row['Reference']||''),title:String(row['Title']||wo),customer:String(row['Customer']||''),hours,dueDate,origDueDate:dueDate,step:String(row['Step']||''),salesRep:String(row['Sales Rep']||''),orderNo:String(row['Order #']||''),value:parseFloat(row['Sub-total']||0),plannedWeek:'',notes:'',colour:''};
+        const newO={wo,ref:String(row['Reference']||''),title:String(row['Title']||wo),customer:String(row['Customer']||''),hours,hoursEstimated,dueDate,origDueDate:dueDate,step:String(row['Step']||''),salesRep:String(row['Sales Rep']||''),orderNo:String(row['Order #']||''),value:parseFloat(row['Sub-total']||0),plannedWeek:'',notes:'',colour:''};
         newOrders.push(newO);
         if(orig[wo]===undefined)orig[wo]='';
         added++;
@@ -470,7 +559,7 @@ function renderExport(app){
         <tbody>${chg.map(o=>`<tr>
           <td><span class="wo-num">${o.wo}</span></td>
           <td>${o.title}</td><td style="color:var(--t2)">${o.customer}</td>
-          <td style="text-align:right;font-weight:600">${o.hours}h</td>
+          <td style="text-align:right"><input type="number" step="0.5" min="0" style="width:52px;text-align:right;border:1px solid ${o.hoursEstimated?'#f59e0b':'var(--b2)'};border-radius:4px;padding:2px 4px;font-size:12px;font-weight:600;background:${o.hoursEstimated?'#fffbeb':'#fff'}" title="${o.hoursEstimated?'Estimated from value — verify':'Actual hours from Cienapps'}" data-hi="${o.wo}" value="${o.hours}"></td>
           <td style="text-align:right;font-size:12px">€${Math.round(o.value||0).toLocaleString()}</td>
           <td style="color:var(--t3)">${wkLbl(orig[o.wo])||'Unscheduled'}</td>
           <td style="font-weight:600;color:var(--blue)">${wkLbl(o.plannedWeek)||'Unscheduled'}</td>
@@ -519,7 +608,7 @@ function renderExport(app){
   });
 }
 
-['b','i','x'].forEach(t=>{document.getElementById('t-'+t).onclick=()=>showTab(t);});
+['b','i','x','s'].forEach(t=>{document.getElementById('t-'+t).onclick=()=>showTab(t);});
 loadDB().then(()=>render());
 </script>
 </body>
