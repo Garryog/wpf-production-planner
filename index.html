@@ -168,9 +168,18 @@ function sched(){clearTimeout(saveT);saveT=setTimeout(saveDB,1200);}
 function setSS(st){const d=document.getElementById('dot'),t=document.getElementById('stxt');if(!d)return;d.className='dot'+(st==='s'?' s':st==='e'?' e':'');t.textContent=st==='s'?'Saving…':st==='e'?'Save failed':'Synced';}
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._x);t._x=setTimeout(()=>t.classList.remove('show'),2500);}
 function fmt(s){if(!s)return'—';return new Date(s).toLocaleDateString('en-IE',{day:'numeric',month:'short',year:'2-digit'});}
-function getMonday(d){const dt=new Date(d),day=dt.getDay(),diff=dt.getDate()-day+(day===0?-6:1);return new Date(dt.setDate(diff));}
-function wkKey(d){return getMonday(d).toISOString().split('T')[0];}
-function wkNum(d){const s=new Date(new Date(d).getFullYear(),0,1);return Math.ceil(((new Date(d)-s)/86400000+s.getDay()+1)/7);}
+function getMonday(d){
+  const dt=new Date(d);
+  // Use UTC day to avoid timezone issues
+  const day=dt.getUTCDay();
+  const diff=dt.getUTCDate()-day+(day===0?-6:1);
+  return new Date(Date.UTC(dt.getUTCFullYear(),dt.getUTCMonth(),diff));
+}
+function wkKey(d){
+  const m=getMonday(d);
+  return m.getUTCFullYear()+'-'+String(m.getUTCMonth()+1).padStart(2,'0')+'-'+String(m.getUTCDate()).padStart(2,'0');
+}
+function wkNum(d){const dt=new Date(d);const s=new Date(Date.UTC(dt.getUTCFullYear(),0,1));return Math.ceil(((dt-s)/86400000+((s.getUTCDay()||7))+1)/7);}
 function wkLbl(k){if(!k)return'—';const d=new Date(k);return'Wk '+wkNum(d)+' · '+d.toLocaleDateString('en-IE',{day:'numeric',month:'short'});}
 function get8Wks(){const w=[];let d=getMonday(new Date());for(let i=0;i<8;i++){w.push(wkKey(d));d=new Date(d);d.setDate(d.getDate()+7);}return w;}
 function wkCap(k){return DB.weekCaps&&DB.weekCaps[k]?DB.weekCaps[k]:WCAP;}
@@ -474,10 +483,10 @@ function autoSchedule(newOrders){
   newOrders.forEach(o=>{
     if(o.plannedWeek)return; // already scheduled — keep it
     const weeks=get8Wks();
-    let due=o.dueDate?new Date(o.dueDate):null;
+    let due=o.dueDate?new Date(o.dueDate+'T12:00:00Z'):null; // noon UTC avoids timezone day boundary issues
 
     // Find eligible weeks (week starts on or before due date)
-    let eligible=due?weeks.filter(w=>new Date(w)<=due):weeks;
+    let eligible=due?weeks.filter(w=>new Date(w+'T12:00:00Z')<=due):weeks;
     if(!eligible.length)eligible=[weeks[0]];
 
     // Try latest eligible week first (latest possible = best for capacity spread)
@@ -518,7 +527,18 @@ function doImport(file){
       const hoursEstimated=rawHours===0;
       let dueDate='';
       const rd=row['Due Date'];
-      if(rd){try{dueDate=typeof rd==='number'?new Date(Math.round((rd-25569)*86400*1000)).toISOString().split('T')[0]:new Date(rd).toISOString().split('T')[0];}catch(ex){}}
+      if(rd){try{
+        if(typeof rd==='number'){
+          // Excel serial date — convert directly to YYYY-MM-DD without timezone offset
+          const d=new Date(Math.round((rd-25569)*86400*1000));
+          dueDate=d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0')+'-'+String(d.getUTCDate()).padStart(2,'0');
+        } else if(rd instanceof Date){
+          // XLSX gave us a Date object — use UTC date parts to avoid timezone shift
+          dueDate=rd.getUTCFullYear()+'-'+String(rd.getUTCMonth()+1).padStart(2,'0')+'-'+String(rd.getUTCDate()).padStart(2,'0');
+        } else {
+          dueDate=new Date(rd).toISOString().split('T')[0];
+        }
+      }catch(ex){}}
       // Skip if WO already exists (prevent duplicates)
       const ex=DB.orders.find(o=>o.wo===wo);
       if(ex){
