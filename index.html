@@ -121,7 +121,7 @@ const WCAP=350;
 
 let DB={orders:[],nid:1,weekCaps:{}};
 // Default value-to-hours scale (editable in Settings tab)
-function getSteps(){const s=new Set(DB.orders.map(o=>o.step||'').filter(Boolean));return[...s].sort();}
+function getSteps(){const base=['Assembly complete','Production complete','Job shipped'];const s=new Set([...DB.orders.map(o=>o.step||'').filter(Boolean),...base]);return[...s].sort();}
 let HOUR_SCALE=[
   {maxVal:1000,  hours:1},
   {maxVal:3000,  hours:3},
