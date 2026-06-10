@@ -121,7 +121,9 @@ const WCAP=350;
 
 let DB={orders:[],nid:1,weekCaps:{}};
 // Default value-to-hours scale (editable in Settings tab)
+function getSteps(){const s=new Set(DB.orders.map(o=>o.step||'').filter(Boolean));return[...s].sort();}
 let HOUR_SCALE=[
+  {maxVal:1000,  hours:1},
   {maxVal:3000,  hours:3},
   {maxVal:6000,  hours:7},
   {maxVal:7000,  hours:9},
@@ -141,6 +143,7 @@ function estimateHours(value){
   return tier?tier.hours:32;
 }
 let orig={};
+let origStep={};
 let tab='b',sortCol='dueDate',sortDir=1,fWeek='',fCust='',srch='';
 let saveT=null,dragSrc=null;
 
@@ -153,7 +156,7 @@ async function loadDB(){
       if(d[0].nid)DB.nid=d[0].nid;
       if(d[0].settings&&d[0].settings.weekCaps)DB.weekCaps=d[0].settings.weekCaps||{};
     }
-    DB.orders.forEach(o=>{orig[o.wo]=o.plannedWeek||'';});
+    DB.orders.forEach(o=>{orig[o.wo]=o.plannedWeek||'';origStep[o.wo]=o.step||'';});
   }catch(e){setSS('e');}
   setSS('ok');
 }
@@ -199,7 +202,7 @@ function dueBadge(due,pw,origDue){
   if(diff<14)return`<span class="due-badge due-soon">${label}</span>${origStr}`;
   return`<span class="due-badge due-ok">${label}</span>${origStr}`;
 }
-function changes(){return DB.orders.filter(o=>orig[o.wo]!==undefined&&orig[o.wo]!==(o.plannedWeek||''));}
+function changes(){return DB.orders.filter(o=>(orig[o.wo]!==undefined&&orig[o.wo]!==(o.plannedWeek||''))||(origStep[o.wo]!==undefined&&origStep[o.wo]!==(o.step||'')));}
 
 function showTab(t){tab=t;['b','i','x'].forEach(id=>{const el=document.getElementById('t-'+id);if(el)el.className='tab'+(id===t?' on':'');});render();}
 
@@ -366,7 +369,10 @@ function renderBoard(app){
           <td style="text-align:right"><input type="number" step="0.5" min="0" style="width:52px;text-align:right;border:1px solid ${o.hoursEstimated?'#f59e0b':'var(--b2)'};border-radius:4px;padding:2px 4px;font-size:12px;font-weight:600;background:${o.hoursEstimated?'#fffbeb':'#fff'}" title="${o.hoursEstimated?'Estimated from value — verify':'Actual hours from Cienapps'}" data-hi="${o.wo}" value="${o.hours}"></td>
           <td>${dueBadge(o.dueDate,o.plannedWeek,o.origDueDate)}</td>
           <td style="text-align:right;font-size:12px;color:var(--t2)">€${Math.round(o.value||0).toLocaleString()}</td>
-          <td><span class="step-badge">${o.step.replace(/^\d\.\s*/,'')}</span></td>
+          <td><select class="step-sel" data-stepsel="${o.wo}" style="font-size:11px;padding:3px 4px;border-radius:6px;border:1px solid var(--bd);background:var(--bg2);color:var(--t1);max-width:120px">
+            ${getSteps().map(s=>`<option value="${s}"${(o.step||'')===s?' selected':''}>${s.replace(/^\d+\.\s*/,'')}</option>`).join('')}
+            ${getSteps().includes(o.step||'')||!(o.step||'')?'':`<option value="${o.step}" selected>${o.step.replace(/^\d+\.\s*/,'')}</option>`}
+          </select></td>
           <td><select class="week-sel" data-wsel="${o.wo}">
             <option value="">— Unscheduled —</option>
             ${weeks.map(w=>`<option value="${w}"${o.plannedWeek===w?' selected':''}>${wkLbl(w)}</option>`).join('')}
@@ -412,7 +418,7 @@ function renderBoard(app){
   if(ca)ca.onclick=()=>{
     if(!confirm('Delete ALL '+DB.orders.length+' orders from the planner? This cannot be undone.'))return;
     DB.orders=[];
-    Object.keys(orig).forEach(k=>delete orig[k]);
+    Object.keys(orig).forEach(k=>delete orig[k]);Object.keys(origStep).forEach(k=>delete origStep[k]);
     sched();render();toast('All orders cleared');
   };
   document.querySelectorAll('[data-s]').forEach(th=>th.onclick=()=>{const s=th.dataset.s;if(sortCol===s)sortDir*=-1;else{sortCol=s;sortDir=1;}render();});
@@ -423,7 +429,7 @@ function renderBoard(app){
   document.querySelectorAll('[data-del]').forEach(btn=>btn.onclick=()=>{
     if(!confirm('Delete '+btn.dataset.del+' from the planner?'))return;
     DB.orders=DB.orders.filter(o=>o.wo!==btn.dataset.del);
-    delete orig[btn.dataset.del];
+    delete orig[btn.dataset.del];delete origStep[btn.dataset.del];
     sched();render();toast('Order removed');
   });
   // Drag & drop to swap weeks
@@ -555,7 +561,7 @@ function doImport(file){
       } else {
         const newO={wo,ref:String(row['Reference']||''),title:String(row['Title']||row['Reference']||wo),customer:String(row['Customer']||''),hours,hoursEstimated,dueDate,origDueDate:dueDate,step:String(row['Step']||''),salesRep:String(row['Sales Rep']||''),orderNo:String(row['Order #']||''),value:parseFloat(row['Sub-total']||0),plannedWeek:'',notes:'',colour:''};
         newOrders.push(newO);
-        if(orig[wo]===undefined)orig[wo]='';
+        if(orig[wo]===undefined)orig[wo]='';if(origStep[wo]===undefined)origStep[wo]=String(row['Step']||'');
         added++;
       }
     });
@@ -564,7 +570,7 @@ function doImport(file){
     autoSchedule(newOrders);
     newOrders.forEach(o=>{
       DB.orders.push(o);
-      orig[o.wo]=o.plannedWeek||''; // set baseline AFTER auto-schedule so auto-assignments don't show as changes
+      orig[o.wo]=o.plannedWeek||'';origStep[o.wo]=o.step||''; // set baseline AFTER auto-schedule so auto-assignments don't show as changes
       prev.push({wo:o.wo,status:'new',title:o.title,hours:o.hours,dueDate:o.dueDate,pw:o.plannedWeek});
     });
 
@@ -579,8 +585,9 @@ function doImport(file){
         <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.title}</span>
         <span style="color:var(--t3);width:40px;text-align:right">${p.hours}h</span>
         <span style="color:var(--t3);font-size:11px;width:100px;text-align:right">${p.pw?wkLbl(p.pw):'—'}</span>
-        <span style="padding:1px 7px;border-radius:3px;font-size:11px;background:${p.status==='new'?'var(--gl)':'var(--al)'};color:${p.status==='new'?'var(--green)':'var(--amber)'};">${p.status}</span>
-      </div>`).join('')}
+        <span style="padding:1px 7px;border-radius:3px;font-size:11px;white-space:nowrap;background:${p.status==='new'?'var(--gl)':p.status==='step changed'?'var(--bl)':'var(--al)'};color:${p.status==='new'?'var(--green)':p.status==='step changed'?'var(--blue)':'var(--amber)'};">${p.status}</span>
+      </div>
+      ${p.what?`<div style="font-size:11px;color:var(--t3);padding:0 10px 4px 90px">${p.what}</div>`:''}`).join('')}
       ${prev.length>15?`<div style="font-size:12px;color:var(--t3);padding:6px 10px">...and ${prev.length-15} more</div>`:''}
       <button class="btn btn-g" style="margin-top:14px" onclick="showTab('b')">Go to Capacity Board →</button>
     </div>`;
@@ -595,18 +602,20 @@ function renderExport(app){
   app.innerHTML=`<div class="pg">
   <div class="exp-panel">
     <div style="font-size:14px;font-weight:600;margin-bottom:6px">Changes This Session</div>
-    <p style="font-size:12px;color:var(--t3);margin-bottom:14px">Work orders where the planned week has been changed. Export this to update Cienapps.</p>
+    <p style="font-size:12px;color:var(--t3);margin-bottom:14px">Work orders where the planned week or step has been changed. Export this to update Cienapps.</p>
     ${!chg.length?`<div class="empty">No changes yet. Go to the Capacity Board and assign or move work orders between weeks.</div>`:`
     <div class="wo-table-wrap" style="margin-bottom:14px">
       <table class="wo-table">
-        <thead><tr><th>WO #</th><th>Title</th><th>Customer</th><th style="text-align:right">Hrs</th><th style="text-align:right">Value</th><th>Was</th><th>Now</th><th>Orig Due</th><th>New Due</th><th>Notes</th></tr></thead>
+        <thead><tr><th>WO #</th><th>Title</th><th>Customer</th><th style="text-align:right">Hrs</th><th style="text-align:right">Value</th><th>Week Was</th><th>Week Now</th><th>Step Was</th><th>Step Now</th><th>Orig Due</th><th>New Due</th><th>Notes</th></tr></thead>
         <tbody>${chg.map(o=>`<tr>
           <td><span class="wo-num">${o.wo}</span></td>
           <td>${o.title}</td><td style="color:var(--t2)">${o.customer}</td>
           <td style="text-align:right"><input type="number" step="0.5" min="0" style="width:52px;text-align:right;border:1px solid ${o.hoursEstimated?'#f59e0b':'var(--b2)'};border-radius:4px;padding:2px 4px;font-size:12px;font-weight:600;background:${o.hoursEstimated?'#fffbeb':'#fff'}" title="${o.hoursEstimated?'Estimated from value — verify':'Actual hours from Cienapps'}" data-hi="${o.wo}" value="${o.hours}"></td>
           <td style="text-align:right;font-size:12px">€${Math.round(o.value||0).toLocaleString()}</td>
           <td style="color:var(--t3)">${wkLbl(orig[o.wo])||'Unscheduled'}</td>
-          <td style="font-weight:600;color:var(--blue)">${wkLbl(o.plannedWeek)||'Unscheduled'}</td>
+          <td style="font-weight:600;color:${(orig[o.wo]||'')!==(o.plannedWeek||'')?'var(--blue)':'var(--t3)'}">${wkLbl(o.plannedWeek)||'Unscheduled'}</td>
+          <td style="font-size:11px;color:var(--t3)">${(origStep[o.wo]||'—').replace(/^\d+\.\s*/,'')}</td>
+          <td style="font-size:11px;font-weight:600;color:${(origStep[o.wo]||'')!==(o.step||'')?'var(--green)':'var(--t3)'}">${(o.step||'—').replace(/^\d+\.\s*/,'')}</td>
           <td style="font-size:12px;color:var(--t3)">${o.origDueDate&&o.origDueDate!==o.dueDate?fmt(o.origDueDate)+' Wk'+wkNum(new Date(o.origDueDate)):fmt(o.dueDate)+' Wk'+wkNum(new Date(o.dueDate))}</td>
           <td style="font-size:12px">${fmt(o.dueDate)} Wk${wkNum(new Date(o.dueDate))}</td>
           <td style="color:var(--t3);font-size:12px">${o.notes||'—'}</td>
@@ -626,15 +635,15 @@ function renderExport(app){
   </div>`;
   document.getElementById('btn-xchg')?.addEventListener('click',()=>{
     const wb=XLSX.utils.book_new();
-    const rows=[['WO #','Title','Customer','Hours','Was','Now','Week Start','Due Date','Notes'],
-      ...chg.map(o=>[o.wo,o.title,o.customer,o.hours,wkLbl(orig[o.wo])||'Unscheduled',wkLbl(o.plannedWeek)||'Unscheduled',o.plannedWeek||'',o.dueDate||'',o.notes||''])];
+    const rows=[['WO #','Title','Customer','Hours','Week Was','Week Now','Step Was','Step Now','Week Start','Due Date','Notes'],
+      ...chg.map(o=>[o.wo,o.title,o.customer,o.hours,wkLbl(orig[o.wo])||'Unscheduled',wkLbl(o.plannedWeek)||'Unscheduled',origStep[o.wo]||'',o.step||'',o.plannedWeek||'',o.dueDate||'',o.notes||''])];
     const ws=XLSX.utils.aoa_to_sheet(rows);
-    ws['!cols']=[{wch:16},{wch:35},{wch:28},{wch:7},{wch:16},{wch:16},{wch:13},{wch:12},{wch:30}];
+    ws['!cols']=[{wch:16},{wch:35},{wch:28},{wch:7},{wch:16},{wch:16},{wch:20},{wch:20},{wch:13},{wch:12},{wch:30}];
     XLSX.utils.book_append_sheet(wb,ws,'Changes');
     XLSX.writeFile(wb,'WPF_Changes_'+new Date().toISOString().split('T')[0]+'.xlsx');
     toast('Changes exported ✓');
   });
-  document.getElementById('btn-mark')?.addEventListener('click',()=>{DB.orders.forEach(o=>{orig[o.wo]=o.plannedWeek||'';});toast('Change tracker reset');render();});
+  document.getElementById('btn-mark')?.addEventListener('click',()=>{DB.orders.forEach(o=>{orig[o.wo]=o.plannedWeek||'';origStep[o.wo]=o.step||'';});toast('Change tracker reset');render();});
   document.getElementById('btn-xfull')?.addEventListener('click',()=>{
     const weeks=get8Wks();
     const wb=XLSX.utils.book_new();
