@@ -68,6 +68,8 @@ button,input,select{font-family:inherit;cursor:pointer}
 .wo-table tr.c-red td:first-child{border-left:4px solid var(--red)}
 .wo-table tr.c-amber td:first-child{border-left:4px solid var(--amber)}
 .wo-table tr.c-green td:first-child{border-left:4px solid var(--green)}
+.wo-table tr.hl-row td{background:#fff8d6!important}
+.wo-table tr.hl-row .wo-num{color:#b8860b;font-weight:700}
 .wo-table tr.c-blue td:first-child{border-left:4px solid var(--blue)}
 .wo-table tr.c-purple td:first-child{border-left:4px solid var(--purple)}
 .wo-num{font-family:monospace;font-size:11px;color:var(--t2)}
@@ -117,7 +119,7 @@ const SUPA_URL='https://klyropbsupqfmtjjwlfa.supabase.co/rest/v1';
 const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtseXJvcGJzdXBxZm10amp3bGZhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyNjY4MDEsImV4cCI6MjA5NDg0MjgwMX0.VuP5mnSgNhzoIdx7t3R7mgt2tyLZVtElUihei3xgC5Q';
 const SUPA_HDR={'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'};
 const SUPA_WHDR={'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=minimal'};
-const WCAP=350;
+let WCAP=350;
 
 let DB={orders:[],nid:1,weekCaps:{}};
 // Default value-to-hours scale (editable in Settings tab)
@@ -155,6 +157,9 @@ async function loadDB(){
       if(d[0].orders)DB.orders=d[0].orders;
       if(d[0].nid)DB.nid=d[0].nid;
       if(d[0].settings&&d[0].settings.weekCaps)DB.weekCaps=d[0].settings.weekCaps||{};
+      if(d[0].settings&&d[0].settings.hourScale&&d[0].settings.hourScale.length)HOUR_SCALE=d[0].settings.hourScale;
+      if(d[0].settings&&d[0].settings.wcap>0)WCAP=d[0].settings.wcap;
+      if(d[0].settings&&d[0].settings.vcap>0)VCAP=d[0].settings.vcap;
     }
     DB.orders.forEach(o=>{orig[o.wo]=o.plannedWeek||'';origStep[o.wo]=o.step||'';});
   }catch(e){setSS('e');}
@@ -163,7 +168,7 @@ async function loadDB(){
 async function saveDB(){
   setSS('s');
   try{
-    await fetch(SUPA_URL+'/production_planner?id=eq.main',{method:'PATCH',headers:SUPA_WHDR,body:JSON.stringify({orders:DB.orders,nid:DB.nid,settings:{weekCaps:DB.weekCaps||{}}})});
+    await fetch(SUPA_URL+'/production_planner?id=eq.main',{method:'PATCH',headers:SUPA_WHDR,body:JSON.stringify({orders:DB.orders,nid:DB.nid,settings:{weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP}})});
     setSS('ok');
   }catch(e){setSS('e');}
 }
@@ -189,7 +194,7 @@ function wkCap(k){return DB.weekCaps&&DB.weekCaps[k]?DB.weekCaps[k]:WCAP;}
 function wkHrs(k){return DB.orders.filter(o=>o.plannedWeek===k).reduce((a,o)=>a+o.hours,0);}
 function wkVal(k){return DB.orders.filter(o=>o.plannedWeek===k).reduce((a,o)=>a+(o.value||0),0);}
 function wkCnt(k){return DB.orders.filter(o=>o.plannedWeek===k).length;}
-const VCAP=250000;
+let VCAP=250000;
 function fmtVal(v){return'€'+Math.round(v/1000)+'k';}
 function dueBadge(due,pw,origDue){
   if(!due)return'<span class="due-badge due-ok">—</span>';
@@ -256,6 +261,7 @@ function renderSettings(app){
       tier.maxVal=parseFloat(document.getElementById('hs-v-'+i)?.value)||tier.maxVal;
       tier.hours=parseFloat(document.getElementById('hs-h-'+i)?.value)||tier.hours;
     });
+    sched();
     toast('Scale saved ✓ — applies to next import');
   });
 
@@ -268,8 +274,9 @@ function renderSettings(app){
   document.getElementById('btn-save-cap')?.addEventListener('click',()=>{
     const newWcap=parseFloat(document.getElementById('s-wcap')?.value);
     const newVcap=parseFloat(document.getElementById('s-vcap')?.value);
-    if(newWcap>0)Object.defineProperty(window,'WCAP',{value:newWcap,writable:true,configurable:true});
-    if(newVcap>0)Object.defineProperty(window,'VCAP',{value:newVcap,writable:true,configurable:true});
+    if(newWcap>0)WCAP=newWcap;
+    if(newVcap>0)VCAP=newVcap;
+    sched();
     toast('Capacity updated ✓');
   });
 }
@@ -423,6 +430,8 @@ function renderBoard(app){
   };
   document.querySelectorAll('[data-s]').forEach(th=>th.onclick=()=>{const s=th.dataset.s;if(sortCol===s)sortDir*=-1;else{sortCol=s;sortDir=1;}render();});
   document.querySelectorAll('[data-wsel]').forEach(sel=>sel.onchange=function(){const o=DB.orders.find(x=>x.wo===this.dataset.wsel);if(o){o.plannedWeek=this.value;sched();render();}});
+  document.querySelectorAll('[data-stepsel]').forEach(sel=>sel.onchange=function(){const o=DB.orders.find(x=>x.wo===this.dataset.stepsel);if(o){o.step=this.value;sched();render();toast('Step updated');}});
+  document.querySelectorAll('[data-hl]').forEach(el=>el.onclick=function(){const o=DB.orders.find(x=>x.wo===this.dataset.hl);if(o){o.hl=!o.hl;sched();render();}});
   document.querySelectorAll('[data-ni]').forEach(inp=>inp.oninput=function(){const o=DB.orders.find(x=>x.wo===this.dataset.ni);if(o){o.notes=this.value;sched();}});
   document.querySelectorAll('[data-hi]').forEach(inp=>inp.onchange=function(){const o=DB.orders.find(x=>x.wo===this.dataset.hi);if(o){o.hours=parseFloat(this.value)||0;o.hoursEstimated=false;sched();render();}});
   document.querySelectorAll('[data-dc]').forEach(dot=>dot.onclick=()=>{const o=DB.orders.find(x=>x.wo===dot.dataset.dc);if(o){o.colour=dot.dataset.cv;sched();render();}});
@@ -513,7 +522,9 @@ function doImport(file){
   const reader=new FileReader();
   reader.onload=e=>{
     const wb=XLSX.read(e.target.result,{type:'binary'});
-    const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+    const rawRows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+    // Normalize header keys: trim whitespace so 'Title ' matches 'Title'
+    const rows=rawRows.map(r=>{const n={};Object.keys(r).forEach(k=>{n[k.trim()]=r[k];});return n;});
     let added=0,updated=0,skipped=0;
     const prev=[];
     const newOrders=[];
@@ -553,13 +564,24 @@ function doImport(file){
       // Skip if WO already exists (prevent duplicates)
       const ex=DB.orders.find(o=>o.wo===wo);
       if(ex){
-        if(ex.hours!==hours||ex.dueDate!==dueDate){
-          if(!ex.origDueDate)ex.origDueDate=ex.dueDate;
-          ex.hours=hours;ex.dueDate=dueDate;ex.step=String(row['Step']||ex.step);
-          updated++;prev.push({wo,status:'updated',title:ex.title,hours,dueDate,pw:ex.plannedWeek});
+        const newStep=String(row['Step']||ex.step);
+        const dateChanged=ex.dueDate!==dueDate;
+        const hoursChanged=ex.hours!==hours;
+        const stepChanged=(ex.step||'')!==newStep;
+        if(dateChanged||hoursChanged||stepChanged){
+          if(dateChanged&&!ex.origDueDate)ex.origDueDate=ex.dueDate;
+          const oldDue=ex.dueDate, oldStep=ex.step;
+          ex.hours=hours;ex.dueDate=dueDate;ex.step=newStep;
+          const newTitle=String(row['Title']||row['Reference']||'').trim();
+          if(newTitle&&newTitle!==ex.title)ex.title=newTitle;
+          const what=[];
+          if(dateChanged)what.push('date: '+oldDue+' → '+dueDate);
+          if(stepChanged)what.push('step: '+(oldStep||'(none)').replace(/^\d+\.\s*/,'')+' → '+newStep.replace(/^\d+\.\s*/,''));
+          if(hoursChanged&&!dateChanged&&!stepChanged)what.push('hours');
+          updated++;prev.push({wo,status:dateChanged?'date changed':(stepChanged?'step changed':'updated'),what:what.join(' · '),title:ex.title,hours,dueDate,pw:ex.plannedWeek});
         } else skipped++;
       } else {
-        const newO={wo,ref:String(row['Reference']||''),title:String(row['Title']||row['Reference']||wo),customer:String(row['Customer']||''),hours,hoursEstimated,dueDate,origDueDate:dueDate,step:String(row['Step']||''),salesRep:String(row['Sales Rep']||''),orderNo:String(row['Order #']||''),value:parseFloat(row['Sub-total']||0),plannedWeek:'',notes:'',colour:''};
+        const newO={wo,ref:String(row['Reference']||''),title:String(row['Title']||row['Reference']||wo).trim(),customer:String(row['Customer']||''),hours,hoursEstimated,dueDate,origDueDate:dueDate,step:String(row['Step']||''),salesRep:String(row['Sales Rep']||''),orderNo:String(row['Order #']||''),value:parseFloat(row['Sub-total']||0),plannedWeek:'',notes:'',colour:''};
         newOrders.push(newO);
         if(orig[wo]===undefined)orig[wo]='';if(origStep[wo]===undefined)origStep[wo]=String(row['Step']||'');
         added++;
