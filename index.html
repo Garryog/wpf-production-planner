@@ -69,6 +69,7 @@ button,input,select{font-family:inherit;cursor:pointer}
 .wo-table tr.c-amber td:first-child{border-left:4px solid var(--amber)}
 .wo-table tr.c-green td:first-child{border-left:4px solid var(--green)}
 .wo-table tr.hl-row td{background:#fff8d6!important}
+.wo-table tr.grp-start td{border-top:2px solid var(--b2)}
 .wo-table tr.hl-row .wo-num{color:#b8860b;font-weight:700}
 .wo-table tr.c-blue td:first-child{border-left:4px solid var(--blue)}
 .wo-table tr.c-purple td:first-child{border-left:4px solid var(--purple)}
@@ -146,7 +147,7 @@ function estimateHours(value){
 }
 let orig={};
 let origStep={};
-let tab='b',sortCol='dueDate',sortDir=1,fWeek='',fCust='',srch='';
+let tab='b',sortCol='plannedWeek',sortDir=1,fWeek='',fCust='',srch='';
 let saveT=null,dragSrc=null;
 
 async function loadDB(){
@@ -291,7 +292,19 @@ function renderBoard(app){
   else if(fWeek)orders=orders.filter(o=>o.plannedWeek===fWeek);
   if(fCust)orders=orders.filter(o=>o.customer===fCust);
   if(srch){const q=srch.toLowerCase();orders=orders.filter(o=>o.title.toLowerCase().includes(q)||o.wo.toLowerCase().includes(q)||o.customer.toLowerCase().includes(q));}
-  orders.sort((a,b)=>{let av=a[sortCol]||'',bv=b[sortCol]||'';if(sortCol==='hours'||sortCol==='value'){av=+av;bv=+bv;}return av<bv?-sortDir:av>bv?sortDir:0;});
+  orders.sort((a,b)=>{
+    let av=a[sortCol]||'',bv=b[sortCol]||'';
+    if(sortCol==='hours'||sortCol==='value'){av=+av;bv=+bv;}
+    if(sortCol==='plannedWeek'){if(!av)av='9999-99-99';if(!bv)bv='9999-99-99';} // unscheduled last
+    if(av<bv)return -sortDir;
+    if(av>bv)return sortDir;
+    // Secondary: group same customer together
+    const ac=(a.customer||'').toLowerCase(),bc=(b.customer||'').toLowerCase();
+    if(ac<bc)return -1;
+    if(ac>bc)return 1;
+    // Tertiary: due date
+    return (a.dueDate||'').localeCompare(b.dueDate||'');
+  });
 
   const unschHrs=DB.orders.filter(o=>!o.plannedWeek).reduce((a,o)=>a+o.hours,0);
   const unschCnt=DB.orders.filter(o=>!o.plannedWeek).length;
@@ -368,9 +381,9 @@ function renderBoard(app){
       </tr></thead>
       <tbody id="tbody">
         ${!orders.length?`<tr><td colspan="10"><div class="empty">No orders match filters</div></td></tr>`:''}
-        ${orders.map(o=>`<tr class="${o.colour?'c-'+o.colour:''}" draggable="true" data-wo="${o.wo}">
+        ${orders.map((o,ri)=>`<tr class="${o.colour?'c-'+o.colour:''}${o.hl?' hl-row':''}${ri>0&&(orders[ri-1].customer||'')!==(o.customer||'')?' grp-start':''}" draggable="true" data-wo="${o.wo}">
           <td><span class="drag-handle">⠿</span></td>
-          <td><span class="wo-num">${o.wo}</span></td>
+          <td><span class="wo-num" data-hl="${o.wo}" style="cursor:pointer" title="Tap to mark as discussed">${o.hl?'✓ ':''}${o.wo}</span></td>
           <td><span class="wo-title" title="${o.title}">${o.title}</span></td>
           <td><span class="wo-cust" title="${o.customer}">${o.customer}</span></td>
           <td style="text-align:right"><input type="number" step="0.5" min="0" style="width:52px;text-align:right;border:1px solid ${o.hoursEstimated?'#f59e0b':'var(--b2)'};border-radius:4px;padding:2px 4px;font-size:12px;font-weight:600;background:${o.hoursEstimated?'#fffbeb':'#fff'}" title="${o.hoursEstimated?'Estimated from value — verify':'Actual hours from Cienapps'}" data-hi="${o.wo}" value="${o.hours}"></td>
