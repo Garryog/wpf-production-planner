@@ -100,6 +100,55 @@ button,input,select{font-family:inherit;cursor:pointer}
 .toast.show{opacity:1}
 @media(max-width:1000px){.week-caps{grid-template-columns:repeat(5,1fr)}}
 @media(max-width:700px){.week-caps{grid-template-columns:repeat(3,1fr)}.wo-table th:nth-child(n+7),.wo-table td:nth-child(n+7){display:none}.pg{padding:12px 12px 60px}}
+/* ---- Deliveries ---- */
+.dvbtn{background:none;border:1px solid transparent;font-size:15px;filter:grayscale(1);opacity:.32;cursor:pointer;padding:1px 5px;border-radius:5px;line-height:1;transition:all .12s}
+.dvbtn:hover{opacity:.7}
+.dvbtn.on{filter:none;opacity:1;background:#e8f1fd;border-color:#b0c8e8}
+#delcnt{display:none;background:#1a56db;color:#fff;border-radius:9px;font-size:10px;font-weight:700;padding:1px 6px;margin-left:5px;vertical-align:1px}
+.del-panel{background:#fff;border:1px solid var(--border);border-radius:10px;padding:16px 18px;margin-bottom:14px}
+.dgrp{margin-bottom:6px}
+.dgrp-h{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.4px;margin:10px 0 5px;cursor:pointer;user-select:none}
+.dgrp-h:hover{color:#1a56db}
+.dgrp-h .gcnt{font-weight:400;color:var(--t3);text-transform:none;letter-spacing:0;font-size:10px}
+.dpool-chips{display:flex;flex-wrap:wrap;gap:6px}
+.dchip{width:216px;background:#fff;border:1px solid #cfd6df;border-radius:7px;padding:6px 8px;font-size:11px;cursor:grab;user-select:none;box-shadow:0 1px 2px rgba(15,25,40,.06)}
+.dcell .dchip{width:100%;margin:0 0 4px;box-shadow:none}
+.dchip-top{display:flex;align-items:center;gap:6px}
+.dchip-top b{font-family:monospace;font-size:12px;font-weight:700;color:#14335c;white-space:nowrap}
+.dfu{font-size:10px;font-weight:700;background:#eef2f7;border:1px solid #d8dfe8;border-radius:4px;padding:1px 5px;color:#3b4c63;white-space:nowrap}
+.fu-badge{font-family:monospace;font-size:11px;font-weight:600;background:#f2f5f9;border:1px solid #e0e5ec;border-radius:4px;padding:1px 6px;color:var(--t2);white-space:nowrap}
+.dsrch{width:100%;max-width:420px;padding:7px 11px;border:1px solid var(--b2);border-radius:6px;font-size:12px;outline:none;margin-bottom:8px}
+.dsrch:focus{border-color:#7ba7e0}
+.dcv{margin-left:auto;font-weight:600;color:#0d6e46;font-size:11px;white-space:nowrap}
+.dchip-btns{display:flex;gap:1px}
+.dchip button{background:none;border:none;cursor:pointer;font-size:12px;line-height:1;padding:2px 4px;border-radius:3px;color:var(--t3)}
+.dchip button:hover{background:#dde3ea;color:var(--t1)}
+.dchip .dchk.on{color:#0d9450;font-weight:700}
+.dchip-t{font-size:11px;color:var(--text);line-height:1.35;margin-top:3px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.dchip-c{font-size:10px;color:var(--t3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dchip.done{background:#eefbf3;border-color:#b3e0c4}
+.dchip.done .dchip-t,.dchip.done .dchip-top b{text-decoration:line-through;opacity:.6}
+.dchip.manual{border-left:3px solid #7c5cd6}
+.dchip.sel{outline:2px solid #1a56db;outline-offset:-1px;background:#eaf2ff}
+.dchip.dragging{opacity:.4}
+.selbar{display:flex;align-items:center;gap:10px;background:#e8f1fd;border:1px solid #b0c8e8;border-radius:6px;padding:7px 12px;font-size:12px;color:#14418f;margin-bottom:10px}
+.selbar button{background:none;border:none;color:#1a56db;font-size:12px;cursor:pointer;text-decoration:underline;padding:0}
+.del-grid{width:100%;min-width:1100px;border-collapse:collapse}
+.del-grid th{background:#f5f6f8;border:1px solid var(--border);padding:6px 8px;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--t2)}
+.del-grid th:first-child{width:106px;text-align:left}
+.del-grid td.dveh{border:1px solid var(--border);padding:6px 8px;font-size:12px;font-weight:600;background:#fafbfc;vertical-align:top;width:106px}
+.del-grid td.dveh .dsub{display:block;font-size:10px;font-weight:400;color:var(--t3);margin-top:1px}
+.dcell{border:1px solid var(--border);padding:4px;min-height:56px;vertical-align:top}
+.dcell.dragover{background:#eaf2ff;outline:2px dashed #7ba7e0;outline-offset:-2px}
+.del-pool{border:2px dashed #cfd6df;border-radius:8px;padding:10px;min-height:46px;background:#fafbfc}
+.del-pool.dragover{background:#eaf2ff;border-color:#7ba7e0}
+.dtot{font-size:11px;color:var(--t2);text-align:center;padding:6px;border:1px solid var(--border);background:#fafbfc;font-weight:600;line-height:1.5}
+.dnote{width:100%;border:1px solid var(--b2);border-radius:4px;padding:5px 7px;font-size:11px;background:#fffdf2;outline:none}
+.dnote:focus{border-color:#e0b830}
+.addjob-row{display:none;gap:8px;flex-wrap:wrap;margin-top:10px;padding:10px;background:#f7f4fe;border:1px solid #d9cdf5;border-radius:8px;align-items:center}
+.addjob-row.open{display:flex}
+.addjob-row input{border:1px solid var(--b2);border-radius:5px;padding:6px 8px;font-size:12px;outline:none}
+@media(max-width:900px){.dchip{width:100%}}
 </style>
 </head>
 <body>
@@ -109,6 +158,7 @@ button,input,select{font-family:inherit;cursor:pointer}
 </div></div>
 <div class="tabs"><div class="tabs-i">
   <button class="tab on" id="t-b">Capacity Board</button>
+  <button class="tab" id="t-d">🚚 Deliveries<span id="delcnt"></span></button>
   <button class="tab" id="t-i">Import Work Orders</button>
   <button class="tab" id="t-x">Export Changes</button>
   <button class="tab" id="t-s">⚙ Settings</button>
@@ -147,7 +197,7 @@ function estimateHours(value){
 }
 let orig={};
 let origStep={};
-let tab='b',sortCol='plannedWeek',sortDir=1,fWeek='',fCust='',srch='';
+let tab='b',sortCol='plannedWeek',sortDir=1,fWeek='',fCust='',srch='',fDel=false;
 let saveT=null,dragSrc=null;
 
 async function loadDB(){
@@ -161,6 +211,8 @@ async function loadDB(){
       if(d[0].settings&&d[0].settings.hourScale&&d[0].settings.hourScale.length)HOUR_SCALE=d[0].settings.hourScale;
       if(d[0].settings&&d[0].settings.wcap>0)WCAP=d[0].settings.wcap;
       if(d[0].settings&&d[0].settings.vcap>0)VCAP=d[0].settings.vcap;
+      if(d[0].settings&&d[0].settings.delx)DB.delx=d[0].settings.delx;
+      if(d[0].settings&&d[0].settings.delNotes)DB.delNotes=d[0].settings.delNotes;
     }
     DB.orders.forEach(o=>{orig[o.wo]=o.plannedWeek||'';origStep[o.wo]=o.step||'';});
   }catch(e){setSS('e');}
@@ -169,7 +221,7 @@ async function loadDB(){
 async function saveDB(){
   setSS('s');
   try{
-    await fetch(SUPA_URL+'/production_planner?id=eq.main',{method:'PATCH',headers:SUPA_WHDR,body:JSON.stringify({orders:DB.orders,nid:DB.nid,settings:{weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP}})});
+    await fetch(SUPA_URL+'/production_planner?id=eq.main',{method:'PATCH',headers:SUPA_WHDR,body:JSON.stringify({orders:DB.orders,nid:DB.nid,settings:{weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP,delx:DB.delx||[],delNotes:DB.delNotes||{}}})});
     setSS('ok');
   }catch(e){setSS('e');}
 }
@@ -210,14 +262,21 @@ function dueBadge(due,pw,origDue){
 }
 function changes(){return DB.orders.filter(o=>(orig[o.wo]!==undefined&&orig[o.wo]!==(o.plannedWeek||''))||(origStep[o.wo]!==undefined&&origStep[o.wo]!==(o.step||'')));}
 
-function showTab(t){tab=t;['b','i','x'].forEach(id=>{const el=document.getElementById('t-'+id);if(el)el.className='tab'+(id===t?' on':'');});render();}
+function showTab(t){tab=t;['b','d','i','x','s'].forEach(id=>{const el=document.getElementById('t-'+id);if(el)el.className='tab'+(id===t?' on':'');});render();}
 
 function render(){
   const app=document.getElementById('app');
   if(tab==='b')renderBoard(app);
+  else if(tab==='d')renderDeliveries(app);
   else if(tab==='i')renderImport(app);
   else if(tab==='x')renderExport(app);
   else renderSettings(app);
+  updDelBadge();
+}
+function updDelBadge(){
+  const el=document.getElementById('delcnt');if(!el)return;
+  const n=DB.orders.filter(o=>o.delv&&!o.delDone).length+(DB.delx||[]).filter(o=>!o.delDone).length;
+  el.textContent=n;el.style.display=n?'inline':'none';
 }
 
 function renderSettings(app){
@@ -291,7 +350,8 @@ function renderBoard(app){
   if(fWeek==='unscheduled')orders=orders.filter(o=>!o.plannedWeek);
   else if(fWeek)orders=orders.filter(o=>o.plannedWeek===fWeek);
   if(fCust)orders=orders.filter(o=>o.customer===fCust);
-  if(srch){const q=srch.toLowerCase();orders=orders.filter(o=>o.title.toLowerCase().includes(q)||o.wo.toLowerCase().includes(q)||o.customer.toLowerCase().includes(q));}
+  if(fDel)orders=orders.filter(o=>o.delv);
+  if(srch){const q=srch.toLowerCase();orders=orders.filter(o=>o.title.toLowerCase().includes(q)||o.wo.toLowerCase().includes(q)||o.customer.toLowerCase().includes(q)||String(o.floor||'').toLowerCase().includes(q)||String(o.unit||'').toLowerCase().includes(q));}
   orders.sort((a,b)=>{
     let av=a[sortCol]||'',bv=b[sortCol]||'';
     if(sortCol==='hours'||sortCol==='value'){av=+av;bv=+bv;}
@@ -359,6 +419,7 @@ function renderBoard(app){
       <option value="">All customers</option>
       ${custs.map(c=>`<option value="${c}"${fCust===c?' selected':''}>${c}</option>`).join('')}
     </select>
+    <button class="btn btn-s" id="btn-fdel" style="${fDel?'background:#e8f1fd;border-color:#b0c8e8;color:#1a56db;font-weight:600':''}">🚚 Delivering only</button>
     <button class="btn btn-s" id="btn-clf">Clear filters</button>
     <span style="margin-left:auto;font-size:12px;color:var(--t2)">${orders.length} shown · ${DB.orders.filter(o=>o.plannedWeek).length} scheduled · ${unschCnt} unscheduled</span>
     <button class="btn btn-s" id="btn-clearall" style="border-color:var(--red);color:var(--red)">Clear All Orders</button>
@@ -368,7 +429,10 @@ function renderBoard(app){
     <table class="wo-table">
       <thead><tr>
         <th style="width:22px"></th>
+        <th style="width:34px;text-align:center" title="Delivery next week">🚚</th>
         <th data-s="wo" class="${sortCol==='wo'?sortDir>0?'asc':'desc':''}">WO #</th>
+        <th data-s="floor" class="${sortCol==='floor'?sortDir>0?'asc':'desc':''}">Floor</th>
+        <th data-s="unit" class="${sortCol==='unit'?sortDir>0?'asc':'desc':''}">Unit</th>
         <th data-s="title" class="${sortCol==='title'?sortDir>0?'asc':'desc':''}">Title</th>
         <th data-s="customer" class="${sortCol==='customer'?sortDir>0?'asc':'desc':''}">Customer</th>
         <th data-s="hours" class="${sortCol==='hours'?sortDir>0?'asc':'desc':''}" style="text-align:right">Hrs</th>
@@ -376,14 +440,16 @@ function renderBoard(app){
         <th data-s="value" class="${sortCol==='value'?sortDir>0?'asc':'desc':''}" style="text-align:right">Value</th>
         <th data-s="step">Step</th>
         <th data-s="plannedWeek">Planned Week</th>
-        <th>Notes</th>
-        <th style="width:90px">Flag</th>
+        <th style="width:30px"></th>
       </tr></thead>
       <tbody id="tbody">
-        ${!orders.length?`<tr><td colspan="10"><div class="empty">No orders match filters</div></td></tr>`:''}
+        ${!orders.length?`<tr><td colspan="13"><div class="empty">No orders match filters</div></td></tr>`:''}
         ${orders.map((o,ri)=>`<tr class="${o.colour?'c-'+o.colour:''}${o.hl?' hl-row':''}${ri>0&&(orders[ri-1].customer||'')!==(o.customer||'')?' grp-start':''}" draggable="true" data-wo="${o.wo}">
           <td><span class="drag-handle">⠿</span></td>
+          <td style="text-align:center"><button class="dvbtn${o.delv?' on':''}" data-dv="${o.wo}" title="${o.delv?'Delivering next week — click to untag':'Tag for delivery next week'}">🚚</button></td>
           <td><span class="wo-num" data-hl="${o.wo}" style="cursor:pointer" title="Tap to mark as discussed">${o.hl?'✓ ':''}${o.wo}</span></td>
+          <td>${o.floor?`<span class="fu-badge">${o.floor}</span>`:'<span style="color:var(--t3)">—</span>'}</td>
+          <td>${o.unit?`<span class="fu-badge">${o.unit}</span>`:'<span style="color:var(--t3)">—</span>'}</td>
           <td><span class="wo-title" title="${o.title}">${o.title}</span></td>
           <td><span class="wo-cust" title="${o.customer}">${o.customer}</span></td>
           <td style="text-align:right"><input type="number" step="0.5" min="0" style="width:52px;text-align:right;border:1px solid ${o.hoursEstimated?'#f59e0b':'var(--b2)'};border-radius:4px;padding:2px 4px;font-size:12px;font-weight:600;background:${o.hoursEstimated?'#fffbeb':'#fff'}" title="${o.hoursEstimated?'Estimated from value — verify':'Actual hours from Cienapps'}" data-hi="${o.wo}" value="${o.hours}"></td>
@@ -397,12 +463,7 @@ function renderBoard(app){
             <option value="">— Unscheduled —</option>
             ${weeks.map(w=>`<option value="${w}"${o.plannedWeek===w?' selected':''}>${wkLbl(w)}</option>`).join('')}
           </select></td>
-          <td><input class="notes-inp" data-ni="${o.wo}" value="${(o.notes||'').replace(/"/g,'&quot;')}" placeholder="Note…"></td>
-          <td><div style="display:flex;gap:3px;align-items:center">
-            ${['red','amber','green','blue','purple'].map(c=>`<span class="cdot" style="background:var(--${c})" data-dc="${o.wo}" data-cv="${c}"></span>`).join('')}
-            <span class="cdot" style="background:#e5e8ed;font-size:10px;line-height:13px;text-align:center;color:var(--t3)" data-dc="${o.wo}" data-cv="" title="Clear colour">×</span>
-            <button style="background:none;border:none;color:var(--t3);font-size:14px;padding:0 2px;cursor:pointer;line-height:1;margin-left:4px" data-del="${o.wo}" title="Delete order">🗑</button>
-          </div></td>
+          <td style="text-align:center"><button style="background:none;border:none;color:var(--t3);font-size:14px;padding:0 2px;cursor:pointer;line-height:1" data-del="${o.wo}" title="Delete order">🗑</button></td>
         </tr>`).join('')}
       </tbody>
     </table>
@@ -433,7 +494,17 @@ function renderBoard(app){
   const si=document.getElementById('srch');if(si)si.oninput=function(){srch=this.value;render();};
   const fw=document.getElementById('fwk');if(fw)fw.onchange=function(){fWeek=this.value;render();};
   const fc=document.getElementById('fcust');if(fc)fc.onchange=function(){fCust=this.value;render();};
-  const cf=document.getElementById('btn-clf');if(cf)cf.onclick=()=>{fWeek='';fCust='';srch='';render();};
+  const cf=document.getElementById('btn-clf');if(cf)cf.onclick=()=>{fWeek='';fCust='';srch='';fDel=false;render();};
+  const fd=document.getElementById('btn-fdel');if(fd)fd.onclick=()=>{fDel=!fDel;render();};
+  // Delivery tag toggle — in place, no re-render, so the list doesn't jump while reviewing
+  document.querySelectorAll('[data-dv]').forEach(b=>b.onclick=()=>{
+    const o=DB.orders.find(x=>x.wo===b.dataset.dv);if(!o)return;
+    o.delv=!o.delv;
+    if(!o.delv){o.delVeh='';o.delDay='';o.delDone=false;}
+    b.className='dvbtn'+(o.delv?' on':'');
+    b.title=o.delv?'Delivering next week — click to untag':'Tag for delivery next week';
+    updDelBadge();sched();
+  });
   const ca=document.getElementById('btn-clearall');
   if(ca)ca.onclick=()=>{
     if(!confirm('Delete ALL '+DB.orders.length+' orders from the planner? This cannot be undone.'))return;
@@ -445,9 +516,7 @@ function renderBoard(app){
   document.querySelectorAll('[data-wsel]').forEach(sel=>sel.onchange=function(){const o=DB.orders.find(x=>x.wo===this.dataset.wsel);if(o){o.plannedWeek=this.value;sched();render();}});
   document.querySelectorAll('[data-stepsel]').forEach(sel=>sel.onchange=function(){const o=DB.orders.find(x=>x.wo===this.dataset.stepsel);if(o){o.step=this.value;sched();render();toast('Step updated');}});
   document.querySelectorAll('[data-hl]').forEach(el=>el.onclick=function(){const o=DB.orders.find(x=>x.wo===this.dataset.hl);if(o){o.hl=!o.hl;sched();render();}});
-  document.querySelectorAll('[data-ni]').forEach(inp=>inp.oninput=function(){const o=DB.orders.find(x=>x.wo===this.dataset.ni);if(o){o.notes=this.value;sched();}});
   document.querySelectorAll('[data-hi]').forEach(inp=>inp.onchange=function(){const o=DB.orders.find(x=>x.wo===this.dataset.hi);if(o){o.hours=parseFloat(this.value)||0;o.hoursEstimated=false;sched();render();}});
-  document.querySelectorAll('[data-dc]').forEach(dot=>dot.onclick=()=>{const o=DB.orders.find(x=>x.wo===dot.dataset.dc);if(o){o.colour=dot.dataset.cv;sched();render();}});
   document.querySelectorAll('[data-del]').forEach(btn=>btn.onclick=()=>{
     if(!confirm('Delete '+btn.dataset.del+' from the planner?'))return;
     DB.orders=DB.orders.filter(o=>o.wo!==btn.dataset.del);
@@ -471,6 +540,366 @@ function renderBoard(app){
       };
     });
   }
+}
+
+/* ---------- Deliveries: plan next week's deliveries by vehicle and day (v2) ---------- */
+const DEL_DAYS=['Mon','Tue','Wed','Thu','Fri','Sat'];
+const DEL_VEH=[
+  {k:'ARTIC',  n:'Artic',        cat:'Artic', sub:''},
+  {k:'VOLVO',  n:'Volvo',        cat:'Truck', sub:''},
+  {k:'RENAULT',n:'Renault',      cat:'Truck', sub:''},
+  {k:'IVECO',  n:'Iveco',        cat:'Truck', sub:''},
+  {k:'CRAFTER',n:'Crafter',      cat:'Truck', sub:''},
+  {k:'SMART',  n:'Smart Movers', cat:'Truck', sub:'external haulier'}
+];
+const vehLbl=k=>{const v=DEL_VEH.find(x=>x.k===k);return v?v.n:'';};
+let delDragList=null,delFilter='';
+const delSel=new Set();
+
+function delAll(){return[...DB.orders.filter(o=>o.delv),...(DB.delx||[])];}
+function findDel(wo){return DB.orders.find(o=>o.wo===wo)||(DB.delx||[]).find(o=>o.wo===wo);}
+function woCmp(a,b){
+  const na=(String(a.wo).match(/\d+/g)||[]).map(Number),nb=(String(b.wo).match(/\d+/g)||[]).map(Number);
+  for(let i=0;i<Math.max(na.length,nb.length);i++){
+    const x=i<na.length?na[i]:-1,y=i<nb.length?nb[i]:-1;
+    if(x!==y)return x-y;
+  }
+  return String(a.wo).localeCompare(String(b.wo));
+}
+function dayVal(d){return delAll().filter(o=>o.delDay===d).reduce((a,o)=>a+(+o.value||0),0);}
+const escA=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+
+function dchip(o,showCust){
+  return `<div class="dchip${o.delDone?' done':''}${o.manual?' manual':''}${delSel.has(o.wo)?' sel':''}" draggable="true" data-dw="${escA(o.wo)}" title="Click to select · drag onto a day${o.manual?' · added manually':''}">
+    <div class="dchip-top"><b>${escA(o.wo)}</b>${(o.floor||o.unit)?`<span class="dfu">${escA([o.floor,o.unit].filter(Boolean).join(' · '))}</span>`:''}<span class="dcv">€${Math.round(o.value||0).toLocaleString()}</span>
+      <span class="dchip-btns"><button class="dchk${o.delDone?' on':''}" data-dd="${escA(o.wo)}" title="${o.delDone?'Delivered — click to undo':'Mark delivered'}">✓</button><button data-dx="${escA(o.wo)}" title="${o.delDay?'Return to pool':(o.manual?'Delete this manual job':'Remove from delivery plan')}">×</button></span>
+    </div>
+    <div class="dchip-t">${escA(o.title)||'—'}</div>
+    ${showCust?`<div class="dchip-c">${escA(o.customer)}</div>`:''}
+  </div>`;
+}
+
+function renderDeliveries(app){
+  const tagged=delAll();
+  const pool=tagged.filter(o=>!o.delDay);
+  const done=tagged.filter(o=>o.delDone).length;
+  const notes=DB.delNotes||{};
+  const wkTot=tagged.filter(o=>o.delDay).reduce((a,o)=>a+(+o.value||0),0);
+  // pool grouped by customer, WO-number numeric order inside each group
+  const grps={};pool.forEach(o=>{const c=o.customer||'(no customer)';(grps[c]=grps[c]||[]).push(o);});
+  const gkeys=Object.keys(grps).sort((a,b)=>a.localeCompare(b));
+  gkeys.forEach(k=>grps[k].sort(woCmp));
+
+  app.innerHTML=`<div class="pg">
+  <div class="del-panel">
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px">
+      <div style="font-size:14px;font-weight:600">Delivery Plan — Next Week</div>
+      <span style="font-size:12px;color:var(--t2)">${tagged.length} tagged · ${tagged.length-pool.length} planned · ${done} delivered</span>
+      <span style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-s" id="btn-addjob">＋ Add Job</button>
+        <button class="btn btn-blue" id="btn-delprint">🖨 Print A3 Poster</button>
+        <button class="btn btn-g" id="btn-delexp">⬇ Export Delivery Plan</button>
+        <button class="btn btn-s" id="btn-delreset" style="border-color:var(--red);color:var(--red)">Clear Week — Start Fresh</button>
+      </span>
+    </div>
+    <p style="font-size:12px;color:var(--t3);margin-bottom:8px">Tag jobs on the Capacity Board with 🚚, or add one manually. Click cards to select several, then drag any selected card onto a vehicle and day to move them together. × on a planned job returns it to the pool; × in the pool removes it from the plan. ✓ marks delivered.</p>
+    <div class="addjob-row" id="ajform">
+      <input id="aj-wo" placeholder="WO / ref (optional)" style="width:140px">
+      <input id="aj-title" placeholder="Description *" style="flex:1;min-width:180px">
+      <input id="aj-cust" placeholder="Customer" style="width:180px">
+      <input id="aj-val" type="number" min="0" placeholder="€ value" style="width:100px">
+      <button class="btn btn-g" id="aj-add">Add to pool</button>
+    </div>
+    ${delSel.size?`<div class="selbar" style="margin-top:10px"><b>${delSel.size} selected</b> — drag any selected card onto a day to move them all <button id="selclr">clear selection</button></div>`:''}
+    <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin:10px 0 5px">
+      <span style="font-size:11px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.4px">To plan — ${pool.length} job${pool.length!==1?'s':''}</span>
+      <input class="dsrch" id="dsrch" placeholder="🔍 Filter jobs — WO, customer, floor, unit, title…" value="${escA(delFilter)}">
+    </div>
+    <div class="del-pool" id="dpool">
+      ${pool.length?gkeys.map(c=>`<div class="dgrp">
+        <div class="dgrp-h" data-grp="${escA(c)}">${escA(c)}<span class="gcnt">${grps[c].length} job${grps[c].length!==1?'s':''} · €${Math.round(grps[c].reduce((a,o)=>a+(+o.value||0),0)).toLocaleString()} · click to select all</span></div>
+        <div class="dpool-chips">${grps[c].map(o=>dchip(o,false)).join('')}</div>
+      </div>`).join(''):'<span style="font-size:12px;color:var(--t3)">Nothing waiting. Tag jobs on the Capacity Board with the 🚚 button, or use ＋ Add Job.</span>'}
+    </div>
+  </div>
+  <div class="del-panel" style="overflow-x:auto">
+    <table class="del-grid">
+      <thead><tr><th>Vehicle</th>${DEL_DAYS.map(d=>`<th>${d}</th>`).join('')}</tr></thead>
+      <tbody>
+        ${DEL_VEH.map((v,i)=>{const vc=tagged.filter(o=>o.delVeh===v.k).length;return `<tr${i===1?' style="border-top:3px double var(--border)"':''}>
+          <td class="dveh">${v.n}<span class="dsub">${v.cat}${v.sub?' · '+v.sub:''} · ${vc} job${vc!==1?'s':''}</span></td>
+          ${DEL_DAYS.map(d=>`<td class="dcell" data-cell="${v.k}|${d}">${tagged.filter(o=>o.delVeh===v.k&&o.delDay===d).sort(woCmp).map(o=>dchip(o,true)).join('')}</td>`).join('')}
+        </tr>`;}).join('')}
+        <tr><td class="dveh">Notes</td>${DEL_DAYS.map(d=>`<td style="border:1px solid var(--border);padding:4px;background:#fffef7"><input class="dnote" data-dnote="${d}" value="${escA(notes[d]||'')}" placeholder="${d} note…"></td>`).join('')}</tr>
+        <tr><td class="dtot" style="text-align:left">Value / day<br><span style="color:#0d6e46">Week: €${Math.round(wkTot).toLocaleString()}</span></td>
+          ${DEL_DAYS.map(d=>{const c=tagged.filter(o=>o.delDay===d).length,v=dayVal(d);return `<td class="dtot">${c?c+' job'+(c!==1?'s':'')+'<br><span style="color:#0d6e46">€'+Math.round(v).toLocaleString()+'</span>':'—'}</td>`;}).join('')}
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  </div>`;
+
+  // ----- bindings -----
+  document.querySelectorAll('.dchip').forEach(ch=>{
+    ch.onclick=e=>{
+      if(e.target.closest('button'))return;
+      const wo=ch.dataset.dw;
+      delSel.has(wo)?delSel.delete(wo):delSel.add(wo);
+      render();
+    };
+    ch.ondragstart=e=>{
+      const wo=ch.dataset.dw;
+      delDragList=delSel.has(wo)?[...delSel]:[wo];
+      ch.classList.add('dragging');
+      e.dataTransfer.effectAllowed='move';
+    };
+    ch.ondragend=()=>ch.classList.remove('dragging');
+  });
+  // Live pool filter — hides cards in place (no re-render, keeps focus while typing)
+  const applyDelFilter=()=>{
+    const q=delFilter.toLowerCase().trim();
+    document.querySelectorAll('#dpool .dchip').forEach(ch=>{
+      const o=findDel(ch.dataset.dw);
+      const hay=o?[o.wo,o.title,o.customer,o.floor,o.unit].map(x=>String(x==null?'':x)).join(' ').toLowerCase():'';
+      ch.style.display=!q||hay.indexOf(q)>-1?'':'none';
+    });
+    document.querySelectorAll('#dpool .dgrp').forEach(g=>{
+      const any=[...g.querySelectorAll('.dchip')].some(c=>c.style.display!=='none');
+      g.style.display=any?'':'none';
+    });
+  };
+  applyDelFilter();
+  const dsr=document.getElementById('dsrch');
+  if(dsr)dsr.oninput=function(){delFilter=this.value;applyDelFilter();};
+  document.querySelectorAll('.dgrp-h').forEach(h=>h.onclick=()=>{
+    // select all VISIBLE (filter-respecting) jobs in this customer group
+    const wos=[...h.parentElement.querySelectorAll('.dchip')].filter(c=>c.style.display!=='none').map(c=>c.dataset.dw);
+    const allIn=wos.length>0&&wos.every(w=>delSel.has(w));
+    wos.forEach(w=>allIn?delSel.delete(w):delSel.add(w));
+    render();
+  });
+  const sc=document.getElementById('selclr');if(sc)sc.onclick=()=>{delSel.clear();render();};
+  document.querySelectorAll('[data-dd]').forEach(b=>b.onclick=()=>{
+    const o=findDel(b.dataset.dd);if(o){o.delDone=!o.delDone;sched();render();}
+  });
+  document.querySelectorAll('[data-dx]').forEach(b=>b.onclick=()=>{
+    const o=findDel(b.dataset.dx);if(!o)return;
+    if(o.delDay){o.delVeh='';o.delDay='';toast(o.wo+' returned to the pool');}
+    else if(o.manual){DB.delx=(DB.delx||[]).filter(x=>x.wo!==o.wo);toast(o.wo+' deleted');}
+    else{o.delv=false;o.delVeh='';o.delDay='';o.delDone=false;toast(o.wo+' removed from delivery plan');}
+    delSel.delete(o.wo);sched();render();
+  });
+  const dropTo=(el,fn)=>{
+    el.ondragover=e=>{e.preventDefault();el.classList.add('dragover');};
+    el.ondragleave=()=>el.classList.remove('dragover');
+    el.ondrop=e=>{
+      e.preventDefault();el.classList.remove('dragover');
+      const list=delDragList||[];delDragList=null;
+      const moved=list.map(findDel).filter(Boolean);
+      if(!moved.length)return;
+      moved.forEach(fn);delSel.clear();sched();render();
+      if(moved.length>1)toast(moved.length+' jobs moved');
+    };
+  };
+  document.querySelectorAll('.dcell').forEach(c=>{
+    const parts=c.dataset.cell.split('|');
+    dropTo(c,o=>{o.delVeh=parts[0];o.delDay=parts[1];});
+  });
+  const pl=document.getElementById('dpool');
+  if(pl)dropTo(pl,o=>{o.delVeh='';o.delDay='';});
+  document.querySelectorAll('.dnote').forEach(inp=>inp.oninput=function(){
+    (DB.delNotes=DB.delNotes||{})[this.dataset.dnote]=this.value;sched();
+  });
+  const aj=document.getElementById('btn-addjob');
+  if(aj)aj.onclick=()=>{document.getElementById('ajform').classList.toggle('open');const t=document.getElementById('aj-title');if(t)t.focus();};
+  const aja=document.getElementById('aj-add');
+  if(aja)aja.onclick=()=>{
+    const title=document.getElementById('aj-title').value.trim();
+    if(!title){toast('Give the job a description');return;}
+    let wo=document.getElementById('aj-wo').value.trim();
+    if(!wo)wo='JOB-'+(DB.nid++);
+    if(findDel(wo)||DB.orders.find(o=>o.wo===wo)){toast(wo+' already exists — use a different ref');return;}
+    DB.delx=DB.delx||[];
+    DB.delx.push({wo,title,customer:document.getElementById('aj-cust').value.trim(),value:parseFloat(document.getElementById('aj-val').value)||0,manual:true,delVeh:'',delDay:'',delDone:false});
+    sched();render();toast(wo+' added to the pool');
+  };
+  const ex=document.getElementById('btn-delexp');if(ex)ex.onclick=exportDeliveries;
+  const pp=document.getElementById('btn-delprint');if(pp)pp.onclick=printPoster;
+  const rs=document.getElementById('btn-delreset');
+  if(rs)rs.onclick=()=>{
+    if(!confirm('Clear the whole delivery plan ('+tagged.length+' jobs)? Tags, manual jobs, day notes, vehicles and days are all removed so you can start fresh at the next production meeting.'))return;
+    DB.orders.forEach(o=>{delete o.delv;delete o.delVeh;delete o.delDay;delete o.delDone;});
+    DB.delx=[];DB.delNotes={};delSel.clear();
+    sched();render();toast('Delivery plan cleared — ready for next week');
+  };
+}
+
+/* Print the delivery plan as A3 landscape wall posters:
+   Sheet 1 Artic · Sheet 2 Trucks (Volvo/Renault/Iveco/Crafter + notes) · Sheet 3 Smart Movers (only if used) */
+function printPoster(){
+  const all=delAll();
+  const planned=all.filter(o=>o.delDay);
+  if(!planned.length){toast('No jobs placed on a vehicle and day yet');return;}
+  const notes=DB.delNotes||{};
+  const now=new Date();const dow=now.getDay();
+  const mon=new Date(now.getFullYear(),now.getMonth(),now.getDate()-dow+(dow===0?-6:1)+7); // next week's Monday
+  const dd=i=>{const d=new Date(mon);d.setDate(d.getDate()+i);return d;};
+  const wn=(d=>{const s=new Date(Date.UTC(d.getFullYear(),0,1));return Math.ceil(((Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())-s.getTime())/864e5+s.getUTCDay()+1)/7);})(mon);
+  const fmtD=(d,o)=>d.toLocaleDateString('en-IE',o);
+  const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+  const DAYNAMES=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const range='Mon '+fmtD(dd(0),{day:'numeric',month:'short'})+' \u2013 Sat '+fmtD(dd(5),{day:'numeric',month:'short',year:'numeric'});
+  const printed=fmtD(now,{weekday:'short',day:'numeric',month:'short',year:'numeric'});
+  const hasNotes=DEL_DAYS.some(d=>(notes[d]||'').trim());
+  const smart=planned.some(o=>o.delVeh==='SMART');
+  const total=smart?3:2;
+  const job=o=>`<div class="job"><div class="jwo">${esc(o.wo)}</div><div class="jti">${esc(o.title||'\u2014')}</div><div class="jcu">${esc(o.customer||'')}</div></div>`;
+  const vRow=v=>`<div class="vrow"><div class="vcell"><div class="vn">${esc(v.n)}</div><div class="vs">${esc(v.cat)}${v.sub?' \u00b7 '+esc(v.sub):''}</div></div>${DEL_DAYS.map(d=>`<div class="dc">${planned.filter(o=>o.delVeh===v.k&&o.delDay===d).sort(woCmp).map(job).join('')}</div>`).join('')}</div>`;
+  const head=t=>`<div class="ph"><div><div class="kick">Western Postform \u2014 Factory floor</div><div class="h1">Delivery plan \u2014 ${t}</div></div><div class="wk"><div class="wkn">Week ${wn}</div><div class="wkr">${range}</div></div></div>`;
+  const dhead=`<div class="dhead"><div class="dh0">Vehicle</div>${DAYNAMES.map((n,i)=>`<div class="dh">${n.toUpperCase()} <span>${fmtD(dd(i),{day:'numeric',month:'short'}).toUpperCase()}</span></div>`).join('')}</div>`;
+  const notesRow=hasNotes?`<div class="nrow"><div class="n0">Notes</div>${DEL_DAYS.map(d=>`<div class="nc">${esc(notes[d]||'')}</div>`).join('')}</div>`:'';
+  const foot=i=>`<div class="pf"><span>Printed ${printed} \u00b7 WPF Production Planner \u2014 reprint after each production meeting</span><span class="pfn">Sheet ${i} of ${total}</span></div>`;
+  const sheet=(t,rows,extra,i)=>`<div class="sheet" data-cat="${esc(t)}">${head(t)}<div class="pgrid">${dhead}${rows}${extra}</div>${foot(i)}</div>`;
+  const body=sheet('Artic',vRow(DEL_VEH[0]),'',1)
+    +sheet('Trucks',DEL_VEH.slice(1,5).map(vRow).join(''),notesRow,2)
+    +(smart?sheet('Smart Movers',vRow(DEL_VEH[5]),'',3):'');
+  const doc=`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>WPF Delivery Plan \u2014 Week ${wn}</title>
+<style>
+@page{size:A3 landscape;margin:0}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+body{font-family:'Archivo',sans-serif;color:#201e1d;background:#8a8886}
+.sheet{width:420mm;height:297mm;background:#fff;padding:14mm 16mm 11mm;display:flex;flex-direction:column;margin:12px auto;page-break-after:always;break-after:page}
+@media print{body{background:none}.sheet{margin:0}}
+.ph{display:flex;justify-content:space-between;align-items:flex-end;gap:10mm;padding-bottom:6mm;border-bottom:2px solid #201e1d}
+.kick{font-size:15px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:#ec3013;margin-bottom:8px}
+.h1{font-size:64px;font-weight:800;line-height:.95;letter-spacing:-1.5px}
+.wk{background:#ec3013;color:#fff;padding:18px 26px;flex-shrink:0}
+.wkn{font-size:34px;font-weight:800;line-height:1}
+.wkr{font-size:16px;font-weight:600;margin-top:6px}
+.pgrid{flex:1;display:flex;flex-direction:column;border:2px solid #201e1d;margin-top:5mm;min-height:0;overflow:hidden}
+.dhead{display:grid;grid-template-columns:180px repeat(6,1fr);background:#201e1d;color:#fff}
+.dh0{padding:11px 14px;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px}
+.dh{padding:11px 14px;font-size:15px;font-weight:700;letter-spacing:1px;border-left:1px solid #5a5754}
+.dh span{font-weight:500;opacity:.65;margin-left:6px}
+.vrow{flex:1 0 auto;display:grid;grid-template-columns:180px repeat(6,1fr);border-top:1px solid #b9b6b4}
+.vcell{padding:12px 14px;background:#eceae9}
+.vn{font-size:20px;font-weight:800;line-height:1.1}
+.vs{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:#7a7672;margin-top:4px}
+.dc{border-left:1px solid #b9b6b4;padding:10px 12px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.jwo{font-size:15px;font-weight:800;line-height:1.15}
+.jti{font-size:13.5px;line-height:1.25;margin-top:2px}
+.jcu{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:#7a7672;margin-top:2px}
+.nrow{display:grid;grid-template-columns:180px repeat(6,1fr);border-top:2px solid #201e1d;background:#fbdcd5}
+.n0{padding:11px 14px;font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;color:#5c130a}
+.nc{border-left:1px solid #f3b3a6;padding:11px 12px;font-size:13px;font-weight:600;line-height:1.3;color:#5c130a}
+.pf{display:flex;justify-content:space-between;gap:20px;margin-top:4mm;font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:#7a7672}
+/* compact steps — used only when a single vehicle's own page overflows, so nothing is ever cut off */
+.sheet.c1 .jwo{font-size:13.5px}.sheet.c1 .jti{font-size:12px}.sheet.c1 .jcu{font-size:10px}.sheet.c1 .dc{padding:8px 10px;gap:8px}
+.sheet.c2 .jwo{font-size:12px}.sheet.c2 .jti{font-size:10.5px}.sheet.c2 .jcu{font-size:9px}.sheet.c2 .dc{padding:6px 8px;gap:6px}
+.sheet.c3 .jwo{font-size:10.5px}.sheet.c3 .jti{font-size:9.5px}.sheet.c3 .jcu{font-size:8.5px}.sheet.c3 .dc{padding:5px 7px;gap:5px}
+</style></head><body>${body}<script>
+/* Overflow pagination: a page only ever holds WHOLE vehicle rows. If a category page
+   overflows, whole vehicles (last first, e.g. Crafter) move to a continuation page —
+   one vehicle's deliveries are never split across pages and no job is ever clipped.
+   If a single vehicle alone still overflows its page, the cards step down in size instead. */
+function paginate(){
+  var list=[].slice.call(document.querySelectorAll('.sheet'));
+  for(var si=0;si<list.length;si++){
+    var sh=list[si],grid=sh.querySelector('.pgrid'),guard=0;
+    while(grid.scrollHeight>grid.clientHeight+2&&guard++<60){
+      var rows=sh.querySelectorAll('.vrow');
+      if(rows.length<=1){
+        var lvl=+(sh.getAttribute('data-c')||0);
+        if(lvl>=3)break;
+        lvl++;sh.setAttribute('data-c',lvl);sh.className='sheet c'+lvl;
+        continue;
+      }
+      var next=list[si+1];
+      var cont=(next&&next.getAttribute('data-cont')===sh.getAttribute('data-cat'))?next:null;
+      if(!cont){
+        cont=document.createElement('div');
+        cont.className='sheet';
+        cont.setAttribute('data-cat',sh.getAttribute('data-cat'));
+        cont.setAttribute('data-cont',sh.getAttribute('data-cat'));
+        var h=sh.querySelector('.ph').cloneNode(true);
+        var h1=h.querySelector('.h1');h1.textContent=h1.textContent.replace(' (cont.)','')+' (cont.)';
+        var g=document.createElement('div');g.className='pgrid';
+        g.appendChild(sh.querySelector('.dhead').cloneNode(true));
+        cont.appendChild(h);cont.appendChild(g);
+        cont.appendChild(sh.querySelector('.pf').cloneNode(true));
+        sh.parentNode.insertBefore(cont,sh.nextSibling);
+        list.splice(si+1,0,cont);
+      }
+      var cg=cont.querySelector('.pgrid');
+      cg.insertBefore(rows[rows.length-1],cg.children[1]||null);
+      var nr=sh.querySelector('.nrow');
+      if(nr)cg.appendChild(nr);
+    }
+  }
+  var all=document.querySelectorAll('.sheet');
+  for(var i=0;i<all.length;i++){var f=all[i].querySelector('.pfn');if(f)f.textContent='Sheet '+(i+1)+' of '+all.length;}
+}
+/* Load the poster font WITHOUT blocking: if Google Fonts is slow or the office is
+   offline, we still paginate and print (system font fallback) after 3s. */
+(function(){
+  var done=false;
+  function go(){if(done)return;done=true;paginate();setTimeout(function(){window.print();},250);}
+  var l=document.createElement('link');l.rel='stylesheet';
+  l.href='https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&display=swap';
+  l.onload=function(){
+    if(document.fonts&&document.fonts.ready)document.fonts.ready.then(function(){setTimeout(go,120);});
+    else setTimeout(go,400);
+  };
+  l.onerror=function(){go();};
+  document.head.appendChild(l);
+  setTimeout(go,3000);
+})();
+<\/script></body></html>`;
+  const w=window.open('','_blank');
+  if(!w){toast('Popup blocked \u2014 allow popups for this page');return;}
+  w.document.write(doc);w.document.close();
+  toast('Poster opened \u2014 print at A3 landscape');
+}
+
+function exportDeliveries(){
+  const all=delAll();
+  if(!all.length){toast('No jobs tagged for delivery yet');return;}
+  const notes=DB.delNotes||{};
+  // Calendar sheet — mirrors the on-screen grid
+  const jobTxt=o=>o.wo+' — '+(o.title||'')+(o.customer?'  ['+o.customer+']':'')+'  €'+Math.round(o.value||0).toLocaleString()+(o.delDone?'  — DELIVERED':'');
+  const cal=[['Vehicle',...DEL_DAYS]];
+  DEL_VEH.forEach(v=>{
+    const by={};DEL_DAYS.forEach(d=>{by[d]=all.filter(o=>o.delVeh===v.k&&o.delDay===d).sort(woCmp);});
+    const k=Math.max(1,...DEL_DAYS.map(d=>by[d].length));
+    for(let i=0;i<k;i++)cal.push([i===0?v.n:'',...DEL_DAYS.map(d=>by[d][i]?jobTxt(by[d][i]):'')]);
+    cal.push(['',...DEL_DAYS.map(()=>'')]);
+  });
+  cal.push(['NOTES',...DEL_DAYS.map(d=>notes[d]||'')]);
+  cal.push(['JOBS / DAY',...DEL_DAYS.map(d=>all.filter(o=>o.delDay===d).length)]);
+  cal.push(['VALUE / DAY €',...DEL_DAYS.map(d=>Math.round(dayVal(d)))]);
+  cal.push(['WEEK TOTAL €',Math.round(all.filter(o=>o.delDay).reduce((a,o)=>a+(+o.value||0),0))]);
+  const un=all.filter(o=>!o.delDay);
+  if(un.length)cal.push(['UNPLANNED',un.length+' job'+(un.length!==1?'s':'')+' still in the pool — see Unplanned sheet']);
+
+  // List sheets
+  const dayIx=o=>{const i=DEL_DAYS.indexOf(o.delDay);return i<0?99:i;};
+  const vehIx=o=>{const i=DEL_VEH.findIndex(v=>v.k===o.delVeh);return i<0?99:i;};
+  const srt=(a,b)=>dayIx(a)-dayIx(b)||vehIx(a)-vehIx(b)||woCmp(a,b);
+  const hdr=['Day','Vehicle','WO #','Floor','Unit','Order #','Title','Customer','Value €','Hours','Status'];
+  const rowOf=o=>[o.delDay||'UNPLANNED',vehLbl(o.delVeh)||'Unassigned',o.wo,o.floor||'',o.unit||'',o.orderNo||'',o.title||'',o.customer||'',Math.round(o.value||0),o.hours||'',o.delDone?'DELIVERED':(o.manual?'added manually':'')];
+  const widths=[{wch:10},{wch:13},{wch:14},{wch:7},{wch:9},{wch:9},{wch:34},{wch:30},{wch:9},{wch:7},{wch:15}];
+  const mkSheet=list=>{const ws=XLSX.utils.aoa_to_sheet([hdr,...[...list].sort(srt).map(rowOf)]);ws['!cols']=widths;return ws;};
+
+  const wb=XLSX.utils.book_new();
+  const cws=XLSX.utils.aoa_to_sheet(cal);
+  cws['!cols']=[{wch:13},...DEL_DAYS.map(()=>({wch:48}))];
+  XLSX.utils.book_append_sheet(wb,cws,'Calendar');
+  XLSX.utils.book_append_sheet(wb,mkSheet(all),'By Day');
+  XLSX.utils.book_append_sheet(wb,mkSheet(all.filter(o=>o.delVeh==='ARTIC')),'Artic');
+  XLSX.utils.book_append_sheet(wb,mkSheet(all.filter(o=>o.delVeh&&o.delVeh!=='ARTIC')),'Trucks');
+  if(un.length)XLSX.utils.book_append_sheet(wb,mkSheet(un),'Unplanned');
+  XLSX.writeFile(wb,'WPF_Deliveries_'+new Date().toISOString().split('T')[0]+'.xlsx');
+  toast('Delivery plan exported');
 }
 
 function renderImport(app){
@@ -530,25 +959,291 @@ function autoSchedule(newOrders){
   });
 }
 
+/* ---------- Import: header-tolerant column mapping (v16) ---------- */
+const IMP_FIELDS=[
+  {k:'wo',      label:'WO number',  req:true,  al:['# wo','wo','wo #','wo no','wo number','work order','work order #','work order no']},
+  {k:'dueDate', label:'Due date',   req:true,  al:['due date','due','required date','date required','req date','due dt']},
+  {k:'title',   label:'Title',      req:false, al:['title','description','job title','job','name']},
+  {k:'customer',label:'Customer',   req:false, al:['customer','client','customer name','account']},
+  {k:'step',    label:'Step',       req:false, al:['step','status','stage']},
+  {k:'value',   label:'Value',      req:false, al:['sub-total','sub total','subtotal','value','net','net value','total']},
+  {k:'hours',   label:'Hours',      req:false, al:['hours assembly time','to process','hours','assembly hours','hrs']},
+  {k:'ref',     label:'Reference',  req:false, al:['reference','ref','our ref']},
+  {k:'floor',   label:'Floor',      req:false, al:['floor','level','flr','storey']},
+  {k:'unit',    label:'Unit',       req:false, al:['position','unit','unit no','house','house no','plot','apt','apartment','pos']},
+  {k:'orderNo', label:'Order #',    req:false, al:['order #','order no','order number','order']},
+  {k:'salesRep',label:'Sales rep',  req:false, al:['sales rep','rep','salesperson','sales person','sales']}
+];
+const nrmH=s=>String(s==null?'':s).toLowerCase().replace(/\s+/g,' ').trim();
+const colLtr=i=>{let s='',n=i;while(n>=0){s=String.fromCharCode(65+(n%26))+s;n=Math.floor(n/26)-1;}return s;};
+let PEND=null;
+
+// Find a real header row anywhere in the first 12 rows. Returns row index or -1.
+function findHeaderRow(aoa){
+  for(let r=0;r<Math.min(12,aoa.length);r++){
+    const cells=(aoa[r]||[]).map(nrmH);
+    let hits=0,hasWo=false;
+    IMP_FIELDS.forEach(f=>{
+      if(cells.some(c=>c&&f.al.indexOf(c)>-1)){hits++;if(f.k==='wo')hasWo=true;}
+    });
+    if(hasWo&&hits>=3)return r;
+  }
+  return -1;
+}
+function mapFromHeader(hdrCells){
+  const m={};
+  IMP_FIELDS.forEach(f=>{
+    m[f.k]=-1;
+    for(let p=0;p<f.al.length&&m[f.k]<0;p++){
+      const idx=hdrCells.findIndex(c=>nrmH(c)===f.al[p]);
+      if(idx>-1&&Object.keys(m).every(k=>k===f.k||m[k]!==idx))m[f.k]=idx;
+    }
+  });
+  return m;
+}
+
+// No header row — infer each column from its contents.
+function guessCols(rows){
+  const n=rows.reduce((a,r)=>Math.max(a,r.length),0);
+  const col=i=>rows.map(r=>r[i]).filter(v=>v!==''&&v!=null);
+  const used={};
+  const take=i=>{if(i>-1)used[i]=1;return i;};
+  const free=i=>!used[i];
+  const m={};
+  const byTest=t=>{let best=-1,bs=0.5;for(let i=0;i<n;i++){if(!free(i))continue;const v=col(i);if(v.length<3)continue;const s=v.filter(t).length/v.length;if(s>bs){bs=s;best=i;}}return best;};
+  m.wo=take(byTest(v=>/^wo[-\s_]/i.test(String(v))));
+  m.step=take(byTest(v=>/^\s*\d+\s*\./.test(String(v))));
+  // Due date: date-like column, well filled, latest-skewed (creation dates sit in the past).
+  const isDt=v=>(v instanceof Date)||(typeof v==='number'&&v>35000&&v<80000);
+  const ser=v=>v instanceof Date?(v.getTime()/86400000)+25569:v;
+  let bd=-1,bmed=-1;
+  for(let i=0;i<n;i++){
+    if(!free(i))continue;
+    const v=col(i);
+    if(!v.length||v.filter(isDt).length/v.length<0.9)continue;
+    if(v.length/rows.length<0.8)continue;
+    const s=v.map(ser).sort((a,b)=>a-b);
+    const med=s[Math.floor(s.length/2)];
+    if(med>bmed){bmed=med;bd=i;}
+  }
+  m.dueDate=take(bd);
+  // Order #: numeric column whose value appears inside the WO number (WO-2604-7 -> 2604).
+  if(m.wo>-1){
+    let bo=-1,bs=0.6;
+    for(let i=0;i<n;i++){
+      if(!free(i))continue;
+      const v=rows.map(r=>[r[m.wo],r[i]]).filter(p=>p[0]!=null&&p[1]!=null&&p[1]!=='');
+      if(v.length<3)continue;
+      const s=v.filter(p=>String(p[0]).indexOf(String(p[1]))>-1).length/v.length;
+      if(s>bs){bs=s;bo=i;}
+    }
+    m.orderNo=take(bo);
+    // Reference: text column that also embeds the order number but is near-unique.
+    let br=-1,bsr=0.6;
+    for(let i=0;i<n;i++){
+      if(!free(i))continue;
+      const v=col(i);
+      if(v.length<3||new Set(v.map(String)).size/v.length<0.9)continue;
+      const pr=rows.map(r=>[r[m.orderNo],r[i]]).filter(p=>p[0]!=null&&p[1]!=null&&p[1]!=='');
+      if(!pr.length)continue;
+      const s=pr.filter(p=>String(p[1]).indexOf(String(p[0]))===0).length/pr.length;
+      if(s>bsr){bsr=s;br=i;}
+    }
+    m.ref=take(br);
+  } else {m.orderNo=-1;m.ref=-1;}
+  // Floor & Unit: the Reference encodes them as segments 3 and 4 (e.g. 2604-7-0-22 = order-seq-floor-unit),
+  // so find the columns whose values match those segments.
+  m.floor=-1;m.unit=-1;
+  if(m.ref>-1){
+    const segs=rows.map(r=>String(r[m.ref]==null?'':r[m.ref]).split('-'));
+    const s3=segs.map(s=>s.length>=4?String(s[2]):null);
+    const s4=segs.map(s=>s.length>=4?s.slice(3).join('-'):null);
+    const matchCol=target=>{
+      let best=-1,bs=0.6;
+      for(let i=0;i<n;i++){
+        if(!free(i))continue;
+        const pairs=rows.map((r,j)=>[target[j],r[i]]).filter(p=>p[0]!=null&&p[1]!=null&&p[1]!=='');
+        if(pairs.length<3)continue;
+        const s=pairs.filter(p=>String(p[1]).toUpperCase().trim()===String(p[0]).toUpperCase().trim()).length/pairs.length;
+        if(s>bs){bs=s;best=i;}
+      }
+      return best;
+    };
+    m.floor=take(matchCol(s3));
+    m.unit=take(matchCol(s4));
+  }
+  // Value: numeric, many distinct, decent magnitude — prefer the one with decimals.
+  let bv=-1,bvs=-1;
+  for(let i=0;i<n;i++){
+    if(!free(i))continue;
+    const v=col(i).filter(x=>typeof x==='number'||(typeof x==='string'&&x!==''&&!isNaN(Number(x)))).map(Number);
+    if(v.length/Math.max(1,col(i).length)<0.9||v.length<3)continue;
+    const d=new Set(v).size;
+    if(d<10)continue;
+    const s=d+(v.some(x=>x%1!==0)?1000:0);
+    if(s>bvs){bvs=s;bv=i;}
+  }
+  m.value=take(bv);
+  // Customer: text column with the longest average value (company names).
+  let bc=-1,bl=6;
+  for(let i=0;i<n;i++){
+    if(!free(i))continue;
+    const v=col(i).map(String);
+    if(v.length<3||v.some(x=>x instanceof Date))continue;
+    if(v.filter(x=>isNaN(Number(x))).length/v.length<0.9)continue;
+    const d=new Set(v).size;
+    if(d<3||d/v.length>0.9)continue;
+    const avg=v.reduce((a,x)=>a+x.length,0)/v.length;
+    if(avg>bl){bl=avg;bc=i;}
+  }
+  m.customer=take(bc);
+  // Title: remaining text column with the most distinct values.
+  let bt=-1,bts=2;
+  for(let i=0;i<n;i++){
+    if(!free(i))continue;
+    const v=col(i).map(String);
+    if(v.length<3)continue;
+    if(v.filter(x=>isNaN(Number(x))).length/v.length<0.8)continue;
+    const d=new Set(v).size;
+    if(d>bts){bts=d;bt=i;}
+  }
+  m.title=take(bt);
+  // Sales rep: remaining text column, few distinct, names with a space.
+  let bp=-1;
+  for(let i=0;i<n&&bp<0;i++){
+    if(!free(i))continue;
+    const v=col(i).map(String);
+    if(v.length<3)continue;
+    const d=new Set(v).size;
+    if(d>=3&&d<=20&&v.filter(x=>/^[A-Za-z .'\-]+$/.test(x)&&x.indexOf(' ')>-1).length/v.length>0.8)bp=i;
+  }
+  m.salesRep=take(bp);
+  if(m.hours===undefined)m.hours=-1;
+  IMP_FIELDS.forEach(f=>{if(m[f.k]===undefined)m[f.k]=-1;});
+  return m;
+}
+
+function objsFrom(rows,map){
+  return rows.map(r=>{
+    const o={};
+    IMP_FIELDS.forEach(f=>{o[f.k]=map[f.k]>-1?r[map[f.k]]:undefined;});
+    return o;
+  });
+}
+function importError(msg,detail){
+  const el=document.getElementById('iprev');
+  if(el)el.innerHTML=`<div style="margin-top:14px;background:#fef2f2;border:1px solid #fca5a5;border-radius:6px;padding:12px 14px">
+    <div style="font-size:13px;font-weight:600;color:#b91c1c;margin-bottom:4px">⚠ Import failed — nothing was changed</div>
+    <div style="font-size:12px;color:#7f1d1d;line-height:1.5">${msg}</div>
+    ${detail?`<div style="font-size:11px;color:#7f1d1d;margin-top:8px;font-family:monospace;opacity:.8">${detail}</div>`:''}
+  </div>`;
+  toast('Import failed — see details');
+}
+
 function doImport(file){
   if(!file)return;
   const reader=new FileReader();
   reader.onload=e=>{
-    const wb=XLSX.read(e.target.result,{type:'binary'});
-    const rawRows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-    // Normalize header keys: trim whitespace so 'Title ' matches 'Title'
-    const rows=rawRows.map(r=>{const n={};Object.keys(r).forEach(k=>{n[k.trim()]=r[k];});return n;});
-    let added=0,updated=0,skipped=0;
+    if(typeof XLSX==='undefined'){importError('The Excel reader library did not load, so no file can be opened. Check your internet connection and reload this page.');return;}
+    let wb;
+    try{wb=XLSX.read(e.target.result,{type:'binary'});}
+    catch(ex){importError('That file could not be read as an Excel workbook. Export again from Cienapps as .xlsx and retry.',String(ex.message||ex));return;}
+    const sh=wb.Sheets[wb.SheetNames[0]];
+    if(!sh){importError('That workbook contains no sheets.');return;}
+    const aoa=XLSX.utils.sheet_to_json(sh,{header:1,blankrows:false}).filter(r=>r&&r.some(c=>c!==''&&c!=null));
+    if(aoa.length<2){importError('That sheet has no data rows.');return;}
+    const h=findHeaderRow(aoa);
+    if(h>-1){
+      const map=mapFromHeader(aoa[h]);
+      const missing=IMP_FIELDS.filter(f=>f.req&&map[f.k]<0);
+      if(missing.length){PEND={rows:aoa.slice(h+1),map:map};renderMapping('Header row found, but no column for: '+missing.map(f=>f.label).join(', ')+'. Confirm the mapping below.');return;}
+      runImport(objsFrom(aoa.slice(h+1),map));
+    } else {
+      const rows=aoa;
+      PEND={rows:rows,map:guessCols(rows)};
+      renderMapping('This export has no header row, so the columns were matched by their contents. Check the mapping below, then import.');
+    }
+  };
+  reader.readAsBinaryString(file);
+}
+
+function renderMapping(note){
+  const rows=PEND.rows,map=PEND.map;
+  const n=rows.reduce((a,r)=>Math.max(a,r.length),0);
+  const isDt=x=>(x instanceof Date)||(typeof x==='number'&&x>35000&&x<80000);
+  const sample=i=>{
+    const v=rows.map(r=>r[i]).filter(x=>x!==''&&x!=null);
+    if(!v.length)return '(empty)';
+    // Show date columns as readable dates, not raw Excel serial numbers
+    if(v.filter(isDt).length/v.length>=0.9){
+      const d=v[0] instanceof Date?v[0]:new Date(Math.round((v[0]-25569)*86400*1000));
+      return d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0')+'-'+String(d.getUTCDate()).padStart(2,'0');
+    }
+    return String(v[0]).substring(0,24);
+  };
+  const opts=sel=>{let s=`<option value="-1"${sel<0?' selected':''}>— not used —</option>`;for(let i=0;i<n;i++)s+=`<option value="${i}"${sel===i?' selected':''}>Col ${colLtr(i)} · ${sample(i).replace(/"/g,'')}</option>`;return s;};
+  document.getElementById('iprev').innerHTML=`<div style="margin-top:14px">
+    <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:6px;padding:10px 13px;font-size:12px;color:#92400e;margin-bottom:12px;line-height:1.5">${note}</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:9px">
+      ${IMP_FIELDS.map(f=>`<div>
+        <label style="display:block;font-size:11px;font-weight:600;color:var(--t2);margin-bottom:3px">${f.label}${f.req?' <span style="color:#dc2626">*</span>':''}</label>
+        <select data-mf="${f.k}" style="width:100%;padding:5px 6px;font-size:12px;border:1px solid var(--b2);border-radius:4px;background:#fff">${opts(map[f.k])}</select>
+      </div>`).join('')}
+    </div>
+    <div style="font-size:11px;color:var(--t3);margin:10px 0 12px">${rows.length} data rows detected. Fields marked * are required.</div>
+    <button class="btn btn-g" id="mapgo">Import ${rows.length} rows →</button>
+    <button class="btn" id="mapcancel" style="margin-left:8px">Cancel</button>
+  </div>`;
+  document.getElementById('mapcancel').onclick=()=>{PEND=null;document.getElementById('iprev').innerHTML='';};
+  document.getElementById('mapgo').onclick=()=>{
+    const m={};
+    document.querySelectorAll('[data-mf]').forEach(s=>{m[s.getAttribute('data-mf')]=parseInt(s.value,10);});
+    const missing=IMP_FIELDS.filter(f=>f.req&&m[f.k]<0);
+    if(missing.length){toast('Choose a column for: '+missing.map(f=>f.label).join(', '));return;}
+    runImport(objsFrom(PEND.rows,m));
+    PEND=null;
+  };
+}
+
+function runImport(rows){
+    let added=0,updated=0,skipped=0,noWo=0,shipped=0,shippedRemoved=0;
     const prev=[];
     const newOrders=[];
 
     rows.forEach(row=>{
-      const wo=String(row['# WO']||'').trim();if(!wo||wo==='NaT'||wo==='nan'||wo==='undefined')return;
-      const rawHours=parseFloat(row['Hours assembly time ']||row['To process']||row['Hours']||0);
-      const rowVal=parseFloat(row['Sub-total']||0);
-      // Hours rules: WO-S, WO-BI, WO-PF prefixes and zero value all get 1h
+      const wo=String(row.wo==null?'':row.wo).trim();
+      if(!wo||wo==='NaT'||wo==='nan'||wo==='undefined'){noWo++;return;}
+      // Floor & Unit — from their own columns, else parsed out of the Reference (order-seq-floor-unit)
+      const refStr=String(row.ref==null?'':row.ref).trim();
+      let flr=String(row.floor==null?'':row.floor).trim();
+      let unt=String(row.unit==null?'':row.unit).trim();
+      if((!flr||!unt)&&refStr.split('-').length>=4){
+        const ps=refStr.split('-');
+        if(!flr)flr=ps[2];
+        if(!unt)unt=ps.slice(3).join('-');
+      }
+      const rawHours=parseFloat(row.hours||0)||0;
+      const rowVal=parseFloat(row.value||0)||0;
+      const exOrd=DB.orders.find(o=>o.wo===wo);
+      // Hours rules: 'Assembly complete' means the assembly work is already done — 0h on the board;
+      // WO-S, WO-BI, WO-PF prefixes and zero value all get 1h
+      const effStep=String(row.step==null?'':row.step).trim()||(exOrd&&exOrd.step)||'';
+      // 'Job shipped' orders are ignored: never added, and removed from the board if still on it
+      if(/job\s*shipped/i.test(effStep)){
+        shipped++;
+        if(exOrd){
+          DB.orders=DB.orders.filter(o=>o.wo!==wo);
+          delete orig[wo];delete origStep[wo];
+          shippedRemoved++;
+          prev.push({wo,status:'shipped — removed',title:exOrd.title,hours:exOrd.hours,dueDate:exOrd.dueDate,pw:''});
+        }
+        return;
+      }
       let hours, hoursEstimated;
-      if(wo.startsWith('WO-S-')||wo.startsWith('WO-BI-')||wo.startsWith('WO-PF-')||rowVal===0){
+      // Assembly complete or palleted (also matches palletised/palletized) = assembly work done, 0h
+      if(/assembly\s*complete/i.test(effStep)||/pallet/i.test(effStep)){
+        hours=0; hoursEstimated=false;
+      } else if(wo.startsWith('WO-S-')||wo.startsWith('WO-BI-')||wo.startsWith('WO-PF-')||rowVal===0){
         hours=1; hoursEstimated=false;
       } else if(rawHours>0){
         hours=rawHours; hoursEstimated=false;
@@ -556,7 +1251,7 @@ function doImport(file){
         hours=estimateHours(rowVal); hoursEstimated=true;
       }
       let dueDate='';
-      const rd=row['Due Date'];
+      const rd=row.dueDate;
       if(rd){try{
         if(typeof rd==='number'){
           // Excel serial date
@@ -575,31 +1270,41 @@ function doImport(file){
         }
       }catch(ex){}}
       // Skip if WO already exists (prevent duplicates)
-      const ex=DB.orders.find(o=>o.wo===wo);
+      const ex=exOrd;
       if(ex){
-        const newStep=String(row['Step']||ex.step);
+        const newStep=String(row.step==null?ex.step:row.step);
         const dateChanged=ex.dueDate!==dueDate;
         const hoursChanged=ex.hours!==hours;
         const stepChanged=(ex.step||'')!==newStep;
         if(dateChanged||hoursChanged||stepChanged){
           if(dateChanged&&!ex.origDueDate)ex.origDueDate=ex.dueDate;
           const oldDue=ex.dueDate, oldStep=ex.step;
-          ex.hours=hours;ex.dueDate=dueDate;ex.step=newStep;
-          const newTitle=String(row['Title']||row['Reference']||'').trim();
+          ex.hours=hours;ex.hoursEstimated=hoursEstimated;ex.dueDate=dueDate;ex.step=newStep;
+          const newTitle=String(row.title||row.ref||'').trim();
           if(newTitle&&newTitle!==ex.title)ex.title=newTitle;
+          if(flr)ex.floor=flr;if(unt)ex.unit=unt;
           const what=[];
           if(dateChanged)what.push('date: '+oldDue+' → '+dueDate);
           if(stepChanged)what.push('step: '+(oldStep||'(none)').replace(/^\d+\.\s*/,'')+' → '+newStep.replace(/^\d+\.\s*/,''));
           if(hoursChanged&&!dateChanged&&!stepChanged)what.push('hours');
           updated++;prev.push({wo,status:dateChanged?'date changed':(stepChanged?'step changed':'updated'),what:what.join(' · '),title:ex.title,hours,dueDate,pw:ex.plannedWeek});
-        } else skipped++;
+        } else {
+          // no change, but still backfill floor/unit on older orders that pre-date these fields
+          if(flr&&!ex.floor)ex.floor=flr;if(unt&&!ex.unit)ex.unit=unt;
+          skipped++;
+        }
       } else {
-        const newO={wo,ref:String(row['Reference']||''),title:String(row['Title']||row['Reference']||wo).trim(),customer:String(row['Customer']||''),hours,hoursEstimated,dueDate,origDueDate:dueDate,step:String(row['Step']||''),salesRep:String(row['Sales Rep']||''),orderNo:String(row['Order #']||''),value:parseFloat(row['Sub-total']||0),plannedWeek:'',notes:'',colour:''};
+        const newO={wo,ref:refStr,floor:flr,unit:unt,title:String(row.title||row.ref||wo).trim(),customer:String(row.customer==null?'':row.customer),hours,hoursEstimated,dueDate,origDueDate:dueDate,step:String(row.step==null?'':row.step),salesRep:String(row.salesRep==null?'':row.salesRep),orderNo:String(row.orderNo==null?'':row.orderNo),value:rowVal,plannedWeek:'',notes:'',colour:''};
         newOrders.push(newO);
-        if(orig[wo]===undefined)orig[wo]='';if(origStep[wo]===undefined)origStep[wo]=String(row['Step']||'');
+        if(orig[wo]===undefined)orig[wo]='';if(origStep[wo]===undefined)origStep[wo]=newO.step;
         added++;
       }
     });
+
+    if(added+updated+skipped+shipped===0){
+      importError('None of the '+rows.length+' rows had a usable WO number, so nothing was imported.','Check that the WO number column is mapped to the column holding values like WO-2604-7.');
+      return;
+    }
 
     // Auto-schedule new orders
     autoSchedule(newOrders);
@@ -612,7 +1317,7 @@ function doImport(file){
     sched();
     document.getElementById('iprev').innerHTML=`<div style="margin-top:14px">
       <div style="font-size:13px;font-weight:600;color:var(--green);margin-bottom:10px">
-        ✓ Import complete: ${added} added · ${updated} updated · ${skipped} unchanged
+        ✓ Import complete: ${added} added · ${updated} updated · ${skipped} unchanged${shipped?` · ${shipped} shipped (ignored${shippedRemoved?`, ${shippedRemoved} removed from board`:''})`:''}${noWo?` · ${noWo} skipped (no WO number)`:''}
       </div>
       <div style="font-size:12px;color:var(--t3);margin-bottom:8px">New orders auto-scheduled based on due date and available capacity.</div>
       ${prev.slice(0,15).map(p=>`<div class="preview-row">
@@ -627,8 +1332,6 @@ function doImport(file){
       <button class="btn btn-g" style="margin-top:14px" onclick="showTab('b')">Go to Capacity Board →</button>
     </div>`;
     toast(`${added} added (auto-scheduled), ${updated} updated`);
-  };
-  reader.readAsBinaryString(file);
 }
 
 function renderExport(app){
@@ -696,7 +1399,7 @@ function renderExport(app){
   });
 }
 
-['b','i','x','s'].forEach(t=>{document.getElementById('t-'+t).onclick=()=>showTab(t);});
+['b','d','i','x','s'].forEach(t=>{document.getElementById('t-'+t).onclick=()=>showTab(t);});
 loadDB().then(()=>render());
 </script>
 </body>
