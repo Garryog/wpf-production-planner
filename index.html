@@ -100,6 +100,19 @@ button,input,select{font-family:inherit;cursor:pointer}
 .toast.show{opacity:1}
 @media(max-width:1000px){.week-caps{grid-template-columns:repeat(5,1fr)}}
 @media(max-width:700px){.week-caps{grid-template-columns:repeat(3,1fr)}.wo-table th:nth-child(n+7),.wo-table td:nth-child(n+7){display:none}.pg{padding:12px 12px 60px}}
+/* ---- Board grouping ---- */
+.gsel{width:14px;height:14px;cursor:pointer;accent-color:#1a56db;vertical-align:middle}
+.grp-row td{background:#eef3fb!important;border-top:2px solid #b9cdec!important;border-bottom:1px solid #c9d8ee}
+.grp-row .grp-title{font-weight:700;font-size:13px;width:100%;min-width:120px;border:1px solid transparent;background:transparent;padding:3px 6px;border-radius:5px;color:#14335c;outline:none}
+.grp-row .grp-title:hover{border-color:var(--b2);background:#fff}
+.grp-row .grp-title:focus{border-color:#7ba7e0;background:#fff}
+.grp-tog{cursor:pointer;font-family:monospace;font-size:11px;font-weight:700;color:#1a56db;white-space:nowrap;user-select:none}
+.grp-tog:hover{text-decoration:underline}
+.grp-member td{background:#f7fafd!important}
+.grm-btn{background:none;border:1px solid transparent;color:var(--t3);font-size:13px;cursor:pointer;padding:1px 6px;border-radius:4px;line-height:1.2}
+.grm-btn:hover{background:#fdecea;color:var(--red);border-color:#f3b3a6}
+.grp-bar{position:fixed;left:50%;transform:translateX(-50%);bottom:20px;background:#14335c;color:#fff;padding:10px 18px;border-radius:12px;display:flex;gap:14px;align-items:center;font-size:13px;box-shadow:0 8px 28px rgba(10,20,40,.4);z-index:60}
+.grp-bar span{color:#bcd0f0;font-weight:600}
 /* ---- Deliveries ---- */
 .dvbtn{background:none;border:1px solid transparent;font-size:15px;filter:grayscale(1);opacity:.32;cursor:pointer;padding:1px 5px;border-radius:5px;line-height:1;transition:all .12s}
 .dvbtn:hover{opacity:.7}
@@ -198,6 +211,8 @@ function estimateHours(value){
 let orig={};
 let origStep={};
 let tab='b',sortCol='plannedWeek',sortDir=1,fWeek='',fCust='',srch='',fDel=false;
+const grpSel=new Set(); // WOs ticked for grouping on the board
+const expGrps=new Set(); // expanded group rows
 let saveT=null,dragSrc=null;
 
 async function loadDB(){
@@ -213,6 +228,7 @@ async function loadDB(){
       if(d[0].settings&&d[0].settings.vcap>0)VCAP=d[0].settings.vcap;
       if(d[0].settings&&d[0].settings.delx)DB.delx=d[0].settings.delx;
       if(d[0].settings&&d[0].settings.delNotes)DB.delNotes=d[0].settings.delNotes;
+      if(d[0].settings&&d[0].settings.grps)DB.grps=d[0].settings.grps;
     }
     DB.orders.forEach(o=>{orig[o.wo]=o.plannedWeek||'';origStep[o.wo]=o.step||'';});
   }catch(e){setSS('e');}
@@ -221,7 +237,7 @@ async function loadDB(){
 async function saveDB(){
   setSS('s');
   try{
-    await fetch(SUPA_URL+'/production_planner?id=eq.main',{method:'PATCH',headers:SUPA_WHDR,body:JSON.stringify({orders:DB.orders,nid:DB.nid,settings:{weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP,delx:DB.delx||[],delNotes:DB.delNotes||{}}})});
+    await fetch(SUPA_URL+'/production_planner?id=eq.main',{method:'PATCH',headers:SUPA_WHDR,body:JSON.stringify({orders:DB.orders,nid:DB.nid,settings:{weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP,delx:DB.delx||[],delNotes:DB.delNotes||{},grps:DB.grps||{}}})});
     setSS('ok');
   }catch(e){setSS('e');}
 }
@@ -341,7 +357,41 @@ function renderSettings(app){
   });
 }
 
+/* ---------- Manual grouping of work orders on the capacity board ---------- */
+function grpMembers(gid){return DB.orders.filter(o=>o.grp===gid);}
+function cleanGroups(){
+  DB.grps=DB.grps||{};
+  const counts={};
+  DB.orders.forEach(o=>{if(o.grp)counts[o.grp]=(counts[o.grp]||0)+1;});
+  // dissolve groups that lost their members (deleted, excluded on import, ungrouped down to one)
+  Object.keys(DB.grps).forEach(g=>{
+    if(!counts[g]||counts[g]<2){
+      DB.orders.forEach(o=>{if(o.grp===g)delete o.grp;});
+      delete DB.grps[g];
+    }
+  });
+  DB.orders.forEach(o=>{if(o.grp&&!DB.grps[o.grp])delete o.grp;});
+}
+function makeGroup(){
+  const members=DB.orders.filter(o=>grpSel.has(o.wo));
+  if(members.length<2){toast('Select at least 2 work orders to group');return;}
+  const gid='G'+(DB.nid++);
+  DB.grps=DB.grps||{};
+  DB.grps[gid]={title:members[0].title||members[0].wo};
+  members.forEach(o=>{o.grp=gid;});
+  cleanGroups();
+  grpSel.clear();expGrps.add(gid);
+  sched();render();
+  toast(members.length+' work orders grouped — click the title to rename');
+}
+function ungroupG(gid){
+  DB.orders.forEach(o=>{if(o.grp===gid)delete o.grp;});
+  if(DB.grps)delete DB.grps[gid];
+  sched();render();toast('Ungrouped');
+}
+
 function renderBoard(app){
+  cleanGroups();
   const weeks=get8Wks();
   const custs=[...new Set(DB.orders.map(o=>o.customer))].sort();
   const chg=changes();
@@ -366,8 +416,83 @@ function renderBoard(app){
     return (a.dueDate||'').localeCompare(b.dueDate||'');
   });
 
+  // Collapse grouped orders into one item at the position of their first member
+  const seenG=new Set();
+  const items=[];
+  orders.forEach(o=>{
+    if(o.grp&&DB.grps&&DB.grps[o.grp]){
+      if(seenG.has(o.grp))return;
+      seenG.add(o.grp);
+      items.push({g:o.grp,customer:grpMembers(o.grp)[0]?grpMembers(o.grp)[0].customer:''});
+    } else items.push({o,customer:o.customer||''});
+  });
+
   const unschHrs=DB.orders.filter(o=>!o.plannedWeek).reduce((a,o)=>a+o.hours,0);
   const unschCnt=DB.orders.filter(o=>!o.plannedWeek).length;
+  const selOrders=DB.orders.filter(o=>grpSel.has(o.wo));
+  const selH=selOrders.reduce((a,o)=>a+o.hours,0), selV=selOrders.reduce((a,o)=>a+(o.value||0),0);
+
+  const weekOpts=(cur,mixed)=>`${mixed?'<option value="__MIX" selected disabled>— Mixed weeks —</option>':''}
+      <option value=""${!mixed&&!cur?' selected':''}>— Unscheduled —</option>
+      ${weeks.map(w=>`<option value="${w}"${!mixed&&cur===w?' selected':''}>${wkLbl(w)}</option>`).join('')}`;
+
+  const rowHTML=(o,member,sep)=>`<tr class="${o.colour?'c-'+o.colour:''}${o.hl?' hl-row':''}${sep?' grp-start':''}${member?' grp-member':''}" draggable="true" data-wo="${o.wo}">
+          <td style="text-align:center">${member
+            ?`<button class="grm-btn" data-grm="${o.wo}" title="Take this WO out of the group">×</button>`
+            :`<input type="checkbox" class="gsel" data-gsel="${o.wo}"${grpSel.has(o.wo)?' checked':''} title="Select to group">`}</td>
+          <td><span class="drag-handle">⠿</span></td>
+          <td style="text-align:center"><button class="dvbtn${o.delv?' on':''}" data-dv="${o.wo}" title="${o.delv?'Delivering next week — click to untag':'Tag for delivery next week'}">🚚</button></td>
+          <td><span class="wo-num" data-hl="${o.wo}" style="cursor:pointer${member?';padding-left:10px':''}" title="Tap to mark as discussed">${o.hl?'✓ ':''}${o.wo}</span></td>
+          <td>${o.floor?`<span class="fu-badge">${o.floor}</span>`:'<span style="color:var(--t3)">—</span>'}</td>
+          <td>${o.unit?`<span class="fu-badge">${o.unit}</span>`:'<span style="color:var(--t3)">—</span>'}</td>
+          <td><span class="wo-title" title="${o.title}">${o.title}</span></td>
+          <td><span class="wo-cust" title="${o.customer}">${o.customer}</span></td>
+          <td style="text-align:right"><input type="number" step="0.5" min="0" style="width:52px;text-align:right;border:1px solid ${o.hoursEstimated?'#f59e0b':'var(--b2)'};border-radius:4px;padding:2px 4px;font-size:12px;font-weight:600;background:${o.hoursEstimated?'#fffbeb':'#fff'}" title="${o.hoursEstimated?'Estimated from value — verify':'Actual hours from Cienapps'}" data-hi="${o.wo}" value="${o.hours}"></td>
+          <td>${dueBadge(o.dueDate,o.plannedWeek,o.origDueDate)}</td>
+          <td style="text-align:right;font-size:12px;color:var(--t2)">€${Math.round(o.value||0).toLocaleString()}</td>
+          <td><select class="step-sel" data-stepsel="${o.wo}" style="font-size:11px;padding:3px 4px;border-radius:6px;border:1px solid var(--bd);background:var(--bg2);color:var(--t1);max-width:120px">
+            ${getSteps().map(s=>`<option value="${s}"${(o.step||'')===s?' selected':''}>${s.replace(/^\d+\.\s*/,'')}</option>`).join('')}
+            ${getSteps().includes(o.step||'')||!(o.step||'')?'':`<option value="${o.step}" selected>${o.step.replace(/^\d+\.\s*/,'')}</option>`}
+          </select></td>
+          <td><select class="week-sel" data-wsel="${o.wo}">${weekOpts(o.plannedWeek||'',false)}</select></td>
+          <td style="text-align:center"><button style="background:none;border:none;color:var(--t3);font-size:14px;padding:0 2px;cursor:pointer;line-height:1" data-del="${o.wo}" title="Delete order">🗑</button></td>
+        </tr>`;
+
+  const grpRowHTML=(gid,sep)=>{
+    const g=DB.grps[gid];
+    const ms=grpMembers(gid).sort(woCmp);
+    const th=ms.reduce((a,o)=>a+o.hours,0), tv=ms.reduce((a,o)=>a+(o.value||0),0);
+    const wks=[...new Set(ms.map(o=>o.plannedWeek||''))];
+    const mixed=wks.length>1, wk=mixed?'':wks[0];
+    const cs=[...new Set(ms.map(o=>o.customer||''))];
+    const due=ms.map(o=>o.dueDate).filter(Boolean).sort()[0]||'';
+    const allSel=ms.every(o=>grpSel.has(o.wo));
+    const allDelv=ms.every(o=>o.delv);
+    const open=expGrps.has(gid);
+    return `<tr class="grp-row${sep?' grp-start':''}" data-grow="${gid}">
+          <td style="text-align:center"><input type="checkbox" class="gsel" data-gselg="${gid}"${allSel?' checked':''} title="Select whole group (e.g. to merge into a new group)"></td>
+          <td><span class="grp-tog" data-gtog="${gid}" title="${open?'Collapse':'Expand'} group">${open?'▾':'▸'}</span></td>
+          <td style="text-align:center"><button class="dvbtn${allDelv?' on':''}" data-gdv="${gid}" title="${allDelv?'Whole group tagged for delivery — click to untag all':'Tag whole group for delivery next week'}">🚚</button></td>
+          <td><span class="grp-tog" data-gtog="${gid}">${ms.length}&nbsp;WOs</span></td>
+          <td colspan="2"><span class="fu-badge" style="background:#e3ecfa;border-color:#b9cdec;color:#14418f">GROUP</span></td>
+          <td><input class="grp-title" data-gtitle="${gid}" value="${String(g.title||'').replace(/"/g,'&quot;')}" title="Group title — click to edit"></td>
+          <td><span class="wo-cust" title="${cs.join(', ')}">${cs.length===1?cs[0]:cs.length+' customers'}</span></td>
+          <td style="text-align:right;font-weight:700;white-space:nowrap">${Math.round(th*10)/10}h</td>
+          <td>${due?dueBadge(due,wk,null):'—'}</td>
+          <td style="text-align:right;font-weight:700;white-space:nowrap">€${Math.round(tv).toLocaleString()}</td>
+          <td style="color:var(--t3);font-size:11px">—</td>
+          <td><select class="week-sel" data-gwsel="${gid}" style="font-weight:600">${weekOpts(wk,mixed)}</select></td>
+          <td style="text-align:center"><button class="grm-btn" data-gun="${gid}" title="Ungroup — the work orders stay, the grouping is removed">⛓</button></td>
+        </tr>
+        ${open?ms.map(o=>rowHTML(o,true,false)).join(''):''}`;
+  };
+
+  let prevCust=null;
+  const bodyHTML=items.map(it=>{
+    const sep=prevCust!==null&&(prevCust||'')!==(it.customer||'');
+    prevCust=it.customer||'';
+    return it.g?grpRowHTML(it.g,sep):rowHTML(it.o,false,sep);
+  }).join('');
 
   app.innerHTML=`<div class="pg">
   ${chg.length>0?`<div class="changes-banner">
@@ -428,6 +553,7 @@ function renderBoard(app){
   <div class="wo-table-wrap">
     <table class="wo-table">
       <thead><tr>
+        <th style="width:28px;text-align:center" title="Select work orders to group">☑</th>
         <th style="width:22px"></th>
         <th style="width:34px;text-align:center" title="Delivery next week">🚚</th>
         <th data-s="wo" class="${sortCol==='wo'?sortDir>0?'asc':'desc':''}">WO #</th>
@@ -443,28 +569,8 @@ function renderBoard(app){
         <th style="width:30px"></th>
       </tr></thead>
       <tbody id="tbody">
-        ${!orders.length?`<tr><td colspan="13"><div class="empty">No orders match filters</div></td></tr>`:''}
-        ${orders.map((o,ri)=>`<tr class="${o.colour?'c-'+o.colour:''}${o.hl?' hl-row':''}${ri>0&&(orders[ri-1].customer||'')!==(o.customer||'')?' grp-start':''}" draggable="true" data-wo="${o.wo}">
-          <td><span class="drag-handle">⠿</span></td>
-          <td style="text-align:center"><button class="dvbtn${o.delv?' on':''}" data-dv="${o.wo}" title="${o.delv?'Delivering next week — click to untag':'Tag for delivery next week'}">🚚</button></td>
-          <td><span class="wo-num" data-hl="${o.wo}" style="cursor:pointer" title="Tap to mark as discussed">${o.hl?'✓ ':''}${o.wo}</span></td>
-          <td>${o.floor?`<span class="fu-badge">${o.floor}</span>`:'<span style="color:var(--t3)">—</span>'}</td>
-          <td>${o.unit?`<span class="fu-badge">${o.unit}</span>`:'<span style="color:var(--t3)">—</span>'}</td>
-          <td><span class="wo-title" title="${o.title}">${o.title}</span></td>
-          <td><span class="wo-cust" title="${o.customer}">${o.customer}</span></td>
-          <td style="text-align:right"><input type="number" step="0.5" min="0" style="width:52px;text-align:right;border:1px solid ${o.hoursEstimated?'#f59e0b':'var(--b2)'};border-radius:4px;padding:2px 4px;font-size:12px;font-weight:600;background:${o.hoursEstimated?'#fffbeb':'#fff'}" title="${o.hoursEstimated?'Estimated from value — verify':'Actual hours from Cienapps'}" data-hi="${o.wo}" value="${o.hours}"></td>
-          <td>${dueBadge(o.dueDate,o.plannedWeek,o.origDueDate)}</td>
-          <td style="text-align:right;font-size:12px;color:var(--t2)">€${Math.round(o.value||0).toLocaleString()}</td>
-          <td><select class="step-sel" data-stepsel="${o.wo}" style="font-size:11px;padding:3px 4px;border-radius:6px;border:1px solid var(--bd);background:var(--bg2);color:var(--t1);max-width:120px">
-            ${getSteps().map(s=>`<option value="${s}"${(o.step||'')===s?' selected':''}>${s.replace(/^\d+\.\s*/,'')}</option>`).join('')}
-            ${getSteps().includes(o.step||'')||!(o.step||'')?'':`<option value="${o.step}" selected>${o.step.replace(/^\d+\.\s*/,'')}</option>`}
-          </select></td>
-          <td><select class="week-sel" data-wsel="${o.wo}">
-            <option value="">— Unscheduled —</option>
-            ${weeks.map(w=>`<option value="${w}"${o.plannedWeek===w?' selected':''}>${wkLbl(w)}</option>`).join('')}
-          </select></td>
-          <td style="text-align:center"><button style="background:none;border:none;color:var(--t3);font-size:14px;padding:0 2px;cursor:pointer;line-height:1" data-del="${o.wo}" title="Delete order">🗑</button></td>
-        </tr>`).join('')}
+        ${!items.length?`<tr><td colspan="14"><div class="empty">No orders match filters</div></td></tr>`:''}
+        ${bodyHTML}
       </tbody>
     </table>
     <div class="table-footer">
@@ -472,10 +578,15 @@ function renderBoard(app){
       <span>Total orders: <strong>${DB.orders.length}</strong></span>
       <span>Total hours: <strong>${DB.orders.reduce((a,o)=>a+o.hours,0)}h</strong></span>
       <span>Total value: <strong>${fmtVal(DB.orders.reduce((a,o)=>a+(o.value||0),0))}</strong></span>
-      ${(()=>{const weeks=get8Wks();const overH=weeks.filter(w=>wkHrs(w)>wkCap(w));const overV=weeks.filter(w=>wkVal(w)>VCAP);return overH.length>0?'<span style="color:var(--red);font-weight:600">⚠ '+overH.length+' week'+(overH.length!==1?'s':'')+' over hours capacity</span>':'';})()} 
-      ${(()=>{const weeks=get8Wks();const overV=weeks.filter(w=>wkVal(w)>VCAP);return overV.length>0?'<span style="color:var(--red);font-weight:600">⚠ '+overV.length+' week'+(overV.length!==1?'s':'')+' over value capacity</span>':'';})()} 
+      ${(()=>{const weeks=get8Wks();const overH=weeks.filter(w=>wkHrs(w)>wkCap(w));const overV=weeks.filter(w=>wkVal(w)>VCAP);return overH.length>0?'<span style="color:var(--red);font-weight:600">⚠ '+overH.length+' week'+(overH.length!==1?'s':'')+' over hours capacity</span>':'';})()}
+      ${(()=>{const weeks=get8Wks();const overV=weeks.filter(w=>wkVal(w)>VCAP);return overV.length>0?'<span style="color:var(--red);font-weight:600">⚠ '+overV.length+' week'+(overV.length!==1?'s':'')+' over value capacity</span>':'';})()}
     </div>
   </div>
+  ${grpSel.size?`<div class="grp-bar">
+    <b>${grpSel.size} selected</b><span>${Math.round(selH*10)/10}h · €${Math.round(selV).toLocaleString()}</span>
+    <button class="btn btn-g" id="btn-mkgrp" style="padding:6px 14px">Group into one line</button>
+    <button id="btn-gclear" style="background:none;border:none;color:#bcd0f0;text-decoration:underline;cursor:pointer;font-size:12px">clear</button>
+  </div>`:''}
   </div>`;
 
   // Bind events
@@ -505,10 +616,49 @@ function renderBoard(app){
     b.title=o.delv?'Delivering next week — click to untag':'Tag for delivery next week';
     updDelBadge();sched();
   });
+  // Grouping
+  document.querySelectorAll('[data-gsel]').forEach(cb=>cb.onchange=function(){
+    this.checked?grpSel.add(this.dataset.gsel):grpSel.delete(this.dataset.gsel);
+    render();
+  });
+  document.querySelectorAll('[data-gselg]').forEach(cb=>cb.onchange=function(){
+    const ms=grpMembers(this.dataset.gselg).map(o=>o.wo);
+    this.checked?ms.forEach(w=>grpSel.add(w)):ms.forEach(w=>grpSel.delete(w));
+    render();
+  });
+  const mg=document.getElementById('btn-mkgrp');if(mg)mg.onclick=makeGroup;
+  const gc=document.getElementById('btn-gclear');if(gc)gc.onclick=()=>{grpSel.clear();render();};
+  document.querySelectorAll('[data-gtog]').forEach(el=>el.onclick=()=>{
+    const g=el.dataset.gtog;
+    expGrps.has(g)?expGrps.delete(g):expGrps.add(g);
+    render();
+  });
+  document.querySelectorAll('[data-gtitle]').forEach(inp=>inp.oninput=function(){
+    if(DB.grps&&DB.grps[this.dataset.gtitle]){DB.grps[this.dataset.gtitle].title=this.value;sched();}
+  });
+  document.querySelectorAll('[data-gwsel]').forEach(sel=>sel.onchange=function(){
+    if(this.value==='__MIX')return;
+    const ms=grpMembers(this.dataset.gwsel);
+    ms.forEach(o=>o.plannedWeek=this.value);
+    sched();render();
+    toast(ms.length+' work orders moved to '+(this.value?wkLbl(this.value):'Unscheduled'));
+  });
+  document.querySelectorAll('[data-gdv]').forEach(b=>b.onclick=()=>{
+    const ms=grpMembers(b.dataset.gdv);
+    const on=!ms.every(o=>o.delv);
+    ms.forEach(o=>{o.delv=on;if(!on){o.delVeh='';o.delDay='';o.delDone=false;}});
+    updDelBadge();sched();render();
+    toast(on?ms.length+' work orders tagged for delivery':'Group untagged');
+  });
+  document.querySelectorAll('[data-gun]').forEach(b=>b.onclick=()=>ungroupG(b.dataset.gun));
+  document.querySelectorAll('[data-grm]').forEach(b=>b.onclick=()=>{
+    const o=DB.orders.find(x=>x.wo===b.dataset.grm);
+    if(o){delete o.grp;cleanGroups();sched();render();toast(o.wo+' taken out of the group');}
+  });
   const ca=document.getElementById('btn-clearall');
   if(ca)ca.onclick=()=>{
     if(!confirm('Delete ALL '+DB.orders.length+' orders from the planner? This cannot be undone.'))return;
-    DB.orders=[];
+    DB.orders=[];DB.grps={};grpSel.clear();
     Object.keys(orig).forEach(k=>delete orig[k]);Object.keys(origStep).forEach(k=>delete origStep[k]);
     sched();render();toast('All orders cleared');
   };
@@ -521,6 +671,7 @@ function renderBoard(app){
     if(!confirm('Delete '+btn.dataset.del+' from the planner?'))return;
     DB.orders=DB.orders.filter(o=>o.wo!==btn.dataset.del);
     delete orig[btn.dataset.del];delete origStep[btn.dataset.del];
+    cleanGroups();
     sched();render();toast('Order removed');
   });
   // Drag & drop to swap weeks
@@ -1206,7 +1357,8 @@ function renderMapping(note){
 }
 
 function runImport(rows){
-    let added=0,updated=0,skipped=0,noWo=0,shipped=0,shippedRemoved=0;
+    let added=0,updated=0,skipped=0,noWo=0,excluded=0,excludedRemoved=0;
+    const exCounts={};
     const prev=[];
     const newOrders=[];
 
@@ -1228,14 +1380,25 @@ function runImport(rows){
       // Hours rules: 'Assembly complete' means the assembly work is already done — 0h on the board;
       // WO-S, WO-BI, WO-PF prefixes and zero value all get 1h
       const effStep=String(row.step==null?'':row.step).trim()||(exOrd&&exOrd.step)||'';
-      // 'Job shipped' orders are ignored: never added, and removed from the board if still on it
-      if(/job\s*shipped/i.test(effStep)){
-        shipped++;
+      // Excluded from the planner entirely — never added, and removed from the board if still on it:
+      //  · WO number starts with "WO-S" (snag work orders)
+      //  · WO number contains "WO-D" (drawing work orders)
+      //  · step contains "drawing" (still at drawing stage — not ready to plan)
+      //  · step contains "shipped" (job shipped)
+      //  · step contains "invoiced" (completed & invoiced, installed to be invoiced, …)
+      const exReason=
+        wo.toUpperCase().indexOf('WO-S')===0?'WO-S snag':
+        wo.toUpperCase().indexOf('WO-D')>-1?'WO-D':
+        /drawing/i.test(effStep)?'drawing':
+        /shipped/i.test(effStep)?'shipped':
+        /invoiced/i.test(effStep)?'invoiced':'';
+      if(exReason){
+        excluded++;exCounts[exReason]=(exCounts[exReason]||0)+1;
         if(exOrd){
           DB.orders=DB.orders.filter(o=>o.wo!==wo);
           delete orig[wo];delete origStep[wo];
-          shippedRemoved++;
-          prev.push({wo,status:'shipped — removed',title:exOrd.title,hours:exOrd.hours,dueDate:exOrd.dueDate,pw:''});
+          excludedRemoved++;
+          prev.push({wo,status:exReason+' — removed',title:exOrd.title,hours:exOrd.hours,dueDate:exOrd.dueDate,pw:''});
         }
         return;
       }
@@ -1243,7 +1406,7 @@ function runImport(rows){
       // Assembly complete or palleted (also matches palletised/palletized) = assembly work done, 0h
       if(/assembly\s*complete/i.test(effStep)||/pallet/i.test(effStep)){
         hours=0; hoursEstimated=false;
-      } else if(wo.startsWith('WO-S-')||wo.startsWith('WO-BI-')||wo.startsWith('WO-PF-')||rowVal===0){
+      } else if(wo.startsWith('WO-BI-')||wo.startsWith('WO-PF-')||rowVal===0){
         hours=1; hoursEstimated=false;
       } else if(rawHours>0){
         hours=rawHours; hoursEstimated=false;
@@ -1301,7 +1464,7 @@ function runImport(rows){
       }
     });
 
-    if(added+updated+skipped+shipped===0){
+    if(added+updated+skipped+excluded===0){
       importError('None of the '+rows.length+' rows had a usable WO number, so nothing was imported.','Check that the WO number column is mapped to the column holding values like WO-2604-7.');
       return;
     }
@@ -1317,7 +1480,7 @@ function runImport(rows){
     sched();
     document.getElementById('iprev').innerHTML=`<div style="margin-top:14px">
       <div style="font-size:13px;font-weight:600;color:var(--green);margin-bottom:10px">
-        ✓ Import complete: ${added} added · ${updated} updated · ${skipped} unchanged${shipped?` · ${shipped} shipped (ignored${shippedRemoved?`, ${shippedRemoved} removed from board`:''})`:''}${noWo?` · ${noWo} skipped (no WO number)`:''}
+        ✓ Import complete: ${added} added · ${updated} updated · ${skipped} unchanged${excluded?` · ${excluded} excluded (${Object.keys(exCounts).map(k=>exCounts[k]+' '+k).join(', ')}${excludedRemoved?` — ${excludedRemoved} removed from board`:''})`:''}${noWo?` · ${noWo} skipped (no WO number)`:''}
       </div>
       <div style="font-size:12px;color:var(--t3);margin-bottom:8px">New orders auto-scheduled based on due date and available capacity.</div>
       ${prev.slice(0,15).map(p=>`<div class="preview-row">
