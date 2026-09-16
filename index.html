@@ -100,6 +100,14 @@ button,input,select{font-family:inherit;cursor:pointer}
 .toast.show{opacity:1}
 @media(max-width:1000px){.week-caps{grid-template-columns:repeat(5,1fr)}}
 @media(max-width:700px){.week-caps{grid-template-columns:repeat(3,1fr)}.wo-table th:nth-child(n+7),.wo-table td:nth-child(n+7){display:none}.pg{padding:12px 12px 60px}}
+/* ---- Column filters ---- */
+.cf-row td{background:#f8f9fb;border-bottom:2px solid var(--border);padding:3px 4px}
+.cf-inp{width:100%;min-width:44px;border:1px solid var(--b2);border-radius:4px;padding:3px 6px;font-size:11px;background:#fff;outline:none;color:var(--text)}
+.cf-inp::placeholder{color:#c3cad6}
+.cf-inp:focus{border-color:#7ba7e0}
+.cf-inp.on{background:#fff8d6;border-color:#e0b830;font-weight:600}
+.cf-clear{background:#fff8d6;border:1px solid #e0b830;color:#8a6d00;border-radius:4px;font-size:10px;font-weight:700;padding:3px 6px;cursor:pointer;white-space:nowrap}
+.cf-clear:hover{background:#ffefad}
 /* ---- Board grouping ---- */
 .gsel{width:14px;height:14px;cursor:pointer;accent-color:#1a56db;vertical-align:middle}
 .grp-row td{background:#eef3fb!important;border-top:2px solid #b9cdec!important;border-bottom:1px solid #c9d8ee}
@@ -213,6 +221,7 @@ let origStep={};
 let tab='b',sortCol='plannedWeek',sortDir=1,fWeek='',fCust='',srch='',fDel=false;
 const grpSel=new Set(); // WOs ticked for grouping on the board
 const expGrps=new Set(); // expanded group rows
+let colF={},cfFocus=null; // per-column contains filters (Excel-style, ANDed together)
 let saveT=null,dragSrc=null;
 
 async function loadDB(){
@@ -402,6 +411,27 @@ function renderBoard(app){
   if(fCust)orders=orders.filter(o=>o.customer===fCust);
   if(fDel)orders=orders.filter(o=>o.delv);
   if(srch){const q=srch.toLowerCase();orders=orders.filter(o=>o.title.toLowerCase().includes(q)||o.wo.toLowerCase().includes(q)||o.customer.toLowerCase().includes(q)||String(o.floor||'').toLowerCase().includes(q)||String(o.unit||'').toLowerCase().includes(q));}
+  // Per-column contains filters — all applied together (AND), like Excel column filters
+  const colVal=(o,k)=>{
+    switch(k){
+      case 'wo':return o.wo||'';
+      case 'floor':return String(o.floor||'');
+      case 'unit':return String(o.unit||'');
+      case 'title':return o.title||'';
+      case 'customer':return o.customer||'';
+      case 'hours':return String(o.hours);
+      case 'dueDate':return (o.dueDate||'')+' '+(o.dueDate?fmt(o.dueDate)+' wk'+wkNum(o.dueDate):'');
+      case 'value':return String(Math.round(o.value||0));
+      case 'step':return o.step||'';
+      case 'plannedWeek':return o.plannedWeek?(o.plannedWeek+' '+wkLbl(o.plannedWeek)):'unscheduled';
+    }
+    return '';
+  };
+  Object.keys(colF).forEach(k=>{
+    const q=String(colF[k]||'').trim().toLowerCase();
+    if(q)orders=orders.filter(o=>colVal(o,k).toLowerCase().includes(q));
+  });
+  const nColF=Object.keys(colF).filter(k=>String(colF[k]||'').trim()).length;
   orders.sort((a,b)=>{
     let av=a[sortCol]||'',bv=b[sortCol]||'';
     if(sortCol==='hours'||sortCol==='value'){av=+av;bv=+bv;}
@@ -553,7 +583,7 @@ function renderBoard(app){
   <div class="wo-table-wrap">
     <table class="wo-table">
       <thead><tr>
-        <th style="width:28px;text-align:center" title="Select work orders to group">☑</th>
+        <th style="width:28px;text-align:center" title="Select ALL shown work orders (respects the filters) — then Group into one line"><input type="checkbox" class="gsel" id="gselall"${orders.length>0&&orders.every(o=>grpSel.has(o.wo))?' checked':''}></th>
         <th style="width:22px"></th>
         <th style="width:34px;text-align:center" title="Delivery next week">🚚</th>
         <th data-s="wo" class="${sortCol==='wo'?sortDir>0?'asc':'desc':''}">WO #</th>
@@ -567,6 +597,12 @@ function renderBoard(app){
         <th data-s="step">Step</th>
         <th data-s="plannedWeek">Planned Week</th>
         <th style="width:30px"></th>
+      </tr>
+      <tr class="cf-row">
+        <td></td><td></td>
+        <td>${nColF?`<button class="cf-clear" id="btn-cfclear" title="Clear all column filters">✕ ${nColF}</button>`:''}</td>
+        ${['wo','floor','unit','title','customer','hours','dueDate','value','step','plannedWeek'].map(k=>`<td><input class="cf-inp${String(colF[k]||'').trim()?' on':''}" data-cf="${k}" value="${String(colF[k]||'').replace(/"/g,'&quot;')}" placeholder="⌕"></td>`).join('')}
+        <td></td>
       </tr></thead>
       <tbody id="tbody">
         ${!items.length?`<tr><td colspan="14"><div class="empty">No orders match filters</div></td></tr>`:''}
@@ -605,7 +641,19 @@ function renderBoard(app){
   const si=document.getElementById('srch');if(si)si.oninput=function(){srch=this.value;render();};
   const fw=document.getElementById('fwk');if(fw)fw.onchange=function(){fWeek=this.value;render();};
   const fc=document.getElementById('fcust');if(fc)fc.onchange=function(){fCust=this.value;render();};
-  const cf=document.getElementById('btn-clf');if(cf)cf.onclick=()=>{fWeek='';fCust='';srch='';fDel=false;render();};
+  const cf=document.getElementById('btn-clf');if(cf)cf.onclick=()=>{fWeek='';fCust='';srch='';fDel=false;colF={};render();};
+  // Column filters — keep typing focus across re-renders
+  document.querySelectorAll('.cf-inp').forEach(inp=>inp.oninput=function(){
+    colF[this.dataset.cf]=this.value;
+    cfFocus={k:this.dataset.cf,pos:this.selectionStart};
+    render();
+  });
+  const cfc=document.getElementById('btn-cfclear');if(cfc)cfc.onclick=()=>{colF={};render();};
+  if(cfFocus){
+    const el=document.querySelector('.cf-inp[data-cf="'+cfFocus.k+'"]');
+    if(el){el.focus();try{el.setSelectionRange(cfFocus.pos,cfFocus.pos);}catch(e){}}
+    cfFocus=null;
+  }
   const fd=document.getElementById('btn-fdel');if(fd)fd.onclick=()=>{fDel=!fDel;render();};
   // Delivery tag toggle — in place, no re-render, so the list doesn't jump while reviewing
   document.querySelectorAll('[data-dv]').forEach(b=>b.onclick=()=>{
@@ -626,6 +674,12 @@ function renderBoard(app){
     this.checked?ms.forEach(w=>grpSel.add(w)):ms.forEach(w=>grpSel.delete(w));
     render();
   });
+  const ga=document.getElementById('gselall');
+  if(ga)ga.onchange=function(){
+    // select/deselect every order currently shown (after all filters) — filter first, tick once, group
+    this.checked?orders.forEach(o=>grpSel.add(o.wo)):orders.forEach(o=>grpSel.delete(o.wo));
+    render();
+  };
   const mg=document.getElementById('btn-mkgrp');if(mg)mg.onclick=makeGroup;
   const gc=document.getElementById('btn-gclear');if(gc)gc.onclick=()=>{grpSel.clear();render();};
   document.querySelectorAll('[data-gtog]').forEach(el=>el.onclick=()=>{
