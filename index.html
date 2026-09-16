@@ -188,7 +188,7 @@ button,input,select{font-family:inherit;cursor:pointer}
 <div class="toast" id="toast"></div>
 <script>
 const SUPA_URL='https://klyropbsupqfmtjjwlfa.supabase.co/rest/v1';
-const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtseXJvcGJzdXBxZm10amp3bGZhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyNjY4MDEsImV4cCI6MjA5NDg0MjgwMX0.VuP5mnSgNhzoIdx7t3R7mgt2tyLZVtElUihei3xgC5Q';
+const SUPA_KEY='sb_publishable_CF4Aizmuq0ChPfVHL6K66w_78VFQC1e'; // new-style Supabase key (legacy JWT keys were disabled by Supabase on 2026-09-11 and are kept only as a re-enabled fallback)
 const SUPA_HDR={'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'};
 const SUPA_WHDR={'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=minimal'};
 let WCAP=350;
@@ -228,6 +228,7 @@ async function loadDB(){
   try{
     const r=await fetch(SUPA_URL+'/production_planner?id=eq.main',{headers:SUPA_HDR});
     const d=await r.json();
+    if(!r.ok||!Array.isArray(d))throw new Error('load failed: '+r.status+' '+JSON.stringify(d).slice(0,120));
     if(d&&d[0]){
       if(d[0].orders)DB.orders=d[0].orders;
       if(d[0].nid)DB.nid=d[0].nid;
@@ -1601,14 +1602,20 @@ function runImport(rows){
           const newTitle=String(row.title||row.ref||'').trim();
           if(newTitle&&newTitle!==ex.title)ex.title=newTitle;
           if(flr)ex.floor=flr;if(unt)ex.unit=unt;
+          if(rowVal>0)ex.value=rowVal;
+          if(refStr&&!ex.ref)ex.ref=refStr;
+          if(row.orderNo!=null&&String(row.orderNo).trim()&&!ex.orderNo)ex.orderNo=String(row.orderNo);
+          if(row.salesRep!=null&&String(row.salesRep).trim()&&!ex.salesRep)ex.salesRep=String(row.salesRep);
           const what=[];
           if(dateChanged)what.push('date: '+oldDue+' → '+dueDate);
           if(stepChanged)what.push('step: '+(oldStep||'(none)').replace(/^\d+\.\s*/,'')+' → '+newStep.replace(/^\d+\.\s*/,''));
           if(hoursChanged&&!dateChanged&&!stepChanged)what.push('hours');
           updated++;prev.push({wo,status:dateChanged?'date changed':(stepChanged?'step changed':'updated'),what:what.join(' · '),title:ex.title,hours,dueDate,pw:ex.plannedWeek});
         } else {
-          // no change, but still backfill floor/unit on older orders that pre-date these fields
+          // no change, but still backfill fields on older/restored orders
           if(flr&&!ex.floor)ex.floor=flr;if(unt&&!ex.unit)ex.unit=unt;
+          if(rowVal>0&&!ex.value)ex.value=rowVal;
+          if(refStr&&!ex.ref)ex.ref=refStr;
           skipped++;
         }
       } else {
