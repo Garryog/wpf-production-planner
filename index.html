@@ -240,6 +240,7 @@ async function loadDB(){
       if(d[0].settings&&d[0].settings.grps)DB.grps=d[0].settings.grps;
     }
     DB.orders.forEach(o=>{orig[o.wo]=o.plannedWeek||'';origStep[o.wo]=o.step||'';});
+    DB.loadFailed=false;
     setSS('ok');
   }catch(e){
     setSS('e');
@@ -247,9 +248,17 @@ async function loadDB(){
   }
 }
 async function saveDB(){
+  // SAFETY: if this page never managed to LOAD the plan, it must never SAVE —
+  // otherwise a disconnected machine could overwrite the real plan with an empty board.
+  if(DB.loadFailed){
+    setSS('e');
+    toast('NOT saved — this page never loaded the plan (database unreachable). Fix the connection and refresh.');
+    return;
+  }
   setSS('s');
   try{
-    await fetch(SUPA_URL+'/production_planner?id=eq.main',{method:'PATCH',headers:SUPA_WHDR,body:JSON.stringify({orders:DB.orders,nid:DB.nid,settings:{weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP,delx:DB.delx||[],delNotes:DB.delNotes||{},grps:DB.grps||{}}})});
+    const resp=await fetch(SUPA_URL+'/production_planner?id=eq.main',{method:'PATCH',headers:SUPA_WHDR,body:JSON.stringify({orders:DB.orders,nid:DB.nid,settings:{weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP,delx:DB.delx||[],delNotes:DB.delNotes||{},grps:DB.grps||{}}})});
+    if(resp&&resp.ok===false){setSS('e');return;}
     setSS('ok');
   }catch(e){setSS('e');}
 }
