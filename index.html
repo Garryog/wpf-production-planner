@@ -240,8 +240,11 @@ async function loadDB(){
       if(d[0].settings&&d[0].settings.grps)DB.grps=d[0].settings.grps;
     }
     DB.orders.forEach(o=>{orig[o.wo]=o.plannedWeek||'';origStep[o.wo]=o.step||'';});
-  }catch(e){setSS('e');}
-  setSS('ok');
+    setSS('ok');
+  }catch(e){
+    setSS('e');
+    DB.loadFailed=true; // render() shows a warning banner while this is set
+  }
 }
 async function saveDB(){
   setSS('s');
@@ -296,6 +299,13 @@ function render(){
   else if(tab==='i')renderImport(app);
   else if(tab==='x')renderExport(app);
   else renderSettings(app);
+  // Make a failed database load impossible to miss — an empty board that says nothing cost a trip downstairs once
+  if(DB.loadFailed)app.insertAdjacentHTML('afterbegin',`<div style="max-width:1400px;margin:14px auto 0;padding:0 20px"><div style="background:#fdecea;border:2px solid #e57368;border-radius:8px;padding:14px 18px;font-size:13px;color:#8a1c10;line-height:1.55">
+      <b style="font-size:14px">⚠ Can't reach the planner database — no data loaded.</b><br>
+      The app loaded, but this computer or network is blocking the connection to the database at <b>klyropbsupqfmtjjwlfa.supabase.co</b>.
+      Nothing you do here will be saved. Usual cause: the firewall or web filter allows this website but blocks supabase.co —
+      ask IT to allow HTTPS (port&nbsp;443) to that address, then refresh this page. (Press F12 → Console to see the blocked request.)
+    </div></div>`);
   updDelBadge();
 }
 function updDelBadge(){
