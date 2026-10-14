@@ -127,6 +127,8 @@ button,input,select{font-family:inherit;cursor:pointer}
 .dvbtn.on{filter:none;opacity:1;background:#e8f1fd;border-color:#b0c8e8}
 #delcnt{display:none;background:#1a56db;color:#fff;border-radius:9px;font-size:10px;font-weight:700;padding:1px 6px;margin-left:5px;vertical-align:1px}
 #listcnt{display:none;background:#c0392b;color:#fff;border-radius:9px;font-size:10px;font-weight:700;padding:1px 6px;margin-left:5px;vertical-align:1px}
+.pwo-l{display:block;font-size:11px;color:var(--t3);font-weight:700;margin-bottom:3px}
+#pwo-form input{padding:7px 9px;border:1px solid var(--b2);border-radius:6px;font-size:13px}
 /* cutting lists library + saw/stores queues */
 .lst-tbl{width:100%;border-collapse:collapse;font-size:12px;background:#fff}
 .lst-tbl th{background:#f4f6f9;text-align:left;padding:6px 8px;font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--t3);border-bottom:1px solid var(--border)}
@@ -153,6 +155,12 @@ button,input,select{font-family:inherit;cursor:pointer}
 .wl-btn{background:#0d9450;color:#fff;border:none;border-radius:10px;padding:14px 22px;font-size:16px;font-weight:800;cursor:pointer}
 .wl-undo{background:none;border:1px solid var(--b2);border-radius:8px;padding:6px 12px;font-size:12px;color:var(--t3);cursor:pointer}
 .wl-donelbl{color:#0d6e46;font-weight:800;font-size:15px}
+.wl-tabs{display:flex;gap:10px;margin-bottom:14px}
+.wl-tabs button{flex:1;padding:14px;font-size:17px;font-weight:800;border-radius:10px;border:2px solid var(--b2);background:#fff;color:var(--t3);cursor:pointer}
+.wl-tabs button.on{background:#14335c;border-color:#14335c;color:#fff}
+.wl-dday{font-size:13px;font-weight:800;color:#14335c;text-transform:uppercase;letter-spacing:.5px;margin:16px 0 6px;border-bottom:2px solid #14335c;padding-bottom:3px}
+.wl-drow{display:flex;gap:10px;align-items:center;background:#fff;border:1px solid var(--border);border-radius:8px;padding:9px 12px;margin-bottom:6px;font-size:14px}
+.wl-drow>b{font-size:16px;color:#14335c}
 /* batch-cut selection + combined view + per-house splits */
 .wl-chk{width:28px;height:28px;border-radius:7px;border:2px solid rgba(255,255,255,.6);background:transparent;cursor:pointer;color:#14335c;font-weight:800;font-size:16px;line-height:1;flex-shrink:0}
 .wl-chk.on{background:#e8b931;border-color:#e8b931}
@@ -269,6 +277,10 @@ button,input,select{font-family:inherit;cursor:pointer}
 .ls-ok{color:#0d6e46;font-weight:700}
 .ls-no{color:#c0392b;font-weight:800;background:#fdecea;border:1px solid #f0b5ae;border-radius:5px;padding:1px 7px}
 .ls-none{color:var(--t3);font-style:italic}
+.dchip-ls{display:flex;gap:4px;margin-top:3px;flex-wrap:wrap}
+.lsc-ok{font-size:9px;font-weight:800;color:#0d6e46;background:#d2f2de;border-radius:4px;padding:1px 5px}
+.lsc-no{font-size:9px;font-weight:800;color:#c0392b;background:#fdecea;border:1px solid #f0b5ae;border-radius:4px;padding:0 5px}
+.dcell.cell-done{background:#eefbf3!important;outline:2px solid #b3e0c4;outline-offset:-2px}
 .drv-tick{width:90px;min-height:56px;border-radius:10px;border:2px solid var(--b2);background:#f7f9fc;font-size:13px;font-weight:800;color:var(--t3);cursor:pointer;flex-shrink:0}
 .drv-tick.on{background:#0d9450;border-color:#0d9450;color:#fff}
 .drv-big{width:100%;padding:18px;font-size:19px;font-weight:800;border:none;border-radius:12px;cursor:pointer;margin-top:6px}
@@ -302,6 +314,7 @@ button,input,select{font-family:inherit;cursor:pointer}
 .dsh-t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dsh-c{color:var(--t3);font-size:12px;white-space:nowrap;max-width:140px;overflow:hidden;text-overflow:ellipsis}
 .dsh-x{font-size:12px;color:var(--t2);white-space:nowrap}
+.pm-sec{font-size:11px;font-weight:800;letter-spacing:.5px;color:#14335c;padding:7px 12px 3px;border-bottom:1px solid #eef1f5;background:#f8fafc}
 </style>
 </head>
 <body>
@@ -501,23 +514,24 @@ function showTab(t){tab=t;['b','d','l','i','x','s'].forEach(id=>{const el=docume
 
 /* ---------- Role views: Office / Factory Floor / Driver (same live plan, a screen per job) ---------- */
 const ls={get:k=>{try{return localStorage.getItem(k)||'';}catch(e){return'';}},set:(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}}};
-function pins(){const p=DB.pins||{};return{office:p.office||'2468',driver:p.driver||'1111'};}
+// Every view has its own PIN; the ADMIN PIN opens any view and is the only one that can change PINs.
+const ROLE_LBL={office:'Office',floor:'Floor screen',saw:'Saw',stores:'Stores',driver:'Driver',dash:'Management',pm:'Project Managers'};
+function pins(){const p=DB.pins||{};return{admin:p.admin||'9000',office:p.office||'2468',driver:p.driver||'1111',floor:p.floor||'2222',saw:p.saw||'3333',stores:p.stores||'4444',dash:p.dash||'5555',pm:p.pm||'6666'};}
 let ROLE='';
 (function(){
   const q=(new URLSearchParams(location.search).get('view')||'').toLowerCase();
-  if(['office','floor','driver','saw','stores','dash'].includes(q))ROLE=q;
-  else{const s=ls.get('wpfRole');if(['office','floor','driver','saw','stores','dash'].includes(s))ROLE=s;}
+  if(['office','floor','driver','saw','stores','dash','pm'].includes(q))ROLE=q;
+  else{const s=ls.get('wpfRole');if(['office','floor','driver','saw','stores','dash','pm'].includes(s))ROLE=s;}
 })();
-function roleOk(r){ // has this device already entered the right PIN for this role?
-  if(r==='floor'||r==='saw'||r==='stores'||r==='dash')return true;
-  if(r==='office')return ls.get('wpfPinOffice')===pins().office;
-  if(r==='driver')return ls.get('wpfPinDriver')===pins().driver;
-  return false;
+function roleOk(r){ // has this device already entered the right PIN (or the admin PIN) for this view?
+  const p=pins();if(!p[r])return false;
+  const c=ls.get('wpfPin_'+r)||(r==='office'?ls.get('wpfPinOffice'):r==='driver'?ls.get('wpfPinDriver'):'');
+  return !!c&&(c===p[r]||c===p.admin);
 }
 let viewTimer=null;
 function startAutoRefresh(){
   clearInterval(viewTimer);
-  if(['floor','driver','saw','stores','office','dash'].includes(ROLE)){
+  if(['floor','driver','saw','stores','office','dash','pm'].includes(ROLE)){
     viewTimer=setInterval(()=>{
       if(saveT||drvUploading||DB.saveFailed)return; // never clobber an unsaved change, a retrying save, or an upload
       loadDB().then(()=>{if(ROLE)render();});
@@ -531,14 +545,16 @@ function rolePicker(pinFor){
   ov.innerHTML=`<div class="rcard">
     <h2>Who's using this screen?</h2>
     <p>Everyone sees the same live plan — each role gets the view for their job.</p>
-    <button class="rbtn" data-role="office"><span class="ri">🗓</span><span>Office / Planning<small>Full planner — plan, dispatch, import, print. PIN required.</small></span></button>
+    <button class="rbtn" data-role="office"><span class="ri">🗓</span><span>Office / Planning<small>Full planner — plan, dispatch, import, print.</small></span></button>
     <button class="rbtn" data-role="floor"><span class="ri">🏭</span><span>Factory Floor Screen<small>Big read-only display — today &amp; tomorrow's loads, live status.</small></span></button>
     <button class="rbtn" data-role="dash"><span class="ri">📊</span><span>Management Dashboard<small>Live overview — cutting, stores, trucks out, delivered, missed. Read-only.</small></span></button>
-    <button class="rbtn" data-role="saw"><span class="ri">🪚</span><span>Saw / Cutting<small>Cutting lists in delivery order — mark each list CUT COMPLETE.</small></span></button>
-    <button class="rbtn" data-role="stores"><span class="ri">🧰</span><span>Stores / Fittings<small>Fittings lists in delivery order — mark each list PICKED.</small></span></button>
-    <button class="rbtn" data-role="driver"><span class="ri">🚚</span><span>Driver<small>Your van's run — check jobs onto the van, confirm delivered. PIN required.</small></span></button>
+    <button class="rbtn" data-role="pm"><span class="ri">🏗</span><span>Project Managers<small>Deliveries per customer — delivered, on the road, scheduled, coming up.</small></span></button>
+    <button class="rbtn" data-role="saw"><span class="ri">🪚</span><span>Saw / Cutting<small>Today's cutting lists — mark each list CUT COMPLETE.</small></span></button>
+    <button class="rbtn" data-role="stores"><span class="ri">🧰</span><span>Stores / Fittings<small>Today's fittings lists — mark each list PICKED.</small></span></button>
+    <button class="rbtn" data-role="driver"><span class="ri">🚚</span><span>Driver<small>Your van's run — check jobs onto the van, confirm delivered.</small></span></button>
+    <div style="font-size:11px;color:var(--t3);margin:2px 0 6px">Every view is PIN-locked — enter its PIN once on this device. The Admin PIN opens any view.</div>
     <div class="rpin${pinFor?' open':''}" id="rpin">
-      <div style="font-size:13px;color:var(--t2);margin-bottom:8px">Enter the <b id="rpin-role">${pinFor==='driver'?'Driver':'Office'}</b> PIN</div>
+      <div style="font-size:13px;color:var(--t2);margin-bottom:8px">Enter the <b id="rpin-role">${escA(ROLE_LBL[pinFor]||'')}</b> PIN (or the Admin PIN)</div>
       <input id="rpin-in" inputmode="numeric" autocomplete="off" maxlength="8" placeholder="····">
       <div class="perr" id="rpin-err"></div>
     </div>
@@ -547,17 +563,17 @@ function rolePicker(pinFor){
   const pinEl=document.getElementById('rpin'),inEl=document.getElementById('rpin-in');
   ov.querySelectorAll('.rbtn').forEach(b=>b.onclick=()=>{
     const r=b.dataset.role;
-    if(r==='floor'||roleOk(r)){ov.className='rovl hide';setRole(r);return;}
+    if(roleOk(r)){ov.className='rovl hide';setRole(r);return;}
     want=r;
-    document.getElementById('rpin-role').textContent=r==='office'?'Office':'Driver';
+    document.getElementById('rpin-role').textContent=ROLE_LBL[r]||r;
     pinEl.classList.add('open');document.getElementById('rpin-err').textContent='';inEl.value='';inEl.focus();
   });
   inEl.oninput=()=>{
     if(!want)return;
-    const v=inEl.value.trim(),good=want==='office'?pins().office:pins().driver;
-    if(v.length>=good.length){
-      if(v===good){ls.set(want==='office'?'wpfPinOffice':'wpfPinDriver',v);ov.className='rovl hide';setRole(want);}
-      else{document.getElementById('rpin-err').textContent='Wrong PIN — try again';inEl.value='';}
+    const v=inEl.value.trim(),p=pins(),good=p[want];
+    if(v.length>=Math.min(good.length,p.admin.length)){
+      if(v===good||v===p.admin){ls.set('wpfPin_'+want,v);ov.className='rovl hide';setRole(want);}
+      else if(v.length>=Math.max(good.length,p.admin.length)){document.getElementById('rpin-err').textContent='Wrong PIN — try again';inEl.value='';}
     }
   };
   if(pinFor)inEl.focus();
@@ -567,7 +583,7 @@ function render(){
   const app=document.getElementById('app');
   const tabsBar=document.querySelector('.tabs');
   const sw=document.getElementById('role-sw');
-  if(sw){sw.style.display=ROLE?'':'none';sw.textContent='⇄ '+({office:'Office',driver:'Driver',floor:'Floor screen',saw:'Saw',stores:'Stores',dash:'Dashboard'}[ROLE]||'');sw.onclick=()=>rolePicker();}
+  if(sw){sw.style.display=ROLE?'':'none';sw.textContent='⇄ '+(ROLE_LBL[ROLE]||'');sw.onclick=()=>rolePicker();}
   if(tabsBar)tabsBar.style.display=(ROLE==='office')?'':'none';
   if(!ROLE){app.innerHTML='';rolePicker();return;}
   if(ROLE!=='floor'&&!roleOk(ROLE)){app.innerHTML='';rolePicker(ROLE);return;}
@@ -578,6 +594,7 @@ function render(){
   if(ROLE==='office')tryDailyBackup(); // once per day, silent
   if(ROLE==='floor'){renderFloor(app);return;}
   if(ROLE==='dash'){renderDash(app);return;}
+  if(ROLE==='pm'){renderPM(app);return;}
   if(ROLE==='saw'){renderWorkList(app,'saw');return;}
   if(ROLE==='stores'){renderWorkList(app,'fit');return;}
   if(ROLE==='driver'){renderDriver(app);return;}
@@ -642,26 +659,24 @@ function renderSettings(app){
     +'</div>'
     +'<div class="exp-panel">'
     +'<div style="font-size:14px;font-weight:600;margin-bottom:6px">View PINs</div>'
-    +'<p style="font-size:12px;color:var(--t3);margin-bottom:12px">The Office PIN unlocks this full planner; the Driver PIN unlocks the driver view (loading checks and delivery confirmation). The factory floor screen needs no PIN — it is read-only. Changing a PIN signs everyone out of that view until they enter the new one.</p>'
-    +'<div style="display:flex;gap:20px;flex-wrap:wrap;margin-bottom:12px">'
-    +'<div><label style="font-size:12px;color:var(--t2);display:block;margin-bottom:4px">Office PIN</label>'
-    +'<input id="s-pin-o" value="'+escA(pins().office)+'" maxlength="8" style="padding:6px 10px;border:1px solid var(--b2);border-radius:6px;font-size:16px;width:110px;letter-spacing:4px"></div>'
-    +'<div><label style="font-size:12px;color:var(--t2);display:block;margin-bottom:4px">Driver PIN</label>'
-    +'<input id="s-pin-d" value="'+escA(pins().driver)+'" maxlength="8" style="padding:6px 10px;border:1px solid var(--b2);border-radius:6px;font-size:16px;width:110px;letter-spacing:4px"></div>'
+    +'<p style="font-size:12px;color:var(--t3);margin-bottom:12px">Every view is locked by its own PIN, entered once per device. The <b>Admin PIN opens any view</b> and is required to save changes here. Changing a PIN signs every device out of that view until the new one is entered.</p>'
+    +'<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px">'
+    +[['admin','🔑 Admin'],['office','🗓 Office'],['floor','🏭 Floor'],['saw','🪚 Saw'],['stores','🧰 Stores'],['driver','🚚 Driver'],['dash','📊 Mgmt'],['pm','🏗 PM']].map(([k,lbl])=>'<div><label style="font-size:12px;color:var(--t2);display:block;margin-bottom:4px">'+lbl+'</label>'
+      +'<input id="s-pin-'+k+'" value="'+escA(pins()[k])+'" maxlength="8" style="padding:6px 10px;border:1px solid '+(k==='admin'?'#c0392b':'var(--b2)')+';border-radius:6px;font-size:16px;width:95px;letter-spacing:3px"></div>').join('')
     +'</div>'
-    +'<button class="btn btn-g" id="btn-save-pins">Save PINs</button>'
+    +'<button class="btn btn-g" id="btn-save-pins">Save PINs (Admin PIN required)</button>'
     +'</div>'
     +'<div class="exp-panel">'
     +'<div style="font-size:14px;font-weight:600;margin-bottom:6px">Staff</div>'
-    +'<p style="font-size:12px;color:var(--t3);margin-bottom:10px">The people who sign work off. Drivers pick their name from this list on the phone; the saw and stores tap their name when marking lists done. Tick the jobs each person does. Removing someone does not touch past records — their name stays on everything they already signed.</p>'
-    +'<table class="lst-tbl" style="max-width:640px"><thead><tr><th>Name</th><th style="text-align:center">🚚 Driver</th><th style="text-align:center">🪚 Saw</th><th style="text-align:center">🧰 Stores</th><th></th></tr></thead><tbody>'
+    +'<p style="font-size:12px;color:var(--t3);margin-bottom:10px">Everyone who uses the system, with a category per view — Admin is the system owner. Drivers pick their name from this list on the phone; the saw and stores tap their name when marking lists done. Removing someone does not touch past records — their name stays on everything they already signed.</p>'
+    +'<table class="lst-tbl" style="max-width:820px"><thead><tr><th>Name</th><th style="text-align:center">🔑 Admin</th><th style="text-align:center">🗓 Office</th><th style="text-align:center">🚚 Driver</th><th style="text-align:center">🪚 Saw</th><th style="text-align:center">🧰 Stores</th><th style="text-align:center">📊 Mgmt</th><th style="text-align:center">🏗 PM</th><th></th></tr></thead><tbody>'
     +staff().map((s,i)=>'<tr>'
       +'<td><input data-stn="'+i+'" value="'+escA(s.n||'')+'" style="width:100%;padding:5px 8px;border:1px solid var(--b2);border-radius:5px;font-size:13px"></td>'
-      +['driver','saw','stores'].map(r=>'<td style="text-align:center"><input type="checkbox" data-str="'+i+'|'+r+'"'+((s.r||[]).includes(r)?' checked':'')+' style="width:16px;height:16px"></td>').join('')
+      +['admin','office','driver','saw','stores','dash','pm'].map(r=>'<td style="text-align:center"><input type="checkbox" data-str="'+i+'|'+r+'"'+((s.r||[]).includes(r)?' checked':'')+' style="width:16px;height:16px"></td>').join('')
       +'<td><button class="btn btn-s" data-stx="'+i+'" style="padding:2px 8px;font-size:11px;color:var(--red);border-color:var(--red)">✕</button></td>'
       +'</tr>').join('')
     +'<tr><td><input id="st-new" placeholder="Add a name…" style="width:100%;padding:5px 8px;border:1px dashed var(--b2);border-radius:5px;font-size:13px"></td>'
-    +'<td colspan="3" style="font-size:11px;color:var(--t3)">tick their jobs after adding</td>'
+    +'<td colspan="7" style="font-size:11px;color:var(--t3)">tick their views after adding</td>'
     +'<td><button class="btn btn-g" id="st-add" style="padding:3px 10px;font-size:12px">＋ Add</button></td></tr>'
     +'</tbody></table>'
     +'</div>'
@@ -706,11 +721,18 @@ function renderSettings(app){
   });
 
   document.getElementById('btn-save-pins')?.addEventListener('click',()=>{
-    const po=(document.getElementById('s-pin-o')?.value||'').trim(),pd=(document.getElementById('s-pin-d')?.value||'').trim();
-    if(po.length<4||pd.length<4){toast('PINs need at least 4 characters');return;}
-    DB.pins={office:po,driver:pd};
-    ls.set('wpfPinOffice',po); // this device stays signed in to Office
-    sched();toast('PINs saved ✓');
+    const a=prompt('Admin PIN to change PINs:');
+    if(a===null)return;
+    if(a.trim()!==pins().admin){toast('Wrong Admin PIN — PINs unchanged');return;}
+    const np={};let bad=false;
+    ['admin','office','floor','saw','stores','driver','dash','pm'].forEach(k=>{
+      const v=(document.getElementById('s-pin-'+k)?.value||'').trim();
+      if(v.length<4)bad=true;np[k]=v;
+    });
+    if(bad){toast('Every PIN needs at least 4 characters');return;}
+    DB.pins=np;
+    ls.set('wpfPin_office',np.office); // this device stays signed in to Office
+    sched();toast('PINs saved ✓ — other devices must enter the new PINs');
   });
 
   document.getElementById('btn-save-scale')?.addEventListener('click',()=>{
@@ -846,7 +868,7 @@ function renderBoard(app){
             :`<input type="checkbox" class="gsel" data-gsel="${escA(o.wo)}"${grpSel.has(o.wo)?' checked':''} title="Select to group">`}</td>
           <td><span class="drag-handle">⠿</span></td>
           <td style="text-align:center"><button class="dvbtn${o.delv?' on':''}" data-dv="${escA(o.wo)}" title="${o.delv?'Delivering next week — click to untag':'Tag for delivery next week'}">🚚</button></td>
-          <td><span class="wo-num" data-hl="${escA(o.wo)}" style="cursor:pointer${member?';padding-left:10px':''}" title="Tap to mark as discussed">${o.hl?'✓ ':''}${escA(o.wo)}</span></td>
+          <td><span class="wo-num" data-hl="${escA(o.wo)}" style="cursor:pointer${member?';padding-left:10px':''}${/^P-\d+$/.test(o.wo)?';color:#7c5cd6;font-weight:800':''}" title="${/^P-\d+$/.test(o.wo)?'Created in the planner — not from Cienapps. ':''}Tap to mark as discussed">${o.hl?'✓ ':''}${escA(o.wo)}</span></td>
           <td>${o.floor?`<span class="fu-badge">${escA(o.floor)}</span>`:'<span style="color:var(--t3)">—</span>'}</td>
           <td>${o.unit?`<span class="fu-badge">${escA(o.unit)}</span>`:'<span style="color:var(--t3)">—</span>'}</td>
           <td><span class="wo-title" title="${escA(o.title)}">${escA(o.title)}</span></td>
@@ -952,8 +974,23 @@ function renderBoard(app){
     ${(n=>n?`<button class="btn btn-s" id="btn-flate" title="Jobs whose planned week ends AFTER their Cienapps due date — dates have drifted since they were planned. Click to see only these and re-plan them." style="${fLate?'background:#fdecea;border-color:#e57368;font-weight:700;':''}border-color:#e57368;color:#c0392b">⚠ ${n} late vs due</button>`:'')(DB.orders.filter(isLateVsDue).length)}
     <button class="btn btn-s" id="btn-clf">Clear filters</button>
     <span style="margin-left:auto;font-size:12px;color:var(--t2)">${orders.length} shown · ${DB.orders.filter(o=>o.plannedWeek).length} scheduled · ${unschCnt} unscheduled</span>
+    <button class="btn btn-g" id="btn-pwo" title="Create a work order directly in the planner — numbered P-…, it follows the same workflow as every Cienapps job but is never touched by imports">＋ New Work Order</button>
     <button class="btn btn-s" id="btn-snap" title="Save a single read-only HTML file with all current data baked in — email it or open it anywhere, no database or internet needed">📸 Offline Snapshot</button>
     <button class="btn btn-s" id="btn-clearall" style="border-color:var(--red);color:var(--red)">Clear All Orders</button>
+  </div>
+  <div id="pwo-form" style="display:none;background:#fff;border:2px solid #7c5cd6;border-radius:10px;padding:14px;margin-bottom:14px;max-width:1400px">
+    <div style="font-size:13px;font-weight:800;color:#7c5cd6;margin-bottom:8px">New planner work order — numbered automatically (P-…), identified in purple, follows the full workflow (board → cutting lists → delivery → driver), never altered or removed by Cienapps imports.</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+      <div><label class="pwo-l">Title *</label><input id="pwo-title" placeholder="e.g. REPLACEMENT DOORS HOUSE 12" style="width:260px"></div>
+      <div><label class="pwo-l">Customer</label><input id="pwo-cust" style="width:160px"></div>
+      <div><label class="pwo-l">Floor</label><input id="pwo-floor" style="width:60px"></div>
+      <div><label class="pwo-l">Unit</label><input id="pwo-unit" style="width:60px"></div>
+      <div><label class="pwo-l">Value €</label><input id="pwo-val" type="number" min="0" style="width:90px"></div>
+      <div><label class="pwo-l">Hours (blank = estimate from value)</label><input id="pwo-hrs" type="number" min="0" step="0.5" style="width:90px"></div>
+      <div><label class="pwo-l">Due date *</label><input id="pwo-due" type="date" style="width:140px"></div>
+      <button class="btn btn-g" id="pwo-add">Create</button>
+      <button class="btn btn-s" id="pwo-cancel">Cancel</button>
+    </div>
   </div>
 
   <div class="wo-table-wrap">
@@ -1036,6 +1073,26 @@ function renderBoard(app){
   }
   const fd=document.getElementById('btn-fdel');if(fd)fd.onclick=()=>{fDel=!fDel;render();};
   const fl=document.getElementById('btn-flate');if(fl)fl.onclick=()=>{fLate=!fLate;render();};
+  // Planner-created work orders: P-numbered, same workflow as Cienapps jobs, immune to imports
+  const pwb=document.getElementById('btn-pwo');
+  if(pwb)pwb.onclick=()=>{const f=document.getElementById('pwo-form');f.style.display=f.style.display==='none'?'':'none';if(f.style.display!=='none')document.getElementById('pwo-title').focus();};
+  const pwc=document.getElementById('pwo-cancel');if(pwc)pwc.onclick=()=>{document.getElementById('pwo-form').style.display='none';};
+  const pwa=document.getElementById('pwo-add');
+  if(pwa)pwa.onclick=()=>{
+    const g=id=>(document.getElementById(id)?.value||'').trim();
+    const title=g('pwo-title'),due=g('pwo-due');
+    if(!title){toast('Give the work order a title');document.getElementById('pwo-title').focus();return;}
+    if(!due){toast('Set the due date — it drives cutting deadlines and the delivery plan');document.getElementById('pwo-due').focus();return;}
+    const num=Math.max(1000,...DB.orders.map(o=>{const m=String(o.wo).match(/^P-(\d+)$/);return m?+m[1]:0;}))+1;
+    const wo='P-'+num;
+    const val=parseFloat(g('pwo-val'))||0;
+    let hours=parseFloat(g('pwo-hrs')),hoursEstimated=false;
+    if(isNaN(hours)||hours<=0){hours=estimateHours(val);hoursEstimated=true;}
+    DB.orders.push({wo,ref:'',floor:g('pwo-floor'),unit:g('pwo-unit'),title,customer:g('pwo-cust'),hours,hoursEstimated,
+      dueDate:due,origDueDate:due,step:'Planner WO',salesRep:'',orderNo:'',value:val,plannedWeek:wkKey(new Date(due)),notes:'',colour:''});
+    orig[wo]='';origStep[wo]='Planner WO';
+    sched();render();toast(wo+' created — scheduled to its due-date week ✓');
+  };
   // Delivery tag toggle — in place, no re-render, so the list doesn't jump while reviewing
   document.querySelectorAll('[data-dv]').forEach(b=>b.onclick=()=>{
     const o=DB.orders.find(x=>x.wo===b.dataset.dv);if(!o)return;
@@ -1468,6 +1525,8 @@ function listTableHTML(l,mode){ // mode 'saw' | 'fit' | 'all'
    Batch mode: tick several lists → one combined table (total qty + per-house split) and
    location labels so every pack or single item is marked with its house. */
 const wlSel=new Set();
+let wlShowDone=false;     // saw/stores: viewing the date-stamped DONE screen
+let wlShowUpcoming=false; // saw/stores: peeking at later days' work
 // A name is REQUIRED on every tick-off — blank records make the audit trail worthless.
 // Remembered per device, so it's one-time friction at each bench.
 function opName(what){
@@ -1600,10 +1659,17 @@ function renderWorkList(app,mode){
   const cfg=mode==='saw'?{icon:'🪚',title:'SAW — Cutting Queue',done:'✓ CUT COMPLETE',cnt:l=>l.saw||0}
                         :{icon:'🧰',title:'STORES — Fittings Queue',done:'✓ FITTINGS PICKED',cnt:l=>l.fit||0};
   const rel=lists().filter(l=>cfg.cnt(l)>0);
-  const open=rel.filter(l=>!listDone(l.id)[mode]).sort((a,b)=>(listDueKey(a)||'9999').localeCompare(listDueKey(b)||'9999'));
+  const todayISO=new Date().toISOString().slice(0,10);
+  const srtDue=(a,b)=>(listDueKey(a)||'9999').localeCompare(listDueKey(b)||'9999');
+  const open=rel.filter(l=>!listDone(l.id)[mode]).sort(srtDue);
   const closed=rel.filter(l=>listDone(l.id)[mode]).sort((a,b)=>String(listDone(b.id)[mode].at).localeCompare(String(listDone(a.id)[mode].at)));
-  [...wlSel].forEach(id=>{if(!open.some(l=>l.id===id))wlSel.delete(id);}); // selections only valid while in the open queue
-  const selLists=open.filter(l=>wlSel.has(l.id));
+  // The bench sees TODAY's work plus anything not cleared from past days — nothing else.
+  const dueNow=open.filter(l=>{const d=listDeadline(l);return d&&d<=todayISO;});   // cut/pick by today, incl. overdue
+  const upcoming=open.filter(l=>{const d=listDeadline(l);return d&&d>todayISO;});  // later days — hidden unless peeked
+  const undated=open.filter(l=>!listDeadline(l));                                  // no delivery date yet (office to tag)
+  const visible=wlShowDone?[]:(wlShowUpcoming?[...dueNow,...upcoming,...undated]:dueNow);
+  [...wlSel].forEach(id=>{if(!visible.some(l=>l.id===id))wlSel.delete(id);}); // selections only valid while visible in the queue
+  const selLists=visible.filter(l=>wlSel.has(l.id));
   const woChips=l=>(l.wos||[]).map(w=>{const o=DB.orders.find(x=>x.wo===w);return `<span class="lst-chip">${escA(w)}${o&&(o.floor||o.unit)?' · '+escA([o.floor,o.unit].filter(Boolean).join(' ')):''}</span>`;}).join('');
   const card=(l,isDone)=>{const dn=listDone(l.id)[mode];const due=listDueKey(l);return `<div class="wl-card${isDone?' cdone':''}">
     <div class="wl-h"><div style="display:flex;gap:10px;align-items:flex-start">${!isDone?`<button class="wl-chk${wlSel.has(l.id)?' on':''}" data-wlsel="${escA(l.id)}" title="Select for batch cutting across houses">${wlSel.has(l.id)?'✓':''}</button>`:''}<div><span class="wn">${escA(l.name)}</span> <span class="wd">${escA(l.project||'')}${(c=>c&&c!==l.project?' · '+escA(c):'')(listCust(l))}</span><div style="margin-top:3px">${woChips(l)}</div></div></div>
@@ -1612,15 +1678,36 @@ function renderWorkList(app,mode){
     <div class="wl-act">${isDone?`<span class="wl-donelbl">${cfg.done} — ${new Date(dn.at).toLocaleDateString('en-IE')} ${hhmm(dn.at)}${dn.by?' by '+escA(dn.by):''}</span><button class="wl-undo" data-wlundo="${escA(l.id)}">Undo</button>`
       :`<span style="font-size:12px;color:var(--t3)">${cfg.cnt(l)} item${cfg.cnt(l)!==1?'s':''}</span><span style="display:flex;gap:8px"><button class="wl-undo" data-wllbl="${escA(l.id)}" title="Print a label for every pack and item, marked with this house">🏷 Labels</button><button class="wl-btn" data-wldone="${escA(l.id)}">${cfg.done}</button></span>`}</div>
   </div>`;};
-  app.innerHTML=`<div class="wl"><h1>${cfg.icon} ${cfg.title}<span>soonest delivery first · updates automatically</span></h1>
-    ${open.length>1?`<div style="font-size:12px;color:var(--t3);margin:-8px 0 10px">Cutting several houses together? Tick the box on each list for a combined table with per-house quantities and location labels.</div>`:''}
+  // DONE screen: everything signed off, newest first, grouped under its date stamp
+  const doneScreen=()=>{
+    if(!closed.length)return `<div class="flr-none">Nothing signed off yet — completed lists land here, date-stamped.</div>`;
+    const byDay={};const order=[];
+    closed.slice(0,60).forEach(l=>{
+      const at=listDone(l.id)[mode].at;
+      const k=new Date(at).toLocaleDateString('en-IE',{weekday:'long',day:'numeric',month:'short'});
+      if(!byDay[k]){byDay[k]=[];order.push(k);}
+      byDay[k].push(l);
+    });
+    return order.map(k=>`<div class="wl-dday">${k===new Date().toLocaleDateString('en-IE',{weekday:'long',day:'numeric',month:'short'})?'TODAY — '+escA(k):escA(k)}</div>`+
+      byDay[k].map(l=>{const dn=listDone(l.id)[mode];return `<div class="wl-drow"><b>${escA(l.name)}</b><span class="dsh-t">${escA(l.project||'')}</span><span class="dsh-c">${escA(listCust(l))}</span><span class="wl-donelbl" style="font-size:13px">✓ ${hhmm(dn.at)}${dn.by?' · '+escA(dn.by):''}</span><button class="wl-undo" data-wlundo="${escA(l.id)}">Undo</button></div>`;}).join('')).join('');
+  };
+  app.innerHTML=`<div class="wl"><h1>${cfg.icon} ${cfg.title}<span>today + anything not cleared · updates automatically</span></h1>
+    <div class="wl-tabs">
+      <button id="wl-tab-todo" class="${!wlShowDone?'on':''}">${mode==='saw'?'🪚':'🧰'} TO DO — ${dueNow.length} today${dueNow.filter(listOverdue).length?` <span style="color:#ffb3a7">(${dueNow.filter(listOverdue).length} overdue)</span>`:''}</button>
+      <button id="wl-tab-done" class="${wlShowDone?'on':''}">✓ DONE — ${closed.length}</button>
+    </div>
+    ${wlShowDone?doneScreen():`
+    ${visible.length>1?`<div style="font-size:12px;color:var(--t3);margin:-4px 0 10px">Cutting several houses together? Tick the box on each list for a combined table with per-house quantities and location labels.</div>`:''}
     ${selLists.length?`<div class="wl-selbar"><b>${selLists.length} house${selLists.length!==1?'s':''} selected</b>
       <button class="btn2" id="wl-comb" ${selLists.length<2?'disabled title="Select at least 2 lists to combine"':''}>⚡ Combined ${mode==='saw'?'cutting':'fittings'} table</button>
       <button class="btn3" id="wl-lblsel">🏷 Labels for selected</button>
       <button class="btn3" id="wl-clrsel">✕ Clear</button></div>`:''}
-    ${open.length?open.map(l=>card(l,false)).join(''):`<div class="flr-none">Nothing in the queue — all lists are ${mode==='saw'?'cut':'picked'}. New lists appear here as the office uploads them.</div>`}
-    ${closed.length?`<div style="margin:18px 0 8px;font-size:13px;color:var(--t3);font-weight:700;text-transform:uppercase">Done</div>`+closed.slice(0,10).map(l=>card(l,true)).join(''):''}
+    ${visible.length?visible.map(l=>card(l,false)).join(''):`<div class="flr-none">Nothing to ${mode==='saw'?'cut':'pick'} for today — all clear ✓${upcoming.length?`<div style="font-size:13px;margin-top:6px;color:var(--t3)">${upcoming.length} list${upcoming.length!==1?'s':''} due on later days</div>`:''}</div>`}
+    ${(upcoming.length||undated.length)?`<div style="text-align:center;margin:12px 0"><button class="btn btn-s" id="wl-upc">${wlShowUpcoming?'▴ Hide later days':'▾ Work ahead — show '+(upcoming.length+undated.length)+' list'+(upcoming.length+undated.length!==1?'s':'')+' due on later days'}</button></div>`:''}`}
     <div class="flr-ft">Last update ${hhmm(new Date().toISOString())}</div></div>`;
+  const tb1=document.getElementById('wl-tab-todo');if(tb1)tb1.onclick=()=>{wlShowDone=false;render();};
+  const tb2=document.getElementById('wl-tab-done');if(tb2)tb2.onclick=()=>{wlShowDone=true;render();};
+  const upc=document.getElementById('wl-upc');if(upc)upc.onclick=()=>{wlShowUpcoming=!wlShowUpcoming;render();};
   document.querySelectorAll('[data-wlsel]').forEach(b=>b.onclick=()=>{
     const id=b.dataset.wlsel;wlSel.has(id)?wlSel.delete(id):wlSel.add(id);render();
   });
@@ -1687,6 +1774,48 @@ function renderDash(app){
     </div>
     <div class="flr-ft">Live — refreshes automatically · Last update ${hhmm(new Date().toISOString())}</div>
   </div>`;
+}
+
+/* ---------- Project Managers dashboard: deliveries per customer — past, on the road, scheduled, coming up ---------- */
+let pmCust='';
+function renderPM(app){
+  const all=delAll();
+  const todayISO=new Date().toISOString().slice(0,10);
+  // every customer seen on live orders or in the delivery archive
+  const custs=[...new Set([...DB.orders.map(o=>o.customer||''),...Object.values(DB.delArchive||{}).flatMap(a=>a.jobs.map(j=>j.c||''))].filter(Boolean))].sort();
+  const sel=pmCust&&custs.includes(pmCust)?[pmCust]:custs;
+  const row=(cells)=>`<div class="dsh-row">${cells}</div>`;
+  const stageLbl=o=>{const s=dStage(o);return s?dStageLbl[s]+(dStageTime(o)?' '+dStageTime(o):''):'PLANNED';};
+  const block=c=>{
+    const mine=all.filter(o=>(o.customer||'')===c);
+    const sched=mine.filter(o=>o.delDay&&dStage(o)!=='deliv').sort((a,b)=>DEL_DAYS.indexOf(a.delDay)-DEL_DAYS.indexOf(b.delDay));
+    const delivWk=mine.filter(o=>dStage(o)==='deliv').sort((a,b)=>String(b.delDelivAt||'').localeCompare(String(a.delDelivAt||'')));
+    const past=Object.values(DB.delArchive||{}).flatMap(a=>a.jobs.filter(j=>(j.c||'')===c&&j.vAt).map(j=>({...j,_at:j.vAt})))
+      .sort((a,b)=>String(b._at).localeCompare(String(a._at))).slice(0,15);
+    const coming=DB.orders.filter(o=>(o.customer||'')===c&&!o.delDay&&!o.delDone&&o.dueDate&&o.dueDate>=todayISO)
+      .sort((a,b)=>a.dueDate.localeCompare(b.dueDate)).slice(0,12);
+    if(!sched.length&&!delivWk.length&&!past.length&&!coming.length)return'';
+    const fu=o=>[o.floor||o.f,o.unit||o.u].filter(Boolean).join(' · ');
+    return `<div class="dsh-p" style="margin-bottom:14px">
+      <div class="dsh-ph" style="background:#14335c;font-size:15px">👤 ${escA(c)} — ${sched.length} scheduled · ${delivWk.length} delivered this week · ${past.length?past.length+' past':'no past on record'} · ${coming.length} coming up</div>
+      ${sched.length?`<div class="pm-sec">🚚 SCHEDULED THIS WEEK</div>`+sched.map(o=>row(`<b>${escA(o.wo)}</b>${fu(o)?`<span class="flr-fu" style="font-size:12px">${escA(fu(o))}</span>`:''}<span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-x">${escA(vehLbl(o.delVeh)||'')} ${escA(o.delDay||'')} · ${stageLbl(o)}</span>`)).join(''):''}
+      ${delivWk.length?`<div class="pm-sec" style="color:#0d6e46">✓ DELIVERED THIS WEEK</div>`+delivWk.map(o=>row(`<b>${escA(o.wo)}</b>${fu(o)?`<span class="flr-fu" style="font-size:12px">${escA(fu(o))}</span>`:''}<span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-x" style="color:#0d6e46">${o.delDelivAt?new Date(o.delDelivAt).toLocaleDateString('en-IE',{weekday:'short',day:'numeric',month:'short'})+' '+dStageTime(o):''}${o.delivBy?' · '+escA(o.delivBy):''}</span>`)).join(''):''}
+      ${past.length?`<div class="pm-sec" style="color:var(--t3)">📚 DELIVERED — PAST WEEKS</div>`+past.map(j=>row(`<b>${escA(j.wo)}</b>${fu(j)?`<span class="flr-fu" style="font-size:12px">${escA(fu(j))}</span>`:''}<span class="dsh-t">${escA(j.t||'')}</span><span class="dsh-x">${new Date(j._at).toLocaleDateString('en-IE',{day:'numeric',month:'short'})}${j.vBy?' · '+escA(j.vBy):''}</span>`)).join(''):''}
+      ${coming.length?`<div class="pm-sec" style="color:#8a6d00">📅 COMING UP — due, not yet on the delivery board</div>`+coming.map(o=>row(`<b>${escA(o.wo)}</b>${fu(o)?`<span class="flr-fu" style="font-size:12px">${escA(fu(o))}</span>`:''}<span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-x">due ${fmt(o.dueDate)}${o.plannedWeek?' · build '+wkLbl(o.plannedWeek):''}</span>`)).join(''):''}
+    </div>`;
+  };
+  app.innerHTML=`<div class="dsh">
+    <div style="display:flex;gap:12px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+      <h1 style="font-size:26px;color:#14335c;margin:0">🏗 Project Managers — Deliveries by customer</h1>
+      <select id="pm-cust" style="padding:8px 10px;border:1px solid var(--b2);border-radius:8px;font-size:14px;max-width:260px">
+        <option value="">All customers</option>
+        ${custs.map(c=>`<option${c===pmCust?' selected':''}>${escA(c)}</option>`).join('')}
+      </select>
+    </div>
+    ${sel.map(block).join('')||'<div class="flr-none">Nothing to show yet.</div>'}
+    <div class="flr-ft">Live — refreshes automatically · Last update ${hhmm(new Date().toISOString())}</div>
+  </div>`;
+  const pc=document.getElementById('pm-cust');if(pc)pc.onchange=()=>{pmCust=pc.value;render();};
 }
 
 /* ---------- Factory floor screen: today + tomorrow's loads, big type, auto-refresh ---------- */
@@ -1836,6 +1965,7 @@ function dchip(o,showCust){
     </div>
     <div class="dchip-t">${escA(o.title)||'—'}</div>
     ${st?`<div class="dstg s-${st}">${dStageLbl[st]}${dStageTime(o)?' '+dStageTime(o):''}${st==='deliv'&&o.delivBy?' — '+escA(o.delivBy):st==='load'&&o.ldBy?' — '+escA(o.ldBy):''}</div>`:''}
+    ${(s=>!s?'':`<div class="dchip-ls">${s.saw!=='none'?`<span class="${s.saw==='done'?'lsc-ok':'lsc-no'}" title="${s.saw==='done'?'Cutting list CUT COMPLETE':'Cutting list NOT cut yet'}">🪚 ${s.saw==='done'?'CUT ✓':'NOT CUT'}</span>`:''}${s.fit!=='none'?`<span class="${s.fit==='done'?'lsc-ok':'lsc-no'}" title="${s.fit==='done'?'Fittings PICKED':'Fittings NOT picked yet'}">🧰 ${s.fit==='done'?'OUT ✓':'NOT OUT'}</span>`:''}</div>`)(woListStat(o.wo))}
     ${showCust?`<div class="dchip-c">${escA(o.customer)}</div>`:''}
   </div>`;
 }
@@ -1891,7 +2021,7 @@ function renderDeliveries(app){
       <tbody>
         ${DEL_VEH.map((v,i)=>{const vc=tagged.filter(o=>o.delVeh===v.k).length;return `<tr${i===1?' style="border-top:3px double var(--border)"':''}>
           <td class="dveh">${v.n}<span class="dsub">${v.cat}${v.sub?' · '+v.sub:''} · ${vc} job${vc!==1?'s':''}</span></td>
-          ${DEL_DAYS.map(d=>{const cj=tagged.filter(o=>o.delVeh===v.k&&o.delDay===d).sort(woCmp);const ppk0=v.k+'|'+d+'|'+wkKey(new Date());const ppk=(DB.pod&&DB.pod[ppk0]&&(DB.pod[ppk0].photos||[]).length)?ppk0:null;return `<td class="dcell" data-cell="${v.k}|${d}">${cj.map(o=>dchip(o,true)).join('')}${cj.length&&cj.some(o=>!o.delDispAt&&!o.delDelivAt&&!o.delDone)?`<button class="cell-disp" data-cdisp="${v.k}|${d}" title="Mark this whole van load as dispatched (left the factory) — runs the part-load check first">🚚→ Dispatch van</button>`:''}${ppk?`<button class="cell-disp" style="background:#eef6ff;border-color:#9cbce8;color:#1450a8" data-pod="${escA(ppk)}" title="Proof-of-delivery photos taken by the driver on site">📷 ${DB.pod[ppk].photos.length} proof photo${DB.pod[ppk].photos.length!==1?'s':''}</button>`:''}</td>`;}).join('')}
+          ${DEL_DAYS.map(d=>{const cj=tagged.filter(o=>o.delVeh===v.k&&o.delDay===d).sort(woCmp);const ppk0=v.k+'|'+d+'|'+wkKey(new Date());const ppk=(DB.pod&&DB.pod[ppk0]&&(DB.pod[ppk0].photos||[]).length)?ppk0:null;const allDlv=cj.length&&cj.every(o=>dStage(o)==='deliv');return `<td class="dcell${allDlv?' cell-done':''}" data-cell="${v.k}|${d}">${allDlv?'<div style="font-size:10px;font-weight:800;color:#0d6e46;padding:2px 0">✓ COMPLETE DELIVERY</div>':''}${cj.map(o=>dchip(o,true)).join('')}${cj.length&&cj.some(o=>!o.delDispAt&&!o.delDelivAt&&!o.delDone)?`<button class="cell-disp" data-cdisp="${v.k}|${d}" title="Mark this whole van load as dispatched (left the factory) — runs the part-load check first">🚚→ Dispatch van</button>`:''}${ppk?`<button class="cell-disp" style="background:#eef6ff;border-color:#9cbce8;color:#1450a8" data-pod="${escA(ppk)}" title="Proof-of-delivery photos taken by the driver on site">📷 ${DB.pod[ppk].photos.length} proof photo${DB.pod[ppk].photos.length!==1?'s':''}</button>`:''}</td>`;}).join('')}
         </tr>`;}).join('')}
         <tr><td class="dveh">Notes</td>${DEL_DAYS.map(d=>`<td style="border:1px solid var(--border);padding:4px;background:#fffef7"><input class="dnote" data-dnote="${d}" value="${escA(notes[d]||'')}" placeholder="${d} note…"></td>`).join('')}</tr>
         <tr><td class="dtot" style="text-align:left">Value / day<br><span style="color:#0d6e46">Week: €${Math.round(wkTot).toLocaleString()}</span></td>
