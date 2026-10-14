@@ -360,6 +360,7 @@ async function loadDB(){
       if(d[0].settings&&d[0].settings.listWBs)DB.listWBs=d[0].settings.listWBs;
       if(d[0].settings&&d[0].settings.listDone)DB.listDone=d[0].settings.listDone;
       if(d[0].settings&&d[0].settings.listLead>0)DB.listLead=d[0].settings.listLead;
+      if(d[0].settings&&d[0].settings.delArchive)DB.delArchive=d[0].settings.delArchive;
     }
     DB.orders.forEach(o=>{orig[o.wo]=o.plannedWeek||'';origStep[o.wo]=o.step||'';});
     DB.loadFailed=false;
@@ -379,7 +380,7 @@ async function saveDB(){
   }
   setSS('s');
   try{
-    const resp=await fetch(SUPA_URL+'/production_planner?id=eq.main',{method:'PATCH',headers:SUPA_WHDR,body:JSON.stringify({orders:DB.orders,nid:DB.nid,settings:{weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP,delx:DB.delx||[],delNotes:DB.delNotes||{},grps:DB.grps||{},pins:DB.pins||{},pod:DB.pod||{},lists:DB.lists||[],listWBs:DB.listWBs||{},listDone:DB.listDone||{},listLead:DB.listLead||5}})});
+    const resp=await fetch(SUPA_URL+'/production_planner?id=eq.main',{method:'PATCH',headers:SUPA_WHDR,body:JSON.stringify({orders:DB.orders,nid:DB.nid,settings:{weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP,delx:DB.delx||[],delNotes:DB.delNotes||{},grps:DB.grps||{},pins:DB.pins||{},pod:DB.pod||{},lists:DB.lists||[],listWBs:DB.listWBs||{},listDone:DB.listDone||{},listLead:DB.listLead||5,delArchive:DB.delArchive||{}}})});
     if(resp&&resp.ok===false){setSS('e');return;}
     setSS('ok');
   }catch(e){setSS('e');}
@@ -1058,6 +1059,7 @@ function listDueKey(l){ // earliest due date among tagged WOs — the ONLY thing
   (l.wos||[]).forEach(w=>{const o=DB.orders.find(x=>x.wo===w);if(o&&o.dueDate&&(!best||o.dueDate<best))best=o.dueDate;});
   return best;
 }
+function listDueKey2(arr){let b='';arr.forEach(l=>{const k=listDueKey(l);if(k&&(!b||k<b))b=k;});return b;}
 function listsNeeded(){ // WOs scheduled to deliver inside the lead time with NO cutting list tagged
   const tagged=new Set();lists().forEach(l=>(l.wos||[]).forEach(w=>tagged.add(w)));
   const lim=new Date(Date.now()+listLead()*86400000).toISOString().slice(0,10);
@@ -1114,17 +1116,29 @@ function parseListWorkbook(data){
   return{wb:out,entries};
 }
 let lstTagOpen=null; // list id whose tag editor is open
+let lstFilter='';    // contains-filter over the library
+const lstColl=new Set(); // collapsed project groups
+let lstAttachOpen=null;  // WO in the needed panel whose attach row is open
 function renderLists(app){
   const need=listsNeeded();
   const all=[...lists()].sort((a,b)=>(listDueKey(a)||'9999').localeCompare(listDueKey(b)||'9999')||String(a.name).localeCompare(String(b.name)));
   const woLbl=w=>{const o=DB.orders.find(x=>x.wo===w);return o?`${w} (${[o.floor,o.unit].filter(Boolean).join(' ')})`:w;};
+  const candFor=o=>{const u=parseInt(o.unit);if(isNaN(u))return[];return all.filter(l=>{const ns=(String(l.sheet).match(/\d+/g)||[]).map(Number);return ns.includes(u)&&!(l.wos||[]).includes(o.wo);});};
   app.innerHTML=`<div class="pg">
     ${need.length?`<div class="exp-panel" style="border:2px solid #c0392b;background:#fdf3f2">
       <div style="font-size:14px;font-weight:700;color:#8a1c10;margin-bottom:6px">⚠ Cutting lists needed — ${need.length} work order${need.length!==1?'s':''} scheduled with no list tagged</div>
       <p style="font-size:12px;color:#8a1c10;margin-bottom:10px">These are on the delivery board or due within ${listLead()} days. Upload the cutting list below and tag it, so the saw and stores see it in good time.</p>
-      <table class="lst-tbl"><thead><tr><th>WO #</th><th>Floor/Unit</th><th>Title</th><th>Customer</th><th>Due</th><th>Why flagged</th></tr></thead><tbody>
-      ${need.slice(0,30).map(o=>`<tr><td style="font-family:monospace;font-weight:700">${escA(o.wo)}</td><td>${escA([o.floor,o.unit].filter(Boolean).join(' · '))}</td><td>${escA(o.title)}</td><td>${escA(o.customer)}</td><td>${fmt(o.dueDate)}</td><td>${o.delv&&o.delDay?'On delivery board ('+escA(o.delDay)+')':'Due within '+listLead()+' days'}</td></tr>`).join('')}
-      ${need.length>30?`<tr><td colspan="6" style="color:var(--t3)">…and ${need.length-30} more</td></tr>`:''}
+      <table class="lst-tbl"><thead><tr><th>WO #</th><th>Floor/Unit</th><th>Title</th><th>Customer</th><th>Due</th><th>Why flagged</th><th></th></tr></thead><tbody>
+      ${need.slice(0,30).map(o=>{const cands=lstAttachOpen===o.wo?candFor(o):[];return `<tr style="cursor:pointer" data-nrow="${escA(o.wo)}"><td style="font-family:monospace;font-weight:700">${escA(o.wo)}</td><td>${escA([o.floor,o.unit].filter(Boolean).join(' · '))}</td><td>${escA(o.title)}</td><td>${escA(o.customer)}</td><td>${fmt(o.dueDate)}</td><td>${o.delv&&o.delDay?'On delivery board ('+escA(o.delDay)+')':'Due within '+listLead()+' days'}</td>
+        <td style="white-space:nowrap"><button class="btn btn-s" data-natt="${escA(o.wo)}" style="padding:2px 8px;font-size:11px">${lstAttachOpen===o.wo?'✕ close':'➕ Attach list'}</button></td></tr>
+      ${lstAttachOpen===o.wo?`<tr><td colspan="7" style="background:#fff;border:1px solid var(--b2);padding:10px">
+        <div style="font-size:12px;font-weight:700;color:#14335c;margin-bottom:6px">Attach a cutting list to ${escA(o.wo)}${o.unit?' (unit '+escA(o.unit)+')':''}:</div>
+        ${cands.length?cands.slice(0,8).map(l=>`<button class="btn btn-s" data-attdo="${escA(l.id)}|${escA(o.wo)}" style="margin:2px;font-size:11px">+ ${escA(l.project||'')} — ${escA(l.name)}</button>`).join(''):`<span style="font-size:12px;color:var(--t3)">No library list matches unit ${escA(o.unit||'?')} — pick one below or upload the workbook.</span>`}
+        <div style="margin-top:6px;display:flex;gap:6px;align-items:center;flex-wrap:wrap"><span style="font-size:11px;color:var(--t3)">Any list:</span>
+          <select id="att-sel" style="padding:4px 8px;border:1px solid var(--b2);border-radius:5px;font-size:12px;max-width:340px">${all.map(l=>`<option value="${escA(l.id)}">${escA(l.project||'')} — ${escA(l.name)}</option>`).join('')}</select>
+          <button class="btn btn-s" data-attsel="${escA(o.wo)}" style="font-size:11px">Attach</button></div>
+      </td></tr>`:''}`;}).join('')}
+      ${need.length>30?`<tr><td colspan="7" style="color:var(--t3)">…and ${need.length-30} more</td></tr>`:''}
       </tbody></table></div>`:
       `<div class="exp-panel" style="border-color:#b3e0c4;background:#f4fbf6"><div style="font-size:13px;color:#0d6e46;font-weight:600">✓ Every work order scheduled inside the next ${listLead()} days has a cutting list tagged.</div></div>`}
     <div class="exp-panel">
@@ -1139,9 +1153,17 @@ function renderLists(app){
       <div id="lst-upmsg" style="margin-top:8px;font-size:12px"></div>
     </div>
     <div class="exp-panel">
-      <div style="font-size:14px;font-weight:600;margin-bottom:8px">Lists library — ${all.length} list${all.length!==1?'s':''}</div>
-      ${all.length?`<table class="lst-tbl"><thead><tr><th>Project</th><th>List</th><th>Saw rows</th><th>Fittings</th><th>Tagged work orders</th><th>Due</th><th>🪚 Saw</th><th>🧰 Stores</th><th></th></tr></thead><tbody>
-      ${all.map(l=>{const dn=listDone(l.id);const due=listDueKey(l);return `<tr>
+      <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+        <div style="font-size:14px;font-weight:600">Lists library — ${all.length} list${all.length!==1?'s':''}</div>
+        <input id="lst-filter" value="${escA(lstFilter)}" placeholder="🔍 Filter — project, house, WO…" style="padding:6px 10px;border:1px solid var(--b2);border-radius:6px;font-size:12px;width:240px">
+        ${lstFilter?`<button class="btn btn-s" id="lst-filter-x" style="font-size:11px">✕ clear</button>`:''}
+      </div>
+      ${all.length?(()=>{
+        const fl=lstFilter.trim().toLowerCase();
+        const show=all.filter(l=>!fl||[l.project,l.name,(l.wos||[]).join(' ')].join(' ').toLowerCase().includes(fl));
+        if(!show.length)return '<p style="font-size:12px;color:var(--t3)">Nothing matches that filter.</p>';
+        const projs={};show.forEach(l=>{const p=l.project||'(no project)';(projs[p]=projs[p]||[]).push(l);});
+        const rowOfL=l=>{const dn=listDone(l.id);const due=listDueKey(l);return `<tr>
         <td>${escA(l.project||'—')}</td>
         <td style="font-weight:700">${escA(l.name)}</td>
         <td>${l.saw||0}</td><td>${l.fit||0}</td>
@@ -1156,8 +1178,17 @@ function renderLists(app){
         <td>${dn.saw?`<span class="lst-done" title="by ${escA(dn.saw.by||'')}">✓ ${hhmm(dn.saw.at)}</span> <button class="btn btn-s" data-lreset="${escA(l.id)}|saw" style="padding:1px 6px;font-size:10px">reset</button>`:'<span style="color:var(--t3)">—</span>'}</td>
         <td>${dn.fit?`<span class="lst-done" title="by ${escA(dn.fit.by||'')}">✓ ${hhmm(dn.fit.at)}</span> <button class="btn btn-s" data-lreset="${escA(l.id)}|fit" style="padding:1px 6px;font-size:10px">reset</button>`:'<span style="color:var(--t3)">—</span>'}</td>
         <td style="white-space:nowrap"><button class="btn btn-s" data-lview="${escA(l.id)}" style="padding:2px 8px;font-size:11px">View</button> <button class="btn btn-s" data-ldel="${escA(l.id)}" style="padding:2px 8px;font-size:11px;color:var(--red);border-color:var(--red)">✕</button></td>
-      </tr>`;}).join('')}
-      </tbody></table>`:'<p style="font-size:12px;color:var(--t3)">No lists yet — upload your first cutting-list workbook above.</p>'}
+      </tr>`;};
+        return `<table class="lst-tbl"><thead><tr><th>Project</th><th>List</th><th>Saw rows</th><th>Fittings</th><th>Tagged work orders</th><th>Due</th><th>🪚 Saw</th><th>🧰 Stores</th><th></th></tr></thead><tbody>
+        ${Object.keys(projs).sort((a,b)=>(listDueKey2(projs[a])||'9999').localeCompare(listDueKey2(projs[b])||'9999')||a.localeCompare(b)).map(p=>{
+          const grp=projs[p];const coll=!fl&&lstColl.has(p); // a live filter always expands
+          const unt=grp.filter(l=>!(l.wos||[]).length).length;
+          const dsaw=grp.filter(l=>listDone(l.id).saw).length,dfit=grp.filter(l=>listDone(l.id).fit).length;
+          return `<tr class="lst-ph" data-pcoll="${escA(p)}"><td colspan="9" style="background:#14335c;color:#fff;font-weight:700;cursor:pointer;font-size:12px;padding:7px 10px">${coll?'▸':'▾'} ${escA(p)} — ${grp.length} list${grp.length!==1?'s':''}${unt?` · <span style="color:#ffb3a7">${unt} untagged</span>`:''} · 🪚 ${dsaw}/${grp.length} cut · 🧰 ${dfit}/${grp.length} picked</td></tr>`
+            +(coll?'':grp.map(rowOfL).join(''));
+        }).join('')}
+        </tbody></table>`;
+      })():'<p style="font-size:12px;color:var(--t3)">No lists yet — upload your first cutting-list workbook above.</p>'}
     </div>
   </div>`;
   const fi=document.getElementById('lst-file');
@@ -1187,6 +1218,32 @@ function renderLists(app){
   };
   const lse=document.getElementById('lst-lead-save');
   if(lse)lse.onclick=()=>{const v=parseInt(document.getElementById('lst-lead').value);if(v>0){DB.listLead=v;sched();render();toast('Lead time set to '+v+' days');}};
+  // click a flagged WO line to attach a list to it right there
+  document.querySelectorAll('[data-nrow]').forEach(tr=>tr.onclick=()=>{
+    lstAttachOpen=lstAttachOpen===tr.dataset.nrow?null:tr.dataset.nrow;render();
+  });
+  document.querySelectorAll('[data-attdo]').forEach(b=>b.onclick=e=>{
+    e.stopPropagation();
+    const[id,wo]=b.dataset.attdo.split('|');const l=lists().find(x=>x.id===id);if(!l)return;
+    l.wos=l.wos||[];if(!l.wos.includes(wo))l.wos.push(wo);
+    lstAttachOpen=null;sched();render();toast(wo+' attached to "'+l.name+'" — it\'s now on the saw and stores queues');
+  });
+  document.querySelectorAll('[data-attsel]').forEach(b=>b.onclick=e=>{
+    e.stopPropagation();
+    const sel=document.getElementById('att-sel');if(!sel||!sel.value)return;
+    const l=lists().find(x=>x.id===sel.value);if(!l)return;
+    const wo=b.dataset.attsel;
+    l.wos=l.wos||[];if(!l.wos.includes(wo))l.wos.push(wo);
+    lstAttachOpen=null;sched();render();toast(wo+' attached to "'+l.name+'"');
+  });
+  // library filter (keeps focus while typing) and project group collapse
+  const lfi=document.getElementById('lst-filter');
+  if(lfi)lfi.oninput=()=>{lstFilter=lfi.value;render();const n=document.getElementById('lst-filter');if(n){n.focus();n.setSelectionRange(n.value.length,n.value.length);}};
+  const lfx=document.getElementById('lst-filter-x');
+  if(lfx)lfx.onclick=()=>{lstFilter='';render();};
+  document.querySelectorAll('[data-pcoll]').forEach(tr=>tr.onclick=()=>{
+    const p=tr.dataset.pcoll;lstColl.has(p)?lstColl.delete(p):lstColl.add(p);render();
+  });
   document.querySelectorAll('[data-tag]').forEach(b=>b.onclick=()=>{lstTagOpen=lstTagOpen===b.dataset.tag?null:b.dataset.tag;render();});
   document.querySelectorAll('[data-tagadd]').forEach(b=>b.onclick=()=>{
     const[id,wo]=b.dataset.tagadd.split('|');const l=lists().find(x=>x.id===id);if(!l)return;
@@ -1526,6 +1583,7 @@ function renderDeliveries(app){
         <button class="btn btn-s" id="btn-runsheets" title="Printable A4 docket per vehicle per day — tick boxes and signature lines for the loader">📋 Run Sheets</button>
         <button class="btn btn-blue" id="btn-delprint">🖨 Print A3 Poster</button>
         <button class="btn btn-g" id="btn-delexp">⬇ Export Delivery Plan</button>
+        <button class="btn btn-s" id="btn-delarch" title="Archived delivery weeks — every cleared week is kept here with all stamps and names">📚 Past weeks</button>
         <button class="btn btn-s" id="btn-delreset" style="border-color:var(--red);color:var(--red)">Clear Week — Start Fresh</button>
       </span>
     </div>
@@ -1683,13 +1741,71 @@ function renderDeliveries(app){
   const ex=document.getElementById('btn-delexp');if(ex)ex.onclick=exportDeliveries;
   const pp=document.getElementById('btn-delprint');if(pp)pp.onclick=printPoster;
   const rsh=document.getElementById('btn-runsheets');if(rsh)rsh.onclick=printRunSheets;
+  const ab=document.getElementById('btn-delarch');if(ab)ab.onclick=openDelArchive;
   const rs=document.getElementById('btn-delreset');
   if(rs)rs.onclick=()=>{
-    if(!confirm('Clear the whole delivery plan ('+tagged.length+' jobs)? Tags, manual jobs, day notes, vehicles and days are all removed so you can start fresh at the next production meeting.'))return;
+    if(!confirm('Clear the whole delivery plan ('+tagged.length+' jobs)? The week is ARCHIVED first (📚 Past weeks keeps every job, timestamp, name and note), then the board starts fresh for the next production meeting.'))return;
+    // Archive the week before anything is cleared — starting fresh must never lose information
+    const snap=tagged.filter(o=>o.delVeh||o.delDay||o.delv||o.manual);
+    if(snap.length){
+      DB.delArchive=DB.delArchive||{};
+      const key=new Date().toISOString().slice(0,10)+'.'+Date.now().toString(36);
+      DB.delArchive[key]={at:new Date().toISOString(),notes:{...(DB.delNotes||{})},
+        jobs:snap.map(o=>({wo:o.wo,t:o.title||'',c:o.customer||'',f:o.floor||'',u:o.unit||'',v:o.delVeh||'',d:o.delDay||'',val:Math.round(o.value||0),lAt:o.delLoadedAt||'',dAt:o.delDispAt||'',vAt:o.delDelivAt||'',lBy:o.ldBy||'',vBy:o.delivBy||''}))};
+      const ks=Object.keys(DB.delArchive).sort();
+      while(ks.length>26)delete DB.delArchive[ks.shift()]; // keep half a year of history
+    }
     DB.orders.forEach(o=>{delete o.delv;delete o.delVeh;delete o.delDay;delete o.delDone;delete o.delLoadedAt;delete o.delDispAt;delete o.delDelivAt;delete o.ldBy;delete o.delivBy;});
     DB.delx=[];DB.delNotes={};delSel.clear();
-    sched();render();toast('Delivery plan cleared — ready for next week');
+    sched();render();toast('Week archived to 📚 Past weeks — board cleared for next week');
   };
+}
+
+/* 📚 Past weeks: every cleared delivery week is archived — view it read-only or export it.
+   This is the answer to "clearing each week will lose information": it can't, it's archived. */
+function openDelArchive(detailKey){
+  const ar=DB.delArchive||{};
+  const keys=Object.keys(ar).sort().reverse();
+  const ov=document.createElement('div');ov.className='pod-ovl';
+  const sum=k=>{const a=ar[k];return{n:a.jobs.length,val:a.jobs.reduce((s,j)=>s+(+j.val||0),0),dlv:a.jobs.filter(j=>j.vAt).length};};
+  const stamp=t=>t?new Date(t).toLocaleDateString('en-IE',{day:'numeric',month:'short'})+' '+hhmm(t):'';
+  let detail='';
+  if(detailKey&&ar[detailKey]){
+    const a=ar[detailKey];
+    const rows=[...a.jobs].sort((x,y)=>DEL_DAYS.indexOf(x.d)-DEL_DAYS.indexOf(y.d)||String(x.v).localeCompare(String(y.v))||woCmp({wo:x.wo},{wo:y.wo}));
+    detail=`<div style="margin-top:14px;border-top:2px solid var(--border);padding-top:10px">
+      <div style="font-weight:700;color:#14335c;margin-bottom:6px">Week archived ${new Date(a.at).toLocaleDateString('en-IE')} — ${a.jobs.length} jobs</div>
+      <table class="lst-tbl"><thead><tr><th>Day</th><th>Vehicle</th><th>WO #</th><th>Floor/Unit</th><th>Title</th><th>Customer</th><th>€</th><th>Loaded</th><th>Dispatched</th><th>Delivered</th></tr></thead><tbody>
+      ${rows.map(j=>`<tr><td>${escA(j.d)||'—'}</td><td>${escA(vehLbl(j.v)||j.v)||'—'}</td><td style="font-family:monospace;font-weight:700">${escA(j.wo)}</td><td>${escA([j.f,j.u].filter(Boolean).join(' · '))}</td><td>${escA(j.t)}</td><td>${escA(j.c)}</td><td>${j.val?j.val.toLocaleString():''}</td>
+        <td>${stamp(j.lAt)}${j.lBy?' · '+escA(j.lBy):''}</td><td>${stamp(j.dAt)}</td><td style="color:#0d6e46;font-weight:700">${stamp(j.vAt)}${j.vBy?' · '+escA(j.vBy):''}</td></tr>`).join('')}
+      ${Object.keys(a.notes||{}).filter(d=>(a.notes[d]||'').trim()).map(d=>`<tr><td style="font-weight:700">${escA(d)}</td><td colspan="9" style="font-style:italic;color:var(--t2)">Note: ${escA(a.notes[d])}</td></tr>`).join('')}
+      </tbody></table></div>`;
+  }
+  ov.innerHTML=`<div class="pod-in" style="min-width:min(1050px,95vw)">
+    <div style="font-weight:800;color:#14335c;font-size:17px;margin-bottom:4px">📚 Past delivery weeks</div>
+    <div style="font-size:12px;color:var(--t3);margin-bottom:10px">Every time the board is cleared, the week is stored here first — jobs, vans, days, who loaded, who delivered, when, and the day notes. Last 26 weeks kept.</div>
+    ${keys.length?`<table class="lst-tbl"><thead><tr><th>Archived</th><th>Jobs</th><th>Delivered</th><th>Value</th><th></th></tr></thead><tbody>
+      ${keys.map(k=>{const s=sum(k);return `<tr${k===detailKey?' style="background:#eaf2ff"':''}><td style="font-weight:700">${new Date(ar[k].at).toLocaleDateString('en-IE',{weekday:'short',day:'numeric',month:'short',year:'numeric'})} ${hhmm(ar[k].at)}</td><td>${s.n}</td><td>${s.dlv}/${s.n}</td><td>€${Math.round(s.val).toLocaleString()}</td>
+        <td style="white-space:nowrap"><button class="btn btn-s" data-arcv="${escA(k)}" style="padding:2px 8px;font-size:11px">${k===detailKey?'Viewing':'View'}</button> <button class="btn btn-s" data-arcx="${escA(k)}" style="padding:2px 8px;font-size:11px">⬇ Export</button></td></tr>`;}).join('')}
+      </tbody></table>`:'<p style="font-size:13px;color:var(--t3)">No archived weeks yet — the first Clear Week will create one.</p>'}
+    ${detail}
+    <div style="margin-top:12px;text-align:right"><button class="btn btn-s" id="pod-x">Close</button></div></div>`;
+  document.body.appendChild(ov);
+  ov.onclick=e=>{if(e.target===ov||e.target.id==='pod-x')ov.remove();};
+  ov.querySelectorAll('[data-arcv]').forEach(b=>b.onclick=()=>{ov.remove();openDelArchive(b.dataset.arcv);});
+  ov.querySelectorAll('[data-arcx]').forEach(b=>b.onclick=()=>{
+    const a=ar[b.dataset.arcx];if(!a)return;
+    const stamp2=t=>t?new Date(t).toLocaleString('en-IE'):'';
+    const rows=[['Day','Vehicle','WO #','Floor','Unit','Title','Customer','Value','Loaded at','Loaded by','Dispatched at','Delivered at','Delivered by'],
+      ...[...a.jobs].sort((x,y)=>DEL_DAYS.indexOf(x.d)-DEL_DAYS.indexOf(y.d)||String(x.v).localeCompare(String(y.v)))
+        .map(j=>[j.d,vehLbl(j.v)||j.v,j.wo,j.f,j.u,j.t,j.c,j.val,stamp2(j.lAt),j.lBy,stamp2(j.dAt),stamp2(j.vAt),j.vBy]),
+      [],['NOTES'],...Object.keys(a.notes||{}).filter(d=>(a.notes[d]||'').trim()).map(d=>[d,a.notes[d]])];
+    const wb=XLSX.utils.book_new();const ws=XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols']=[{wch:6},{wch:13},{wch:16},{wch:7},{wch:7},{wch:34},{wch:24},{wch:9},{wch:18},{wch:12},{wch:18},{wch:18},{wch:12}];
+    XLSX.utils.book_append_sheet(wb,ws,'Delivery Week');
+    XLSX.writeFile(wb,'WPF_DeliveryWeek_'+String(a.at).slice(0,10)+'.xlsx');
+    toast('Archived week exported ✓');
+  });
 }
 
 /* Printable A4 run sheets: one docket per vehicle per day with tick boxes and signature lines.
