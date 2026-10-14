@@ -153,6 +153,16 @@ button,input,select{font-family:inherit;cursor:pointer}
 .wl-btn{background:#0d9450;color:#fff;border:none;border-radius:10px;padding:14px 22px;font-size:16px;font-weight:800;cursor:pointer}
 .wl-undo{background:none;border:1px solid var(--b2);border-radius:8px;padding:6px 12px;font-size:12px;color:var(--t3);cursor:pointer}
 .wl-donelbl{color:#0d6e46;font-weight:800;font-size:15px}
+/* batch-cut selection + combined view + per-house splits */
+.wl-chk{width:28px;height:28px;border-radius:7px;border:2px solid rgba(255,255,255,.6);background:transparent;cursor:pointer;color:#14335c;font-weight:800;font-size:16px;line-height:1;flex-shrink:0}
+.wl-chk.on{background:#e8b931;border-color:#e8b931}
+.wl-selbar{position:sticky;top:8px;z-index:50;background:#14335c;color:#fff;border-radius:10px;padding:10px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px;box-shadow:0 4px 14px rgba(0,0,0,.3)}
+.wl-selbar b{font-size:15px}
+.wl-selbar .btn2{background:#e8b931;color:#14335c;border:none;border-radius:8px;padding:10px 16px;font-weight:800;font-size:14px;cursor:pointer}
+.wl-selbar .btn2:disabled{opacity:.45;cursor:default}
+.wl-selbar .btn3{background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.4);border-radius:8px;padding:10px 14px;font-weight:700;font-size:13px;cursor:pointer}
+.ph-chip{display:inline-block;background:#eaf0f8;border:1px solid #c4cdd9;border-radius:5px;padding:1px 8px;font-size:12px;font-weight:700;color:#14335c;margin:1px 2px;white-space:nowrap}
+.ph-chip b{color:#0d6e46}
 .del-panel{background:#fff;border:1px solid var(--border);border-radius:10px;padding:16px 18px;margin-bottom:14px}
 .dgrp{margin-bottom:6px}
 .dgrp-h{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.4px;margin:10px 0 5px;cursor:pointer;user-select:none}
@@ -1227,31 +1237,143 @@ function listTableHTML(l,mode){ // mode 'saw' | 'fit' | 'all'
     :`<tr><td>${escA(r.item)||'—'}</td><td class="num">${r.qty}</td>${saw?`<td class="num">${r.k==='saw'?escA(r.L):''}</td><td class="num">${r.k==='saw'?escA(r.W):''}</td>`:''}<td>${escA(r.mat)}</td><td>${escA(r.note)}</td></tr>`).join('')}
   </tbody></table>`;
 }
-/* Saw / Stores queue view: lists in delivery order, big type, tick-off with name + time */
+/* Saw / Stores queue view: lists in delivery order, big type, tick-off with name + time.
+   Batch mode: tick several lists → one combined table (total qty + per-house split) and
+   location labels so every pack or single item is marked with its house. */
+const wlSel=new Set();
+function markListDone(ids,mode,by){
+  const now=new Date().toISOString();
+  DB.listDone=DB.listDone||{};
+  ids.forEach(id=>{DB.listDone[id]=DB.listDone[id]||{};DB.listDone[id][mode]={at:now,by:(by||'').trim()};});
+}
+function combineLists(lsArr,mode){
+  // aggregate identical items (same item + dims + material + edging) across houses, keeping the per-house split
+  const byKey={},order=[];
+  const projs=new Set(lsArr.map(l=>l.project||''));
+  const hname=l=>projs.size>1?((l.project?l.project+' — ':'')+l.name):l.name;
+  lsArr.forEach(l=>{
+    listRows(l).filter(r=>r.k===mode).forEach(r=>{
+      const key=[String(r.item).trim(),r.L,r.W,String(r.mat).trim(),String(r.note).trim()].join('|').toLowerCase();
+      if(!byKey[key]){byKey[key]={item:r.item,L:r.L,W:r.W,mat:r.mat,note:r.note,k:r.k,qty:0,per:{}};order.push(key);}
+      byKey[key].qty+=(+r.qty||0);
+      byKey[key].per[hname(l)]=(byKey[key].per[hname(l)]||0)+(+r.qty||0);
+    });
+  });
+  return order.map(k=>byKey[k]);
+}
+function openCombined(lsArr,mode){
+  const rows=combineLists(lsArr,mode);
+  const saw=mode==='saw';
+  const ov=document.createElement('div');ov.className='pod-ovl';
+  ov.innerHTML=`<div class="pod-in" style="min-width:min(980px,94vw)">
+    <div style="font-weight:800;color:#14335c;font-size:17px;margin-bottom:2px">${saw?'⚡ Combined cutting list':'⚡ Combined fittings list'} — ${lsArr.length} houses</div>
+    <div style="font-size:12px;color:var(--t3);margin-bottom:10px">${lsArr.map(l=>escA(l.name)).join(' · ')} — cut/pick the total, split per house as labelled. Quantities per house stay beside every line.</div>
+    <table class="wl-tbl"><thead><tr><th style="width:24%">Item</th><th>Total</th>${saw?'<th>Length</th><th>Width</th>':''}<th>${saw?'Material':'Spec'}</th><th>${saw?'Edging / Note':'Note'}</th><th style="width:26%">Per house</th></tr></thead><tbody>
+    ${rows.map(r=>`<tr><td>${escA(r.item)||'—'}</td><td class="num" style="font-size:17px">${r.qty}</td>${saw?`<td class="num">${escA(r.L)}</td><td class="num">${escA(r.W)}</td>`:''}<td>${escA(r.mat)}</td><td>${escA(r.note)}</td>
+      <td>${Object.entries(r.per).map(([h,q])=>`<span class="ph-chip">${escA(h)} <b>×${q}</b></span>`).join('')}</td></tr>`).join('')}
+    </tbody></table>
+    <div style="margin-top:12px;display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">
+      <button class="btn btn-s" id="cmb-lbl">🏷 Print location labels</button>
+      <button class="wl-btn" id="cmb-done">✓ MARK ALL ${lsArr.length} ${saw?'CUT COMPLETE':'PICKED'}</button>
+      <button class="btn btn-s" id="pod-x">Close</button>
+    </div></div>`;
+  document.body.appendChild(ov);
+  ov.onclick=e=>{if(e.target===ov||e.target.id==='pod-x')ov.remove();};
+  ov.querySelector('#cmb-lbl').onclick=()=>printLabels(lsArr,mode);
+  ov.querySelector('#cmb-done').onclick=()=>{
+    const by=prompt((saw?'Batch cut complete':'Batch picked')+' for '+lsArr.length+' houses — your name or initials:');
+    if(by===null)return;
+    markListDone(lsArr.map(l=>l.id),mode,by);
+    wlSel.clear();ov.remove();sched();render();
+    toast(lsArr.length+' lists marked '+(saw?'cut complete':'picked')+' ✓');
+  };
+}
+/* Location labels: a pack-header label per house + one label per item row, so every pack
+   or single item leaving the saw/stores is marked with the house it belongs to. */
+function printLabels(lsArr,mode){
+  const E=escA,saw=mode==='saw';
+  const one=(l,r)=>`<div class="lb">
+    <div class="lb-top">${E(l.project||'')} · WESTERN POSTFORM</div>
+    <div class="lb-house">${E(l.name)}</div>
+    <div class="lb-item">${E(r.item||r.mat||'')}</div>
+    <div class="lb-mid"><span class="lb-qty">×${r.qty}</span><span class="lb-dims">${saw&&(r.L||r.W)?E(r.L)+' × '+E(r.W):''}</span></div>
+    <div class="lb-sub">${E(r.mat||'')}${r.note?' · '+E(r.note):''}</div>
+    <div class="lb-wos">${(l.wos||[]).map(E).join(' · ')}</div></div>`;
+  let labels='';
+  lsArr.forEach(l=>{
+    const rows=listRows(l).filter(r=>r.k===mode);
+    labels+=`<div class="lb lb-hd">
+      <div class="lb-top">${E(l.project||'')} · WESTERN POSTFORM</div>
+      <div class="lb-house">${E(l.name)}</div>
+      <div class="lb-item">${saw?'CUT PACK':'FITTINGS BOX'}</div>
+      <div class="lb-sub">${rows.length} line item${rows.length!==1?'s':''} · printed ${new Date().toLocaleDateString('en-IE')}</div>
+      <div class="lb-wos">${(l.wos||[]).map(E).join(' · ')}</div></div>`;
+    rows.forEach(r=>{labels+=one(l,r);});
+  });
+  const w=window.open('','_blank');
+  if(!w){toast('Pop-up blocked — allow pop-ups for this site to print labels');return;}
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>WPF Location Labels</title><style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:Arial,sans-serif;padding:6mm}
+  .sheet{display:grid;grid-template-columns:1fr 1fr;gap:4mm}
+  .lb{border:1.6px dashed #555;border-radius:3mm;padding:4mm 5mm;height:62mm;overflow:hidden;page-break-inside:avoid;display:flex;flex-direction:column}
+  .lb-hd{background:#14335c;color:#fff;border-style:solid;border-color:#14335c}
+  .lb-top{font-size:9px;letter-spacing:.6px;text-transform:uppercase;color:#888}
+  .lb-hd .lb-top{color:#cbd5e6}
+  .lb-house{font-size:30px;font-weight:800;color:#14335c;line-height:1.05;margin:1mm 0}
+  .lb-hd .lb-house{color:#fff}
+  .lb-item{font-size:16px;font-weight:700;line-height:1.15}
+  .lb-mid{display:flex;align-items:baseline;gap:6mm;margin:1.5mm 0}
+  .lb-qty{font-size:26px;font-weight:800;color:#0d6e46}
+  .lb-dims{font-size:19px;font-weight:700;font-family:monospace}
+  .lb-sub{font-size:12px;color:#444;margin-top:auto}
+  .lb-hd .lb-sub{color:#cbd5e6}
+  .lb-wos{font-size:10px;font-family:monospace;color:#888;margin-top:1mm}
+  .lb-hd .lb-wos{color:#cbd5e6}
+  @media print{@page{size:A4 portrait;margin:8mm} body{padding:0}}
+  </style></head><body><div class="sheet">${labels}</div><script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script></body></html>`);
+  w.document.close();
+}
 function renderWorkList(app,mode){
   const cfg=mode==='saw'?{icon:'🪚',title:'SAW — Cutting Queue',done:'✓ CUT COMPLETE',cnt:l=>l.saw||0}
                         :{icon:'🧰',title:'STORES — Fittings Queue',done:'✓ FITTINGS PICKED',cnt:l=>l.fit||0};
   const rel=lists().filter(l=>cfg.cnt(l)>0);
   const open=rel.filter(l=>!listDone(l.id)[mode]).sort((a,b)=>(listDueKey(a)||'9999').localeCompare(listDueKey(b)||'9999'));
   const closed=rel.filter(l=>listDone(l.id)[mode]).sort((a,b)=>String(listDone(b.id)[mode].at).localeCompare(String(listDone(a.id)[mode].at)));
+  [...wlSel].forEach(id=>{if(!open.some(l=>l.id===id))wlSel.delete(id);}); // selections only valid while in the open queue
+  const selLists=open.filter(l=>wlSel.has(l.id));
   const woChips=l=>(l.wos||[]).map(w=>{const o=DB.orders.find(x=>x.wo===w);return `<span class="lst-chip">${escA(w)}${o&&(o.floor||o.unit)?' · '+escA([o.floor,o.unit].filter(Boolean).join(' ')):''}</span>`;}).join('');
   const card=(l,isDone)=>{const dn=listDone(l.id)[mode];const due=listDueKey(l);return `<div class="wl-card${isDone?' cdone':''}">
-    <div class="wl-h"><div><span class="wn">${escA(l.name)}</span> <span class="wd">${escA(l.project||'')}</span><div style="margin-top:3px">${woChips(l)}</div></div>
+    <div class="wl-h"><div style="display:flex;gap:10px;align-items:flex-start">${!isDone?`<button class="wl-chk${wlSel.has(l.id)?' on':''}" data-wlsel="${escA(l.id)}" title="Select for batch cutting across houses">${wlSel.has(l.id)?'✓':''}</button>`:''}<div><span class="wn">${escA(l.name)}</span> <span class="wd">${escA(l.project||'')}</span><div style="margin-top:3px">${woChips(l)}</div></div></div>
     ${due?`<span class="wl-due">DELIVERS ${fmt(due)}</span>`:'<span class="wd">no delivery date yet</span>'}</div>
     ${listTableHTML(l,mode)}
     <div class="wl-act">${isDone?`<span class="wl-donelbl">${cfg.done} — ${new Date(dn.at).toLocaleDateString('en-IE')} ${hhmm(dn.at)}${dn.by?' by '+escA(dn.by):''}</span><button class="wl-undo" data-wlundo="${escA(l.id)}">Undo</button>`
-      :`<span style="font-size:12px;color:var(--t3)">${cfg.cnt(l)} item${cfg.cnt(l)!==1?'s':''}</span><button class="wl-btn" data-wldone="${escA(l.id)}">${cfg.done}</button>`}</div>
+      :`<span style="font-size:12px;color:var(--t3)">${cfg.cnt(l)} item${cfg.cnt(l)!==1?'s':''}</span><span style="display:flex;gap:8px"><button class="wl-undo" data-wllbl="${escA(l.id)}" title="Print a label for every pack and item, marked with this house">🏷 Labels</button><button class="wl-btn" data-wldone="${escA(l.id)}">${cfg.done}</button></span>`}</div>
   </div>`;};
   app.innerHTML=`<div class="wl"><h1>${cfg.icon} ${cfg.title}<span>soonest delivery first · updates automatically</span></h1>
+    ${open.length>1?`<div style="font-size:12px;color:var(--t3);margin:-8px 0 10px">Cutting several houses together? Tick the box on each list for a combined table with per-house quantities and location labels.</div>`:''}
+    ${selLists.length?`<div class="wl-selbar"><b>${selLists.length} house${selLists.length!==1?'s':''} selected</b>
+      <button class="btn2" id="wl-comb" ${selLists.length<2?'disabled title="Select at least 2 lists to combine"':''}>⚡ Combined ${mode==='saw'?'cutting':'fittings'} table</button>
+      <button class="btn3" id="wl-lblsel">🏷 Labels for selected</button>
+      <button class="btn3" id="wl-clrsel">✕ Clear</button></div>`:''}
     ${open.length?open.map(l=>card(l,false)).join(''):`<div class="flr-none">Nothing in the queue — all lists are ${mode==='saw'?'cut':'picked'}. New lists appear here as the office uploads them.</div>`}
     ${closed.length?`<div style="margin:18px 0 8px;font-size:13px;color:var(--t3);font-weight:700;text-transform:uppercase">Done</div>`+closed.slice(0,10).map(l=>card(l,true)).join(''):''}
     <div class="flr-ft">Last update ${hhmm(new Date().toISOString())}</div></div>`;
+  document.querySelectorAll('[data-wlsel]').forEach(b=>b.onclick=()=>{
+    const id=b.dataset.wlsel;wlSel.has(id)?wlSel.delete(id):wlSel.add(id);render();
+  });
+  const cb=document.getElementById('wl-comb');if(cb)cb.onclick=()=>{if(selLists.length>=2)openCombined(selLists,mode);};
+  const lb=document.getElementById('wl-lblsel');if(lb)lb.onclick=()=>printLabels(selLists,mode);
+  const cs=document.getElementById('wl-clrsel');if(cs)cs.onclick=()=>{wlSel.clear();render();};
+  document.querySelectorAll('[data-wllbl]').forEach(b=>b.onclick=()=>{
+    const l=lists().find(x=>x.id===b.dataset.wllbl);if(l)printLabels([l],mode);
+  });
   document.querySelectorAll('[data-wldone]').forEach(b=>b.onclick=()=>{
     const l=lists().find(x=>x.id===b.dataset.wldone);if(!l)return;
     const by=prompt((mode==='saw'?'Cut complete':'Fittings picked')+' — your name or initials for the record:');
     if(by===null)return;
-    DB.listDone=DB.listDone||{};DB.listDone[l.id]=DB.listDone[l.id]||{};
-    DB.listDone[l.id][mode]={at:new Date().toISOString(),by:(by||'').trim()};
+    markListDone([l.id],mode,by);
+    wlSel.delete(l.id);
     sched();render();toast(l.name+' — '+(mode==='saw'?'cut complete':'fittings picked')+' ✓');
   });
   document.querySelectorAll('[data-wlundo]').forEach(b=>b.onclick=()=>{
