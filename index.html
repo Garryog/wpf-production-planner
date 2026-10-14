@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>WPF Production Planner</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" onerror="var s=document.createElement('script');s.src='xlsx.full.min.js';document.head.appendChild(s);"></script><!-- if the CDN is blocked by the works firewall, the copy in this site is used instead -->
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -348,6 +348,9 @@ async function loadDB(){
     const r=await fetch(SUPA_URL+'/production_planner?id=eq.main',{headers:SUPA_HDR});
     const d=await r.json();
     if(!r.ok||!Array.isArray(d))throw new Error('load failed: '+r.status+' '+JSON.stringify(d).slice(0,120));
+    // A local edit happened while this fetch was in flight — applying the server copy
+    // would silently revert it and then save the regression. Keep the local state.
+    if(saveT){setSS('ok');return;}
     if(d&&d[0]){
       if(d[0].orders)DB.orders=d[0].orders;
       if(d[0].nid)DB.nid=d[0].nid;
@@ -368,26 +371,61 @@ async function loadDB(){
     }
     DB.orders.forEach(o=>{orig[o.wo]=o.plannedWeek||'';origStep[o.wo]=o.step||'';});
     DB.loadFailed=false;
+    DB.loaded=true; // this page has held a good copy of the plan at least once
     setSS('ok');
   }catch(e){
     setSS('e');
-    DB.loadFailed=true; // render() shows a warning banner while this is set
+    // Only a page that has NEVER loaded the plan is dangerous to save from.
+    // A transient refresh failure on a page that already holds good data must not
+    // wipe the screen or block saves — that would throw away real work.
+    if(!DB.loaded)DB.loadFailed=true;
   }
 }
 async function saveDB(){
+  // The debounce timer has fired (or we're called directly) — clear it, or the stale
+  // truthy timeout id would suppress auto-refresh forever after the first edit.
+  clearTimeout(saveT);saveT=null;
   // SAFETY: if this page never managed to LOAD the plan, it must never SAVE —
   // otherwise a disconnected machine could overwrite the real plan with an empty board.
-  if(DB.loadFailed){
+  if(DB.loadFailed||!DB.loaded){
     setSS('e');
     toast('NOT saved — this page never loaded the plan (database unreachable). Fix the connection and refresh.');
     return;
   }
   setSS('s');
   try{
-    const resp=await fetch(SUPA_URL+'/production_planner?id=eq.main',{method:'PATCH',headers:SUPA_WHDR,body:JSON.stringify({orders:DB.orders,nid:DB.nid,settings:{weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP,delx:DB.delx||[],delNotes:DB.delNotes||{},grps:DB.grps||{},pins:DB.pins||{},pod:DB.pod||{},lists:DB.lists||[],listWBs:DB.listWBs||{},listDone:DB.listDone||{},listLead:DB.listLead||5,delArchive:DB.delArchive||{}}})});
-    if(resp&&resp.ok===false){setSS('e');return;}
+    const resp=await fetch(SUPA_URL+'/production_planner?id=eq.main',{method:'PATCH',headers:SUPA_WHDR,body:JSON.stringify({orders:DB.orders,nid:DB.nid,settings:fullSettings()})});
+    if(resp&&resp.ok===false)throw new Error('HTTP '+resp.status);
+    DB.saveFailed=false;
     setSS('ok');
-  }catch(e){setSS('e');}
+  }catch(e){
+    setSS('e');
+    DB.saveFailed=true; // driver view shows a keep-page-open banner while this is set
+    toast('Save failed — will retry automatically. Keep this page open.');
+    clearTimeout(saveT);saveT=setTimeout(saveDB,30000); // retry while the page lives
+    if(ROLE==='driver')render();
+  }
+}
+// Never let a tab close while an edit is unsaved or a retry is pending
+window.addEventListener('beforeunload',e=>{if(saveT||DB.saveFailed){e.preventDefault();e.returnValue='';}});
+function fullSettings(){return{weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP,delx:DB.delx||[],delNotes:DB.delNotes||{},grps:DB.grps||{},pins:DB.pins||{},pod:DB.pod||{},lists:DB.lists||[],listWBs:DB.listWBs||{},listDone:DB.listDone||{},listLead:DB.listLead||5,delArchive:DB.delArchive||{}};}
+/* Daily safety copy: once per day, the first office machine writes the whole plan to a dated
+   backup row (id='bak-YYYY-MM-DD') and prunes copies older than 14 days. If the database row
+   doesn't allow inserts, this fails silently — the JSON download button in Settings still works. */
+async function tryDailyBackup(){
+  try{
+    if(ROLE!=='office'||!DB.loaded)return;
+    const today=new Date().toISOString().slice(0,10);
+    if(ls.get('wpfBakDay')===today)return;
+    const r=await fetch(SUPA_URL+'/production_planner',{method:'POST',
+      headers:{...SUPA_WHDR,'Prefer':'resolution=merge-duplicates,return=minimal'},
+      body:JSON.stringify({id:'bak-'+today,orders:DB.orders,nid:DB.nid,settings:fullSettings()})});
+    if(r.ok){
+      ls.set('wpfBakDay',today);
+      const cut=new Date(Date.now()-14*86400000).toISOString().slice(0,10);
+      fetch(SUPA_URL+'/production_planner?id=like.bak-*&id=lt.bak-'+cut,{method:'DELETE',headers:SUPA_WHDR}).catch(()=>{});
+    }
+  }catch(e){}
 }
 function sched(){clearTimeout(saveT);saveT=setTimeout(saveDB,1200);}
 function setSS(st){const d=document.getElementById('dot'),t=document.getElementById('stxt');if(!d)return;d.className='dot'+(st==='s'?' s':st==='e'?' e':'');t.textContent=st==='s'?'Saving…':st==='e'?'Save failed':'Synced';}
@@ -404,7 +442,12 @@ function wkKey(d){
   const m=getMonday(d);
   return m.getUTCFullYear()+'-'+String(m.getUTCMonth()+1).padStart(2,'0')+'-'+String(m.getUTCDate()).padStart(2,'0');
 }
-function wkNum(d){const dt=new Date(d);const s=new Date(Date.UTC(dt.getUTCFullYear(),0,1));return Math.ceil(((dt-s)/86400000+((s.getUTCDay()||7))+1)/7);}
+function wkNum(d){ // ISO-8601 week number — matches Irish calendars and Cienapps
+  const dt=new Date(Date.UTC(new Date(d).getUTCFullYear(),new Date(d).getUTCMonth(),new Date(d).getUTCDate()));
+  const day=dt.getUTCDay()||7;dt.setUTCDate(dt.getUTCDate()+4-day);
+  const y0=new Date(Date.UTC(dt.getUTCFullYear(),0,1));
+  return Math.ceil(((dt-y0)/86400000+1)/7);
+}
 function wkLbl(k){if(!k)return'—';const d=new Date(k);return'Wk '+wkNum(d)+' · '+d.toLocaleDateString('en-IE',{day:'numeric',month:'short'});}
 function get8Wks(){const w=[];let d=getMonday(new Date());for(let i=0;i<8;i++){w.push(wkKey(d));d=new Date(d);d.setDate(d.getDate()+7);}return w;}
 function wkCap(k){return DB.weekCaps&&DB.weekCaps[k]?DB.weekCaps[k]:WCAP;}
@@ -446,10 +489,10 @@ function roleOk(r){ // has this device already entered the right PIN for this ro
 let viewTimer=null;
 function startAutoRefresh(){
   clearInterval(viewTimer);
-  if(['floor','driver','saw','stores'].includes(ROLE)){
+  if(['floor','driver','saw','stores','office'].includes(ROLE)){
     viewTimer=setInterval(()=>{
-      if(saveT||drvUploading)return; // never clobber an unsaved change or an upload in progress
-      loadDB().then(()=>{if(['floor','driver','saw','stores'].includes(ROLE))render();});
+      if(saveT||drvUploading||DB.saveFailed)return; // never clobber an unsaved change, a retrying save, or an upload
+      loadDB().then(()=>{if(ROLE)render();});
     },120000);
   }
 }
@@ -503,6 +546,7 @@ function render(){
     app.innerHTML=`<div style="max-width:700px;margin:40px auto;padding:0 20px"><div style="background:#fdecea;border:2px solid #e57368;border-radius:8px;padding:16px;font-size:14px;color:#8a1c10"><b>⚠ Can't reach the planner database.</b> This screen has no data to show. Check the network allows klyropbsupqfmtjjwlfa.supabase.co, then refresh.</div></div>`;
     return;
   }
+  if(ROLE==='office')tryDailyBackup(); // once per day, silent
   if(ROLE==='floor'){renderFloor(app);return;}
   if(ROLE==='saw'){renderWorkList(app,'saw');return;}
   if(ROLE==='stores'){renderWorkList(app,'fit');return;}
@@ -576,7 +620,21 @@ function renderSettings(app){
     +'<input id="s-pin-d" value="'+escA(pins().driver)+'" maxlength="8" style="padding:6px 10px;border:1px solid var(--b2);border-radius:6px;font-size:16px;width:110px;letter-spacing:4px"></div>'
     +'</div>'
     +'<button class="btn btn-g" id="btn-save-pins">Save PINs</button>'
+    +'</div>'
+    +'<div class="exp-panel">'
+    +'<div style="font-size:14px;font-weight:600;margin-bottom:6px">Backup</div>'
+    +'<p style="font-size:12px;color:var(--t3);margin-bottom:10px">Downloads everything — every order, delivery plan, cutting list, archive and setting — as one file. Keep a weekly copy in OneDrive. If the database is ever lost or overwritten, this file is the restore point.</p>'
+    +'<button class="btn btn-g" id="btn-backup">⬇ Download full backup (JSON)</button>'
     +'</div></div>';
+
+  document.getElementById('btn-backup')?.addEventListener('click',()=>{
+    const data={backedUpAt:new Date().toISOString(),orders:DB.orders,nid:DB.nid,settings:fullSettings()};
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(new Blob([JSON.stringify(data)],{type:'application/json'}));
+    a.download='WPF_Backup_'+new Date().toISOString().slice(0,10)+'.json';
+    a.click();setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+    toast('Backup downloaded — keep it in OneDrive ✓');
+  });
 
   document.getElementById('btn-save-pins')?.addEventListener('click',()=>{
     const po=(document.getElementById('s-pin-o')?.value||'').trim(),pd=(document.getElementById('s-pin-d')?.value||'').trim();
@@ -709,28 +767,29 @@ function renderBoard(app){
 
   const weekOpts=(cur,mixed)=>`${mixed?'<option value="__MIX" selected disabled>— Mixed weeks —</option>':''}
       <option value=""${!mixed&&!cur?' selected':''}>— Unscheduled —</option>
+      ${!mixed&&cur&&!weeks.includes(cur)?`<option value="${cur}" selected>${wkLbl(cur)} (past)</option>`:''}
       ${weeks.map(w=>`<option value="${w}"${!mixed&&cur===w?' selected':''}>${wkLbl(w)}</option>`).join('')}`;
 
-  const rowHTML=(o,member,sep)=>`<tr class="${o.colour?'c-'+o.colour:''}${o.hl?' hl-row':''}${sep?' grp-start':''}${member?' grp-member':''}" draggable="true" data-wo="${o.wo}">
+  const rowHTML=(o,member,sep)=>`<tr class="${o.colour?'c-'+o.colour:''}${o.hl?' hl-row':''}${sep?' grp-start':''}${member?' grp-member':''}" draggable="true" data-wo="${escA(o.wo)}">
           <td style="text-align:center">${member
-            ?`<button class="grm-btn" data-grm="${o.wo}" title="Take this WO out of the group">×</button>`
-            :`<input type="checkbox" class="gsel" data-gsel="${o.wo}"${grpSel.has(o.wo)?' checked':''} title="Select to group">`}</td>
+            ?`<button class="grm-btn" data-grm="${escA(o.wo)}" title="Take this WO out of the group">×</button>`
+            :`<input type="checkbox" class="gsel" data-gsel="${escA(o.wo)}"${grpSel.has(o.wo)?' checked':''} title="Select to group">`}</td>
           <td><span class="drag-handle">⠿</span></td>
-          <td style="text-align:center"><button class="dvbtn${o.delv?' on':''}" data-dv="${o.wo}" title="${o.delv?'Delivering next week — click to untag':'Tag for delivery next week'}">🚚</button></td>
-          <td><span class="wo-num" data-hl="${o.wo}" style="cursor:pointer${member?';padding-left:10px':''}" title="Tap to mark as discussed">${o.hl?'✓ ':''}${o.wo}</span></td>
-          <td>${o.floor?`<span class="fu-badge">${o.floor}</span>`:'<span style="color:var(--t3)">—</span>'}</td>
-          <td>${o.unit?`<span class="fu-badge">${o.unit}</span>`:'<span style="color:var(--t3)">—</span>'}</td>
-          <td><span class="wo-title" title="${o.title}">${o.title}</span></td>
-          <td><span class="wo-cust" title="${o.customer}">${o.customer}</span></td>
-          <td style="text-align:right"><input type="number" step="0.5" min="0" style="width:52px;text-align:right;border:1px solid ${o.hoursEstimated?'#f59e0b':'var(--b2)'};border-radius:4px;padding:2px 4px;font-size:12px;font-weight:600;background:${o.hoursEstimated?'#fffbeb':'#fff'}" title="${o.hoursEstimated?'Estimated from value — verify':'Actual hours from Cienapps'}" data-hi="${o.wo}" value="${o.hours}"></td>
+          <td style="text-align:center"><button class="dvbtn${o.delv?' on':''}" data-dv="${escA(o.wo)}" title="${o.delv?'Delivering next week — click to untag':'Tag for delivery next week'}">🚚</button></td>
+          <td><span class="wo-num" data-hl="${escA(o.wo)}" style="cursor:pointer${member?';padding-left:10px':''}" title="Tap to mark as discussed">${o.hl?'✓ ':''}${escA(o.wo)}</span></td>
+          <td>${o.floor?`<span class="fu-badge">${escA(o.floor)}</span>`:'<span style="color:var(--t3)">—</span>'}</td>
+          <td>${o.unit?`<span class="fu-badge">${escA(o.unit)}</span>`:'<span style="color:var(--t3)">—</span>'}</td>
+          <td><span class="wo-title" title="${escA(o.title)}">${escA(o.title)}</span></td>
+          <td><span class="wo-cust" title="${escA(o.customer)}">${escA(o.customer)}</span></td>
+          <td style="text-align:right"><input type="number" step="0.5" min="0" style="width:52px;text-align:right;border:1px solid ${o.hoursEstimated?'#f59e0b':'var(--b2)'};border-radius:4px;padding:2px 4px;font-size:12px;font-weight:600;background:${o.hoursEstimated?'#fffbeb':'#fff'}" title="${o.hoursEstimated?'Estimated from value — verify':'Actual hours from Cienapps'}" data-hi="${escA(o.wo)}" value="${o.hours}"></td>
           <td>${dueBadge(o.dueDate,o.plannedWeek,o.origDueDate)}</td>
           <td style="text-align:right;font-size:12px;color:var(--t2)">€${Math.round(o.value||0).toLocaleString()}</td>
-          <td><select class="step-sel" data-stepsel="${o.wo}" style="font-size:11px;padding:3px 4px;border-radius:6px;border:1px solid var(--bd);background:var(--bg2);color:var(--t1);max-width:120px">
-            ${getSteps().map(s=>`<option value="${s}"${(o.step||'')===s?' selected':''}>${s.replace(/^\d+\.\s*/,'')}</option>`).join('')}
-            ${getSteps().includes(o.step||'')||!(o.step||'')?'':`<option value="${o.step}" selected>${o.step.replace(/^\d+\.\s*/,'')}</option>`}
+          <td><select class="step-sel" data-stepsel="${escA(o.wo)}" style="font-size:11px;padding:3px 4px;border-radius:6px;border:1px solid var(--bd);background:var(--bg2);color:var(--t1);max-width:120px">
+            ${getSteps().map(s=>`<option value="${escA(s)}"${(o.step||'')===s?' selected':''}>${escA(s.replace(/^\d+\.\s*/,''))}</option>`).join('')}
+            ${getSteps().includes(o.step||'')||!(o.step||'')?'':`<option value="${escA(o.step)}" selected>${escA(o.step.replace(/^\d+\.\s*/,''))}</option>`}
           </select></td>
-          <td><select class="week-sel" data-wsel="${o.wo}">${weekOpts(o.plannedWeek||'',false)}</select></td>
-          <td style="text-align:center"><button style="background:none;border:none;color:var(--t3);font-size:14px;padding:0 2px;cursor:pointer;line-height:1" data-del="${o.wo}" title="Delete order">🗑</button></td>
+          <td><select class="week-sel" data-wsel="${escA(o.wo)}">${weekOpts(o.plannedWeek||'',false)}</select></td>
+          <td style="text-align:center"><button style="background:none;border:none;color:var(--t3);font-size:14px;padding:0 2px;cursor:pointer;line-height:1" data-del="${escA(o.wo)}" title="Delete order">🗑</button></td>
         </tr>`;
 
   const grpRowHTML=(gid,sep)=>{
@@ -750,8 +809,8 @@ function renderBoard(app){
           <td style="text-align:center"><button class="dvbtn${allDelv?' on':''}" data-gdv="${gid}" title="${allDelv?'Whole group tagged for delivery — click to untag all':'Tag whole group for delivery next week'}">🚚</button></td>
           <td><span class="grp-tog" data-gtog="${gid}">${ms.length}&nbsp;WOs</span></td>
           <td colspan="2"><span class="fu-badge" style="background:#e3ecfa;border-color:#b9cdec;color:#14418f">GROUP</span></td>
-          <td><input class="grp-title" data-gtitle="${gid}" value="${String(g.title||'').replace(/"/g,'&quot;')}" title="Group title — click to edit"></td>
-          <td><span class="wo-cust" title="${cs.join(', ')}">${cs.length===1?cs[0]:cs.length+' customers'}</span></td>
+          <td><input class="grp-title" data-gtitle="${gid}" value="${escA(g.title||'')}" title="Group title — click to edit"></td>
+          <td><span class="wo-cust" title="${escA(cs.join(', '))}">${cs.length===1?escA(cs[0]):cs.length+' customers'}</span></td>
           <td style="text-align:right;font-weight:700;white-space:nowrap">${Math.round(th*10)/10}h</td>
           <td>${due?dueBadge(due,wk,null):'—'}</td>
           <td style="text-align:right;font-weight:700;white-space:nowrap">€${Math.round(tv).toLocaleString()}</td>
@@ -809,7 +868,7 @@ function renderBoard(app){
   </div>
 
   <div class="board-toolbar">
-    <input class="search-input" id="srch" placeholder="Search WO, title, customer…" value="${srch}">
+    <input class="search-input" id="srch" placeholder="Search WO, title, customer…" value="${escA(srch)}">
     <select class="filter-sel" id="fwk">
       <option value="">All weeks</option>
       <option value="unscheduled"${fWeek==='unscheduled'?' selected':''}>Unscheduled</option>
@@ -884,7 +943,11 @@ function renderBoard(app){
       sched();render();
     };
   });
-  const si=document.getElementById('srch');if(si)si.oninput=function(){srch=this.value;render();};
+  const si=document.getElementById('srch');
+  if(si)si.oninput=function(){
+    srch=this.value;const pos=this.selectionStart;render();
+    const n=document.getElementById('srch');if(n){n.focus();try{n.setSelectionRange(pos,pos);}catch(e){}}
+  };
   const fw=document.getElementById('fwk');if(fw)fw.onchange=function(){fWeek=this.value;render();};
   const fc=document.getElementById('fcust');if(fc)fc.onchange=function(){fCust=this.value;render();};
   const cf=document.getElementById('btn-clf');if(cf)cf.onclick=()=>{fWeek='';fCust='';srch='';fDel=false;colF={};render();};
@@ -1204,18 +1267,31 @@ function renderLists(app){
       try{
         const{wb,entries}=parseListWorkbook(rd.result);
         if(!entries.length){msg.innerHTML='<span style="color:var(--red)">No usable sheets found — expected columns: Item | Qty | Length | Width | Material | Edging.</span>';return;}
-        const wbId='WB'+(DB.nid++);
+        // unique ids that can never collide between two office machines (unlike a shared counter)
+        const uid=p=>p+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+        const wbId=uid('WB');
         DB.listWBs=DB.listWBs||{};DB.listWBs[wbId]=wb;
         DB.lists=DB.lists||[];
-        let auto=0;
+        let auto=0,replaced=0;
         entries.forEach(e=>{
-          const id='L'+(DB.nid++);
-          const l={id,wb:wbId,sheet:e.sheet,name:e.sheet,project:wb.project||f.name.replace(/\.(xlsx|xls)$/i,''),sdate:e.sdate,saw:e.saw,fit:e.fit,wos:[],up:new Date().toISOString()};
-          l.wos=suggestWOs(l).slice(0,6).map(o=>o.wo);auto+=l.wos.length;
+          const proj=wb.project||f.name.replace(/\.(xlsx|xls)$/i,'');
+          // re-uploading a corrected workbook REPLACES the old version of each sheet —
+          // tags and tick-offs carry across, and the saw never sees two revisions of one house
+          const old=DB.lists.find(x=>x.sheet===e.sheet&&(x.project||'')===proj);
+          const id=old?old.id:uid('L');
+          const l={id,wb:wbId,sheet:e.sheet,name:e.sheet,project:proj,sdate:e.sdate,saw:e.saw,fit:e.fit,wos:old?(old.wos||[]):[],up:new Date().toISOString()};
+          if(old){
+            DB.lists=DB.lists.filter(x=>x.id!==old.id);
+            if(!DB.lists.some(x=>x.wb===old.wb)&&old.wb!==wbId&&DB.listWBs)delete DB.listWBs[old.wb];
+            replaced++;
+          }
+          if(!l.wos.length){l.wos=suggestWOs(l).slice(0,6).map(o=>o.wo);auto+=l.wos.length;}
           DB.lists.push(l);
         });
+        // drop any replaced workbooks that no longer have lists pointing at them
+        Object.keys(DB.listWBs).forEach(k=>{if(k!==wbId&&!DB.lists.some(x=>x.wb===k))delete DB.listWBs[k];});
         sched();render();
-        toast(entries.length+' lists imported from '+(wb.project||f.name)+' — '+auto+' work orders auto-tagged. Check the tags.');
+        toast(entries.length+' lists imported from '+(wb.project||f.name)+(replaced?' — '+replaced+' replaced with this newer version':'')+(auto?' — '+auto+' work orders auto-tagged. Check the tags.':''));
       }catch(e){msg.innerHTML='<span style="color:var(--red)">Could not read that file: '+escA(e.message)+'</span>';}
     };
     rd.readAsArrayBuffer(f);
@@ -1302,6 +1378,14 @@ function listTableHTML(l,mode){ // mode 'saw' | 'fit' | 'all'
    Batch mode: tick several lists → one combined table (total qty + per-house split) and
    location labels so every pack or single item is marked with its house. */
 const wlSel=new Set();
+// A name is REQUIRED on every tick-off — blank records make the audit trail worthless.
+// Remembered per device, so it's one-time friction at each bench.
+function opName(what){
+  let by=prompt(what+' — your name or initials for the record:',ls.get('wpfOpName')||'');
+  while(by!==null&&!(by||'').trim())by=prompt('A name is needed for the record — who is signing this off?',ls.get('wpfOpName')||'');
+  if(by!==null)ls.set('wpfOpName',by.trim());
+  return by===null?null:by.trim();
+}
 function markListDone(ids,mode,by){
   const now=new Date().toISOString();
   DB.listDone=DB.listDone||{};
@@ -1342,7 +1426,7 @@ function openCombined(lsArr,mode){
   ov.onclick=e=>{if(e.target===ov||e.target.id==='pod-x')ov.remove();};
   ov.querySelector('#cmb-lbl').onclick=()=>printLabels(lsArr,mode);
   ov.querySelector('#cmb-done').onclick=()=>{
-    const by=prompt((saw?'Batch cut complete':'Batch picked')+' for '+lsArr.length+' houses — your name or initials:');
+    const by=opName((saw?'Batch cut complete':'Batch picked')+' for '+lsArr.length+' houses');
     if(by===null)return;
     markListDone(lsArr.map(l=>l.id),mode,by);
     wlSel.clear();ov.remove();sched();render();
@@ -1431,7 +1515,7 @@ function renderWorkList(app,mode){
   });
   document.querySelectorAll('[data-wldone]').forEach(b=>b.onclick=()=>{
     const l=lists().find(x=>x.id===b.dataset.wldone);if(!l)return;
-    const by=prompt((mode==='saw'?'Cut complete':'Fittings picked')+' — your name or initials for the record:');
+    const by=opName((mode==='saw'?'Cut complete':'Fittings picked'));
     if(by===null)return;
     markListDone([l.id],mode,by);
     wlSel.delete(l.id);
@@ -1486,6 +1570,7 @@ function renderDriver(app){
   const allDeliv=jobs.length>0&&delivd===jobs.length;
   const pk=podKey(veh,day);const pod=(DB.pod||{})[pk];
   app.innerHTML=`<div class="drv">
+    ${DB.saveFailed?`<div style="background:#c0392b;color:#fff;border-radius:10px;padding:12px 14px;font-size:14px;font-weight:800;margin-bottom:10px">⚠ NOT SAVED YET — no signal. Keep this page open; it retries automatically and will sync when you're back in coverage.</div>`:''}
     <div class="drv-set">
       <div><label>Driver name</label><input id="drv-name" value="${escA(name)}" placeholder="Your name"></div>
       <div><label>Vehicle</label><select id="drv-veh"><option value="">— pick van —</option>${DEL_VEH.map(v=>`<option value="${v.k}"${v.k===veh?' selected':''}>${v.n}</option>`).join('')}</select></div>
@@ -1632,7 +1717,7 @@ function renderDeliveries(app){
       <tbody>
         ${DEL_VEH.map((v,i)=>{const vc=tagged.filter(o=>o.delVeh===v.k).length;return `<tr${i===1?' style="border-top:3px double var(--border)"':''}>
           <td class="dveh">${v.n}<span class="dsub">${v.cat}${v.sub?' · '+v.sub:''} · ${vc} job${vc!==1?'s':''}</span></td>
-          ${DEL_DAYS.map(d=>{const cj=tagged.filter(o=>o.delVeh===v.k&&o.delDay===d).sort(woCmp);const pks=Object.keys(DB.pod||{}).filter(k=>k.indexOf(v.k+'|'+d+'|')===0&&(DB.pod[k].photos||[]).length).sort();const ppk=pks[pks.length-1];return `<td class="dcell" data-cell="${v.k}|${d}">${cj.map(o=>dchip(o,true)).join('')}${cj.length&&cj.some(o=>!o.delDispAt&&!o.delDelivAt&&!o.delDone)?`<button class="cell-disp" data-cdisp="${v.k}|${d}" title="Mark this whole van load as dispatched (left the factory) — runs the part-load check first">🚚→ Dispatch van</button>`:''}${ppk?`<button class="cell-disp" style="background:#eef6ff;border-color:#9cbce8;color:#1450a8" data-pod="${escA(ppk)}" title="Proof-of-delivery photos taken by the driver on site">📷 ${DB.pod[ppk].photos.length} proof photo${DB.pod[ppk].photos.length!==1?'s':''}</button>`:''}</td>`;}).join('')}
+          ${DEL_DAYS.map(d=>{const cj=tagged.filter(o=>o.delVeh===v.k&&o.delDay===d).sort(woCmp);const ppk0=v.k+'|'+d+'|'+wkKey(new Date());const ppk=(DB.pod&&DB.pod[ppk0]&&(DB.pod[ppk0].photos||[]).length)?ppk0:null;return `<td class="dcell" data-cell="${v.k}|${d}">${cj.map(o=>dchip(o,true)).join('')}${cj.length&&cj.some(o=>!o.delDispAt&&!o.delDelivAt&&!o.delDone)?`<button class="cell-disp" data-cdisp="${v.k}|${d}" title="Mark this whole van load as dispatched (left the factory) — runs the part-load check first">🚚→ Dispatch van</button>`:''}${ppk?`<button class="cell-disp" style="background:#eef6ff;border-color:#9cbce8;color:#1450a8" data-pod="${escA(ppk)}" title="Proof-of-delivery photos taken by the driver on site">📷 ${DB.pod[ppk].photos.length} proof photo${DB.pod[ppk].photos.length!==1?'s':''}</button>`:''}</td>`;}).join('')}
         </tr>`;}).join('')}
         <tr><td class="dveh">Notes</td>${DEL_DAYS.map(d=>`<td style="border:1px solid var(--border);padding:4px;background:#fffef7"><input class="dnote" data-dnote="${d}" value="${escA(notes[d]||'')}" placeholder="${d} note…"></td>`).join('')}</tr>
         <tr><td class="dtot" style="text-align:left">Value / day<br><span style="color:#0d6e46">Week: €${Math.round(wkTot).toLocaleString()}</span></td>
@@ -1769,10 +1854,11 @@ function renderDeliveries(app){
     if(snap.length){
       DB.delArchive=DB.delArchive||{};
       const key=new Date().toISOString().slice(0,10)+'.'+Date.now().toString(36);
-      DB.delArchive[key]={at:new Date().toISOString(),notes:{...(DB.delNotes||{})},
+      DB.delArchive[key]={at:new Date().toISOString(),notes:{...(DB.delNotes||{})},pod:{...(DB.pod||{})},
         jobs:snap.map(o=>({wo:o.wo,t:o.title||'',c:o.customer||'',f:o.floor||'',u:o.unit||'',v:o.delVeh||'',d:o.delDay||'',val:Math.round(o.value||0),lAt:o.delLoadedAt||'',dAt:o.delDispAt||'',vAt:o.delDelivAt||'',lBy:o.ldBy||'',vBy:o.delivBy||''}))};
       const ks=Object.keys(DB.delArchive).sort();
       while(ks.length>26)delete DB.delArchive[ks.shift()]; // keep half a year of history
+      DB.pod={}; // the week's proof photos move into the archive with it — a fresh board shows no stale 📷
     }
     DB.orders.forEach(o=>{delete o.delv;delete o.delVeh;delete o.delDay;delete o.delDone;delete o.delLoadedAt;delete o.delDispAt;delete o.delDelivAt;delete o.ldBy;delete o.delivBy;});
     DB.delx=[];DB.delNotes={};delSel.clear();
@@ -2418,7 +2504,7 @@ function renderMapping(note){
     }
     return String(v[0]).substring(0,24);
   };
-  const opts=sel=>{let s=`<option value="-1"${sel<0?' selected':''}>— not used —</option>`;for(let i=0;i<n;i++)s+=`<option value="${i}"${sel===i?' selected':''}>Col ${colLtr(i)} · ${sample(i).replace(/"/g,'')}</option>`;return s;};
+  const opts=sel=>{let s=`<option value="-1"${sel<0?' selected':''}>— not used —</option>`;for(let i=0;i<n;i++)s+=`<option value="${i}"${sel===i?' selected':''}>Col ${colLtr(i)} · ${escA(sample(i))}</option>`;return s;};
   document.getElementById('iprev').innerHTML=`<div style="margin-top:14px">
     <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:6px;padding:10px 13px;font-size:12px;color:#92400e;margin-bottom:12px;line-height:1.5">${note}</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:9px">
@@ -2442,12 +2528,21 @@ function renderMapping(note){
   };
 }
 
+/* Two-phase import: ANALYZE builds a plan without touching the board; the office reviews
+   exactly what will happen (new / updated / removed / warnings) and then APPLIES or cancels.
+   Nothing changes — and nothing is saved — until Apply is clicked. */
+let IMPPLAN=null;
 function runImport(rows){
-    let added=0,updated=0,skipped=0,noWo=0,excluded=0,excludedRemoved=0;
+    const plan=analyzeImport(rows);
+    if(!plan)return;
+    IMPPLAN=plan;
+    renderImportPreview(plan);
+}
+function analyzeImport(rows){
+    let added=0,updated=0,skipped=0,noWo=0,excluded=0;
     const dispGaps=[]; // Cienapps says shipped/invoiced but the planner has no dispatch record
     const exCounts={};
-    const prev=[];
-    const newOrders=[];
+    const newOrders=[],updates=[],backfills=[],removals=[],inTransit=[];
 
     rows.forEach(row=>{
       const wo=String(row.wo==null?'':row.wo).trim();
@@ -2487,10 +2582,14 @@ function runImport(rows){
           if((exReason==='shipped'||exReason==='invoiced')&&!exOrd.delDispAt&&!exOrd.delDelivAt&&!exOrd.delDone){
             dispGaps.push({wo,title:exOrd.title||'',customer:exOrd.customer||'',unit:[exOrd.floor,exOrd.unit].filter(Boolean).join(' · '),reason:exReason});
           }
-          DB.orders=DB.orders.filter(o=>o.wo!==wo);
-          delete orig[wo];delete origStep[wo];
-          excludedRemoved++;
-          prev.push({wo,status:exReason+' — removed',title:exOrd.title,hours:exOrd.hours,dueDate:exOrd.dueDate,pw:''});
+          // PROTECTED: a job that is loaded or dispatched but NOT yet confirmed delivered must
+          // never vanish from the board mid-delivery, whatever Cienapps says — the driver is
+          // still out with it. It stays until the delivery is confirmed (next import removes it).
+          if((exOrd.delLoadedAt||exOrd.delDispAt)&&!exOrd.delDelivAt&&!exOrd.delDone){
+            inTransit.push({wo,title:exOrd.title||'',reason:exReason,veh:vehLbl(exOrd.delVeh)||'',day:exOrd.delDay||''});
+          }else{
+            removals.push({wo,reason:exReason,title:exOrd.title||'',customer:exOrd.customer||'',hours:exOrd.hours});
+          }
         }
         return;
       }
@@ -2505,7 +2604,7 @@ function runImport(rows){
       } else {
         hours=estimateHours(rowVal); hoursEstimated=true;
       }
-      let dueDate='';
+      let dueDate=''; // '' = no date in the row · null = a date was there but unreadable (keep the existing one)
       const rd=row.dueDate;
       if(rd){try{
         if(typeof rd==='number'){
@@ -2518,88 +2617,120 @@ function runImport(rows){
         } else if(typeof rd==='string'&&rd.match(/^\d{4}-\d{2}-\d{2}/)){
           // Already a YYYY-MM-DD string
           dueDate=rd.substring(0,10);
+        } else if(typeof rd==='string'&&/^\d{1,2}\/\d{1,2}\/\d{4}/.test(rd.trim())){
+          // Irish d/m/y text date — never let 04/10 become April 10
+          const m=rd.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+          dueDate=m[3]+'-'+String(m[2]).padStart(2,'0')+'-'+String(m[1]).padStart(2,'0');
         } else {
-          // Try parsing as date using UTC
+          // Try parsing as date using UTC; an unreadable date must keep the existing one, not wipe it
           const parsed=new Date(rd);
-          if(!isNaN(parsed))dueDate=parsed.getUTCFullYear()+'-'+String(parsed.getUTCMonth()+1).padStart(2,'0')+'-'+String(parsed.getUTCDate()).padStart(2,'0');
+          dueDate=isNaN(parsed)?null:parsed.getUTCFullYear()+'-'+String(parsed.getUTCMonth()+1).padStart(2,'0')+'-'+String(parsed.getUTCDate()).padStart(2,'0');
         }
-      }catch(ex){}}
-      // Skip if WO already exists (prevent duplicates)
+      }catch(ex){dueDate=null;}}
       const ex=exOrd;
       if(ex){
         const newStep=String(row.step==null?ex.step:row.step);
-        const dateChanged=ex.dueDate!==dueDate;
+        const effDue=(dueDate===null)?ex.dueDate:dueDate; // unreadable date keeps the existing one
+        const dateChanged=ex.dueDate!==effDue;
         const hoursChanged=ex.hours!==hours;
         const stepChanged=(ex.step||'')!==newStep;
         if(dateChanged||hoursChanged||stepChanged){
-          if(dateChanged&&!ex.origDueDate)ex.origDueDate=ex.dueDate;
-          const oldDue=ex.dueDate, oldStep=ex.step;
-          ex.hours=hours;ex.hoursEstimated=hoursEstimated;ex.dueDate=dueDate;ex.step=newStep;
-          const newTitle=String(row.title||row.ref||'').trim();
-          if(newTitle&&newTitle!==ex.title)ex.title=newTitle;
-          if(flr)ex.floor=flr;if(unt)ex.unit=unt;
-          if(rowVal>0)ex.value=rowVal;
-          if(refStr&&!ex.ref)ex.ref=refStr;
-          if(row.orderNo!=null&&String(row.orderNo).trim()&&!ex.orderNo)ex.orderNo=String(row.orderNo);
-          if(row.salesRep!=null&&String(row.salesRep).trim()&&!ex.salesRep)ex.salesRep=String(row.salesRep);
           const what=[];
-          if(dateChanged)what.push('date: '+oldDue+' → '+dueDate);
-          if(stepChanged)what.push('step: '+(oldStep||'(none)').replace(/^\d+\.\s*/,'')+' → '+newStep.replace(/^\d+\.\s*/,''));
-          if(hoursChanged&&!dateChanged&&!stepChanged)what.push('hours');
-          updated++;prev.push({wo,status:dateChanged?'date changed':(stepChanged?'step changed':'updated'),what:what.join(' · '),title:ex.title,hours,dueDate,pw:ex.plannedWeek});
+          if(dateChanged)what.push('date: '+(ex.dueDate||'(none)')+' → '+effDue);
+          if(stepChanged)what.push('step: '+(ex.step||'(none)').replace(/^\d+\.\s*/,'')+' → '+newStep.replace(/^\d+\.\s*/,''));
+          if(hoursChanged&&!dateChanged&&!stepChanged)what.push('hours: '+ex.hours+' → '+hours);
+          updates.push({wo,hours,hoursEstimated,dueDate:effDue,dateChanged,step:newStep,
+            title:String(row.title||row.ref||'').trim(),flr,unt,rowVal,refStr,
+            orderNo:row.orderNo!=null?String(row.orderNo).trim():'',salesRep:row.salesRep!=null?String(row.salesRep).trim():'',
+            what:what.join(' · '),status:dateChanged?'date changed':(stepChanged?'step changed':'updated'),exTitle:ex.title,pw:ex.plannedWeek});
+          updated++;
         } else {
-          // no change, but still backfill fields on older/restored orders
-          if(flr&&!ex.floor)ex.floor=flr;if(unt&&!ex.unit)ex.unit=unt;
-          if(rowVal>0&&!ex.value)ex.value=rowVal;
-          if(refStr&&!ex.ref)ex.ref=refStr;
+          backfills.push({wo,flr,unt,rowVal,refStr});
           skipped++;
         }
       } else {
-        const newO={wo,ref:refStr,floor:flr,unit:unt,title:String(row.title||row.ref||wo).trim(),customer:String(row.customer==null?'':row.customer),hours,hoursEstimated,dueDate,origDueDate:dueDate,step:String(row.step==null?'':row.step),salesRep:String(row.salesRep==null?'':row.salesRep),orderNo:String(row.orderNo==null?'':row.orderNo),value:rowVal,plannedWeek:'',notes:'',colour:''};
+        const newO={wo,ref:refStr,floor:flr,unit:unt,title:String(row.title||row.ref||wo).trim(),customer:String(row.customer==null?'':row.customer),hours,hoursEstimated,dueDate:dueDate||'',origDueDate:dueDate||'',step:String(row.step==null?'':row.step),salesRep:String(row.salesRep==null?'':row.salesRep),orderNo:String(row.orderNo==null?'':row.orderNo),value:rowVal,plannedWeek:'',notes:'',colour:''};
         newOrders.push(newO);
-        if(orig[wo]===undefined)orig[wo]='';if(origStep[wo]===undefined)origStep[wo]=newO.step;
         added++;
       }
     });
 
     if(added+updated+skipped+excluded===0){
       importError('None of the '+rows.length+' rows had a usable WO number, so nothing was imported.','Check that the WO number column is mapped to the column holding values like WO-2604-7.');
-      return;
+      return null;
     }
-
-    // Auto-schedule new orders
-    autoSchedule(newOrders);
-    newOrders.forEach(o=>{
-      DB.orders.push(o);
-      orig[o.wo]=o.plannedWeek||'';origStep[o.wo]=o.step||''; // set baseline AFTER auto-schedule so auto-assignments don't show as changes
-      prev.push({wo:o.wo,status:'new',title:o.title,hours:o.hours,dueDate:o.dueDate,pw:o.plannedWeek});
+    return{newOrders,updates,backfills,removals,inTransit,dispGaps,exCounts,counts:{added,updated,skipped,noWo,excluded,rows:rows.length}};
+}
+function renderImportPreview(plan){
+  const c=plan.counts;
+  const line=(wo,title,extra)=>`<div class="preview-row"><span style="font-family:monospace;color:var(--t2);width:140px;flex-shrink:0">${escA(wo)}</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escA(title||'')}</span><span style="color:var(--t3);font-size:11px;white-space:nowrap">${extra||''}</span></div>`;
+  const section=(title,color,bg,items,fmtr,cap)=>items.length?`<div style="background:${bg};border:1px solid ${color};border-radius:8px;padding:10px 13px;margin-bottom:10px">
+    <div style="font-size:13px;font-weight:700;margin-bottom:6px">${title}</div>
+    ${items.slice(0,cap||12).map(fmtr).join('')}
+    ${items.length>(cap||12)?`<div style="font-size:11px;color:var(--t3);padding-top:4px">…and ${items.length-(cap||12)} more</div>`:''}
+  </div>`:'';
+  document.getElementById('iprev').innerHTML=`<div style="margin-top:14px">
+    <div style="background:#eaf2ff;border:2px solid #1a56db;border-radius:8px;padding:12px 15px;margin-bottom:12px">
+      <div style="font-size:14px;font-weight:800;color:#14335c;margin-bottom:4px">Import preview — nothing has changed yet</div>
+      <div style="font-size:13px;color:#14335c">${c.added} new · ${c.updated} updated · ${c.skipped} unchanged · ${plan.removals.length} removed from board${plan.inTransit.length?` · <b>${plan.inTransit.length} protected (out for delivery)</b>`:''}${c.excluded?` · ${c.excluded} excluded (${Object.keys(plan.exCounts).map(k=>plan.exCounts[k]+' '+k).join(', ')})`:''}${c.noWo?` · ${c.noWo} rows with no WO number`:''}</div>
+    </div>
+    ${plan.dispGaps.length?`<div style="background:#fdecea;border:2px solid #e57368;border-radius:8px;padding:12px 15px;margin-bottom:12px">
+      <div style="font-size:13px;font-weight:700;color:#8a1c10;margin-bottom:6px">⚠ CHECK THESE — Cienapps says shipped/invoiced, but the planner has NO dispatch record:</div>
+      ${plan.dispGaps.map(g=>`<div style="font-size:12px;color:#8a1c10;padding:2px 0"><b style="font-family:monospace">${escA(g.wo)}</b>${g.unit?' · '+escA(g.unit):''} — ${escA(g.title)}${g.customer?' <span style="opacity:.75">('+escA(g.customer)+')</span>':''} <span style="font-weight:700">[${escA(g.reason)} in Cienapps]</span></div>`).join('')}
+      <div style="font-size:11px;color:#8a1c10;margin-top:6px">If any of these are still in the factory, Cienapps is ahead of reality — fix the status there and get the job on a van.</div>
+    </div>`:''}
+    ${section('🛡 Protected — out for delivery, NOT removed although Cienapps says shipped','#ecd394','#fff8e6',plan.inTransit,t=>line(t.wo,t.title,escA([t.veh,t.day].filter(Boolean).join(' '))+' · stays until the driver confirms delivery'),12)}
+    ${section('➕ New work orders — will be added and scheduled to their due-date week','#b3e0c4','#f4fbf6',plan.newOrders,o=>line(o.wo,o.title,o.hours+'h · due '+(o.dueDate?fmt(o.dueDate):'—')),15)}
+    ${section('✏ Updates to existing work orders','#f5d89b','#fffbeb',plan.updates,u=>line(u.wo,u.exTitle,escA(u.what)),15)}
+    ${section('🗑 Will be removed from the board (shipped / invoiced / drawing / snag)','#e57368','#fdf3f2',plan.removals,r=>line(r.wo,r.title,escA(r.reason)),15)}
+    <div style="display:flex;gap:10px;margin-top:6px;flex-wrap:wrap">
+      <button class="btn btn-g" id="imp-apply" style="font-size:14px;padding:10px 22px">✓ Apply import — ${c.added+c.updated+plan.removals.length} change${c.added+c.updated+plan.removals.length!==1?'s':''}</button>
+      <button class="btn btn-s" id="imp-cancel">✕ Cancel — change nothing</button>
+    </div>
+  </div>`;
+  document.getElementById('imp-cancel').onclick=()=>{IMPPLAN=null;document.getElementById('iprev').innerHTML='<div style="margin-top:14px;font-size:13px;color:var(--t3)">Import cancelled — nothing was changed.</div>';};
+  document.getElementById('imp-apply').onclick=()=>{if(IMPPLAN){applyImport(IMPPLAN);IMPPLAN=null;}};
+}
+function applyImport(plan){
+    // removals (delivered or never-dispatched excluded jobs) — also release their cutting-list tags
+    plan.removals.forEach(r=>{
+      DB.orders=DB.orders.filter(o=>o.wo!==r.wo);
+      delete orig[r.wo];delete origStep[r.wo];
+      lists().forEach(l=>{if((l.wos||[]).includes(r.wo))l.wos=l.wos.filter(w=>w!==r.wo);});
     });
-
+    // updates
+    plan.updates.forEach(u=>{
+      const ex=DB.orders.find(o=>o.wo===u.wo);if(!ex)return;
+      if(u.dateChanged&&!ex.origDueDate)ex.origDueDate=ex.dueDate;
+      ex.hours=u.hours;ex.hoursEstimated=u.hoursEstimated;ex.dueDate=u.dueDate;ex.step=u.step;
+      if(u.title&&u.title!==ex.title)ex.title=u.title;
+      if(u.flr)ex.floor=u.flr;if(u.unt)ex.unit=u.unt;
+      if(u.rowVal>0)ex.value=u.rowVal;
+      if(u.refStr&&!ex.ref)ex.ref=u.refStr;
+      if(u.orderNo&&!ex.orderNo)ex.orderNo=u.orderNo;
+      if(u.salesRep&&!ex.salesRep)ex.salesRep=u.salesRep;
+    });
+    // backfills on unchanged orders
+    plan.backfills.forEach(b=>{
+      const ex=DB.orders.find(o=>o.wo===b.wo);if(!ex)return;
+      if(b.flr&&!ex.floor)ex.floor=b.flr;if(b.unt&&!ex.unit)ex.unit=b.unt;
+      if(b.rowVal>0&&!ex.value)ex.value=b.rowVal;
+      if(b.refStr&&!ex.ref)ex.ref=b.refStr;
+    });
+    // new orders — scheduled to their due-date week
+    autoSchedule(plan.newOrders);
+    plan.newOrders.forEach(o=>{
+      DB.orders.push(o);
+      orig[o.wo]=o.plannedWeek||'';origStep[o.wo]=o.step||''; // baseline AFTER auto-schedule so auto-assignments don't show as changes
+    });
+    cleanGroups();
     sched();
+    const c=plan.counts;
     document.getElementById('iprev').innerHTML=`<div style="margin-top:14px">
-      <div style="font-size:13px;font-weight:600;color:var(--green);margin-bottom:10px">
-        ✓ Import complete: ${added} added · ${updated} updated · ${skipped} unchanged${excluded?` · ${excluded} excluded (${Object.keys(exCounts).map(k=>exCounts[k]+' '+k).join(', ')}${excludedRemoved?` — ${excludedRemoved} removed from board`:''})`:''}${noWo?` · ${noWo} skipped (no WO number)`:''}
-      </div>
-      ${dispGaps.length?`<div style="background:#fdecea;border:2px solid #e57368;border-radius:8px;padding:12px 15px;margin-bottom:12px">
-        <div style="font-size:13px;font-weight:700;color:#8a1c10;margin-bottom:6px">⚠ CHECK THESE — Cienapps says shipped/invoiced, but the planner has NO dispatch record:</div>
-        ${dispGaps.map(g=>`<div style="font-size:12px;color:#8a1c10;padding:2px 0"><b style="font-family:monospace">${g.wo}</b>${g.unit?' · '+g.unit:''} — ${g.title}${g.customer?' <span style="opacity:.75">('+g.customer+')</span>':''} <span style="font-weight:700">[${g.reason} in Cienapps]</span></div>`).join('')}
-        <div style="font-size:11px;color:#8a1c10;margin-top:6px">If any of these are still in the factory, Cienapps is ahead of reality — fix the status there and get the job on a van.</div>
-      </div>`:''}
-      <div style="display:none">
-      </div>
-      <div style="font-size:12px;color:var(--t3);margin-bottom:8px">New orders auto-scheduled based on due date and available capacity.</div>
-      ${prev.slice(0,15).map(p=>`<div class="preview-row">
-        <span style="font-family:monospace;color:var(--t2);width:130px;flex-shrink:0">${p.wo}</span>
-        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.title}</span>
-        <span style="color:var(--t3);width:40px;text-align:right">${p.hours}h</span>
-        <span style="color:var(--t3);font-size:11px;width:100px;text-align:right">${p.pw?wkLbl(p.pw):'—'}</span>
-        <span style="padding:1px 7px;border-radius:3px;font-size:11px;white-space:nowrap;background:${p.status==='new'?'var(--gl)':p.status==='step changed'?'var(--bl)':'var(--al)'};color:${p.status==='new'?'var(--green)':p.status==='step changed'?'var(--blue)':'var(--amber)'};">${p.status}</span>
-      </div>
-      ${p.what?`<div style="font-size:11px;color:var(--t3);padding:0 10px 4px 90px">${p.what}</div>`:''}`).join('')}
-      ${prev.length>15?`<div style="font-size:12px;color:var(--t3);padding:6px 10px">...and ${prev.length-15} more</div>`:''}
-      <button class="btn btn-g" style="margin-top:14px" onclick="showTab('b')">Go to Capacity Board →</button>
+      <div style="font-size:13px;font-weight:600;color:var(--green);margin-bottom:10px">✓ Import applied: ${c.added} added · ${c.updated} updated · ${c.skipped} unchanged · ${plan.removals.length} removed${plan.inTransit.length?` · ${plan.inTransit.length} kept (out for delivery)`:''}</div>
+      <button class="btn btn-g" onclick="showTab('b')">Go to Capacity Board →</button>
     </div>`;
-    toast(`${added} added (auto-scheduled), ${updated} updated`);
+    toast(`Import applied — ${c.added} added, ${c.updated} updated`);
 }
 
 function renderExport(app){
@@ -2614,17 +2745,17 @@ function renderExport(app){
       <table class="wo-table">
         <thead><tr><th>WO #</th><th>Title</th><th>Customer</th><th style="text-align:right">Hrs</th><th style="text-align:right">Value</th><th>Week Was</th><th>Week Now</th><th>Step Was</th><th>Step Now</th><th>Orig Due</th><th>New Due</th><th>Notes</th></tr></thead>
         <tbody>${chg.map(o=>`<tr>
-          <td><span class="wo-num">${o.wo}</span></td>
-          <td>${o.title}</td><td style="color:var(--t2)">${o.customer}</td>
-          <td style="text-align:right"><input type="number" step="0.5" min="0" style="width:52px;text-align:right;border:1px solid ${o.hoursEstimated?'#f59e0b':'var(--b2)'};border-radius:4px;padding:2px 4px;font-size:12px;font-weight:600;background:${o.hoursEstimated?'#fffbeb':'#fff'}" title="${o.hoursEstimated?'Estimated from value — verify':'Actual hours from Cienapps'}" data-hi="${o.wo}" value="${o.hours}"></td>
+          <td><span class="wo-num">${escA(o.wo)}</span></td>
+          <td>${escA(o.title)}</td><td style="color:var(--t2)">${escA(o.customer)}</td>
+          <td style="text-align:right"><input type="number" step="0.5" min="0" style="width:52px;text-align:right;border:1px solid ${o.hoursEstimated?'#f59e0b':'var(--b2)'};border-radius:4px;padding:2px 4px;font-size:12px;font-weight:600;background:${o.hoursEstimated?'#fffbeb':'#fff'}" title="${o.hoursEstimated?'Estimated from value — verify':'Actual hours from Cienapps'}" data-hi="${escA(o.wo)}" value="${o.hours}"></td>
           <td style="text-align:right;font-size:12px">€${Math.round(o.value||0).toLocaleString()}</td>
           <td style="color:var(--t3)">${wkLbl(orig[o.wo])||'Unscheduled'}</td>
           <td style="font-weight:600;color:${(orig[o.wo]||'')!==(o.plannedWeek||'')?'var(--blue)':'var(--t3)'}">${wkLbl(o.plannedWeek)||'Unscheduled'}</td>
-          <td style="font-size:11px;color:var(--t3)">${(origStep[o.wo]||'—').replace(/^\d+\.\s*/,'')}</td>
-          <td style="font-size:11px;font-weight:600;color:${(origStep[o.wo]||'')!==(o.step||'')?'var(--green)':'var(--t3)'}">${(o.step||'—').replace(/^\d+\.\s*/,'')}</td>
+          <td style="font-size:11px;color:var(--t3)">${escA((origStep[o.wo]||'—').replace(/^\d+\.\s*/,''))}</td>
+          <td style="font-size:11px;font-weight:600;color:${(origStep[o.wo]||'')!==(o.step||'')?'var(--green)':'var(--t3)'}">${escA((o.step||'—').replace(/^\d+\.\s*/,''))}</td>
           <td style="font-size:12px;color:var(--t3)">${o.origDueDate&&o.origDueDate!==o.dueDate?fmt(o.origDueDate)+' Wk'+wkNum(new Date(o.origDueDate)):fmt(o.dueDate)+' Wk'+wkNum(new Date(o.dueDate))}</td>
           <td style="font-size:12px">${fmt(o.dueDate)} Wk${wkNum(new Date(o.dueDate))}</td>
-          <td style="color:var(--t3);font-size:12px">${o.notes||'—'}</td>
+          <td style="color:var(--t3);font-size:12px">${escA(o.notes||'—')}</td>
         </tr>`).join('')}</tbody>
       </table>
     </div>
@@ -2639,6 +2770,8 @@ function renderExport(app){
     <button class="btn btn-s" id="btn-xfull">Download Full Schedule Excel</button>
   </div>
   </div>`;
+  // hours inputs on this tab must save exactly like the board's (they looked live but were dead)
+  document.querySelectorAll('[data-hi]').forEach(inp=>inp.onchange=function(){const o=DB.orders.find(x=>x.wo===this.dataset.hi);if(o){o.hours=parseFloat(this.value)||0;o.hoursEstimated=false;sched();render();}});
   document.getElementById('btn-xchg')?.addEventListener('click',()=>{
     const wb=XLSX.utils.book_new();
     const rows=[['WO #','Title','Customer','Hours','Week Was','Week Now','Step Was','Step Now','Week Start','Due Date','Notes'],
