@@ -337,7 +337,14 @@ function estimateHours(value){
 }
 let orig={};
 let origStep={};
-let tab='b',sortCol='plannedWeek',sortDir=1,fWeek='',fCust='',srch='',fDel=false;
+let tab='b',sortCol='plannedWeek',sortDir=1,fWeek='',fCust='',srch='',fDel=false,fLate=false;
+// A job is "late vs due" when its planned week ends after its Cienapps due date —
+// the standing reconciliation view for dates that drifted since planning.
+function isLateVsDue(o){
+  if(!o.plannedWeek||!o.dueDate)return false;
+  const pe=new Date(o.plannedWeek);pe.setDate(pe.getDate()+4);
+  return pe>new Date(o.dueDate);
+}
 const grpSel=new Set(); // WOs ticked for grouping on the board
 const expGrps=new Set(); // expanded group rows
 let colF={},cfFocus=null; // per-column contains filters (Excel-style, ANDed together)
@@ -713,6 +720,7 @@ function renderBoard(app){
   else if(fWeek)orders=orders.filter(o=>o.plannedWeek===fWeek);
   if(fCust)orders=orders.filter(o=>o.customer===fCust);
   if(fDel)orders=orders.filter(o=>o.delv);
+  if(fLate)orders=orders.filter(isLateVsDue);
   if(srch){const q=srch.toLowerCase();orders=orders.filter(o=>o.title.toLowerCase().includes(q)||o.wo.toLowerCase().includes(q)||o.customer.toLowerCase().includes(q)||String(o.floor||'').toLowerCase().includes(q)||String(o.unit||'').toLowerCase().includes(q));}
   // Per-column contains filters — all applied together (AND), like Excel column filters
   const colVal=(o,k)=>{
@@ -879,6 +887,7 @@ function renderBoard(app){
       ${custs.map(c=>`<option value="${c}"${fCust===c?' selected':''}>${c}</option>`).join('')}
     </select>
     <button class="btn btn-s" id="btn-fdel" style="${fDel?'background:#e8f1fd;border-color:#b0c8e8;color:#1a56db;font-weight:600':''}">🚚 Delivering only</button>
+    ${(n=>n?`<button class="btn btn-s" id="btn-flate" title="Jobs whose planned week ends AFTER their Cienapps due date — dates have drifted since they were planned. Click to see only these and re-plan them." style="${fLate?'background:#fdecea;border-color:#e57368;font-weight:700;':''}border-color:#e57368;color:#c0392b">⚠ ${n} late vs due</button>`:'')(DB.orders.filter(isLateVsDue).length)}
     <button class="btn btn-s" id="btn-clf">Clear filters</button>
     <span style="margin-left:auto;font-size:12px;color:var(--t2)">${orders.length} shown · ${DB.orders.filter(o=>o.plannedWeek).length} scheduled · ${unschCnt} unscheduled</span>
     <button class="btn btn-s" id="btn-snap" title="Save a single read-only HTML file with all current data baked in — email it or open it anywhere, no database or internet needed">📸 Offline Snapshot</button>
@@ -950,7 +959,7 @@ function renderBoard(app){
   };
   const fw=document.getElementById('fwk');if(fw)fw.onchange=function(){fWeek=this.value;render();};
   const fc=document.getElementById('fcust');if(fc)fc.onchange=function(){fCust=this.value;render();};
-  const cf=document.getElementById('btn-clf');if(cf)cf.onclick=()=>{fWeek='';fCust='';srch='';fDel=false;colF={};render();};
+  const cf=document.getElementById('btn-clf');if(cf)cf.onclick=()=>{fWeek='';fCust='';srch='';fDel=false;fLate=false;colF={};render();};
   // Column filters — keep typing focus across re-renders
   document.querySelectorAll('.cf-inp').forEach(inp=>inp.oninput=function(){
     colF[this.dataset.cf]=this.value;
@@ -964,6 +973,7 @@ function renderBoard(app){
     cfFocus=null;
   }
   const fd=document.getElementById('btn-fdel');if(fd)fd.onclick=()=>{fDel=!fDel;render();};
+  const fl=document.getElementById('btn-flate');if(fl)fl.onclick=()=>{fLate=!fLate;render();};
   // Delivery tag toggle — in place, no re-render, so the list doesn't jump while reviewing
   document.querySelectorAll('[data-dv]').forEach(b=>b.onclick=()=>{
     const o=DB.orders.find(x=>x.wo===b.dataset.dv);if(!o)return;
@@ -2639,7 +2649,13 @@ function analyzeImport(rows){
           if(dateChanged)what.push('date: '+(ex.dueDate||'(none)')+' → '+effDue);
           if(stepChanged)what.push('step: '+(ex.step||'(none)').replace(/^\d+\.\s*/,'')+' → '+newStep.replace(/^\d+\.\s*/,''));
           if(hoursChanged&&!dateChanged&&!stepChanged)what.push('hours: '+ex.hours+' → '+hours);
-          updates.push({wo,hours,hoursEstimated,dueDate:effDue,dateChanged,step:newStep,
+          // Date reconciliation: where will this job's current planned week stand against the NEW due date?
+          let sugWk='',lateNow=false;
+          if(dateChanged&&effDue){
+            sugWk=wkKey(new Date(effDue)); // the week the new due date falls in
+            if(ex.plannedWeek){const pe=new Date(ex.plannedWeek);pe.setDate(pe.getDate()+4);lateNow=pe>new Date(effDue);}
+          }
+          updates.push({wo,hours,hoursEstimated,dueDate:effDue,dateChanged,oldDue:ex.dueDate||'',sugWk,lateNow,step:newStep,
             title:String(row.title||row.ref||'').trim(),flr,unt,rowVal,refStr,
             orderNo:row.orderNo!=null?String(row.orderNo).trim():'',salesRep:row.salesRep!=null?String(row.salesRep).trim():'',
             what:what.join(' · '),status:dateChanged?'date changed':(stepChanged?'step changed':'updated'),exTitle:ex.title,pw:ex.plannedWeek});
@@ -2681,7 +2697,22 @@ function renderImportPreview(plan){
     </div>`:''}
     ${section('🛡 Protected — out for delivery, NOT removed although Cienapps says shipped','#ecd394','#fff8e6',plan.inTransit,t=>line(t.wo,t.title,escA([t.veh,t.day].filter(Boolean).join(' '))+' · stays until the driver confirms delivery'),12)}
     ${section('➕ New work orders — will be added and scheduled to their due-date week','#b3e0c4','#f4fbf6',plan.newOrders,o=>line(o.wo,o.title,o.hours+'h · due '+(o.dueDate?fmt(o.dueDate):'—')),15)}
-    ${section('✏ Updates to existing work orders','#f5d89b','#fffbeb',plan.updates,u=>line(u.wo,u.exTitle,escA(u.what)),15)}
+    ${(dc=>dc.length?`<div style="background:#fffbeb;border:2px solid #e8b931;border-radius:8px;padding:12px 15px;margin-bottom:10px">
+      <div style="font-size:13px;font-weight:800;color:#8a6d00;margin-bottom:3px">📅 Due dates changed in Cienapps — decide each job's week</div>
+      <div style="font-size:11px;color:#8a6d00;margin-bottom:8px">The planner never moves a planned week by itself. For each date change, keep the week the meeting chose, or move the job to its new due-date week. <b style="color:#c0392b">LATE</b> = the current planned week now ends after the new due date.</div>
+      ${dc.slice(0,25).map(u=>`<div style="display:flex;gap:10px;align-items:center;padding:4px 0;border-bottom:1px solid #f1e3b8;font-size:12px;flex-wrap:wrap">
+        <span style="font-family:monospace;font-weight:700;width:140px;flex-shrink:0">${escA(u.wo)}</span>
+        <span style="flex:1;min-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escA(u.exTitle||'')}</span>
+        <span style="white-space:nowrap">${u.oldDue?fmt(u.oldDue):'—'} → <b>${fmt(u.dueDate)}</b></span>
+        <span style="white-space:nowrap">planned ${u.pw?wkLbl(u.pw):'—'}${u.lateNow?' <b style="color:#c0392b;background:#fdecea;border-radius:4px;padding:0 5px">LATE</b>':u.pw?' <span style="color:#0d6e46">✓ still fits</span>':''}</span>
+        ${u.sugWk&&u.sugWk!==u.pw?`<select data-rmv="${escA(u.wo)}" style="padding:3px 6px;border:1px solid ${u.lateNow?'#e57368':'var(--b2)'};border-radius:5px;font-size:11px;background:#fff">
+          <option value="">Keep ${u.pw?wkLbl(u.pw):'unscheduled'}</option>
+          <option value="${escA(u.sugWk)}">Move to ${wkLbl(u.sugWk)} (due week)</option>
+        </select>`:''}
+      </div>`).join('')}
+      ${dc.length>25?`<div style="font-size:11px;color:#8a6d00;padding-top:4px">…and ${dc.length-25} more date changes (all applied; use the ⚠ late-vs-due filter on the board to re-plan them)</div>`:''}
+    </div>`:'')(plan.updates.filter(u=>u.dateChanged))}
+    ${section('✏ Other updates to existing work orders','#f5d89b','#fffbeb',plan.updates.filter(u=>!u.dateChanged),u=>line(u.wo,u.exTitle,escA(u.what)),15)}
     ${section('🗑 Will be removed from the board (shipped / invoiced / drawing / snag)','#e57368','#fdf3f2',plan.removals,r=>line(r.wo,r.title,escA(r.reason)),15)}
     <div style="display:flex;gap:10px;margin-top:6px;flex-wrap:wrap">
       <button class="btn btn-g" id="imp-apply" style="font-size:14px;padding:10px 22px">✓ Apply import — ${c.added+c.updated+plan.removals.length} change${c.added+c.updated+plan.removals.length!==1?'s':''}</button>
@@ -2689,7 +2720,13 @@ function renderImportPreview(plan){
     </div>
   </div>`;
   document.getElementById('imp-cancel').onclick=()=>{IMPPLAN=null;document.getElementById('iprev').innerHTML='<div style="margin-top:14px;font-size:13px;color:var(--t3)">Import cancelled — nothing was changed.</div>';};
-  document.getElementById('imp-apply').onclick=()=>{if(IMPPLAN){applyImport(IMPPLAN);IMPPLAN=null;}};
+  document.getElementById('imp-apply').onclick=()=>{
+    if(!IMPPLAN)return;
+    // capture the week decisions made on the date-reconciliation rows before the preview DOM goes
+    const moves={};document.querySelectorAll('[data-rmv]').forEach(s=>{if(s.value)moves[s.dataset.rmv]=s.value;});
+    IMPPLAN.moves=moves;
+    applyImport(IMPPLAN);IMPPLAN=null;
+  };
 }
 function applyImport(plan){
     // removals (delivered or never-dispatched excluded jobs) — also release their cutting-list tags
@@ -2710,6 +2747,8 @@ function applyImport(plan){
       if(u.orderNo&&!ex.orderNo)ex.orderNo=u.orderNo;
       if(u.salesRep&&!ex.salesRep)ex.salesRep=u.salesRep;
     });
+    // week moves chosen on the date-reconciliation rows (shows in the change tracker, as it should)
+    if(plan.moves)Object.keys(plan.moves).forEach(wo=>{const ex=DB.orders.find(o=>o.wo===wo);if(ex)ex.plannedWeek=plan.moves[wo];});
     // backfills on unchanged orders
     plan.backfills.forEach(b=>{
       const ex=DB.orders.find(o=>o.wo===b.wo);if(!ex)return;
