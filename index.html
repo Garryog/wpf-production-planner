@@ -7,12 +7,15 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" onerror="var s=document.createElement('script');s.src='xlsx.full.min.js';document.head.appendChild(s);"></script><!-- if the CDN is blocked by the works firewall, the copy in this site is used instead -->
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
+:focus-visible{outline:3px solid #1a56db;outline-offset:2px}
+.wl-h :focus-visible,.wl-selbar :focus-visible,.flr-vh :focus-visible{outline-color:#e8b931}
+::placeholder{color:#7d8aa0}
 :root{
   --bg:#f0f2f5;--card:#fff;--border:#dde1e7;--b2:#c4c9d4;
-  --text:#1a1d23;--t2:#4a5568;--t3:#8896aa;
+  --text:#1a1d23;--t2:#4a5568;--t3:#5b6b82;
   --green:#1a7a3c;--gl:#e6f4ec;--gb:#2d9e54;
   --red:#c0392b;--rl:#fdecea;
-  --amber:#d97706;--al:#fef3c7;
+  --amber:#92400e;--al:#fef3c7;
   --blue:#1e4db7;--bl:#ebf0fb;
   --purple:#6d28d9;--pl:#f3effd;
   --accent:#c8a84b;
@@ -52,9 +55,9 @@ button,input,select{font-family:inherit;cursor:pointer}
 .btn-g{background:var(--green);color:#fff}.btn-g:hover{background:var(--gb)}
 .btn-s{background:#fff;border:1px solid var(--b2);color:var(--text)}.btn-s:hover{background:var(--bg)}
 .btn-blue{background:var(--blue);color:#fff}
-.search-input{padding:7px 12px;border:1px solid var(--b2);border-radius:6px;font-size:13px;min-width:200px;outline:none}
+.search-input{padding:7px 12px;border:1px solid var(--b2);border-radius:6px;font-size:13px;min-width:200px;}
 .search-input:focus{border-color:var(--blue)}
-.filter-sel{padding:7px 10px;border:1px solid var(--b2);border-radius:6px;font-size:13px;background:#fff;outline:none;-webkit-appearance:none}
+.filter-sel{padding:7px 10px;border:1px solid var(--b2);border-radius:6px;font-size:13px;background:#fff;-webkit-appearance:none}
 .wo-table-wrap{background:#fff;border:1px solid var(--border);border-radius:10px;overflow:hidden}
 .wo-table{width:100%;border-collapse:collapse;font-size:13px}
 .wo-table th{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--t3);padding:8px 10px;border-bottom:1px solid var(--border);background:#f8f9fb;text-align:left;white-space:nowrap;cursor:pointer;user-select:none}
@@ -80,7 +83,7 @@ button,input,select{font-family:inherit;cursor:pointer}
 .due-late{background:var(--rl);color:var(--red)}.due-soon{background:var(--al);color:var(--amber)}.due-ok{background:var(--gl);color:var(--green)}
 .step-badge{font-size:10px;padding:2px 6px;border-radius:3px;background:var(--bl);color:var(--blue);white-space:nowrap}
 .week-sel{padding:4px 8px;border:1px solid var(--b2);border-radius:5px;font-size:12px;background:#fff;width:120px}
-.notes-inp{width:100%;border:none;background:transparent;font-size:12px;color:var(--t2);padding:1px 0;outline:none;font-family:inherit;min-width:100px}
+.notes-inp{width:100%;border:none;background:transparent;font-size:12px;color:var(--t2);padding:1px 0;font-family:inherit;min-width:100px}
 .notes-inp:focus{border-bottom:1px solid var(--blue)}
 .cdot{width:13px;height:13px;border-radius:50%;display:inline-block;cursor:pointer;border:2px solid transparent;flex-shrink:0}
 .cdot:hover{border-color:#fff;box-shadow:0 0 0 2px var(--b2)}
@@ -102,7 +105,7 @@ button,input,select{font-family:inherit;cursor:pointer}
 @media(max-width:700px){.week-caps{grid-template-columns:repeat(3,1fr)}.wo-table th:nth-child(n+7),.wo-table td:nth-child(n+7){display:none}.pg{padding:12px 12px 60px}}
 /* ---- Column filters ---- */
 .cf-row td{background:#f8f9fb;border-bottom:2px solid var(--border);padding:3px 4px}
-.cf-inp{width:100%;min-width:44px;border:1px solid var(--b2);border-radius:4px;padding:3px 6px;font-size:11px;background:#fff;outline:none;color:var(--text)}
+.cf-inp{width:100%;min-width:44px;border:1px solid var(--b2);border-radius:4px;padding:3px 6px;font-size:11px;background:#fff;color:var(--text)}
 .cf-inp::placeholder{color:#c3cad6}
 .cf-inp:focus{border-color:#7ba7e0}
 .cf-inp.on{background:#fff8d6;border-color:#e0b830;font-weight:600}
@@ -111,7 +114,7 @@ button,input,select{font-family:inherit;cursor:pointer}
 /* ---- Board grouping ---- */
 .gsel{width:14px;height:14px;cursor:pointer;accent-color:#1a56db;vertical-align:middle}
 .grp-row td{background:#eef3fb!important;border-top:2px solid #b9cdec!important;border-bottom:1px solid #c9d8ee}
-.grp-row .grp-title{font-weight:700;font-size:13px;width:100%;min-width:120px;border:1px solid transparent;background:transparent;padding:3px 6px;border-radius:5px;color:#14335c;outline:none}
+.grp-row .grp-title{font-weight:700;font-size:13px;width:100%;min-width:120px;border:1px solid transparent;background:transparent;padding:3px 6px;border-radius:5px;color:#14335c;}
 .grp-row .grp-title:hover{border-color:var(--b2);background:#fff}
 .grp-row .grp-title:focus{border-color:#7ba7e0;background:#fff}
 .grp-tog{cursor:pointer;font-family:monospace;font-size:11px;font-weight:700;color:#1a56db;white-space:nowrap;user-select:none}
@@ -152,8 +155,8 @@ button,input,select{font-family:inherit;cursor:pointer}
 .wl-tbl td.num{font-weight:700;font-family:monospace;white-space:nowrap}
 .wl-sec td{background:#eaf0f8;font-weight:800;color:#14335c;font-size:14px;border-top:2px solid var(--b2)}
 .wl-act{padding:12px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
-.wl-btn{background:#0d9450;color:#fff;border:none;border-radius:10px;padding:14px 22px;font-size:16px;font-weight:800;cursor:pointer}
-.wl-undo{background:none;border:1px solid var(--b2);border-radius:8px;padding:6px 12px;font-size:12px;color:var(--t3);cursor:pointer}
+.wl-btn{background:#0b7e44;color:#fff;border:none;border-radius:10px;padding:14px 22px;font-size:16px;font-weight:800;cursor:pointer}
+.wl-undo{background:#fff;border:2px solid #8e99ab;border-radius:10px;padding:12px 18px;font-size:14px;font-weight:700;color:#4a5568;cursor:pointer;min-height:44px}
 .wl-donelbl{color:#0d6e46;font-weight:800;font-size:15px}
 .wl-tabs{display:flex;gap:10px;margin-bottom:14px}
 .wl-tabs button{flex:1;padding:14px;font-size:17px;font-weight:800;border-radius:10px;border:2px solid var(--b2);background:#fff;color:var(--t3);cursor:pointer}
@@ -162,7 +165,7 @@ button,input,select{font-family:inherit;cursor:pointer}
 .wl-drow{display:flex;gap:10px;align-items:center;background:#fff;border:1px solid var(--border);border-radius:8px;padding:9px 12px;margin-bottom:6px;font-size:14px}
 .wl-drow>b{font-size:16px;color:#14335c}
 /* batch-cut selection + combined view + per-house splits */
-.wl-chk{width:28px;height:28px;border-radius:7px;border:2px solid rgba(255,255,255,.6);background:transparent;cursor:pointer;color:#14335c;font-weight:800;font-size:16px;line-height:1;flex-shrink:0}
+.wl-chk{width:44px;height:44px;border-radius:9px;border:2px solid rgba(255,255,255,.65);background:transparent;cursor:pointer;color:#14335c;font-weight:800;font-size:20px;line-height:1;flex-shrink:0}
 .wl-chk.on{background:#e8b931;border-color:#e8b931}
 .wl-selbar{position:sticky;top:8px;z-index:50;background:#14335c;color:#fff;border-radius:10px;padding:10px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px;box-shadow:0 4px 14px rgba(0,0,0,.3)}
 .wl-selbar b{font-size:15px}
@@ -183,13 +186,13 @@ button,input,select{font-family:inherit;cursor:pointer}
 .dchip-top b{font-family:monospace;font-size:12px;font-weight:700;color:#14335c;white-space:nowrap}
 .dfu{font-size:10px;font-weight:700;background:#eef2f7;border:1px solid #d8dfe8;border-radius:4px;padding:1px 5px;color:#3b4c63;white-space:nowrap}
 .fu-badge{font-family:monospace;font-size:11px;font-weight:600;background:#f2f5f9;border:1px solid #e0e5ec;border-radius:4px;padding:1px 6px;color:var(--t2);white-space:nowrap}
-.dsrch{width:100%;max-width:420px;padding:7px 11px;border:1px solid var(--b2);border-radius:6px;font-size:12px;outline:none;margin-bottom:8px}
+.dsrch{width:100%;max-width:420px;padding:7px 11px;border:1px solid var(--b2);border-radius:6px;font-size:12px;margin-bottom:8px}
 .dsrch:focus{border-color:#7ba7e0}
 .dcv{margin-left:auto;font-weight:600;color:#0d6e46;font-size:11px;white-space:nowrap}
 .dchip-btns{display:flex;gap:1px}
-.dchip button{background:none;border:none;cursor:pointer;font-size:12px;line-height:1;padding:2px 4px;border-radius:3px;color:var(--t3)}
-.dchip button:hover{background:#dde3ea;color:var(--t1)}
-.dchip .dchk.on{color:#0d9450;font-weight:700}
+.dchip button{background:none;border:none;cursor:pointer;font-size:15px;line-height:1;padding:7px 8px;min-width:32px;min-height:32px;border-radius:5px;color:#4a5568}
+.dchip button:hover{background:#dde3ea;color:var(--text)}
+.dchip .dchk.on{color:#0b7e44;font-weight:700}
 .dchip-t{font-size:11px;color:var(--text);line-height:1.35;margin-top:3px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .dchip-c{font-size:10px;color:var(--t3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dchip.done{background:#eefbf3;border-color:#b3e0c4}
@@ -217,11 +220,11 @@ button,input,select{font-family:inherit;cursor:pointer}
 .del-pool{border:2px dashed #cfd6df;border-radius:8px;padding:10px;min-height:46px;background:#fafbfc}
 .del-pool.dragover{background:#eaf2ff;border-color:#7ba7e0}
 .dtot{font-size:11px;color:var(--t2);text-align:center;padding:6px;border:1px solid var(--border);background:#fafbfc;font-weight:600;line-height:1.5}
-.dnote{width:100%;border:1px solid var(--b2);border-radius:4px;padding:5px 7px;font-size:11px;background:#fffdf2;outline:none}
+.dnote{width:100%;border:1px solid var(--b2);border-radius:4px;padding:5px 7px;font-size:11px;background:#fffdf2;}
 .dnote:focus{border-color:#e0b830}
 .addjob-row{display:none;gap:8px;flex-wrap:wrap;margin-top:10px;padding:10px;background:#f7f4fe;border:1px solid #d9cdf5;border-radius:8px;align-items:center}
 .addjob-row.open{display:flex}
-.addjob-row input{border:1px solid var(--b2);border-radius:5px;padding:6px 8px;font-size:12px;outline:none}
+.addjob-row input{border:1px solid var(--b2);border-radius:5px;padding:6px 8px;font-size:12px;}
 @media(max-width:900px){.dchip{width:100%}}
 /* ---------- Role views: picker overlay, factory floor screen, driver phone ---------- */
 .rovl{position:fixed;inset:0;background:rgba(12,20,34,.74);z-index:500;display:flex;align-items:center;justify-content:center;padding:16px}
@@ -235,7 +238,7 @@ button,input,select{font-family:inherit;cursor:pointer}
 .rbtn small{display:block;font-weight:400;font-size:11px;color:var(--t3);margin-top:2px}
 .rpin{display:none;margin-top:12px}
 .rpin.open{display:block}
-.rpin input{font-size:24px;letter-spacing:8px;text-align:center;width:170px;padding:8px;border:2px solid #1a56db;border-radius:8px;outline:none}
+.rpin input{font-size:24px;letter-spacing:8px;text-align:center;width:170px;padding:8px;border:2px solid #1a56db;border-radius:8px;}
 .rpin .perr{color:var(--red);font-size:12px;margin-top:6px;min-height:14px}
 /* factory floor screen (big read-only display) */
 .flr{max-width:1800px;margin:0 auto;padding:14px 18px;display:grid;grid-template-columns:1.1fr 1fr;gap:18px}
@@ -243,17 +246,17 @@ button,input,select{font-family:inherit;cursor:pointer}
 .flr-col h2{font-size:30px;color:#14335c;border-bottom:4px solid #1a56db;padding-bottom:6px;margin-bottom:12px}
 .flr-col h2 span{font-size:16px;color:var(--t3);font-weight:400;margin-left:10px}
 .flr-veh{background:#fff;border:1px solid var(--border);border-radius:10px;margin-bottom:14px;overflow:hidden}
-.flr-vh{background:#14335c;color:#fff;font-size:20px;font-weight:700;padding:8px 14px;display:flex;justify-content:space-between;align-items:center}
+.flr-vh{background:#14335c;color:#fff;font-size:26px;font-weight:700;padding:10px 16px;display:flex;justify-content:space-between;align-items:center}
 .flr-vh span{font-weight:400;font-size:14px;opacity:.85}
-.flr-job{display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid var(--border);font-size:17px}
+.flr-job{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border);font-size:22px}
 .flr-job:last-child{border-bottom:none}
-.flr-job>b{font-family:monospace;font-size:19px;color:#14335c;white-space:nowrap}
-.flr-fu{background:#eef2f8;border-radius:5px;padding:2px 8px;font-size:14px;color:#345;white-space:nowrap}
+.flr-job>b{font-family:monospace;font-size:26px;color:#14335c;white-space:nowrap}
+.flr-fu{background:#eef2f8;border-radius:5px;padding:2px 10px;font-size:18px;color:#345;white-space:nowrap}
 .flr-t{flex:1;min-width:0}
-.flr-c{color:var(--t3);font-size:13px}
-.flr-st{font-weight:800;font-size:14px;padding:4px 10px;border-radius:6px;white-space:nowrap}
-.flr-st.s-{background:#f1f3f7;color:#667}
-.flr-st.s-load{background:#fff3cd;color:#8a6d00}
+.flr-c{color:#4a5568;font-size:18px}
+.flr-st{font-weight:800;font-size:22px;padding:8px 16px;border-radius:8px;white-space:nowrap}
+.flr-st.s-{background:#e8b931;color:#231c05}
+.flr-st.s-load{background:#fff3cd;color:#6b5400}
 .flr-st.s-disp{background:#d7e7fd;color:#1450a8}
 .flr-st.s-deliv{background:#d2f2de;color:#0d6e46}
 .flr-none{padding:26px;text-align:center;color:var(--t3);font-size:18px;background:#fff;border:1px dashed var(--b2);border-radius:10px}
@@ -281,10 +284,10 @@ button,input,select{font-family:inherit;cursor:pointer}
 .lsc-ok{font-size:9px;font-weight:800;color:#0d6e46;background:#d2f2de;border-radius:4px;padding:1px 5px}
 .lsc-no{font-size:9px;font-weight:800;color:#c0392b;background:#fdecea;border:1px solid #f0b5ae;border-radius:4px;padding:0 5px}
 .dcell.cell-done{background:#eefbf3!important;outline:2px solid #b3e0c4;outline-offset:-2px}
-.drv-tick{width:90px;min-height:56px;border-radius:10px;border:2px solid var(--b2);background:#f7f9fc;font-size:13px;font-weight:800;color:var(--t3);cursor:pointer;flex-shrink:0}
-.drv-tick.on{background:#0d9450;border-color:#0d9450;color:#fff}
+.drv-tick{width:90px;min-height:52px;border-radius:10px;border:2px solid #8e99ab;background:#f7f9fc;font-size:13px;font-weight:800;color:#4a5568;cursor:pointer;flex-shrink:0}
+.drv-tick.on{background:#0b7e44;border-color:#0b7e44;color:#fff}
 .drv-big{width:100%;padding:18px;font-size:19px;font-weight:800;border:none;border-radius:12px;cursor:pointer;margin-top:6px}
-.drv-deliv{background:#0d9450;color:#fff}
+.drv-deliv{background:#0b7e44;color:#fff}
 .drv-deliv:disabled{background:#c6cdd8;cursor:default}
 .drv-stat{background:#14335c;color:#fff;border-radius:10px;padding:12px 14px;font-size:14px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
 .drv-pod{background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px;margin-top:14px}
@@ -294,7 +297,7 @@ button,input,select{font-family:inherit;cursor:pointer}
 .drv-pod .pbtn{display:inline-flex;align-items:center;gap:8px;background:#1a56db;color:#fff;border:none;border-radius:10px;padding:12px 16px;font-size:15px;font-weight:700;cursor:pointer}
 .drv-pod .pbtn:disabled{background:#c6cdd8}
 .drv-done-banner{background:#d2f2de;border:1px solid #b3e0c4;color:#0d6e46;border-radius:10px;padding:14px;font-size:15px;font-weight:700;text-align:center;margin-top:10px}
-.hdr-role{margin-left:12px;font-size:11px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.35);color:#fff;border-radius:6px;padding:4px 9px;cursor:pointer;white-space:nowrap}
+.hdr-role{margin-left:12px;font-size:13px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.35);color:#fff;border-radius:8px;padding:10px 14px;cursor:pointer;white-space:nowrap}
 .pod-ovl{position:fixed;inset:0;background:rgba(12,20,34,.8);z-index:600;display:flex;align-items:center;justify-content:center;padding:20px}
 .pod-ovl .pod-in{background:#fff;border-radius:12px;padding:18px;max-width:900px;max-height:86vh;overflow:auto}
 .pod-ovl img{max-width:260px;border-radius:8px;margin:6px;border:1px solid var(--border)}
@@ -305,7 +308,7 @@ button,input,select{font-family:inherit;cursor:pointer}
 .dsh-n{font-size:34px;font-weight:800;line-height:1}
 .dsh-l{font-size:11px;font-weight:800;letter-spacing:.5px;color:var(--t2);margin-top:4px}
 .dsh-s{font-size:11px;color:var(--t3);margin-top:2px}
-.dsh-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:14px}
+.dsh-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(420px,100%),1fr));gap:14px}
 .dsh-p{background:#fff;border:1px solid var(--border);border-radius:10px;overflow:hidden}
 .dsh-ph{color:#fff;font-size:13px;font-weight:800;padding:8px 12px}
 .dsh-row{display:flex;gap:8px;align-items:center;padding:6px 12px;border-bottom:1px solid #eef1f5;font-size:13px}
@@ -331,7 +334,7 @@ button,input,select{font-family:inherit;cursor:pointer}
   <button class="tab" id="t-s">⚙ Settings</button>
 </div></div>
 <div id="app"><div style="padding:60px;text-align:center"><div class="spin"></div></div></div>
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 <div class="rovl hide" id="rovl"></div>
 <script>
 const SUPA_URL='https://klyropbsupqfmtjjwlfa.supabase.co/rest/v1';
@@ -534,6 +537,8 @@ function startAutoRefresh(){
   if(['floor','driver','saw','stores','office','dash','pm'].includes(ROLE)){
     viewTimer=setInterval(()=>{
       if(saveT||drvUploading||DB.saveFailed)return; // never clobber an unsaved change, a retrying save, or an upload
+      if(typeof IMPPLAN!=='undefined'&&(IMPPLAN||PEND))return; // an import review in progress must never be wiped by a refresh
+      const ae=document.activeElement;if(ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName))return; // someone is typing
       loadDB().then(()=>{if(ROLE)render();});
     },120000);
   }
@@ -552,7 +557,7 @@ function rolePicker(pinFor){
     <button class="rbtn" data-role="saw"><span class="ri">🪚</span><span>Saw / Cutting<small>Today's cutting lists — mark each list CUT COMPLETE.</small></span></button>
     <button class="rbtn" data-role="stores"><span class="ri">🧰</span><span>Stores / Fittings<small>Today's fittings lists — mark each list PICKED.</small></span></button>
     <button class="rbtn" data-role="driver"><span class="ri">🚚</span><span>Driver<small>Your van's run — check jobs onto the van, confirm delivered.</small></span></button>
-    <div style="font-size:11px;color:var(--t3);margin:2px 0 6px">Every view is PIN-locked — enter its PIN once on this device. The Admin PIN opens any view.</div>
+    <div style="font-size:13px;color:var(--t2);margin:2px 0 8px;font-weight:600">Every view is PIN-locked — you enter its PIN once on this device. The Admin PIN opens any view.</div>
     <div class="rpin${pinFor?' open':''}" id="rpin">
       <div style="font-size:13px;color:var(--t2);margin-bottom:8px">Enter the <b id="rpin-role">${escA(ROLE_LBL[pinFor]||'')}</b> PIN (or the Admin PIN)</div>
       <input id="rpin-in" inputmode="numeric" autocomplete="off" maxlength="8" placeholder="····">
@@ -573,7 +578,7 @@ function rolePicker(pinFor){
     const v=inEl.value.trim(),p=pins(),good=p[want];
     if(v.length>=Math.min(good.length,p.admin.length)){
       if(v===good||v===p.admin){ls.set('wpfPin_'+want,v);ov.className='rovl hide';setRole(want);}
-      else if(v.length>=Math.max(good.length,p.admin.length)){document.getElementById('rpin-err').textContent='Wrong PIN — try again';inEl.value='';}
+      else if(v.length>=Math.max(good.length,p.admin.length)||(v.length>=good.length&&!p.admin.startsWith(v))){document.getElementById('rpin-err').textContent='Wrong PIN — try again';inEl.value='';}
     }
   };
   if(pinFor)inEl.focus();
@@ -586,7 +591,7 @@ function render(){
   if(sw){sw.style.display=ROLE?'':'none';sw.textContent='⇄ '+(ROLE_LBL[ROLE]||'');sw.onclick=()=>rolePicker();}
   if(tabsBar)tabsBar.style.display=(ROLE==='office')?'':'none';
   if(!ROLE){app.innerHTML='';rolePicker();return;}
-  if(ROLE!=='floor'&&!roleOk(ROLE)){app.innerHTML='';rolePicker(ROLE);return;}
+  if(!roleOk(ROLE)){app.innerHTML='';rolePicker(ROLE);return;}
   if(DB.loadFailed&&ROLE!=='office'){
     app.innerHTML=`<div style="max-width:700px;margin:40px auto;padding:0 20px"><div style="background:#fdecea;border:2px solid #e57368;border-radius:8px;padding:16px;font-size:14px;color:#8a1c10"><b>⚠ Can't reach the planner database.</b> This screen has no data to show. Check the network allows klyropbsupqfmtjjwlfa.supabase.co, then refresh.</div></div>`;
     return;
@@ -662,9 +667,9 @@ function renderSettings(app){
     +'<p style="font-size:12px;color:var(--t3);margin-bottom:12px">Every view is locked by its own PIN, entered once per device. The <b>Admin PIN opens any view</b> and is required to save changes here. Changing a PIN signs every device out of that view until the new one is entered.</p>'
     +'<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px">'
     +[['admin','🔑 Admin'],['office','🗓 Office'],['floor','🏭 Floor'],['saw','🪚 Saw'],['stores','🧰 Stores'],['driver','🚚 Driver'],['dash','📊 Mgmt'],['pm','🏗 PM']].map(([k,lbl])=>'<div><label style="font-size:12px;color:var(--t2);display:block;margin-bottom:4px">'+lbl+'</label>'
-      +'<input id="s-pin-'+k+'" value="'+escA(pins()[k])+'" maxlength="8" style="padding:6px 10px;border:1px solid '+(k==='admin'?'#c0392b':'var(--b2)')+';border-radius:6px;font-size:16px;width:95px;letter-spacing:3px"></div>').join('')
+      +'<input id="s-pin-'+k+'" type="'+(pinShow?'text':'password')+'" value="'+escA(pins()[k])+'" maxlength="8" autocomplete="off" style="padding:6px 10px;border:1px solid '+(k==='admin'?'#c0392b':'var(--b2)')+';border-radius:6px;font-size:16px;width:95px;letter-spacing:3px"></div>').join('')
     +'</div>'
-    +'<button class="btn btn-g" id="btn-save-pins">Save PINs (Admin PIN required)</button>'
+    +'<button class="btn btn-g" id="btn-save-pins">Save PINs (Admin PIN required)</button> '+'<button class="btn btn-s" id="btn-show-pins">'+(pinShow?'🙈 Hide PINs':'👁 Show PINs (Admin PIN required)')+'</button>'
     +'</div>'
     +'<div class="exp-panel">'
     +'<div style="font-size:14px;font-weight:600;margin-bottom:6px">Staff</div>'
@@ -720,6 +725,13 @@ function renderSettings(app){
     toast('Backup downloaded — keep it in OneDrive ✓');
   });
 
+  document.getElementById('btn-show-pins')?.addEventListener('click',()=>{
+    if(pinShow){pinShow=false;render();return;}
+    const a=prompt('Admin PIN to reveal the PINs:');
+    if(a===null)return;
+    if(a.trim()!==pins().admin){toast('Wrong Admin PIN');return;}
+    pinShow=true;render();
+  });
   document.getElementById('btn-save-pins')?.addEventListener('click',()=>{
     const a=prompt('Admin PIN to change PINs:');
     if(a===null)return;
@@ -867,7 +879,7 @@ function renderBoard(app){
             ?`<button class="grm-btn" data-grm="${escA(o.wo)}" title="Take this WO out of the group">×</button>`
             :`<input type="checkbox" class="gsel" data-gsel="${escA(o.wo)}"${grpSel.has(o.wo)?' checked':''} title="Select to group">`}</td>
           <td><span class="drag-handle">⠿</span></td>
-          <td style="text-align:center"><button class="dvbtn${o.delv?' on':''}" data-dv="${escA(o.wo)}" title="${o.delv?'Delivering next week — click to untag':'Tag for delivery next week'}">🚚</button></td>
+          <td style="text-align:center"><button class="dvbtn${o.delv?' on':''}" data-dv="${escA(o.wo)}" title="${o.delv?'On the delivery board — click to untag':'Put on the delivery board'}">🚚</button></td>
           <td><span class="wo-num" data-hl="${escA(o.wo)}" style="cursor:pointer${member?';padding-left:10px':''}${/^P-\d+$/.test(o.wo)?';color:#7c5cd6;font-weight:800':''}" title="${/^P-\d+$/.test(o.wo)?'Created in the planner — not from Cienapps. ':''}Tap to mark as discussed">${o.hl?'✓ ':''}${escA(o.wo)}</span></td>
           <td>${o.floor?`<span class="fu-badge">${escA(o.floor)}</span>`:'<span style="color:var(--t3)">—</span>'}</td>
           <td>${o.unit?`<span class="fu-badge">${escA(o.unit)}</span>`:'<span style="color:var(--t3)">—</span>'}</td>
@@ -876,7 +888,7 @@ function renderBoard(app){
           <td style="text-align:right"><input type="number" step="0.5" min="0" style="width:52px;text-align:right;border:1px solid ${o.hoursEstimated?'#f59e0b':'var(--b2)'};border-radius:4px;padding:2px 4px;font-size:12px;font-weight:600;background:${o.hoursEstimated?'#fffbeb':'#fff'}" title="${o.hoursEstimated?'Estimated from value — verify':'Actual hours from Cienapps'}" data-hi="${escA(o.wo)}" value="${o.hours}"></td>
           <td>${dueBadge(o.dueDate,o.plannedWeek,o.origDueDate)}</td>
           <td style="text-align:right;font-size:12px;color:var(--t2)">€${Math.round(o.value||0).toLocaleString()}</td>
-          <td><select class="step-sel" data-stepsel="${escA(o.wo)}" style="font-size:11px;padding:3px 4px;border-radius:6px;border:1px solid var(--bd);background:var(--bg2);color:var(--t1);max-width:120px">
+          <td><select class="step-sel" data-stepsel="${escA(o.wo)}" style="font-size:11px;padding:3px 4px;border-radius:6px;border:1px solid var(--b2);background:#fff;color:var(--text);max-width:120px">
             ${getSteps().map(s=>`<option value="${escA(s)}"${(o.step||'')===s?' selected':''}>${escA(s.replace(/^\d+\.\s*/,''))}</option>`).join('')}
             ${getSteps().includes(o.step||'')||!(o.step||'')?'':`<option value="${escA(o.step)}" selected>${escA(o.step.replace(/^\d+\.\s*/,''))}</option>`}
           </select></td>
@@ -968,9 +980,9 @@ function renderBoard(app){
     </select>
     <select class="filter-sel" id="fcust">
       <option value="">All customers</option>
-      ${custs.map(c=>`<option value="${c}"${fCust===c?' selected':''}>${c}</option>`).join('')}
+      ${custs.map(c=>`<option value="${escA(c)}"${fCust===c?' selected':''}>${escA(c)}</option>`).join('')}
     </select>
-    <button class="btn btn-s" id="btn-fdel" style="${fDel?'background:#e8f1fd;border-color:#b0c8e8;color:#1a56db;font-weight:600':''}">🚚 Delivering only</button>
+    <button class="btn btn-s" id="btn-fdel" style="${fDel?'background:#e8f1fd;border-color:#b0c8e8;color:#1a56db;font-weight:600':''}">🚚 On delivery board</button>
     ${(n=>n?`<button class="btn btn-s" id="btn-flate" title="Jobs whose planned week ends AFTER their Cienapps due date — dates have drifted since they were planned. Click to see only these and re-plan them." style="${fLate?'background:#fdecea;border-color:#e57368;font-weight:700;':''}border-color:#e57368;color:#c0392b">⚠ ${n} late vs due</button>`:'')(DB.orders.filter(isLateVsDue).length)}
     <button class="btn btn-s" id="btn-clf">Clear filters</button>
     <span style="margin-left:auto;font-size:12px;color:var(--t2)">${orders.length} shown · ${DB.orders.filter(o=>o.plannedWeek).length} scheduled · ${unschCnt} unscheduled</span>
@@ -1083,7 +1095,8 @@ function renderBoard(app){
     const title=g('pwo-title'),due=g('pwo-due');
     if(!title){toast('Give the work order a title');document.getElementById('pwo-title').focus();return;}
     if(!due){toast('Set the due date — it drives cutting deadlines and the delivery plan');document.getElementById('pwo-due').focus();return;}
-    const num=Math.max(1000,...DB.orders.map(o=>{const m=String(o.wo).match(/^P-(\d+)$/);return m?+m[1]:0;}))+1;
+    let num=Math.max(1000,...DB.orders.map(o=>{const m=String(o.wo).match(/^P-(\d+)$/);return m?+m[1]:0;}))+1;
+    while(DB.orders.some(o=>o.wo==='P-'+num))num++;
     const wo='P-'+num;
     const val=parseFloat(g('pwo-val'))||0;
     let hours=parseFloat(g('pwo-hrs')),hoursEstimated=false;
@@ -1099,8 +1112,9 @@ function renderBoard(app){
     o.delv=!o.delv;
     if(!o.delv){o.delVeh='';o.delDay='';o.delDone=false;}
     b.className='dvbtn'+(o.delv?' on':'');
-    b.title=o.delv?'Delivering next week — click to untag':'Tag for delivery next week';
+    b.title=o.delv?'On the delivery board — click to untag':'Put on the delivery board';
     updDelBadge();sched();
+    if(o.delv)showReadiness([o.wo],'put on the delivery board'); // list status the moment it's scheduled
   });
   // Grouping
   document.querySelectorAll('[data-gsel]').forEach(cb=>cb.onchange=function(){
@@ -1140,7 +1154,8 @@ function renderBoard(app){
     const on=!ms.every(o=>o.delv);
     ms.forEach(o=>{o.delv=on;if(!on){o.delVeh='';o.delDay='';o.delDone=false;}});
     updDelBadge();sched();render();
-    toast(on?ms.length+' work orders tagged for delivery':'Group untagged');
+    if(on)showReadiness(ms.map(o=>o.wo),'group put on the delivery board');
+    else toast('Group untagged');
   });
   document.querySelectorAll('[data-gun]').forEach(b=>b.onclick=()=>ungroupG(b.dataset.gun));
   document.querySelectorAll('[data-grm]').forEach(b=>b.onclick=()=>{
@@ -1150,8 +1165,10 @@ function renderBoard(app){
   const sn=document.getElementById('btn-snap');if(sn)sn.onclick=exportSnapshot;
   const ca=document.getElementById('btn-clearall');
   if(ca)ca.onclick=()=>{
-    if(!confirm('Delete ALL '+DB.orders.length+' orders from the planner? This cannot be undone.'))return;
+    const typed=prompt('This deletes ALL '+DB.orders.length+' orders from the planner and cannot be undone.\n\nType DELETE to confirm:');
+    if(typed!=='DELETE'){if(typed!==null)toast('Not deleted — you must type DELETE');return;}
     DB.orders=[];DB.grps={};grpSel.clear();
+    lists().forEach(l=>{l.wos=[];});
     Object.keys(orig).forEach(k=>delete orig[k]);Object.keys(origStep).forEach(k=>delete origStep[k]);
     sched();render();toast('All orders cleared');
   };
@@ -1164,6 +1181,7 @@ function renderBoard(app){
     if(!confirm('Delete '+btn.dataset.del+' from the planner?'))return;
     DB.orders=DB.orders.filter(o=>o.wo!==btn.dataset.del);
     delete orig[btn.dataset.del];delete origStep[btn.dataset.del];
+    lists().forEach(l=>{if((l.wos||[]).includes(btn.dataset.del))l.wos=l.wos.filter(w=>w!==btn.dataset.del);}); // release cutting-list tags
     cleanGroups();
     sched();render();toast('Order removed');
   });
@@ -1258,8 +1276,9 @@ function listDueKey(l){ // earliest due date among tagged WOs — the ONLY thing
 function listDueKey2(arr){let b='';arr.forEach(l=>{const k=listDueKey(l);if(k&&(!b||k<b))b=k;});return b;}
 function listCust(l){for(const w of (l.wos||[])){const o=DB.orders.find(x=>x.wo===w);if(o&&o.customer)return o.customer;}return'';}
 // The factory rule: cutting and fittings must be finished THE DAY BEFORE delivery.
+function todayLocal(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function listDeadline(l){const d=listDueKey(l);if(!d)return'';const t=new Date(d);t.setDate(t.getDate()-1);return t.toISOString().slice(0,10);}
-function listOverdue(l){const dl=listDeadline(l);return !!dl&&dl<new Date().toISOString().slice(0,10);}
+function listOverdue(l){const dl=listDeadline(l);return !!dl&&dl<todayLocal();}
 function listsNeeded(){ // WOs scheduled to deliver inside the lead time with NO cutting list tagged
   const tagged=new Set();lists().forEach(l=>(l.wos||[]).forEach(w=>tagged.add(w)));
   const lim=new Date(Date.now()+listLead()*86400000).toISOString().slice(0,10);
@@ -1315,6 +1334,7 @@ function parseListWorkbook(data){
   });
   return{wb:out,entries};
 }
+let pinShow=false; // Settings: PINs stay masked until the Admin PIN reveals them
 let lstTagOpen=null; // list id whose tag editor is open
 let lstFilter='';    // contains-filter over the library
 let lstCustF='';     // customer filter
@@ -1348,7 +1368,7 @@ function renderLists(app){
       <p style="font-size:12px;color:var(--t3);margin-bottom:10px">One Excel file per project, one sheet per house — exactly like the lists you use today. Rows with length &times; width go to the <b>Saw</b> view; rows with a quantity but no dimensions (sinks, taps, gola rail, handles…) go to the <b>Stores</b> view. Each sheet becomes a list, auto-tagged to matching work orders by house number — check the tags after upload.</p>
       <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
         <input type="file" id="lst-file" accept=".xlsx,.xls" style="font-size:13px">
-        <span style="font-size:12px;color:var(--t3)">Lead time:</span>
+        <span style="font-size:12px;color:var(--t3)">Flag jobs with no list</span>
         <input type="number" id="lst-lead" value="${listLead()}" min="1" max="60" style="width:60px;padding:5px 8px;border:1px solid var(--b2);border-radius:5px"> days
         <button class="btn btn-s" id="lst-lead-save">Save</button>
       </div>
@@ -1428,7 +1448,12 @@ function renderLists(app){
             if(!DB.lists.some(x=>x.wb===old.wb)&&old.wb!==wbId&&DB.listWBs)delete DB.listWBs[old.wb];
             replaced++;
           }
-          if(!l.wos.length){l.wos=suggestWOs(l).slice(0,6).map(o=>o.wo);auto+=l.wos.length;}
+          if(!l.wos.length){
+            const sugg=suggestWOs(l);
+            const pw=(l.project||'').toLowerCase().split(/\s+/).filter(x=>x.length>2);
+            const strong=sugg.filter(o=>pw.some(w=>(o.customer||'').toLowerCase().includes(w)));
+            l.wos=(strong.length?strong:sugg).slice(0,6).map(o=>o.wo);auto+=l.wos.length;
+          }
           DB.lists.push(l);
         });
         // drop any replaced workbooks that no longer have lists pointing at them
@@ -1538,7 +1563,7 @@ function opName(what){
 /* Tap-your-name sign-off: when the Settings staff list has people for this role, show them as
    big buttons (last-used highlighted) with a free-type fallback; otherwise the plain prompt. */
 function pickName(mode,what,cb){
-  const ppl=staffFor(mode==='fit'?'stores':'saw');
+  const ppl=staffFor(mode==='fit'?'stores':mode==='driver'?'driver':'saw');
   if(!ppl.length){const by=opName(what);if(by!==null)cb(by);return;}
   const last=ls.get('wpfOpName');
   const ov=document.createElement('div');ov.className='pod-ovl';
@@ -1583,7 +1608,7 @@ function openCombined(lsArr,mode){
     <div style="font-weight:800;color:#14335c;font-size:17px;margin-bottom:2px">${saw?'⚡ Combined cutting list':'⚡ Combined fittings list'} — ${lsArr.length} houses</div>
     <div style="font-size:12px;color:var(--t3);margin-bottom:6px">Cut/pick the total, split per house as labelled — quantities per house stay beside every line.</div>
     <div style="background:#f4f7fb;border:1px solid var(--border);border-radius:7px;padding:7px 10px;margin-bottom:10px">
-      ${lsArr.map(l=>{const o=DB.orders.find(x=>(l.wos||[]).includes(x.wo));return `<div style="font-size:12px;color:#14335c;padding:1px 0"><b>${escA(l.name)}</b>${o&&(o.floor||o.unit)?' · '+escA([o.floor,o.unit].filter(Boolean).join(' · ')):''}${o&&o.title?' · '+escA(o.title):''}${o&&o.customer?' · <b>'+escA(o.customer)+'</b>':''}</div>`;}).join('')}
+      ${lsArr.map(l=>{let o=null;for(const w of (l.wos||[])){o=DB.orders.find(x=>x.wo===w);if(o)break;}return `<div style="font-size:12px;color:#14335c;padding:1px 0"><b>${escA(l.name)}</b>${o&&(o.floor||o.unit)?' · '+escA([o.floor,o.unit].filter(Boolean).join(' · ')):''}${o&&o.title?' · '+escA(o.title):''}${o&&o.customer?' · <b>'+escA(o.customer)+'</b>':''}</div>`;}).join('')}
     </div>
     <table class="wl-tbl"><thead><tr><th style="width:24%">Item</th><th>Total</th>${saw?'<th>Length</th><th>Width</th>':''}<th>${saw?'Material':'Spec'}</th><th>${saw?'Edging / Note':'Note'}</th><th style="width:26%">Per house</th></tr></thead><tbody>
     ${rows.map(r=>`<tr><td>${escA(r.item)||'—'}</td><td class="num" style="font-size:17px">${r.qty}</td>${saw?`<td class="num">${escA(r.L)}</td><td class="num">${escA(r.W)}</td>`:''}<td>${escA(r.mat)}</td><td>${escA(r.note)}</td>
@@ -1659,7 +1684,7 @@ function renderWorkList(app,mode){
   const cfg=mode==='saw'?{icon:'🪚',title:'SAW — Cutting Queue',done:'✓ CUT COMPLETE',cnt:l=>l.saw||0}
                         :{icon:'🧰',title:'STORES — Fittings Queue',done:'✓ FITTINGS PICKED',cnt:l=>l.fit||0};
   const rel=lists().filter(l=>cfg.cnt(l)>0);
-  const todayISO=new Date().toISOString().slice(0,10);
+  const todayISO=todayLocal();
   const srtDue=(a,b)=>(listDueKey(a)||'9999').localeCompare(listDueKey(b)||'9999');
   const open=rel.filter(l=>!listDone(l.id)[mode]).sort(srtDue);
   const closed=rel.filter(l=>listDone(l.id)[mode]).sort((a,b)=>String(listDone(b.id)[mode].at).localeCompare(String(listDone(a.id)[mode].at)));
@@ -1755,14 +1780,14 @@ function renderDash(app){
   const panel=(title,color,rows,empty)=>`<div class="dsh-p"><div class="dsh-ph" style="background:${color}">${title}</div>${rows.length?rows.join(''):`<div class="dsh-row" style="color:var(--t3);font-style:italic">${empty}</div>`}</div>`;
   app.innerHTML=`<div class="dsh">
     <div class="dsh-tiles">
-      ${tile(missed.length,'MISSED DELIVERIES','planned earlier this week, not delivered','#c0392b')}
+      ${tile(missed.length,'MISSED DELIVERIES','planned earlier this week, not delivered',missed.length?'#c0392b':'#5b6b82')}
       ${tile(onTruck.length,'ON TRUCKS NOW','dispatched, awaiting driver confirmation','#1450a8')}
       ${tile(loadedNotGone.length,'LOADED IN YARD','on a van, not yet dispatched','#8a6d00')}
       ${tile(delivered.length,'DELIVERED','this week · €'+Math.round(val(delivered)).toLocaleString(),'#0d6e46')}
       ${tile(planned.length,'ON DELIVERY BOARD','planned this week · €'+Math.round(val(planned)).toLocaleString(),'#14335c')}
       ${tile(sawOpen.length,'CUTTING LISTS OPEN',(n=>n?`<b style="color:#c0392b">${n} OVERDUE</b> · `:'')(sawOpen.filter(listOverdue).length)+sawDone.length+' cut complete','#7c5cd6')}
       ${tile(fitOpen.length,'FITTINGS TO PICK',(n=>n?`<b style="color:#c0392b">${n} OVERDUE</b> · `:'')(fitOpen.filter(listOverdue).length)+fitDone.length+' picked','#0e7490')}
-      ${tile(needed.length,'LISTS MISSING','jobs scheduled with no cutting list','#c0392b')}
+      ${tile(needed.length,'LISTS MISSING','jobs scheduled with no cutting list',needed.length?'#c0392b':'#5b6b82')}
     </div>
     <div class="dsh-cols">
       ${panel('⚠ MISSED — planned earlier this week, not delivered','#c0392b',missed.sort((a,b)=>DEL_DAYS.indexOf(a.delDay)-DEL_DAYS.indexOf(b.delDay)).map(o=>`<div class="dsh-row"><b>${escA(o.wo)}</b><span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-c">${escA(o.customer||'')}</span><span class="dsh-x" style="color:#c0392b;font-weight:800">${escA(o.delDay)} · ${st(o)?dStageLbl[st(o)]:'NEVER LOADED'}</span></div>`),'None — every planned delivery is on time ✓')}
@@ -1780,7 +1805,7 @@ function renderDash(app){
 let pmCust='';
 function renderPM(app){
   const all=delAll();
-  const todayISO=new Date().toISOString().slice(0,10);
+  const todayISO=todayLocal();
   // every customer seen on live orders or in the delivery archive
   const custs=[...new Set([...DB.orders.map(o=>o.customer||''),...Object.values(DB.delArchive||{}).flatMap(a=>a.jobs.map(j=>j.c||''))].filter(Boolean))].sort();
   const sel=pmCust&&custs.includes(pmCust)?[pmCust]:custs;
@@ -1797,7 +1822,7 @@ function renderPM(app){
     if(!sched.length&&!delivWk.length&&!past.length&&!coming.length)return'';
     const fu=o=>[o.floor||o.f,o.unit||o.u].filter(Boolean).join(' · ');
     return `<div class="dsh-p" style="margin-bottom:14px">
-      <div class="dsh-ph" style="background:#14335c;font-size:15px">👤 ${escA(c)} — ${sched.length} scheduled · ${delivWk.length} delivered this week · ${past.length?past.length+' past':'no past on record'} · ${coming.length} coming up</div>
+      <div class="dsh-ph" style="background:#14335c;font-size:15px">👤 ${escA(c)} — ${sched.length} scheduled · ${delivWk.length} delivered this week · ${past.length?past.length+' past':'no earlier deliveries'} · ${coming.length} coming up</div>
       ${sched.length?`<div class="pm-sec">🚚 SCHEDULED THIS WEEK</div>`+sched.map(o=>row(`<b>${escA(o.wo)}</b>${fu(o)?`<span class="flr-fu" style="font-size:12px">${escA(fu(o))}</span>`:''}<span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-x">${escA(vehLbl(o.delVeh)||'')} ${escA(o.delDay||'')} · ${stageLbl(o)}</span>`)).join(''):''}
       ${delivWk.length?`<div class="pm-sec" style="color:#0d6e46">✓ DELIVERED THIS WEEK</div>`+delivWk.map(o=>row(`<b>${escA(o.wo)}</b>${fu(o)?`<span class="flr-fu" style="font-size:12px">${escA(fu(o))}</span>`:''}<span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-x" style="color:#0d6e46">${o.delDelivAt?new Date(o.delDelivAt).toLocaleDateString('en-IE',{weekday:'short',day:'numeric',month:'short'})+' '+dStageTime(o):''}${o.delivBy?' · '+escA(o.delivBy):''}</span>`)).join(''):''}
       ${past.length?`<div class="pm-sec" style="color:var(--t3)">📚 DELIVERED — PAST WEEKS</div>`+past.map(j=>row(`<b>${escA(j.wo)}</b>${fu(j)?`<span class="flr-fu" style="font-size:12px">${escA(fu(j))}</span>`:''}<span class="dsh-t">${escA(j.t||'')}</span><span class="dsh-x">${new Date(j._at).toLocaleDateString('en-IE',{day:'numeric',month:'short'})}${j.vBy?' · '+escA(j.vBy):''}</span>`)).join(''):''}
@@ -1847,7 +1872,34 @@ function listStatHTML(wo){
   const s=woListStat(wo);
   if(!s)return`<div class="drv-ls"><span class="ls-none">📋 no cutting list linked</span></div>`;
   const bit=(st,at,okTxt,noTxt)=>st==='none'?'':st==='done'?`<span class="ls-ok">${okTxt}${at?' '+hhmm(at):''}</span>`:`<span class="ls-no">${noTxt}</span>`;
-  return`<div class="drv-ls">${bit(s.saw,s.sawAt,'🪚 Cut ✓','🪚 NOT CUT')} ${bit(s.fit,s.fitAt,'🧰 Fittings out ✓','🧰 Fittings NOT out')}</div>`;
+  return`<div class="drv-ls">${bit(s.saw,s.sawAt,'🪚 Cut ✓','🪚 NOT CUT')} ${bit(s.fit,s.fitAt,'🧰 Fittings picked ✓','🧰 Fittings NOT picked')}</div>`;
+}
+/* Scheduling check: the moment a job is put on the delivery board, show where its cutting
+   and fittings lists stand — and whether a list still needs to be issued at all. */
+function showReadiness(wos,ctx){
+  const items=wos.map(w=>{const o=DB.orders.find(x=>x.wo===w)||findDel(w);return o?{o,s:woListStat(w)}:null;}).filter(Boolean);
+  if(!items.length)return;
+  const attention=items.filter(i=>!i.s||i.s.saw==='open'||i.s.fit==='open');
+  if(!attention.length){toast('✓ Cutting & fittings all ready for '+(items.length===1?items[0].o.wo:items.length+' jobs'));return;}
+  const chip=(ok,txtOk,txtNo)=>ok?`<span class="ls-ok" style="font-size:13px">${txtOk}</span>`:`<span class="ls-no" style="font-size:13px">${txtNo}</span>`;
+  const rowH=i=>{
+    const o=i.o,s=i.s;
+    return `<div style="display:flex;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);flex-wrap:wrap">
+      <b style="font-family:monospace;color:#14335c">${escA(o.wo)}</b>
+      <span style="flex:1;min-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escA(o.title||'')}</span>
+      ${!s?`<span class="ls-no" style="font-size:13px">📋 NO LIST ISSUED — upload/attach one in 📋 Cutting Lists</span>`
+        :`${s.saw!=='none'?chip(s.saw==='done','🪚 CUT ✓'+(s.sawAt?' '+hhmm(s.sawAt):''),'🪚 NOT CUT yet'):''}
+          ${s.fit!=='none'?chip(s.fit==='done','🧰 PICKED ✓'+(s.fitAt?' '+hhmm(s.fitAt):''),'🧰 NOT PICKED yet'):''}`}
+    </div>`;
+  };
+  const ov=document.createElement('div');ov.className='pod-ovl';
+  ov.innerHTML=`<div class="pod-in" style="min-width:min(620px,94vw)">
+    <div style="font-weight:800;color:#14335c;font-size:16px;margin-bottom:2px">📋 Cutting &amp; fittings check — ${escA(ctx)}</div>
+    <div style="font-size:12px;color:var(--t3);margin-bottom:8px">Everything must be cut and picked <b>the day before delivery</b>. Red items need action before this delivery can go out complete.</div>
+    ${items.map(rowH).join('')}
+    <div style="margin-top:12px;text-align:right"><button class="wl-btn" id="pod-x" style="padding:10px 22px;font-size:14px">OK — understood</button></div></div>`;
+  document.body.appendChild(ov);
+  ov.onclick=e=>{if(e.target===ov||e.target.id==='pod-x')ov.remove();};
 }
 let drvUploading=false;
 function podKey(veh,day){return veh+'|'+day+'|'+wkKey(new Date());}
@@ -1876,7 +1928,10 @@ function renderDriver(app){
       ${jobs.map(o=>{const st=dStage(o);return`<div class="drv-job${st==='deliv'?' done':st==='disp'?' disp':st?' on':''}">
         <div class="drv-ji"><b>${escA(o.wo)}</b>${(o.floor||o.unit)?`<span class="drv-fu">${escA([o.floor,o.unit].filter(Boolean).join(' · '))}</span>`:''}
           <div class="drv-jt">${escA(o.title)||'—'}</div><div class="drv-jc">${escA(o.customer||'')}${st==='deliv'?' · ✓ delivered '+dStageTime(o)+(o.delivBy?' by '+escA(o.delivBy):''):st==='disp'?' · dispatched '+dStageTime(o):''}</div>${st==='deliv'?'':listStatHTML(o.wo)}</div>
-        ${st==='deliv'?`<div style="font-size:28px;color:#0d9450;flex-shrink:0">✓</div>`:`<button class="drv-tick${st?' on':''}" data-dl="${escA(o.wo)}">${st?'ON VAN ✓':'ON VAN'}</button>`}
+        ${st==='deliv'?`<div style="font-size:28px;color:#0b7e44;flex-shrink:0">✓</div>`:`<div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">
+          <button class="drv-tick${st?' on':''}" data-dl="${escA(o.wo)}">${st?'ON VAN ✓':'ON VAN'}</button>
+          ${st?`<button class="drv-tick" style="background:#0b7e44;border-color:#0b7e44;color:#fff" data-ddv="${escA(o.wo)}" title="Mark just this drop delivered">DELIVERED ✓</button>`:''}
+        </div>`}
       </div>`;}).join('')}
       ${allDeliv?`<div class="drv-done-banner">✓ All delivered${pod&&pod.at?' — '+hhmm(pod.at):''}${pod&&pod.by?' by '+escA(pod.by):''}</div>`:
         `<button class="drv-big drv-deliv" id="drv-alldeliv">✓ ALL DELIVERED — run complete</button>
@@ -1909,6 +1964,17 @@ function renderDriver(app){
     else if(st==='load'){delete o.delLoadedAt;delete o.ldBy;toast(o.wo+' taken back off the van');}
     else return; // dispatched/delivered can't be un-ticked from the van
     sched();render();
+  });
+  // Per-drop delivery: a driver with one locked site can still record the drops he DID make
+  document.querySelectorAll('[data-ddv]').forEach(b=>b.onclick=()=>{
+    const o=findDel(b.dataset.ddv);if(!o)return;
+    const nmv=drvName();
+    if(!nmv){toast('Pick your name first — it goes on the delivery record');return;}
+    if(!confirm('Mark '+o.wo+' DELIVERED?\n\nRecorded as delivered by '+nmv+' at '+hhmm(new Date().toISOString())+'.'))return;
+    const now=new Date().toISOString();
+    if(!o.delLoadedAt)o.delLoadedAt=now;if(!o.delDispAt)o.delDispAt=now;
+    o.delDelivAt=now;o.delDone=true;o.delivBy=nmv;
+    sched();render();toast(o.wo+' DELIVERED ✓');
   });
   const ad=document.getElementById('drv-alldeliv');
   if(ad)ad.onclick=()=>{
@@ -1961,11 +2027,11 @@ function dchip(o,showCust){
   const st=dStage(o);
   return `<div class="dchip${st==='deliv'?' done':''}${st==='disp'?' dispd':''}${st==='load'?' loadd':''}${o.manual?' manual':''}${delSel.has(o.wo)?' sel':''}" draggable="true" data-dw="${escA(o.wo)}" title="Click to select · drag onto a day${o.manual?' · added manually':''}">
     <div class="dchip-top"><b>${escA(o.wo)}</b>${(o.floor||o.unit)?`<span class="dfu">${escA([o.floor,o.unit].filter(Boolean).join(' · '))}</span>`:''}<span class="dcv">€${Math.round(o.value||0).toLocaleString()}</span>
-      <span class="dchip-btns"><button class="dchk${st?' on':''}" data-dd="${escA(o.wo)}" title="Status: ${dStageLbl[st]||'planned'} — click to advance (Loaded → Dispatched → Delivered → clear)">${st==='deliv'?'✓':st==='disp'?'D':st==='load'?'L':'·'}</button><button data-dx="${escA(o.wo)}" title="${o.delDay?'Return to pool':(o.manual?'Delete this manual job':'Remove from delivery plan')}">×</button></span>
+      <span class="dchip-btns"><button class="dchk${st?' on':''}" data-dd="${escA(o.wo)}" title="Status: ${dStageLbl[st]||'planned'} — tap to update (opens a menu)">${st==='deliv'?'✓':st==='disp'?'D':st==='load'?'L':'·'}</button><button data-dx="${escA(o.wo)}" title="${o.delDay?'Return to pool':(o.manual?'Delete this manual job':'Remove from delivery plan')}">×</button></span>
     </div>
     <div class="dchip-t">${escA(o.title)||'—'}</div>
     ${st?`<div class="dstg s-${st}">${dStageLbl[st]}${dStageTime(o)?' '+dStageTime(o):''}${st==='deliv'&&o.delivBy?' — '+escA(o.delivBy):st==='load'&&o.ldBy?' — '+escA(o.ldBy):''}</div>`:''}
-    ${(s=>!s?'':`<div class="dchip-ls">${s.saw!=='none'?`<span class="${s.saw==='done'?'lsc-ok':'lsc-no'}" title="${s.saw==='done'?'Cutting list CUT COMPLETE':'Cutting list NOT cut yet'}">🪚 ${s.saw==='done'?'CUT ✓':'NOT CUT'}</span>`:''}${s.fit!=='none'?`<span class="${s.fit==='done'?'lsc-ok':'lsc-no'}" title="${s.fit==='done'?'Fittings PICKED':'Fittings NOT picked yet'}">🧰 ${s.fit==='done'?'OUT ✓':'NOT OUT'}</span>`:''}</div>`)(woListStat(o.wo))}
+    ${(s=>!s?'':`<div class="dchip-ls">${s.saw!=='none'?`<span class="${s.saw==='done'?'lsc-ok':'lsc-no'}" title="${s.saw==='done'?'Cutting list CUT COMPLETE':'Cutting list NOT cut yet'}">🪚 ${s.saw==='done'?'CUT ✓':'NOT CUT'}</span>`:''}${s.fit!=='none'?`<span class="${s.fit==='done'?'lsc-ok':'lsc-no'}" title="${s.fit==='done'?'Fittings PICKED':'Fittings NOT picked yet'}">🧰 ${s.fit==='done'?'PICKED ✓':'NOT PICKED'}</span>`:''}</div>`)(woListStat(o.wo))}
     ${showCust?`<div class="dchip-c">${escA(o.customer)}</div>`:''}
   </div>`;
 }
@@ -1984,7 +2050,7 @@ function renderDeliveries(app){
   app.innerHTML=`<div class="pg">
   <div class="del-panel">
     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px">
-      <div style="font-size:14px;font-weight:600">Delivery Plan — Next Week</div>
+      <div style="font-size:14px;font-weight:600">Delivery Board — Week of ${fmt(wkKey(new Date()))}</div>
       <span style="font-size:12px;color:var(--t2)">${tagged.length} tagged · ${tagged.length-pool.length} planned · ${done} delivered</span>
       <span style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-s" id="btn-addjob">＋ Add Job</button>
@@ -2021,7 +2087,7 @@ function renderDeliveries(app){
       <tbody>
         ${DEL_VEH.map((v,i)=>{const vc=tagged.filter(o=>o.delVeh===v.k).length;return `<tr${i===1?' style="border-top:3px double var(--border)"':''}>
           <td class="dveh">${v.n}<span class="dsub">${v.cat}${v.sub?' · '+v.sub:''} · ${vc} job${vc!==1?'s':''}</span></td>
-          ${DEL_DAYS.map(d=>{const cj=tagged.filter(o=>o.delVeh===v.k&&o.delDay===d).sort(woCmp);const ppk0=v.k+'|'+d+'|'+wkKey(new Date());const ppk=(DB.pod&&DB.pod[ppk0]&&(DB.pod[ppk0].photos||[]).length)?ppk0:null;const allDlv=cj.length&&cj.every(o=>dStage(o)==='deliv');return `<td class="dcell${allDlv?' cell-done':''}" data-cell="${v.k}|${d}">${allDlv?'<div style="font-size:10px;font-weight:800;color:#0d6e46;padding:2px 0">✓ COMPLETE DELIVERY</div>':''}${cj.map(o=>dchip(o,true)).join('')}${cj.length&&cj.some(o=>!o.delDispAt&&!o.delDelivAt&&!o.delDone)?`<button class="cell-disp" data-cdisp="${v.k}|${d}" title="Mark this whole van load as dispatched (left the factory) — runs the part-load check first">🚚→ Dispatch van</button>`:''}${ppk?`<button class="cell-disp" style="background:#eef6ff;border-color:#9cbce8;color:#1450a8" data-pod="${escA(ppk)}" title="Proof-of-delivery photos taken by the driver on site">📷 ${DB.pod[ppk].photos.length} proof photo${DB.pod[ppk].photos.length!==1?'s':''}</button>`:''}</td>`;}).join('')}
+          ${DEL_DAYS.map(d=>{const cj=tagged.filter(o=>o.delVeh===v.k&&o.delDay===d).sort(woCmp);const ppk0=v.k+'|'+d+'|'+wkKey(new Date());const ppk=(DB.pod&&DB.pod[ppk0]&&(DB.pod[ppk0].photos||[]).length)?ppk0:null;const allDlv=cj.length&&cj.every(o=>dStage(o)==='deliv');return `<td class="dcell${allDlv?' cell-done':''}" data-cell="${v.k}|${d}">${allDlv?'<div style="font-size:10px;font-weight:800;color:#0d6e46;padding:2px 0">✓ COMPLETE DELIVERY</div>':''}${cj.map(o=>dchip(o,true)).join('')}${cj.length&&cj.some(o=>!o.delDispAt&&!o.delDelivAt&&!o.delDone)?`<button class="cell-disp" data-cdisp="${v.k}|${d}" title="Mark this whole van load as dispatched (left the factory) — runs the part-load check first">🚚→ Dispatch van</button>`:''}${ppk?`<button class="cell-disp" style="background:#eef6ff;border-color:#9cbce8;color:#1450a8" data-pod="${escA(ppk)}" title="Proof-of-delivery photos taken by the driver on site">📷 ${DB.pod[ppk].photos.length} proof photo${DB.pod[ppk].photos.length!==1?'s':''}</button>`:''}${delSel.size?`<button class="cell-disp" style="background:#eaf2ff;border-color:#1a56db;color:#1a56db" data-place="${v.k}|${d}">⤵ Place ${delSel.size} here</button>`:''}</td>`;}).join('')}
         </tr>`;}).join('')}
         <tr><td class="dveh">Notes</td>${DEL_DAYS.map(d=>`<td style="border:1px solid var(--border);padding:4px;background:#fffef7"><input class="dnote" data-dnote="${d}" value="${escA(notes[d]||'')}" placeholder="${d} note…"></td>`).join('')}</tr>
         <tr><td class="dtot" style="text-align:left">Value / day<br><span style="color:#0d6e46">Week: €${Math.round(wkTot).toLocaleString()}</span></td>
@@ -2072,18 +2138,44 @@ function renderDeliveries(app){
     render();
   });
   const sc=document.getElementById('selclr');if(sc)sc.onclick=()=>{delSel.clear();render();};
-  // Status cycle: planned → Loaded → Dispatched (part-load check) → Delivered → clear
+  // Status menu: plain-words choices instead of a cryptic cycle — no more silent mis-click to DELIVERED
   document.querySelectorAll('[data-dd]').forEach(b=>b.onclick=()=>{
     const o=findDel(b.dataset.dd);if(!o)return;
     const st=dStage(o);
-    if(st===''){o.delLoadedAt=new Date().toISOString();toast(o.wo+' marked LOADED');}
-    else if(st==='load'){
-      if(!confirmPartLoad([o]))return;
-      o.delDispAt=new Date().toISOString();toast(o.wo+' DISPATCHED — left the factory');
-    }
-    else if(st==='disp'){o.delDelivAt=new Date().toISOString();o.delDone=true;toast(o.wo+' DELIVERED');}
-    else{delete o.delLoadedAt;delete o.delDispAt;delete o.delDelivAt;delete o.ldBy;delete o.delivBy;o.delDone=false;toast(o.wo+' status cleared');}
-    sched();render();
+    const ov=document.createElement('div');ov.className='pod-ovl';
+    const dis='disabled style="opacity:.4;cursor:default"';
+    ov.innerHTML=`<div class="pod-in" style="min-width:min(400px,92vw)">
+      <div style="font-weight:800;color:#14335c;margin-bottom:2px">${escA(o.wo)} — ${escA(o.title||'')}</div>
+      <div style="font-size:12px;color:var(--t3);margin-bottom:10px">Current status: <b>${st?dStageLbl[st]:'planned'}</b>${dStageTime(o)?' '+dStageTime(o):''}</div>
+      <button class="rbtn" data-st="load" ${st?dis:''} style="justify-content:center">📦 Mark LOADED</button>
+      <button class="rbtn" data-st="disp" ${st==='disp'||st==='deliv'?dis:''} style="justify-content:center">🚚 Mark DISPATCHED — left the factory</button>
+      <button class="rbtn" data-st="deliv" ${st==='deliv'?dis:''} style="justify-content:center">✅ Mark DELIVERED (records who)</button>
+      ${st?`<button class="rbtn" data-st="clear" style="justify-content:center">↩ Clear status</button>`:''}
+      <div style="text-align:right;margin-top:6px"><button class="btn btn-s" id="pod-x">Cancel</button></div></div>`;
+    document.body.appendChild(ov);
+    ov.onclick=e=>{if(e.target===ov||e.target.id==='pod-x')ov.remove();};
+    ov.querySelectorAll('[data-st]').forEach(x=>x.onclick=()=>{
+      if(x.disabled)return;
+      const a=x.dataset.st;
+      if(a==='load'){o.delLoadedAt=new Date().toISOString();toast(o.wo+' marked LOADED');}
+      else if(a==='disp'){
+        if(!confirmPartLoad([o])){ov.remove();return;}
+        if(!o.delLoadedAt)o.delLoadedAt=new Date().toISOString();
+        o.delDispAt=new Date().toISOString();toast(o.wo+' DISPATCHED — left the factory');
+      }
+      else if(a==='deliv'){
+        ov.remove();
+        pickName('driver','Delivered — '+o.wo,by=>{
+          const now=new Date().toISOString();
+          if(!o.delLoadedAt)o.delLoadedAt=now;if(!o.delDispAt)o.delDispAt=now;
+          o.delDelivAt=now;o.delDone=true;o.delivBy=by;
+          sched();render();toast(o.wo+' DELIVERED ✓ by '+by);
+        });
+        return;
+      }
+      else{delete o.delLoadedAt;delete o.delDispAt;delete o.delDelivAt;delete o.ldBy;delete o.delivBy;o.delDone=false;toast(o.wo+' status cleared');}
+      ov.remove();sched();render();
+    });
   });
   // Dispatch a whole van load at once
   document.querySelectorAll('[data-cdisp]').forEach(b=>b.onclick=()=>{
@@ -2112,7 +2204,7 @@ function renderDeliveries(app){
     else{o.delv=false;o.delVeh='';o.delDay='';o.delDone=false;delete o.delLoadedAt;delete o.delDispAt;delete o.delDelivAt;delete o.ldBy;delete o.delivBy;toast(o.wo+' removed from delivery plan');}
     delSel.delete(o.wo);sched();render();
   });
-  const dropTo=(el,fn)=>{
+  const dropTo=(el,fn,after)=>{
     el.ondragover=e=>{e.preventDefault();el.classList.add('dragover');};
     el.ondragleave=()=>el.classList.remove('dragover');
     el.ondrop=e=>{
@@ -2121,12 +2213,22 @@ function renderDeliveries(app){
       const moved=list.map(findDel).filter(Boolean);
       if(!moved.length)return;
       moved.forEach(fn);delSel.clear();sched();render();
-      if(moved.length>1)toast(moved.length+' jobs moved');
+      if(after)after(moved.map(o=>o.wo));
+      else if(moved.length>1)toast(moved.length+' jobs moved');
     };
   };
   document.querySelectorAll('.dcell').forEach(c=>{
     const parts=c.dataset.cell.split('|');
-    dropTo(c,o=>{o.delVeh=parts[0];o.delDay=parts[1];});
+    dropTo(c,o=>{o.delVeh=parts[0];o.delDay=parts[1];},wos=>showReadiness(wos,'scheduled to '+(vehLbl(parts[0])||parts[0])+' '+parts[1]));
+  });
+  // Tap-to-place: select chips, then tap a day cell — works with gloves/touch and keyboards, no dragging needed
+  document.querySelectorAll('[data-place]').forEach(b=>b.onclick=()=>{
+    const[veh,day]=b.dataset.place.split('|');
+    const moved=[...delSel].map(findDel).filter(Boolean);
+    if(!moved.length)return;
+    moved.forEach(o=>{o.delVeh=veh;o.delDay=day;});
+    delSel.clear();sched();render();
+    showReadiness(moved.map(o=>o.wo),'scheduled to '+(vehLbl(veh)||veh)+' '+day);
   });
   const pl=document.getElementById('dpool');
   if(pl)dropTo(pl,o=>{o.delVeh='';o.delDay='';});
@@ -2164,7 +2266,7 @@ function renderDeliveries(app){
       while(ks.length>26)delete DB.delArchive[ks.shift()]; // keep half a year of history
       DB.pod={}; // the week's proof photos move into the archive with it — a fresh board shows no stale 📷
     }
-    DB.orders.forEach(o=>{delete o.delv;delete o.delVeh;delete o.delDay;delete o.delDone;delete o.delLoadedAt;delete o.delDispAt;delete o.delDelivAt;delete o.ldBy;delete o.delivBy;});
+    DB.orders.forEach(o=>{const wasDeliv=!!(o.delDelivAt||o.delDone);delete o.delv;delete o.delVeh;delete o.delDay;delete o.delLoadedAt;delete o.delDispAt;delete o.delDelivAt;delete o.ldBy;delete o.delivBy;if(wasDeliv)o.delDone=true;else delete o.delDone;});
     DB.delx=[];DB.delNotes={};delSel.clear();
     sched();render();toast('Week archived to 📚 Past weeks — board cleared for next week');
   };
@@ -2291,7 +2393,7 @@ function printPoster(){
   const now=new Date();const dow=now.getDay();
   const mon=new Date(now.getFullYear(),now.getMonth(),now.getDate()-dow+(dow===0?-6:1)+7); // next week's Monday
   const dd=i=>{const d=new Date(mon);d.setDate(d.getDate()+i);return d;};
-  const wn=(d=>{const s=new Date(Date.UTC(d.getFullYear(),0,1));return Math.ceil(((Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())-s.getTime())/864e5+s.getUTCDay()+1)/7);})(mon);
+  const wn=wkNum(mon);
   const fmtD=(d,o)=>d.toLocaleDateString('en-IE',o);
   const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
   const DAYNAMES=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
