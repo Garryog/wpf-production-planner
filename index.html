@@ -2654,10 +2654,10 @@ function renderExport(app){
     const weeks=get8Wks();
     const wb=XLSX.utils.book_new();
     const sorted=[...DB.orders].sort((a,b)=>{if(!a.plannedWeek&&b.plannedWeek)return 1;if(a.plannedWeek&&!b.plannedWeek)return-1;return(a.plannedWeek||'').localeCompare(b.plannedWeek||'');});
-    const rows=[['WO #','Title','Customer','Hours','Planned Week','Week Start','Due Date','Step','Sales Rep','Notes'],
-      ...sorted.map(o=>[o.wo,o.title,o.customer,o.hours,wkLbl(o.plannedWeek)||'Unscheduled',o.plannedWeek||'',o.dueDate||'',o.step.replace(/^\d\.\s*/,''),o.salesRep||'',o.notes||''])];
+    const rows=[['WO #','Title','Customer','Hours','Planned Week','Week Start','Due Date','Step','Sales Rep','Notes','Vehicle','Delivery Day','Delivered At','Delivered By'],
+      ...sorted.map(o=>[o.wo,o.title,o.customer,o.hours,wkLbl(o.plannedWeek)||'Unscheduled',o.plannedWeek||'',o.dueDate||'',o.step.replace(/^\d\.\s*/,''),o.salesRep||'',o.notes||'',o.delVeh?(vehLbl(o.delVeh)||o.delVeh):'',o.delDay||'',o.delDelivAt?new Date(o.delDelivAt).toLocaleString('en-IE'):'',o.delivBy||''])];
     const ws=XLSX.utils.aoa_to_sheet(rows);
-    ws['!cols']=[{wch:16},{wch:35},{wch:28},{wch:7},{wch:16},{wch:13},{wch:12},{wch:20},{wch:16},{wch:30}];
+    ws['!cols']=[{wch:16},{wch:35},{wch:28},{wch:7},{wch:16},{wch:13},{wch:12},{wch:20},{wch:16},{wch:30},{wch:12},{wch:10},{wch:18},{wch:14}];
     XLSX.utils.book_append_sheet(wb,ws,'Full Schedule');
     const srows=[['Week','Start Date','Orders','Hours','Capacity','% Used','Status'],...weeks.map(wk=>{const h=wkHrs(wk),cnt=wkCnt(wk),pct=Math.round(h/WCAP*100);return[wkLbl(wk),wk,cnt,h,WCAP,pct+'%',pct>=100?'OVER':pct>=80?'NEAR OK':'OK'];})];
     const ws2=XLSX.utils.aoa_to_sheet(srows);ws2['!cols']=[{wch:16},{wch:13},{wch:8},{wch:8},{wch:10},{wch:8},{wch:12}];
