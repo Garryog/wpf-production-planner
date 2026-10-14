@@ -2670,10 +2670,10 @@ function analyzeImport(rows){
           if((exReason==='shipped'||exReason==='invoiced')&&!exOrd.delDispAt&&!exOrd.delDelivAt&&!exOrd.delDone){
             dispGaps.push({wo,title:exOrd.title||'',customer:exOrd.customer||'',unit:[exOrd.floor,exOrd.unit].filter(Boolean).join(' · '),reason:exReason});
           }
-          // PROTECTED: a job that is loaded or dispatched but NOT yet confirmed delivered must
-          // never vanish from the board mid-delivery, whatever Cienapps says — the driver is
-          // still out with it. It stays until the delivery is confirmed (next import removes it).
-          if((exOrd.delLoadedAt||exOrd.delDispAt)&&!exOrd.delDelivAt&&!exOrd.delDone){
+          // PROTECTED: a job that is tagged for delivery, loaded or dispatched — but NOT yet
+          // confirmed delivered — must never vanish from the board, whatever Cienapps says.
+          // The delivery plan outranks a status change; it stays until the driver confirms.
+          if((exOrd.delv||exOrd.delLoadedAt||exOrd.delDispAt)&&!exOrd.delDelivAt&&!exOrd.delDone){
             inTransit.push({wo,title:exOrd.title||'',reason:exReason,veh:vehLbl(exOrd.delVeh)||'',day:exOrd.delDay||''});
           }else{
             removals.push({wo,reason:exReason,title:exOrd.title||'',customer:exOrd.customer||'',hours:exOrd.hours});
@@ -2773,7 +2773,7 @@ function renderImportPreview(plan){
       ${plan.dispGaps.map(g=>`<div style="font-size:12px;color:#8a1c10;padding:2px 0"><b style="font-family:monospace">${escA(g.wo)}</b>${g.unit?' · '+escA(g.unit):''} — ${escA(g.title)}${g.customer?' <span style="opacity:.75">('+escA(g.customer)+')</span>':''} <span style="font-weight:700">[${escA(g.reason)} in Cienapps]</span></div>`).join('')}
       <div style="font-size:11px;color:#8a1c10;margin-top:6px">If any of these are still in the factory, Cienapps is ahead of reality — fix the status there and get the job on a van.</div>
     </div>`:''}
-    ${section('🛡 Protected — out for delivery, NOT removed although Cienapps says shipped','#ecd394','#fff8e6',plan.inTransit,t=>line(t.wo,t.title,escA([t.veh,t.day].filter(Boolean).join(' '))+' · stays until the driver confirms delivery'),12)}
+    ${section('🛡 Protected — tagged for delivery, NOT removed although Cienapps says shipped/invoiced','#ecd394','#fff8e6',plan.inTransit,t=>line(t.wo,t.title,(escA([t.veh,t.day].filter(Boolean).join(' '))||'on the delivery board')+' · stays until the driver confirms delivery'),12)}
     ${section('➕ New work orders — will be added and scheduled to their due-date week','#b3e0c4','#f4fbf6',plan.newOrders,o=>line(o.wo,o.title,o.hours+'h · due '+(o.dueDate?fmt(o.dueDate):'—')),15)}
     ${(dc=>dc.length?`<div style="background:#fffbeb;border:2px solid #e8b931;border-radius:8px;padding:12px 15px;margin-bottom:10px">
       <div style="font-size:13px;font-weight:800;color:#8a6d00;margin-bottom:3px">📅 Due dates changed in Cienapps — decide each job's week</div>
