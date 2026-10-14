@@ -375,6 +375,7 @@ async function loadDB(){
       if(d[0].settings&&d[0].settings.listDone)DB.listDone=d[0].settings.listDone;
       if(d[0].settings&&d[0].settings.listLead>0)DB.listLead=d[0].settings.listLead;
       if(d[0].settings&&d[0].settings.delArchive)DB.delArchive=d[0].settings.delArchive;
+      if(d[0].settings&&d[0].settings.staff)DB.staff=d[0].settings.staff;
     }
     DB.orders.forEach(o=>{orig[o.wo]=o.plannedWeek||'';origStep[o.wo]=o.step||'';});
     DB.loadFailed=false;
@@ -415,7 +416,11 @@ async function saveDB(){
 }
 // Never let a tab close while an edit is unsaved or a retry is pending
 window.addEventListener('beforeunload',e=>{if(saveT||DB.saveFailed){e.preventDefault();e.returnValue='';}});
-function fullSettings(){return{weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP,delx:DB.delx||[],delNotes:DB.delNotes||{},grps:DB.grps||{},pins:DB.pins||{},pod:DB.pod||{},lists:DB.lists||[],listWBs:DB.listWBs||{},listDone:DB.listDone||{},listLead:DB.listLead||5,delArchive:DB.delArchive||{}};}
+function fullSettings(){return{weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP,delx:DB.delx||[],delNotes:DB.delNotes||{},grps:DB.grps||{},pins:DB.pins||{},pod:DB.pod||{},lists:DB.lists||[],listWBs:DB.listWBs||{},listDone:DB.listDone||{},listLead:DB.listLead||5,delArchive:DB.delArchive||{},staff:DB.staff||[]};}
+/* Staff roster: {id, n:name, r:[roles]} — one source of names for drivers, saw and stores,
+   so every "loaded by / delivered by / cut by" record uses the same spelling of the same person. */
+function staff(){return DB.staff||[];}
+function staffFor(role){return staff().filter(s=>(s.r||[]).includes(role)&&(s.n||'').trim());}
 /* Daily safety copy: once per day, the first office machine writes the whole plan to a dated
    backup row (id='bak-YYYY-MM-DD') and prunes copies older than 14 days. If the database row
    doesn't allow inserts, this fails silently — the JSON download button in Settings still works. */
@@ -629,11 +634,50 @@ function renderSettings(app){
     +'<button class="btn btn-g" id="btn-save-pins">Save PINs</button>'
     +'</div>'
     +'<div class="exp-panel">'
+    +'<div style="font-size:14px;font-weight:600;margin-bottom:6px">Staff</div>'
+    +'<p style="font-size:12px;color:var(--t3);margin-bottom:10px">The people who sign work off. Drivers pick their name from this list on the phone; the saw and stores tap their name when marking lists done. Tick the jobs each person does. Removing someone does not touch past records — their name stays on everything they already signed.</p>'
+    +'<table class="lst-tbl" style="max-width:640px"><thead><tr><th>Name</th><th style="text-align:center">🚚 Driver</th><th style="text-align:center">🪚 Saw</th><th style="text-align:center">🧰 Stores</th><th></th></tr></thead><tbody>'
+    +staff().map((s,i)=>'<tr>'
+      +'<td><input data-stn="'+i+'" value="'+escA(s.n||'')+'" style="width:100%;padding:5px 8px;border:1px solid var(--b2);border-radius:5px;font-size:13px"></td>'
+      +['driver','saw','stores'].map(r=>'<td style="text-align:center"><input type="checkbox" data-str="'+i+'|'+r+'"'+((s.r||[]).includes(r)?' checked':'')+' style="width:16px;height:16px"></td>').join('')
+      +'<td><button class="btn btn-s" data-stx="'+i+'" style="padding:2px 8px;font-size:11px;color:var(--red);border-color:var(--red)">✕</button></td>'
+      +'</tr>').join('')
+    +'<tr><td><input id="st-new" placeholder="Add a name…" style="width:100%;padding:5px 8px;border:1px dashed var(--b2);border-radius:5px;font-size:13px"></td>'
+    +'<td colspan="3" style="font-size:11px;color:var(--t3)">tick their jobs after adding</td>'
+    +'<td><button class="btn btn-g" id="st-add" style="padding:3px 10px;font-size:12px">＋ Add</button></td></tr>'
+    +'</tbody></table>'
+    +'</div>'
+    +'<div class="exp-panel">'
     +'<div style="font-size:14px;font-weight:600;margin-bottom:6px">Backup</div>'
     +'<p style="font-size:12px;color:var(--t3);margin-bottom:10px">Downloads everything — every order, delivery plan, cutting list, archive and setting — as one file. Keep a weekly copy in OneDrive. If the database is ever lost or overwritten, this file is the restore point.</p>'
     +'<button class="btn btn-g" id="btn-backup">⬇ Download full backup (JSON)</button>'
     +'</div></div>';
 
+  // staff roster: edit in place, add, remove
+  const uidS=()=>'S'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+  document.querySelectorAll('[data-stn]').forEach(inp=>inp.onchange=function(){
+    const s=staff()[+this.dataset.stn];if(s){s.n=this.value.trim();sched();}
+  });
+  document.querySelectorAll('[data-str]').forEach(cb=>cb.onchange=function(){
+    const[ix,role]=this.dataset.str.split('|');const s=staff()[+ix];if(!s)return;
+    s.r=s.r||[];
+    if(this.checked){if(!s.r.includes(role))s.r.push(role);}else s.r=s.r.filter(x=>x!==role);
+    sched();
+  });
+  document.querySelectorAll('[data-stx]').forEach(b=>b.onclick=function(){
+    const s=staff()[+this.dataset.stx];if(!s)return;
+    if(!confirm('Remove '+(s.n||'this person')+' from the staff list? Past records keep their name.'))return;
+    DB.staff=staff().filter((_,i)=>i!==+this.dataset.stx);sched();render();
+  });
+  const sta=document.getElementById('st-add');
+  if(sta)sta.onclick=()=>{
+    const inp=document.getElementById('st-new');const n=(inp.value||'').trim();
+    if(!n){toast('Type the name first');inp.focus();return;}
+    if(staff().some(s=>(s.n||'').toLowerCase()===n.toLowerCase())){toast(n+' is already on the list');return;}
+    DB.staff=staff();DB.staff.push({id:uidS(),n,r:[]});
+    sched();render();toast(n+' added — tick the jobs they do');
+  };
+  document.getElementById('st-new')?.addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('st-add').click();});
   document.getElementById('btn-backup')?.addEventListener('click',()=>{
     const data={backedUpAt:new Date().toISOString(),orders:DB.orders,nid:DB.nid,settings:fullSettings()};
     const a=document.createElement('a');
@@ -1396,6 +1440,26 @@ function opName(what){
   if(by!==null)ls.set('wpfOpName',by.trim());
   return by===null?null:by.trim();
 }
+/* Tap-your-name sign-off: when the Settings staff list has people for this role, show them as
+   big buttons (last-used highlighted) with a free-type fallback; otherwise the plain prompt. */
+function pickName(mode,what,cb){
+  const ppl=staffFor(mode==='fit'?'stores':'saw');
+  if(!ppl.length){const by=opName(what);if(by!==null)cb(by);return;}
+  const last=ls.get('wpfOpName');
+  const ov=document.createElement('div');ov.className='pod-ovl';
+  ov.innerHTML=`<div class="pod-in" style="min-width:min(420px,92vw)">
+    <div style="font-weight:800;color:#14335c;font-size:16px;margin-bottom:2px">${escA(what)}</div>
+    <div style="font-size:12px;color:var(--t3);margin-bottom:12px">Who's signing this off?</div>
+    ${ppl.map(s=>`<button class="rbtn" data-pick="${escA(s.n)}" style="justify-content:center;font-size:16px${s.n===last?';border-color:#1a56db;background:#eaf2ff':''}">${escA(s.n)}</button>`).join('')}
+    <div style="display:flex;gap:6px;margin-top:4px"><input id="pick-other" placeholder="Someone else…" style="flex:1;padding:10px;border:1px solid var(--b2);border-radius:8px;font-size:14px"><button class="btn btn-s" id="pick-ok">OK</button></div>
+    <div style="margin-top:10px;text-align:right"><button class="btn btn-s" id="pod-x">Cancel</button></div></div>`;
+  document.body.appendChild(ov);
+  const done=n=>{if(!n||!n.trim())return;ov.remove();ls.set('wpfOpName',n.trim());cb(n.trim());};
+  ov.onclick=e=>{if(e.target===ov||e.target.id==='pod-x')ov.remove();};
+  ov.querySelectorAll('[data-pick]').forEach(b=>b.onclick=()=>done(b.dataset.pick));
+  ov.querySelector('#pick-ok').onclick=()=>done(document.getElementById('pick-other').value);
+  ov.querySelector('#pick-other').addEventListener('keydown',e=>{if(e.key==='Enter')done(e.target.value);});
+}
 function markListDone(ids,mode,by){
   const now=new Date().toISOString();
   DB.listDone=DB.listDone||{};
@@ -1436,11 +1500,11 @@ function openCombined(lsArr,mode){
   ov.onclick=e=>{if(e.target===ov||e.target.id==='pod-x')ov.remove();};
   ov.querySelector('#cmb-lbl').onclick=()=>printLabels(lsArr,mode);
   ov.querySelector('#cmb-done').onclick=()=>{
-    const by=opName((saw?'Batch cut complete':'Batch picked')+' for '+lsArr.length+' houses');
-    if(by===null)return;
-    markListDone(lsArr.map(l=>l.id),mode,by);
-    wlSel.clear();ov.remove();sched();render();
-    toast(lsArr.length+' lists marked '+(saw?'cut complete':'picked')+' ✓');
+    pickName(mode,(saw?'Batch cut complete':'Batch picked')+' — '+lsArr.length+' houses',by=>{
+      markListDone(lsArr.map(l=>l.id),mode,by);
+      wlSel.clear();ov.remove();sched();render();
+      toast(lsArr.length+' lists marked '+(saw?'cut complete':'picked')+' ✓');
+    });
   };
 }
 /* Location labels: a pack-header label per house + one label per item row, so every pack
@@ -1525,11 +1589,11 @@ function renderWorkList(app,mode){
   });
   document.querySelectorAll('[data-wldone]').forEach(b=>b.onclick=()=>{
     const l=lists().find(x=>x.id===b.dataset.wldone);if(!l)return;
-    const by=opName((mode==='saw'?'Cut complete':'Fittings picked'));
-    if(by===null)return;
-    markListDone([l.id],mode,by);
-    wlSel.delete(l.id);
-    sched();render();toast(l.name+' — '+(mode==='saw'?'cut complete':'fittings picked')+' ✓');
+    pickName(mode,(mode==='saw'?'Cut complete':'Fittings picked')+' — '+l.name,by=>{
+      markListDone([l.id],mode,by);
+      wlSel.delete(l.id);
+      sched();render();toast(l.name+' — '+(mode==='saw'?'cut complete':'fittings picked')+' ✓');
+    });
   });
   document.querySelectorAll('[data-wlundo]').forEach(b=>b.onclick=()=>{
     if(!confirm('Put this list back in the queue?'))return;
@@ -1582,7 +1646,12 @@ function renderDriver(app){
   app.innerHTML=`<div class="drv">
     ${DB.saveFailed?`<div style="background:#c0392b;color:#fff;border-radius:10px;padding:12px 14px;font-size:14px;font-weight:800;margin-bottom:10px">⚠ NOT SAVED YET — no signal. Keep this page open; it retries automatically and will sync when you're back in coverage.</div>`:''}
     <div class="drv-set">
-      <div><label>Driver name</label><input id="drv-name" value="${escA(name)}" placeholder="Your name"></div>
+      <div><label>Driver name</label>${(ds=>ds.length?`<select id="drv-name-sel">
+          <option value="">— who's driving? —</option>
+          ${ds.map(s=>`<option${s.n===name?' selected':''}>${escA(s.n)}</option>`).join('')}
+          <option value="__other"${name&&!ds.some(s=>s.n===name)?' selected':''}>Other…</option>
+        </select><input id="drv-name" value="${escA(name)}" placeholder="Your name" style="margin-top:6px;${name&&!ds.some(s=>s.n===name)?'':'display:none'}">`
+        :`<input id="drv-name" value="${escA(name)}" placeholder="Your name">`)(staffFor('driver'))}</div>
       <div><label>Vehicle</label><select id="drv-veh"><option value="">— pick van —</option>${DEL_VEH.map(v=>`<option value="${v.k}"${v.k===veh?' selected':''}>${v.n}</option>`).join('')}</select></div>
       <div><label>Day</label><select id="drv-day">${DEL_DAYS.map(d=>`<option${d===day?' selected':''}>${d}</option>`).join('')}</select></div>
     </div>
@@ -1605,7 +1674,16 @@ function renderDriver(app){
       </div>`}
   </div>`;
   const nm=document.getElementById('drv-name');if(nm)nm.oninput=()=>ls.set('wpfDrvName',nm.value.trim()); // save as typed — a re-render must never lose the name
-  const drvName=()=>{const el=document.getElementById('drv-name');return((el&&el.value)||ls.get('wpfDrvName')||'').trim();};
+  const nsel=document.getElementById('drv-name-sel');
+  if(nsel)nsel.onchange=()=>{
+    if(nsel.value==='__other'){const el=document.getElementById('drv-name');el.style.display='';el.value='';ls.set('wpfDrvName','');el.focus();}
+    else{ls.set('wpfDrvName',nsel.value);render();}
+  };
+  const drvName=()=>{
+    const sel=document.getElementById('drv-name-sel');
+    if(sel&&sel.value&&sel.value!=='__other')return sel.value.trim();
+    const el=document.getElementById('drv-name');return((el&&el.value)||ls.get('wpfDrvName')||'').trim();
+  };
   const vs=document.getElementById('drv-veh');if(vs)vs.onchange=()=>{ls.set('wpfDrvVeh',vs.value);render();};
   const ds=document.getElementById('drv-day');if(ds)ds.onchange=()=>{ls.set('wpfDrvDay',ds.value);render();};
   document.querySelectorAll('[data-dl]').forEach(b=>b.onclick=()=>{
