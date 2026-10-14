@@ -149,6 +149,14 @@ button,input,select{font-family:inherit;cursor:pointer}
 .dchip-c{font-size:10px;color:var(--t3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dchip.done{background:#eefbf3;border-color:#b3e0c4}
 .dchip.done .dchip-t,.dchip.done .dchip-top b{text-decoration:line-through;opacity:.6}
+.dchip.dispd{background:#e8f1fd;border-color:#9cbce8}
+.dchip.loadd{background:#fff8e6;border-color:#ecd394}
+.dstg{display:inline-block;font-size:9px;font-weight:800;letter-spacing:.6px;border-radius:3px;padding:1px 6px;margin-top:3px}
+.dstg.s-load{background:#f5e3ad;color:#6b5400}
+.dstg.s-disp{background:#c7dcf7;color:#14418f}
+.dstg.s-deliv{background:#bfe8cd;color:#0d6e46}
+.cell-disp{display:block;width:100%;margin-top:3px;background:#fff;border:1px dashed #9cbce8;color:#1a56db;font-size:10px;font-weight:700;border-radius:5px;padding:3px 4px;cursor:pointer}
+.cell-disp:hover{background:#e8f1fd;border-style:solid}
 .dchip.manual{border-left:3px solid #7c5cd6}
 .dchip.sel{outline:2px solid #1a56db;outline-offset:-1px;background:#eaf2ff}
 .dchip.dragging{opacity:.4}
@@ -796,12 +804,43 @@ function woCmp(a,b){
 function dayVal(d){return delAll().filter(o=>o.delDay===d).reduce((a,o)=>a+(+o.value||0),0);}
 const escA=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
 
+/* Dispatch stages: '' → loaded → dispatched (left the factory, timestamped) → delivered */
+function dStage(o){return (o.delDelivAt||o.delDone)?'deliv':(o.delDispAt?'disp':(o.delLoadedAt?'load':''));}
+const dStageLbl={'':'','load':'LOADED','disp':'DISPATCHED','deliv':'DELIVERED'};
+const hhmm=t=>{try{const d=new Date(t);return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}catch(e){return'';}};
+function dStageTime(o){const s=dStage(o);return s==='deliv'?(o.delDelivAt?hhmm(o.delDelivAt):''):s==='disp'?hhmm(o.delDispAt):s==='load'?hhmm(o.delLoadedAt):'';}
+
+// Part-load guard: other live jobs for the SAME unit (or same board group) that are NOT dispatched and NOT in this load
+function partLoadGaps(jobs){
+  const inLoad=new Set(jobs.map(j=>j.wo));
+  const gaps=[];const seen=new Set();
+  jobs.forEach(j=>{
+    const rel=DB.orders.filter(o=>{
+      if(inLoad.has(o.wo)||seen.has(o.wo))return false;
+      if(o.delDispAt||o.delDelivAt||o.delDone)return false;
+      const sameUnit=j.orderNo&&o.orderNo===j.orderNo&&j.unit&&o.unit===j.unit&&!/multiple/i.test(j.unit||'');
+      const sameGrp=j.grp&&o.grp===j.grp;
+      return sameUnit||sameGrp;
+    });
+    rel.forEach(o=>{seen.add(o.wo);gaps.push({forWo:j.wo,unit:[j.floor,j.unit].filter(Boolean).join(' '),wo:o.wo,title:o.title});});
+  });
+  return gaps;
+}
+function confirmPartLoad(jobs){
+  const gaps=partLoadGaps(jobs);
+  if(!gaps.length)return true;
+  const lines=gaps.slice(0,12).map(g=>'  • '+g.wo+' — '+(g.title||'').slice(0,40)+'  (same unit/group as '+g.forWo+')');
+  return confirm('⚠ PART-LOAD WARNING\n\nThe following jobs belong to the same unit or group as jobs on this load, but are NOT dispatched and NOT on this van:\n\n'+lines.join('\n')+(gaps.length>12?'\n  …and '+(gaps.length-12)+' more':'')+'\n\nSend the load anyway WITHOUT them?');
+}
+
 function dchip(o,showCust){
-  return `<div class="dchip${o.delDone?' done':''}${o.manual?' manual':''}${delSel.has(o.wo)?' sel':''}" draggable="true" data-dw="${escA(o.wo)}" title="Click to select · drag onto a day${o.manual?' · added manually':''}">
+  const st=dStage(o);
+  return `<div class="dchip${st==='deliv'?' done':''}${st==='disp'?' dispd':''}${st==='load'?' loadd':''}${o.manual?' manual':''}${delSel.has(o.wo)?' sel':''}" draggable="true" data-dw="${escA(o.wo)}" title="Click to select · drag onto a day${o.manual?' · added manually':''}">
     <div class="dchip-top"><b>${escA(o.wo)}</b>${(o.floor||o.unit)?`<span class="dfu">${escA([o.floor,o.unit].filter(Boolean).join(' · '))}</span>`:''}<span class="dcv">€${Math.round(o.value||0).toLocaleString()}</span>
-      <span class="dchip-btns"><button class="dchk${o.delDone?' on':''}" data-dd="${escA(o.wo)}" title="${o.delDone?'Delivered — click to undo':'Mark delivered'}">✓</button><button data-dx="${escA(o.wo)}" title="${o.delDay?'Return to pool':(o.manual?'Delete this manual job':'Remove from delivery plan')}">×</button></span>
+      <span class="dchip-btns"><button class="dchk${st?' on':''}" data-dd="${escA(o.wo)}" title="Status: ${dStageLbl[st]||'planned'} — click to advance (Loaded → Dispatched → Delivered → clear)">${st==='deliv'?'✓':st==='disp'?'D':st==='load'?'L':'·'}</button><button data-dx="${escA(o.wo)}" title="${o.delDay?'Return to pool':(o.manual?'Delete this manual job':'Remove from delivery plan')}">×</button></span>
     </div>
     <div class="dchip-t">${escA(o.title)||'—'}</div>
+    ${st?`<div class="dstg s-${st}">${dStageLbl[st]}${dStageTime(o)?' '+dStageTime(o):''}</div>`:''}
     ${showCust?`<div class="dchip-c">${escA(o.customer)}</div>`:''}
   </div>`;
 }
@@ -824,6 +863,7 @@ function renderDeliveries(app){
       <span style="font-size:12px;color:var(--t2)">${tagged.length} tagged · ${tagged.length-pool.length} planned · ${done} delivered</span>
       <span style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-s" id="btn-addjob">＋ Add Job</button>
+        <button class="btn btn-s" id="btn-runsheets" title="Printable A4 docket per vehicle per day — tick boxes and signature lines for the loader">📋 Run Sheets</button>
         <button class="btn btn-blue" id="btn-delprint">🖨 Print A3 Poster</button>
         <button class="btn btn-g" id="btn-delexp">⬇ Export Delivery Plan</button>
         <button class="btn btn-s" id="btn-delreset" style="border-color:var(--red);color:var(--red)">Clear Week — Start Fresh</button>
@@ -855,7 +895,7 @@ function renderDeliveries(app){
       <tbody>
         ${DEL_VEH.map((v,i)=>{const vc=tagged.filter(o=>o.delVeh===v.k).length;return `<tr${i===1?' style="border-top:3px double var(--border)"':''}>
           <td class="dveh">${v.n}<span class="dsub">${v.cat}${v.sub?' · '+v.sub:''} · ${vc} job${vc!==1?'s':''}</span></td>
-          ${DEL_DAYS.map(d=>`<td class="dcell" data-cell="${v.k}|${d}">${tagged.filter(o=>o.delVeh===v.k&&o.delDay===d).sort(woCmp).map(o=>dchip(o,true)).join('')}</td>`).join('')}
+          ${DEL_DAYS.map(d=>{const cj=tagged.filter(o=>o.delVeh===v.k&&o.delDay===d).sort(woCmp);return `<td class="dcell" data-cell="${v.k}|${d}">${cj.map(o=>dchip(o,true)).join('')}${cj.length&&cj.some(o=>!o.delDispAt&&!o.delDelivAt&&!o.delDone)?`<button class="cell-disp" data-cdisp="${v.k}|${d}" title="Mark this whole van load as dispatched (left the factory) — runs the part-load check first">🚚→ Dispatch van</button>`:''}</td>`;}).join('')}
         </tr>`;}).join('')}
         <tr><td class="dveh">Notes</td>${DEL_DAYS.map(d=>`<td style="border:1px solid var(--border);padding:4px;background:#fffef7"><input class="dnote" data-dnote="${d}" value="${escA(notes[d]||'')}" placeholder="${d} note…"></td>`).join('')}</tr>
         <tr><td class="dtot" style="text-align:left">Value / day<br><span style="color:#0d6e46">Week: €${Math.round(wkTot).toLocaleString()}</span></td>
@@ -906,14 +946,35 @@ function renderDeliveries(app){
     render();
   });
   const sc=document.getElementById('selclr');if(sc)sc.onclick=()=>{delSel.clear();render();};
+  // Status cycle: planned → Loaded → Dispatched (part-load check) → Delivered → clear
   document.querySelectorAll('[data-dd]').forEach(b=>b.onclick=()=>{
-    const o=findDel(b.dataset.dd);if(o){o.delDone=!o.delDone;sched();render();}
+    const o=findDel(b.dataset.dd);if(!o)return;
+    const st=dStage(o);
+    if(st===''){o.delLoadedAt=new Date().toISOString();toast(o.wo+' marked LOADED');}
+    else if(st==='load'){
+      if(!confirmPartLoad([o]))return;
+      o.delDispAt=new Date().toISOString();toast(o.wo+' DISPATCHED — left the factory');
+    }
+    else if(st==='disp'){o.delDelivAt=new Date().toISOString();o.delDone=true;toast(o.wo+' DELIVERED');}
+    else{delete o.delLoadedAt;delete o.delDispAt;delete o.delDelivAt;o.delDone=false;toast(o.wo+' status cleared');}
+    sched();render();
+  });
+  // Dispatch a whole van load at once
+  document.querySelectorAll('[data-cdisp]').forEach(b=>b.onclick=()=>{
+    const parts=b.dataset.cdisp.split('|');
+    const jobs=delAll().filter(o=>o.delVeh===parts[0]&&o.delDay===parts[1]&&!o.delDispAt&&!o.delDelivAt&&!o.delDone);
+    if(!jobs.length)return;
+    if(!confirmPartLoad(jobs))return;
+    if(!confirm('Dispatch '+jobs.length+' job'+(jobs.length!==1?'s':'')+' on the '+vehLbl(parts[0])+' ('+parts[1]+')?\n\nThis records that the load physically left the factory, timestamped now.'))return;
+    const now=new Date().toISOString();
+    jobs.forEach(o=>{if(!o.delLoadedAt)o.delLoadedAt=now;o.delDispAt=now;});
+    sched();render();toast(vehLbl(parts[0])+' '+parts[1]+' dispatched — '+jobs.length+' jobs, '+hhmm(now));
   });
   document.querySelectorAll('[data-dx]').forEach(b=>b.onclick=()=>{
     const o=findDel(b.dataset.dx);if(!o)return;
     if(o.delDay){o.delVeh='';o.delDay='';toast(o.wo+' returned to the pool');}
     else if(o.manual){DB.delx=(DB.delx||[]).filter(x=>x.wo!==o.wo);toast(o.wo+' deleted');}
-    else{o.delv=false;o.delVeh='';o.delDay='';o.delDone=false;toast(o.wo+' removed from delivery plan');}
+    else{o.delv=false;o.delVeh='';o.delDay='';o.delDone=false;delete o.delLoadedAt;delete o.delDispAt;delete o.delDelivAt;toast(o.wo+' removed from delivery plan');}
     delSel.delete(o.wo);sched();render();
   });
   const dropTo=(el,fn)=>{
@@ -952,13 +1013,78 @@ function renderDeliveries(app){
   };
   const ex=document.getElementById('btn-delexp');if(ex)ex.onclick=exportDeliveries;
   const pp=document.getElementById('btn-delprint');if(pp)pp.onclick=printPoster;
+  const rsh=document.getElementById('btn-runsheets');if(rsh)rsh.onclick=printRunSheets;
   const rs=document.getElementById('btn-delreset');
   if(rs)rs.onclick=()=>{
     if(!confirm('Clear the whole delivery plan ('+tagged.length+' jobs)? Tags, manual jobs, day notes, vehicles and days are all removed so you can start fresh at the next production meeting.'))return;
-    DB.orders.forEach(o=>{delete o.delv;delete o.delVeh;delete o.delDay;delete o.delDone;});
+    DB.orders.forEach(o=>{delete o.delv;delete o.delVeh;delete o.delDay;delete o.delDone;delete o.delLoadedAt;delete o.delDispAt;delete o.delDelivAt;});
     DB.delx=[];DB.delNotes={};delSel.clear();
     sched();render();toast('Delivery plan cleared — ready for next week');
   };
+}
+
+/* Printable A4 run sheets: one docket per vehicle per day with tick boxes and signature lines.
+   Print at load-out, the loader ticks each job onto the van and signs — the paper trail for dispatch. */
+function printRunSheets(){
+  const all=delAll();
+  const planned=all.filter(o=>o.delDay&&o.delVeh);
+  if(!planned.length){toast('No jobs placed on a vehicle and day yet');return;}
+  const now=new Date();const dow=now.getDay();
+  const mon=new Date(now.getFullYear(),now.getMonth(),now.getDate()-dow+(dow===0?-6:1)+7); // next week's Monday (same rule as the poster)
+  const dd=i=>{const d=new Date(mon);d.setDate(d.getDate()+i);return d;};
+  const fmtD=(d,o)=>d.toLocaleDateString('en-IE',o);
+  const printed=fmtD(now,{weekday:'short',day:'numeric',month:'short',year:'numeric'})+' '+hhmm(now.toISOString());
+  const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+  const DAYNAMES=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  let sheets='';
+  DEL_VEH.forEach(v=>{
+    DEL_DAYS.forEach((d,di)=>{
+      const jobs=planned.filter(o=>o.delVeh===v.k&&o.delDay===d).sort(woCmp);
+      if(!jobs.length)return;
+      const note=(DB.delNotes||{})[d]||'';
+      sheets+=`<div class="sheet">
+        <div class="hd"><div><div class="kick">WPF DISPATCH RUN SHEET</div><div class="h1">${esc(v.n)} — ${DAYNAMES[di]} ${fmtD(dd(di),{day:'numeric',month:'short',year:'numeric'})}</div></div>
+        <div class="meta">${jobs.length} job${jobs.length!==1?'s':''} · €${Math.round(jobs.reduce((a,o)=>a+(+o.value||0),0)).toLocaleString()}<br>Printed ${esc(printed)}</div></div>
+        ${note?`<div class="note">NOTE: ${esc(note)}</div>`:''}
+        <table><thead><tr><th class="tick">ON VAN</th><th>WO #</th><th>FLOOR</th><th>UNIT</th><th>DESCRIPTION</th><th>CUSTOMER / SITE</th><th class="tick">CHECKED</th></tr></thead><tbody>
+        ${jobs.map(o=>`<tr><td class="tick">☐</td><td class="mono">${esc(o.wo)}</td><td class="mono">${esc(o.floor||'')}</td><td class="mono">${esc(o.unit||'')}</td><td>${esc(o.title||'')}</td><td class="cu">${esc(o.customer||'')}</td><td class="tick">☐</td></tr>`).join('')}
+        </tbody></table>
+        <div class="sig">
+          <div><span>Loaded by:</span><i></i></div>
+          <div><span>Checked against van by:</span><i></i></div>
+          <div><span>Time van left:</span><i></i></div>
+        </div>
+        <div class="ft">Every job ticked ON VAN must be marked Dispatched in the planner before the van leaves. Anything NOT ticked must be reported to dispatch immediately.</div>
+      </div>`;
+    });
+  });
+  const doc=`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>WPF Run Sheets — printed ${esc(printed)}</title><style>
+@page{size:A4 portrait;margin:12mm}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#17191d;background:#8a8886}
+.sheet{width:186mm;min-height:260mm;background:#fff;margin:12px auto;padding:10mm;page-break-after:always;display:flex;flex-direction:column}
+@media print{body{background:none}.sheet{margin:0;width:auto;min-height:auto}}
+.hd{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #17191d;padding-bottom:5mm;gap:8mm}
+.kick{font-size:11px;font-weight:800;letter-spacing:2px;color:#ec3013;margin-bottom:4px}
+.h1{font-size:26px;font-weight:800;line-height:1.05}
+.meta{font-size:11px;text-align:right;color:#555;font-weight:600;white-space:nowrap}
+.note{background:#fbdcd5;border:1px solid #f3b3a6;color:#5c130a;font-weight:700;font-size:12px;padding:6px 10px;margin-top:4mm;border-radius:4px}
+table{width:100%;border-collapse:collapse;margin-top:5mm;font-size:12px}
+th{font-size:9px;letter-spacing:1px;text-align:left;background:#17191d;color:#fff;padding:6px 7px}
+td{border-bottom:1px solid #c9c6c3;padding:8px 7px;vertical-align:top}
+.tick{text-align:center;font-size:17px;width:16mm}
+.mono{font-family:monospace;font-size:11px;white-space:nowrap}
+.cu{font-size:10px;color:#555}
+tr:nth-child(even) td{background:#f4f3f1}
+.sig{display:flex;gap:10mm;margin-top:auto;padding-top:10mm}
+.sig div{flex:1;font-size:11px;font-weight:700}
+.sig i{display:block;border-bottom:2px solid #17191d;height:9mm;margin-top:2mm}
+.ft{font-size:9px;color:#777;margin-top:4mm;font-weight:600;letter-spacing:.3px}
+</style></head><body>${sheets}<script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script></body></html>`;
+  const w=window.open('','_blank');
+  if(!w){toast('Popup blocked — allow popups for this page');return;}
+  w.document.write(doc);w.document.close();
+  toast('Run sheets opened — one page per van per day, A4');
 }
 
 /* Print the delivery plan as A3 landscape wall posters:
@@ -1193,7 +1319,7 @@ function exportDeliveries(){
   const vehIx=o=>{const i=DEL_VEH.findIndex(v=>v.k===o.delVeh);return i<0?99:i;};
   const srt=(a,b)=>dayIx(a)-dayIx(b)||vehIx(a)-vehIx(b)||woCmp(a,b);
   const hdr=['Day','Vehicle','WO #','Floor','Unit','Order #','Title','Customer','Value €','Hours','Status'];
-  const rowOf=o=>[o.delDay||'UNPLANNED',vehLbl(o.delVeh)||'Unassigned',o.wo,o.floor||'',o.unit||'',o.orderNo||'',o.title||'',o.customer||'',Math.round(o.value||0),o.hours||'',o.delDone?'DELIVERED':(o.manual?'added manually':'')];
+  const rowOf=o=>[o.delDay||'UNPLANNED',vehLbl(o.delVeh)||'Unassigned',o.wo,o.floor||'',o.unit||'',o.orderNo||'',o.title||'',o.customer||'',Math.round(o.value||0),o.hours||'',(dStage(o)?dStageLbl[dStage(o)]+(dStageTime(o)?' '+dStageTime(o):''):(o.manual?'added manually':''))];
   const widths=[{wch:10},{wch:13},{wch:14},{wch:7},{wch:9},{wch:9},{wch:34},{wch:30},{wch:9},{wch:7},{wch:15}];
   const mkSheet=list=>{const ws=XLSX.utils.aoa_to_sheet([hdr,...[...list].sort(srt).map(rowOf)]);ws['!cols']=widths;return ws;};
 
@@ -1514,6 +1640,7 @@ function renderMapping(note){
 
 function runImport(rows){
     let added=0,updated=0,skipped=0,noWo=0,excluded=0,excludedRemoved=0;
+    const dispGaps=[]; // Cienapps says shipped/invoiced but the planner has no dispatch record
     const exCounts={};
     const prev=[];
     const newOrders=[];
@@ -1551,6 +1678,11 @@ function runImport(rows){
       if(exReason){
         excluded++;exCounts[exReason]=(exCounts[exReason]||0)+1;
         if(exOrd){
+          // Cienapps cross-check: it says shipped/invoiced, but the planner never recorded a dispatch.
+          // That's a "house 18" — the paperwork moved on while the job may still be in the factory.
+          if((exReason==='shipped'||exReason==='invoiced')&&!exOrd.delDispAt&&!exOrd.delDelivAt&&!exOrd.delDone){
+            dispGaps.push({wo,title:exOrd.title||'',customer:exOrd.customer||'',unit:[exOrd.floor,exOrd.unit].filter(Boolean).join(' · '),reason:exReason});
+          }
           DB.orders=DB.orders.filter(o=>o.wo!==wo);
           delete orig[wo];delete origStep[wo];
           excludedRemoved++;
@@ -1643,6 +1775,13 @@ function runImport(rows){
     document.getElementById('iprev').innerHTML=`<div style="margin-top:14px">
       <div style="font-size:13px;font-weight:600;color:var(--green);margin-bottom:10px">
         ✓ Import complete: ${added} added · ${updated} updated · ${skipped} unchanged${excluded?` · ${excluded} excluded (${Object.keys(exCounts).map(k=>exCounts[k]+' '+k).join(', ')}${excludedRemoved?` — ${excludedRemoved} removed from board`:''})`:''}${noWo?` · ${noWo} skipped (no WO number)`:''}
+      </div>
+      ${dispGaps.length?`<div style="background:#fdecea;border:2px solid #e57368;border-radius:8px;padding:12px 15px;margin-bottom:12px">
+        <div style="font-size:13px;font-weight:700;color:#8a1c10;margin-bottom:6px">⚠ CHECK THESE — Cienapps says shipped/invoiced, but the planner has NO dispatch record:</div>
+        ${dispGaps.map(g=>`<div style="font-size:12px;color:#8a1c10;padding:2px 0"><b style="font-family:monospace">${g.wo}</b>${g.unit?' · '+g.unit:''} — ${g.title}${g.customer?' <span style="opacity:.75">('+g.customer+')</span>':''} <span style="font-weight:700">[${g.reason} in Cienapps]</span></div>`).join('')}
+        <div style="font-size:11px;color:#8a1c10;margin-top:6px">If any of these are still in the factory, Cienapps is ahead of reality — fix the status there and get the job on a van.</div>
+      </div>`:''}
+      <div style="display:none">
       </div>
       <div style="font-size:12px;color:var(--t3);margin-bottom:8px">New orders auto-scheduled based on due date and available capacity.</div>
       ${prev.slice(0,15).map(p=>`<div class="preview-row">
