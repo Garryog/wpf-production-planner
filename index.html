@@ -265,6 +265,10 @@ button,input,select{font-family:inherit;cursor:pointer}
 .drv-fu{background:#eef2f8;border-radius:4px;padding:1px 7px;font-size:13px;color:#345;margin-left:6px;white-space:nowrap}
 .drv-jt{font-size:14px;margin-top:3px}
 .drv-jc{font-size:12px;color:var(--t3);margin-top:1px}
+.drv-ls{font-size:12px;margin-top:4px;display:flex;gap:10px;flex-wrap:wrap}
+.ls-ok{color:#0d6e46;font-weight:700}
+.ls-no{color:#c0392b;font-weight:800;background:#fdecea;border:1px solid #f0b5ae;border-radius:5px;padding:1px 7px}
+.ls-none{color:var(--t3);font-style:italic}
 .drv-tick{width:90px;min-height:56px;border-radius:10px;border:2px solid var(--b2);background:#f7f9fc;font-size:13px;font-weight:800;color:var(--t3);cursor:pointer;flex-shrink:0}
 .drv-tick.on{background:#0d9450;border-color:#0d9450;color:#fff}
 .drv-big{width:100%;padding:18px;font-size:19px;font-weight:800;border:none;border-radius:12px;cursor:pointer;margin-top:6px}
@@ -1457,6 +1461,21 @@ function renderFloor(app){
 }
 
 /* ---------- Driver phone view: check jobs onto the van, group ALL DELIVERED, photo proof ---------- */
+// Cutting/fittings readiness for one WO, from its tagged lists: is the material cut, are the fittings out?
+function woListStat(wo){
+  const ls2=lists().filter(l=>(l.wos||[]).includes(wo));
+  if(!ls2.length)return null;
+  const saw=ls2.filter(l=>(l.saw||0)>0),fit=ls2.filter(l=>(l.fit||0)>0);
+  const st=(arr,m)=>!arr.length?'none':(arr.every(l=>listDone(l.id)[m])?'done':'open');
+  const when=(arr,m)=>{let t='';arr.forEach(l=>{const d=listDone(l.id)[m];if(d&&d.at>t)t=d.at;});return t;};
+  return{saw:st(saw,'saw'),fit:st(fit,'fit'),sawAt:when(saw,'saw'),fitAt:when(fit,'fit')};
+}
+function listStatHTML(wo){
+  const s=woListStat(wo);
+  if(!s)return`<div class="drv-ls"><span class="ls-none">📋 no cutting list linked</span></div>`;
+  const bit=(st,at,okTxt,noTxt)=>st==='none'?'':st==='done'?`<span class="ls-ok">${okTxt}${at?' '+hhmm(at):''}</span>`:`<span class="ls-no">${noTxt}</span>`;
+  return`<div class="drv-ls">${bit(s.saw,s.sawAt,'🪚 Cut ✓','🪚 NOT CUT')} ${bit(s.fit,s.fitAt,'🧰 Fittings out ✓','🧰 Fittings NOT out')}</div>`;
+}
 let drvUploading=false;
 function podKey(veh,day){return veh+'|'+day+'|'+wkKey(new Date());}
 function renderDriver(app){
@@ -1477,7 +1496,7 @@ function renderDriver(app){
       <div class="drv-stat"><span><b>${escA(vehLbl(veh))} — ${day}</b> · ${jobs.length} job${jobs.length!==1?'s':''}</span><span>${onVan}/${jobs.length} on van · ${delivd} delivered</span></div>
       ${jobs.map(o=>{const st=dStage(o);return`<div class="drv-job${st==='deliv'?' done':st==='disp'?' disp':st?' on':''}">
         <div class="drv-ji"><b>${escA(o.wo)}</b>${(o.floor||o.unit)?`<span class="drv-fu">${escA([o.floor,o.unit].filter(Boolean).join(' · '))}</span>`:''}
-          <div class="drv-jt">${escA(o.title)||'—'}</div><div class="drv-jc">${escA(o.customer||'')}${st==='deliv'?' · ✓ delivered '+dStageTime(o)+(o.delivBy?' by '+escA(o.delivBy):''):st==='disp'?' · dispatched '+dStageTime(o):''}</div></div>
+          <div class="drv-jt">${escA(o.title)||'—'}</div><div class="drv-jc">${escA(o.customer||'')}${st==='deliv'?' · ✓ delivered '+dStageTime(o)+(o.delivBy?' by '+escA(o.delivBy):''):st==='disp'?' · dispatched '+dStageTime(o):''}</div>${st==='deliv'?'':listStatHTML(o.wo)}</div>
         ${st==='deliv'?`<div style="font-size:28px;color:#0d9450;flex-shrink:0">✓</div>`:`<button class="drv-tick${st?' on':''}" data-dl="${escA(o.wo)}">${st?'ON VAN ✓':'ON VAN'}</button>`}
       </div>`;}).join('')}
       ${allDeliv?`<div class="drv-done-banner">✓ All delivered${pod&&pod.at?' — '+hhmm(pod.at):''}${pod&&pod.by?' by '+escA(pod.by):''}</div>`:
