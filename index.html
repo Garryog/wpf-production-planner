@@ -286,6 +286,22 @@ button,input,select{font-family:inherit;cursor:pointer}
 .pod-ovl{position:fixed;inset:0;background:rgba(12,20,34,.8);z-index:600;display:flex;align-items:center;justify-content:center;padding:20px}
 .pod-ovl .pod-in{background:#fff;border-radius:12px;padding:18px;max-width:900px;max-height:86vh;overflow:auto}
 .pod-ovl img{max-width:260px;border-radius:8px;margin:6px;border:1px solid var(--border)}
+/* management dashboard */
+.dsh{max-width:1700px;margin:0 auto;padding:14px 18px}
+.dsh-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:16px}
+.dsh-tile{background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px 14px}
+.dsh-n{font-size:34px;font-weight:800;line-height:1}
+.dsh-l{font-size:11px;font-weight:800;letter-spacing:.5px;color:var(--t2);margin-top:4px}
+.dsh-s{font-size:11px;color:var(--t3);margin-top:2px}
+.dsh-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:14px}
+.dsh-p{background:#fff;border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.dsh-ph{color:#fff;font-size:13px;font-weight:800;padding:8px 12px}
+.dsh-row{display:flex;gap:8px;align-items:center;padding:6px 12px;border-bottom:1px solid #eef1f5;font-size:13px}
+.dsh-row:last-child{border-bottom:none}
+.dsh-row>b{font-family:monospace;white-space:nowrap;color:#14335c}
+.dsh-t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dsh-c{color:var(--t3);font-size:12px;white-space:nowrap;max-width:140px;overflow:hidden;text-overflow:ellipsis}
+.dsh-x{font-size:12px;color:var(--t2);white-space:nowrap}
 </style>
 </head>
 <body>
@@ -489,11 +505,11 @@ function pins(){const p=DB.pins||{};return{office:p.office||'2468',driver:p.driv
 let ROLE='';
 (function(){
   const q=(new URLSearchParams(location.search).get('view')||'').toLowerCase();
-  if(['office','floor','driver','saw','stores'].includes(q))ROLE=q;
-  else{const s=ls.get('wpfRole');if(['office','floor','driver','saw','stores'].includes(s))ROLE=s;}
+  if(['office','floor','driver','saw','stores','dash'].includes(q))ROLE=q;
+  else{const s=ls.get('wpfRole');if(['office','floor','driver','saw','stores','dash'].includes(s))ROLE=s;}
 })();
 function roleOk(r){ // has this device already entered the right PIN for this role?
-  if(r==='floor'||r==='saw'||r==='stores')return true;
+  if(r==='floor'||r==='saw'||r==='stores'||r==='dash')return true;
   if(r==='office')return ls.get('wpfPinOffice')===pins().office;
   if(r==='driver')return ls.get('wpfPinDriver')===pins().driver;
   return false;
@@ -501,7 +517,7 @@ function roleOk(r){ // has this device already entered the right PIN for this ro
 let viewTimer=null;
 function startAutoRefresh(){
   clearInterval(viewTimer);
-  if(['floor','driver','saw','stores','office'].includes(ROLE)){
+  if(['floor','driver','saw','stores','office','dash'].includes(ROLE)){
     viewTimer=setInterval(()=>{
       if(saveT||drvUploading||DB.saveFailed)return; // never clobber an unsaved change, a retrying save, or an upload
       loadDB().then(()=>{if(ROLE)render();});
@@ -517,6 +533,7 @@ function rolePicker(pinFor){
     <p>Everyone sees the same live plan — each role gets the view for their job.</p>
     <button class="rbtn" data-role="office"><span class="ri">🗓</span><span>Office / Planning<small>Full planner — plan, dispatch, import, print. PIN required.</small></span></button>
     <button class="rbtn" data-role="floor"><span class="ri">🏭</span><span>Factory Floor Screen<small>Big read-only display — today &amp; tomorrow's loads, live status.</small></span></button>
+    <button class="rbtn" data-role="dash"><span class="ri">📊</span><span>Management Dashboard<small>Live overview — cutting, stores, trucks out, delivered, missed. Read-only.</small></span></button>
     <button class="rbtn" data-role="saw"><span class="ri">🪚</span><span>Saw / Cutting<small>Cutting lists in delivery order — mark each list CUT COMPLETE.</small></span></button>
     <button class="rbtn" data-role="stores"><span class="ri">🧰</span><span>Stores / Fittings<small>Fittings lists in delivery order — mark each list PICKED.</small></span></button>
     <button class="rbtn" data-role="driver"><span class="ri">🚚</span><span>Driver<small>Your van's run — check jobs onto the van, confirm delivered. PIN required.</small></span></button>
@@ -550,7 +567,7 @@ function render(){
   const app=document.getElementById('app');
   const tabsBar=document.querySelector('.tabs');
   const sw=document.getElementById('role-sw');
-  if(sw){sw.style.display=ROLE?'':'none';sw.textContent='⇄ '+({office:'Office',driver:'Driver',floor:'Floor screen',saw:'Saw',stores:'Stores'}[ROLE]||'');sw.onclick=()=>rolePicker();}
+  if(sw){sw.style.display=ROLE?'':'none';sw.textContent='⇄ '+({office:'Office',driver:'Driver',floor:'Floor screen',saw:'Saw',stores:'Stores',dash:'Dashboard'}[ROLE]||'');sw.onclick=()=>rolePicker();}
   if(tabsBar)tabsBar.style.display=(ROLE==='office')?'':'none';
   if(!ROLE){app.innerHTML='';rolePicker();return;}
   if(ROLE!=='floor'&&!roleOk(ROLE)){app.innerHTML='';rolePicker(ROLE);return;}
@@ -560,6 +577,7 @@ function render(){
   }
   if(ROLE==='office')tryDailyBackup(); // once per day, silent
   if(ROLE==='floor'){renderFloor(app);return;}
+  if(ROLE==='dash'){renderDash(app);return;}
   if(ROLE==='saw'){renderWorkList(app,'saw');return;}
   if(ROLE==='stores'){renderWorkList(app,'fit');return;}
   if(ROLE==='driver'){renderDriver(app);return;}
@@ -1181,6 +1199,10 @@ function listDueKey(l){ // earliest due date among tagged WOs — the ONLY thing
   return best;
 }
 function listDueKey2(arr){let b='';arr.forEach(l=>{const k=listDueKey(l);if(k&&(!b||k<b))b=k;});return b;}
+function listCust(l){for(const w of (l.wos||[])){const o=DB.orders.find(x=>x.wo===w);if(o&&o.customer)return o.customer;}return'';}
+// The factory rule: cutting and fittings must be finished THE DAY BEFORE delivery.
+function listDeadline(l){const d=listDueKey(l);if(!d)return'';const t=new Date(d);t.setDate(t.getDate()-1);return t.toISOString().slice(0,10);}
+function listOverdue(l){const dl=listDeadline(l);return !!dl&&dl<new Date().toISOString().slice(0,10);}
 function listsNeeded(){ // WOs scheduled to deliver inside the lead time with NO cutting list tagged
   const tagged=new Set();lists().forEach(l=>(l.wos||[]).forEach(w=>tagged.add(w)));
   const lim=new Date(Date.now()+listLead()*86400000).toISOString().slice(0,10);
@@ -1238,6 +1260,8 @@ function parseListWorkbook(data){
 }
 let lstTagOpen=null; // list id whose tag editor is open
 let lstFilter='';    // contains-filter over the library
+let lstCustF='';     // customer filter
+let lstGroupBy='project'; // library grouping: 'project' | 'customer'
 const lstColl=new Set(); // collapsed project groups
 let lstAttachOpen=null;  // WO in the needed panel whose attach row is open
 function renderLists(app){
@@ -1276,14 +1300,22 @@ function renderLists(app){
     <div class="exp-panel">
       <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
         <div style="font-size:14px;font-weight:600">Lists library — ${all.length} list${all.length!==1?'s':''}</div>
-        <input id="lst-filter" value="${escA(lstFilter)}" placeholder="🔍 Filter — project, house, WO…" style="padding:6px 10px;border:1px solid var(--b2);border-radius:6px;font-size:12px;width:240px">
-        ${lstFilter?`<button class="btn btn-s" id="lst-filter-x" style="font-size:11px">✕ clear</button>`:''}
+        <input id="lst-filter" value="${escA(lstFilter)}" placeholder="🔍 Filter — project, house, customer, WO…" style="padding:6px 10px;border:1px solid var(--b2);border-radius:6px;font-size:12px;width:230px">
+        <select id="lst-custf" style="padding:6px 8px;border:1px solid var(--b2);border-radius:6px;font-size:12px;max-width:180px">
+          <option value="">All customers</option>
+          ${[...new Set(all.map(listCust).filter(Boolean))].sort().map(c=>`<option${c===lstCustF?' selected':''}>${escA(c)}</option>`).join('')}
+        </select>
+        <span style="font-size:11px;color:var(--t3)">Group by:</span>
+        <button class="btn btn-s" id="lst-gb-p" style="font-size:11px;padding:3px 10px;${lstGroupBy==='project'?'background:#eaf2ff;border-color:#1a56db;color:#1a56db;font-weight:700':''}">Project</button>
+        <button class="btn btn-s" id="lst-gb-c" style="font-size:11px;padding:3px 10px;${lstGroupBy==='customer'?'background:#eaf2ff;border-color:#1a56db;color:#1a56db;font-weight:700':''}">Customer</button>
+        ${lstFilter||lstCustF?`<button class="btn btn-s" id="lst-filter-x" style="font-size:11px">✕ clear</button>`:''}
       </div>
       ${all.length?(()=>{
         const fl=lstFilter.trim().toLowerCase();
-        const show=all.filter(l=>!fl||[l.project,l.name,(l.wos||[]).join(' ')].join(' ').toLowerCase().includes(fl));
+        const show=all.filter(l=>(!fl||[l.project,l.name,listCust(l),(l.wos||[]).join(' ')].join(' ').toLowerCase().includes(fl))&&(!lstCustF||listCust(l)===lstCustF));
         if(!show.length)return '<p style="font-size:12px;color:var(--t3)">Nothing matches that filter.</p>';
-        const projs={};show.forEach(l=>{const p=l.project||'(no project)';(projs[p]=projs[p]||[]).push(l);});
+        const gkey=l=>lstGroupBy==='customer'?(listCust(l)||'(no customer tagged)'):(l.project||'(no project)');
+        const projs={};show.forEach(l=>{const p=gkey(l);(projs[p]=projs[p]||[]).push(l);});
         const rowOfL=l=>{const dn=listDone(l.id);const due=listDueKey(l);return `<tr>
         <td>${escA(l.project||'—')}</td>
         <td style="font-weight:700">${escA(l.name)}</td>
@@ -1305,7 +1337,7 @@ function renderLists(app){
           const grp=projs[p];const coll=!fl&&lstColl.has(p); // a live filter always expands
           const unt=grp.filter(l=>!(l.wos||[]).length).length;
           const dsaw=grp.filter(l=>listDone(l.id).saw).length,dfit=grp.filter(l=>listDone(l.id).fit).length;
-          return `<tr class="lst-ph" data-pcoll="${escA(p)}"><td colspan="9" style="background:#14335c;color:#fff;font-weight:700;cursor:pointer;font-size:12px;padding:7px 10px">${coll?'▸':'▾'} ${escA(p)} — ${grp.length} list${grp.length!==1?'s':''}${unt?` · <span style="color:#ffb3a7">${unt} untagged</span>`:''} · 🪚 ${dsaw}/${grp.length} cut · 🧰 ${dfit}/${grp.length} picked</td></tr>`
+          return `<tr class="lst-ph" data-pcoll="${escA(p)}"><td colspan="9" style="background:#14335c;color:#fff;font-weight:700;cursor:pointer;font-size:12px;padding:7px 10px">${coll?'▸':'▾'} ${lstGroupBy==='customer'?'👤':''} ${escA(p)} — ${grp.length} list${grp.length!==1?'s':''}${unt?` · <span style="color:#ffb3a7">${unt} untagged</span>`:''} · 🪚 ${dsaw}/${grp.length} cut · 🧰 ${dfit}/${grp.length} picked</td></tr>`
             +(coll?'':grp.map(rowOfL).join(''));
         }).join('')}
         </tbody></table>`;
@@ -1374,7 +1406,11 @@ function renderLists(app){
   const lfi=document.getElementById('lst-filter');
   if(lfi)lfi.oninput=()=>{lstFilter=lfi.value;render();const n=document.getElementById('lst-filter');if(n){n.focus();n.setSelectionRange(n.value.length,n.value.length);}};
   const lfx=document.getElementById('lst-filter-x');
-  if(lfx)lfx.onclick=()=>{lstFilter='';render();};
+  if(lfx)lfx.onclick=()=>{lstFilter='';lstCustF='';render();};
+  const lcf=document.getElementById('lst-custf');
+  if(lcf)lcf.onchange=()=>{lstCustF=lcf.value;render();};
+  const gbp=document.getElementById('lst-gb-p');if(gbp)gbp.onclick=()=>{lstGroupBy='project';render();};
+  const gbc=document.getElementById('lst-gb-c');if(gbc)gbc.onclick=()=>{lstGroupBy='customer';render();};
   document.querySelectorAll('[data-pcoll]').forEach(tr=>tr.onclick=()=>{
     const p=tr.dataset.pcoll;lstColl.has(p)?lstColl.delete(p):lstColl.add(p);render();
   });
@@ -1486,7 +1522,10 @@ function openCombined(lsArr,mode){
   const ov=document.createElement('div');ov.className='pod-ovl';
   ov.innerHTML=`<div class="pod-in" style="min-width:min(980px,94vw)">
     <div style="font-weight:800;color:#14335c;font-size:17px;margin-bottom:2px">${saw?'⚡ Combined cutting list':'⚡ Combined fittings list'} — ${lsArr.length} houses</div>
-    <div style="font-size:12px;color:var(--t3);margin-bottom:10px">${lsArr.map(l=>escA(l.name)).join(' · ')} — cut/pick the total, split per house as labelled. Quantities per house stay beside every line.</div>
+    <div style="font-size:12px;color:var(--t3);margin-bottom:6px">Cut/pick the total, split per house as labelled — quantities per house stay beside every line.</div>
+    <div style="background:#f4f7fb;border:1px solid var(--border);border-radius:7px;padding:7px 10px;margin-bottom:10px">
+      ${lsArr.map(l=>{const o=DB.orders.find(x=>(l.wos||[]).includes(x.wo));return `<div style="font-size:12px;color:#14335c;padding:1px 0"><b>${escA(l.name)}</b>${o&&(o.floor||o.unit)?' · '+escA([o.floor,o.unit].filter(Boolean).join(' · ')):''}${o&&o.title?' · '+escA(o.title):''}${o&&o.customer?' · <b>'+escA(o.customer)+'</b>':''}</div>`;}).join('')}
+    </div>
     <table class="wl-tbl"><thead><tr><th style="width:24%">Item</th><th>Total</th>${saw?'<th>Length</th><th>Width</th>':''}<th>${saw?'Material':'Spec'}</th><th>${saw?'Edging / Note':'Note'}</th><th style="width:26%">Per house</th></tr></thead><tbody>
     ${rows.map(r=>`<tr><td>${escA(r.item)||'—'}</td><td class="num" style="font-size:17px">${r.qty}</td>${saw?`<td class="num">${escA(r.L)}</td><td class="num">${escA(r.W)}</td>`:''}<td>${escA(r.mat)}</td><td>${escA(r.note)}</td>
       <td>${Object.entries(r.per).map(([h,q])=>`<span class="ph-chip">${escA(h)} <b>×${q}</b></span>`).join('')}</td></tr>`).join('')}
@@ -1514,6 +1553,7 @@ function printLabels(lsArr,mode){
   const one=(l,r)=>`<div class="lb">
     <div class="lb-top">${E(l.project||'')} · WESTERN POSTFORM</div>
     <div class="lb-house">${E(l.name)}</div>
+    ${listCust(l)?`<div class="lb-cust">${E(listCust(l))}</div>`:''}
     <div class="lb-item">${E(r.item||r.mat||'')}</div>
     <div class="lb-mid"><span class="lb-qty">×${r.qty}</span><span class="lb-dims">${saw&&(r.L||r.W)?E(r.L)+' × '+E(r.W):''}</span></div>
     <div class="lb-sub">${E(r.mat||'')}${r.note?' · '+E(r.note):''}</div>
@@ -1524,6 +1564,7 @@ function printLabels(lsArr,mode){
     labels+=`<div class="lb lb-hd">
       <div class="lb-top">${E(l.project||'')} · WESTERN POSTFORM</div>
       <div class="lb-house">${E(l.name)}</div>
+      ${listCust(l)?`<div class="lb-cust">${E(listCust(l))}</div>`:''}
       <div class="lb-item">${saw?'CUT PACK':'FITTINGS BOX'}</div>
       <div class="lb-sub">${rows.length} line item${rows.length!==1?'s':''} · printed ${new Date().toLocaleDateString('en-IE')}</div>
       <div class="lb-wos">${(l.wos||[]).map(E).join(' · ')}</div></div>`;
@@ -1541,6 +1582,8 @@ function printLabels(lsArr,mode){
   .lb-hd .lb-top{color:#cbd5e6}
   .lb-house{font-size:30px;font-weight:800;color:#14335c;line-height:1.05;margin:1mm 0}
   .lb-hd .lb-house{color:#fff}
+  .lb-cust{font-size:13px;font-weight:700;color:#1450a8;margin-bottom:1mm}
+  .lb-hd .lb-cust{color:#e8b931}
   .lb-item{font-size:16px;font-weight:700;line-height:1.15}
   .lb-mid{display:flex;align-items:baseline;gap:6mm;margin:1.5mm 0}
   .lb-qty{font-size:26px;font-weight:800;color:#0d6e46}
@@ -1563,8 +1606,8 @@ function renderWorkList(app,mode){
   const selLists=open.filter(l=>wlSel.has(l.id));
   const woChips=l=>(l.wos||[]).map(w=>{const o=DB.orders.find(x=>x.wo===w);return `<span class="lst-chip">${escA(w)}${o&&(o.floor||o.unit)?' · '+escA([o.floor,o.unit].filter(Boolean).join(' ')):''}</span>`;}).join('');
   const card=(l,isDone)=>{const dn=listDone(l.id)[mode];const due=listDueKey(l);return `<div class="wl-card${isDone?' cdone':''}">
-    <div class="wl-h"><div style="display:flex;gap:10px;align-items:flex-start">${!isDone?`<button class="wl-chk${wlSel.has(l.id)?' on':''}" data-wlsel="${escA(l.id)}" title="Select for batch cutting across houses">${wlSel.has(l.id)?'✓':''}</button>`:''}<div><span class="wn">${escA(l.name)}</span> <span class="wd">${escA(l.project||'')}</span><div style="margin-top:3px">${woChips(l)}</div></div></div>
-    ${due?`<span class="wl-due">DELIVERS ${fmt(due)}</span>`:'<span class="wd">no delivery date yet</span>'}</div>
+    <div class="wl-h"><div style="display:flex;gap:10px;align-items:flex-start">${!isDone?`<button class="wl-chk${wlSel.has(l.id)?' on':''}" data-wlsel="${escA(l.id)}" title="Select for batch cutting across houses">${wlSel.has(l.id)?'✓':''}</button>`:''}<div><span class="wn">${escA(l.name)}</span> <span class="wd">${escA(l.project||'')}${(c=>c&&c!==l.project?' · '+escA(c):'')(listCust(l))}</span><div style="margin-top:3px">${woChips(l)}</div></div></div>
+    ${due?(od=>`<span class="wl-due"${od?' style="background:#c0392b;color:#fff"':''}>${od?'⚠ OVERDUE — ':''}${mode==='saw'?'CUT':'PICK'} BY ${fmt(listDeadline(l))} · DELIVERS ${fmt(due)}</span>`)(!isDone&&listOverdue(l)):'<span class="wd">no delivery date yet</span>'}</div>
     ${listTableHTML(l,mode)}
     <div class="wl-act">${isDone?`<span class="wl-donelbl">${cfg.done} — ${new Date(dn.at).toLocaleDateString('en-IE')} ${hhmm(dn.at)}${dn.by?' by '+escA(dn.by):''}</span><button class="wl-undo" data-wlundo="${escA(l.id)}">Undo</button>`
       :`<span style="font-size:12px;color:var(--t3)">${cfg.cnt(l)} item${cfg.cnt(l)!==1?'s':''}</span><span style="display:flex;gap:8px"><button class="wl-undo" data-wllbl="${escA(l.id)}" title="Print a label for every pack and item, marked with this house">🏷 Labels</button><button class="wl-btn" data-wldone="${escA(l.id)}">${cfg.done}</button></span>`}</div>
@@ -1601,6 +1644,49 @@ function renderWorkList(app,mode){
     if(DB.listDone&&DB.listDone[id])delete DB.listDone[id][mode];
     sched();render();
   });
+}
+
+/* ---------- Management dashboard: one live read-only picture of the whole chain ---------- */
+function renderDash(app){
+  const all=delAll();
+  const todayIx=(i=>i<0?6:i)(DEL_DAYS.indexOf(wdName(new Date()))); // Sunday counts the whole week as past
+  const st=o=>dStage(o);
+  const planned=all.filter(o=>o.delDay);
+  const onTruck=all.filter(o=>st(o)==='disp');
+  const delivered=all.filter(o=>st(o)==='deliv');
+  const loadedNotGone=all.filter(o=>st(o)==='load');
+  const missed=planned.filter(o=>DEL_DAYS.indexOf(o.delDay)<todayIx&&st(o)!=='deliv');
+  const val=a=>a.reduce((s,o)=>s+(+o.value||0),0);
+  const sawOpen=lists().filter(l=>(l.saw||0)>0&&!listDone(l.id).saw);
+  const sawDone=lists().filter(l=>(l.saw||0)>0&&listDone(l.id).saw);
+  const fitOpen=lists().filter(l=>(l.fit||0)>0&&!listDone(l.id).fit);
+  const fitDone=lists().filter(l=>(l.fit||0)>0&&listDone(l.id).fit);
+  const needed=listsNeeded();
+  const srt=(a,b)=>(listDueKey(a)||'9999').localeCompare(listDueKey(b)||'9999');
+  const tile=(n,lbl,sub,color)=>`<div class="dsh-tile" style="border-top:4px solid ${color}"><div class="dsh-n" style="color:${color}">${n}</div><div class="dsh-l">${lbl}</div>${sub?`<div class="dsh-s">${sub}</div>`:''}</div>`;
+  const jrow=o=>`<div class="dsh-row"><b>${escA(o.wo)}</b>${(o.floor||o.unit)?`<span class="flr-fu" style="font-size:12px">${escA([o.floor,o.unit].filter(Boolean).join(' · '))}</span>`:''}<span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-c">${escA(o.customer||'')}</span><span class="dsh-x">${escA(vehLbl(o.delVeh)||'')} ${escA(o.delDay||'')}</span></div>`;
+  const panel=(title,color,rows,empty)=>`<div class="dsh-p"><div class="dsh-ph" style="background:${color}">${title}</div>${rows.length?rows.join(''):`<div class="dsh-row" style="color:var(--t3);font-style:italic">${empty}</div>`}</div>`;
+  app.innerHTML=`<div class="dsh">
+    <div class="dsh-tiles">
+      ${tile(missed.length,'MISSED DELIVERIES','planned earlier this week, not delivered','#c0392b')}
+      ${tile(onTruck.length,'ON TRUCKS NOW','dispatched, awaiting driver confirmation','#1450a8')}
+      ${tile(loadedNotGone.length,'LOADED IN YARD','on a van, not yet dispatched','#8a6d00')}
+      ${tile(delivered.length,'DELIVERED','this week · €'+Math.round(val(delivered)).toLocaleString(),'#0d6e46')}
+      ${tile(planned.length,'ON DELIVERY BOARD','planned this week · €'+Math.round(val(planned)).toLocaleString(),'#14335c')}
+      ${tile(sawOpen.length,'CUTTING LISTS OPEN',(n=>n?`<b style="color:#c0392b">${n} OVERDUE</b> · `:'')(sawOpen.filter(listOverdue).length)+sawDone.length+' cut complete','#7c5cd6')}
+      ${tile(fitOpen.length,'FITTINGS TO PICK',(n=>n?`<b style="color:#c0392b">${n} OVERDUE</b> · `:'')(fitOpen.filter(listOverdue).length)+fitDone.length+' picked','#0e7490')}
+      ${tile(needed.length,'LISTS MISSING','jobs scheduled with no cutting list','#c0392b')}
+    </div>
+    <div class="dsh-cols">
+      ${panel('⚠ MISSED — planned earlier this week, not delivered','#c0392b',missed.sort((a,b)=>DEL_DAYS.indexOf(a.delDay)-DEL_DAYS.indexOf(b.delDay)).map(o=>`<div class="dsh-row"><b>${escA(o.wo)}</b><span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-c">${escA(o.customer||'')}</span><span class="dsh-x" style="color:#c0392b;font-weight:800">${escA(o.delDay)} · ${st(o)?dStageLbl[st(o)]:'NEVER LOADED'}</span></div>`),'None — every planned delivery is on time ✓')}
+      ${panel('🚚 ON TRUCKS NOW','#1450a8',onTruck.map(o=>`<div class="dsh-row"><b>${escA(o.wo)}</b><span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-c">${escA(o.customer||'')}</span><span class="dsh-x">${escA(vehLbl(o.delVeh)||'')} · out since ${dStageTime(o)}</span></div>`),'Nothing out for delivery right now')}
+      ${panel('✓ DELIVERED THIS WEEK','#0d6e46',delivered.sort((a,b)=>String(b.delDelivAt||'').localeCompare(String(a.delDelivAt||''))).slice(0,20).map(o=>`<div class="dsh-row"><b>${escA(o.wo)}</b><span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-c">${escA(o.customer||'')}</span><span class="dsh-x" style="color:#0d6e46">${o.delDelivAt?new Date(o.delDelivAt).toLocaleDateString('en-IE',{weekday:'short'})+' '+dStageTime(o):''}${o.delivBy?' · '+escA(o.delivBy):''}</span></div>`),'No confirmed deliveries yet this week')}
+      ${panel('🪚 CUTTING — next up (cut by the day before delivery)','#7c5cd6',sawOpen.sort(srt).slice(0,8).map(l=>`<div class="dsh-row"><b>${escA(l.name)}</b><span class="dsh-t">${escA(l.project||'')}</span><span class="dsh-c">${escA(listCust(l))}</span><span class="dsh-x">${listDueKey(l)?(listOverdue(l)?`<span style="color:#c0392b;font-weight:800">cut by ${fmt(listDeadline(l))} — OVERDUE</span>`:'cut by '+fmt(listDeadline(l))):'no date'}</span></div>`),'Cutting queue is clear ✓')}
+      ${panel('🧰 STORES — next up (pick by the day before delivery)','#0e7490',fitOpen.sort(srt).slice(0,8).map(l=>`<div class="dsh-row"><b>${escA(l.name)}</b><span class="dsh-t">${escA(l.project||'')}</span><span class="dsh-c">${escA(listCust(l))}</span><span class="dsh-x">${listDueKey(l)?(listOverdue(l)?`<span style="color:#c0392b;font-weight:800">pick by ${fmt(listDeadline(l))} — OVERDUE</span>`:'pick by '+fmt(listDeadline(l))):'no date'}</span></div>`),'Stores queue is clear ✓')}
+      ${panel('📋 LISTS MISSING — scheduled, no cutting list','#c0392b',needed.slice(0,8).map(o=>`<div class="dsh-row"><b>${escA(o.wo)}</b><span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-c">${escA(o.customer||'')}</span><span class="dsh-x">${fmt(o.dueDate)}</span></div>`),'Every scheduled job has its list ✓')}
+    </div>
+    <div class="flr-ft">Live — refreshes automatically · Last update ${hhmm(new Date().toISOString())}</div>
+  </div>`;
 }
 
 /* ---------- Factory floor screen: today + tomorrow's loads, big type, auto-refresh ---------- */
