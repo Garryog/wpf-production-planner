@@ -178,12 +178,79 @@ button,input,select{font-family:inherit;cursor:pointer}
 .addjob-row.open{display:flex}
 .addjob-row input{border:1px solid var(--b2);border-radius:5px;padding:6px 8px;font-size:12px;outline:none}
 @media(max-width:900px){.dchip{width:100%}}
+/* ---------- Role views: picker overlay, factory floor screen, driver phone ---------- */
+.rovl{position:fixed;inset:0;background:rgba(12,20,34,.74);z-index:500;display:flex;align-items:center;justify-content:center;padding:16px}
+.rovl.hide{display:none}
+.rcard{background:#fff;border-radius:14px;padding:26px 22px;max-width:430px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.35);text-align:center}
+.rcard h2{font-size:18px;color:#14335c;margin-bottom:4px}
+.rcard>p{font-size:12px;color:var(--t3);margin-bottom:16px}
+.rbtn{display:flex;align-items:center;gap:14px;width:100%;border:1px solid var(--b2);background:#f7f9fc;border-radius:10px;padding:13px 14px;margin-bottom:9px;cursor:pointer;text-align:left;font-size:15px;font-weight:600;color:var(--text)}
+.rbtn:hover{background:#eaf2ff;border-color:#1a56db}
+.rbtn .ri{font-size:26px}
+.rbtn small{display:block;font-weight:400;font-size:11px;color:var(--t3);margin-top:2px}
+.rpin{display:none;margin-top:12px}
+.rpin.open{display:block}
+.rpin input{font-size:24px;letter-spacing:8px;text-align:center;width:170px;padding:8px;border:2px solid #1a56db;border-radius:8px;outline:none}
+.rpin .perr{color:var(--red);font-size:12px;margin-top:6px;min-height:14px}
+/* factory floor screen (big read-only display) */
+.flr{max-width:1800px;margin:0 auto;padding:14px 18px;display:grid;grid-template-columns:1.1fr 1fr;gap:18px}
+@media(max-width:900px){.flr{grid-template-columns:1fr}}
+.flr-col h2{font-size:30px;color:#14335c;border-bottom:4px solid #1a56db;padding-bottom:6px;margin-bottom:12px}
+.flr-col h2 span{font-size:16px;color:var(--t3);font-weight:400;margin-left:10px}
+.flr-veh{background:#fff;border:1px solid var(--border);border-radius:10px;margin-bottom:14px;overflow:hidden}
+.flr-vh{background:#14335c;color:#fff;font-size:20px;font-weight:700;padding:8px 14px;display:flex;justify-content:space-between;align-items:center}
+.flr-vh span{font-weight:400;font-size:14px;opacity:.85}
+.flr-job{display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid var(--border);font-size:17px}
+.flr-job:last-child{border-bottom:none}
+.flr-job>b{font-family:monospace;font-size:19px;color:#14335c;white-space:nowrap}
+.flr-fu{background:#eef2f8;border-radius:5px;padding:2px 8px;font-size:14px;color:#345;white-space:nowrap}
+.flr-t{flex:1;min-width:0}
+.flr-c{color:var(--t3);font-size:13px}
+.flr-st{font-weight:800;font-size:14px;padding:4px 10px;border-radius:6px;white-space:nowrap}
+.flr-st.s-{background:#f1f3f7;color:#667}
+.flr-st.s-load{background:#fff3cd;color:#8a6d00}
+.flr-st.s-disp{background:#d7e7fd;color:#1450a8}
+.flr-st.s-deliv{background:#d2f2de;color:#0d6e46}
+.flr-none{padding:26px;text-align:center;color:var(--t3);font-size:18px;background:#fff;border:1px dashed var(--b2);border-radius:10px}
+.flr-ft{grid-column:1/-1;text-align:center;color:var(--t3);font-size:13px;padding:6px}
+/* driver phone view */
+.drv{max-width:680px;margin:0 auto;padding:12px}
+.drv-set{display:grid;grid-template-columns:1.2fr 1fr .8fr;gap:8px;margin-bottom:12px}
+@media(max-width:480px){.drv-set{grid-template-columns:1fr 1fr;} .drv-set>div:first-child{grid-column:1/-1}}
+.drv-set label{font-size:11px;color:var(--t3);font-weight:700;text-transform:uppercase;display:block;margin-bottom:3px}
+.drv-set input,.drv-set select{width:100%;padding:12px 10px;font-size:16px;border:1px solid var(--b2);border-radius:8px;background:#fff}
+.drv-job{background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px;display:flex;align-items:center;gap:12px}
+.drv-job.on{background:#fff8e6;border-color:#ecd394}
+.drv-job.disp{background:#e8f1fd;border-color:#9cbce8}
+.drv-job.done{background:#eefbf3;border-color:#b3e0c4}
+.drv-ji{flex:1;min-width:0}
+.drv-ji b{font-family:monospace;font-size:17px;color:#14335c}
+.drv-fu{background:#eef2f8;border-radius:4px;padding:1px 7px;font-size:13px;color:#345;margin-left:6px;white-space:nowrap}
+.drv-jt{font-size:14px;margin-top:3px}
+.drv-jc{font-size:12px;color:var(--t3);margin-top:1px}
+.drv-tick{width:90px;min-height:56px;border-radius:10px;border:2px solid var(--b2);background:#f7f9fc;font-size:13px;font-weight:800;color:var(--t3);cursor:pointer;flex-shrink:0}
+.drv-tick.on{background:#0d9450;border-color:#0d9450;color:#fff}
+.drv-big{width:100%;padding:18px;font-size:19px;font-weight:800;border:none;border-radius:12px;cursor:pointer;margin-top:6px}
+.drv-deliv{background:#0d9450;color:#fff}
+.drv-deliv:disabled{background:#c6cdd8;cursor:default}
+.drv-stat{background:#14335c;color:#fff;border-radius:10px;padding:12px 14px;font-size:14px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.drv-pod{background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px;margin-top:14px}
+.drv-pod h3{font-size:14px;color:#14335c;margin-bottom:8px}
+.drv-pod .pthumbs{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.drv-pod .pthumbs img{width:86px;height:86px;object-fit:cover;border-radius:8px;border:1px solid var(--border)}
+.drv-pod .pbtn{display:inline-flex;align-items:center;gap:8px;background:#1a56db;color:#fff;border:none;border-radius:10px;padding:12px 16px;font-size:15px;font-weight:700;cursor:pointer}
+.drv-pod .pbtn:disabled{background:#c6cdd8}
+.drv-done-banner{background:#d2f2de;border:1px solid #b3e0c4;color:#0d6e46;border-radius:10px;padding:14px;font-size:15px;font-weight:700;text-align:center;margin-top:10px}
+.hdr-role{margin-left:12px;font-size:11px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.35);color:#fff;border-radius:6px;padding:4px 9px;cursor:pointer;white-space:nowrap}
+.pod-ovl{position:fixed;inset:0;background:rgba(12,20,34,.8);z-index:600;display:flex;align-items:center;justify-content:center;padding:20px}
+.pod-ovl .pod-in{background:#fff;border-radius:12px;padding:18px;max-width:900px;max-height:86vh;overflow:auto}
+.pod-ovl img{max-width:260px;border-radius:8px;margin:6px;border:1px solid var(--border)}
 </style>
 </head>
 <body>
 <div class="hdr"><div class="hdr-i">
   <div class="logo"><div class="lm">WP</div><div><div class="lt">Western Postform</div><div class="ls">Production Planner</div></div></div>
-  <div class="sync"><span class="dot" id="dot"></span><span id="stxt">Loading…</span></div>
+  <div class="sync"><span class="dot" id="dot"></span><span id="stxt">Loading…</span><button class="hdr-role" id="role-sw" style="display:none">⇄ Switch view</button></div>
 </div></div>
 <div class="tabs"><div class="tabs-i">
   <button class="tab on" id="t-b">Capacity Board</button>
@@ -194,11 +261,13 @@ button,input,select{font-family:inherit;cursor:pointer}
 </div></div>
 <div id="app"><div style="padding:60px;text-align:center"><div class="spin"></div></div></div>
 <div class="toast" id="toast"></div>
+<div class="rovl hide" id="rovl"></div>
 <script>
 const SUPA_URL='https://klyropbsupqfmtjjwlfa.supabase.co/rest/v1';
 const SUPA_KEY='sb_publishable_CF4Aizmuq0ChPfVHL6K66w_78VFQC1e'; // new-style Supabase key (legacy JWT keys were disabled by Supabase on 2026-09-11 and are kept only as a re-enabled fallback)
 const SUPA_HDR={'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'};
 const SUPA_WHDR={'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=minimal'};
+const SUPA_STORE='https://klyropbsupqfmtjjwlfa.supabase.co/storage/v1'; // proof-of-delivery photos live in the public 'pod' bucket
 let WCAP=350;
 
 let DB={orders:[],nid:1,weekCaps:{}};
@@ -247,6 +316,8 @@ async function loadDB(){
       if(d[0].settings&&d[0].settings.delx)DB.delx=d[0].settings.delx;
       if(d[0].settings&&d[0].settings.delNotes)DB.delNotes=d[0].settings.delNotes;
       if(d[0].settings&&d[0].settings.grps)DB.grps=d[0].settings.grps;
+      if(d[0].settings&&d[0].settings.pins)DB.pins=d[0].settings.pins;
+      if(d[0].settings&&d[0].settings.pod)DB.pod=d[0].settings.pod;
     }
     DB.orders.forEach(o=>{orig[o.wo]=o.plannedWeek||'';origStep[o.wo]=o.step||'';});
     DB.loadFailed=false;
@@ -266,7 +337,7 @@ async function saveDB(){
   }
   setSS('s');
   try{
-    const resp=await fetch(SUPA_URL+'/production_planner?id=eq.main',{method:'PATCH',headers:SUPA_WHDR,body:JSON.stringify({orders:DB.orders,nid:DB.nid,settings:{weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP,delx:DB.delx||[],delNotes:DB.delNotes||{},grps:DB.grps||{}}})});
+    const resp=await fetch(SUPA_URL+'/production_planner?id=eq.main',{method:'PATCH',headers:SUPA_WHDR,body:JSON.stringify({orders:DB.orders,nid:DB.nid,settings:{weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP,delx:DB.delx||[],delNotes:DB.delNotes||{},grps:DB.grps||{},pins:DB.pins||{},pod:DB.pod||{}}})});
     if(resp&&resp.ok===false){setSS('e');return;}
     setSS('ok');
   }catch(e){setSS('e');}
@@ -310,8 +381,81 @@ function changes(){return DB.orders.filter(o=>(orig[o.wo]!==undefined&&orig[o.wo
 
 function showTab(t){tab=t;['b','d','i','x','s'].forEach(id=>{const el=document.getElementById('t-'+id);if(el)el.className='tab'+(id===t?' on':'');});render();}
 
+/* ---------- Role views: Office / Factory Floor / Driver (same live plan, a screen per job) ---------- */
+const ls={get:k=>{try{return localStorage.getItem(k)||'';}catch(e){return'';}},set:(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}}};
+function pins(){const p=DB.pins||{};return{office:p.office||'2468',driver:p.driver||'1111'};}
+let ROLE='';
+(function(){
+  const q=(new URLSearchParams(location.search).get('view')||'').toLowerCase();
+  if(['office','floor','driver'].includes(q))ROLE=q;
+  else{const s=ls.get('wpfRole');if(['office','floor','driver'].includes(s))ROLE=s;}
+})();
+function roleOk(r){ // has this device already entered the right PIN for this role?
+  if(r==='floor')return true;
+  if(r==='office')return ls.get('wpfPinOffice')===pins().office;
+  if(r==='driver')return ls.get('wpfPinDriver')===pins().driver;
+  return false;
+}
+let viewTimer=null;
+function startAutoRefresh(){
+  clearInterval(viewTimer);
+  if(ROLE==='floor'||ROLE==='driver'){
+    viewTimer=setInterval(()=>{
+      if(saveT||drvUploading)return; // never clobber an unsaved change or an upload in progress
+      loadDB().then(()=>{if(ROLE==='floor'||ROLE==='driver')render();});
+    },120000);
+  }
+}
+function setRole(r){ROLE=r;ls.set('wpfRole',r);startAutoRefresh();render();}
+function rolePicker(pinFor){
+  const ov=document.getElementById('rovl');
+  ov.className='rovl';
+  ov.innerHTML=`<div class="rcard">
+    <h2>Who's using this screen?</h2>
+    <p>Everyone sees the same live plan — each role gets the view for their job.</p>
+    <button class="rbtn" data-role="office"><span class="ri">🗓</span><span>Office / Planning<small>Full planner — plan, dispatch, import, print. PIN required.</small></span></button>
+    <button class="rbtn" data-role="floor"><span class="ri">🏭</span><span>Factory Floor Screen<small>Big read-only display — today &amp; tomorrow's loads, live status.</small></span></button>
+    <button class="rbtn" data-role="driver"><span class="ri">🚚</span><span>Driver<small>Your van's run — check jobs onto the van, confirm delivered. PIN required.</small></span></button>
+    <div class="rpin${pinFor?' open':''}" id="rpin">
+      <div style="font-size:13px;color:var(--t2);margin-bottom:8px">Enter the <b id="rpin-role">${pinFor==='driver'?'Driver':'Office'}</b> PIN</div>
+      <input id="rpin-in" inputmode="numeric" autocomplete="off" maxlength="8" placeholder="····">
+      <div class="perr" id="rpin-err"></div>
+    </div>
+  </div>`;
+  let want=pinFor||'';
+  const pinEl=document.getElementById('rpin'),inEl=document.getElementById('rpin-in');
+  ov.querySelectorAll('.rbtn').forEach(b=>b.onclick=()=>{
+    const r=b.dataset.role;
+    if(r==='floor'||roleOk(r)){ov.className='rovl hide';setRole(r);return;}
+    want=r;
+    document.getElementById('rpin-role').textContent=r==='office'?'Office':'Driver';
+    pinEl.classList.add('open');document.getElementById('rpin-err').textContent='';inEl.value='';inEl.focus();
+  });
+  inEl.oninput=()=>{
+    if(!want)return;
+    const v=inEl.value.trim(),good=want==='office'?pins().office:pins().driver;
+    if(v.length>=good.length){
+      if(v===good){ls.set(want==='office'?'wpfPinOffice':'wpfPinDriver',v);ov.className='rovl hide';setRole(want);}
+      else{document.getElementById('rpin-err').textContent='Wrong PIN — try again';inEl.value='';}
+    }
+  };
+  if(pinFor)inEl.focus();
+}
+
 function render(){
   const app=document.getElementById('app');
+  const tabsBar=document.querySelector('.tabs');
+  const sw=document.getElementById('role-sw');
+  if(sw){sw.style.display=ROLE?'':'none';sw.textContent='⇄ '+(ROLE==='office'?'Office':ROLE==='driver'?'Driver':'Floor screen');sw.onclick=()=>rolePicker();}
+  if(tabsBar)tabsBar.style.display=(ROLE==='office')?'':'none';
+  if(!ROLE){app.innerHTML='';rolePicker();return;}
+  if(ROLE!=='floor'&&!roleOk(ROLE)){app.innerHTML='';rolePicker(ROLE);return;}
+  if(DB.loadFailed&&ROLE!=='office'){
+    app.innerHTML=`<div style="max-width:700px;margin:40px auto;padding:0 20px"><div style="background:#fdecea;border:2px solid #e57368;border-radius:8px;padding:16px;font-size:14px;color:#8a1c10"><b>⚠ Can't reach the planner database.</b> This screen has no data to show. Check the network allows klyropbsupqfmtjjwlfa.supabase.co, then refresh.</div></div>`;
+    return;
+  }
+  if(ROLE==='floor'){renderFloor(app);return;}
+  if(ROLE==='driver'){renderDriver(app);return;}
   if(tab==='b')renderBoard(app);
   else if(tab==='d')renderDeliveries(app);
   else if(tab==='i')renderImport(app);
@@ -367,7 +511,26 @@ function renderSettings(app){
     +'<input type="number" id="s-vcap" value="'+VCAP+'" step="10000" min="1" style="padding:6px 10px;border:1px solid var(--b2);border-radius:6px;font-size:14px;width:140px"></div>'
     +'</div>'
     +'<button class="btn btn-g" id="btn-save-cap">Save Capacity</button>'
+    +'</div>'
+    +'<div class="exp-panel">'
+    +'<div style="font-size:14px;font-weight:600;margin-bottom:6px">View PINs</div>'
+    +'<p style="font-size:12px;color:var(--t3);margin-bottom:12px">The Office PIN unlocks this full planner; the Driver PIN unlocks the driver view (loading checks and delivery confirmation). The factory floor screen needs no PIN — it is read-only. Changing a PIN signs everyone out of that view until they enter the new one.</p>'
+    +'<div style="display:flex;gap:20px;flex-wrap:wrap;margin-bottom:12px">'
+    +'<div><label style="font-size:12px;color:var(--t2);display:block;margin-bottom:4px">Office PIN</label>'
+    +'<input id="s-pin-o" value="'+escA(pins().office)+'" maxlength="8" style="padding:6px 10px;border:1px solid var(--b2);border-radius:6px;font-size:16px;width:110px;letter-spacing:4px"></div>'
+    +'<div><label style="font-size:12px;color:var(--t2);display:block;margin-bottom:4px">Driver PIN</label>'
+    +'<input id="s-pin-d" value="'+escA(pins().driver)+'" maxlength="8" style="padding:6px 10px;border:1px solid var(--b2);border-radius:6px;font-size:16px;width:110px;letter-spacing:4px"></div>'
+    +'</div>'
+    +'<button class="btn btn-g" id="btn-save-pins">Save PINs</button>'
     +'</div></div>';
+
+  document.getElementById('btn-save-pins')?.addEventListener('click',()=>{
+    const po=(document.getElementById('s-pin-o')?.value||'').trim(),pd=(document.getElementById('s-pin-d')?.value||'').trim();
+    if(po.length<4||pd.length<4){toast('PINs need at least 4 characters');return;}
+    DB.pins={office:po,driver:pd};
+    ls.set('wpfPinOffice',po); // this device stays signed in to Office
+    sched();toast('PINs saved ✓');
+  });
 
   document.getElementById('btn-save-scale')?.addEventListener('click',()=>{
     HOUR_SCALE.forEach((tier,i)=>{
@@ -833,6 +996,115 @@ function confirmPartLoad(jobs){
   return confirm('⚠ PART-LOAD WARNING\n\nThe following jobs belong to the same unit or group as jobs on this load, but are NOT dispatched and NOT on this van:\n\n'+lines.join('\n')+(gaps.length>12?'\n  …and '+(gaps.length-12)+' more':'')+'\n\nSend the load anyway WITHOUT them?');
 }
 
+/* ---------- Factory floor screen: today + tomorrow's loads, big type, auto-refresh ---------- */
+function wdName(d){return['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()];}
+function floorDays(){const t=wdName(new Date());const i=DEL_DAYS.indexOf(t);if(i<0)return['Mon','Tue'];return[t,DEL_DAYS[(i+1)%DEL_DAYS.length]];}
+function renderFloor(app){
+  const[td,tm]=floorDays();
+  const col=(day,label)=>{
+    const vehs=DEL_VEH.map(v=>({v,jobs:delAll().filter(o=>o.delVeh===v.k&&o.delDay===day).sort(woCmp)})).filter(x=>x.jobs.length);
+    const inner=vehs.length?vehs.map(x=>`<div class="flr-veh"><div class="flr-vh">${escA(x.v.n)}<span>${x.jobs.length} job${x.jobs.length!==1?'s':''}${x.v.sub?' · '+escA(x.v.sub):''}</span></div>
+      ${x.jobs.map(o=>{const st=dStage(o);return`<div class="flr-job"><b>${escA(o.wo)}</b>${(o.floor||o.unit)?`<span class="flr-fu">${escA([o.floor,o.unit].filter(Boolean).join(' · '))}</span>`:''}<span class="flr-t">${escA(o.title)||'—'}<div class="flr-c">${escA(o.customer||'')}</div></span><span class="flr-st s-${st}">${st?dStageLbl[st]+(dStageTime(o)?' '+dStageTime(o):''):'TO LOAD'}</span></div>`;}).join('')}
+    </div>`).join(''):`<div class="flr-none">No deliveries planned for ${day}</div>`;
+    return `<div class="flr-col"><h2>${label}<span>${day}</span></h2>${inner}</div>`;
+  };
+  app.innerHTML=`<div class="flr">${col(td,'TODAY')}${col(tm,'TOMORROW')}<div class="flr-ft">Live — refreshes automatically · Last update ${hhmm(new Date().toISOString())}</div></div>`;
+}
+
+/* ---------- Driver phone view: check jobs onto the van, group ALL DELIVERED, photo proof ---------- */
+let drvUploading=false;
+function podKey(veh,day){return veh+'|'+day+'|'+wkKey(new Date());}
+function renderDriver(app){
+  const name=ls.get('wpfDrvName'),veh=ls.get('wpfDrvVeh')||'',day=ls.get('wpfDrvDay')||floorDays()[0];
+  const jobs=veh?delAll().filter(o=>o.delVeh===veh&&o.delDay===day).sort(woCmp):[];
+  const onVan=jobs.filter(o=>dStage(o)!=='').length;
+  const delivd=jobs.filter(o=>dStage(o)==='deliv').length;
+  const allDeliv=jobs.length>0&&delivd===jobs.length;
+  const pk=podKey(veh,day);const pod=(DB.pod||{})[pk];
+  app.innerHTML=`<div class="drv">
+    <div class="drv-set">
+      <div><label>Driver name</label><input id="drv-name" value="${escA(name)}" placeholder="Your name"></div>
+      <div><label>Vehicle</label><select id="drv-veh"><option value="">— pick van —</option>${DEL_VEH.map(v=>`<option value="${v.k}"${v.k===veh?' selected':''}>${v.n}</option>`).join('')}</select></div>
+      <div><label>Day</label><select id="drv-day">${DEL_DAYS.map(d=>`<option${d===day?' selected':''}>${d}</option>`).join('')}</select></div>
+    </div>
+    ${!veh?`<div class="flr-none">Pick your van above to see your run</div>`:
+      !jobs.length?`<div class="flr-none">No jobs planned for ${escA(vehLbl(veh))} on ${day}</div>`:`
+      <div class="drv-stat"><span><b>${escA(vehLbl(veh))} — ${day}</b> · ${jobs.length} job${jobs.length!==1?'s':''}</span><span>${onVan}/${jobs.length} on van · ${delivd} delivered</span></div>
+      ${jobs.map(o=>{const st=dStage(o);return`<div class="drv-job${st==='deliv'?' done':st==='disp'?' disp':st?' on':''}">
+        <div class="drv-ji"><b>${escA(o.wo)}</b>${(o.floor||o.unit)?`<span class="drv-fu">${escA([o.floor,o.unit].filter(Boolean).join(' · '))}</span>`:''}
+          <div class="drv-jt">${escA(o.title)||'—'}</div><div class="drv-jc">${escA(o.customer||'')}${st==='deliv'?' · ✓ delivered '+dStageTime(o)+(o.delivBy?' by '+escA(o.delivBy):''):st==='disp'?' · dispatched '+dStageTime(o):''}</div></div>
+        ${st==='deliv'?`<div style="font-size:28px;color:#0d9450;flex-shrink:0">✓</div>`:`<button class="drv-tick${st?' on':''}" data-dl="${escA(o.wo)}">${st?'ON VAN ✓':'ON VAN'}</button>`}
+      </div>`;}).join('')}
+      ${allDeliv?`<div class="drv-done-banner">✓ All delivered${pod&&pod.at?' — '+hhmm(pod.at):''}${pod&&pod.by?' by '+escA(pod.by):''}</div>`:
+        `<button class="drv-big drv-deliv" id="drv-alldeliv">✓ ALL DELIVERED — run complete</button>
+         <div style="font-size:11px;color:var(--t3);text-align:center;margin-top:6px">Tap when every drop on this run is made — the date, time and your name go on every job.</div>`}
+      <div class="drv-pod">
+        <h3>📷 Proof of delivery photos</h3>
+        <button class="pbtn" id="drv-photo"${drvUploading?' disabled':''}>${drvUploading?'Uploading…':'📷 Add photo'}</button>
+        <input type="file" id="drv-file" accept="image/*" capture="environment" multiple style="display:none">
+        <div class="pthumbs">${pod&&(pod.photos||[]).length?pod.photos.map(u=>`<a href="${escA(u)}" target="_blank"><img src="${escA(u)}" alt="proof"></a>`).join(''):''}</div>
+      </div>`}
+  </div>`;
+  const nm=document.getElementById('drv-name');if(nm)nm.oninput=()=>ls.set('wpfDrvName',nm.value.trim()); // save as typed — a re-render must never lose the name
+  const drvName=()=>{const el=document.getElementById('drv-name');return((el&&el.value)||ls.get('wpfDrvName')||'').trim();};
+  const vs=document.getElementById('drv-veh');if(vs)vs.onchange=()=>{ls.set('wpfDrvVeh',vs.value);render();};
+  const ds=document.getElementById('drv-day');if(ds)ds.onchange=()=>{ls.set('wpfDrvDay',ds.value);render();};
+  document.querySelectorAll('[data-dl]').forEach(b=>b.onclick=()=>{
+    const o=findDel(b.dataset.dl);if(!o)return;
+    const nmv=drvName();
+    const st=dStage(o);
+    if(st===''){o.delLoadedAt=new Date().toISOString();if(nmv){o.ldBy=nmv;ls.set('wpfDrvName',nmv);}toast(o.wo+' on the van ✓');}
+    else if(st==='load'){delete o.delLoadedAt;delete o.ldBy;toast(o.wo+' taken back off the van');}
+    else return; // dispatched/delivered can't be un-ticked from the van
+    sched();render();
+  });
+  const ad=document.getElementById('drv-alldeliv');
+  if(ad)ad.onclick=()=>{
+    const nmv=drvName();
+    if(!nmv){toast('Enter your name first — it goes on the delivery record');document.getElementById('drv-name').focus();return;}
+    ls.set('wpfDrvName',nmv);
+    const open=jobs.filter(o=>dStage(o)!=='deliv');
+    if(!open.length)return;
+    if(!confirm('Confirm ALL '+open.length+' job'+(open.length!==1?'s':'')+' on the '+vehLbl(veh)+' ('+day+') are DELIVERED?\n\nRecorded as delivered by '+nmv+', '+new Date().toLocaleDateString('en-IE')+' '+hhmm(new Date().toISOString())+'.'))return;
+    const now=new Date().toISOString();
+    open.forEach(o=>{if(!o.delLoadedAt)o.delLoadedAt=now;if(!o.delDispAt)o.delDispAt=now;o.delDelivAt=now;o.delDone=true;o.delivBy=nmv;});
+    DB.pod=DB.pod||{};DB.pod[pk]=DB.pod[pk]||{photos:[]};DB.pod[pk].by=nmv;DB.pod[pk].at=now;
+    sched();render();toast('Run complete — '+open.length+' job'+(open.length!==1?'s':'')+' marked DELIVERED ✓ Add a photo as proof.');
+  };
+  const pb=document.getElementById('drv-photo'),pf=document.getElementById('drv-file');
+  if(pb&&pf){pb.onclick=()=>pf.click();pf.onchange=()=>addPodPhotos(pf.files,pk);}
+}
+function shrinkImage(file){return new Promise((res,rej)=>{
+  const img=new Image();const url=URL.createObjectURL(file);
+  img.onload=()=>{
+    const mx=1400,sc=Math.min(1,mx/Math.max(img.width,img.height));
+    const c=document.createElement('canvas');c.width=Math.max(1,Math.round(img.width*sc));c.height=Math.max(1,Math.round(img.height*sc));
+    c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+    URL.revokeObjectURL(url);
+    c.toBlob(b=>b?res(b):rej(new Error('compress failed')),'image/jpeg',.72);
+  };
+  img.onerror=()=>{URL.revokeObjectURL(url);rej(new Error('bad image'));};
+  img.src=url;
+});}
+async function addPodPhotos(files,pk){
+  if(!files||!files.length)return;
+  drvUploading=true;render();
+  try{
+    DB.pod=DB.pod||{};DB.pod[pk]=DB.pod[pk]||{photos:[]};
+    for(const f of files){
+      const blob=await shrinkImage(f);
+      const path=pk.replace(/[^A-Za-z0-9-]/g,'-')+'/'+Date.now()+'-'+Math.floor(Math.random()*1e4)+'.jpg';
+      const r=await fetch(SUPA_STORE+'/object/pod/'+path,{method:'POST',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'image/jpeg','x-upsert':'true'},body:blob});
+      if(!r.ok)throw new Error('HTTP '+r.status);
+      DB.pod[pk].photos.push(SUPA_STORE+'/object/public/pod/'+path);
+    }
+    sched();toast('Photo saved ✓');
+  }catch(e){
+    toast('Photo upload failed ('+e.message+') — tell the office; the photo bucket may not be set up yet.');
+  }
+  drvUploading=false;render();
+}
+
 function dchip(o,showCust){
   const st=dStage(o);
   return `<div class="dchip${st==='deliv'?' done':''}${st==='disp'?' dispd':''}${st==='load'?' loadd':''}${o.manual?' manual':''}${delSel.has(o.wo)?' sel':''}" draggable="true" data-dw="${escA(o.wo)}" title="Click to select · drag onto a day${o.manual?' · added manually':''}">
@@ -840,7 +1112,7 @@ function dchip(o,showCust){
       <span class="dchip-btns"><button class="dchk${st?' on':''}" data-dd="${escA(o.wo)}" title="Status: ${dStageLbl[st]||'planned'} — click to advance (Loaded → Dispatched → Delivered → clear)">${st==='deliv'?'✓':st==='disp'?'D':st==='load'?'L':'·'}</button><button data-dx="${escA(o.wo)}" title="${o.delDay?'Return to pool':(o.manual?'Delete this manual job':'Remove from delivery plan')}">×</button></span>
     </div>
     <div class="dchip-t">${escA(o.title)||'—'}</div>
-    ${st?`<div class="dstg s-${st}">${dStageLbl[st]}${dStageTime(o)?' '+dStageTime(o):''}</div>`:''}
+    ${st?`<div class="dstg s-${st}">${dStageLbl[st]}${dStageTime(o)?' '+dStageTime(o):''}${st==='deliv'&&o.delivBy?' — '+escA(o.delivBy):st==='load'&&o.ldBy?' — '+escA(o.ldBy):''}</div>`:''}
     ${showCust?`<div class="dchip-c">${escA(o.customer)}</div>`:''}
   </div>`;
 }
@@ -895,7 +1167,7 @@ function renderDeliveries(app){
       <tbody>
         ${DEL_VEH.map((v,i)=>{const vc=tagged.filter(o=>o.delVeh===v.k).length;return `<tr${i===1?' style="border-top:3px double var(--border)"':''}>
           <td class="dveh">${v.n}<span class="dsub">${v.cat}${v.sub?' · '+v.sub:''} · ${vc} job${vc!==1?'s':''}</span></td>
-          ${DEL_DAYS.map(d=>{const cj=tagged.filter(o=>o.delVeh===v.k&&o.delDay===d).sort(woCmp);return `<td class="dcell" data-cell="${v.k}|${d}">${cj.map(o=>dchip(o,true)).join('')}${cj.length&&cj.some(o=>!o.delDispAt&&!o.delDelivAt&&!o.delDone)?`<button class="cell-disp" data-cdisp="${v.k}|${d}" title="Mark this whole van load as dispatched (left the factory) — runs the part-load check first">🚚→ Dispatch van</button>`:''}</td>`;}).join('')}
+          ${DEL_DAYS.map(d=>{const cj=tagged.filter(o=>o.delVeh===v.k&&o.delDay===d).sort(woCmp);const pks=Object.keys(DB.pod||{}).filter(k=>k.indexOf(v.k+'|'+d+'|')===0&&(DB.pod[k].photos||[]).length).sort();const ppk=pks[pks.length-1];return `<td class="dcell" data-cell="${v.k}|${d}">${cj.map(o=>dchip(o,true)).join('')}${cj.length&&cj.some(o=>!o.delDispAt&&!o.delDelivAt&&!o.delDone)?`<button class="cell-disp" data-cdisp="${v.k}|${d}" title="Mark this whole van load as dispatched (left the factory) — runs the part-load check first">🚚→ Dispatch van</button>`:''}${ppk?`<button class="cell-disp" style="background:#eef6ff;border-color:#9cbce8;color:#1450a8" data-pod="${escA(ppk)}" title="Proof-of-delivery photos taken by the driver on site">📷 ${DB.pod[ppk].photos.length} proof photo${DB.pod[ppk].photos.length!==1?'s':''}</button>`:''}</td>`;}).join('')}
         </tr>`;}).join('')}
         <tr><td class="dveh">Notes</td>${DEL_DAYS.map(d=>`<td style="border:1px solid var(--border);padding:4px;background:#fffef7"><input class="dnote" data-dnote="${d}" value="${escA(notes[d]||'')}" placeholder="${d} note…"></td>`).join('')}</tr>
         <tr><td class="dtot" style="text-align:left">Value / day<br><span style="color:#0d6e46">Week: €${Math.round(wkTot).toLocaleString()}</span></td>
@@ -956,7 +1228,7 @@ function renderDeliveries(app){
       o.delDispAt=new Date().toISOString();toast(o.wo+' DISPATCHED — left the factory');
     }
     else if(st==='disp'){o.delDelivAt=new Date().toISOString();o.delDone=true;toast(o.wo+' DELIVERED');}
-    else{delete o.delLoadedAt;delete o.delDispAt;delete o.delDelivAt;o.delDone=false;toast(o.wo+' status cleared');}
+    else{delete o.delLoadedAt;delete o.delDispAt;delete o.delDelivAt;delete o.ldBy;delete o.delivBy;o.delDone=false;toast(o.wo+' status cleared');}
     sched();render();
   });
   // Dispatch a whole van load at once
@@ -970,11 +1242,20 @@ function renderDeliveries(app){
     jobs.forEach(o=>{if(!o.delLoadedAt)o.delLoadedAt=now;o.delDispAt=now;});
     sched();render();toast(vehLbl(parts[0])+' '+parts[1]+' dispatched — '+jobs.length+' jobs, '+hhmm(now));
   });
+  // Proof-of-delivery photo viewer (photos the driver took on site)
+  document.querySelectorAll('[data-pod]').forEach(b=>b.onclick=()=>{
+    const pd=(DB.pod||{})[b.dataset.pod];if(!pd)return;
+    const parts=b.dataset.pod.split('|');
+    const ov=document.createElement('div');ov.className='pod-ovl';
+    ov.innerHTML=`<div class="pod-in"><div style="font-weight:700;color:#14335c;margin-bottom:8px">Proof of delivery — ${escA(vehLbl(parts[0])||parts[0])} ${escA(parts[1]||'')}${pd.by?' · delivered by '+escA(pd.by):''}${pd.at?' · '+new Date(pd.at).toLocaleDateString('en-IE')+' '+hhmm(pd.at):''}</div>${(pd.photos||[]).map(u=>`<a href="${escA(u)}" target="_blank" rel="noopener"><img src="${escA(u)}" alt="proof"></a>`).join('')||'<i>No photos</i>'}<div style="margin-top:10px;text-align:right"><button class="btn btn-s" id="pod-x">Close</button></div></div>`;
+    document.body.appendChild(ov);
+    ov.onclick=e=>{if(e.target===ov||e.target.id==='pod-x')ov.remove();};
+  });
   document.querySelectorAll('[data-dx]').forEach(b=>b.onclick=()=>{
     const o=findDel(b.dataset.dx);if(!o)return;
     if(o.delDay){o.delVeh='';o.delDay='';toast(o.wo+' returned to the pool');}
     else if(o.manual){DB.delx=(DB.delx||[]).filter(x=>x.wo!==o.wo);toast(o.wo+' deleted');}
-    else{o.delv=false;o.delVeh='';o.delDay='';o.delDone=false;delete o.delLoadedAt;delete o.delDispAt;delete o.delDelivAt;toast(o.wo+' removed from delivery plan');}
+    else{o.delv=false;o.delVeh='';o.delDay='';o.delDone=false;delete o.delLoadedAt;delete o.delDispAt;delete o.delDelivAt;delete o.ldBy;delete o.delivBy;toast(o.wo+' removed from delivery plan');}
     delSel.delete(o.wo);sched();render();
   });
   const dropTo=(el,fn)=>{
@@ -1017,7 +1298,7 @@ function renderDeliveries(app){
   const rs=document.getElementById('btn-delreset');
   if(rs)rs.onclick=()=>{
     if(!confirm('Clear the whole delivery plan ('+tagged.length+' jobs)? Tags, manual jobs, day notes, vehicles and days are all removed so you can start fresh at the next production meeting.'))return;
-    DB.orders.forEach(o=>{delete o.delv;delete o.delVeh;delete o.delDay;delete o.delDone;delete o.delLoadedAt;delete o.delDispAt;delete o.delDelivAt;});
+    DB.orders.forEach(o=>{delete o.delv;delete o.delVeh;delete o.delDay;delete o.delDone;delete o.delLoadedAt;delete o.delDispAt;delete o.delDelivAt;delete o.ldBy;delete o.delivBy;});
     DB.delx=[];DB.delNotes={};delSel.clear();
     sched();render();toast('Delivery plan cleared — ready for next week');
   };
@@ -1864,7 +2145,7 @@ function renderExport(app){
 }
 
 ['b','d','i','x','s'].forEach(t=>{document.getElementById('t-'+t).onclick=()=>showTab(t);});
-loadDB().then(()=>render());
+loadDB().then(()=>{render();startAutoRefresh();});
 </script>
 </body>
 </html>
