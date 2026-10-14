@@ -126,6 +126,33 @@ button,input,select{font-family:inherit;cursor:pointer}
 .dvbtn:hover{opacity:.7}
 .dvbtn.on{filter:none;opacity:1;background:#e8f1fd;border-color:#b0c8e8}
 #delcnt{display:none;background:#1a56db;color:#fff;border-radius:9px;font-size:10px;font-weight:700;padding:1px 6px;margin-left:5px;vertical-align:1px}
+#listcnt{display:none;background:#c0392b;color:#fff;border-radius:9px;font-size:10px;font-weight:700;padding:1px 6px;margin-left:5px;vertical-align:1px}
+/* cutting lists library + saw/stores queues */
+.lst-tbl{width:100%;border-collapse:collapse;font-size:12px;background:#fff}
+.lst-tbl th{background:#f4f6f9;text-align:left;padding:6px 8px;font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--t3);border-bottom:1px solid var(--border)}
+.lst-tbl td{padding:6px 8px;border-bottom:1px solid var(--border);vertical-align:top}
+.lst-chip{display:inline-block;background:#eef2f8;border:1px solid var(--b2);border-radius:5px;padding:1px 7px;font-size:11px;font-family:monospace;margin:1px 3px 1px 0;white-space:nowrap}
+.lst-chip button{border:none;background:none;cursor:pointer;color:var(--t3);font-size:11px;padding:0 0 0 3px}
+.lst-done{color:#0d6e46;font-weight:700;font-size:11px;white-space:nowrap}
+.wl{max-width:1100px;margin:0 auto;padding:14px 18px}
+.wl h1{font-size:26px;color:#14335c;border-bottom:4px solid #1a56db;padding-bottom:6px;margin-bottom:14px}
+.wl h1 span{font-size:14px;color:var(--t3);font-weight:400;margin-left:10px}
+.wl-card{background:#fff;border:1px solid var(--border);border-radius:10px;margin-bottom:16px;overflow:hidden}
+.wl-card.cdone{opacity:.55}
+.wl-h{background:#14335c;color:#fff;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.wl-h .wn{font-size:19px;font-weight:800}
+.wl-h .wd{font-size:13px;opacity:.9}
+.wl-due{background:#e8b931;color:#14335c;font-weight:800;font-size:13px;border-radius:6px;padding:3px 10px;white-space:nowrap}
+.wl-h .lst-chip{background:rgba(255,255,255,.95);color:#14335c;border-color:transparent;font-weight:700}
+.wl-tbl{width:100%;border-collapse:collapse;font-size:15px}
+.wl-tbl th{background:#f4f6f9;text-align:left;padding:6px 10px;font-size:11px;text-transform:uppercase;color:var(--t3);border-bottom:1px solid var(--border)}
+.wl-tbl td{padding:7px 10px;border-bottom:1px solid #eef1f5}
+.wl-tbl td.num{font-weight:700;font-family:monospace;white-space:nowrap}
+.wl-sec td{background:#eaf0f8;font-weight:800;color:#14335c;font-size:14px;border-top:2px solid var(--b2)}
+.wl-act{padding:12px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.wl-btn{background:#0d9450;color:#fff;border:none;border-radius:10px;padding:14px 22px;font-size:16px;font-weight:800;cursor:pointer}
+.wl-undo{background:none;border:1px solid var(--b2);border-radius:8px;padding:6px 12px;font-size:12px;color:var(--t3);cursor:pointer}
+.wl-donelbl{color:#0d6e46;font-weight:800;font-size:15px}
 .del-panel{background:#fff;border:1px solid var(--border);border-radius:10px;padding:16px 18px;margin-bottom:14px}
 .dgrp{margin-bottom:6px}
 .dgrp-h{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.4px;margin:10px 0 5px;cursor:pointer;user-select:none}
@@ -255,6 +282,7 @@ button,input,select{font-family:inherit;cursor:pointer}
 <div class="tabs"><div class="tabs-i">
   <button class="tab on" id="t-b">Capacity Board</button>
   <button class="tab" id="t-d">🚚 Deliveries<span id="delcnt"></span></button>
+  <button class="tab" id="t-l">📋 Cutting Lists<span id="listcnt"></span></button>
   <button class="tab" id="t-i">Import Work Orders</button>
   <button class="tab" id="t-x">Export Changes</button>
   <button class="tab" id="t-s">⚙ Settings</button>
@@ -318,6 +346,10 @@ async function loadDB(){
       if(d[0].settings&&d[0].settings.grps)DB.grps=d[0].settings.grps;
       if(d[0].settings&&d[0].settings.pins)DB.pins=d[0].settings.pins;
       if(d[0].settings&&d[0].settings.pod)DB.pod=d[0].settings.pod;
+      if(d[0].settings&&d[0].settings.lists)DB.lists=d[0].settings.lists;
+      if(d[0].settings&&d[0].settings.listWBs)DB.listWBs=d[0].settings.listWBs;
+      if(d[0].settings&&d[0].settings.listDone)DB.listDone=d[0].settings.listDone;
+      if(d[0].settings&&d[0].settings.listLead>0)DB.listLead=d[0].settings.listLead;
     }
     DB.orders.forEach(o=>{orig[o.wo]=o.plannedWeek||'';origStep[o.wo]=o.step||'';});
     DB.loadFailed=false;
@@ -337,7 +369,7 @@ async function saveDB(){
   }
   setSS('s');
   try{
-    const resp=await fetch(SUPA_URL+'/production_planner?id=eq.main',{method:'PATCH',headers:SUPA_WHDR,body:JSON.stringify({orders:DB.orders,nid:DB.nid,settings:{weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP,delx:DB.delx||[],delNotes:DB.delNotes||{},grps:DB.grps||{},pins:DB.pins||{},pod:DB.pod||{}}})});
+    const resp=await fetch(SUPA_URL+'/production_planner?id=eq.main',{method:'PATCH',headers:SUPA_WHDR,body:JSON.stringify({orders:DB.orders,nid:DB.nid,settings:{weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP,delx:DB.delx||[],delNotes:DB.delNotes||{},grps:DB.grps||{},pins:DB.pins||{},pod:DB.pod||{},lists:DB.lists||[],listWBs:DB.listWBs||{},listDone:DB.listDone||{},listLead:DB.listLead||5}})});
     if(resp&&resp.ok===false){setSS('e');return;}
     setSS('ok');
   }catch(e){setSS('e');}
@@ -379,7 +411,7 @@ function dueBadge(due,pw,origDue){
 }
 function changes(){return DB.orders.filter(o=>(orig[o.wo]!==undefined&&orig[o.wo]!==(o.plannedWeek||''))||(origStep[o.wo]!==undefined&&origStep[o.wo]!==(o.step||'')));}
 
-function showTab(t){tab=t;['b','d','i','x','s'].forEach(id=>{const el=document.getElementById('t-'+id);if(el)el.className='tab'+(id===t?' on':'');});render();}
+function showTab(t){tab=t;['b','d','l','i','x','s'].forEach(id=>{const el=document.getElementById('t-'+id);if(el)el.className='tab'+(id===t?' on':'');});render();}
 
 /* ---------- Role views: Office / Factory Floor / Driver (same live plan, a screen per job) ---------- */
 const ls={get:k=>{try{return localStorage.getItem(k)||'';}catch(e){return'';}},set:(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}}};
@@ -387,11 +419,11 @@ function pins(){const p=DB.pins||{};return{office:p.office||'2468',driver:p.driv
 let ROLE='';
 (function(){
   const q=(new URLSearchParams(location.search).get('view')||'').toLowerCase();
-  if(['office','floor','driver'].includes(q))ROLE=q;
-  else{const s=ls.get('wpfRole');if(['office','floor','driver'].includes(s))ROLE=s;}
+  if(['office','floor','driver','saw','stores'].includes(q))ROLE=q;
+  else{const s=ls.get('wpfRole');if(['office','floor','driver','saw','stores'].includes(s))ROLE=s;}
 })();
 function roleOk(r){ // has this device already entered the right PIN for this role?
-  if(r==='floor')return true;
+  if(r==='floor'||r==='saw'||r==='stores')return true;
   if(r==='office')return ls.get('wpfPinOffice')===pins().office;
   if(r==='driver')return ls.get('wpfPinDriver')===pins().driver;
   return false;
@@ -399,10 +431,10 @@ function roleOk(r){ // has this device already entered the right PIN for this ro
 let viewTimer=null;
 function startAutoRefresh(){
   clearInterval(viewTimer);
-  if(ROLE==='floor'||ROLE==='driver'){
+  if(['floor','driver','saw','stores'].includes(ROLE)){
     viewTimer=setInterval(()=>{
       if(saveT||drvUploading)return; // never clobber an unsaved change or an upload in progress
-      loadDB().then(()=>{if(ROLE==='floor'||ROLE==='driver')render();});
+      loadDB().then(()=>{if(['floor','driver','saw','stores'].includes(ROLE))render();});
     },120000);
   }
 }
@@ -415,6 +447,8 @@ function rolePicker(pinFor){
     <p>Everyone sees the same live plan — each role gets the view for their job.</p>
     <button class="rbtn" data-role="office"><span class="ri">🗓</span><span>Office / Planning<small>Full planner — plan, dispatch, import, print. PIN required.</small></span></button>
     <button class="rbtn" data-role="floor"><span class="ri">🏭</span><span>Factory Floor Screen<small>Big read-only display — today &amp; tomorrow's loads, live status.</small></span></button>
+    <button class="rbtn" data-role="saw"><span class="ri">🪚</span><span>Saw / Cutting<small>Cutting lists in delivery order — mark each list CUT COMPLETE.</small></span></button>
+    <button class="rbtn" data-role="stores"><span class="ri">🧰</span><span>Stores / Fittings<small>Fittings lists in delivery order — mark each list PICKED.</small></span></button>
     <button class="rbtn" data-role="driver"><span class="ri">🚚</span><span>Driver<small>Your van's run — check jobs onto the van, confirm delivered. PIN required.</small></span></button>
     <div class="rpin${pinFor?' open':''}" id="rpin">
       <div style="font-size:13px;color:var(--t2);margin-bottom:8px">Enter the <b id="rpin-role">${pinFor==='driver'?'Driver':'Office'}</b> PIN</div>
@@ -446,7 +480,7 @@ function render(){
   const app=document.getElementById('app');
   const tabsBar=document.querySelector('.tabs');
   const sw=document.getElementById('role-sw');
-  if(sw){sw.style.display=ROLE?'':'none';sw.textContent='⇄ '+(ROLE==='office'?'Office':ROLE==='driver'?'Driver':'Floor screen');sw.onclick=()=>rolePicker();}
+  if(sw){sw.style.display=ROLE?'':'none';sw.textContent='⇄ '+({office:'Office',driver:'Driver',floor:'Floor screen',saw:'Saw',stores:'Stores'}[ROLE]||'');sw.onclick=()=>rolePicker();}
   if(tabsBar)tabsBar.style.display=(ROLE==='office')?'':'none';
   if(!ROLE){app.innerHTML='';rolePicker();return;}
   if(ROLE!=='floor'&&!roleOk(ROLE)){app.innerHTML='';rolePicker(ROLE);return;}
@@ -455,8 +489,11 @@ function render(){
     return;
   }
   if(ROLE==='floor'){renderFloor(app);return;}
+  if(ROLE==='saw'){renderWorkList(app,'saw');return;}
+  if(ROLE==='stores'){renderWorkList(app,'fit');return;}
   if(ROLE==='driver'){renderDriver(app);return;}
   if(tab==='b')renderBoard(app);
+  else if(tab==='l')renderLists(app);
   else if(tab==='d')renderDeliveries(app);
   else if(tab==='i')renderImport(app);
   else if(tab==='x')renderExport(app);
@@ -474,6 +511,8 @@ function updDelBadge(){
   const el=document.getElementById('delcnt');if(!el)return;
   const n=DB.orders.filter(o=>o.delv&&!o.delDone).length+(DB.delx||[]).filter(o=>!o.delDone).length;
   el.textContent=n;el.style.display=n?'inline':'none';
+  const el2=document.getElementById('listcnt');
+  if(el2){const m=listsNeeded().length;el2.textContent=m;el2.style.display=m?'inline':'none';}
 }
 
 function renderSettings(app){
@@ -994,6 +1033,230 @@ function confirmPartLoad(jobs){
   if(!gaps.length)return true;
   const lines=gaps.slice(0,12).map(g=>'  • '+g.wo+' — '+(g.title||'').slice(0,40)+'  (same unit/group as '+g.forWo+')');
   return confirm('⚠ PART-LOAD WARNING\n\nThe following jobs belong to the same unit or group as jobs on this load, but are NOT dispatched and NOT on this van:\n\n'+lines.join('\n')+(gaps.length>12?'\n  …and '+(gaps.length-12)+' more':'')+'\n\nSend the load anyway WITHOUT them?');
+}
+
+/* ---------- Cutting lists & fittings: library, WO tagging, saw + stores queues ----------
+   One workbook per project, one sheet per house. Rows with length/width = saw material;
+   rows with qty but no dimensions = fittings for the stores. Both views are fed from the
+   same upload, ordered by the earliest scheduled delivery of the tagged work orders. */
+function lists(){return DB.lists||[];}
+function listRows(l){const wb=(DB.listWBs||{})[l.wb];return wb&&wb.sheets&&wb.sheets[l.sheet]?wb.sheets[l.sheet]:[];}
+function listDone(id){return (DB.listDone||{})[id]||{};}
+function listLead(){return DB.listLead>0?DB.listLead:5;}
+function listDueKey(l){ // earliest due date among tagged WOs — the ONLY thing that orders the queues
+  let best='';
+  (l.wos||[]).forEach(w=>{const o=DB.orders.find(x=>x.wo===w);if(o&&o.dueDate&&(!best||o.dueDate<best))best=o.dueDate;});
+  return best;
+}
+function listsNeeded(){ // WOs scheduled to deliver inside the lead time with NO cutting list tagged
+  const tagged=new Set();lists().forEach(l=>(l.wos||[]).forEach(w=>tagged.add(w)));
+  const lim=new Date(Date.now()+listLead()*86400000).toISOString().slice(0,10);
+  return DB.orders.filter(o=>{
+    if(tagged.has(o.wo)||o.delDelivAt||o.delDone)return false;
+    const planned=o.delv&&o.delDay;                 // already on the delivery board
+    const dueSoon=o.dueDate&&o.dueDate<=lim;        // due date inside the lead window
+    return planned||dueSoon;
+  }).sort((a,b)=>(a.dueDate||'9999').localeCompare(b.dueDate||'9999'));
+}
+function suggestWOs(l){ // match house/unit numbers in the sheet name against live WOs; customer-matches first
+  const nums=(String(l.sheet).match(/\d+/g)||[]).map(Number);
+  if(!nums.length)return[];
+  const pw=(l.project||'').toLowerCase().split(/\s+/).filter(x=>x.length>2);
+  const hits=DB.orders.filter(o=>{
+    if(o.delDone||o.delDelivAt)return false;
+    const u=parseInt(o.unit);return!isNaN(u)&&nums.includes(u);
+  });
+  const cm=o=>pw.some(w=>(o.customer||'').toLowerCase().includes(w))?0:1;
+  return hits.sort((a,b)=>cm(a)-cm(b)||woCmp(a,b));
+}
+function parseListWorkbook(data){
+  const wb=XLSX.read(data,{type:'array',cellDates:true});
+  const out={project:'',sheets:{}},entries=[];
+  wb.SheetNames.forEach(sn=>{
+    const aoa=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,raw:true,defval:null});
+    const rows=[];let proj='',sdate='';
+    aoa.forEach((r,i)=>{
+      const A=r[0]!=null?String(r[0]).trim():'';
+      const qv=r[1]!=null&&String(r[1]).trim()!==''?parseFloat(r[1]):NaN;
+      const L=r[2]!=null?parseFloat(r[2]):NaN,W=r[3]!=null?parseFloat(r[3]):NaN;
+      const mat=r[4]!=null?String(r[4]).trim():'',note=r[5]!=null&&!(r[5] instanceof Date)?String(r[5]).trim():'';
+      if(!A&&isNaN(qv)&&!mat)return;
+      if(i===0&&A&&isNaN(qv)){ // project header row: name in A, date in F
+        proj=A;const d=r[5];
+        if(d instanceof Date)sdate=d.toISOString().slice(0,10);
+        else if(typeof d==='string'&&/\d{4}-\d{2}-\d{2}/.test(d))sdate=d.slice(0,10);
+        return;
+      }
+      if(!isNaN(qv)){
+        if(!isNaN(L)||!isNaN(W))rows.push({k:'saw',item:A,qty:qv,L:isNaN(L)?'':L,W:isNaN(W)?'':W,mat,note});
+        else rows.push({k:'fit',item:A||mat,qty:qv,mat,note});
+      }else if(A||mat)rows.push({k:'hdr',item:A,note:mat||note});
+    });
+    if(rows.some(x=>x.k!=='hdr')){
+      out.sheets[sn]=rows;
+      entries.push({sheet:sn,sdate,saw:rows.filter(x=>x.k==='saw').length,fit:rows.filter(x=>x.k==='fit').length});
+    }
+    if(proj&&!out.project)out.project=proj;
+  });
+  return{wb:out,entries};
+}
+let lstTagOpen=null; // list id whose tag editor is open
+function renderLists(app){
+  const need=listsNeeded();
+  const all=[...lists()].sort((a,b)=>(listDueKey(a)||'9999').localeCompare(listDueKey(b)||'9999')||String(a.name).localeCompare(String(b.name)));
+  const woLbl=w=>{const o=DB.orders.find(x=>x.wo===w);return o?`${w} (${[o.floor,o.unit].filter(Boolean).join(' ')})`:w;};
+  app.innerHTML=`<div class="pg">
+    ${need.length?`<div class="exp-panel" style="border:2px solid #c0392b;background:#fdf3f2">
+      <div style="font-size:14px;font-weight:700;color:#8a1c10;margin-bottom:6px">⚠ Cutting lists needed — ${need.length} work order${need.length!==1?'s':''} scheduled with no list tagged</div>
+      <p style="font-size:12px;color:#8a1c10;margin-bottom:10px">These are on the delivery board or due within ${listLead()} days. Upload the cutting list below and tag it, so the saw and stores see it in good time.</p>
+      <table class="lst-tbl"><thead><tr><th>WO #</th><th>Floor/Unit</th><th>Title</th><th>Customer</th><th>Due</th><th>Why flagged</th></tr></thead><tbody>
+      ${need.slice(0,30).map(o=>`<tr><td style="font-family:monospace;font-weight:700">${escA(o.wo)}</td><td>${escA([o.floor,o.unit].filter(Boolean).join(' · '))}</td><td>${escA(o.title)}</td><td>${escA(o.customer)}</td><td>${fmt(o.dueDate)}</td><td>${o.delv&&o.delDay?'On delivery board ('+escA(o.delDay)+')':'Due within '+listLead()+' days'}</td></tr>`).join('')}
+      ${need.length>30?`<tr><td colspan="6" style="color:var(--t3)">…and ${need.length-30} more</td></tr>`:''}
+      </tbody></table></div>`:
+      `<div class="exp-panel" style="border-color:#b3e0c4;background:#f4fbf6"><div style="font-size:13px;color:#0d6e46;font-weight:600">✓ Every work order scheduled inside the next ${listLead()} days has a cutting list tagged.</div></div>`}
+    <div class="exp-panel">
+      <div style="font-size:14px;font-weight:600;margin-bottom:6px">Upload a cutting-list workbook</div>
+      <p style="font-size:12px;color:var(--t3);margin-bottom:10px">One Excel file per project, one sheet per house — exactly like the lists you use today. Rows with length &times; width go to the <b>Saw</b> view; rows with a quantity but no dimensions (sinks, taps, gola rail, handles…) go to the <b>Stores</b> view. Each sheet becomes a list, auto-tagged to matching work orders by house number — check the tags after upload.</p>
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+        <input type="file" id="lst-file" accept=".xlsx,.xls" style="font-size:13px">
+        <span style="font-size:12px;color:var(--t3)">Lead time:</span>
+        <input type="number" id="lst-lead" value="${listLead()}" min="1" max="60" style="width:60px;padding:5px 8px;border:1px solid var(--b2);border-radius:5px"> days
+        <button class="btn btn-s" id="lst-lead-save">Save</button>
+      </div>
+      <div id="lst-upmsg" style="margin-top:8px;font-size:12px"></div>
+    </div>
+    <div class="exp-panel">
+      <div style="font-size:14px;font-weight:600;margin-bottom:8px">Lists library — ${all.length} list${all.length!==1?'s':''}</div>
+      ${all.length?`<table class="lst-tbl"><thead><tr><th>Project</th><th>List</th><th>Saw rows</th><th>Fittings</th><th>Tagged work orders</th><th>Due</th><th>🪚 Saw</th><th>🧰 Stores</th><th></th></tr></thead><tbody>
+      ${all.map(l=>{const dn=listDone(l.id);const due=listDueKey(l);return `<tr>
+        <td>${escA(l.project||'—')}</td>
+        <td style="font-weight:700">${escA(l.name)}</td>
+        <td>${l.saw||0}</td><td>${l.fit||0}</td>
+        <td>${(l.wos||[]).map(w=>`<span class="lst-chip" title="${escA(woLbl(w))}">${escA(w)}<button data-untag="${escA(l.id)}|${escA(w)}" title="Remove tag">×</button></span>`).join('')||'<span style="color:#c0392b;font-size:11px;font-weight:700">UNTAGGED</span>'}
+          <button class="btn btn-s" data-tag="${escA(l.id)}" style="padding:2px 8px;font-size:11px">✎ tag</button>
+          ${lstTagOpen===l.id?`<div style="margin-top:6px;background:#f7f9fc;border:1px solid var(--b2);border-radius:6px;padding:8px">
+            ${suggestWOs(l).filter(o=>!(l.wos||[]).includes(o.wo)).slice(0,8).map(o=>`<button class="btn btn-s" data-tagadd="${escA(l.id)}|${escA(o.wo)}" style="padding:2px 8px;font-size:11px;margin:2px" title="${escA(o.title)} — ${escA(o.customer)}">+ ${escA(o.wo)} (${escA([o.floor,o.unit].filter(Boolean).join(' '))})</button>`).join('')||'<span style="font-size:11px;color:var(--t3)">No automatic matches — type a WO:</span>'}
+            <div style="margin-top:5px;display:flex;gap:6px"><input id="tagin-${escA(l.id)}" placeholder="WO-PF-…" style="padding:4px 8px;border:1px solid var(--b2);border-radius:5px;font-size:12px;width:170px"><button class="btn btn-s" data-tagman="${escA(l.id)}" style="font-size:11px">Add</button></div>
+          </div>`:''}
+        </td>
+        <td>${due?fmt(due):'—'}</td>
+        <td>${dn.saw?`<span class="lst-done" title="by ${escA(dn.saw.by||'')}">✓ ${hhmm(dn.saw.at)}</span> <button class="btn btn-s" data-lreset="${escA(l.id)}|saw" style="padding:1px 6px;font-size:10px">reset</button>`:'<span style="color:var(--t3)">—</span>'}</td>
+        <td>${dn.fit?`<span class="lst-done" title="by ${escA(dn.fit.by||'')}">✓ ${hhmm(dn.fit.at)}</span> <button class="btn btn-s" data-lreset="${escA(l.id)}|fit" style="padding:1px 6px;font-size:10px">reset</button>`:'<span style="color:var(--t3)">—</span>'}</td>
+        <td style="white-space:nowrap"><button class="btn btn-s" data-lview="${escA(l.id)}" style="padding:2px 8px;font-size:11px">View</button> <button class="btn btn-s" data-ldel="${escA(l.id)}" style="padding:2px 8px;font-size:11px;color:var(--red);border-color:var(--red)">✕</button></td>
+      </tr>`;}).join('')}
+      </tbody></table>`:'<p style="font-size:12px;color:var(--t3)">No lists yet — upload your first cutting-list workbook above.</p>'}
+    </div>
+  </div>`;
+  const fi=document.getElementById('lst-file');
+  if(fi)fi.onchange=()=>{
+    const f=fi.files[0];if(!f)return;
+    const msg=document.getElementById('lst-upmsg');msg.textContent='Reading '+f.name+'…';
+    const rd=new FileReader();
+    rd.onload=()=>{
+      try{
+        const{wb,entries}=parseListWorkbook(rd.result);
+        if(!entries.length){msg.innerHTML='<span style="color:var(--red)">No usable sheets found — expected columns: Item | Qty | Length | Width | Material | Edging.</span>';return;}
+        const wbId='WB'+(DB.nid++);
+        DB.listWBs=DB.listWBs||{};DB.listWBs[wbId]=wb;
+        DB.lists=DB.lists||[];
+        let auto=0;
+        entries.forEach(e=>{
+          const id='L'+(DB.nid++);
+          const l={id,wb:wbId,sheet:e.sheet,name:e.sheet,project:wb.project||f.name.replace(/\.(xlsx|xls)$/i,''),sdate:e.sdate,saw:e.saw,fit:e.fit,wos:[],up:new Date().toISOString()};
+          l.wos=suggestWOs(l).slice(0,6).map(o=>o.wo);auto+=l.wos.length;
+          DB.lists.push(l);
+        });
+        sched();render();
+        toast(entries.length+' lists imported from '+(wb.project||f.name)+' — '+auto+' work orders auto-tagged. Check the tags.');
+      }catch(e){msg.innerHTML='<span style="color:var(--red)">Could not read that file: '+escA(e.message)+'</span>';}
+    };
+    rd.readAsArrayBuffer(f);
+  };
+  const lse=document.getElementById('lst-lead-save');
+  if(lse)lse.onclick=()=>{const v=parseInt(document.getElementById('lst-lead').value);if(v>0){DB.listLead=v;sched();render();toast('Lead time set to '+v+' days');}};
+  document.querySelectorAll('[data-tag]').forEach(b=>b.onclick=()=>{lstTagOpen=lstTagOpen===b.dataset.tag?null:b.dataset.tag;render();});
+  document.querySelectorAll('[data-tagadd]').forEach(b=>b.onclick=()=>{
+    const[id,wo]=b.dataset.tagadd.split('|');const l=lists().find(x=>x.id===id);if(!l)return;
+    l.wos=l.wos||[];if(!l.wos.includes(wo))l.wos.push(wo);sched();render();
+  });
+  document.querySelectorAll('[data-tagman]').forEach(b=>b.onclick=()=>{
+    const l=lists().find(x=>x.id===b.dataset.tagman);if(!l)return;
+    const inp=document.getElementById('tagin-'+l.id);const wo=(inp.value||'').trim();
+    if(!wo)return;
+    if(!DB.orders.find(o=>o.wo===wo)){toast(wo+' is not on the board — check the WO number');return;}
+    l.wos=l.wos||[];if(!l.wos.includes(wo))l.wos.push(wo);sched();render();
+  });
+  document.querySelectorAll('[data-untag]').forEach(b=>b.onclick=()=>{
+    const[id,wo]=b.dataset.untag.split('|');const l=lists().find(x=>x.id===id);if(!l)return;
+    l.wos=(l.wos||[]).filter(w=>w!==wo);sched();render();
+  });
+  document.querySelectorAll('[data-lreset]').forEach(b=>b.onclick=()=>{
+    const[id,m]=b.dataset.lreset.split('|');
+    if(DB.listDone&&DB.listDone[id])delete DB.listDone[id][m];
+    sched();render();toast('Reset — back in the '+(m==='saw'?'saw':'stores')+' queue');
+  });
+  document.querySelectorAll('[data-ldel]').forEach(b=>b.onclick=()=>{
+    const l=lists().find(x=>x.id===b.dataset.ldel);if(!l)return;
+    if(!confirm('Delete the list "'+l.name+'" ('+(l.project||'')+')? The saw and stores will no longer see it.'))return;
+    DB.lists=lists().filter(x=>x.id!==l.id);
+    if(DB.listDone)delete DB.listDone[l.id];
+    if(!lists().some(x=>x.wb===l.wb)&&DB.listWBs)delete DB.listWBs[l.wb]; // last list of this workbook — drop the stored rows too
+    sched();render();toast('List deleted');
+  });
+  document.querySelectorAll('[data-lview]').forEach(b=>b.onclick=()=>{
+    const l=lists().find(x=>x.id===b.dataset.lview);if(!l)return;
+    const ov=document.createElement('div');ov.className='pod-ovl';
+    ov.innerHTML=`<div class="pod-in" style="min-width:min(760px,92vw)"><div style="font-weight:700;color:#14335c;margin-bottom:8px">${escA(l.project||'')} — ${escA(l.name)}</div>${listTableHTML(l,'all')}<div style="margin-top:10px;text-align:right"><button class="btn btn-s" id="pod-x">Close</button></div></div>`;
+    document.body.appendChild(ov);
+    ov.onclick=e=>{if(e.target===ov||e.target.id==='pod-x')ov.remove();};
+  });
+}
+function listTableHTML(l,mode){ // mode 'saw' | 'fit' | 'all'
+  const rows=listRows(l).filter(r=>mode==='all'?true:(r.k===mode||r.k==='hdr'));
+  // drop headers that have no body rows under them in this mode
+  const keep=[];rows.forEach((r,i)=>{
+    if(r.k!=='hdr'){keep.push(r);return;}
+    for(let j=i+1;j<rows.length;j++){if(rows[j].k==='hdr')break;keep.push(r);break;}
+  });
+  const saw=mode!=='fit';
+  return `<table class="wl-tbl"><thead><tr><th style="width:34%">Item</th><th>Qty</th>${saw?'<th>Length</th><th>Width</th>':''}<th>${mode==='fit'?'Spec':'Material'}</th><th>${mode==='fit'?'Note':'Edging / Note'}</th></tr></thead><tbody>
+  ${keep.map(r=>r.k==='hdr'?`<tr class="wl-sec"><td colspan="${saw?6:4}">${escA(r.item)}${r.note?' · '+escA(r.note):''}</td></tr>`
+    :`<tr><td>${escA(r.item)||'—'}</td><td class="num">${r.qty}</td>${saw?`<td class="num">${r.k==='saw'?escA(r.L):''}</td><td class="num">${r.k==='saw'?escA(r.W):''}</td>`:''}<td>${escA(r.mat)}</td><td>${escA(r.note)}</td></tr>`).join('')}
+  </tbody></table>`;
+}
+/* Saw / Stores queue view: lists in delivery order, big type, tick-off with name + time */
+function renderWorkList(app,mode){
+  const cfg=mode==='saw'?{icon:'🪚',title:'SAW — Cutting Queue',done:'✓ CUT COMPLETE',cnt:l=>l.saw||0}
+                        :{icon:'🧰',title:'STORES — Fittings Queue',done:'✓ FITTINGS PICKED',cnt:l=>l.fit||0};
+  const rel=lists().filter(l=>cfg.cnt(l)>0);
+  const open=rel.filter(l=>!listDone(l.id)[mode]).sort((a,b)=>(listDueKey(a)||'9999').localeCompare(listDueKey(b)||'9999'));
+  const closed=rel.filter(l=>listDone(l.id)[mode]).sort((a,b)=>String(listDone(b.id)[mode].at).localeCompare(String(listDone(a.id)[mode].at)));
+  const woChips=l=>(l.wos||[]).map(w=>{const o=DB.orders.find(x=>x.wo===w);return `<span class="lst-chip">${escA(w)}${o&&(o.floor||o.unit)?' · '+escA([o.floor,o.unit].filter(Boolean).join(' ')):''}</span>`;}).join('');
+  const card=(l,isDone)=>{const dn=listDone(l.id)[mode];const due=listDueKey(l);return `<div class="wl-card${isDone?' cdone':''}">
+    <div class="wl-h"><div><span class="wn">${escA(l.name)}</span> <span class="wd">${escA(l.project||'')}</span><div style="margin-top:3px">${woChips(l)}</div></div>
+    ${due?`<span class="wl-due">DELIVERS ${fmt(due)}</span>`:'<span class="wd">no delivery date yet</span>'}</div>
+    ${listTableHTML(l,mode)}
+    <div class="wl-act">${isDone?`<span class="wl-donelbl">${cfg.done} — ${new Date(dn.at).toLocaleDateString('en-IE')} ${hhmm(dn.at)}${dn.by?' by '+escA(dn.by):''}</span><button class="wl-undo" data-wlundo="${escA(l.id)}">Undo</button>`
+      :`<span style="font-size:12px;color:var(--t3)">${cfg.cnt(l)} item${cfg.cnt(l)!==1?'s':''}</span><button class="wl-btn" data-wldone="${escA(l.id)}">${cfg.done}</button>`}</div>
+  </div>`;};
+  app.innerHTML=`<div class="wl"><h1>${cfg.icon} ${cfg.title}<span>soonest delivery first · updates automatically</span></h1>
+    ${open.length?open.map(l=>card(l,false)).join(''):`<div class="flr-none">Nothing in the queue — all lists are ${mode==='saw'?'cut':'picked'}. New lists appear here as the office uploads them.</div>`}
+    ${closed.length?`<div style="margin:18px 0 8px;font-size:13px;color:var(--t3);font-weight:700;text-transform:uppercase">Done</div>`+closed.slice(0,10).map(l=>card(l,true)).join(''):''}
+    <div class="flr-ft">Last update ${hhmm(new Date().toISOString())}</div></div>`;
+  document.querySelectorAll('[data-wldone]').forEach(b=>b.onclick=()=>{
+    const l=lists().find(x=>x.id===b.dataset.wldone);if(!l)return;
+    const by=prompt((mode==='saw'?'Cut complete':'Fittings picked')+' — your name or initials for the record:');
+    if(by===null)return;
+    DB.listDone=DB.listDone||{};DB.listDone[l.id]=DB.listDone[l.id]||{};
+    DB.listDone[l.id][mode]={at:new Date().toISOString(),by:(by||'').trim()};
+    sched();render();toast(l.name+' — '+(mode==='saw'?'cut complete':'fittings picked')+' ✓');
+  });
+  document.querySelectorAll('[data-wlundo]').forEach(b=>b.onclick=()=>{
+    if(!confirm('Put this list back in the queue?'))return;
+    const id=b.dataset.wlundo;
+    if(DB.listDone&&DB.listDone[id])delete DB.listDone[id][mode];
+    sched();render();
+  });
 }
 
 /* ---------- Factory floor screen: today + tomorrow's loads, big type, auto-refresh ---------- */
@@ -2144,7 +2407,7 @@ function renderExport(app){
   });
 }
 
-['b','d','i','x','s'].forEach(t=>{document.getElementById('t-'+t).onclick=()=>showTab(t);});
+['b','d','l','i','x','s'].forEach(t=>{document.getElementById('t-'+t).onclick=()=>showTab(t);});
 loadDB().then(()=>{render();startAutoRefresh();});
 </script>
 </body>
