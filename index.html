@@ -362,6 +362,44 @@ button,input,select{font-family:inherit;cursor:pointer}
 .me-flag{font-size:13px;font-weight:600;color:#14335c;display:flex;gap:6px;align-items:center;cursor:pointer}
 .me-flag input{width:18px;height:18px}
 .sc-tbl td,.sc-tbl th{white-space:nowrap}
+/* Bench PCs (saw / stores): condensed so more houses fit on one screen */
+.wl{max-width:1240px;padding:8px 14px}
+.wl h1{font-size:20px;padding-bottom:4px;margin-bottom:8px;border-width:3px}
+.wl h1 span{font-size:12px}
+.wl-card{margin-bottom:8px;border-radius:7px}
+.wl-h{padding:5px 10px;gap:8px}
+.wl-h .wn{font-size:16px}.wl-h .wd{font-size:12px}
+.wl-due{font-size:11px;padding:2px 8px}
+.wl-h .lst-chip{font-size:10px;padding:1px 5px}
+.wl-chk{width:30px;height:30px;font-size:15px;border-radius:6px}
+.wl-tbl{font-size:13px}
+.wl-tbl th{padding:3px 8px;font-size:10px}
+.wl-tbl td{padding:3px 8px}
+.wl-sec td{font-size:12px;padding:3px 8px}
+.wl-act{padding:5px 10px;gap:6px}
+.wl-btn{padding:7px 14px;font-size:13px;border-radius:7px}
+.wl-undo{padding:6px 10px;font-size:12px;min-height:32px;border-radius:7px}
+.wl-donelbl{font-size:13px}
+.wl-tabs{gap:6px;margin-bottom:8px}
+.wl-tabs button{padding:7px;font-size:14px;border-radius:7px}
+.wl-tabs .wl-print button{font-size:12px;padding:6px 10px}
+.wl-hint{font-size:12px;margin:-2px 0 8px}
+.hold-note,.rel-note{padding:5px 10px;margin:4px 0 6px;font-size:12px}
+.wl-drow{padding:6px 10px;margin-bottom:4px;font-size:13px}.wl-drow>b{font-size:14px}
+.wl-dday{margin:10px 0 4px;font-size:12px}
+.tkh{width:34px}.tkc{text-align:center;padding:2px 4px!important}
+.rtk{width:28px;height:28px;border:2px solid #8e99ab;border-radius:6px;background:#fff;cursor:pointer;font-size:16px;font-weight:800;color:#fff;line-height:1}
+.rtk:hover{border-color:#0b7e44}
+.rtk.on{background:#0b7e44;border-color:#0b7e44}
+.tk-na{color:#8a5a00;font-weight:800}
+.wl-rdone td{color:#8e99ab;text-decoration:line-through}
+.wl-rdone td.tkc{text-decoration:none}
+.wl-rdone td.num{font-weight:400}
+.wl-cust{display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin:0 0 8px}
+.wl-cust span{font-size:11px;color:var(--t3);text-transform:uppercase;font-weight:700;margin-right:2px}
+.wl-cust button{padding:5px 11px;font-size:13px;font-weight:700;border-radius:16px;border:2px solid var(--b2);background:#fff;color:#14335c;cursor:pointer}
+.wl-cust button.on{background:#14335c;border-color:#14335c;color:#fff}
+@media(max-width:700px){.wl-chk{width:40px;height:40px}.rtk{width:36px;height:36px}.wl-btn{padding:11px 16px;font-size:15px}}
 </style>
 </head>
 <body>
@@ -454,6 +492,7 @@ async function loadDB(){
       if(d[0].settings&&d[0].settings.staff)DB.staff=d[0].settings.staff;
       if(d[0].settings&&d[0].settings.listHold)DB.listHold=d[0].settings.listHold;
       if(d[0].settings&&d[0].settings.holdLog)DB.holdLog=d[0].settings.holdLog;
+      if(d[0].settings&&d[0].settings.listRow)DB.listRow=d[0].settings.listRow;
     }
     DB.orders.forEach(o=>{orig[o.wo]=o.plannedWeek||'';origStep[o.wo]=o.step||'';});
     DB.loadFailed=false;
@@ -494,7 +533,7 @@ async function saveDB(){
 }
 // Never let a tab close while an edit is unsaved or a retry is pending
 window.addEventListener('beforeunload',e=>{if(saveT||DB.saveFailed){e.preventDefault();e.returnValue='';}});
-function fullSettings(){return{weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP,delx:DB.delx||[],delNotes:DB.delNotes||{},grps:DB.grps||{},pins:DB.pins||{},pod:DB.pod||{},lists:DB.lists||[],listWBs:DB.listWBs||{},listDone:DB.listDone||{},listLead:DB.listLead||5,delArchive:DB.delArchive||{},staff:DB.staff||[],listHold:DB.listHold||{},holdLog:DB.holdLog||[]};}
+function fullSettings(){return{weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP,delx:DB.delx||[],delNotes:DB.delNotes||{},grps:DB.grps||{},pins:DB.pins||{},pod:DB.pod||{},lists:DB.lists||[],listWBs:DB.listWBs||{},listDone:DB.listDone||{},listLead:DB.listLead||5,delArchive:DB.delArchive||{},staff:DB.staff||[],listHold:DB.listHold||{},holdLog:DB.holdLog||[],listRow:DB.listRow||{}};}
 /* Staff roster: {id, n:name, r:[roles]} — one source of names for drivers, saw and stores,
    so every "loaded by / delivered by / cut by" record uses the same spelling of the same person. */
 function staff(){return DB.staff||[];}
@@ -1629,8 +1668,8 @@ function renderLists(app){
     ov.onclick=e=>{if(e.target===ov||e.target.id==='pod-x')ov.remove();};
   });
 }
-function listTableHTML(l,mode,opt){ // mode 'saw' | 'fit' | 'all'; opt.relOnly = only rows released from a material hold
-  opt=opt||{};const hb=holdsOf(l.id);
+function listTableHTML(l,mode,opt){ // mode 'saw' | 'fit' | 'all'; opt.relOnly = only rows released from a material hold; opt.tick = bench tick column
+  opt=opt||{};const hb=holdsOf(l.id);const tk=rowTicks(l.id);
   let rows=listRows(l).filter(r=>mode==='all'?true:(r.k===mode||r.k==='hdr'));
   if(opt.relOnly)rows=rows.filter(r=>r.k==='hdr'||(hb[rowKey(r)]&&hb[rowKey(r)].st==='rel'));
   // drop headers that have no body rows under them in this mode
@@ -1639,9 +1678,9 @@ function listTableHTML(l,mode,opt){ // mode 'saw' | 'fit' | 'all'; opt.relOnly =
     for(let j=i+1;j<rows.length;j++){if(rows[j].k==='hdr')break;keep.push(r);break;}
   });
   const saw=mode!=='fit';
-  return `<table class="wl-tbl"><thead><tr><th style="width:34%">Item</th><th>Qty</th>${saw?'<th>Length</th><th>Width</th>':''}<th>${mode==='fit'?'Spec':'Material'}</th><th>${mode==='fit'?'Note':'Edging / Note'}</th></tr></thead><tbody>
-  ${keep.map(r=>r.k==='hdr'?`<tr class="wl-sec"><td colspan="${saw?6:4}">${escA(r.item)}${r.note?' · '+escA(r.note):''}</td></tr>`
-    :`<tr${(h=>h&&h.st==='hold'?' class="wl-held"':'')(hb[rowKey(r)])}><td>${(h=>!h?'':h.st==='hold'?'<span class="hold-b">⏸ WAITING ON MATERIAL</span> ':'<span class="rel-b">▶ MATERIAL IN — DO NOW</span> ')(hb[rowKey(r)])}${escA(r.item)||'—'}</td><td class="num">${r.qty}</td>${saw?`<td class="num">${r.k==='saw'?escA(r.L):''}</td><td class="num">${r.k==='saw'?escA(r.W):''}</td>`:''}<td>${escA(r.mat)}</td><td>${escA(r.note)}</td></tr>`).join('')}
+  return `<table class="wl-tbl"><thead><tr>${opt.tick?'<th class="tkh">✓</th>':''}<th style="width:34%">Item</th><th>Qty</th>${saw?'<th>Length</th><th>Width</th>':''}<th>${mode==='fit'?'Spec':'Material'}</th><th>${mode==='fit'?'Note':'Edging / Note'}</th></tr></thead><tbody>
+  ${keep.map(r=>r.k==='hdr'?`<tr class="wl-sec"><td colspan="${(saw?6:4)+(opt.tick?1:0)}">${escA(r.item)}${r.note?' · '+escA(r.note):''}</td></tr>`
+    :`<tr class="${(h=>h&&h.st==='hold'?'wl-held':'')(hb[rowKey(r)])}${opt.tick&&tk[rowKey(r)]?' wl-rdone':''}">${opt.tick?`<td class="tkc">${(h=>h&&h.st==='hold'?'<span class="tk-na">⏸</span>':`<button class="rtk${tk[rowKey(r)]?' on':''}" data-rt="${escA(l.id)}|${escA(rowKey(r))}" title="${tk[rowKey(r)]?'Done '+hhmm(tk[rowKey(r)].at)+(tk[rowKey(r)].by?' by '+escA(tk[rowKey(r)].by):'')+' — click to untick':'Tick when '+(mode==='saw'?'cut':'picked')}">${tk[rowKey(r)]?'✓':''}</button>`)(hb[rowKey(r)])}</td>`:''}<td>${(h=>!h?'':h.st==='hold'?'<span class="hold-b">⏸ WAITING ON MATERIAL</span> ':'<span class="rel-b">▶ MATERIAL IN — DO NOW</span> ')(hb[rowKey(r)])}${escA(r.item)||'—'}</td><td class="num">${r.qty}</td>${saw?`<td class="num">${r.k==='saw'?escA(r.L):''}</td><td class="num">${r.k==='saw'?escA(r.W):''}</td>`:''}<td>${escA(r.mat)}</td><td>${escA(r.note)}</td></tr>`).join('')}
   </tbody></table>`;
 }
 /* Saw / Stores queue view: lists in delivery order, big type, tick-off with name + time.
@@ -1651,6 +1690,7 @@ const wlSel=new Set();
 let wlShowDone=false;     // saw/stores: viewing the date-stamped DONE screen
 let wlShowUpcoming=false; // saw/stores: peeking at later days' work
 let wlShowHold=false;     // saw/stores: the waiting-on-material book
+let wlCust='';            // saw/stores: one-tap customer filter over the day's work
 // A name is REQUIRED on every tick-off — blank records make the audit trail worthless.
 // Remembered per device, so it's one-time friction at each bench.
 function opName(what){
@@ -1724,6 +1764,7 @@ function openCombined(lsArr,mode){
   ov.querySelector('#cmb-lbl').onclick=()=>printLabels(lsArr,mode);
   ov.querySelector('#cmb-done').onclick=()=>{
     pickName(mode,(saw?'Batch cut complete':'Batch picked')+' — '+lsArr.length+' houses',by=>{
+      lsArr.forEach(l=>tickableRows(l,mode).forEach(r=>{if(!rowTicked(l.id,rowKey(r)))setRowTick(l,rowKey(r),mode,by,true);}));
       markListDone(lsArr.map(l=>l.id),mode,by);clearReleased(lsArr,mode,by);
       wlSel.clear();ov.remove();sched();render();
       toast(lsArr.length+' lists marked '+(saw?'cut complete':'picked')+' ✓');
@@ -1795,7 +1836,10 @@ function renderWorkList(app,mode){
   const undated=open.filter(l=>!listDeadline(l));                                  // no delivery date yet (office to tag)
   const holdModes=mode==='saw'?['saw']:['fit','saw']; // stores books material in, so it can release saw holds too
   const nHold=allHolds(holdModes,'hold').length;
-  const visible=(wlShowDone||wlShowHold)?[]:(wlShowUpcoming?[...dueNow,...upcoming,...undated]:dueNow);
+  const visAll=(wlShowDone||wlShowHold)?[]:(wlShowUpcoming?[...dueNow,...upcoming,...undated]:dueNow);
+  const custs=[...new Set(visAll.map(listCust).map(c=>c||'(no customer)'))].sort();
+  if(wlCust&&!custs.includes(wlCust))wlCust='';
+  const visible=wlCust?visAll.filter(l=>(listCust(l)||'(no customer)')===wlCust):visAll;
   [...wlSel].forEach(id=>{if(!visible.some(l=>l.id===id))wlSel.delete(id);}); // selections only valid while visible in the queue
   const selLists=visible.filter(l=>wlSel.has(l.id));
   const woChips=l=>(l.wos||[]).map(w=>{const o=DB.orders.find(x=>x.wo===w);return `<span class="lst-chip">${escA(w)}${o&&(o.floor||o.unit)?' · '+escA([o.floor,o.unit].filter(Boolean).join(' ')):''}</span>`;}).join('');
@@ -1804,9 +1848,9 @@ function renderWorkList(app,mode){
     ${due?(od=>`<span class="wl-due"${od?' style="background:#c0392b;color:#fff"':''}>${od?'⚠ OVERDUE — ':''}${mode==='saw'?'CUT':'PICK'} BY ${fmt(listDeadline(l))} · DELIVERS ${fmt(due)}</span>`)(!isDone&&listOverdue(l)):'<span class="wd">no delivery date yet</span>'}</div>
     ${relOnly?`<div class="rel-note">▶ MATERIAL HAS ARRIVED — ${relRows(l)} row${relRows(l)!==1?'s':''} released from the waiting list. The rest of this house was done ${new Date(dn.at).toLocaleDateString('en-IE')}${dn.by?' by '+escA(dn.by):''}.</div>`:''}
     ${nh?`<div class="hold-note">⏸ ${nh} row${nh!==1?'s':''} waiting on ${mode==='saw'?'material':'stock'} — ${mode==='saw'?'cut':'pick'} the rest and tap ${cfg.done}; the waiting rows come back when released.</div>`:''}
-    ${listTableHTML(l,mode,{relOnly})}
+    ${listTableHTML(l,mode,{relOnly,tick:!isDone})}
     <div class="wl-act">${isDone?`<span class="wl-donelbl">${cfg.done} — ${new Date(dn.at).toLocaleDateString('en-IE')} ${hhmm(dn.at)}${dn.by?' by '+escA(dn.by):''}</span><button class="wl-undo" data-wlundo="${escA(l.id)}">Undo</button>`
-      :`<span style="font-size:12px;color:var(--t3)">${cfg.cnt(l)} item${cfg.cnt(l)!==1?'s':''}</span><span style="display:flex;gap:8px;flex-wrap:wrap"><button class="wl-undo" data-wlhold="${escA(l.id)}" title="Material or stock not in — park these rows until it arrives">⏸ ${mode==='saw'?'Material':'Stock'} not in</button><button class="wl-undo" data-wllbl="${escA(l.id)}" title="Print a label for every pack and item, marked with this house">🏷 Labels</button><button class="wl-btn" data-wldone="${escA(l.id)}">${cfg.done}</button></span>`}</div>
+      :`<span style="font-size:12px;color:var(--t3)">${(n=>n.filter(r=>rowTicked(l.id,rowKey(r))).length)(tickableRows(l,mode))} of ${tickableRows(l,mode).length} ticked</span><span style="display:flex;gap:8px;flex-wrap:wrap"><button class="wl-undo" data-wlhold="${escA(l.id)}" title="Material or stock not in — park these rows until it arrives">⏸ ${mode==='saw'?'Material':'Stock'} not in</button><button class="wl-undo" data-wllbl="${escA(l.id)}" title="Print a label for every pack and item, marked with this house">🏷 Labels</button><button class="wl-btn" data-wldone="${escA(l.id)}">${cfg.done}</button></span>`}</div>
   </div>`;};
   // DONE screen: everything signed off, newest first, grouped under its date stamp
   const doneScreen=()=>{
@@ -1829,6 +1873,7 @@ function renderWorkList(app,mode){
       <span class="wl-print"><button id="wl-pr1" title="Paper fallback — today's work and anything overdue, with tick boxes and initials">🖨 Print today</button><button id="wl-pr3" title="Paper fallback for a longer outage — the next 3 days">🖨 Next 3 days</button></span>
     </div>
     ${wlShowHold?`<div class="wl-hint">Rows parked because ${mode==='saw'?'the material':'stock'} isn't in. When it arrives, tap <b>ARRIVED — RELEASE</b> and the rows go straight back on the ${mode==='saw'?'saw':'stores'} queue as due work.</div>`+holdBookHTML(holdModes):wlShowDone?doneScreen():`
+    ${custs.length>1?`<div class="wl-cust"><span>Customer:</span><button class="${!wlCust?'on':''}" data-wlc="">All · ${visAll.length}</button>${custs.map(c=>`<button class="${wlCust===c?'on':''}" data-wlc="${escA(c)}">${escA(c)} · ${visAll.filter(l=>(listCust(l)||'(no customer)')===c).length}</button>`).join('')}</div>`:''}
     ${visible.length>1?`<div style="font-size:12px;color:var(--t3);margin:-4px 0 10px">Cutting several houses together? Tick the box on each list for a combined table with per-house quantities and location labels.</div>`:''}
     ${selLists.length?`<div class="wl-selbar"><b>${selLists.length} house${selLists.length!==1?'s':''} selected</b>
       <button class="btn2" id="wl-comb" ${selLists.length<2?'disabled title="Select at least 2 lists to combine"':''}>⚡ Combined ${mode==='saw'?'cutting':'fittings'} table</button>
@@ -1844,6 +1889,24 @@ function renderWorkList(app,mode){
   const pr3=document.getElementById('wl-pr3');if(pr3)pr3.onclick=()=>printWorkList(mode,3);
   if(wlShowHold)bindHoldBook(holdModes,(what,cb)=>pickName(mode,what,cb));
   document.querySelectorAll('[data-wlhold]').forEach(b=>b.onclick=()=>{const l=lists().find(x=>x.id===b.dataset.wlhold);if(l)openHold(l,mode);});
+  document.querySelectorAll('[data-wlc]').forEach(b=>b.onclick=()=>{wlCust=b.dataset.wlc;render();});
+  // Per-row tick: the device's remembered name goes on the row (asked once); the last row ticked signs the house off
+  document.querySelectorAll('[data-rt]').forEach(b=>b.onclick=()=>{
+    const v=b.dataset.rt,i=v.indexOf('|'),id=v.slice(0,i),k=v.slice(i+1);
+    const l=lists().find(x=>x.id===id);if(!l)return;
+    const on=!rowTicked(id,k);
+    const go=by=>{
+      setRowTick(l,k,mode,by,on);
+      const rows=tickableRows(l,mode);
+      if(on&&rows.length&&rows.every(r=>rowTicked(id,rowKey(r)))){
+        markListDone([id],mode,by);clearReleased([l],mode,by);wlSel.delete(id);
+        toast(l.name+' — all rows ticked · '+(mode==='saw'?'cut complete':'fittings picked')+' ✓');
+      }
+      sched();render();
+    };
+    const last=ls.get('wpfOpName');
+    if(!on||last)go(last||'');else pickName(mode,(mode==='saw'?'Cutting':'Picking')+' — '+l.name,go);
+  });
   const upc=document.getElementById('wl-upc');if(upc)upc.onclick=()=>{wlShowUpcoming=!wlShowUpcoming;render();};
   document.querySelectorAll('[data-wlsel]').forEach(b=>b.onclick=()=>{
     const id=b.dataset.wlsel;wlSel.has(id)?wlSel.delete(id):wlSel.add(id);render();
@@ -1857,6 +1920,7 @@ function renderWorkList(app,mode){
   document.querySelectorAll('[data-wldone]').forEach(b=>b.onclick=()=>{
     const l=lists().find(x=>x.id===b.dataset.wldone);if(!l)return;
     pickName(mode,(mode==='saw'?'Cut complete':'Fittings picked')+' — '+l.name,by=>{
+      tickableRows(l,mode).forEach(r=>{if(!rowTicked(l.id,rowKey(r)))setRowTick(l,rowKey(r),mode,by,true);});
       markListDone([l.id],mode,by);clearReleased([l],mode,by);
       wlSel.delete(l.id);
       sched();render();toast(l.name+' — '+(mode==='saw'?'cut complete':'fittings picked')+' ✓');
@@ -1866,6 +1930,7 @@ function renderWorkList(app,mode){
     if(!confirm('Put this list back in the queue?'))return;
     const id=b.dataset.wlundo;
     if(DB.listDone&&DB.listDone[id])delete DB.listDone[id][mode];
+    const lu=lists().find(x=>x.id===id);if(lu)clearRowTicks(lu,mode);
     sched();render();
   });
 }
@@ -3483,6 +3548,19 @@ function bindMissWhy(){document.querySelectorAll('[data-misswhy]').forEach(b=>b.
 /* ---------- Readiness: one colour per job, from its cutting/fittings lists ---------- */
 function rowKey(r){return[r.k,String(r.item||'').trim(),r.L,r.W,String(r.mat||'').trim(),String(r.note||'').trim()].join('|').toLowerCase();}
 function holdsOf(id){return (DB.listHold||{})[id]||{};}
+/* Per-row tick-off at the bench: each item is ticked as it's cut/picked and struck through; the house signs off when the last row goes. */
+function rowTicks(id){return (DB.listRow||{})[id]||{};}
+function rowTicked(id,k){const t=rowTicks(id)[k];return !!t;}
+function setRowTick(l,k,mode,by,on){
+  DB.listRow=DB.listRow||{};const t=DB.listRow[l.id]=DB.listRow[l.id]||{};
+  if(on)t[k]={m:mode,at:nowISO(),by:by||''};else delete t[k];
+  if(!Object.keys(t).length)delete DB.listRow[l.id];
+}
+function clearRowTicks(l,mode){const t=rowTicks(l.id);Object.keys(t).forEach(k=>{if(t[k].m===mode)delete t[k];});if(DB.listRow&&DB.listRow[l.id]&&!Object.keys(t).length)delete DB.listRow[l.id];}
+function tickableRows(l,mode){ // rows the bench can tick right now: not held; only released rows when the rest was already signed off
+  const h=holdsOf(l.id),relOnly=!!listDone(l.id)[mode]&&listHoldRows(l,mode,'rel').length>0;
+  return listRows(l).filter(r=>r.k===mode).filter(r=>{const x=h[rowKey(r)];if(x&&x.st==='hold')return false;return !relOnly||(x&&x.st==='rel');});
+}
 function listHoldRows(l,mode,st){return Object.entries(holdsOf(l.id)).filter(([k,v])=>v.m===mode&&(!st||v.st===st)).map(([k,v])=>({k,...v}));}
 function sideState(l,mode){ // 'na' | 'unset' | 'hold' | 'open' | 'done'
   const n=mode==='saw'?(l.saw||0):(l.fit||0);
