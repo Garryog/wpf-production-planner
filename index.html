@@ -483,6 +483,25 @@ function same(a,b){
   return true;
 }
 function snap(){return clone({orders:DB.orders,nid:DB.nid,settings:fullSettings()});}
+/* Unsaved changes are also kept on this device (localStorage), so closing the tab, a dead battery or
+   no signal can't lose them: on next open they're merged into the latest plan and sent.
+   Cutting-list workbooks (listWBs) are too big for the device copy and are left out. */
+const PEND_KEY='wpfPending';let pendT=null;
+function noWB(p){if(!p)return p;const s={...(p.settings||{})};delete s.listWBs;return{...p,settings:s};}
+function snapLite(){const s=fullSettings();delete s.listWBs;return clone({orders:DB.orders,nid:DB.nid,settings:s});}
+function writePend(){
+  clearTimeout(pendT);pendT=null;
+  try{
+    if(!BASE||!DB.loaded)return;
+    const mine=snapLite(),base=noWB(BASE);
+    if(same(mine,base)){localStorage.removeItem(PEND_KEY);return;}
+    localStorage.setItem(PEND_KEY,JSON.stringify({at:Date.now(),base,mine}));
+  }catch(e){console.warn('Planner: could not keep unsaved changes on this device',e&&e.message);}
+}
+function pendSoon(){clearTimeout(pendT);pendT=setTimeout(writePend,300);}
+function readPend(){try{const p=JSON.parse(localStorage.getItem(PEND_KEY)||'null');return p&&p.base&&p.mine?p:null;}catch(e){return null;}}
+window.addEventListener('pagehide',()=>{if(pendT)writePend();});
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&pendT)writePend();});
 // Server settings → a full settings object. Missing/empty keys keep what we had (same rules the old loader used).
 function settingsFrom(s,prev){
   const r={...prev};s=s||{};
@@ -591,6 +610,18 @@ async function loadDB(){
     }
     DB.orders.forEach(o=>{orig[o.wo]=o.plannedWeek||'';origStep[o.wo]=o.step||'';});
     BASE=snap();
+    // First open on this device: changes that never reached the database last time are merged in and sent now.
+    // They're older than what's in the database, so on a true clash the database copy wins (ticks still win).
+    const pend=!DB.loaded&&row?readPend():null;
+    if(pend&&!same(pend.mine,pend.base)){
+      const m=mergePlan(pend.base,pend.mine,noWB(BASE),{theirsWins:true});
+      m.plan.settings.listWBs=BASE.settings.listWBs;
+      applyPlan(m.plan);
+      DB.loaded=true;DB.loadFailed=false;
+      toast('Unsaved changes from last time were recovered — saving them now');
+      sched();
+      return;
+    }
     DB.loadFailed=false;
     DB.loaded=true; // this page has held a good copy of the plan at least once
     setSS('ok');
@@ -657,11 +688,13 @@ async function saveDB(){
   try{
     await pushPlan();
     DB.saveFailed=false;
+    writePend(); // clears the device copy if everything is now in the database
     setSS('ok');
   }catch(e){
     console.warn('Planner save failed:',e&&e.message);
     setSS('e');
     DB.saveFailed=true; // driver view shows a keep-page-open banner while this is set
+    writePend();
     toast('Save failed — will retry automatically. Keep this page open.');
     clearTimeout(saveT);saveT=setTimeout(saveDB,30000); // retry while the page lives
     if(ROLE==='driver')render();
@@ -695,7 +728,7 @@ async function tryDailyBackup(){
     }
   }catch(e){}
 }
-function sched(){clearTimeout(saveT);saveT=setTimeout(saveDB,1200);}
+function sched(){clearTimeout(saveT);saveT=setTimeout(saveDB,1200);pendSoon();}
 function setSS(st){const d=document.getElementById('dot'),t=document.getElementById('stxt');if(!d)return;d.className='dot'+(st==='s'?' s':st==='e'?' e':'');t.textContent=st==='s'?'Saving…':st==='e'?'Save failed':'Synced';}
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._x);t._x=setTimeout(()=>t.classList.remove('show'),2500);}
 function fmt(s){if(!s)return'—';return new Date(s).toLocaleDateString('en-IE',{day:'numeric',month:'short',year:'2-digit'});}
