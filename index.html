@@ -493,6 +493,17 @@ function snap(){return clone({orders:DB.orders,nid:DB.nid,settings:fullSettings(
    no signal can't lose them: on next open they're merged into the latest plan and sent.
    Cutting-list workbooks (listWBs) are too big for the device copy and are left out. */
 const PEND_KEY='wpfPending';let pendT=null;
+// Each tab keeps its own slot inside the device copy, so two tabs on one PC never wipe each other's changes.
+const TAB_ID=(()=>{try{let t=sessionStorage.getItem('wpfTab');if(!t){t='T'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);sessionStorage.setItem('wpfTab',t);}return t;}catch(e){return'T'+Math.random().toString(36).slice(2,8);}})();
+function pendAll(){
+  const p=JSON.parse(localStorage.getItem(PEND_KEY)||'null');
+  if(!p)return{};
+  if(p.tabs)return p.tabs;
+  if(p.base&&p.mine)return{old:{at:p.at,d:pdiff(noWB(p.base),noWB(p.mine))}}; // earlier single-slot formats
+  if(Array.isArray(p.d))return{old:p};
+  return{};
+}
+function pendPut(tabs){if(Object.keys(tabs).length)localStorage.setItem(PEND_KEY,JSON.stringify({tabs}));else localStorage.removeItem(PEND_KEY);}
 function noWB(p){if(!p)return p;const s={...(p.settings||{})};delete s.listWBs;return{...p,settings:s};}
 function snapLite(){const s=fullSettings();delete s.listWBs;return clone({orders:DB.orders,nid:DB.nid,settings:s});}
 /* The device copy holds only what changed (each changed job / setting, before and after), not the whole plan:
@@ -529,14 +540,15 @@ function writePend(){
   try{
     if(!BASE||!DB.loaded)return;
     const d=pdiff(noWB(BASE),snapLite());
-    if(!d.length)localStorage.removeItem(PEND_KEY);
-    else localStorage.setItem(PEND_KEY,JSON.stringify({at:Date.now(),d}));
+    let tabs={};try{tabs=pendAll();}catch(e){}
+    if(d.length)tabs[TAB_ID]={at:Date.now(),d};else delete tabs[TAB_ID];
+    pendPut(tabs);
     DB.pendFail=false;
   }catch(e){DB.pendFail=true;console.warn('Planner: could NOT keep unsaved changes on this device',e&&e.message);}
   updSaveBar();
 }
 function pendSoon(){clearTimeout(pendT);pendT=setTimeout(writePend,300);}
-function readPend(){try{const p=JSON.parse(localStorage.getItem(PEND_KEY)||'null');if(p&&p.base&&p.mine)p.d=pdiff(noWB(p.base),noWB(p.mine));return p&&Array.isArray(p.d)&&p.d.length?p:null;}catch(e){return null;}}
+function readPend(){try{const t=pendAll();return Object.keys(t).map(k=>({id:k,...t[k]})).filter(s=>Array.isArray(s.d)&&s.d.length).sort((a,b)=>(a.at||0)-(b.at||0));}catch(e){return[];}}
 window.addEventListener('pagehide',()=>{if(pendT)writePend();});
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&pendT)writePend();});
 // Server settings → a full settings object. Missing/empty keys keep what we had (same rules the old loader used).
@@ -685,12 +697,16 @@ async function loadDB(){
     BASE=snap();
     // First open on this device: changes that never reached the database last time are merged in and sent now.
     // They're older than what's in the database, so on a true clash the database copy wins (ticks still win).
-    const pend=!DB.loaded&&row?readPend():null;
-    if(pend){
-      const t=noWB(BASE),m=mergePlan(pbuild(t,pend.d,'b'),pbuild(t,pend.d,'m'),t,{theirsWins:true});
-      m.plan.settings.listWBs=BASE.settings.listWBs;
-      applyPlan(m.plan);
+    // Every tab's slot on this device is merged in (oldest first); this tab then holds them all in its own slot.
+    const pend=!DB.loaded&&row?readPend():[];
+    if(pend.length){
+      let cur=noWB(BASE);
+      pend.forEach(s=>{const m=mergePlan(pbuild(cur,s.d,'b'),pbuild(cur,s.d,'m'),cur,{theirsWins:true});cur=m.plan;});
+      cur.settings.listWBs=BASE.settings.listWBs;
+      applyPlan(cur);
       DB.loaded=true;DB.loadFailed=false;
+      writePend();
+      if(!DB.pendFail)try{const tabs=pendAll();pend.forEach(s=>{if(s.id!==TAB_ID)delete tabs[s.id];});pendPut(tabs);}catch(e){}
       toast('Unsaved changes from last time were recovered — saving them now');
       sched();
       return;
