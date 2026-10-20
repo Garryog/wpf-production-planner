@@ -103,6 +103,8 @@ button,input,select{font-family:inherit;cursor:pointer}
 .toast.show{opacity:1}
 .savebar{position:sticky;top:0;z-index:9000;background:#c0392b;color:#fff;font-size:14px;font-weight:700;line-height:1.4;padding:10px 16px;text-align:center}
 .savebar[hidden]{display:none}
+.verbar{position:sticky;top:0;z-index:8999;width:100%;border:0;background:#14335c;color:#fff;font-size:14px;font-weight:700;padding:10px 16px;cursor:pointer}
+.verbar[hidden]{display:none}
 @media(max-width:1000px){.week-caps{grid-template-columns:repeat(5,1fr)}}
 @media(max-width:700px){.week-caps{grid-template-columns:repeat(3,1fr)}.wo-table th:nth-child(n+7),.wo-table td:nth-child(n+7){display:none}.pg{padding:12px 12px 60px}}
 /* ---- Column filters ---- */
@@ -410,6 +412,7 @@ button,input,select{font-family:inherit;cursor:pointer}
   <div class="sync"><span class="dot" id="dot"></span><span id="stxt">Loading…</span><button class="hdr-role" id="who-sw" style="display:none" title="Who is making changes on this computer — tap to switch person">👤</button><button class="hdr-role" id="role-sw" style="display:none">⇄ Switch view</button></div>
 </div></div>
 <div class="savebar" id="savebar" role="alert" hidden></div>
+<button class="verbar" id="verbar" hidden>🔄 New version available — tap to reload</button>
 <div class="tabs"><div class="tabs-i">
   <button class="tab on" id="t-b">Capacity Board</button>
   <button class="tab" id="t-d">🚚 Deliveries<span id="delcnt"></span></button>
@@ -855,10 +858,27 @@ function roleOk(r){ // has this device already entered the right PIN (or the adm
   return !!c&&(c===p[r]||c===p.admin);
 }
 let viewTimer=null;
+/* "New version available": a HEAD request (no download) asks the server when index.html last changed;
+   if that's newer than the copy this tab is running, offer a one-tap reload. */
+let SEEN_ETAG=null;
+async function checkNewVersion(){
+  try{
+    if(!/^https?:$/.test(location.protocol))return;
+    const r=await fetch(location.pathname+'?v='+Date.now(),{method:'HEAD',cache:'no-store'});
+    if(!r||!r.ok)return;
+    const lm=r.headers.get('last-modified'),et=r.headers.get('etag');
+    let newer=false;
+    if(lm){const a=Date.parse(lm),b=Date.parse(document.lastModified);newer=!!(a&&b&&a-b>60000);}
+    else if(et){if(SEEN_ETAG===null)SEEN_ETAG=et;else newer=et!==SEEN_ETAG;}
+    const vb=document.getElementById('verbar');
+    if(newer&&vb&&vb.hidden){vb.hidden=false;vb.onclick=()=>{writePend();location.reload();};}
+  }catch(e){}
+}
 function startAutoRefresh(){
   clearInterval(viewTimer);
   if(['floor','driver','saw','stores','office','dash','pm','prod'].includes(ROLE)){
     viewTimer=setInterval(()=>{
+      checkNewVersion();
       if(drvUploading)return; // never interrupt a photo upload (unsaved edits are merged by loadDB, not skipped)
       if(typeof IMPPLAN!=='undefined'&&(IMPPLAN||PEND))return; // an import review in progress must never be wiped by a refresh
       const ae=document.activeElement;if(ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName))return; // someone is typing
