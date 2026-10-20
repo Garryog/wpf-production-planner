@@ -657,6 +657,8 @@ async function loadDB(){
     if(SAVING)return; // a save is mid-flight — the next refresh picks the result up
     const row=checkRow(await fetchMain());
     if(SAVING)return;
+    // A slow refresh reply that left the database before this screen's own save landed is out of date — ignore it
+    if(row&&VER!==null&&row.version!==undefined&&(+row.version||1)<VER){setSS(DB.saveFailed?'e':'ok');return;}
     DB.remoteBroken=false;
     // This screen has changes the database hasn't got yet (typing, a pending or failed save):
     // never throw them away — merge the database copy into them and send the result.
