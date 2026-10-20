@@ -600,11 +600,25 @@ async function fetchMain(){
   if(!r.ok||!Array.isArray(d))throw new Error('load failed: '+r.status+' '+JSON.stringify(d).slice(0,120));
   return d[0]||null;
 }
+/* Refuse a missing, empty or damaged planner record (e.g. a wiped row or a permissions change that makes the
+   database answer "nothing"). Treated as a failed load — the screen keeps what it has and never saves over it. */
+function checkRow(row){
+  const saw=ls.get('wpfSawJobs')==='1'||!!(BASE&&BASE.orders&&BASE.orders.length);
+  let bad='';
+  if(!row)bad='the planner record is missing';
+  else if(row.orders!=null&&!Array.isArray(row.orders))bad='the job list is damaged';
+  else if(row.settings!=null&&(typeof row.settings!=='object'||Array.isArray(row.settings)))bad='the settings are damaged';
+  else if(saw&&!Array.isArray(row.orders))bad='the job list is missing';
+  else if(saw&&!row.orders.length&&(!row.settings||!Object.keys(row.settings).length))bad='the plan came back empty';
+  if(bad){const e=new Error(bad);e.broken=true;throw e;}
+  return row;
+}
 async function loadDB(){
   try{
     if(SAVING)return; // a save is mid-flight — the next refresh picks the result up
-    const row=await fetchMain();
+    const row=checkRow(await fetchMain());
     if(SAVING)return;
+    DB.remoteBroken=false;
     // This screen has changes the database hasn't got yet (typing, a pending or failed save):
     // never throw them away — merge the database copy into them and send the result.
     if(row&&DB.loaded&&BASE&&!same(snap(),BASE)){
@@ -644,7 +658,9 @@ async function loadDB(){
     DB.loaded=true; // this page has held a good copy of the plan at least once
     setSS('ok');
     if(migr)sched(); // store the migrated baseline
+    if(DB.orders.length)ls.set('wpfSawJobs','1');
   }catch(e){
+    if(e&&e.broken){DB.remoteBroken=e.message;console.error('Planner: refused to load — '+e.message+'. Nothing will be saved over it.');}
     setSS('e');
     // Only a page that has NEVER loaded the plan is dangerous to save from.
     // A transient refresh failure on a page that already holds good data must not
@@ -659,8 +675,7 @@ async function pushPlan(){
     const mine=snap();
     if(VER===null){
       if(DB.saveFailed&&BASE){ // old-style save retrying after a failure: merge in what others saved meanwhile first
-        const row=await fetchMain();
-        if(!row)throw new Error('planner record missing');
+        const row=checkRow(await fetchMain());
         const theirs=planOf(row,BASE.settings),m=mergePlan(BASE,snap(),theirs);
         applyPlan(m.plan);noteMerge(m.notes);mergedRender();
       }
@@ -680,8 +695,7 @@ async function pushPlan(){
     if(Array.isArray(d)&&d.length){VER=+d[0].version||VER+1;BASE=mine;return;}
     if(!Array.isArray(d))throw new Error('unexpected save reply');
     // Nothing updated: another screen saved first. Fetch theirs, merge, try again.
-    const row=await fetchMain();
-    if(!row)throw new Error('planner record missing');
+    const row=checkRow(await fetchMain());
     const theirs=planOf(row,BASE.settings);
     const m=mergePlan(BASE,snap(),theirs);
     applyPlan(m.plan);noteMerge(m.notes);
@@ -708,6 +722,12 @@ async function saveDB(){
     toast('NOT saved — this page never loaded the plan (database unreachable). Fix the connection and refresh.');
     return;
   }
+  if(DB.remoteBroken){ // the database copy looked empty/damaged — never write over it; keep the changes on this device
+    setSS('e');DB.saveFailed=true;writePend();
+    toast('NOT saved — the database copy looks empty or damaged ('+DB.remoteBroken+'). Your changes are kept on this device. Tell the office.');
+    clearTimeout(saveT);saveT=setTimeout(saveDB,30000);
+    return;
+  }
   if(SAVING){SAVE_AGAIN=true;return;} // one save at a time; go again when this one lands
   SAVING=true;
   setSS('s');
@@ -718,6 +738,7 @@ async function saveDB(){
     setSS('ok');
   }catch(e){
     console.warn('Planner save failed:',e&&e.message);
+    if(e&&e.broken)DB.remoteBroken=e.message;
     setSS('e');
     DB.saveFailed=true; // driver view shows a keep-page-open banner while this is set
     writePend();
