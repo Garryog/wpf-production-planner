@@ -2,6 +2,9 @@
 // network latency, 503s, lost replies (write landed, reply lost), offline periods and tab close/reopen.
 // Each device only touches "its own" things, so there are NO true clashes: every single change must
 // survive, nothing may be duplicated, and every device must end with the identical plan.
+// A tab reopened with no signal that has never loaded the plan shows only a blocking "can't reach the database"
+// screen with no controls (proved in t6-neverloaded), so no user can make an edit there: ops are skipped on such tabs.
+// The fake DB simulates the Stage 1 version-bump trigger.
 // Run: node tests/stage1/t1-soak.test.js [seed] [rounds]
 const { H, makeServer, device, sleep } = require('./tsrv');
 let seed = +(process.argv[2] || 7); const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
@@ -17,10 +20,12 @@ const NAMES = ['office', 'saw', 'stores', 'driver', 'pm'];
   // expected state
   const exp = { notes: {}, ticks: new Set(), unticked: new Set(), added: new Set(), deleted: new Set(), caps: {} };
   const own = (d, i) => i % 5 === d;
-  let k = 0;
+  let k = 0, skipped = 0;
   const op = async (di) => {
     const D = devs[di], n = NAMES[di]; k++;
     const r = rnd();
+    const blocked = await D.page.evaluate(() => !DB.loaded || !!DB.loadFailed).catch(() => true);
+    if (blocked) { skipped++; return; } // the UI offers nothing to edit on a never-loaded screen
     const mine = []; for (let i = 0; i < 20; i++) if (own(di, i) && !exp.deleted.has('WO-' + i)) mine.push('WO-' + i);
     let js;
     if (r < 0.35 && mine.length) { const wo = mine[Math.floor(rnd() * mine.length)]; const tok = n + ':' + k; exp.notes[wo] = tok; js = `{const o=DB.orders.find(x=>x.wo===${JSON.stringify(wo)});o.notes=${JSON.stringify(tok)};}`; }
@@ -72,8 +77,10 @@ const NAMES = ['office', 'saw', 'stores', 'driver', 'pm'];
   const lostCap = Object.keys(exp.caps).filter(c => srv.caps[c] !== exp.caps[c]); rec('every settings edit survived', !lostCap.length, lostCap.join(','));
   const errs = devs.flatMap(D => D.dev.errors); rec('no page errors', !errs.length, errs.slice(0, 3).join(' | '));
   for (const t of lostTicks) { const h = S.hist; for (let i = 1; i < h.length; i++) if (h[i - 1].ticks.includes(t) && !h[i].ticks.includes(t)) console.log('  tick ' + t + ' removed by ' + h[i].who + ' writing v' + h[i].v + ' (' + h[i].url + ')'); }
+  for (const t of zombie) { const h = S.hist; let st = false; const tl = []; h.forEach((x, i) => { const has = x.ticks.includes(t); if (has !== st) { tl.push((has ? '+' : '-') + ' by ' + x.who + ' v' + x.v); st = has; } }); console.log('  zombie ' + t + ' timeline: ' + tl.join(' | ')); }
   for (const t of Object.keys(exp.caps).filter(c => srv.caps[c] !== exp.caps[c])) { const h = S.hist; const first = h.findIndex(x => x.caps.includes(t)); console.log('  cap ' + t + ' first on server at idx ' + first); for (let i = 1; i < h.length; i++) if (h[i - 1].caps.includes(t) && !h[i].caps.includes(t)) console.log('  cap ' + t + ' removed by ' + h[i].who + ' v' + h[i].v); }
   for (const D of devs) { const l = await D.page.evaluate(() => window.__lost || []).catch(() => []); l.filter(x => lostTicks.some(t => x.startsWith(t + ' '))).forEach(x => console.log('  ' + D.dev.name + ' local drop: ' + x)); }
+  console.log('ops skipped on never-loaded (blocked) tabs: ' + skipped);
   console.log('server: patches=' + S.patches + ' ok=' + S.okSaves + ' conflicts=' + S.conflicts + ' version=' + S.row.version + ' ops=' + k);
   for (const D of devs) await D.close(); await browser.close();
   console.log(res.filter(x => !x).length + ' failed of ' + res.length);

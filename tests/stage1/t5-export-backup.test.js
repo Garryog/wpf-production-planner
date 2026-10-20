@@ -27,7 +27,7 @@ const chg = p => p.evaluate(() => changes().map(o => o.wo + ':' + orig[o.wo] + '
   { // import on A removes a job (shipped) while B has moved that job: what does Export Changes say?
     const S = makeServer(base()); const A = await device(browser, S, { name: 'A' }), B = await device(browser, S, { name: 'B' });
     await B.page.evaluate(async () => { DB.orders[2].plannedWeek = '2026-11-16'; await saveDB(); });
-    await A.page.evaluate(async () => { applyImport({ removals: [{ wo: 'WO-3', reason: 'shipped' }], updates: [], newOrders: [], backfills: [], inTransit: [], counts: {}, moves: {} }); await saveDB(); }).catch(e => console.log('  (applyImport shape differs: ' + e.message.split('\n')[0] + ')'));
+    await A.page.evaluate(async () => { showTab('i'); applyImport({ removals: [{ wo: 'WO-3', reason: 'shipped' }], updates: [], newOrders: [], backfills: [], inTransit: [], counts: {}, moves: {} }); await saveDB(); }).catch(e => console.log('  (applyImport shape differs: ' + e.message.split('\n')[0] + ')'));
     const wos = S.row.orders.map(o => o.wo).join(',');
     rec('import removal vs remote move: shipped job not resurrected onto the board', !wos.includes('WO-3'), wos + ' (merge keeps "deleted on one screen, changed on another")');
     await A.close(); await B.close();

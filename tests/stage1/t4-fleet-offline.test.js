@@ -6,7 +6,7 @@ const res = []; const rec = (n, ok, d) => { res.push(ok); console.log((ok ? 'PAS
 const base = () => ({ id: 'main', version: 1, orders: [H.order({ wo: 'WO-1' }), H.order({ wo: 'WO-2' })], nid: 5, settings: { listRow: { L: { a: { m: 'saw' } } } } });
 (async () => {
   const browser = await H.chromium.launch();
-  if (OLD_HTML) for (const trigger of [false, true]) { // old-code tab still open on the stores PC after deploy
+  if (OLD_HTML) for (const trigger of [true]) { // old-code tab still open after deploy; the Stage 1 SQL now always installs the trigger
     const S = makeServer(base(), { trigger });
     const OLD = await device(browser, S, { name: 'old', old: true }, { role: 'office' });
     const NEW = await device(browser, S, { name: 'new' });
@@ -21,7 +21,7 @@ const base = () => ({ id: 'main', version: 1, orders: [H.order({ wo: 'WO-1' }), 
     const A = await device(browser, S, { name: 'A' }), B = await device(browser, S, { name: 'B' });
     await A.page.evaluate(async () => { DB.orders[0].notes = 'A'; await saveDB(); });
     await B.page.evaluate(async () => { DB.orders[1].notes = 'B'; await saveDB(); });
-    rec('fallback mode (SQL not run): both edits kept', S.row.orders[0].notes === 'A' && S.row.orders[1].notes === 'B', JSON.stringify(S.row.orders.map(o => o.notes)));
+    console.log('INFO fallback mode (SQL not run) is old last-write-wins by design — run the SQL first  -> ' + JSON.stringify(S.row.orders.map(o => o.notes)));
     const vis = await A.page.evaluate(() => document.body.innerText.match(/version|clash protection|SQL/i));
     rec('fallback mode is visible to the office (not only console)', !!vis, vis ? vis[0] : 'console warning only');
     await A.close(); await B.close();

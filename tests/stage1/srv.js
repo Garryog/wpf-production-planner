@@ -38,7 +38,8 @@ async function attach(t, S) {
         }
         const v = url.match(/version=eq\.(\d+)/);
         if (v && +v[1] !== S.row.version) return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
-        Object.assign(S.row, body);
+        const before = S.row.version; Object.assign(S.row, body);
+        if (S.trigger !== false) { S.row.version = (+before || 1) + 1; S.row.updated_at = new Date().toISOString(); } // Stage 1 SQL trigger: version := old.version + 1
         return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([S.row]) });
       }
     }

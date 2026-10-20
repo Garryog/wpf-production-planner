@@ -7,7 +7,7 @@ const OLD_HTML = (() => { try { return require('child_process').execSync('git -C
 const XLSXJS = fs.readFileSync(path.join(__dirname, '../../xlsx.full.min.js'), 'utf8');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 function makeServer(row, o = {}) {
-  return { row: JSON.parse(JSON.stringify(row)), versioned: o.versioned !== false, bumpOnAnyUpdate: !!o.trigger, backups: [], nextId: 1, log: [], patches: 0, conflicts: 0, okSaves: 0 };
+  return { row: JSON.parse(JSON.stringify(row)), versioned: o.versioned !== false, bumpOnAnyUpdate: o.trigger !== false /* Stage 1 SQL trigger: version := old.version + 1 on every update */, backups: [], nextId: 1, log: [], patches: 0, conflicts: 0, okSaves: 0 };
 }
 // dev: {name, offline, failRate, latency:[min,max], getDelay}
 async function attach(page, S, dev) {
@@ -60,7 +60,7 @@ function applyPatch(S, url, body) {
   if (v && +v[1] !== S.row.version) { S.conflicts++; return 'conflict'; }
   const before = S.row.version;
   Object.assign(S.row, JSON.parse(JSON.stringify(body)));
-  if (S.bumpOnAnyUpdate && S.row.version === before) S.row.version = before + 1; // what a DB trigger would do
+  if (S.bumpOnAnyUpdate) { S.row.version = before + 1; S.row.updated_at = new Date().toISOString(); } // exactly what production_planner_bump() does
   S.okSaves++; (S.hist = S.hist || []).push({ who: S._who, v: S.row.version, url: url.replace(/^.*\?/, ''), ticks: Object.keys(((S.row.settings || {}).listRow || {}).L || {}), caps: Object.keys((S.row.settings || {}).weekCaps || {}) }); return 'ok';
 }
 async function device(browser, S, dev, opts = {}) {
