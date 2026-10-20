@@ -478,6 +478,8 @@ let saveT=null,dragSrc=null;
 let BASE=null;   // the plan exactly as last agreed with the database (load or successful save)
 let VER=null;    // database version of BASE; null = version column missing → old save behaviour
 let SAVING=false,SAVE_AGAIN=false;
+let UNSURE=[]; // plans sent by saves whose reply never arrived (each may or may not have landed)
+function unsureAdd(p){UNSURE.push(p);if(UNSURE.length>5)UNSURE.shift();}
 function clone(x){return x===undefined?undefined:JSON.parse(JSON.stringify(x));}
 function same(a,b){
   if(a===b)return true;
@@ -535,13 +537,23 @@ function pbuild(t,d,side){ // the database copy t with one side ('b' before / 'm
   r.orders=r.orders.filter(x=>x!==undefined);
   return r;
 }
+function valAt(pl,p){
+  if(p[0]==='o')return oKeys(pl.orders).get(p[1]);
+  if(p[0]==='n')return pl.nid;
+  const s=(pl.settings||{})[p[1]];
+  return p.length===2?s:isPO(s)?s[p[2]]:undefined;
+}
 function writePend(){
   clearTimeout(pendT);pendT=null;
   try{
     if(!BASE||!DB.loaded)return;
-    const d=pdiff(noWB(BASE),snapLite());
+    const bs=noWB(BASE),mine=snapLite(),d=pdiff(bs,mine);
+    const us=d.length?UNSURE.map(x=>pdiff(bs,noWB(x))):[];
+    // also keep "mine" for anything an unconfirmed save touched — e.g. a tick sent then removed again here
+    const has=new Set(d.map(e=>JSON.stringify(e.p)));
+    us.forEach(ud=>ud.forEach(e=>{const k=JSON.stringify(e.p),pre=JSON.stringify(e.p.slice(0,2));if(has.has(k)||has.has(pre))return;has.add(k);d.push({p:e.p,b:e.b,m:valAt(mine,e.p)});}));
     let tabs={};try{tabs=pendAll();}catch(e){}
-    if(d.length)tabs[TAB_ID]={at:Date.now(),d};else delete tabs[TAB_ID];
+    if(d.length)tabs[TAB_ID]={at:Date.now(),d,us};else delete tabs[TAB_ID];
     pendPut(tabs);
     DB.pendFail=false;
   }catch(e){DB.pendFail=true;console.warn('Planner: could NOT keep unsaved changes on this device',e&&e.message);}
@@ -589,29 +601,33 @@ function mKey(x,seen){
   const k=x.id!=null&&x.id!==''?'id:'+x.id:Object.prototype.hasOwnProperty.call(x,'wo')?'wo:'+(x.wo==null?'':x.wo):null;
   if(!k)return null;const n=seen[k]=(seen[k]||0)+1;return n>1?k+'#'+n:k;
 }
-function mArr(b,m,t,path,N,o){
+const NOU=Symbol('no-unsure'); // "no information about an unconfirmed save here"
+function mArr(b,m,t,path,N,o,u){
   const ks=a=>{const seen={},r=[];for(const x of a){const k=mKey(x,seen);if(!k)return null;r.push([k,x]);}return r;};
-  const kb=ks(b),km=ks(m),kt=ks(t);
+  const kb=ks(b),km=ks(m),kt=ks(t),Us=u.map(x=>{const k=Array.isArray(x)?ks(x):null;return k?new Map(k):null;});
   if(kb&&km&&kt&&(b.length||m.length||t.length)){ // jobs, lists, staff… — merge item by item
     const B=new Map(kb),M=new Map(km),T=new Map(kt),out=[];
     const keys=[...km.map(x=>x[0]),...kt.map(x=>x[0]).filter(k=>!M.has(k))];
-    keys.forEach(k=>{const v=m3(B.get(k),M.get(k),T.get(k),path.concat(k),N,o);if(v!==undefined)out.push(v);});
+    keys.forEach(k=>{const v=m3(B.get(k),M.get(k),T.get(k),path.concat(k),N,o,Us.map(U=>U?U.get(k):NOU));if(v!==undefined)out.push(v);});
     return out;
   }
   // plain lists (history logs, WO tags, roles): keep additions from both sides, drop what either removed
   const J=x=>JSON.stringify(x),bs=new Set(b.map(J)),ms=new Set(m.map(J)),ts=new Set(t.map(J));
   return m.filter(x=>!(bs.has(J(x))&&!ts.has(J(x)))).concat(t.filter(x=>!bs.has(J(x))&&!ms.has(J(x))));
 }
-function m3(b,m,t,path,N,o){
+function m3(b,m,t,path,N,o,u){
+  // A save from this screen whose reply never came back may have landed. Where the database now holds exactly
+  // what that save sent, it's our own write — not another screen's change — so it counts as the base.
+  for(const x of u)if(x!==NOU&&same(t,x)){b=x;break;}
   if(same(m,t))return m;
   if(same(m,b))return t;
   if(same(t,b))return m;
   const isObj=x=>!!x&&typeof x==='object'&&!Array.isArray(x);
   if(!MERGE_ATOMIC[path[path.length-1]]){
-    if(Array.isArray(m)&&Array.isArray(t))return mArr(Array.isArray(b)?b:[],m,t,path,N,o);
+    if(Array.isArray(m)&&Array.isArray(t))return mArr(Array.isArray(b)?b:[],m,t,path,N,o,u);
     if(isObj(m)&&isObj(t)){
       const bb=isObj(b)?b:{},r={};
-      [...new Set([...Object.keys(m),...Object.keys(t)])].forEach(k=>{const v=m3(bb[k],m[k],t[k],path.concat(k),N,o);if(v!==undefined)r[k]=v;});
+      [...new Set([...Object.keys(m),...Object.keys(t)])].forEach(k=>{const v=m3(bb[k],m[k],t[k],path.concat(k),N,o,u.map(x=>isObj(x)?x[k]:NOU));if(v!==undefined)r[k]=v;});
       return r;
     }
   }
@@ -628,8 +644,9 @@ function m3(b,m,t,path,N,o){
 function mergePlan(base,mine,theirs,o){
   o=o||{};const N=[];base=base||{orders:[],settings:{}};
   mine=clone(mine);theirs=clone(theirs); // the result is all fresh objects — nothing shared with BASE or the live plan
-  const orders=m3(base.orders||[],mine.orders||[],theirs.orders||[],['orders'],N,o)||[];
-  const settings=m3(base.settings||{},mine.settings||{},theirs.settings||{},['settings'],N,o)||{};
+  const un=(o.unsure||[]).filter(Boolean);
+  const orders=m3(base.orders||[],mine.orders||[],theirs.orders||[],['orders'],N,o,un.map(x=>x.orders||[]))||[];
+  const settings=m3(base.settings||{},mine.settings||{},theirs.settings||{},['settings'],N,o,un.map(x=>x.settings||{}))||{};
   const plan={orders,nid:Math.max(+mine.nid||1,+theirs.nid||1),settings};
   const sh=v=>v===undefined||v===null||v===''?'(blank)':String(typeof v==='object'?JSON.stringify(v):v).slice(0,40);
   N.forEach(n=>{
@@ -677,9 +694,9 @@ async function loadDB(){
     // never throw them away — merge the database copy into them and send the result.
     if(row&&DB.loaded&&BASE&&!same(snap(),BASE)){
       const theirs=planOf(row,BASE.settings);
-      const m=mergePlan(BASE,snap(),theirs);
+      const m=mergePlan(BASE,snap(),theirs,{unsure:UNSURE});
       applyPlan(m.plan);noteMerge(m.notes);
-      BASE=clone(theirs);VER=row.version===undefined?null:(+row.version||1);
+      BASE=clone(theirs);UNSURE=[];VER=row.version===undefined?null:(+row.version||1);
       DB.loadFailed=false;
       sched();setSS('s');
       return;
@@ -687,6 +704,7 @@ async function loadDB(){
     if(row){
       if(row.version===undefined){VER=null;legacyWarn('load');}else VER=+row.version||1;
       applyPlan(planOf(row,BASE?BASE.settings:fullSettings()));
+      UNSURE=[];
     }
     // One-off migration: plans saved before the baseline was stored get it built once from the jobs as they
     // stand (what every load used to do); the office saves it so all screens share one baseline.
@@ -702,7 +720,8 @@ async function loadDB(){
     const pend=!DB.loaded&&row?readPend():[];
     if(pend.length){
       let cur=noWB(BASE);
-      pend.forEach(s=>{const m=mergePlan(pbuild(cur,s.d,'b'),pbuild(cur,s.d,'m'),cur,{theirsWins:true});cur=m.plan;});
+      pend.forEach(s=>{const b=pbuild(cur,s.d,'b'),us=(Array.isArray(s.us)?s.us:[]).map(ud=>pbuild(b,ud,'m'));
+        const m=mergePlan(b,pbuild(cur,s.d,'m'),cur,{theirsWins:true,unsure:us});cur=m.plan;});
       cur.settings.listWBs=BASE.settings.listWBs;
       applyPlan(cur);
       DB.loaded=true;DB.loadFailed=false;
@@ -734,33 +753,36 @@ async function pushPlan(){
     if(VER===null){
       if(DB.saveFailed&&BASE){ // old-style save retrying after a failure: merge in what others saved meanwhile first
         const row=checkRow(await fetchMain());
-        const theirs=planOf(row,BASE.settings),m=mergePlan(BASE,snap(),theirs);
+        const theirs=planOf(row,BASE.settings),m=mergePlan(BASE,snap(),theirs,{unsure:UNSURE});
         applyPlan(m.plan);noteMerge(m.notes);mergedRender();
+        BASE=clone(theirs);UNSURE=[];
       }
       const mine=snap();
-      const resp=await fetch(SUPA_URL+'/production_planner?id=eq.main',{method:'PATCH',headers:SUPA_WHDR,body:JSON.stringify(mine)});
+      let resp;try{resp=await fetch(SUPA_URL+'/production_planner?id=eq.main',{method:'PATCH',headers:SUPA_WHDR,body:JSON.stringify(mine)});}catch(e){unsureAdd(mine);throw e;}
       if(resp&&resp.ok===false)throw new Error('HTTP '+resp.status);
-      BASE=mine;return;
+      BASE=mine;UNSURE=[];return;
     }
     // Only saves if the database is still at the version we loaded. We ask for VER+1; the database trigger
     // (SUPABASE_CHANGES.md) also sets old+1 on every update — same number, so never a double bump — and
     // bumps it for old-code tabs too. The reply carries just the new version number.
-    const resp=await fetch(SUPA_URL+'/production_planner?id=eq.main&version=eq.'+VER+'&select=version',{method:'PATCH',headers:{...SUPA_WHDR,'Prefer':'return=representation'},
-      body:JSON.stringify({...mine,version:VER+1,updated_by:whoTag()})});
+    let resp;
+    try{resp=await fetch(SUPA_URL+'/production_planner?id=eq.main&version=eq.'+VER+'&select=version',{method:'PATCH',headers:{...SUPA_WHDR,'Prefer':'return=representation'},
+      body:JSON.stringify({...mine,version:VER+1,updated_by:whoTag()})});}
+    catch(e){unsureAdd(mine);throw e;} // no reply: it may have landed — remember what we sent so it isn't mistaken for someone else's change
     if(!resp||resp.ok===false){
       const tx=resp?await resp.text().catch(()=>''):'';
       if(/version|updated_by/.test(tx)&&/column/i.test(tx)){VER=null;legacyWarn('save');continue;} // SQL not run — old way
       throw new Error('HTTP '+(resp?resp.status:'?'));
     }
     let d=null;try{d=await resp.json();}catch(e){}
-    if(Array.isArray(d)&&d.length){VER=+d[0].version||VER+1;BASE=mine;return;}
+    if(Array.isArray(d)&&d.length){VER=+d[0].version||VER+1;BASE=mine;UNSURE=[];return;}
     if(!Array.isArray(d))throw new Error('unexpected save reply');
     // Nothing updated: another screen saved first. Fetch theirs, merge, try again.
     const row=checkRow(await fetchMain());
     const theirs=planOf(row,BASE.settings);
-    const m=mergePlan(BASE,snap(),theirs);
+    const m=mergePlan(BASE,snap(),theirs,{unsure:UNSURE});
     applyPlan(m.plan);noteMerge(m.notes);
-    BASE=clone(theirs);VER=row.version===undefined?null:(+row.version||1);
+    BASE=clone(theirs);UNSURE=[];VER=row.version===undefined?null:(+row.version||1);
     mergedRender();
   }
   throw new Error('kept clashing with other screens');
