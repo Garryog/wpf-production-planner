@@ -495,17 +495,48 @@ function snap(){return clone({orders:DB.orders,nid:DB.nid,settings:fullSettings(
 const PEND_KEY='wpfPending';let pendT=null;
 function noWB(p){if(!p)return p;const s={...(p.settings||{})};delete s.listWBs;return{...p,settings:s};}
 function snapLite(){const s=fullSettings();delete s.listWBs;return clone({orders:DB.orders,nid:DB.nid,settings:s});}
+/* The device copy holds only what changed (each changed job / setting, before and after), not the whole plan:
+   a handful of ticks on a 2,500-job plan is a few KB. On reopen it's laid over the latest database copy and merged. */
+const isPO=x=>!!x&&typeof x==='object'&&!Array.isArray(x);
+function oKeys(list){const seen={},m=new Map();(list||[]).forEach((o,i)=>m.set(mKey(o,seen)||'#'+i,o));return m;}
+function pdiff(b,m){
+  const d=[],ob=oKeys(b.orders),om=oKeys(m.orders);
+  new Set([...ob.keys(),...om.keys()]).forEach(k=>{const x=ob.get(k),y=om.get(k);if(!same(x,y))d.push({p:['o',k],b:x,m:y});});
+  const sb=b.settings||{},sm=m.settings||{};
+  new Set([...Object.keys(sb),...Object.keys(sm)]).forEach(k=>{
+    const x=sb[k],y=sm[k];if(same(x,y))return;
+    if(isPO(x)&&isPO(y))new Set([...Object.keys(x),...Object.keys(y)]).forEach(j=>{if(!same(x[j],y[j]))d.push({p:['s',k,j],b:x[j],m:y[j]});});
+    else d.push({p:['s',k],b:x,m:y});
+  });
+  if(b.nid!==m.nid)d.push({p:['n'],b:b.nid,m:m.nid});
+  return d;
+}
+function pbuild(t,d,side){ // the database copy t with one side ('b' before / 'm' mine) of the changes laid over it
+  const r=clone(t);r.orders=r.orders||[];r.settings=r.settings||{};
+  const ix=new Map([...oKeys(r.orders).keys()].map((k,i)=>[k,i]));
+  d.forEach(e=>{
+    const has=side in e&&e[side]!==undefined,v=clone(e[side]),p=e.p;
+    if(p[0]==='o'){const i=ix.get(p[1]);if(i!==undefined)r.orders[i]=has?v:undefined;else if(has)r.orders.push(v);}
+    else if(p[0]==='s'&&p.length===2){if(has)r.settings[p[1]]=v;else delete r.settings[p[1]];}
+    else if(p[0]==='s'){const o=isPO(r.settings[p[1]])?r.settings[p[1]]:(r.settings[p[1]]={});if(has)o[p[2]]=v;else delete o[p[2]];}
+    else if(p[0]==='n'&&has)r.nid=v;
+  });
+  r.orders=r.orders.filter(x=>x!==undefined);
+  return r;
+}
 function writePend(){
   clearTimeout(pendT);pendT=null;
   try{
     if(!BASE||!DB.loaded)return;
-    const mine=snapLite(),base=noWB(BASE);
-    if(same(mine,base)){localStorage.removeItem(PEND_KEY);return;}
-    localStorage.setItem(PEND_KEY,JSON.stringify({at:Date.now(),base,mine}));
-  }catch(e){console.warn('Planner: could not keep unsaved changes on this device',e&&e.message);}
+    const d=pdiff(noWB(BASE),snapLite());
+    if(!d.length)localStorage.removeItem(PEND_KEY);
+    else localStorage.setItem(PEND_KEY,JSON.stringify({at:Date.now(),d}));
+    DB.pendFail=false;
+  }catch(e){DB.pendFail=true;console.warn('Planner: could NOT keep unsaved changes on this device',e&&e.message);}
+  updSaveBar();
 }
 function pendSoon(){clearTimeout(pendT);pendT=setTimeout(writePend,300);}
-function readPend(){try{const p=JSON.parse(localStorage.getItem(PEND_KEY)||'null');return p&&p.base&&p.mine?p:null;}catch(e){return null;}}
+function readPend(){try{const p=JSON.parse(localStorage.getItem(PEND_KEY)||'null');if(p&&p.base&&p.mine)p.d=pdiff(noWB(p.base),noWB(p.mine));return p&&Array.isArray(p.d)&&p.d.length?p:null;}catch(e){return null;}}
 window.addEventListener('pagehide',()=>{if(pendT)writePend();});
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&pendT)writePend();});
 // Server settings → a full settings object. Missing/empty keys keep what we had (same rules the old loader used).
@@ -653,8 +684,8 @@ async function loadDB(){
     // First open on this device: changes that never reached the database last time are merged in and sent now.
     // They're older than what's in the database, so on a true clash the database copy wins (ticks still win).
     const pend=!DB.loaded&&row?readPend():null;
-    if(pend&&!same(pend.mine,pend.base)){
-      const m=mergePlan(pend.base,pend.mine,noWB(BASE),{theirsWins:true});
+    if(pend){
+      const t=noWB(BASE),m=mergePlan(pbuild(t,pend.d,'b'),pbuild(t,pend.d,'m'),t,{theirsWins:true});
       m.plan.settings.listWBs=BASE.settings.listWBs;
       applyPlan(m.plan);
       DB.loaded=true;DB.loadFailed=false;
@@ -844,9 +875,10 @@ function updSaveBar(){
   const b=document.getElementById('savebar');if(!b)return;
   const on=!!(DB.saveFailed||DB.remoteBroken);
   b.hidden=!on;
+  const kept=DB.pendFail?'This device could NOT keep a copy of your changes (storage full or blocked) — keep this page open and in signal until this bar goes.':'Your changes are kept on this device';
   if(on)b.textContent=DB.remoteBroken
-    ?'⚠ NOT SAVING — the planner database came back empty or damaged ('+DB.remoteBroken+'). Nothing is being written over it. Your changes are kept on this device. Tell the office.'
-    :'⚠ NOT SAVED YET — changes are kept on this device and will be sent automatically when the connection is back. Keep this page open.';
+    ?'⚠ NOT SAVING — the planner database came back empty or damaged ('+DB.remoteBroken+'). Nothing is being written over it. '+kept+(DB.pendFail?'':'. Tell the office.')
+    :'⚠ NOT SAVED YET — '+(DB.pendFail?kept:'changes are kept on this device and will be sent automatically when the connection is back. Keep this page open.');
 }
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._x);t._x=setTimeout(()=>t.classList.remove('show'),2500);}
 function fmt(s){if(!s)return'—';return new Date(s).toLocaleDateString('en-IE',{day:'numeric',month:'short',year:'2-digit'});}
