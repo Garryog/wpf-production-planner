@@ -508,6 +508,7 @@ function settingsFrom(s,prev){
   ['weekCaps','delx','delNotes','grps','pins','pod','lists','listWBs','listDone','delArchive','staff','listHold','holdLog','listRow'].forEach(k=>{if(s[k])r[k]=s[k];});
   if(s.hourScale&&s.hourScale.length)r.hourScale=s.hourScale;
   ['wcap','vcap','listLead'].forEach(k=>{if(s[k]>0)r[k]=s[k];});
+  if(s.exportBase&&typeof s.exportBase==='object')r.exportBase=s.exportBase;
   return r;
 }
 function planOf(row,prev){return{orders:Array.isArray(row.orders)?row.orders:[],nid:row.nid||1,settings:settingsFrom(row.settings,prev)};}
@@ -525,6 +526,8 @@ function applyPlan(p){
   DB.weekCaps=s.weekCaps||{};if(s.hourScale&&s.hourScale.length)HOUR_SCALE=s.hourScale;if(s.wcap>0)WCAP=s.wcap;if(s.vcap>0)VCAP=s.vcap;
   ['delx','delNotes','grps','pins','pod','lists','listWBs','listDone','delArchive','staff','listHold','holdLog','listRow'].forEach(k=>{if(s[k])DB[k]=s[k];});
   if(s.listLead>0)DB.listLead=s.listLead;
+  // Export Changes baseline: saved with the plan, so a refresh never resets it — only "Mark as applied" does
+  if(s.exportBase){orig={...(s.exportBase.wk||{})};origStep={...(s.exportBase.st||{})};}
 }
 /* 3-way merge: base = what both screens started from, mine = this screen, theirs = the database now.
    Changes made on only one side are kept. Both sides changed the same thing differently ("clash"):
@@ -617,7 +620,13 @@ async function loadDB(){
       if(row.version===undefined){VER=null;legacyWarn('load');}else VER=+row.version||1;
       applyPlan(planOf(row,BASE?BASE.settings:fullSettings()));
     }
-    DB.orders.forEach(o=>{orig[o.wo]=o.plannedWeek||'';origStep[o.wo]=o.step||'';});
+    // One-off migration: plans saved before the baseline was stored get it built once from the jobs as they
+    // stand (what every load used to do); the office saves it so all screens share one baseline.
+    let migr=false;
+    if(row&&!(row.settings&&row.settings.exportBase)&&!Object.keys(orig).length&&!Object.keys(origStep).length&&DB.orders.length){
+      DB.orders.forEach(o=>{orig[o.wo]=o.plannedWeek||'';origStep[o.wo]=o.step||'';});
+      migr=VER!==null&&ROLE==='office';
+    }
     BASE=snap();
     // First open on this device: changes that never reached the database last time are merged in and sent now.
     // They're older than what's in the database, so on a true clash the database copy wins (ticks still win).
@@ -634,6 +643,7 @@ async function loadDB(){
     DB.loadFailed=false;
     DB.loaded=true; // this page has held a good copy of the plan at least once
     setSS('ok');
+    if(migr)sched(); // store the migrated baseline
   }catch(e){
     setSS('e');
     // Only a page that has NEVER loaded the plan is dangerous to save from.
@@ -721,7 +731,7 @@ async function saveDB(){
 }
 // Never let a tab close while an edit is unsaved or a retry is pending
 window.addEventListener('beforeunload',e=>{if(saveT||DB.saveFailed){e.preventDefault();e.returnValue='';}});
-function fullSettings(){return{weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP,delx:DB.delx||[],delNotes:DB.delNotes||{},grps:DB.grps||{},pins:DB.pins||{},pod:DB.pod||{},lists:DB.lists||[],listWBs:DB.listWBs||{},listDone:DB.listDone||{},listLead:DB.listLead||5,delArchive:DB.delArchive||{},staff:DB.staff||[],listHold:DB.listHold||{},holdLog:DB.holdLog||[],listRow:DB.listRow||{}};}
+function fullSettings(){return{weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP,delx:DB.delx||[],delNotes:DB.delNotes||{},grps:DB.grps||{},pins:DB.pins||{},pod:DB.pod||{},lists:DB.lists||[],listWBs:DB.listWBs||{},listDone:DB.listDone||{},listLead:DB.listLead||5,delArchive:DB.delArchive||{},staff:DB.staff||[],listHold:DB.listHold||{},holdLog:DB.holdLog||[],listRow:DB.listRow||{},exportBase:{wk:orig,st:origStep}};}
 /* Staff roster: {id, n:name, r:[roles]} — one source of names for drivers, saw and stores,
    so every "loaded by / delivered by / cut by" record uses the same spelling of the same person. */
 function staff(){return DB.staff||[];}
@@ -3598,7 +3608,7 @@ function renderExport(app){
     XLSX.writeFile(wb,'WPF_Changes_'+new Date().toISOString().split('T')[0]+'.xlsx');
     toast('Changes exported ✓');
   });
-  document.getElementById('btn-mark')?.addEventListener('click',()=>{DB.orders.forEach(o=>{orig[o.wo]=o.plannedWeek||'';origStep[o.wo]=o.step||'';});toast('Change tracker reset');render();});
+  document.getElementById('btn-mark')?.addEventListener('click',()=>{DB.orders.forEach(o=>{orig[o.wo]=o.plannedWeek||'';origStep[o.wo]=o.step||'';});sched();toast('Change tracker reset');render();});
   document.getElementById('btn-xfull')?.addEventListener('click',()=>{
     const weeks=get8Wks();
     const wb=XLSX.utils.book_new();
