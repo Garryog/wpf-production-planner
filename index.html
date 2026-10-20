@@ -101,6 +101,8 @@ button,input,select{font-family:inherit;cursor:pointer}
 @keyframes sp{to{transform:rotate(360deg)}}
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1a1d23;color:#fff;padding:9px 20px;border-radius:100px;font-size:13px;font-weight:500;z-index:9999;pointer-events:none;opacity:0;transition:opacity .2s;white-space:nowrap}
 .toast.show{opacity:1}
+.savebar{position:sticky;top:0;z-index:9000;background:#c0392b;color:#fff;font-size:14px;font-weight:700;line-height:1.4;padding:10px 16px;text-align:center}
+.savebar[hidden]{display:none}
 @media(max-width:1000px){.week-caps{grid-template-columns:repeat(5,1fr)}}
 @media(max-width:700px){.week-caps{grid-template-columns:repeat(3,1fr)}.wo-table th:nth-child(n+7),.wo-table td:nth-child(n+7){display:none}.pg{padding:12px 12px 60px}}
 /* ---- Column filters ---- */
@@ -407,6 +409,7 @@ button,input,select{font-family:inherit;cursor:pointer}
   <div class="logo"><div class="lm">WP</div><div><div class="lt">Western Postform</div><div class="ls">Production Planner</div></div></div>
   <div class="sync"><span class="dot" id="dot"></span><span id="stxt">Loading…</span><button class="hdr-role" id="who-sw" style="display:none" title="Who is making changes on this computer — tap to switch person">👤</button><button class="hdr-role" id="role-sw" style="display:none">⇄ Switch view</button></div>
 </div></div>
+<div class="savebar" id="savebar" role="alert" hidden></div>
 <div class="tabs"><div class="tabs-i">
   <button class="tab on" id="t-b">Capacity Board</button>
   <button class="tab" id="t-d">🚚 Deliveries<span id="delcnt"></span></button>
@@ -739,8 +742,8 @@ async function saveDB(){
   }catch(e){
     console.warn('Planner save failed:',e&&e.message);
     if(e&&e.broken)DB.remoteBroken=e.message;
-    setSS('e');
     DB.saveFailed=true; // driver view shows a keep-page-open banner while this is set
+    setSS('e');
     writePend();
     toast('Save failed — will retry automatically. Keep this page open.');
     clearTimeout(saveT);saveT=setTimeout(saveDB,30000); // retry while the page lives
@@ -776,7 +779,23 @@ async function tryDailyBackup(){
   }catch(e){}
 }
 function sched(){clearTimeout(saveT);saveT=setTimeout(saveDB,1200);pendSoon();}
-function setSS(st){const d=document.getElementById('dot'),t=document.getElementById('stxt');if(!d)return;d.className='dot'+(st==='s'?' s':st==='e'?' e':'');t.textContent=st==='s'?'Saving…':st==='e'?'Save failed':'Synced';}
+function setSS(st){
+  const d=document.getElementById('dot'),t=document.getElementById('stxt');if(!d)return;
+  if(st==='ok'&&(DB.saveFailed||DB.remoteBroken))st='e'; // never say "saved" while something is still unsaved
+  const office=ROLE==='office'||!ROLE; // floor/phone views get a plain marker nobody has to act on
+  d.className='dot'+(st==='s'?' s':st==='e'?' e':'');
+  t.textContent=st==='s'?'Saving…':st==='e'?(office?'Save failed':'Waiting for signal'):(office?'Synced':'Saved');
+  updSaveBar();
+}
+// Permanent red bar on every view while anything is unsaved — stays until a save gets through.
+function updSaveBar(){
+  const b=document.getElementById('savebar');if(!b)return;
+  const on=!!(DB.saveFailed||DB.remoteBroken);
+  b.hidden=!on;
+  if(on)b.textContent=DB.remoteBroken
+    ?'⚠ NOT SAVING — the planner database came back empty or damaged ('+DB.remoteBroken+'). Nothing is being written over it. Your changes are kept on this device. Tell the office.'
+    :'⚠ NOT SAVED YET — changes are kept on this device and will be sent automatically when the connection is back. Keep this page open.';
+}
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._x);t._x=setTimeout(()=>t.classList.remove('show'),2500);}
 function fmt(s){if(!s)return'—';return new Date(s).toLocaleDateString('en-IE',{day:'numeric',month:'short',year:'2-digit'});}
 function getMonday(d){
