@@ -692,7 +692,10 @@ async function pushPlan(){
       if(resp&&resp.ok===false)throw new Error('HTTP '+resp.status);
       BASE=mine;return;
     }
-    const resp=await fetch(SUPA_URL+'/production_planner?id=eq.main&version=eq.'+VER,{method:'PATCH',headers:{...SUPA_WHDR,'Prefer':'return=representation'},
+    // Only saves if the database is still at the version we loaded. We ask for VER+1; the database trigger
+    // (SUPABASE_CHANGES.md) also sets old+1 on every update — same number, so never a double bump — and
+    // bumps it for old-code tabs too. The reply carries just the new version number.
+    const resp=await fetch(SUPA_URL+'/production_planner?id=eq.main&version=eq.'+VER+'&select=version',{method:'PATCH',headers:{...SUPA_WHDR,'Prefer':'return=representation'},
       body:JSON.stringify({...mine,version:VER+1,updated_by:whoTag()})});
     if(!resp||resp.ok===false){
       const tx=resp?await resp.text().catch(()=>''):'';
