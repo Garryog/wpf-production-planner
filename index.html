@@ -763,23 +763,62 @@ function fullSettings(){return{weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wca
    so every "loaded by / delivered by / cut by" record uses the same spelling of the same person. */
 function staff(){return DB.staff||[];}
 function staffFor(role){return staff().filter(s=>(s.r||[]).includes(role)&&(s.n||'').trim());}
-/* Daily safety copy: once per day, the first office machine writes the whole plan to a dated
-   backup row (id='bak-YYYY-MM-DD') and prunes copies older than 14 days. If the database row
-   doesn't allow inserts, this fails silently — the JSON download button in Settings still works. */
+/* Safety copies go to their own table, planner_backups (never into production_planner).
+   Every copy is read back and its job count checked — a failure is shown, never swallowed.
+   The first office screen each day takes the daily copy; copies older than 30 days are pruned. */
+const BAK={last:null,n:null,err:'',busy:false,asked:false};
+function bakErrText(r,t){return /planner_backups|42P01|PGRST205|PGRST202/.test(t||'')||r.status===404?'the backups table is not set up yet (run the Stage 1 SQL in SUPABASE_CHANGES.md)':'HTTP '+r.status+' '+String(t||'').slice(0,80);}
+async function backupNow(reason){
+  if(!DB.loaded||DB.loadFailed)throw new Error('the plan is not loaded on this screen');
+  const n=DB.orders.length;
+  const r=await fetch(SUPA_URL+'/planner_backups',{method:'POST',headers:{...SUPA_WHDR,'Prefer':'return=representation'},
+    body:JSON.stringify({reason:reason+' · '+whoTag(),orders_count:n,payload:{orders:DB.orders,nid:DB.nid,settings:fullSettings()}})});
+  if(!r.ok)throw new Error(bakErrText(r,await r.text().catch(()=>'')));
+  const d=await r.json().catch(()=>null);
+  const id=d&&d[0]&&d[0].id;if(!id)throw new Error('the database did not confirm the backup');
+  const g=await fetch(SUPA_URL+'/planner_backups?id=eq.'+id+'&select=id,taken_at,orders_count,payload',{headers:SUPA_HDR});
+  const b=g.ok?((await g.json().catch(()=>[]))||[])[0]:null;
+  const got=b&&b.payload&&Array.isArray(b.payload.orders)?b.payload.orders.length:-1;
+  if(!b||b.orders_count!==n||got!==n)throw new Error('the backup read back wrong ('+(got<0?'nothing':got)+' of '+n+' jobs)');
+  BAK.last=b.taken_at;BAK.n=n;BAK.err='';
+  return b;
+}
+async function lastBackup(){
+  const r=await fetch(SUPA_URL+'/planner_backups?select=taken_at,orders_count&order=taken_at.desc&limit=1',{headers:SUPA_HDR});
+  if(!r.ok)throw new Error(bakErrText(r,await r.text().catch(()=>'')));
+  const d=await r.json();const b=Array.isArray(d)?d[0]:null;
+  if(b){BAK.last=b.taken_at;BAK.n=b.orders_count;}
+  return b||null;
+}
 async function tryDailyBackup(){
+  if(ROLE!=='office'||!DB.loaded||DB.loadFailed||BAK.busy)return;
+  const today=new Date().toISOString().slice(0,10);
+  if(ls.get('wpfBakDay')===today)return;
+  if(BAK.failAt&&Date.now()-BAK.failAt<30*60000)return; // after a failure, try again in 30 min (not on every screen redraw)
+  BAK.busy=true;
   try{
-    if(ROLE!=='office'||!DB.loaded)return;
-    const today=new Date().toISOString().slice(0,10);
-    if(ls.get('wpfBakDay')===today)return;
-    const r=await fetch(SUPA_URL+'/production_planner',{method:'POST',
-      headers:{...SUPA_WHDR,'Prefer':'resolution=merge-duplicates,return=minimal'},
-      body:JSON.stringify({id:'bak-'+today,orders:DB.orders,nid:DB.nid,settings:fullSettings()})});
-    if(r.ok){
-      ls.set('wpfBakDay',today);
-      const cut=new Date(Date.now()-14*86400000).toISOString().slice(0,10);
-      fetch(SUPA_URL+'/production_planner?id=like.bak-*&id=lt.bak-'+cut,{method:'DELETE',headers:SUPA_WHDR}).catch(()=>{});
-    }
-  }catch(e){}
+    const l=await lastBackup();
+    if(l&&String(l.taken_at).slice(0,10)===today){ls.set('wpfBakDay',today);return;} // another office screen already did today's
+    const b=await backupNow('daily');
+    ls.set('wpfBakDay',today);
+    // prune by the database's own clock (a PC with a wrong date can't wipe the history)
+    const cut=new Date(Date.parse(b.taken_at)-30*86400000).toISOString();
+    const dr=await fetch(SUPA_URL+'/planner_backups?taken_at=lt.'+encodeURIComponent(cut),{method:'DELETE',headers:SUPA_WHDR});
+    if(!dr.ok)console.warn('Planner: could not prune backups older than 30 days (HTTP '+dr.status+')');
+  }catch(e){
+    BAK.err=e.message;BAK.failAt=Date.now();console.error('Planner daily backup FAILED: '+e.message);
+    toast('⚠ Daily backup failed — '+e.message);
+  }finally{
+    BAK.busy=false;updBakLine();
+  }
+}
+function updBakLine(){
+  const el=document.getElementById('bak-last');if(!el)return;
+  const age=BAK.last?(Date.now()-Date.parse(BAK.last))/3600000:Infinity;
+  const red=age>36||!!BAK.err;
+  el.style.color=red?'#c0392b':'var(--green)';
+  el.textContent=(BAK.last?'Last good backup: '+new Date(BAK.last).toLocaleString('en-IE',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})+(BAK.n!=null?' ('+BAK.n+' jobs)':'')+(age>36?' — older than 36 hours!':''):'Last good backup: none found')
+    +(BAK.err?' · Last attempt FAILED: '+BAK.err:'');
 }
 function sched(){clearTimeout(saveT);saveT=setTimeout(saveDB,1200);pendSoon();}
 function setSS(st){
@@ -1037,6 +1076,8 @@ function renderSettings(app){
     +'<div style="font-size:14px;font-weight:600;margin-bottom:6px">Backup</div>'
     +'<p style="font-size:12px;color:var(--t3);margin-bottom:10px">Downloads everything — every order, delivery plan, cutting list, archive and setting — as one file. Keep a weekly copy in OneDrive. If the database is ever lost or overwritten, this file is the restore point.</p>'
     +'<button class="btn btn-g" id="btn-backup">⬇ Download full backup (JSON)</button>'
+    +'<div id="bak-last" style="font-size:13px;font-weight:700;margin-top:12px">Last good backup: checking…</div>'
+    +'<div style="font-size:11px;color:var(--t3);margin-top:3px">Automatic: the first office screen each day saves a copy to the database (kept 30 days). Clear Week and other bulk deletes take one first.</div>'
     +'</div></div>';
 
   // staff roster: edit in place, add, remove
@@ -1064,6 +1105,8 @@ function renderSettings(app){
     sched();render();toast(n+' added — tick the jobs they do');
   };
   document.getElementById('st-new')?.addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('st-add').click();});
+  updBakLine();
+  if(!BAK.busy)lastBackup().then(()=>{BAK.err=BAK.err||'';updBakLine();}).catch(e=>{BAK.err=e.message;updBakLine();});
   document.getElementById('btn-backup')?.addEventListener('click',()=>{
     const data={backedUpAt:new Date().toISOString(),orders:DB.orders,nid:DB.nid,settings:fullSettings()};
     const a=document.createElement('a');
