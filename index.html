@@ -464,37 +464,133 @@ const expGrps=new Set(); // expanded group rows
 let colF={},cfFocus=null; // per-column contains filters (Excel-style, ANDed together)
 let saveT=null,dragSrc=null;
 
+/* ---------- Safe saving ----------
+   The whole plan lives in one 'main' record. Every save says "I'm editing version N"; if another
+   screen saved first the database refuses, we fetch their copy, merge job-by-job and field-by-field
+   against the copy we last loaded (BASE), and save again — so two people's changes both survive.
+   If the 'version' column doesn't exist yet (SQL not run), we fall back to the old plain save. */
+let BASE=null;   // the plan exactly as last agreed with the database (load or successful save)
+let VER=null;    // database version of BASE; null = version column missing → old save behaviour
+let SAVING=false,SAVE_AGAIN=false;
+function clone(x){return x===undefined?undefined:JSON.parse(JSON.stringify(x));}
+function same(a,b){
+  if(a===b)return true;
+  if(!a||!b||typeof a!=='object'||typeof b!=='object'||Array.isArray(a)!==Array.isArray(b))return false;
+  if(Array.isArray(a)){if(a.length!==b.length)return false;for(let i=0;i<a.length;i++)if(!same(a[i],b[i]))return false;return true;}
+  const ka=Object.keys(a).filter(k=>a[k]!==undefined),kb=Object.keys(b).filter(k=>b[k]!==undefined);
+  if(ka.length!==kb.length)return false;
+  for(const k of ka)if(!same(a[k],b[k]))return false;
+  return true;
+}
+function snap(){return clone({orders:DB.orders,nid:DB.nid,settings:fullSettings()});}
+// Server settings → a full settings object. Missing/empty keys keep what we had (same rules the old loader used).
+function settingsFrom(s,prev){
+  const r={...prev};s=s||{};
+  ['weekCaps','delx','delNotes','grps','pins','pod','lists','listWBs','listDone','delArchive','staff','listHold','holdLog','listRow'].forEach(k=>{if(s[k])r[k]=s[k];});
+  if(s.hourScale&&s.hourScale.length)r.hourScale=s.hourScale;
+  ['wcap','vcap','listLead'].forEach(k=>{if(s[k]>0)r[k]=s[k];});
+  return r;
+}
+function planOf(row,prev){return{orders:Array.isArray(row.orders)?row.orders:[],nid:row.nid||1,settings:settingsFrom(row.settings,prev)};}
+// Put a plan into the live app. Jobs are updated in place so open screens keep pointing at the same job.
+function applyPlan(p){
+  const seen={},old=new Map();
+  DB.orders.forEach(o=>{const k=o.wo+'#'+(seen[o.wo]=(seen[o.wo]||0)+1);old.set(k,o);});
+  const seen2={};
+  DB.orders=(p.orders||[]).map(n=>{
+    const o=old.get(n.wo+'#'+(seen2[n.wo]=(seen2[n.wo]||0)+1));if(!o)return n;
+    Object.keys(o).forEach(k=>{if(!(k in n))delete o[k];});Object.assign(o,n);return o;
+  });
+  if(p.nid)DB.nid=p.nid;
+  const s=p.settings||{};
+  DB.weekCaps=s.weekCaps||{};if(s.hourScale&&s.hourScale.length)HOUR_SCALE=s.hourScale;if(s.wcap>0)WCAP=s.wcap;if(s.vcap>0)VCAP=s.vcap;
+  ['delx','delNotes','grps','pins','pod','lists','listWBs','listDone','delArchive','staff','listHold','holdLog','listRow'].forEach(k=>{if(s[k])DB[k]=s[k];});
+  if(s.listLead>0)DB.listLead=s.listLead;
+}
+/* 3-way merge: base = what both screens started from, mine = this screen, theirs = the database now.
+   Changes made on only one side are kept. Both sides changed the same thing differently ("clash"):
+   a tick / done flag wins over an un-tick, otherwise the later edit wins and the job's history notes it. */
+const MERGE_ATOMIC={hourScale:1}; // edited as a whole, never mixed
+function mKey(x,seen){
+  if(!x||typeof x!=='object'||Array.isArray(x))return null;
+  const k=x.id!=null&&x.id!==''?'id:'+x.id:x.wo!=null&&x.wo!==''?'wo:'+x.wo:null;
+  if(!k)return null;const n=seen[k]=(seen[k]||0)+1;return n>1?k+'#'+n:k;
+}
+function mArr(b,m,t,path,N,o){
+  const ks=a=>{const seen={},r=[];for(const x of a){const k=mKey(x,seen);if(!k)return null;r.push([k,x]);}return r;};
+  const kb=ks(b),km=ks(m),kt=ks(t);
+  if(kb&&km&&kt&&(b.length||m.length||t.length)){ // jobs, lists, staff… — merge item by item
+    const B=new Map(kb),M=new Map(km),T=new Map(kt),out=[];
+    const keys=[...km.map(x=>x[0]),...kt.map(x=>x[0]).filter(k=>!M.has(k))];
+    keys.forEach(k=>{const v=m3(B.get(k),M.get(k),T.get(k),path.concat(k),N,o);if(v!==undefined)out.push(v);});
+    return out;
+  }
+  // plain lists (history logs, WO tags, roles): keep additions from both sides, drop what either removed
+  const J=x=>JSON.stringify(x),bs=new Set(b.map(J)),ms=new Set(m.map(J)),ts=new Set(t.map(J));
+  return m.filter(x=>!(bs.has(J(x))&&!ts.has(J(x)))).concat(t.filter(x=>!bs.has(J(x))&&!ms.has(J(x))));
+}
+function m3(b,m,t,path,N,o){
+  if(same(m,t))return m;
+  if(same(m,b))return t;
+  if(same(t,b))return m;
+  const isObj=x=>!!x&&typeof x==='object'&&!Array.isArray(x);
+  if(!MERGE_ATOMIC[path[path.length-1]]){
+    if(Array.isArray(m)&&Array.isArray(t))return mArr(Array.isArray(b)?b:[],m,t,path,N,o);
+    if(isObj(m)&&isObj(t)){
+      const bb=isObj(b)?b:{},r={};
+      [...new Set([...Object.keys(m),...Object.keys(t)])].forEach(k=>{const v=m3(bb[k],m[k],t[k],path.concat(k),N,o);if(v!==undefined)r[k]=v;});
+      return r;
+    }
+  }
+  // removed on one side, changed on the other → keep the change (a tick survives an un-tick; an edited job isn't lost)
+  if(m===undefined||t===undefined){
+    if(path[0]==='orders'&&path.length===2)N.push({path,gone:m===undefined?'here':'other'});
+    return m===undefined?t:m;
+  }
+  if((m===true&&!t)||(t===true&&!m))return true; // done wins, silently
+  const win=o.theirsWins?t:m;
+  N.push({path,kept:win,lost:win===m?t:m});
+  return win;
+}
+function mergePlan(base,mine,theirs,o){
+  o=o||{};const N=[];base=base||{orders:[],settings:{}};
+  const orders=m3(base.orders||[],mine.orders||[],theirs.orders||[],['orders'],N,o)||[];
+  const settings=m3(base.settings||{},mine.settings||{},theirs.settings||{},['settings'],N,o)||{};
+  const plan={orders,nid:Math.max(+mine.nid||1,+theirs.nid||1),settings};
+  const sh=v=>v===undefined||v===null||v===''?'(blank)':String(typeof v==='object'?JSON.stringify(v):v).slice(0,40);
+  N.forEach(n=>{
+    if(n.path[0]!=='orders'||n.path.length<3)return;
+    const wo=String(n.path[1]).replace(/^wo:/,'').replace(/#\d+$/,''),od=orders.find(x=>x.wo===wo);
+    if(od)logEdit(od,'Edited on two screens at once — '+n.path.slice(2).join('.')+' kept '+sh(n.kept)+', the other screen had '+sh(n.lost),'(auto-merge)');
+  });
+  if(N.length)console.warn('Planner merge: '+N.length+' clash(es)',N);
+  return{plan,notes:N};
+}
+function noteMerge(N){
+  if(!N||!N.length)return;
+  const g=N.filter(n=>n.gone).map(n=>String(n.path[1]).replace(/^wo:/,''));
+  toast(g.length?g.join(', ')+' was deleted on one screen but changed on another — kept':N.length+' edit'+(N.length!==1?'s':'')+' clashed with another screen — the latest kept (see the job history)');
+}
+function legacyWarn(why){if(!legacyWarn.done){legacyWarn.done=1;console.warn('Planner: database has no "version" column yet ('+why+') — saving the old way, without clash protection. Run the Stage 1 SQL in SUPABASE_CHANGES.md.');}}
+async function fetchMain(){
+  const r=await fetch(SUPA_URL+'/production_planner?id=eq.main',{headers:SUPA_HDR});
+  const d=await r.json();
+  if(!r.ok||!Array.isArray(d))throw new Error('load failed: '+r.status+' '+JSON.stringify(d).slice(0,120));
+  return d[0]||null;
+}
 async function loadDB(){
   try{
-    const r=await fetch(SUPA_URL+'/production_planner?id=eq.main',{headers:SUPA_HDR});
-    const d=await r.json();
-    if(!r.ok||!Array.isArray(d))throw new Error('load failed: '+r.status+' '+JSON.stringify(d).slice(0,120));
+    if(SAVING)return; // a save is mid-flight — the next refresh picks the result up
+    const row=await fetchMain();
     // A local edit happened while this fetch was in flight — applying the server copy
     // would silently revert it and then save the regression. Keep the local state.
-    if(saveT){setSS('ok');return;}
-    if(d&&d[0]){
-      if(d[0].orders)DB.orders=d[0].orders;
-      if(d[0].nid)DB.nid=d[0].nid;
-      if(d[0].settings&&d[0].settings.weekCaps)DB.weekCaps=d[0].settings.weekCaps||{};
-      if(d[0].settings&&d[0].settings.hourScale&&d[0].settings.hourScale.length)HOUR_SCALE=d[0].settings.hourScale;
-      if(d[0].settings&&d[0].settings.wcap>0)WCAP=d[0].settings.wcap;
-      if(d[0].settings&&d[0].settings.vcap>0)VCAP=d[0].settings.vcap;
-      if(d[0].settings&&d[0].settings.delx)DB.delx=d[0].settings.delx;
-      if(d[0].settings&&d[0].settings.delNotes)DB.delNotes=d[0].settings.delNotes;
-      if(d[0].settings&&d[0].settings.grps)DB.grps=d[0].settings.grps;
-      if(d[0].settings&&d[0].settings.pins)DB.pins=d[0].settings.pins;
-      if(d[0].settings&&d[0].settings.pod)DB.pod=d[0].settings.pod;
-      if(d[0].settings&&d[0].settings.lists)DB.lists=d[0].settings.lists;
-      if(d[0].settings&&d[0].settings.listWBs)DB.listWBs=d[0].settings.listWBs;
-      if(d[0].settings&&d[0].settings.listDone)DB.listDone=d[0].settings.listDone;
-      if(d[0].settings&&d[0].settings.listLead>0)DB.listLead=d[0].settings.listLead;
-      if(d[0].settings&&d[0].settings.delArchive)DB.delArchive=d[0].settings.delArchive;
-      if(d[0].settings&&d[0].settings.staff)DB.staff=d[0].settings.staff;
-      if(d[0].settings&&d[0].settings.listHold)DB.listHold=d[0].settings.listHold;
-      if(d[0].settings&&d[0].settings.holdLog)DB.holdLog=d[0].settings.holdLog;
-      if(d[0].settings&&d[0].settings.listRow)DB.listRow=d[0].settings.listRow;
+    if(saveT||SAVING){setSS('ok');return;}
+    if(row){
+      if(row.version===undefined){VER=null;legacyWarn('load');}else VER=+row.version||1;
+      applyPlan(planOf(row,BASE?BASE.settings:fullSettings()));
     }
     DB.orders.forEach(o=>{orig[o.wo]=o.plannedWeek||'';origStep[o.wo]=o.step||'';});
+    BASE=snap();
     DB.loadFailed=false;
     DB.loaded=true; // this page has held a good copy of the plan at least once
     setSS('ok');
@@ -505,6 +601,44 @@ async function loadDB(){
     // wipe the screen or block saves — that would throw away real work.
     if(!DB.loaded)DB.loadFailed=true;
   }
+}
+function whoTag(){return((whoNow()||'').trim()||'?')+' ['+(ROLE||'?')+']';}
+// One save round: PATCH only if the database is still at our version; otherwise merge and go again.
+async function pushPlan(){
+  for(let i=0;i<6;i++){
+    const mine=snap();
+    if(VER===null){
+      const resp=await fetch(SUPA_URL+'/production_planner?id=eq.main',{method:'PATCH',headers:SUPA_WHDR,body:JSON.stringify(mine)});
+      if(resp&&resp.ok===false)throw new Error('HTTP '+resp.status);
+      BASE=mine;return;
+    }
+    const resp=await fetch(SUPA_URL+'/production_planner?id=eq.main&version=eq.'+VER,{method:'PATCH',headers:{...SUPA_WHDR,'Prefer':'return=representation'},
+      body:JSON.stringify({...mine,version:VER+1,updated_by:whoTag()})});
+    if(!resp||resp.ok===false){
+      const tx=resp?await resp.text().catch(()=>''):'';
+      if(/version|updated_by/.test(tx)&&/column/i.test(tx)){VER=null;legacyWarn('save');continue;} // SQL not run — old way
+      throw new Error('HTTP '+(resp?resp.status:'?'));
+    }
+    let d=null;try{d=await resp.json();}catch(e){}
+    if(Array.isArray(d)&&d.length){VER=+d[0].version||VER+1;BASE=mine;return;}
+    if(!Array.isArray(d))throw new Error('unexpected save reply');
+    // Nothing updated: another screen saved first. Fetch theirs, merge, try again.
+    const row=await fetchMain();
+    if(!row)throw new Error('planner record missing');
+    const theirs=planOf(row,BASE.settings);
+    const m=mergePlan(BASE,snap(),theirs);
+    applyPlan(m.plan);noteMerge(m.notes);
+    BASE=theirs;VER=row.version===undefined?null:(+row.version||1);
+    mergedRender();
+  }
+  throw new Error('kept clashing with other screens');
+}
+// Re-draw after a merge brought in other people's changes — but never under someone's fingers.
+function mergedRender(){
+  const ae=document.activeElement;if(ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName))return;
+  if(document.querySelector('.pod-ovl'))return;
+  if(typeof IMPPLAN!=='undefined'&&(IMPPLAN||PEND))return;
+  if(ROLE)render();
 }
 async function saveDB(){
   // The debounce timer has fired (or we're called directly) — clear it, or the stale
@@ -517,18 +651,23 @@ async function saveDB(){
     toast('NOT saved — this page never loaded the plan (database unreachable). Fix the connection and refresh.');
     return;
   }
+  if(SAVING){SAVE_AGAIN=true;return;} // one save at a time; go again when this one lands
+  SAVING=true;
   setSS('s');
   try{
-    const resp=await fetch(SUPA_URL+'/production_planner?id=eq.main',{method:'PATCH',headers:SUPA_WHDR,body:JSON.stringify({orders:DB.orders,nid:DB.nid,settings:fullSettings()})});
-    if(resp&&resp.ok===false)throw new Error('HTTP '+resp.status);
+    await pushPlan();
     DB.saveFailed=false;
     setSS('ok');
   }catch(e){
+    console.warn('Planner save failed:',e&&e.message);
     setSS('e');
     DB.saveFailed=true; // driver view shows a keep-page-open banner while this is set
     toast('Save failed — will retry automatically. Keep this page open.');
     clearTimeout(saveT);saveT=setTimeout(saveDB,30000); // retry while the page lives
     if(ROLE==='driver')render();
+  }finally{
+    SAVING=false;
+    if(SAVE_AGAIN){SAVE_AGAIN=false;if(!DB.saveFailed)saveDB();}
   }
 }
 // Never let a tab close while an edit is unsaved or a retry is pending
