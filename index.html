@@ -1188,10 +1188,12 @@ function cleanGroups(){
   });
   DB.orders.forEach(o=>{if(o.grp&&!DB.grps[o.grp])delete o.grp;});
 }
+// IDs made on two screens at the same moment must never collide (a shared counter would) — time + random.
+function uniqId(p){return p+Date.now().toString(36).toUpperCase().slice(-5)+Math.random().toString(36).slice(2,5).toUpperCase();}
 function makeGroup(){
   const members=DB.orders.filter(o=>grpSel.has(o.wo));
   if(members.length<2){toast('Select at least 2 work orders to group');return;}
-  const gid='G'+(DB.nid++);
+  let gid=uniqId('G');while(DB.grps&&DB.grps[gid])gid=uniqId('G');
   DB.grps=DB.grps||{};
   DB.grps[gid]={title:members[0].title||members[0].wo};
   members.forEach(o=>{o.grp=gid;});
@@ -2747,7 +2749,7 @@ function renderDeliveries(app){
     const title=document.getElementById('aj-title').value.trim();
     if(!title){toast('Give the job a description');return;}
     let wo=document.getElementById('aj-wo').value.trim();
-    if(!wo)wo='JOB-'+(DB.nid++);
+    if(!wo){wo=uniqId('JOB-');while(delAll().some(o=>o.wo===wo))wo=uniqId('JOB-');}
     if(findDel(wo)||DB.orders.find(o=>o.wo===wo)){toast(wo+' already exists — use a different ref');return;}
     DB.delx=DB.delx||[];
     DB.delx.push({wo,title,customer:document.getElementById('aj-cust').value.trim(),value:parseFloat(document.getElementById('aj-val').value)||0,manual:true,delVeh:'',delDay:'',delDone:false});
