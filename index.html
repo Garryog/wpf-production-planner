@@ -683,12 +683,20 @@ function renumberP(base,mine,theirs,o){
   }
   return ren;
 }
-function noteMerge(N,ren){
+function noteMerge(N,ren,by){
   const r=Object.keys(ren||{});
   if(r.length){alert('Work order number changed: '+r.map(w=>w+' is now '+ren[w]).join(', ')+'.\n\nAnother screen created the same P-number at the same moment. Use the new number from now on (cutting lists were updated).');}
   if(!N||!N.length)return;
   const g=N.filter(n=>n.gone).map(n=>String(n.path[1]).replace(/^wo:/,''));
-  toast(g.length?g.join(', ')+' was deleted on one screen but changed on another — kept':N.length+' edit'+(N.length!==1?'s':'')+' clashed with another screen — the latest kept (see the job history)');
+  // Say plainly what changed: "<field> on <WO> was also changed by <who> — kept <value>"
+  const sh=v=>v===undefined||v===null||v===''?'(blank)':String(typeof v==='object'?JSON.stringify(v):v).slice(0,30);
+  const who=(by||'').trim()||'another screen';
+  const cl=N.filter(n=>!n.gone).map(n=>n.path[0]==='orders'
+    ?n.path.slice(2).join('.')+' on '+String(n.path[1]).replace(/^wo:/,'').replace(/#\d+$/,'')+' was also changed by '+who+' — kept '+sh(n.kept)
+    :n.path.slice(1).join('.')+' setting was also changed by '+who+' — kept '+sh(n.kept));
+  const msg=(g.length?[g.join(', ')+' was deleted on one screen but changed on another — kept']:[]).concat(cl.slice(0,2));
+  if(cl.length>2)msg.push('+'+(cl.length-2)+' more');
+  toast(msg.join(' · '));
 }
 function legacyWarn(why){if(!legacyWarn.done){legacyWarn.done=1;console.warn('Planner: database has no "version" column yet ('+why+') — saving the old way, without clash protection. Run the Stage 1 SQL in SUPABASE_CHANGES.md.');}}
 async function fetchMain(){
@@ -725,7 +733,7 @@ async function loadDB(){
     if(row&&DB.loaded&&BASE&&(UNSURE.length||!same(snap(),BASE))){
       const theirs=planOf(row,BASE.settings);
       const m=mergePlan(BASE,snap(),theirs,{unsure:UNSURE});
-      applyPlan(m.plan);noteMerge(m.notes,m.ren);
+      applyPlan(m.plan);noteMerge(m.notes,m.ren,row.updated_by);
       BASE=clone(theirs);UNSURE=[];VER=row.version===undefined?null:(+row.version||1);
       DB.loadFailed=false;
       sched();setSS('s');
@@ -785,7 +793,7 @@ async function pushPlan(){
       if(DB.saveFailed&&BASE){ // old-style save retrying after a failure: merge in what others saved meanwhile first
         const row=checkRow(await fetchMain());
         const theirs=planOf(row,BASE.settings),m=mergePlan(BASE,snap(),theirs,{unsure:UNSURE});
-        applyPlan(m.plan);noteMerge(m.notes,m.ren);mergedRender();
+        applyPlan(m.plan);noteMerge(m.notes,m.ren,row.updated_by);mergedRender();
         BASE=clone(theirs);UNSURE=[];
       }
       const mine=snap();
@@ -812,7 +820,7 @@ async function pushPlan(){
     const row=checkRow(await fetchMain());
     const theirs=planOf(row,BASE.settings);
     const m=mergePlan(BASE,snap(),theirs,{unsure:UNSURE});
-    applyPlan(m.plan);noteMerge(m.notes,m.ren);
+    applyPlan(m.plan);noteMerge(m.notes,m.ren,row.updated_by);
     BASE=clone(theirs);UNSURE=[];VER=row.version===undefined?null:(+row.version||1);
     mergedRender();
   }
