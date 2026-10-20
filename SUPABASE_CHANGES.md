@@ -23,7 +23,7 @@ Newest at the top. Each block must be run in Supabase BEFORE the matching code g
 5. Click **Run** (bottom right, or Ctrl+Enter).
 6. Expected result: **"Success. No rows returned"**. If you see a red error, stop and send a screenshot — do not deploy.
 7. Check: left menu **Database → Triggers** → you should see `production_planner_bump` on `production_planner`.
-8. Check: left menu **Table Editor** → you should now see a table called `planner_backups` (empty), and `production_planner` should have two new columns, `version` (all rows = 1) and `updated_by` (blank).
+8. Check: left menu **Table Editor** → you should now see a table called `planner_backups` (empty), and `production_planner` should have three new columns: `version` (all rows = 1), `updated_by` (blank) and `updated_at` (blank).
 
 ```sql
 -- 1. Clash protection on the main planner record
