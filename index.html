@@ -1093,7 +1093,7 @@ function render(){
   if(!ROLE){app.innerHTML='';rolePicker();return;}
   if(!roleOk(ROLE)){app.innerHTML='';rolePicker(ROLE);return;}
   if(DB.loadFailed&&ROLE!=='office'){
-    app.innerHTML=`<div style="max-width:700px;margin:40px auto;padding:0 20px"><div style="background:#fdecea;border:2px solid #e57368;border-radius:8px;padding:16px;font-size:14px;color:#8a1c10"><b>⚠ Can't reach the planner database.</b> This screen has no data to show. Check the network allows klyropbsupqfmtjjwlfa.supabase.co, then refresh.</div></div>`;
+    app.innerHTML=`<div style="max-width:700px;margin:40px auto;padding:0 20px"><div style="background:#fdecea;border:2px solid #e57368;border-radius:8px;padding:16px;font-size:14px;color:#8a1c10"><b>⚠ Can't reach the planner database.</b> This screen has no data to show. Check the network allows klyropbsupqfmtjjwlfa.supabase.co, then refresh.${readPend().length?'<div style="margin-top:10px;font-weight:700">Changes made earlier that weren\'t sent yet are kept safe on this phone and will be sent when the signal is back. Don\'t clear this browser\'s data.</div>':''}</div></div>`;
     return;
   }
   if(ROLE==='office')tryDailyBackup(); // once per day, silent
