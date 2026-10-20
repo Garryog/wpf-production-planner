@@ -548,7 +548,7 @@ function writePend(){
   try{
     if(!BASE||!DB.loaded)return;
     const bs=noWB(BASE),mine=snapLite(),d=pdiff(bs,mine);
-    const us=d.length?UNSURE.map(x=>pdiff(bs,noWB(x))):[];
+    const us=UNSURE.map(x=>pdiff(bs,noWB(x)));
     // also keep "mine" for anything an unconfirmed save touched — e.g. a tick sent then removed again here
     const has=new Set(d.map(e=>JSON.stringify(e.p)));
     us.forEach(ud=>ud.forEach(e=>{const k=JSON.stringify(e.p),pre=JSON.stringify(e.p.slice(0,2));if(has.has(k)||has.has(pre))return;has.add(k);d.push({p:e.p,b:e.b,m:valAt(mine,e.p)});}));
@@ -692,7 +692,9 @@ async function loadDB(){
     DB.remoteBroken=false;
     // This screen has changes the database hasn't got yet (typing, a pending or failed save):
     // never throw them away — merge the database copy into them and send the result.
-    if(row&&DB.loaded&&BASE&&!same(snap(),BASE)){
+    // A save that may have landed without a reply also counts: e.g. a tick sent, then unticked — the screen now
+    // matches BASE again, but the database may hold the tick, so it must be merged (our untick wins), not applied.
+    if(row&&DB.loaded&&BASE&&(UNSURE.length||!same(snap(),BASE))){
       const theirs=planOf(row,BASE.settings);
       const m=mergePlan(BASE,snap(),theirs,{unsure:UNSURE});
       applyPlan(m.plan);noteMerge(m.notes);
