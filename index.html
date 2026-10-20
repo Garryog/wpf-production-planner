@@ -644,6 +644,7 @@ function m3(b,m,t,path,N,o,u){
 function mergePlan(base,mine,theirs,o){
   o=o||{};const N=[];base=base||{orders:[],settings:{}};
   mine=clone(mine);theirs=clone(theirs); // the result is all fresh objects — nothing shared with BASE or the live plan
+  const ren=renumberP(base,mine,theirs,o);
   const un=(o.unsure||[]).filter(Boolean);
   const orders=m3(base.orders||[],mine.orders||[],theirs.orders||[],['orders'],N,o,un.map(x=>x.orders||[]))||[];
   const settings=m3(base.settings||{},mine.settings||{},theirs.settings||{},['settings'],N,o,un.map(x=>x.settings||{}))||{};
@@ -655,9 +656,36 @@ function mergePlan(base,mine,theirs,o){
     if(od)logEdit(od,'Edited on two screens at once — '+n.path.slice(2).join('.')+' kept '+sh(n.kept)+', the other screen had '+sh(n.lost),'(auto-merge)');
   });
   if(N.length)console.warn('Planner merge: '+N.length+' clash(es)',N);
-  return{plan,notes:N};
+  return{plan,notes:N,ren};
 }
-function noteMerge(N){
+/* Planner WOs (P-####) are numbered on the screen that makes them, so two PCs can both make P-1001 at the same
+   moment. When merging, a P-number this screen created that the database already has for a DIFFERENT job is
+   renumbered to the next free one (with its cutting-list tags and Export baseline), and the user is told. */
+function renumberP(base,mine,theirs,o){
+  const ren={},isP=w=>/^P-\d+$/.test(String(w||''));
+  const inB=new Set((base.orders||[]).map(x=>x.wo)),T=new Map((theirs.orders||[]).map(x=>[x.wo,x]));
+  const sent=w=>(o.unsure||[]).some(u=>u&&(u.orders||[]).some(x=>x.wo===w)); // may be our own job that landed
+  let top=Math.max(1000,...[...(mine.orders||[]),...(theirs.orders||[])].map(x=>{const m=/^P-(\d+)$/.exec(String(x.wo||''));return m?+m[1]:0;}));
+  (mine.orders||[]).forEach(od=>{
+    const w=od.wo;
+    if(!isP(w)||inB.has(w)||!T.has(w)||sent(w)||ren[w])return;
+    const th=T.get(w),c0=x=>((x.log||[])[0]||{}).at||'';
+    if(same(od,th)||(c0(od)&&c0(od)===c0(th)&&od.title===th.title))return; // the same job, not a clash
+    const nw='P-'+(++top);ren[w]=nw;od.wo=nw;
+    logEdit(od,'Renumbered '+w+' → '+nw+' — another screen created '+w+' at the same moment','(auto-merge)');
+  });
+  if(Object.keys(ren).length){
+    const s=mine.settings||{},bl=new Map(((base.settings||{}).lists||[]).map(l=>[l.id,l]));
+    Object.keys(ren).forEach(w=>{
+      const eb=s.exportBase;if(eb){if(eb.wk&&w in eb.wk)eb.wk[ren[w]]=eb.wk[w];if(eb.st&&w in eb.st)eb.st[ren[w]]=eb.st[w];}
+      (s.lists||[]).forEach(l=>{const b=bl.get(l.id);if((l.wos||[]).includes(w)&&!(b&&(b.wos||[]).includes(w)))l.wos=l.wos.map(x=>x===w?ren[w]:x);});
+    });
+  }
+  return ren;
+}
+function noteMerge(N,ren){
+  const r=Object.keys(ren||{});
+  if(r.length){alert('Work order number changed: '+r.map(w=>w+' is now '+ren[w]).join(', ')+'.\n\nAnother screen created the same P-number at the same moment. Use the new number from now on (cutting lists were updated).');}
   if(!N||!N.length)return;
   const g=N.filter(n=>n.gone).map(n=>String(n.path[1]).replace(/^wo:/,''));
   toast(g.length?g.join(', ')+' was deleted on one screen but changed on another — kept':N.length+' edit'+(N.length!==1?'s':'')+' clashed with another screen — the latest kept (see the job history)');
@@ -697,7 +725,7 @@ async function loadDB(){
     if(row&&DB.loaded&&BASE&&(UNSURE.length||!same(snap(),BASE))){
       const theirs=planOf(row,BASE.settings);
       const m=mergePlan(BASE,snap(),theirs,{unsure:UNSURE});
-      applyPlan(m.plan);noteMerge(m.notes);
+      applyPlan(m.plan);noteMerge(m.notes,m.ren);
       BASE=clone(theirs);UNSURE=[];VER=row.version===undefined?null:(+row.version||1);
       DB.loadFailed=false;
       sched();setSS('s');
@@ -721,9 +749,10 @@ async function loadDB(){
     // Every tab's slot on this device is merged in (oldest first); this tab then holds them all in its own slot.
     const pend=!DB.loaded&&row?readPend():[];
     if(pend.length){
-      let cur=noWB(BASE);
+      let cur=noWB(BASE);const ren={};
       pend.forEach(s=>{const b=pbuild(cur,s.d,'b'),us=(Array.isArray(s.us)?s.us:[]).map(ud=>pbuild(b,ud,'m'));
-        const m=mergePlan(b,pbuild(cur,s.d,'m'),cur,{theirsWins:true,unsure:us});cur=m.plan;});
+        const m=mergePlan(b,pbuild(cur,s.d,'m'),cur,{theirsWins:true,unsure:us});cur=m.plan;Object.assign(ren,m.ren);});
+      if(Object.keys(ren).length)setTimeout(()=>noteMerge([],ren),0);
       cur.settings.listWBs=BASE.settings.listWBs;
       applyPlan(cur);
       DB.loaded=true;DB.loadFailed=false;
@@ -756,7 +785,7 @@ async function pushPlan(){
       if(DB.saveFailed&&BASE){ // old-style save retrying after a failure: merge in what others saved meanwhile first
         const row=checkRow(await fetchMain());
         const theirs=planOf(row,BASE.settings),m=mergePlan(BASE,snap(),theirs,{unsure:UNSURE});
-        applyPlan(m.plan);noteMerge(m.notes);mergedRender();
+        applyPlan(m.plan);noteMerge(m.notes,m.ren);mergedRender();
         BASE=clone(theirs);UNSURE=[];
       }
       const mine=snap();
@@ -783,7 +812,7 @@ async function pushPlan(){
     const row=checkRow(await fetchMain());
     const theirs=planOf(row,BASE.settings);
     const m=mergePlan(BASE,snap(),theirs,{unsure:UNSURE});
-    applyPlan(m.plan);noteMerge(m.notes);
+    applyPlan(m.plan);noteMerge(m.notes,m.ren);
     BASE=clone(theirs);UNSURE=[];VER=row.version===undefined?null:(+row.version||1);
     mergedRender();
   }
