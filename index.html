@@ -585,7 +585,8 @@ function applyPlan(p){
 const MERGE_ATOMIC={hourScale:1}; // edited as a whole, never mixed
 function mKey(x,seen){
   if(!x||typeof x!=='object'||Array.isArray(x))return null;
-  const k=x.id!=null&&x.id!==''?'id:'+x.id:x.wo!=null&&x.wo!==''?'wo:'+x.wo:null;
+  // a job with a blank WO still counts as a job (keyed 'wo:'), so one bad line can't turn the job merge into a text diff
+  const k=x.id!=null&&x.id!==''?'id:'+x.id:Object.prototype.hasOwnProperty.call(x,'wo')?'wo:'+(x.wo==null?'':x.wo):null;
   if(!k)return null;const n=seen[k]=(seen[k]||0)+1;return n>1?k+'#'+n:k;
 }
 function mArr(b,m,t,path,N,o){
