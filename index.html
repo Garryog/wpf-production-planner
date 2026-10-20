@@ -520,6 +520,7 @@ function settingsFrom(s,prev){
 function planOf(row,prev){return{orders:Array.isArray(row.orders)?row.orders:[],nid:row.nid||1,settings:settingsFrom(row.settings,prev)};}
 // Put a plan into the live app. Jobs are updated in place so open screens keep pointing at the same job.
 function applyPlan(p){
+  p=clone(p); // the live plan must never share objects with BASE or a server reply, or later edits look "already saved"
   const seen={},old=new Map();
   DB.orders.forEach(o=>{const k=o.wo+'#'+(seen[o.wo]=(seen[o.wo]||0)+1);old.set(k,o);});
   const seen2={};
@@ -582,6 +583,7 @@ function m3(b,m,t,path,N,o){
 }
 function mergePlan(base,mine,theirs,o){
   o=o||{};const N=[];base=base||{orders:[],settings:{}};
+  mine=clone(mine);theirs=clone(theirs); // the result is all fresh objects — nothing shared with BASE or the live plan
   const orders=m3(base.orders||[],mine.orders||[],theirs.orders||[],['orders'],N,o)||[];
   const settings=m3(base.settings||{},mine.settings||{},theirs.settings||{},['settings'],N,o)||{};
   const plan={orders,nid:Math.max(+mine.nid||1,+theirs.nid||1),settings};
@@ -631,7 +633,7 @@ async function loadDB(){
       const theirs=planOf(row,BASE.settings);
       const m=mergePlan(BASE,snap(),theirs);
       applyPlan(m.plan);noteMerge(m.notes);
-      BASE=theirs;VER=row.version===undefined?null:(+row.version||1);
+      BASE=clone(theirs);VER=row.version===undefined?null:(+row.version||1);
       DB.loadFailed=false;
       sched();setSS('s');
       return;
@@ -705,7 +707,7 @@ async function pushPlan(){
     const theirs=planOf(row,BASE.settings);
     const m=mergePlan(BASE,snap(),theirs);
     applyPlan(m.plan);noteMerge(m.notes);
-    BASE=theirs;VER=row.version===undefined?null:(+row.version||1);
+    BASE=clone(theirs);VER=row.version===undefined?null:(+row.version||1);
     mergedRender();
   }
   throw new Error('kept clashing with other screens');
