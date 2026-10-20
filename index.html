@@ -812,6 +812,11 @@ async function tryDailyBackup(){
     BAK.busy=false;updBakLine();
   }
 }
+// Before any bulk delete: a verified copy in planner_backups. If that fails, the person decides.
+async function backupFirst(what){
+  try{await backupNow('before '+what);updBakLine();toast('Safety backup saved ✓');return true;}
+  catch(e){BAK.err=e.message;updBakLine();return confirm('⚠ The safety backup before '+what+' FAILED:\n'+e.message+'\n\nGo ahead WITHOUT a backup?');}
+}
 function updBakLine(){
   const el=document.getElementById('bak-last');if(!el)return;
   const age=BAK.last?(Date.now()-Date.parse(BAK.last))/3600000:Infinity;
@@ -1557,9 +1562,10 @@ function renderBoard(app){
   });
   const sn=document.getElementById('btn-snap');if(sn)sn.onclick=exportSnapshot;
   const ca=document.getElementById('btn-clearall');
-  if(ca)ca.onclick=()=>{
-    const typed=prompt('This deletes ALL '+DB.orders.length+' orders from the planner and cannot be undone.\n\nType DELETE to confirm:');
+  if(ca)ca.onclick=async()=>{
+    const typed=prompt('This deletes ALL '+DB.orders.length+' orders from the planner. A safety backup is saved to the database first.\n\nType DELETE to confirm:');
     if(typed!=='DELETE'){if(typed!==null)toast('Not deleted — you must type DELETE');return;}
+    if(!await backupFirst('Clear all orders'))return;
     DB.orders=[];DB.grps={};grpSel.clear();
     lists().forEach(l=>{l.wos=[];});
     Object.keys(orig).forEach(k=>delete orig[k]);Object.keys(origStep).forEach(k=>delete origStep[k]);
@@ -2747,8 +2753,9 @@ function renderDeliveries(app){
   const rsh=document.getElementById('btn-runsheets');if(rsh)rsh.onclick=printRunSheets;
   const ab=document.getElementById('btn-delarch');if(ab)ab.onclick=openDelArchive;
   const rs=document.getElementById('btn-delreset');
-  if(rs)rs.onclick=()=>{
-    if(!confirm('Clear the whole delivery plan ('+tagged.length+' jobs)? The week is ARCHIVED first (📚 Past weeks keeps every job, timestamp, name and note), then the board starts fresh for the next production meeting.'))return;
+  if(rs)rs.onclick=async()=>{
+    if(!confirm('Clear the whole delivery plan ('+tagged.length+' jobs)? A safety backup of the whole plan is saved to the database first, and the week is ARCHIVED (📚 Past weeks keeps every job, timestamp, name and note), then the board starts fresh for the next production meeting.'))return;
+    if(!await backupFirst('Clear Week'))return;
     // Archive the week before anything is cleared — starting fresh must never lose information
     const snap=tagged.filter(o=>o.delVeh||o.delDay||o.delv||o.manual);
     if(snap.length){
@@ -3610,7 +3617,9 @@ function renderImportPreview(plan){
     </div>
   </div>`;
   document.getElementById('imp-cancel').onclick=()=>{IMPPLAN=null;document.getElementById('iprev').innerHTML='<div style="margin-top:14px;font-size:13px;color:var(--t3)">Import cancelled — nothing was changed.</div>';};
-  document.getElementById('imp-apply').onclick=()=>{
+  document.getElementById('imp-apply').onclick=async()=>{
+    if(!IMPPLAN)return;
+    if(IMPPLAN.removals.length&&!await backupFirst('import removing '+IMPPLAN.removals.length+' work order'+(IMPPLAN.removals.length!==1?'s':'')))return;
     if(!IMPPLAN)return;
     // capture the week decisions made on the date-reconciliation rows before the preview DOM goes
     const moves={};document.querySelectorAll('[data-rmv]').forEach(s=>{if(s.value)moves[s.dataset.rmv]=s.value;});
