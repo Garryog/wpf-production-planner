@@ -601,9 +601,18 @@ async function loadDB(){
   try{
     if(SAVING)return; // a save is mid-flight — the next refresh picks the result up
     const row=await fetchMain();
-    // A local edit happened while this fetch was in flight — applying the server copy
-    // would silently revert it and then save the regression. Keep the local state.
-    if(saveT||SAVING){setSS('ok');return;}
+    if(SAVING)return;
+    // This screen has changes the database hasn't got yet (typing, a pending or failed save):
+    // never throw them away — merge the database copy into them and send the result.
+    if(row&&DB.loaded&&BASE&&!same(snap(),BASE)){
+      const theirs=planOf(row,BASE.settings);
+      const m=mergePlan(BASE,snap(),theirs);
+      applyPlan(m.plan);noteMerge(m.notes);
+      BASE=theirs;VER=row.version===undefined?null:(+row.version||1);
+      DB.loadFailed=false;
+      sched();setSS('s');
+      return;
+    }
     if(row){
       if(row.version===undefined){VER=null;legacyWarn('load');}else VER=+row.version||1;
       applyPlan(planOf(row,BASE?BASE.settings:fullSettings()));
@@ -639,6 +648,13 @@ async function pushPlan(){
   for(let i=0;i<6;i++){
     const mine=snap();
     if(VER===null){
+      if(DB.saveFailed&&BASE){ // old-style save retrying after a failure: merge in what others saved meanwhile first
+        const row=await fetchMain();
+        if(!row)throw new Error('planner record missing');
+        const theirs=planOf(row,BASE.settings),m=mergePlan(BASE,snap(),theirs);
+        applyPlan(m.plan);noteMerge(m.notes);mergedRender();
+      }
+      const mine=snap();
       const resp=await fetch(SUPA_URL+'/production_planner?id=eq.main',{method:'PATCH',headers:SUPA_WHDR,body:JSON.stringify(mine)});
       if(resp&&resp.ok===false)throw new Error('HTTP '+resp.status);
       BASE=mine;return;
@@ -793,7 +809,7 @@ function startAutoRefresh(){
   clearInterval(viewTimer);
   if(['floor','driver','saw','stores','office','dash','pm','prod'].includes(ROLE)){
     viewTimer=setInterval(()=>{
-      if(saveT||drvUploading||DB.saveFailed)return; // never clobber an unsaved change, a retrying save, or an upload
+      if(drvUploading)return; // never interrupt a photo upload (unsaved edits are merged by loadDB, not skipped)
       if(typeof IMPPLAN!=='undefined'&&(IMPPLAN||PEND))return; // an import review in progress must never be wiped by a refresh
       const ae=document.activeElement;if(ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName))return; // someone is typing
       if(document.querySelector('.pod-ovl'))return; // a dialog is open (name, reason, list editor) — its answer must land on the live objects
