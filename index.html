@@ -404,6 +404,12 @@ button,input,select{font-family:inherit;cursor:pointer}
 .wl-rdone td{color:#8e99ab;text-decoration:line-through}
 .wl-rdone td.tkc{text-decoration:none}
 .wl-rdone td.num{font-weight:400}
+.sn-wrap{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 12px}
+.sn-box{flex:1;min-width:260px;background:#f4f7fb;border:1px solid var(--border);border-radius:8px;padding:8px 12px}
+.sn-h{font-size:14px;font-weight:800;color:#14335c;margin-bottom:4px}.sn-h span{font-weight:400;color:var(--t3);font-size:12px}
+.sn-r{display:flex;gap:10px;align-items:baseline;font-size:14px;padding:2px 0;border-top:1px solid #e3e8f0}
+.sn-n{min-width:74px;font-weight:800;color:#0b5e33}.sn-m{flex:1}.sn-a{color:var(--t3);font-size:12px;white-space:nowrap}
+.sn-w{font-size:12px;color:#8a5a00;font-weight:700;margin-top:3px}.sn-ft{font-size:11px;color:var(--t3);margin-top:4px}
 .wl-cust{display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin:0 0 8px}
 .wl-cust span{font-size:11px;color:var(--t3);text-transform:uppercase;font-weight:700;margin-right:2px}
 .wl-cust button{padding:5px 11px;font-size:13px;font-weight:700;border-radius:16px;border:2px solid var(--b2);background:#fff;color:#14335c;cursor:pointer}
@@ -2101,6 +2107,52 @@ function renderLists(app){
     ov.onclick=e=>{if(e.target===ov||e.target.id==='pod-x')ov.remove();};
   });
 }
+/* ---------- Sheets needed: board count per material for a cut-by date range (pure — reusable by a forklift view) ---------- */
+const SHEET_M2=5.75,SHEET_WASTE=0.10; // one full board = 5.75 m²; +10% for offcuts and kerf
+function isoOf(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function addDayISO(iso,n){const d=new Date(iso+'T12:00:00');d.setDate(d.getDate()+n);return isoOf(d);}
+function nextWorkDay(iso){let d=addDayISO(iso,1);while([0,6].includes(new Date(d+'T12:00:00').getDay()))d=addDayISO(d,1);return d;} // Fri → Mon
+// ls: lists to look at; a list counts when its cut-by date is within [fromISO,toISO] ('' = open-ended).
+// opt.cutSince (YYYY-MM-DD): lines/lists finished before that day are left out; lines cut on or after it still count.
+// Lines waiting on material are left out. Dims are mm. Returns {mats:[{mat,m2,sheets,lines,check}],noSize,noQty,lines,sheets}.
+function sheetNeed(ls,fromISO,toISO,opt){
+  opt=opt||{};const since=opt.cutSince||'';
+  const day=at=>at?isoOf(new Date(at)):'';
+  const num=v=>{const n=parseFloat(String(v==null?'':v).replace(',','.'));return isFinite(n)?n:NaN;};
+  const by={};let noSize=0,noQty=0,lines=0;
+  (ls||[]).forEach(l=>{
+    const d=listDeadline(l);if(!d||(fromISO&&d<fromISO)||(toISO&&d>toISO))return;
+    const dn=listDone(l.id).saw,hb=holdsOf(l.id),tk=rowTicks(l.id);
+    const oldDone=!!(dn&&since&&day(dn.at)<since); // signed off on an earlier day: only rows released since count
+    listRows(l).filter(r=>r.k==='saw').forEach(r=>{
+      const k=rowKey(r);
+      if(heldRow(l,k))return;
+      if(oldDone&&!(hb[k]&&hb[k].st==='rel'))return;
+      if(tk[k]&&since&&day(tk[k].at)<since)return; // cut on an earlier day
+      const L=num(r.L),W=num(r.W),q=num(r.qty);
+      if(!(L>0)||!(W>0)){noSize++;return;}
+      if(!(q>0)){noQty++;return;}
+      const m=String(r.mat||'').trim()||'(no material)',mk=m.toLowerCase();
+      const g=by[mk]=by[mk]||{mat:m,m2:0,lines:0,check:false};
+      g.m2+=L*W*q/1e6;g.lines++;lines++;
+      if(L<10||W<10)g.check=true;
+    });
+  });
+  const mats=Object.values(by).sort((a,b)=>a.mat.localeCompare(b.mat)).map(g=>({mat:g.mat,lines:g.lines,check:g.check,m2:Math.round(g.m2*100)/100,sheets:Math.ceil(g.m2/SHEET_M2*(1+SHEET_WASTE)-1e-9)}));
+  return{mats,noSize,noQty,lines,sheets:mats.reduce((s,g)=>s+g.sheets,0)};
+}
+function sheetNeedBox(title,sub,r){
+  return `<div class="sn-box"><div class="sn-h">Sheets needed — ${escA(title)} <span>${escA(sub)}</span></div>
+    ${r.mats.length?r.mats.map(g=>`<div class="sn-r"><span class="sn-n">${g.sheets} sheet${g.sheets!==1?'s':''}</span><span class="sn-m">${escA(g.mat)}${g.check?' <b style="color:#c0392b">⚠ check units</b>':''}</span><span class="sn-a">${g.m2.toFixed(2)} m²</span></div>`).join(''):'<div style="font-size:13px;color:var(--t3)">Nothing to cut</div>'}
+    ${r.noSize?`<div class="sn-w">⚠ ${r.noSize} line${r.noSize!==1?'s':''} not counted — no size</div>`:''}
+    ${r.noQty?`<div class="sn-w">⚠ ${r.noQty} line${r.noQty!==1?'s':''} not counted — no quantity</div>`:''}</div>`;
+}
+function sheetNeedHTML(){
+  const t=todayLocal(),nx=nextWorkDay(t),ls2=lists();
+  const a=sheetNeed(ls2,'',t,{cutSince:t}),b=sheetNeed(ls2,addDayISO(t,1),nx,{cutSince:t});
+  return `<div class="sn-wrap">${sheetNeedBox('today','incl. overdue',a)}${sheetNeedBox('next working day',new Date(nx+'T12:00:00').toLocaleDateString('en-IE',{weekday:'short',day:'numeric',month:'short'}),b)}</div>
+    <div class="sn-ft" style="margin:-8px 0 12px">Full ${SHEET_M2} m² boards + ${Math.round(SHEET_WASTE*100)}% for offcuts, rounded up. Lines already cut today still count; lines waiting on material don't.</div>`;
+}
 function listTableHTML(l,mode,opt){ // mode 'saw' | 'fit' | 'all'; opt.relOnly = only rows released from a material hold; opt.tick = bench tick column
   opt=opt||{};const hb=holdsOf(l.id);const tk=rowTicks(l.id);
   const hs=r=>{const x=hb[rowKey(r)];return x&&x.st==='hold'&&tk[rowKey(r)]?null:x;}; // ticked + held (two screens) = done, not waiting
@@ -2307,6 +2359,7 @@ function renderWorkList(app,mode){
       <span class="wl-print"><button id="wl-pr1" title="Paper fallback — today's work and anything overdue, with tick boxes and initials">🖨 Print today</button><button id="wl-pr3" title="Paper fallback for a longer outage — the next 3 days">🖨 Next 3 days</button></span>
     </div>
     ${wlShowHold?`<div class="wl-hint">Rows parked because ${mode==='saw'?'the material':'stock'} isn't in. When it arrives, tap <b>ARRIVED — RELEASE</b> and the rows go straight back on the ${mode==='saw'?'saw':'stores'} queue as due work.</div>`+holdBookHTML(holdModes):wlShowDone?doneScreen():`
+    ${mode==='saw'?sheetNeedHTML():''}
     ${custs.length>1?`<div class="wl-cust"><span>Customer:</span><button class="${!wlCust?'on':''}" data-wlc="">All · ${visAll.length}</button>${custs.map(c=>`<button class="${wlCust===c?'on':''}" data-wlc="${escA(c)}">${escA(c)} · ${visAll.filter(l=>(listCust(l)||'(no customer)')===c).length}</button>`).join('')}</div>`:''}
     ${visible.length>1?`<div style="font-size:12px;color:var(--t3);margin:-4px 0 10px">Cutting several houses together? Tick the box on each list for a combined table with per-house quantities and location labels.</div>`:''}
     ${selLists.length?`<div class="wl-selbar"><b>${selLists.length} house${selLists.length!==1?'s':''} selected</b>
