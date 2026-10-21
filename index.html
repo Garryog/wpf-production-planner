@@ -2098,6 +2098,7 @@ function renderLists(app){
 }
 function listTableHTML(l,mode,opt){ // mode 'saw' | 'fit' | 'all'; opt.relOnly = only rows released from a material hold; opt.tick = bench tick column
   opt=opt||{};const hb=holdsOf(l.id);const tk=rowTicks(l.id);
+  const hs=r=>{const x=hb[rowKey(r)];return x&&x.st==='hold'&&tk[rowKey(r)]?null:x;}; // ticked + held (two screens) = done, not waiting
   let rows=listRows(l).filter(r=>mode==='all'?true:(r.k===mode||r.k==='hdr'));
   if(opt.relOnly)rows=rows.filter(r=>r.k==='hdr'||(hb[rowKey(r)]&&hb[rowKey(r)].st==='rel'));
   // drop headers that have no body rows under them in this mode
@@ -2108,7 +2109,7 @@ function listTableHTML(l,mode,opt){ // mode 'saw' | 'fit' | 'all'; opt.relOnly =
   const saw=mode!=='fit';
   return `<table class="wl-tbl"><thead><tr>${opt.tick?'<th class="tkh">✓</th>':''}<th style="width:34%">Item</th><th>Qty</th>${saw?'<th>Length</th><th>Width</th>':''}<th>${mode==='fit'?'Spec':'Material'}</th><th>${mode==='fit'?'Note':'Edging / Note'}</th></tr></thead><tbody>
   ${keep.map(r=>r.k==='hdr'?`<tr class="wl-sec"><td colspan="${(saw?6:4)+(opt.tick?1:0)}">${escA(r.item)}${r.note?' · '+escA(r.note):''}</td></tr>`
-    :`<tr class="${(h=>h&&h.st==='hold'?'wl-held':'')(hb[rowKey(r)])}${opt.tick&&tk[rowKey(r)]?' wl-rdone':''}">${opt.tick?`<td class="tkc">${(h=>h&&h.st==='hold'?'<span class="tk-na">⏸</span>':`<button class="rtk${tk[rowKey(r)]?' on':''}" data-rt="${escA(l.id)}|${escA(rowKey(r))}" title="${tk[rowKey(r)]?'Done '+hhmm(tk[rowKey(r)].at)+(tk[rowKey(r)].by?' by '+escA(tk[rowKey(r)].by):'')+' — click to untick':'Tick when '+(mode==='saw'?'cut':'picked')}">${tk[rowKey(r)]?'✓':''}</button>`)(hb[rowKey(r)])}</td>`:''}<td>${(h=>!h?'':h.st==='hold'?'<span class="hold-b">⏸ WAITING ON MATERIAL</span> ':'<span class="rel-b">▶ MATERIAL IN — DO NOW</span> ')(hb[rowKey(r)])}${escA(r.item)||'—'}</td><td class="num">${r.qty}</td>${saw?`<td class="num">${r.k==='saw'?escA(r.L):''}</td><td class="num">${r.k==='saw'?escA(r.W):''}</td>`:''}<td>${escA(r.mat)}</td><td>${escA(r.note)}</td></tr>`).join('')}
+    :`<tr class="${(h=>h&&h.st==='hold'?'wl-held':'')(hs(r))}${opt.tick&&tk[rowKey(r)]?' wl-rdone':''}">${opt.tick?`<td class="tkc">${(h=>h&&h.st==='hold'?'<span class="tk-na">⏸</span>':`<button class="rtk${tk[rowKey(r)]?' on':''}" data-rt="${escA(l.id)}|${escA(rowKey(r))}" title="${tk[rowKey(r)]?'Done '+hhmm(tk[rowKey(r)].at)+(tk[rowKey(r)].by?' by '+escA(tk[rowKey(r)].by):'')+' — click to untick':'Tick when '+(mode==='saw'?'cut':'picked')}">${tk[rowKey(r)]?'✓':''}</button>`)(hs(r))}</td>`:''}<td>${(h=>!h?'':h.st==='hold'?'<span class="hold-b">⏸ WAITING ON MATERIAL</span> ':'<span class="rel-b">▶ MATERIAL IN — DO NOW</span> ')(hs(r))}${escA(r.item)||'—'}</td><td class="num">${r.qty}</td>${saw?`<td class="num">${r.k==='saw'?escA(r.L):''}</td><td class="num">${r.k==='saw'?escA(r.W):''}</td>`:''}<td>${escA(r.mat)}</td><td>${escA(r.note)}</td></tr>`).join('')}
   </tbody></table>`;
 }
 /* Saw / Stores queue view: lists in delivery order, big type, tick-off with name + time.
@@ -2159,7 +2160,7 @@ function combineLists(lsArr,mode){
   const hname=l=>projs.size>1?((l.project?l.project+' — ':'')+l.name):l.name;
   lsArr.forEach(l=>{
     const hb=holdsOf(l.id),relOnly=!!listDone(l.id)[mode]&&listHoldRows(l,mode,'rel').length>0;
-    listRows(l).filter(r=>r.k===mode).filter(r=>{const h=hb[rowKey(r)];if(h&&h.st==='hold')return false;return !relOnly||(h&&h.st==='rel');}).forEach(r=>{
+    listRows(l).filter(r=>r.k===mode).filter(r=>{const h=hb[rowKey(r)];if(heldRow(l,rowKey(r)))return false;return !relOnly||(h&&h.st==='rel');}).forEach(r=>{
       const key=[String(r.item).trim(),r.L,r.W,String(r.mat).trim(),String(r.note).trim()].join('|').toLowerCase();
       if(!byKey[key]){byKey[key]={item:r.item,L:r.L,W:r.W,mat:r.mat,note:r.note,k:r.k,qty:0,per:{}};order.push(key);}
       byKey[key].qty+=(+r.qty||0);
@@ -3986,13 +3987,17 @@ function setRowTick(l,k,mode,by,on){
   DB.listRow=DB.listRow||{};const t=DB.listRow[l.id]=DB.listRow[l.id]||{};
   if(on)t[k]={m:mode,at:nowISO(),by:by||''};else delete t[k];
   if(!Object.keys(t).length)delete DB.listRow[l.id];
+  if(on){const h=holdsOf(l.id);if(h[k]&&h[k].st==='hold'){delete h[k];if(DB.listHold&&!Object.keys(h).length)delete DB.listHold[l.id];holdLog(mode==='saw'?'cut':'picked',l,1,mode,by);}} // got out = no longer waiting
 }
+/* A row is waiting only while it is held AND not ticked. Two screens can leave a row both ticked (got out) and
+   held (N/A) after a merge — got-out wins, so that row counts as done. Applied when reading; saved data untouched. */
+function heldRow(l,k){const h=holdsOf(l.id)[k];return !!(h&&h.st==='hold'&&!rowTicked(l.id,k));}
 function clearRowTicks(l,mode){const t=rowTicks(l.id);Object.keys(t).forEach(k=>{if(t[k].m===mode)delete t[k];});if(DB.listRow&&DB.listRow[l.id]&&!Object.keys(t).length)delete DB.listRow[l.id];}
 function tickableRows(l,mode){ // rows the bench can tick right now: not held; only released rows when the rest was already signed off
   const h=holdsOf(l.id),relOnly=!!listDone(l.id)[mode]&&listHoldRows(l,mode,'rel').length>0;
-  return listRows(l).filter(r=>r.k===mode).filter(r=>{const x=h[rowKey(r)];if(x&&x.st==='hold')return false;return !relOnly||(x&&x.st==='rel');});
+  return listRows(l).filter(r=>r.k===mode).filter(r=>{const x=h[rowKey(r)];if(heldRow(l,rowKey(r)))return false;return !relOnly||(x&&x.st==='rel');});
 }
-function listHoldRows(l,mode,st){return Object.entries(holdsOf(l.id)).filter(([k,v])=>v.m===mode&&(!st||v.st===st)).map(([k,v])=>({k,...v}));}
+function listHoldRows(l,mode,st){return Object.entries(holdsOf(l.id)).filter(([k,v])=>v.m===mode&&(!st||v.st===st)&&!(v.st==='hold'&&rowTicked(l.id,k))).map(([k,v])=>({k,...v}));}
 function sideState(l,mode){ // 'na' | 'unset' | 'hold' | 'open' | 'done'
   const n=mode==='saw'?(l.saw||0):(l.fit||0);
   if(!n)return (mode==='saw'?l.noCut:l.noFit)?'na':'unset';
@@ -4023,7 +4028,7 @@ const RDY_LBL={green:'READY',amber:'PART READY',red:'NOT READY'};
 /* ---------- Waiting on material: per-row holds, released by Saw, Stores, Office or Production ---------- */
 function allHolds(modes,st){
   const out=[];
-  lists().forEach(l=>Object.entries(holdsOf(l.id)).forEach(([k,v])=>{if(modes.includes(v.m)&&(!st||v.st===st))out.push({l,k,v});}));
+  lists().forEach(l=>Object.entries(holdsOf(l.id)).forEach(([k,v])=>{if(modes.includes(v.m)&&(!st||v.st===st)&&!(v.st==='hold'&&rowTicked(l.id,k)))out.push({l,k,v});}));
   return out;
 }
 function holdRows(l,keys,mode,by){
@@ -4050,8 +4055,8 @@ function holdLog(act,l,n,mode,by){
 }
 function openHold(l,mode){
   const h=holdsOf(l.id);
-  const rows=listRows(l).filter(r=>r.k===mode&&!(h[rowKey(r)]&&h[rowKey(r)].st==='hold'));
-  if(!rows.length){toast('Every row on this list is already waiting');return;}
+  const rows=listRows(l).filter(r=>r.k===mode&&!(h[rowKey(r)]&&h[rowKey(r)].st==='hold')&&!rowTicked(l.id,rowKey(r))); // ticked = already got out
+  if(!rows.length){toast('Nothing left to park — every row is already ticked or waiting');return;}
   const ov=document.createElement('div');ov.className='pod-ovl';
   ov.innerHTML=`<div class="pod-in" style="min-width:min(640px,94vw)">
     <div style="font-weight:800;color:#14335c;font-size:17px;margin-bottom:2px">⏸ ${mode==='saw'?'Material not in':'Not in stock'} — ${escA(l.name)}</div>
@@ -4277,7 +4282,7 @@ function printWorkList(mode,days){
       <span class="dl">${listOverdue(l)?'OVERDUE · ':''}${saw?'CUT':'PICK'} BY ${E(fmt(listDeadline(l)))} · DELIVERS ${E(fmt(listDueKey(l)))}</span></div>
       <div class="wos">${(l.wos||[]).map(E).join(' · ')}${relOnly?' · <b>MATERIAL ARRIVED — these rows only</b>':''}</div>
       <table><thead><tr><th class="tk">✓</th><th>Item</th><th class="n">Qty</th>${saw?'<th class="n">Length</th><th class="n">Width</th><th>Material</th><th>Edging / note</th>':'<th>Spec</th><th>Note</th>'}<th class="in">Initials</th></tr></thead><tbody>
-      ${rows.map(r=>{const hv=h[rowKey(r)];const held=hv&&hv.st==='hold';return `<tr${held?' class="held"':''}><td class="tk">${held?'⏸':'☐'}</td><td>${held?'<b>WAITING ON MATERIAL</b> — ':''}${E(r.item||'')}</td><td class="n">${E(r.qty)}</td>${saw?`<td class="n">${E(r.L)}</td><td class="n">${E(r.W)}</td><td>${E(r.mat)}</td><td>${E(r.note)}</td>`:`<td>${E(r.mat)}</td><td>${E(r.note)}</td>`}<td class="in"></td></tr>`;}).join('')}
+      ${rows.map(r=>{const held=heldRow(l,rowKey(r));return `<tr${held?' class="held"':''}><td class="tk">${held?'⏸':'☐'}</td><td>${held?'<b>WAITING ON MATERIAL</b> — ':''}${E(r.item||'')}</td><td class="n">${E(r.qty)}</td>${saw?`<td class="n">${E(r.L)}</td><td class="n">${E(r.W)}</td><td>${E(r.mat)}</td><td>${E(r.note)}</td>`:`<td>${E(r.mat)}</td><td>${E(r.note)}</td>`}<td class="in"></td></tr>`;}).join('')}
       </tbody></table>
       <div class="sig">${saw?'Cut complete':'Picked'} — signed: ______________________ &nbsp; time: ________</div></div>`;
   };
