@@ -2118,7 +2118,11 @@ const SHEET_M2=5.75,SHEET_WASTE=0.10; // one full board = 5.75 m²; +10% for off
 const SHEET_MIN_DIM=100,SHEET_MAX_DIM=3000; // mm — a panel part outside this is flagged "check units"
 function isoOf(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function addDayISO(iso,n){const d=new Date(iso+'T12:00:00');d.setDate(d.getDate()+n);return isoOf(d);}
-function nextWorkDay(iso){let d=addDayISO(iso,1);while([0,6].includes(new Date(d+'T12:00:00').getDay()))d=addDayISO(d,1);return d;} // Fri → Mon
+// Irish public holidays (incl. the weekday substitutes for Christmas/St Stephen's at weekends). Edit here — one place.
+const IE_BANK_HOLS=['2026-01-01','2026-02-02','2026-03-17','2026-04-06','2026-05-04','2026-06-01','2026-08-03','2026-10-26','2026-12-25','2026-12-28',
+  '2027-01-01','2027-02-01','2027-03-17','2027-03-29','2027-05-03','2027-06-07','2027-08-02','2027-10-25','2027-12-27','2027-12-28'];
+function isWorkDay(iso){return ![0,6].includes(new Date(iso+'T12:00:00').getDay())&&!IE_BANK_HOLS.includes(iso);}
+function nextWorkDay(iso){let d=addDayISO(iso,1);while(!isWorkDay(d))d=addDayISO(d,1);return d;} // Fri → Mon; skips bank holidays
 // ls: lists to look at; a list counts when its cut-by date is within [fromISO,toISO] ('' = open-ended).
 // opt.cutSince (YYYY-MM-DD): lines/lists finished before that day are left out; lines cut on or after it still count.
 // Lines waiting on material are left out. Dims are mm. Returns {mats:[{mat,m2,sheets,lines,check}],noSize,noQty,lines,sheets}.
@@ -2157,9 +2161,12 @@ function sheetNeedBox(title,sub,r){
     ${r.badQty?`<div class="sn-w">⚠ ${r.badQty} line${r.badQty!==1?'s':''} not counted — check quantity</div>`:''}</div>`;
 }
 function sheetNeedHTML(){
-  const t=todayLocal(),nx=nextWorkDay(t),ls2=lists();
-  const a=sheetNeed(ls2,'',t,{cutSince:t}),b=sheetNeed(ls2,addDayISO(t,1),nx,{cutSince:t});
-  return `<div class="sn-wrap">${sheetNeedBox('today','incl. overdue',a)}${sheetNeedBox('next working day',new Date(nx+'T12:00:00').toLocaleDateString('en-IE',{weekday:'short',day:'numeric',month:'short'}),b)}</div>
+  // A cut-by date on a weekend / bank holiday has to be cut on the working day before it: so "today" runs up to the
+  // day before the next working day, and "next working day" up to the day before the one after.
+  const t=todayLocal(),nx=nextWorkDay(t),nx2=nextWorkDay(nx),ls2=lists(),tEnd=addDayISO(nx,-1);
+  const a=sheetNeed(ls2,'',tEnd,{cutSince:t}),b=sheetNeed(ls2,nx,addDayISO(nx2,-1),{cutSince:t});
+  const short=iso=>new Date(iso+'T12:00:00').toLocaleDateString('en-IE',{weekday:'short',day:'numeric',month:'short'});
+  return `<div class="sn-wrap">${sheetNeedBox('today','incl. overdue'+(tEnd>t?' + cut-by to '+short(tEnd)+' (not a working day)':''),a)}${sheetNeedBox('next working day',new Date(nx+'T12:00:00').toLocaleDateString('en-IE',{weekday:'short',day:'numeric',month:'short'}),b)}</div>
     <div class="sn-ft" style="margin:-8px 0 12px">Full ${SHEET_M2} m² boards + ${Math.round(SHEET_WASTE*100)}% for offcuts, rounded up. Lines already cut today still count; lines waiting on material don't.</div>`;
 }
 function listTableHTML(l,mode,opt){ // mode 'saw' | 'fit' | 'all'; opt.relOnly = only rows released from a material hold; opt.tick = bench tick column

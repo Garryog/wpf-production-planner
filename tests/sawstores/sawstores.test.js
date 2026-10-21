@@ -31,23 +31,30 @@ const click = (page, attr, i) => page.evaluate(({ attr, i }) => { const k = list
     const nm = r4.mats.find(m => m.mat === '(no material)') || {};
     rec('no material → "(no material)" + dim < 10 flags check units', nm.check === true && nm.lines === 1, JSON.stringify(r4.mats));
     rec('material grouped ignoring case', r4.mats.filter(m => /mfc white/i.test(m.mat)).length === 1 && r4.mats.find(m => m.mat === 'MFC White').m2 === 12.02, JSON.stringify(r4.mats));
-    const wd = await A.page.evaluate(() => [nextWorkDay('2026-10-23'), nextWorkDay('2026-10-24'), nextWorkDay('2026-10-25'), nextWorkDay('2026-10-21')]);
-    rec('next working day: Fri→Mon, Sat→Mon, Sun→Mon, Wed→Thu', wd.join() === '2026-10-26,2026-10-26,2026-10-26,2026-10-22', wd.join());
+    const wd = await A.page.evaluate(() => [nextWorkDay('2026-10-30'), nextWorkDay('2026-10-31'), nextWorkDay('2026-11-01'), nextWorkDay('2026-10-21'), nextWorkDay('2026-10-23'), nextWorkDay('2026-12-24'), nextWorkDay('2026-12-31')]);
+    rec('next working day: Fri→Mon, Sat→Mon, Sun→Mon, Wed→Thu; bank hols: Fri 23 Oct→Tue 27, Xmas Eve→Tue 29 Dec, 31 Dec→Mon 4 Jan', wd.join() === '2026-11-02,2026-11-02,2026-11-02,2026-10-22,2026-10-27,2026-12-29,2027-01-04', wd.join());
     const r5 = await A.page.evaluate(() => sheetNeed(lists(), '2026-10-22', '2026-10-30').lines);
     rec('outside the date range → nothing', r5 === 0);
     await A.close();
   }
-  { // ---- Friday: next-working-day panel picks up Sunday + Monday cut-by dates
-    const r = row('2026-10-26'); r.orders.push(H.order({ wo: 'WO-2', dueDate: '2026-10-27', origDueDate: '2026-10-27' }));
+  { // ---- Friday 30 Oct: Monday-delivery work (cut-by Sun) is today's; Tuesday-delivery (cut-by Mon) is next working day
+    const r = row('2026-11-02'); r.orders.push(H.order({ wo: 'WO-2', dueDate: '2026-11-03', origDueDate: '2026-11-03' }));
     r.settings.lists.push({ id: 'L2', wb: 'W1', sheet: 'H1', name: 'House 2', project: 'Proj', saw: 3, fit: 1, wos: ['WO-2'], up: NOW });
     const S = makeServer(r);
-    const A = await open(browser, S, { now: '2026-10-23T09:00:00Z', role: 'saw' });
-    const o = await A.page.evaluate(() => { const t = todayLocal(); return { today: sheetNeed(lists(), '', t, { cutSince: t }).lines, next: sheetNeed(lists(), addDayISO(t, 1), nextWorkDay(t), { cutSince: t }).mats[0] }; });
-    rec('Friday: today empty, Monday panel has both houses (23.04 m² → 5 sheets)', o.today === 0 && o.next.m2 === 23.04 && o.next.sheets === 5, JSON.stringify(o));
-    const txt = await A.page.evaluate(() => document.getElementById('app').innerText);
-    rec('panel shows on Saw TO DO', /Sheets needed — today/.test(txt) && /Sheets needed — next working day/.test(txt) && /5 sheets/.test(txt) && /2 lines not counted — no size/.test(txt), txt.slice(0, 400));
+    const A = await open(browser, S, { now: '2026-10-30T09:00:00Z', role: 'saw' });
+    const box = () => A.page.evaluate(() => [...document.querySelectorAll('.sn-box')].map(b => b.innerText.replace(/\s+/g, ' ')));
+    const b = await box();
+    rec('Friday: today = Mon-delivery house (3 sheets), next working day Mon 2 Nov = Tue-delivery house (3 sheets)', /today/.test(b[0]) && /3 sheets MFC White 11\.52/.test(b[0]) && /Mon, 2 Nov/.test(b[1]) && /3 sheets MFC White 11\.52/.test(b[1]), JSON.stringify(b));
+    rec('panel shows on Saw TO DO with warnings', /Sheets needed — today/.test(b[0]) && /1 line not counted — no size/.test(b[0]), b[0]);
     await A.page.evaluate(() => { localStorage.setItem('wpfPin_stores', '9000'); setRole('stores'); });
     rec('no panel on Stores', !/Sheets needed/.test(await A.page.evaluate(() => document.getElementById('app').innerText)));
+    await A.close();
+  }
+  { // ---- Bank holiday: Fri 23 Oct, job delivers Tue 27 (cut-by Mon 26 = bank holiday) → shows under today
+    const S = makeServer(row('2026-10-27'));
+    const A = await open(browser, S, { now: '2026-10-23T09:00:00Z', role: 'saw' });
+    const b = await A.page.evaluate(() => [...document.querySelectorAll('.sn-box')].map(b => b.innerText.replace(/\s+/g, ' ')));
+    rec('bank-holiday Monday cut-by → today on Friday; next working day is Tue 27', /3 sheets/.test(b[0]) && /Tue, 27 Oct/.test(b[1]) && /Nothing to cut/.test(b[1]), JSON.stringify(b));
     await A.close();
   }
   { // ---- N/A box + tick exclusivity + openHold (Saw) and N/A on Stores
