@@ -22,3 +22,8 @@ Loop: if Tester or Manager finds Critical/Blocker issues → back to Coder (or A
 ## Saw/Stores release decisions (21 Oct 2026)
 - Saw label printer: Zebra ZD420 (direct thermal, 203 dpi, 104 mm max print width; label size, connection and saw device TBC).
 - Labels: per-line print AND a group print (print labels for all lines on screen / selected lines in one go).
+
+## Stores report + Driver POD decisions (21 Oct 2026)
+- Stores "Items sent" report: per customer/project, by date — date, WO, item/list, who got it out, delivered yes/no; print + Excel.
+- Driver: tick + photo PER WORK ORDER (extra photos optional); photo gets a burned-in date/time stamp; driver name recorded. No typed name or signature for now.
+- Drivers only see their own deliveries. Two drivers on one run: each picks their own name from the staff list; both recorded on the run; either can tick/photograph.
