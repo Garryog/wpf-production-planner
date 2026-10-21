@@ -35,3 +35,7 @@ Loop: if Tester or Manager finds Critical/Blocker issues → back to Coder (or A
 - Driver's snag tick + photo automatically marks the snag "delivered" on the PM's snag table (raised → in production → on van → delivered with photo).
 - Weekly summary per driver: snags delivered, placed vs couldn't place, reasons. Records are permanent; drivers can add, not delete. Office must not tick "delivered" on a driver's behalf.
 - Proof of delivery visible to Production Manager and PMs.
+
+## Future phase: Fitters view / fitter management (noted 21 Oct 2026 — not yet planned)
+- Fitters get their own view. Delivered snags, with photo and site location / "handed to", must appear on the fitter's view for their project.
+- Fitter management is a major area for the next phase after saving, saw/stores, cutting lists/snags, deliveries and CNC/forklift. Design the snag and delivery data so a fitter view can read it without rework.
