@@ -1853,6 +1853,8 @@ function parseListWorkbook(data){
     aoa.forEach((r,i)=>{
       const A=r[0]!=null?String(r[0]).trim():'';
       const qv=r[1]!=null&&String(r[1]).trim()!==''?parseFloat(r[1]):NaN;
+      const qs=r[1]!=null?String(r[1]).trim():'';
+      const qty=typeof r[1]==='number'||/^\d+(\.\d+)?(\s*(off|pcs?|no\.?))?$/i.test(qs)?qv:qs; // "2x2", "4+2" kept as typed — flagged "check quantity", never guessed
       const L=r[2]!=null?parseFloat(r[2]):NaN,W=r[3]!=null?parseFloat(r[3]):NaN;
       const mat=r[4]!=null?String(r[4]).trim():'',note=r[5]!=null&&!(r[5] instanceof Date)?String(r[5]).trim():'';
       if(!A&&isNaN(qv)&&!mat)return;
@@ -1863,8 +1865,10 @@ function parseListWorkbook(data){
         return;
       }
       if(!isNaN(qv)){
-        if(!isNaN(L)||!isNaN(W))rows.push({k:'saw',item:A,qty:qv,L:isNaN(L)?'':L,W:isNaN(W)?'':W,mat,note});
-        else rows.push({k:'fit',item:A||mat,qty:qv,mat,note});
+        if(!isNaN(L)||!isNaN(W))rows.push({k:'saw',item:A,qty,L:isNaN(L)?'':L,W:isNaN(W)?'':W,mat,note});
+        else rows.push({k:'fit',item:A||mat,qty,mat,note});
+      }else if(!isNaN(L)&&!isNaN(W)&&(A||mat)){ // size but no quantity: still a part — kept as a line (flagged), not turned into a heading
+        rows.push({k:'saw',item:A,qty:'',L,W,mat,note});
       }else if(A||mat){
         if(/^item\s*$/i.test(A)&&r[1]!=null&&/qty/i.test(String(r[1])))return; // the template's column-header row is labels, not data
         rows.push({k:'hdr',item:A,note:mat||note});
@@ -2111,6 +2115,7 @@ function renderLists(app){
 }
 /* ---------- Sheets needed: board count per material for a cut-by date range (pure — reusable by a forklift view) ---------- */
 const SHEET_M2=5.75,SHEET_WASTE=0.10; // one full board = 5.75 m²; +10% for offcuts and kerf
+const SHEET_MIN_DIM=100,SHEET_MAX_DIM=3000; // mm — a panel part outside this is flagged "check units"
 function isoOf(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function addDayISO(iso,n){const d=new Date(iso+'T12:00:00');d.setDate(d.getDate()+n);return isoOf(d);}
 function nextWorkDay(iso){let d=addDayISO(iso,1);while([0,6].includes(new Date(d+'T12:00:00').getDay()))d=addDayISO(d,1);return d;} // Fri → Mon
@@ -2121,7 +2126,7 @@ function sheetNeed(ls,fromISO,toISO,opt){
   opt=opt||{};const since=opt.cutSince||'';
   const day=at=>at?isoOf(new Date(at)):'';
   const num=v=>{const n=parseFloat(String(v==null?'':v).replace(',','.'));return isFinite(n)?n:NaN;};
-  const by={};let noSize=0,noQty=0,lines=0;
+  const by={};let noSize=0,noQty=0,badQty=0,lines=0;
   (ls||[]).forEach(l=>{
     const d=listDeadline(l);if(!d||(fromISO&&d<fromISO)||(toISO&&d>toISO))return;
     const dn=listDone(l.id).saw,hb=holdsOf(l.id),tk=rowTicks(l.id);
@@ -2131,23 +2136,25 @@ function sheetNeed(ls,fromISO,toISO,opt){
       if(heldRow(l,k))return;
       if(oldDone&&!(hb[k]&&hb[k].st==='rel'))return;
       if(tk[k]&&since&&day(tk[k].at)<since)return; // cut on an earlier day
-      const L=num(r.L),W=num(r.W),q=num(r.qty);
+      const L=num(r.L),W=num(r.W),qs=String(r.qty==null?'':r.qty).trim(),q=+qs;
       if(!(L>0)||!(W>0)){noSize++;return;}
-      if(!(q>0)){noQty++;return;}
+      if(!qs){noQty++;return;}
+      if(!/^\d+$/.test(qs)||!(q>0)){badQty++;return;} // "2x2", "1.5", "4 off" — never guessed
       const m=String(r.mat||'').trim()||'(no material)',mk=m.toLowerCase();
       const g=by[mk]=by[mk]||{mat:m,m2:0,lines:0,check:false};
       g.m2+=L*W*q/1e6;g.lines++;lines++;
-      if(L<10||W<10)g.check=true;
+      if(L<SHEET_MIN_DIM||W<SHEET_MIN_DIM||L>SHEET_MAX_DIM||W>SHEET_MAX_DIM)g.check=true; // cm, metres or a typo
     });
   });
   const mats=Object.values(by).sort((a,b)=>a.mat.localeCompare(b.mat)).map(g=>({mat:g.mat,lines:g.lines,check:g.check,m2:Math.round(g.m2*100)/100,sheets:Math.ceil(g.m2/SHEET_M2*(1+SHEET_WASTE)-1e-9)}));
-  return{mats,noSize,noQty,lines,sheets:mats.reduce((s,g)=>s+g.sheets,0)};
+  return{mats,noSize,noQty,badQty,lines,sheets:mats.reduce((s,g)=>s+g.sheets,0)};
 }
 function sheetNeedBox(title,sub,r){
   return `<div class="sn-box"><div class="sn-h">Sheets needed — ${escA(title)} <span>${escA(sub)}</span></div>
     ${r.mats.length?r.mats.map(g=>`<div class="sn-r"><span class="sn-n">${g.sheets} sheet${g.sheets!==1?'s':''}</span><span class="sn-m">${escA(g.mat)}${g.check?' <b style="color:#c0392b">⚠ check units</b>':''}</span><span class="sn-a">${g.m2.toFixed(2)} m²</span></div>`).join(''):'<div style="font-size:13px;color:var(--t3)">Nothing to cut</div>'}
     ${r.noSize?`<div class="sn-w">⚠ ${r.noSize} line${r.noSize!==1?'s':''} not counted — no size</div>`:''}
-    ${r.noQty?`<div class="sn-w">⚠ ${r.noQty} line${r.noQty!==1?'s':''} not counted — no quantity</div>`:''}</div>`;
+    ${r.noQty?`<div class="sn-w">⚠ ${r.noQty} line${r.noQty!==1?'s':''} not counted — no quantity</div>`:''}
+    ${r.badQty?`<div class="sn-w">⚠ ${r.badQty} line${r.badQty!==1?'s':''} not counted — check quantity</div>`:''}</div>`;
 }
 function sheetNeedHTML(){
   const t=todayLocal(),nx=nextWorkDay(t),ls2=lists();
@@ -2168,7 +2175,7 @@ function listTableHTML(l,mode,opt){ // mode 'saw' | 'fit' | 'all'; opt.relOnly =
   const saw=mode!=='fit';
   return `<table class="wl-tbl"><thead><tr>${opt.tick?'<th class="tkh">✓</th><th class="nah" title="Not available — park this line until it comes in">N/A</th>':''}<th style="width:34%">Item</th><th>Qty</th>${saw?'<th>Length</th><th>Width</th>':''}<th class="c-mt">${mode==='fit'?'Spec':'Material'}</th><th class="c-mt">${mode==='fit'?'Note':'Edging / Note'}</th></tr></thead><tbody>
   ${keep.map(r=>r.k==='hdr'?`<tr class="wl-sec"><td colspan="${(saw?6:4)+(opt.tick?2:0)}">${escA(r.item)}${r.note?' · '+escA(r.note):''}</td></tr>`
-    :`<tr class="${(h=>h&&h.st==='hold'?'wl-held':'')(hs(r))}${opt.tick&&tk[rowKey(r)]?' wl-rdone':''}">${opt.tick?`<td class="tkc">${(h=>h&&h.st==='hold'?'<span class="tk-na">⏸</span>':`<button class="rtk${tk[rowKey(r)]?' on':''}" data-rt="${escA(l.id)}|${escA(rowKey(r))}" title="${tk[rowKey(r)]?'Done '+hhmm(tk[rowKey(r)].at)+(tk[rowKey(r)].by?' by '+escA(tk[rowKey(r)].by):'')+' — click to untick':'Tick when '+(mode==='saw'?'cut':'picked')}">${tk[rowKey(r)]?'✓':''}</button>`)(hs(r))}</td>${(h=>{const on=!!(h&&h.st==='hold'),t=tk[rowKey(r)];return `<td class="nac"><button class="rna${on?' on':''}" data-rna="${escA(l.id)}|${escA(rowKey(r))}"${t?' disabled':''} title="${on?'Waiting since '+escA(new Date(h.at).toLocaleDateString('en-IE',{day:'numeric',month:'short'}))+(h.by?' · '+escA(h.by):'')+' — tap to undo':t?'Already '+(mode==='saw'?'cut':'picked'):'Not available — park this line until it comes in'}">N/A</button></td>`;})(hs(r))}`:''}<td>${(h=>!h?'':h.st==='hold'?'<span class="hold-b">⏸ WAITING ON MATERIAL</span> ':'<span class="rel-b">▶ MATERIAL IN — DO NOW</span> ')(hs(r))}${escA(r.item)||'—'}${r.mat||r.note?`<div class="wl-ph">${escA(r.mat)}${r.mat&&r.note?' · ':''}${escA(r.note)}</div>`:''}</td><td class="num">${r.qty}</td>${saw?`<td class="num">${r.k==='saw'?escA(r.L):''}</td><td class="num">${r.k==='saw'?escA(r.W):''}</td>`:''}<td class="c-mt">${escA(r.mat)}</td><td class="c-mt">${escA(r.note)}</td></tr>`).join('')}
+    :`<tr class="${(h=>h&&h.st==='hold'?'wl-held':'')(hs(r))}${opt.tick&&tk[rowKey(r)]?' wl-rdone':''}">${opt.tick?`<td class="tkc">${(h=>h&&h.st==='hold'?'<span class="tk-na">⏸</span>':`<button class="rtk${tk[rowKey(r)]?' on':''}" data-rt="${escA(l.id)}|${escA(rowKey(r))}" title="${tk[rowKey(r)]?'Done '+hhmm(tk[rowKey(r)].at)+(tk[rowKey(r)].by?' by '+escA(tk[rowKey(r)].by):'')+' — click to untick':'Tick when '+(mode==='saw'?'cut':'picked')}">${tk[rowKey(r)]?'✓':''}</button>`)(hs(r))}</td>${(h=>{const on=!!(h&&h.st==='hold'),t=tk[rowKey(r)];return `<td class="nac"><button class="rna${on?' on':''}" data-rna="${escA(l.id)}|${escA(rowKey(r))}"${t?' disabled':''} title="${on?'Waiting since '+escA(new Date(h.at).toLocaleDateString('en-IE',{day:'numeric',month:'short'}))+(h.by?' · '+escA(h.by):'')+' — tap to undo':t?'Already '+(mode==='saw'?'cut':'picked'):'Not available — park this line until it comes in'}">N/A</button></td>`;})(hs(r))}`:''}<td>${(h=>!h?'':h.st==='hold'?'<span class="hold-b">⏸ WAITING ON MATERIAL</span> ':'<span class="rel-b">▶ MATERIAL IN — DO NOW</span> ')(hs(r))}${escA(r.item)||'—'}${r.mat||r.note?`<div class="wl-ph">${escA(r.mat)}${r.mat&&r.note?' · ':''}${escA(r.note)}</div>`:''}</td><td class="num">${escA(r.qty)}</td>${saw?`<td class="num">${r.k==='saw'?escA(r.L):''}</td><td class="num">${r.k==='saw'?escA(r.W):''}</td>`:''}<td class="c-mt">${escA(r.mat)}</td><td class="c-mt">${escA(r.note)}</td></tr>`).join('')}
   </tbody></table>`;
 }
 /* Saw / Stores queue view: lists in delivery order, big type, tick-off with name + time.
@@ -2268,7 +2275,7 @@ function printLabels(lsArr,mode){
     <div class="lb-house">${E(l.name)}</div>
     ${listCust(l)?`<div class="lb-cust">${E(listCust(l))}</div>`:''}
     <div class="lb-item">${E(r.item||r.mat||'')}</div>
-    <div class="lb-mid"><span class="lb-qty">×${r.qty}</span><span class="lb-dims">${saw&&(r.L||r.W)?E(r.L)+' × '+E(r.W):''}</span></div>
+    <div class="lb-mid"><span class="lb-qty">×${E(r.qty)}</span><span class="lb-dims">${saw&&(r.L||r.W)?E(r.L)+' × '+E(r.W):''}</span></div>
     <div class="lb-sub">${E(r.mat||'')}${r.note?' · '+E(r.note):''}</div>
     <div class="lb-wos">${(l.wos||[]).map(E).join(' · ')}</div></div>`;
   let labels='';
