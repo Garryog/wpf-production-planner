@@ -18,3 +18,7 @@ Loop: if Tester or Manager finds Critical/Blocker issues → back to Coder (or A
 - Chrome is the supported phone browser (Safari on iPhone has blocked Supabase calls).
 - Cienapps export headers can have trailing spaces — always trim.
 - Never delete production data.
+
+## Saw/Stores release decisions (21 Oct 2026)
+- Saw label printer: Zebra ZD420 (direct thermal, 203 dpi, 104 mm max print width; label size, connection and saw device TBC).
+- Labels: per-line print AND a group print (print labels for all lines on screen / selected lines in one go).
