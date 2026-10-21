@@ -8,25 +8,16 @@ const NOW = '2026-10-19T10:00:00Z';
   const browser = await H.chromium.launch();
   const base = () => ({ id: 'main', orders: [H.order({ wo: 'WO-1-1', plannedWeek: '2026-10-26' }), H.order({ wo: 'WO-1-2', plannedWeek: '2026-10-26' })], nid: 3, settings: {} });
 
-  // 1. Two office PCs edit different jobs; both save. Shared fake server row.
+  // 1. Two office PCs edit different jobs; both save. ONE shared fake database with the Stage 1 version column,
+  //    so B's save is made against a stale version and must be refused, merged and resent (not overwrite A).
   {
-    const A = await H.open({ browser, now: NOW, row: base() });
-    const B = await H.open({ browser, now: NOW, row: base() });
-    // wire B to A's server row so they share one "database"
-    B.server.row = A.server.row;
-    await B.page.unroute('**/*');
-    await B.page.route('**/*', async route => {
-      const req = route.request(), url = req.url();
-      if (url.includes('supabase.co')) {
-        if (req.method() === 'GET') return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([A.server.row]) });
-        if (req.method() === 'PATCH') { Object.assign(A.server.row, JSON.parse(req.postData())); return route.fulfill({ status: 204, body: '' }); }
-      }
-      return route.fulfill({ status: 404, body: '' });
-    });
+    const A = await H.open({ browser, now: NOW, row: Object.assign(base(), { version: 1 }) });
+    const B = await H.open({ browser, now: NOW, server: A.server });
     await A.page.evaluate(async () => { DB.orders.find(o => o.wo === 'WO-1-1').plannedWeek = '2026-11-02'; await saveDB(); });
     await B.page.evaluate(async () => { DB.orders.find(o => o.wo === 'WO-1-2').plannedWeek = '2026-11-09'; await saveDB(); });
     const srv = A.server.row.orders.reduce((a, o) => (a[o.wo] = o.plannedWeek, a), {});
-    rec('Two PCs editing different jobs: both edits survive', srv['WO-1-1'] === '2026-11-02' && srv['WO-1-2'] === '2026-11-09', 'server now: ' + JSON.stringify(srv));
+    rec('Two PCs editing different jobs: both edits survive', srv['WO-1-1'] === '2026-11-02' && srv['WO-1-2'] === '2026-11-09', 'server now: ' + JSON.stringify(srv) + ' version=' + A.server.row.version);
+    rec('Two PCs: the stale save was refused by the version check (clash detected, then merged)', (A.server.conflicts || 0) >= 1 && A.server.row.version >= 3, 'conflicts=' + (A.server.conflicts || 0) + ' version=' + A.server.row.version + ' patches=' + A.server.patches.length);
     await A.close(); await B.close();
   }
 

@@ -11,7 +11,8 @@ const XLSXJS = fs.readFileSync(path.join(ROOT, 'xlsx.full.min.js'), 'utf8');
 // row: the production_planner 'main' row the fake server returns
 async function open(opts = {}) {
   const row = opts.row || { id: 'main', orders: [], nid: 1, settings: {} };
-  const server = { row: JSON.parse(JSON.stringify(row)), patches: [], posts: [], deletes: [], other: [], failSaves: opts.failSaves || false, failLoad: opts.failLoad || false };
+  // opts.server: share one fake database between two pages ("two PCs").
+  const server = opts.server || { row: JSON.parse(JSON.stringify(row)), patches: [], posts: [], deletes: [], other: [], failSaves: opts.failSaves || false, failLoad: opts.failLoad || false };
   const browser = opts.browser || await chromium.launch();
   const ctx = await browser.newContext({ viewport: opts.viewport || { width: 1400, height: 900 }, timezoneId: opts.tz || 'Europe/Dublin', acceptDownloads: true });
   if (opts.now) await ctx.addInitScript(`(()=>{const T=${+new Date(opts.now)};const R=Date;const off=T-R.now();class D extends R{constructor(...a){if(a.length===0){super(R.now()+off);}else super(...a);}static now(){return R.now()+off;}}D.UTC=R.UTC;D.parse=R.parse;window.Date=D;})();`);
@@ -44,7 +45,16 @@ async function open(opts = {}) {
         const body = JSON.parse(req.postData() || '{}');
         server.patches.push(body);
         if (server.failSaves) return route.fulfill({ status: 500, body: 'err' });
-        Object.assign(server.row, body);
+        // Row has a version column (Stage 1 SQL run): behave like PostgREST + the production_planner_bump trigger.
+        if (server.row && server.row.version !== undefined) {
+          const v = url.match(/version=eq\.(\d+)/);
+          if (v && +v[1] !== +server.row.version) { server.conflicts = (server.conflicts || 0) + 1; return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }); }
+          const before = +server.row.version || 1;
+          Object.assign(server.row, body);
+          server.row.version = before + 1; server.row.updated_at = new Date().toISOString();
+          return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([server.row]) });
+        }
+        Object.assign(server.row, body); // no version column: old plain overwrite
         return route.fulfill({ status: 204, body: '' });
       }
       if (m === 'POST') { server.posts.push(req.postData()); return route.fulfill({ status: 201, body: '' }); }
