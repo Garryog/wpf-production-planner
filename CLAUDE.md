@@ -40,3 +40,4 @@ Loop: if Tester or Manager finds Critical/Blocker issues → back to Coder (or A
 - Fitters get their own view. Delivered snags, with photo and site location / "handed to", must appear on the fitter's view for their project.
 - Fitter management is a major area for the next phase after saving, saw/stores, cutting lists/snags, deliveries and CNC/forklift. Design the snag and delivery data so a fitter view can read it without rework.
 - ZD420 spec confirmed (sheet from Garry): 203 dpi, 104 mm max print width, USB standard (Ethernet/Wi-Fi/Bluetooth optional), ZPL + EPL. It will be the DEFAULT printer on the saw's PC → use label-sized HTML print page + Chrome kiosk-printing (no dialog). ZPL via Browser Print only if barcodes need to scan.
+- Label contents (confirmed 21 Oct): WO, project/customer, house or room, part name, L × W, material, edging, quantity. Per-line print + group print. No barcode requested. Label size still TBC.
