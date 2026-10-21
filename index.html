@@ -396,6 +396,11 @@ button,input,select{font-family:inherit;cursor:pointer}
 .rtk:hover{border-color:#0b7e44}
 .rtk.on{background:#0b7e44;border-color:#0b7e44}
 .tk-na{color:#8a5a00;font-weight:800}
+.nah{width:52px;color:#8a5a00}.nac{text-align:center;padding:2px 4px 2px 14px!important;border-left:1px dashed #e2c48d}
+.rna{min-width:40px;height:28px;padding:0 6px;border:2px dashed #b7791f;border-radius:14px;background:#fff8eb;color:#8a5a00;cursor:pointer;font-size:11px;font-weight:800;line-height:1}
+.rna.on{background:#8a5a00;border:2px solid #8a5a00;color:#fff}
+.rna:disabled{background:#f4f4f4;border-color:#d5d9e0;color:#b8bec9;cursor:not-allowed}
+.wl-rdone td.nac{text-decoration:none}
 .wl-rdone td{color:#8e99ab;text-decoration:line-through}
 .wl-rdone td.tkc{text-decoration:none}
 .wl-rdone td.num{font-weight:400}
@@ -403,7 +408,7 @@ button,input,select{font-family:inherit;cursor:pointer}
 .wl-cust span{font-size:11px;color:var(--t3);text-transform:uppercase;font-weight:700;margin-right:2px}
 .wl-cust button{padding:5px 11px;font-size:13px;font-weight:700;border-radius:16px;border:2px solid var(--b2);background:#fff;color:#14335c;cursor:pointer}
 .wl-cust button.on{background:#14335c;border-color:#14335c;color:#fff}
-@media(max-width:700px){.wl-chk{width:40px;height:40px}.rtk{width:36px;height:36px}.wl-btn{padding:11px 16px;font-size:15px}}
+@media(max-width:700px){.wl-chk{width:40px;height:40px}.rtk{width:36px;height:36px}.rna{height:36px;min-width:48px}.nac{padding-left:18px!important}.wl-btn{padding:11px 16px;font-size:15px}}
 </style>
 </head>
 <body>
@@ -2107,9 +2112,9 @@ function listTableHTML(l,mode,opt){ // mode 'saw' | 'fit' | 'all'; opt.relOnly =
     for(let j=i+1;j<rows.length;j++){if(rows[j].k==='hdr')break;keep.push(r);break;}
   });
   const saw=mode!=='fit';
-  return `<table class="wl-tbl"><thead><tr>${opt.tick?'<th class="tkh">✓</th>':''}<th style="width:34%">Item</th><th>Qty</th>${saw?'<th>Length</th><th>Width</th>':''}<th>${mode==='fit'?'Spec':'Material'}</th><th>${mode==='fit'?'Note':'Edging / Note'}</th></tr></thead><tbody>
-  ${keep.map(r=>r.k==='hdr'?`<tr class="wl-sec"><td colspan="${(saw?6:4)+(opt.tick?1:0)}">${escA(r.item)}${r.note?' · '+escA(r.note):''}</td></tr>`
-    :`<tr class="${(h=>h&&h.st==='hold'?'wl-held':'')(hs(r))}${opt.tick&&tk[rowKey(r)]?' wl-rdone':''}">${opt.tick?`<td class="tkc">${(h=>h&&h.st==='hold'?'<span class="tk-na">⏸</span>':`<button class="rtk${tk[rowKey(r)]?' on':''}" data-rt="${escA(l.id)}|${escA(rowKey(r))}" title="${tk[rowKey(r)]?'Done '+hhmm(tk[rowKey(r)].at)+(tk[rowKey(r)].by?' by '+escA(tk[rowKey(r)].by):'')+' — click to untick':'Tick when '+(mode==='saw'?'cut':'picked')}">${tk[rowKey(r)]?'✓':''}</button>`)(hs(r))}</td>`:''}<td>${(h=>!h?'':h.st==='hold'?'<span class="hold-b">⏸ WAITING ON MATERIAL</span> ':'<span class="rel-b">▶ MATERIAL IN — DO NOW</span> ')(hs(r))}${escA(r.item)||'—'}</td><td class="num">${r.qty}</td>${saw?`<td class="num">${r.k==='saw'?escA(r.L):''}</td><td class="num">${r.k==='saw'?escA(r.W):''}</td>`:''}<td>${escA(r.mat)}</td><td>${escA(r.note)}</td></tr>`).join('')}
+  return `<table class="wl-tbl"><thead><tr>${opt.tick?'<th class="tkh">✓</th><th class="nah" title="Not available — park this line until it comes in">N/A</th>':''}<th style="width:34%">Item</th><th>Qty</th>${saw?'<th>Length</th><th>Width</th>':''}<th>${mode==='fit'?'Spec':'Material'}</th><th>${mode==='fit'?'Note':'Edging / Note'}</th></tr></thead><tbody>
+  ${keep.map(r=>r.k==='hdr'?`<tr class="wl-sec"><td colspan="${(saw?6:4)+(opt.tick?2:0)}">${escA(r.item)}${r.note?' · '+escA(r.note):''}</td></tr>`
+    :`<tr class="${(h=>h&&h.st==='hold'?'wl-held':'')(hs(r))}${opt.tick&&tk[rowKey(r)]?' wl-rdone':''}">${opt.tick?`<td class="tkc">${(h=>h&&h.st==='hold'?'<span class="tk-na">⏸</span>':`<button class="rtk${tk[rowKey(r)]?' on':''}" data-rt="${escA(l.id)}|${escA(rowKey(r))}" title="${tk[rowKey(r)]?'Done '+hhmm(tk[rowKey(r)].at)+(tk[rowKey(r)].by?' by '+escA(tk[rowKey(r)].by):'')+' — click to untick':'Tick when '+(mode==='saw'?'cut':'picked')}">${tk[rowKey(r)]?'✓':''}</button>`)(hs(r))}</td>${(h=>{const on=!!(h&&h.st==='hold'),t=tk[rowKey(r)];return `<td class="nac"><button class="rna${on?' on':''}" data-rna="${escA(l.id)}|${escA(rowKey(r))}"${t?' disabled':''} title="${on?'Waiting since '+escA(new Date(h.at).toLocaleDateString('en-IE',{day:'numeric',month:'short'}))+(h.by?' · '+escA(h.by):'')+' — tap to undo':t?'Already '+(mode==='saw'?'cut':'picked'):'Not available — park this line until it comes in'}">N/A</button></td>`;})(hs(r))}`:''}<td>${(h=>!h?'':h.st==='hold'?'<span class="hold-b">⏸ WAITING ON MATERIAL</span> ':'<span class="rel-b">▶ MATERIAL IN — DO NOW</span> ')(hs(r))}${escA(r.item)||'—'}</td><td class="num">${r.qty}</td>${saw?`<td class="num">${r.k==='saw'?escA(r.L):''}</td><td class="num">${r.k==='saw'?escA(r.W):''}</td>`:''}<td>${escA(r.mat)}</td><td>${escA(r.note)}</td></tr>`).join('')}
   </tbody></table>`;
 }
 /* Saw / Stores queue view: lists in delivery order, big type, tick-off with name + time.
@@ -2335,6 +2340,19 @@ function renderWorkList(app,mode){
     };
     const last=ls.get('wpfOpName');
     if(!on||last)go(last||'');else pickName(mode,(mode==='saw'?'Cutting':'Picking')+' — '+l.name,go);
+  });
+  // Per-row N/A: one tap parks the line in WAITING (device's remembered name); tap again to undo
+  document.querySelectorAll('[data-rna]').forEach(b=>b.onclick=()=>{
+    if(b.disabled)return;
+    const v=b.dataset.rna,i=v.indexOf('|'),id=v.slice(0,i),k=v.slice(i+1);
+    const l=lists().find(x=>x.id===id);if(!l)return;
+    const on=!heldRow(l,k);
+    if(on&&rowTicked(id,k))return;
+    const go=by=>{
+      if(on?holdOne(l,k,mode,by):unholdOne(l,k,mode,by)){sched();render();toast(on?'Line parked — find it under ⏸ WAITING':'Line back in the queue');}
+    };
+    const last=ls.get('wpfOpName');
+    if(last)go(last);else pickName(mode,'Not available — '+l.name,go);
   });
   const upc=document.getElementById('wl-upc');if(upc)upc.onclick=()=>{wlShowUpcoming=!wlShowUpcoming;render();};
   document.querySelectorAll('[data-wlsel]').forEach(b=>b.onclick=()=>{
@@ -4047,6 +4065,13 @@ function clearReleased(lsArr,mode,by){ // released rows that have now been cut/p
   lsArr.forEach(l=>{const h=holdsOf(l.id);let n=0;Object.keys(h).forEach(k=>{if(h[k].m===mode&&h[k].st==='rel'){delete h[k];n++;}});
     if(n)holdLog(mode==='saw'?'cut':'picked',l,n,mode,by);
     if(DB.listHold&&!Object.keys(h).length)delete DB.listHold[l.id];});
+}
+/* One-line park / un-park from the bench N/A box — thin wrappers over the same hold book and log */
+function holdOne(l,k,mode,by){if(rowTicked(l.id,k))return false;holdRows(l,[k],mode,by);return true;}
+function unholdOne(l,k,mode,by){
+  const h=holdsOf(l.id);if(!(h[k]&&h[k].st==='hold'))return false;
+  delete h[k];if(DB.listHold&&!Object.keys(h).length)delete DB.listHold[l.id];
+  holdLog('unhold',l,1,mode,by);return true;
 }
 function holdLog(act,l,n,mode,by){
   DB.holdLog=DB.holdLog||[];
