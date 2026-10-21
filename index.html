@@ -2432,7 +2432,7 @@ function renderWorkList(app,mode){
     if(!confirm('Put this list back in the queue?'))return;
     const id=b.dataset.wlundo;
     if(DB.listDone&&DB.listDone[id])delete DB.listDone[id][mode];
-    const lu=lists().find(x=>x.id===id);if(lu)clearRowTicks(lu,mode);
+    const lu=lists().find(x=>x.id===id);if(lu)clearRowTicks(lu,mode,ls.get('wpfOpName')||'');
     sched();render();
   });
 }
@@ -4058,14 +4058,19 @@ function rowTicks(id){return (DB.listRow||{})[id]||{};}
 function rowTicked(id,k){const t=rowTicks(id)[k];return !!t;}
 function setRowTick(l,k,mode,by,on){
   DB.listRow=DB.listRow||{};const t=DB.listRow[l.id]=DB.listRow[l.id]||{};
+  const had=!!t[k];
   if(on)t[k]={m:mode,at:nowISO(),by:by||''};else delete t[k];
   if(!Object.keys(t).length)delete DB.listRow[l.id];
-  if(on){const h=holdsOf(l.id);if(h[k]&&h[k].st==='hold'){delete h[k];if(DB.listHold&&!Object.keys(h).length)delete DB.listHold[l.id];holdLog(mode==='saw'?'cut':'picked',l,1,mode,by);}} // got out = no longer waiting
+  // got out = no longer waiting; a hold left under a tick (two screens) is superseded — unticking must not bring it back
+  if(on||had){if(dropHold(l,k))holdLog(on?(mode==='saw'?'cut':'picked'):'na-cleared',l,1,mode,by);}
 }
+function dropHold(l,k){const h=holdsOf(l.id);if(!(h[k]&&h[k].st==='hold'))return false;delete h[k];if(DB.listHold&&!Object.keys(h).length)delete DB.listHold[l.id];return true;}
 /* A row is waiting only while it is held AND not ticked. Two screens can leave a row both ticked (got out) and
    held (N/A) after a merge — got-out wins, so that row counts as done. Applied when reading; saved data untouched. */
 function heldRow(l,k){const h=holdsOf(l.id)[k];return !!(h&&h.st==='hold'&&!rowTicked(l.id,k));}
-function clearRowTicks(l,mode){const t=rowTicks(l.id);Object.keys(t).forEach(k=>{if(t[k].m===mode)delete t[k];});if(DB.listRow&&DB.listRow[l.id]&&!Object.keys(t).length)delete DB.listRow[l.id];}
+function clearRowTicks(l,mode,by){const t=rowTicks(l.id);let n=0;Object.keys(t).forEach(k=>{if(t[k].m===mode){delete t[k];if(dropHold(l,k))n++;}});if(DB.listRow&&DB.listRow[l.id]&&!Object.keys(t).length)delete DB.listRow[l.id];
+  if(n)holdLog('na-cleared',l,n,mode,by); // N/A left under a tick by another screen — superseded, not brought back
+}
 function tickableRows(l,mode){ // rows the bench can tick right now: not held; only released rows when the rest was already signed off
   const h=holdsOf(l.id),relOnly=!!listDone(l.id)[mode]&&listHoldRows(l,mode,'rel').length>0;
   return listRows(l).filter(r=>r.k===mode).filter(r=>{const x=h[rowKey(r)];if(heldRow(l,rowKey(r)))return false;return !relOnly||(x&&x.st==='rel');});
@@ -4124,8 +4129,7 @@ function clearReleased(lsArr,mode,by){ // released rows that have now been cut/p
 /* One-line park / un-park from the bench N/A box — thin wrappers over the same hold book and log */
 function holdOne(l,k,mode,by){if(rowTicked(l.id,k))return false;holdRows(l,[k],mode,by);return true;}
 function unholdOne(l,k,mode,by){
-  const h=holdsOf(l.id);if(!(h[k]&&h[k].st==='hold'))return false;
-  delete h[k];if(DB.listHold&&!Object.keys(h).length)delete DB.listHold[l.id];
+  if(!dropHold(l,k))return false;
   holdLog('unhold',l,1,mode,by);return true;
 }
 function holdLog(act,l,n,mode,by){
