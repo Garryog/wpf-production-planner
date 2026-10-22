@@ -64,3 +64,4 @@ Rule: cap each release at one area of the floor. Nothing new is decided until th
 - CNC auto-plan priority: COLOUR FIRST within a 2-day window (a job may move up to 2 days early/late to join its colour on a machine), then cut-by date; never later than cut-by + 2 days.
 - Stock levels: not yet; forklift view shows need only.
 - CNC floor screens: one PC/tablet per machine; the operator ticks CUT on that machine's screen.
+- Stage 2 addition (22 Oct): a Cienapps import that brings a job in at "Assembly complete" or "Palleted" automatically puts it on the delivery board (delv=true; no van/day assigned; never untags; preview shows "N auto-tagged for delivery").
