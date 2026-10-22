@@ -994,7 +994,8 @@ function wkNum(d){ // ISO-8601 week number — matches Irish calendars and Ciena
   return Math.ceil(((dt-y0)/86400000+1)/7);
 }
 function wkLbl(k){if(!k)return'—';const d=new Date(k);return'Wk '+wkNum(d)+' · '+d.toLocaleDateString('en-IE',{day:'numeric',month:'short'});}
-function get8Wks(){const w=[];let d=getMonday(new Date());for(let i=0;i<8;i++){w.push(wkKey(d));d=new Date(d);d.setDate(d.getDate()+7);}return w;}
+// Step a week at a time in UTC (getMonday is UTC) — a local-time step repeated a Monday across the March clock change
+function get8Wks(){const w=[];let d=getMonday(new Date());for(let i=0;i<8;i++){w.push(wkKey(d));d=new Date(d);d.setUTCDate(d.getUTCDate()+7);}return w;}
 function wkCap(k){return DB.weekCaps&&DB.weekCaps[k]?DB.weekCaps[k]:WCAP;}
 function wkHrs(k){return DB.orders.filter(o=>o.plannedWeek===k).reduce((a,o)=>a+(+o.hours||0),0);}
 function wkVal(k){return DB.orders.filter(o=>o.plannedWeek===k).reduce((a,o)=>a+(o.value||0),0);}
@@ -4043,7 +4044,7 @@ function applyImport(plan){
     (plan.shipped||[]).forEach(s=>{const ex=get(s);if(!ex||ex.shippedAt)return;ex.shippedAt=at;ex.shippedStep=s.cs;delete ex.shipBack;nShip++;logEdit(ex,'Moved to Shipped — Cienapps: '+s.cs,'(import)');});
     // new orders — skip any that another screen added meanwhile, then schedule to their due-date week
     const fresh=(plan.newOrders||[]).filter(o=>!board.has(woKey(o.wo)));
-    autoSchedule(fresh);
+    autoSchedule(fresh.slice()); // (autoSchedule sorts its list; the jobs keep the file's order on the board data)
     fresh.forEach(o=>{
       DB.orders.push(o);board.set(woKey(o.wo),o);
       orig[o.wo]=o.plannedWeek||'';origStep[o.wo]=o.step||''; // baseline AFTER auto-schedule so auto-assignments don't show as changes
@@ -4118,7 +4119,7 @@ function renderExport(app){
     const ws=XLSX.utils.aoa_to_sheet(rows);
     ws['!cols']=[{wch:16},{wch:35},{wch:28},{wch:7},{wch:16},{wch:13},{wch:12},{wch:20},{wch:16},{wch:30},{wch:12},{wch:10},{wch:18},{wch:14}];
     XLSX.utils.book_append_sheet(wb,ws,'Full Schedule');
-    const srows=[['Week','Start Date','Orders','Hours','Capacity','% Used','Status'],...weeks.map(wk=>{const h=wkHrs(wk),cnt=wkCnt(wk),pct=Math.round(h/WCAP*100);return[wkLbl(wk),wk,cnt,h,WCAP,pct+'%',pct>=100?'OVER':pct>=80?'NEAR OK':'OK'];})];
+    const srows=[['Week','Start Date','Orders','Hours','Capacity','% Used','Status'],...weeks.map(wk=>{const h=wkHrs(wk),cnt=wkCnt(wk),cap=wkCap(wk),pct=Math.round(h/cap*100);return[wkLbl(wk),wk,cnt,h,cap,pct+'%',pct>=100?'OVER':pct>=80?'NEAR OK':'OK'];})];
     const ws2=XLSX.utils.aoa_to_sheet(srows);ws2['!cols']=[{wch:16},{wch:13},{wch:8},{wch:8},{wch:10},{wch:8},{wch:12}];
     XLSX.utils.book_append_sheet(wb,ws2,'Week Summary');
     XLSX.writeFile(wb,'WPF_Schedule_'+new Date().toISOString().split('T')[0]+'.xlsx');
