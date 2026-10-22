@@ -42,7 +42,11 @@ const NOW = '2026-10-19T10:00:00Z';
   rec('12: grouped pair — held member off the board, the other stays', h.g104.join() === 'WO-104-2', h.g104.join());
   // on hold → step unchanged on the job, no delivery flags lost
   const o101 = await g('WO-101-1'), o102 = await g('WO-102-1');
-  rec('12: hold keeps van/day/loaded fields (nothing deleted)', o101.delVeh === 'VOLVO' && o101.delDay === 'Tue' && !!o102.delLoadedAt && o101.cienHold, JSON.stringify([o101.delVeh, o101.delDay, o102.delLoadedAt]));
+  // R2 fix 3 (agreed: on hold = out of sight): a tagged-but-not-loaded job is untagged (van/day cleared) with a note of
+  // what it was; a LOADED job keeps everything. The job itself is never deleted.
+  const hc = await ev(() => { showTab('h'); return (document.getElementById('sh-hold') || {}).textContent || ''; });
+  rec('12: held job not loaded — untagged, van/day cleared, what it was noted on the job + history + On hold card', o101.cienHold === true && !o101.delv && !o101.delVeh && !o101.delDay && /Volvo/i.test(o101.holdDel || '') && /Tue/.test(o101.holdDel || '') && (o101.log || []).some(l => /taken off Deliveries/.test(l.what || l.a || JSON.stringify(l))) && /Tue/.test(hc), JSON.stringify({ delv: o101.delv, veh: o101.delVeh, day: o101.delDay, holdDel: o101.holdDel, cardHasTue: /Tue/.test(hc) }));
+  rec('12: held job already LOADED keeps tag, van, day and loaded time', o102.cienHold === true && o102.delv === true && o102.delVeh === 'IVECO' && o102.delDay === 'Mon' && !!o102.delLoadedAt, JSON.stringify([o102.delv, o102.delVeh, o102.delDay, o102.delLoadedAt]));
   // the same 12 again → nothing changes, no new flag noise
   let r = await imp([{ wo: 'WO-103-1', step: '12. ON HOLD / DELETE' }]);
   rec('12: re-import of 12 on a held job → no update, no "back" flag', !r.flagged.some(f => /back from on hold/.test(f.why)) && (await g('WO-103-1')).cienHold, JSON.stringify(r.flagged));
@@ -72,7 +76,9 @@ const NOW = '2026-10-19T10:00:00Z';
   let o106 = await g('WO-106-1');
   rec('11 directly from 5: shipped + installed + complete', !!o106.shippedAt && !!o106.installedAt && !!o106.completeAt, JSON.stringify([o106.shippedAt, o106.installedAt, o106.completeAt]));
   // planner "Undo complete" then re-import 11 → is the undo respected?
-  await ev(() => { const o = DB.orders.find(o => o.wo === 'WO-106-1'); delete o.completeAt; delete o.completeBy; });
+  // press the real "Undo complete" button on the Shipped tab (completed jobs shown)
+  const undo = await ev(() => { shDone = true; showTab('h'); const b = document.querySelector('[data-shu="WO-106-1"]'); if (b) b.click(); shDone = false; return !!b; });
+  rec('11: "Undo complete" button found and pressed', undo, String(undo));
   r = await imp([{ wo: 'WO-106-1', step: '11. COMPLETED AND INVOICED' }]);
   o106 = await g('WO-106-1');
   rec('11: planner pressed "Undo complete" — the next import of the same 11 does not silently re-complete it', !o106.completeAt, JSON.stringify({ completeAt: o106.completeAt, by: o106.completeBy, marks: r.marks }));

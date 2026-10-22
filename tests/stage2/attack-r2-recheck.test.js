@@ -22,7 +22,7 @@ const L = { 3: '3. READY FOR UPLOAD', 5: '5. WORK ORDER PROCESSED', 6: '6. JOB C
     { wo: 'WO-8', value: 4000, step: L[5], dueDate: '2026-11-02' },          // unchanged
   ];
   const preview = (P, file) => P.page.evaluate(f => { showTab('i'); IMPPLAN = analyzeImport(prepImport(f), 'file'); renderImportPreview(IMPPLAN); return document.getElementById('iprev').textContent; }, file || FILE);
-  const apply = P => P.page.evaluate(async () => { await document.getElementById('imp-apply').onclick(); const txt = document.getElementById('iprev').textContent; const still = !!IMPPLAN; if (!still) await saveDB(); return { txt, still, banner: (document.getElementById('imp-changed') || {}).textContent || '' }; });
+  const apply = P => P.page.evaluate(async () => { const b = document.getElementById('imp-apply'); if (!b) return { txt: document.getElementById('iprev').textContent, still: !!IMPPLAN, banner: '', noButton: true }; await b.onclick(); const txt = document.getElementById('iprev').textContent; const still = !!IMPPLAN; if (!still) await saveDB(); return { txt, still, banner: (document.getElementById('imp-changed') || {}).textContent || '' }; });
   const srv = (S, w) => S.row.orders.find(o => o.wo === w) || null;
 
   // ---- 1. B hand-edits everything the import touches, then A applies
@@ -44,8 +44,12 @@ const L = { 3: '3. READY FOR UPLOAD', 5: '5. WORK ORDER PROCESSED', 6: '6. JOB C
       await saveDB();
     });
     const r0 = await apply(A);
-    // B moving WO-5 to 7 makes the import re-estimate its hours (7 = no CNC hours) — a genuinely NEW change, so a re-show is right
-    rec('1: re-show only for genuinely new work (WO-5 hours re-estimated at B\'s step 7)', r0.still && /WO-5: hours/.test(r0.banner) && (r0.banner.match(/•/g) || []).length === 1, r0.banner.replace(/\s+/g, ' ').slice(0, 400));
+    // R2 fix 2 (agreed): any job B changed that the import still writes to re-shows the preview; those rows restart at Keep, no Move
+    const bl = r0.banner.replace(/\s+/g, ' ');
+    const named = ['WO-1', 'WO-2', 'WO-3', 'WO-4', 'WO-5', 'WO-6'].filter(w => new RegExp(w + ': changed on another PC').test(bl));
+    rec('1: Apply re-shows and names every job B changed that the import writes to (WO-1..6), not WO-8', r0.still && named.length === 6 && !/WO-8/.test(bl), bl.slice(0, 500));
+    const ch = await A.page.evaluate(() => ({ dk2: (document.querySelector('[data-dk="WO-2"][value="keep"]') || {}).checked, mv6: (document.querySelector('[data-rmv="WO-6"]') || { value: 'none' }).value, dk6: (document.querySelector('[data-dk="WO-6"][value="keep"]') || {}).checked }));
+    rec('1: after the re-show B\'s rows start at Keep — WO-2 Keep, WO-6 Keep and A\'s "Move to" dropped', ch.dk2 === true && ch.dk6 === true && (ch.mv6 === '' || ch.mv6 === 'none'), JSON.stringify(ch));
     const r = r0.still ? await apply(A) : r0;
     await sleep(300); await B.page.evaluate(() => loadDB()); await sleep(300);
     const g = w => srv(S, w);
@@ -57,13 +61,15 @@ const L = { 3: '3. READY FOR UPLOAD', 5: '5. WORK ORDER PROCESSED', 6: '6. JOB C
     rec('1: WO-5 B stepped to 7 and put on Iveco/Wed — import (6) does not move it back or clear the van', g('WO-5').step === L[7] && g('WO-5').delVeh === 'IVECO' && g('WO-5').delDay === 'Wed', JSON.stringify([g('WO-5').step, g('WO-5').delVeh, g('WO-5').delDay]));
     rec('1: WO-7 on hold and B\'s note kept', g('WO-7').cienHold === true && /keep the slot/.test(g('WO-7').notes || ''), JSON.stringify([g('WO-7').cienHold, g('WO-7').notes]));
     // the two contested ones
-    rec('1: B re-dated WO-2 to 6 Nov while A\'s preview showed "2 Nov → 20 Nov" — B\'s date is not silently overwritten (re-shown or kept)', g('WO-2').dueDate === '2026-11-06' || r.still, 'server due=' + g('WO-2').dueDate + ' origDue=' + g('WO-2').origDueDate + ' (preview showed old due 2 Nov; B set 6 Nov; Take applied without re-showing)');
-    rec('1: B re-planned WO-6 to 9 Nov while A\'s preview offered "Move to" — B\'s week not silently overwritten', g('WO-6').plannedWeek === '2026-11-09' || r.still, 'A picked ' + sel + ', server week=' + g('WO-6').plannedWeek);
+    rec('1: B re-dated WO-2 to 6 Nov while A\'s preview showed "2 Nov → 20 Nov" — B\'s date kept', g('WO-2').dueDate === '2026-11-06', 'server due=' + g('WO-2').dueDate + ' origDue=' + g('WO-2').origDueDate + ' (preview showed old due 2 Nov; B set 6 Nov; Take applied without re-showing)');
+    rec('1: B re-planned WO-6 to 9 Nov while A\'s preview offered "Move to" — B\'s week kept', g('WO-6').plannedWeek === '2026-11-09', 'A picked ' + sel + ', server week=' + g('WO-6').plannedWeek);
     rec('no page errors', !A.dev.errors.length && !B.dev.errors.length, A.dev.errors.concat(B.dev.errors).join(' | '));
     await A.close(); await B.close();
   }
 
-  // ---- 2. B deletes a job that the import updates → re-shown as "new job"; Take/Keep and Move choices survive the re-show
+  // ---- 2. B deletes a job the import would update (WO-8) while A's preview is open.
+  // R2 fix 2 (agreed): the deleted job is skipped and listed, not re-added; nothing else changed, so Apply goes through
+  // in one go with A's Keep (WO-2) and Move (WO-6) choices honoured.
   {
     const S = makeServer(row());
     const A = await device(browser, S, { name: 'A' }), B = await device(browser, S, { name: 'B' });
@@ -71,13 +77,31 @@ const L = { 3: '3. READY FOR UPLOAD', 5: '5. WORK ORDER PROCESSED', 6: '6. JOB C
     await A.page.evaluate(() => { const k = document.querySelector('[data-dk="WO-2"][value="keep"]'); k.checked = true; const s = document.querySelector('[data-rmv="WO-6"]'); s.value = s.options[1].value; });
     await B.page.evaluate(async () => { DB.orders = DB.orders.filter(o => o.wo !== 'WO-8'); await saveDB(); });
     const r = await apply(A);
-    rec('2: B deleted WO-8 → Apply stops, banner names WO-8 as a new job', r.still && /WO-8/.test(r.banner) && /plan changed/.test(r.banner), r.banner.slice(0, 300));
-    const kept = await A.page.evaluate(() => ({ keep: (document.querySelector('[data-dk="WO-2"][value="keep"]') || {}).checked, mv: (document.querySelector('[data-rmv="WO-6"]') || {}).value }));
-    rec('2: Keep on WO-2 and Move on WO-6 still chosen after the re-show', kept.keep === true && !!kept.mv, JSON.stringify(kept));
+    const g = w => srv(S, w);
+    rec('2: B deleted WO-8 → Apply goes through in one go and says WO-8 was skipped (deleted on another PC)', !r.still && /deleted on another PC[^]*WO-8/.test(r.txt), r.txt.replace(/\s+/g, ' ').slice(0, 400));
+    rec('2: WO-8 not re-added by this Apply', S.row.orders.filter(o => o.wo === 'WO-8').length === 0, String(S.row.orders.filter(o => o.wo === 'WO-8').length));
+    rec('2: A\'s choices honoured — WO-2 kept planner date (dueKeep 20 Nov), WO-6 moved to its due week', g('WO-2').dueDate === '2026-11-02' && g('WO-2').dueKeep === '2026-11-20' && g('WO-6').plannedWeek !== '2026-10-26' && g('WO-6').dueDate === '2026-11-27', JSON.stringify([g('WO-2').dueDate, g('WO-2').dueKeep, g('WO-6').plannedWeek, g('WO-6').dueDate]));
+    // the NEXT import of the same file brings it back as a new job (the planner's delete is not remembered) — INFO only
+    await A.page.evaluate(() => loadDB()); await preview(A); const r3 = await apply(A);
+    console.log('INFO  next import after the delete: WO-8 lines on server = ' + S.row.orders.filter(o => o.wo === 'WO-8').length + ' (re-added as a new job: ' + /WO-8/.test(r3.txt) + ')');
+    rec('no page errors', !A.dev.errors.length && !B.dev.errors.length, A.dev.errors.concat(B.dev.errors).join(' | '));
+    await A.close(); await B.close();
+  }
+  // ---- 2b. B edits WO-6 (hand-set hours) while A has Keep on WO-2 and Move on WO-6 → re-show; WO-6 restarts at Keep/no Move,
+  // A's Keep on WO-2 (not touched by B) survives; the second Apply leaves WO-6's week and due date alone.
+  {
+    const S = makeServer(row());
+    const A = await device(browser, S, { name: 'A' }), B = await device(browser, S, { name: 'B' });
+    await preview(A);
+    await A.page.evaluate(() => { document.querySelector('[data-dk="WO-2"][value="keep"]').checked = true; const s = document.querySelector('[data-rmv="WO-6"]'); s.value = s.options[1].value; });
+    await B.page.evaluate(async () => { Object.assign(DB.orders.find(o => o.wo === 'WO-6'), { hours: 12, hoursSrc: 'hand', hoursEstimated: false }); await saveDB(); });
+    const r = await apply(A);
+    const ch = await A.page.evaluate(() => ({ dk2: (document.querySelector('[data-dk="WO-2"][value="keep"]') || {}).checked, dk6: (document.querySelector('[data-dk="WO-6"][value="keep"]') || {}).checked, mv6: (document.querySelector('[data-rmv="WO-6"]') || { value: 'none' }).value }));
+    rec('2b: B hand-set WO-6 hours → Apply re-shows naming WO-6 only', r.still && /WO-6: changed on another PC/.test(r.banner) && !/WO-2/.test(r.banner), r.banner.replace(/\s+/g, ' ').slice(0, 300));
+    rec('2b: WO-6 restarts at Keep with no Move; A\'s Keep on WO-2 survives', ch.dk2 === true && ch.dk6 === true && (ch.mv6 === '' || ch.mv6 === 'none'), JSON.stringify(ch));
     const r2 = await apply(A);
     const g = w => srv(S, w);
-    rec('2: second Apply goes through; WO-2 kept planner date (dueKeep), WO-6 moved', !r2.still && g('WO-2').dueDate === '2026-11-02' && g('WO-2').dueKeep === '2026-11-20' && g('WO-6').plannedWeek !== '2026-10-26', JSON.stringify([g('WO-2').dueDate, g('WO-2').dueKeep, g('WO-6').plannedWeek]));
-    rec('2: deleted WO-8 is re-added once (the file still has it) — INFO: planner\'s delete is undone by the import', S.row.orders.filter(o => o.wo === 'WO-8').length === 1, String(S.row.orders.filter(o => o.wo === 'WO-8').length));
+    rec('2b: second Apply: WO-6 week/due/hours untouched (B\'s 12h), WO-2 Keep honoured', !r2.still && g('WO-6').plannedWeek === '2026-10-26' && g('WO-6').dueDate === '2026-11-02' && g('WO-6').hours === 12 && g('WO-2').dueDate === '2026-11-02' && g('WO-2').dueKeep === '2026-11-20', JSON.stringify([r2.still, g('WO-6').plannedWeek, g('WO-6').dueDate, g('WO-6').dueKeep, g('WO-6').hours, g('WO-2').dueDate, g('WO-2').dueKeep]));
     await A.close(); await B.close();
   }
 
@@ -107,6 +131,8 @@ const L = { 3: '3. READY FOR UPLOAD', 5: '5. WORK ORDER PROCESSED', 6: '6. JOB C
     await A.close(); await B.close();
   }
 
+  const REP = +process.env.REPEAT || 1;
+  for (let rep = 0; rep < REP; rep++) {
   // ---- 5. A database save from B lands DURING A's re-check (slow load) → no lost update
   {
     const S = makeServer(row());
@@ -136,6 +162,7 @@ const L = { 3: '3. READY FOR UPLOAD', 5: '5. WORK ORDER PROCESSED', 6: '6. JOB C
     const g = w => srv(S, w);
     rec('5b: B hand-sets 33h on WO-1 just after A applied — planner hours win over the import estimate', g('WO-1').hours === 33, JSON.stringify({ hours: g('WO-1').hours, src: g('WO-1').hoursSrc, toastOnA: toast }));
     await A.close(); await B.close();
+  }
   }
   // ---- 6. A is offline at Apply → told, nothing applied, preview kept; back online → Apply works
   {

@@ -29,7 +29,12 @@ const res = []; const rec = (n, ok, d) => { res.push(ok); console.log((ok ? 'PAS
     await saveDB();
   });
   const v1 = S.row.version;
-  await A.page.evaluate(async () => { await document.getElementById('imp-apply').onclick(); await saveDB(); });
+  // R2 fix 2 (agreed): B changed jobs the import writes to → the first Apply re-shows; the planner checks it and presses Apply again
+  const first = await A.page.evaluate(async () => { await document.getElementById('imp-apply').onclick(); return { still: !!IMPPLAN, banner: ((document.getElementById('imp-changed') || {}).textContent || '').replace(/\s+/g, ' ') }; });
+  // WO-2: B's step 6 is now ahead of the file's 4, so the import no longer writes to it (dropped, not re-shown) — only WO-1 re-shows
+  rec('first Apply re-shows the preview naming WO-1 (hand-set hours on PC B), not WO-2', first.still && /WO-1: changed on another PC/.test(first.banner) && !/WO-2/.test(first.banner), first.banner.slice(0, 300));
+  const second = await A.page.evaluate(async () => { const b = document.getElementById('imp-apply'); if (b) await b.onclick(); const still = !!IMPPLAN; await saveDB(); return still; });
+  rec('second Apply goes through', !second);
   await new Promise(r => setTimeout(r, 500));
   await A.page.evaluate(() => loadDB()); await B.page.evaluate(() => loadDB());
   await new Promise(r => setTimeout(r, 500));
@@ -52,7 +57,9 @@ const res = []; const rec = (n, ok, d) => { res.push(ok); console.log((ok ? 'PAS
     const A2 = await device(browser, S2, { name: 'A' }), B2 = await device(browser, S2, { name: 'B' });
     await A2.page.evaluate(() => { showTab('i'); IMPPLAN = analyzeImport(prepImport([{ wo: 'WO-5', step: '9. JOB SHIPPED', value: 4000, dueDate: '2026-11-02' }]), 'file'); renderImportPreview(IMPPLAN); });
     await B2.page.evaluate(async () => { showTab('h'); document.querySelector('[data-shb="WO-5"]').click(); await saveDB(); });
-    await A2.page.evaluate(async () => { await document.getElementById('imp-apply').onclick(); await saveDB(); });
+    await A2.page.evaluate(async () => { for (let i = 0; i < 3 && IMPPLAN; i++) { const b = document.getElementById('imp-apply'); if (!b) break; await b.onclick(); } await saveDB(); });
+    const a2Done = await A2.page.evaluate(() => !IMPPLAN);
+    rec('A\'s import of the shipped file actually applied (after any re-show)', a2Done);
     const o = S2.row.orders[0];
     rec('"Bring back" on PC B survives an import of the same shipped status applied on PC A', !o.shippedAt && !!o.shipBack, JSON.stringify({ shippedAt: o.shippedAt, shipBack: o.shipBack }));
     await A2.close(); await B2.close();
