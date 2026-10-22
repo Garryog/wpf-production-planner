@@ -10,22 +10,21 @@ const base = () => ({ id: 'main', version: 1, orders: [H.order({ wo: 'WO-1', pla
 const empty = { removals: [], updates: [], newOrders: [], backfills: [], inTransit: [], counts: {}, moves: {} };
 (async () => {
   const browser = await H.chromium.launch();
-  {
+  { // Stage 2: shipped jobs are never removed (acceptance check 27), so the old "removed job comes back" problem can't happen.
+    // A's import marks WO-3 shipped while B moved it. Export Changes lists B's real move (that IS a planner change) but never
+    // the Cienapps step; the next import of the same file changes nothing.
     const S = makeServer(base()); const A = await device(browser, S, { name: 'A' }), B = await device(browser, S, { name: 'B' });
     await B.page.evaluate(async () => { DB.orders[2].plannedWeek = '2026-11-16'; await saveDB(); });
-    await A.page.evaluate(async e => { showTab('i'); applyImport({ ...e, removals: [{ wo: 'WO-3', reason: 'shipped' }] }); await saveDB(); }, empty);
-    const back = S.row.orders.some(o => o.wo === 'WO-3');
-    info('import removal vs remote move: shipped job back on the board', back ? 'yes (known, t5)' : 'no');
-    for (const [n, P] of [['A', A], ['B', B]]) { await P.page.evaluate(() => loadDB()); const c = await P.page.evaluate(() => changes().map(o => o.wo).join(',')); rec('resurrected shipped job NOT in Export Changes on ' + n + ' (no date sent to Cienapps)', !/WO-3/.test(c), c || '(none)'); }
-    const log = S.row.orders.find(o => o.wo === 'WO-3'); info('history note on the resurrected job', log ? JSON.stringify((log.log || []).slice(-1)) : '-');
-    await A.page.evaluate(async e => { showTab('i'); applyImport({ ...e, removals: [{ wo: 'WO-3', reason: 'shipped' }] }); await saveDB(); }, empty);
-    rec('next import removes it again (self-heals)', !S.row.orders.some(o => o.wo === 'WO-3'), S.row.orders.map(o => o.wo).join(','));
+    const imp = async () => A.page.evaluate(async () => { showTab('i'); const p = analyzeImport(prepImport([{ wo: 'WO-3', step: '8. Job shipped', value: 4000, dueDate: '2026-11-02' }]), 'file'); applyImport(p); await saveDB(); return p.updates.length + p.shipped.length; });
+    await imp();
+    for (const [n, P] of [['A', A], ['B', B]]) { await P.page.evaluate(() => loadDB()); const c = await P.page.evaluate(() => changes().map(o => o.wo + ':' + (orig[o.wo] !== (o.plannedWeek || '') ? 'week' : '') + (origStep[o.wo] !== (o.step || '') ? 'step' : '')).join(',')); rec('shipped job on ' + n + ': only the planner week move is exported, never the Cienapps step', c === 'WO-3:week', c || '(none)'); }
+    rec('next import of the same file changes nothing (no removal, no duplicate)', (await imp()) === 0 && S.row.orders.filter(o => o.wo === 'WO-3').length === 1, S.row.orders.map(o => o.wo).join(','));
     await A.close(); await B.close();
   }
   { // same import file listing a WO twice -> duplicate WO lines exist today (reachable, Stage 2 dedupe)
     const S = makeServer(base()); const A = await device(browser, S, { name: 'A' });
     const n = await A.page.evaluate(async () => { showTab('i'); const p = analyzeImport([{ wo: 'WO-9', title: 'x', value: 1000, dueDate: '2026-11-20', step: '3. In production' }, { wo: 'WO-9', title: 'x', value: 1000, dueDate: '2026-11-20', step: '3. In production' }]); applyImport(p); await saveDB(); return DB.orders.filter(o => o.wo === 'WO-9').length; }).catch(e => 'ERR ' + e.message.split('\n')[0]);
-    info('one Cienapps file listing a WO on two lines creates duplicate WO lines (the route into the t3 bug)', n + ' line(s)');
+    rec('one Cienapps file listing a WO on two lines makes ONE job (Stage 2 dedupe closes the route into the t3 bug)', n === 1, n + ' line(s)');
     await A.close();
   }
   { // two office PCs each create a planner WO in the same moment: both pick P-1001

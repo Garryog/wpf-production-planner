@@ -107,6 +107,19 @@ button,input,select{font-family:inherit;cursor:pointer}
 .verbar[hidden]{display:none}
 @media(max-width:1000px){.week-caps{grid-template-columns:repeat(5,1fr)}}
 @media(max-width:700px){.week-caps{grid-template-columns:repeat(3,1fr)}.wo-table th:nth-child(n+7),.wo-table td:nth-child(n+7){display:none}.pg{padding:12px 12px 60px}}
+/* ---- Shipped tab (phone-first cards) ---- */
+.sh-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
+.sh-bar .search-input{flex:1;min-width:200px}
+.sh-chk{font-size:13px;color:var(--t2);display:flex;align-items:center;gap:6px;white-space:nowrap}
+.sh-card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px}
+.sh-card.sh-done{background:#f4fbf6;border-color:#b3e0c4}
+.sh-top{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.sh-t{font-size:14px;font-weight:600;margin-top:4px;overflow-wrap:anywhere}
+.sh-m{font-size:12px;color:var(--t2);margin-top:2px;overflow-wrap:anywhere}
+.sh-b{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.sh-pill{font-size:11px;font-weight:700;border-radius:100px;padding:2px 8px;white-space:nowrap}
+.sh-pill.ok{background:#e6f6ec;color:#0d6e46}.sh-pill.no{background:#f1f3f6;color:var(--t2)}.sh-pill.warn{background:#fdecea;color:#c0392b}
+@media(max-width:700px){.sh-b .btn{flex:1;min-height:44px;font-size:14px}.sh-bar .search-input,.sh-bar .filter-sel{width:100%;min-width:0;min-height:40px;font-size:16px}.sh-chk{min-height:36px}}
 /* ---- Column filters ---- */
 .cf-row td{background:#f8f9fb;border-bottom:2px solid var(--border);padding:3px 4px}
 .cf-inp{width:100%;min-width:44px;border:1px solid var(--b2);border-radius:4px;padding:3px 6px;font-size:11px;background:#fff;color:var(--text)}
@@ -430,6 +443,7 @@ button,input,select{font-family:inherit;cursor:pointer}
 <div class="tabs"><div class="tabs-i">
   <button class="tab on" id="t-b">Capacity Board</button>
   <button class="tab" id="t-d">🚚 Deliveries<span id="delcnt"></span></button>
+  <button class="tab" id="t-h">📦 Shipped<span id="shipcnt"></span></button>
   <button class="tab" id="t-l">📋 Cutting Lists<span id="listcnt"></span></button>
   <button class="tab" id="t-i">Import Work Orders</button>
   <button class="tab" id="t-x">Export Changes</button>
@@ -997,9 +1011,24 @@ function wkLbl(k){if(!k)return'—';const d=new Date(k);return'Wk '+wkNum(d)+' �
 // Step a week at a time in UTC (getMonday is UTC) — a local-time step repeated a Monday across the March clock change
 function get8Wks(){const w=[];let d=getMonday(new Date());for(let i=0;i<8;i++){w.push(wkKey(d));d=new Date(d);d.setUTCDate(d.getUTCDate()+7);}return w;}
 function wkCap(k){return DB.weekCaps&&DB.weekCaps[k]?DB.weekCaps[k]:WCAP;}
-function wkHrs(k){return DB.orders.filter(o=>o.plannedWeek===k).reduce((a,o)=>a+(+o.hours||0),0);}
-function wkVal(k){return DB.orders.filter(o=>o.plannedWeek===k).reduce((a,o)=>a+(o.value||0),0);}
-function wkCnt(k){return DB.orders.filter(o=>o.plannedWeek===k).length;}
+/* Shipped (Cienapps shipped/invoiced): off the Capacity Board and out of every week total, but kept — the Shipped tab
+   holds it until installation is complete, and Deliveries keeps it until the driver confirms. */
+function isShipped(o){return !!(o&&o.shippedAt);}
+function planOrders(){return DB.orders.filter(o=>!isShipped(o));}
+// Waiting (N/A) lines per WO, from the cutting/fittings lists it is tagged on. Follow-ons and snags join this in later stages.
+function attnMap(){
+  const m=new Map();
+  lists().forEach(l=>{
+    const n=Object.keys(holdsOf(l.id)).filter(k=>heldRow(l,k)).length;
+    if(n)(l.wos||[]).forEach(w=>m.set(w,(m.get(w)||0)+n));
+  });
+  return m;
+}
+function needsAttention(o,m){return ((m||attnMap()).get(o.wo)||0)>0;}
+function boardOrders(){const m=attnMap();return DB.orders.filter(o=>!isShipped(o)||needsAttention(o,m));}
+function wkHrs(k){return planOrders().filter(o=>o.plannedWeek===k).reduce((a,o)=>a+(+o.hours||0),0);}
+function wkVal(k){return planOrders().filter(o=>o.plannedWeek===k).reduce((a,o)=>a+(o.value||0),0);}
+function wkCnt(k){return planOrders().filter(o=>o.plannedWeek===k).length;}
 let VCAP=250000;
 function fmtVal(v){return'€'+Math.round(v/1000)+'k';}
 function dueBadge(due,pw,origDue){
@@ -1015,7 +1044,7 @@ function dueBadge(due,pw,origDue){
 }
 function changes(){return DB.orders.filter(o=>(orig[o.wo]!==undefined&&orig[o.wo]!==(o.plannedWeek||''))||(origStep[o.wo]!==undefined&&origStep[o.wo]!==(o.step||'')));}
 
-function showTab(t){tab=t;['b','d','l','i','x','s'].forEach(id=>{const el=document.getElementById('t-'+id);if(el)el.className='tab'+(id===t?' on':'');});render();}
+function showTab(t){tab=t;['b','d','h','l','i','x','s'].forEach(id=>{const el=document.getElementById('t-'+id);if(el)el.className='tab'+(id===t?' on':'');});render();}
 
 /* ---------- Role views: Office / Factory Floor / Driver (same live plan, a screen per job) ---------- */
 const ls={get:k=>{try{return localStorage.getItem(k)||'';}catch(e){return'';}},set:(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}}};
@@ -1130,6 +1159,7 @@ function render(){
   if(tab==='b')renderBoard(app);
   else if(tab==='l')renderLists(app);
   else if(tab==='d')renderDeliveries(app);
+  else if(tab==='h')renderShipped(app);
   else if(tab==='i')renderImport(app);
   else if(tab==='x')renderExport(app);
   else renderSettings(app);
@@ -1150,6 +1180,8 @@ function updDelBadge(){
   el.textContent=n;el.style.display=n?'inline':'none';
   const el2=document.getElementById('listcnt');
   if(el2){const m=listsNeeded().length;el2.textContent=m;el2.style.display=m?'inline':'none';}
+  const el3=document.getElementById('shipcnt');
+  if(el3){const am=attnMap(),k=DB.orders.filter(o=>isShipped(o)&&!o.completeAt&&am.get(o.wo)).length;el3.textContent=k;el3.style.display=k?'inline':'none';}
 }
 
 function renderSettings(app){
@@ -1341,10 +1373,11 @@ function ungroupG(gid){
 function renderBoard(app){
   cleanGroups();
   const weeks=get8Wks();
-  const custs=[...new Set(DB.orders.map(o=>o.customer))].sort();
+  const BO=boardOrders(),PO=planOrders(),AM=attnMap();
+  const custs=[...new Set(BO.map(o=>o.customer))].sort();
   const chg=changes();
 
-  let orders=[...DB.orders];
+  let orders=[...BO];
   if(fWeek==='unscheduled')orders=orders.filter(o=>!o.plannedWeek);
   else if(fWeek)orders=orders.filter(o=>o.plannedWeek===fWeek);
   if(fCust)orders=orders.filter(o=>o.customer===fCust);
@@ -1397,8 +1430,8 @@ function renderBoard(app){
     } else items.push({o,customer:o.customer||''});
   });
 
-  const unschHrs=DB.orders.filter(o=>!o.plannedWeek).reduce((a,o)=>a+(+o.hours||0),0);
-  const unschCnt=DB.orders.filter(o=>!o.plannedWeek).length;
+  const unschHrs=Math.round(PO.filter(o=>!o.plannedWeek).reduce((a,o)=>a+(+o.hours||0),0)*10)/10;
+  const unschCnt=PO.filter(o=>!o.plannedWeek).length;
   const selOrders=DB.orders.filter(o=>grpSel.has(o.wo));
   const selH=selOrders.reduce((a,o)=>a+(+o.hours||0),0), selV=selOrders.reduce((a,o)=>a+(o.value||0),0);
 
@@ -1413,7 +1446,7 @@ function renderBoard(app){
             :`<input type="checkbox" class="gsel" data-gsel="${escA(o.wo)}"${grpSel.has(o.wo)?' checked':''} title="Select to group">`}</td>
           <td><span class="drag-handle">⠿</span></td>
           <td style="text-align:center"><button class="dvbtn${o.delv?' on':''}" data-dv="${escA(o.wo)}" title="${o.delv?'On the delivery board — click to untag':'Put on the delivery board'}">🚚</button></td>
-          <td><span class="wo-num" data-hl="${escA(o.wo)}" style="cursor:pointer${member?';padding-left:10px':''}${/^P-\d+$/.test(o.wo)?';color:#7c5cd6;font-weight:800':''}" title="${/^P-\d+$/.test(o.wo)?'Created in the planner — not from Cienapps. ':''}Tap to mark as discussed">${o.hl?'✓ ':''}${escA(o.wo)}</span></td>
+          <td><span class="wo-num" data-hl="${escA(o.wo)}" style="cursor:pointer${member?';padding-left:10px':''}${/^P-\d+$/.test(o.wo)?';color:#7c5cd6;font-weight:800':''}" title="${/^P-\d+$/.test(o.wo)?'Created in the planner — not from Cienapps. ':''}Tap to mark as discussed">${o.hl?'✓ ':''}${escA(o.wo)}</span>${addBadge(o)}${isShipped(o)?`<span class="fu-badge" style="background:#eef3fb;border-color:#b9cdec;color:#14418f;margin-left:4px" title="Shipped in Cienapps — on the board because it still has waiting lines">📦 ${AM.get(o.wo)||0} waiting</span>`:''}</td>
           <td>${o.floor?`<span class="fu-badge">${escA(o.floor)}</span>`:'<span style="color:var(--t3)">—</span>'}</td>
           <td>${o.unit?`<span class="fu-badge">${escA(o.unit)}</span>`:'<span style="color:var(--t3)">—</span>'}</td>
           <td><span class="wo-title" title="${escA(o.title)}">${escA(o.title)}</span></td>
@@ -1498,7 +1531,7 @@ function renderBoard(app){
       <div class="wk-cap${fWeek==='unscheduled'?' selected':''}" data-wk="unscheduled">
         <div class="wk-label" style="color:var(--amber)">Unscheduled</div>
         <div class="wk-bar-wrap"><div class="wk-bar warn" style="width:100%"></div></div>
-        <div class="wk-hours warn">${unschHrs}h · ${fmtVal(DB.orders.filter(o=>!o.plannedWeek).reduce((a,o)=>a+(o.value||0),0))}</div>
+        <div class="wk-hours warn">${unschHrs}h · ${fmtVal(PO.filter(o=>!o.plannedWeek).reduce((a,o)=>a+(o.value||0),0))}</div>
         <div class="wk-count">${unschCnt} order${unschCnt!==1?'s':''}</div>
       </div>
     </div>
@@ -1516,9 +1549,9 @@ function renderBoard(app){
       ${custs.map(c=>`<option value="${escA(c)}"${fCust===c?' selected':''}>${escA(c)}</option>`).join('')}
     </select>
     <button class="btn btn-s" id="btn-fdel" style="${fDel?'background:#e8f1fd;border-color:#b0c8e8;color:#1a56db;font-weight:600':''}">🚚 On delivery board</button>
-    ${(n=>n?`<button class="btn btn-s" id="btn-flate" title="Jobs whose planned week ends AFTER their Cienapps due date — dates have drifted since they were planned. Click to see only these and re-plan them." style="${fLate?'background:#fdecea;border-color:#e57368;font-weight:700;':''}border-color:#e57368;color:#c0392b">⚠ ${n} late vs due</button>`:'')(DB.orders.filter(isLateVsDue).length)}
+    ${(n=>n?`<button class="btn btn-s" id="btn-flate" title="Jobs whose planned week ends AFTER their Cienapps due date — dates have drifted since they were planned. Click to see only these and re-plan them." style="${fLate?'background:#fdecea;border-color:#e57368;font-weight:700;':''}border-color:#e57368;color:#c0392b">⚠ ${n} late vs due</button>`:'')(PO.filter(isLateVsDue).length)}
     <button class="btn btn-s" id="btn-clf">Clear filters</button>
-    <span style="margin-left:auto;font-size:12px;color:var(--t2)">${orders.length} shown · ${DB.orders.filter(o=>o.plannedWeek).length} scheduled · ${unschCnt} unscheduled</span>
+    <span style="margin-left:auto;font-size:12px;color:var(--t2)">${orders.length} shown · ${PO.filter(o=>o.plannedWeek).length} scheduled · ${unschCnt} unscheduled${PO.length<DB.orders.length?` · <a href="#" id="go-ship" style="color:var(--t2)">${DB.orders.length-PO.length} shipped</a>`:''}</span>
     <button class="btn btn-g" id="btn-pwo" title="Create a work order directly in the planner — numbered P-…, it follows the same workflow as every Cienapps job but is never touched by imports">＋ New Work Order</button>
     <button class="btn btn-s" id="btn-snap" title="Save a single read-only HTML file with all current data baked in — email it or open it anywhere, no database or internet needed">📸 Offline Snapshot</button>
     <button class="btn btn-s" id="btn-clearall" style="border-color:var(--red);color:var(--red)">Clear All Orders</button>
@@ -1569,9 +1602,9 @@ function renderBoard(app){
     </table>
     <div class="table-footer">
       <span>Shown: <strong>${Math.round(orders.reduce((a,o)=>a+(+o.hours||0),0)*10)/10}h</strong></span>
-      <span>Total orders: <strong>${DB.orders.length}</strong></span>
-      <span>Total hours: <strong>${Math.round(DB.orders.reduce((a,o)=>a+(+o.hours||0),0)*10)/10}h</strong></span>
-      <span>Total value: <strong>${fmtVal(DB.orders.reduce((a,o)=>a+(o.value||0),0))}</strong></span>
+      <span>Total orders: <strong>${PO.length}</strong></span>
+      <span>Total hours: <strong>${Math.round(PO.reduce((a,o)=>a+(+o.hours||0),0)*10)/10}h</strong></span>
+      <span>Total value: <strong>${fmtVal(PO.reduce((a,o)=>a+(o.value||0),0))}</strong></span>
       ${(()=>{const weeks=get8Wks();const overH=weeks.filter(w=>wkHrs(w)>wkCap(w));const overV=weeks.filter(w=>wkVal(w)>VCAP);return overH.length>0?'<span style="color:var(--red);font-weight:600">⚠ '+overH.length+' week'+(overH.length!==1?'s':'')+' over hours capacity</span>':'';})()}
       ${(()=>{const weeks=get8Wks();const overV=weeks.filter(w=>wkVal(w)>VCAP);return overV.length>0?'<span style="color:var(--red);font-weight:600">⚠ '+overV.length+' week'+(overV.length!==1?'s':'')+' over value capacity</span>':'';})()}
     </div>
@@ -1617,6 +1650,7 @@ function renderBoard(app){
     cfFocus=null;
   }
   const fd=document.getElementById('btn-fdel');if(fd)fd.onclick=()=>{fDel=!fDel;render();};
+  const gs=document.getElementById('go-ship');if(gs)gs.onclick=e=>{e.preventDefault();showTab('h');};
   const fl=document.getElementById('btn-flate');if(fl)fl.onclick=()=>{fLate=!fLate;render();};
   // Planner-created work orders: P-numbered, same workflow as Cienapps jobs, immune to imports
   const pwb=document.getElementById('btn-pwo');
@@ -1744,6 +1778,62 @@ function renderBoard(app){
   }
 }
 
+/* ---------- 📦 Shipped tab: jobs Cienapps calls shipped/invoiced. Off the Capacity Board, kept here until the
+   planner marks installation complete. Searchable; a job can be brought back to the board. Works on a phone (Chrome). ---------- */
+let shSrch='',shDel='',shDone=false;
+function renderShipped(app){
+  const am=attnMap();
+  const all=DB.orders.filter(isShipped);
+  let os=all.filter(o=>shDone||!o.completeAt);
+  if(shDel==='yes')os=os.filter(o=>dStage(o)==='deliv');else if(shDel==='no')os=os.filter(o=>dStage(o)!=='deliv');
+  if(shSrch){const q=shSrch.toLowerCase();os=os.filter(o=>[o.wo,o.title,o.customer,o.floor,o.unit].some(v=>String(v||'').toLowerCase().includes(q)));}
+  os.sort((a,b)=>String(b.shippedAt||'').localeCompare(String(a.shippedAt||''))||woCmp(a,b));
+  const shown=os.slice(0,300);
+  const dt=s=>s?new Date(s).toLocaleDateString('en-IE',{day:'numeric',month:'short'}):'—';
+  const nDone=all.filter(o=>o.completeAt).length;
+  const card=o=>{
+    const deliv=dStage(o)==='deliv',w=am.get(o.wo)||0,fu=[o.floor,o.unit].filter(Boolean).join(' · ');
+    return `<div class="sh-card${o.completeAt?' sh-done':''}">
+      <div class="sh-top"><span class="wo-num">${escA(o.wo)}</span>${fu?`<span class="fu-badge">${escA(fu)}</span>`:''}${addBadge(o)}
+        <span class="sh-pill ${deliv?'ok':'no'}">${deliv?'✓ Delivered '+dt(o.delDelivAt):(o.delDispAt?'🚚 On the road':o.delv?'🚚 On Deliveries':'Not delivered')}</span>
+        ${w?`<span class="sh-pill warn" title="Waiting (N/A) lines on its cutting/fittings lists — also shown on the Capacity Board">⚠ ${w} waiting</span>`:''}</div>
+      <div class="sh-t">${escA(o.title||'')}</div>
+      <div class="sh-m">${escA(o.customer||'')} · shipped ${dt(o.shippedAt)} · Cienapps: ${escA(String(o.cienStep||o.shippedStep||o.step||'—').replace(/^\d+\.\s*/,''))}</div>
+      ${o.completeAt?`<div class="sh-m" style="color:#0d6e46;font-weight:700">✓ Installation complete ${dt(o.completeAt)}${o.completeBy?' — '+escA(o.completeBy):''}</div>`:''}
+      <div class="sh-b">
+        ${o.completeAt?`<button class="btn btn-s" data-shu="${escA(o.wo)}">Undo complete</button>`:`<button class="btn btn-g" data-shc="${escA(o.wo)}">✓ Installation complete</button>`}
+        <button class="btn btn-s" data-shb="${escA(o.wo)}">↩ Bring back to board</button>
+      </div>
+    </div>`;
+  };
+  app.innerHTML=`<div class="pg">
+    <div class="sh-bar">
+      <input class="search-input" id="sh-q" placeholder="Search WO, title, customer, unit…" value="${escA(shSrch)}">
+      <select class="filter-sel" id="sh-del">
+        <option value=""${shDel===''?' selected':''}>Delivered: all</option>
+        <option value="yes"${shDel==='yes'?' selected':''}>Delivered: yes</option>
+        <option value="no"${shDel==='no'?' selected':''}>Delivered: no</option>
+      </select>
+      <label class="sh-chk"><input type="checkbox" id="sh-done"${shDone?' checked':''}> Show completed (${nDone})</label>
+    </div>
+    <div style="font-size:12px;color:var(--t2);margin:2px 0 10px">${os.length} shown · ${all.length} shipped in total. Shipped jobs are off the Capacity Board and out of the week totals; jobs on a van stay on 🚚 Deliveries until the driver confirms.</div>
+    ${shown.length?shown.map(card).join(''):`<div class="empty">${all.length?'No shipped jobs match.':'No shipped jobs yet — they arrive here when a Cienapps import says shipped or invoiced.'}</div>`}
+    ${os.length>shown.length?`<div style="font-size:12px;color:var(--t3);padding:6px 0">…and ${os.length-shown.length} more — search to narrow down</div>`:''}
+  </div>`;
+  const q=document.getElementById('sh-q');
+  if(q)q.oninput=function(){shSrch=this.value;const pos=this.selectionStart;render();const n=document.getElementById('sh-q');if(n){n.focus();try{n.setSelectionRange(pos,pos);}catch(e){}}};
+  const sd=document.getElementById('sh-del');if(sd)sd.onchange=function(){shDel=this.value;render();};
+  const sc=document.getElementById('sh-done');if(sc)sc.onchange=function(){shDone=this.checked;render();};
+  const find=wo=>DB.orders.find(x=>x.wo===wo);
+  app.querySelectorAll('[data-shc]').forEach(b=>b.onclick=()=>{const o=find(b.dataset.shc);if(!o)return;
+    officeWho(by=>{o.completeAt=nowISO();o.completeBy=by;logEdit(o,'Installation complete',by);sched();render();toast(o.wo+' — installation complete ✓');});});
+  app.querySelectorAll('[data-shu]').forEach(b=>b.onclick=()=>{const o=find(b.dataset.shu);if(!o)return;
+    officeWho(by=>{delete o.completeAt;delete o.completeBy;logEdit(o,'Installation complete undone',by);sched();render();});});
+  app.querySelectorAll('[data-shb]').forEach(b=>b.onclick=()=>{const o=find(b.dataset.shb);if(!o)return;
+    if(!confirm('Bring '+o.wo+' back to the Capacity Board?\n\nIt stays there even though Cienapps says shipped — until Cienapps moves it on (e.g. to invoiced).'))return;
+    officeWho(by=>{o.shipBack={at:nowISO(),by,cs:o.cienStep||o.shippedStep||''};delete o.shippedAt;delete o.completeAt;delete o.completeBy;logEdit(o,'Brought back to the board from Shipped',by);sched();render();toast(o.wo+' is back on the Capacity Board');});});
+}
+
 /* ---------- Deliveries: plan next week's deliveries by vehicle and day (v2) ---------- */
 const DEL_DAYS=['Mon','Tue','Wed','Thu','Fri','Sat'];
 const DEL_VEH=[
@@ -1784,7 +1874,7 @@ function partLoadGaps(jobs){
   jobs.forEach(j=>{
     const rel=DB.orders.filter(o=>{
       if(inLoad.has(o.wo)||seen.has(o.wo))return false;
-      if(o.delDispAt||o.delDelivAt||o.delDone)return false;
+      if(o.delDispAt||o.delDelivAt||o.delDone||(isShipped(o)&&!o.delv))return false;
       const sameUnit=j.orderNo&&o.orderNo===j.orderNo&&j.unit&&o.unit===j.unit&&!/multiple/i.test(j.unit||'');
       const sameGrp=j.grp&&o.grp===j.grp;
       return sameUnit||sameGrp;
@@ -1825,7 +1915,7 @@ function listDeadline(l){ // calendar day before delivery — local-date arithme
   return t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
 }
 function listOverdue(l){const dl=listDeadline(l);return !!dl&&dl<todayLocal();}
-function woFinished(o){return !!o&&(/shipped|invoiced|delivered/i.test(o.step||'')||!!o.delDelivAt||!!o.delDone);}
+function woFinished(o){return !!o&&(/shipped|invoiced|delivered/i.test(o.step||'')||!!o.delDelivAt||!!o.delDone||isShipped(o));}
 function listFinished(l){ // every tagged job shipped/delivered (or none tagged but both sides signed off) — nothing left for the factory to do
   const ws=(l.wos||[]).map(w=>DB.orders.find(o=>o.wo===w));
   if(ws.length&&ws.every(o=>!o||woFinished(o)))return true;
@@ -2538,7 +2628,7 @@ function renderPM(app){
     const delivWk=mine.filter(o=>dStage(o)==='deliv').sort((a,b)=>String(b.delDelivAt||'').localeCompare(String(a.delDelivAt||'')));
     const past=Object.values(DB.delArchive||{}).flatMap(a=>a.jobs.filter(j=>(j.c||'')===c&&j.vAt).map(j=>({...j,_at:j.vAt})))
       .sort((a,b)=>String(b._at).localeCompare(String(a._at))).slice(0,15);
-    const coming=DB.orders.filter(o=>(o.customer||'')===c&&!o.delDay&&!o.delDone&&o.dueDate&&o.dueDate>=todayISO)
+    const coming=DB.orders.filter(o=>(o.customer||'')===c&&!o.delDay&&!o.delDone&&!isShipped(o)&&o.dueDate&&o.dueDate>=todayISO)
       .sort((a,b)=>a.dueDate.localeCompare(b.dueDate)).slice(0,12);
     if(!sched.length&&!delivWk.length&&!past.length&&!coming.length)return'';
     const fu=o=>[o.floor||o.f,o.unit||o.u].filter(Boolean).join(' · ');
@@ -3506,6 +3596,8 @@ function normaliseRow(row){
   else if(d){r.dueDate=d;r.has.dueDate=1;}
   return r;
 }
+// "+A" / "+A+C" badge for a WO with A/C lines folded into it (letters from o.adds)
+function addBadge(o){const ks=Object.keys((o&&o.adds)||{});if(!ks.length)return'';const ls=ks.map(k=>(acBase(k)||{}).letter||'?');return`<span class="fu-badge" style="background:#f6f2fd;border-color:#c9b6f0;color:#5b3fa8;margin-left:4px" title="Additions folded in: ${escA(ks.join(', '))}">+${escA(ls.join('+'))}</span>`;}
 // A/C suffix: one letter straight after the number, with or without a dash (2557_01A, WO-2604-7-C) → base WO key, or null
 function acBase(key){const m=String(key).match(/^(.*\d)-?([A-Z])$/);return m?{base:m[1],letter:m[2]}:null;}
 /* combineRows: same WO twice in the file → one record (filled cells win, earliest due date, flagged).
@@ -4114,10 +4206,10 @@ function renderExport(app){
     const weeks=get8Wks();
     const wb=XLSX.utils.book_new();
     const sorted=[...DB.orders].sort((a,b)=>{if(!a.plannedWeek&&b.plannedWeek)return 1;if(a.plannedWeek&&!b.plannedWeek)return-1;return(a.plannedWeek||'').localeCompare(b.plannedWeek||'');});
-    const rows=[['WO #','Title','Customer','Hours','Planned Week','Week Start','Due Date','Step','Sales Rep','Notes','Vehicle','Delivery Day','Delivered At','Delivered By'],
-      ...sorted.map(o=>[o.wo,o.title,o.customer,o.hours,wkLbl(o.plannedWeek)||'Unscheduled',o.plannedWeek||'',o.dueDate||'',(o.step||'').replace(/^\d+\.\s*/,''),o.salesRep||'',o.notes||'',o.delVeh?(vehLbl(o.delVeh)||o.delVeh):'',o.delDay||'',o.delDelivAt?new Date(o.delDelivAt).toLocaleString('en-IE'):'',o.delivBy||''])];
+    const rows=[['WO #','Title','Customer','Hours','Planned Week','Week Start','Due Date','Step','Sales Rep','Notes','Vehicle','Delivery Day','Delivered At','Delivered By','Shipped At','Sheets (Cienapps)'],
+      ...sorted.map(o=>[o.wo,o.title,o.customer,o.hours,wkLbl(o.plannedWeek)||'Unscheduled',o.plannedWeek||'',o.dueDate||'',(o.step||'').replace(/^\d+\.\s*/,''),o.salesRep||'',o.notes||'',o.delVeh?(vehLbl(o.delVeh)||o.delVeh):'',o.delDay||'',o.delDelivAt?new Date(o.delDelivAt).toLocaleString('en-IE'):'',o.delivBy||'',o.shippedAt?new Date(o.shippedAt).toLocaleString('en-IE'):'',o.sheetsCien!=null?o.sheetsCien:''])];
     const ws=XLSX.utils.aoa_to_sheet(rows);
-    ws['!cols']=[{wch:16},{wch:35},{wch:28},{wch:7},{wch:16},{wch:13},{wch:12},{wch:20},{wch:16},{wch:30},{wch:12},{wch:10},{wch:18},{wch:14}];
+    ws['!cols']=[{wch:16},{wch:35},{wch:28},{wch:7},{wch:16},{wch:13},{wch:12},{wch:20},{wch:16},{wch:30},{wch:12},{wch:10},{wch:18},{wch:14},{wch:18},{wch:10}];
     XLSX.utils.book_append_sheet(wb,ws,'Full Schedule');
     const srows=[['Week','Start Date','Orders','Hours','Capacity','% Used','Status'],...weeks.map(wk=>{const h=wkHrs(wk),cnt=wkCnt(wk),cap=wkCap(wk),pct=Math.round(h/cap*100);return[wkLbl(wk),wk,cnt,h,cap,pct+'%',pct>=100?'OVER':pct>=80?'NEAR OK':'OK'];})];
     const ws2=XLSX.utils.aoa_to_sheet(srows);ws2['!cols']=[{wch:16},{wch:13},{wch:8},{wch:8},{wch:10},{wch:8},{wch:12}];
@@ -4127,7 +4219,7 @@ function renderExport(app){
   });
 }
 
-['b','d','l','i','x','s'].forEach(t=>{document.getElementById('t-'+t).onclick=()=>showTab(t);});
+['b','d','h','l','i','x','s'].forEach(t=>{document.getElementById('t-'+t).onclick=()=>showTab(t);});
 
 /* =====================================================================================
    15 Oct 2026 additions (spec: "Planner Additions Spec & Rollout Risks")
@@ -4631,7 +4723,7 @@ function renderProd(app){
   const later=live.filter(o=>o.delDay!==td&&o.delDay!==tm&&DEL_DAYS.indexOf(o.delDay)>ix&&rdy(o).lvl!=='green');
   const perf=weekPerf(liveWeekJobs(),ix);
   const lim=new Date(Date.now()+7*86400000).toISOString().slice(0,10);
-  const unplaced=DB.orders.filter(o=>!o.delDay&&!o.delDone&&!o.delDelivAt&&o.dueDate&&o.dueDate<=lim&&!/assembly complete|pallet/i.test(o.step||'')).sort((a,b)=>a.dueDate.localeCompare(b.dueDate));
+  const unplaced=DB.orders.filter(o=>!o.delDay&&!o.delDone&&!o.delDelivAt&&!isShipped(o)&&o.dueDate&&o.dueDate<=lim&&!/assembly complete|pallet/i.test(o.step||'')).sort((a,b)=>a.dueDate.localeCompare(b.dueDate));
   const holds=allHolds(['saw','fit'],'hold');
   const missNo=missedJobs().filter(o=>!o.missWhy);
   const moved=all.filter(o=>(o.delMoves||[]).length);
