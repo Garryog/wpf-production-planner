@@ -110,7 +110,7 @@ const title = n => Array.from({ length: n }, (_, i) => i === 0 ? ['Western Postf
   {
     const orders = Array.from({ length: 2000 }, (_, i) => H.order({ wo: 'WO-' + (5000 + i) + '-1', value: 3000 + i, hours: 5, hoursEstimated: true, hoursSrc: 'est', step: '3. In production', dueDate: '2026-11-0' + (1 + i % 9) }));
     t = await H.open({ browser, now: NOW, row: { id: 'main', nid: 3, orders, settings: {} } });
-    const rows = [HDR, ...Array.from({ length: 2500 }, (_, i) => ['WO-' + (5000 + i) + '-1', 'Job ' + i, 'Cust ' + (i % 40), 46331 + (i % 30), i % 7 === 0 ? '8. Job shipped' : '3. In production', 3000 + i, ''])];
+    const rows = [HDR, ...Array.from({ length: 2500 }, (_, i) => ['WO-' + (5000 + i) + '-1', 'Job ' + i, 'Cust ' + (i % 40), 46331 + (i % 30), i % 7 === 0 ? '9. JOB SHIPPED' : '3. In production', 3000 + i, ''])];
     const t0 = Date.now();
     r = await H.importAoa(t.page, rows);
     await t.page.waitForFunction(() => !!IMPPLAN, null, { timeout: 30000 }).catch(() => {});

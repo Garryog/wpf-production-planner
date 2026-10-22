@@ -17,14 +17,14 @@ const res = []; const rec = (n, ok, d) => { res.push(ok); console.log((ok ? 'PAS
   // A builds the preview from the file: value change (re-estimates WO-1 hours), Cienapps step ahead on WO-2, new due date on WO-3, new job WO-9
   await A.page.evaluate(() => { showTab('i'); IMPPLAN = analyzeImport(prepImport([
     { wo: 'WO-1', value: 9000, step: '3. In production', dueDate: '2026-11-02' },
-    { wo: 'WO-2', value: 4000, step: '4. Assembly', dueDate: '2026-11-02' },
+    { wo: 'WO-2', value: 4000, step: '4. READY FOR PRODUCTION', dueDate: '2026-11-02' },
     { wo: 'WO-3', value: 4000, step: '3. In production', dueDate: '2026-11-20' },
     { wo: 'WO-9', value: 4000, step: '3. In production', dueDate: '2026-11-02', title: 'From Cienapps' },
   ]), 'file'); renderImportPreview(IMPPLAN); });
   // Meanwhile on PC B: hand-set WO-1 to 20h, moves WO-2 on to Production complete, hand-sets WO-3 due date, adds WO-9 by hand
   await B.page.evaluate(async () => {
     const o1 = DB.orders.find(o => o.wo === 'WO-1'); o1.hours = 20; o1.hoursEstimated = false; o1.hoursSrc = 'hand';
-    DB.orders.find(o => o.wo === 'WO-2').step = '6. Production complete';
+    DB.orders.find(o => o.wo === 'WO-2').step = '6. JOB CUT COMPLETE';
     DB.orders.find(o => o.wo === 'WO-4').notes = 'B note';
     await saveDB();
   });
@@ -37,7 +37,7 @@ const res = []; const rec = (n, ok, d) => { res.push(ok); console.log((ok ? 'PAS
   rec('server moved on (B saved first)', v1 > 1 && S.row.version > v1, 'v ' + v1 + ' → ' + S.row.version);
   rec('B\'s hand-set 20h on WO-1 survives A\'s import (planner hours win)', g('WO-1').hours === 20 && g('WO-1').hoursSrc === 'hand', JSON.stringify({ h: g('WO-1').hours, src: g('WO-1').hoursSrc, est: g('WO-1').hoursEstimated, value: g('WO-1').value }));
   rec('WO-1 value from Cienapps (9000) still applied', g('WO-1').value === 9000, String(g('WO-1').value));
-  rec('B\'s step "6. Production complete" on WO-2 is not moved BACKWARDS to "4. Assembly" by the import', g('WO-2').step === '6. Production complete', 'step=' + g('WO-2').step);
+  rec('B\'s step "6. JOB CUT COMPLETE" on WO-2 is not moved BACKWARDS to "4. READY FOR PRODUCTION" by the import', g('WO-2').step === '6. JOB CUT COMPLETE', 'step=' + g('WO-2').step);
   rec('B\'s note on WO-4 kept', g('WO-4').notes === 'B note');
   rec('new WO-9 added once', S.row.orders.filter(o => o.wo === 'WO-9').length === 1);
   const chA = await A.page.evaluate(() => changes().map(o => o.wo + ':' + origStep[o.wo] + '>' + o.step).join()), chB = await B.page.evaluate(() => changes().map(o => o.wo + ':' + origStep[o.wo] + '>' + o.step).join());
@@ -47,10 +47,10 @@ const res = []; const rec = (n, ok, d) => { res.push(ok); console.log((ok ? 'PAS
 
   // Bring back on PC B while PC A's import (same Cienapps "shipped") is being previewed
   {
-    const r = { id: 'main', version: 1, nid: 3, settings: {}, orders: [H.order({ wo: 'WO-5', plannedWeek: '2026-10-26', shippedAt: '2026-10-10T10:00:00Z', cienStep: '8. Job shipped', step: '8. Job shipped' })] };
+    const r = { id: 'main', version: 1, nid: 3, settings: {}, orders: [H.order({ wo: 'WO-5', plannedWeek: '2026-10-26', shippedAt: '2026-10-10T10:00:00Z', cienStep: '9. JOB SHIPPED', step: '9. JOB SHIPPED' })] };
     const S2 = makeServer(r);
     const A2 = await device(browser, S2, { name: 'A' }), B2 = await device(browser, S2, { name: 'B' });
-    await A2.page.evaluate(() => { showTab('i'); IMPPLAN = analyzeImport(prepImport([{ wo: 'WO-5', step: '8. Job shipped', value: 4000, dueDate: '2026-11-02' }]), 'file'); renderImportPreview(IMPPLAN); });
+    await A2.page.evaluate(() => { showTab('i'); IMPPLAN = analyzeImport(prepImport([{ wo: 'WO-5', step: '9. JOB SHIPPED', value: 4000, dueDate: '2026-11-02' }]), 'file'); renderImportPreview(IMPPLAN); });
     await B2.page.evaluate(async () => { showTab('h'); document.querySelector('[data-shb="WO-5"]').click(); await saveDB(); });
     await A2.page.evaluate(async () => { await document.getElementById('imp-apply').onclick(); await saveDB(); });
     const o = S2.row.orders[0];

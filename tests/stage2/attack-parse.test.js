@@ -14,6 +14,8 @@ const NOW = '2026-10-19T10:00:00Z';
     H.order({ wo: 'WO-9-4', step: '3. In production' }),
     H.order({ wo: 'WO-9-5', step: '3. In production' }),
     H.order({ wo: 'WO-9-6', step: '3. In production' }),
+    H.order({ wo: 'WO-9-7', step: '3. In production' }),
+    H.order({ wo: 'WO-9-8', step: '3. In production' }),
   ] } });
   const P = (rows) => t.page.evaluate(rows => { const p = analyzeImport(prepImport(rows), 'file'); return p && JSON.parse(JSON.stringify(p)); }, rows);
   const ev = (fn, arg) => t.page.evaluate(fn, arg);
@@ -79,14 +81,14 @@ const NOW = '2026-10-19T10:00:00Z';
   p = await P([{ wo: '3100_01A', value: 300, dueDate: '2026-11-02' }]);
   rec('A/C: base absent → own job, flagged base not found', p.newOrders.length === 1 && p.flagged.some(f => /not found/.test(f.why)), JSON.stringify(p.flagged));
   // A line shipped while base in production
-  p = await P([{ wo: 'WO-2604-1C', value: 300, dueDate: '2026-11-02', step: '8. Job shipped' }]);
+  p = await P([{ wo: 'WO-2604-1C', value: 300, dueDate: '2026-11-02', step: '9. JOB SHIPPED' }]);
   rec('A/C: the addition line\'s own step (shipped) is at least shown/flagged, not silently dropped', p.flagged.some(f => /ship/i.test(f.why)) || p.folds.some(f => /ship/i.test(f.step)), JSON.stringify(p.folds));
   // false-positive: real WO with a letter that is NOT an addition, e.g. WO-BI / revision letters on board as own jobs
   p = await P([{ wo: 'WO-2604-1R', value: 50, dueDate: '2026-11-02', title: 'Remake' }]);
   console.log('INFO  A/C: "WO-2604-1R" (any trailing letter) folds=' + JSON.stringify(p.folds));
 
   // ---- duplicate WO 3x with different due dates
-  p = await P([{ wo: 'WO-7100-1', value: 100, dueDate: '20/11/2026', step: '3. In production' }, { wo: 'WO-7100-1', value: 200, dueDate: '06/11/2026', step: '8. Job shipped' }, { wo: 'wo-7100-1 ', value: 300, dueDate: 46340 }]);
+  p = await P([{ wo: 'WO-7100-1', value: 100, dueDate: '20/11/2026', step: '3. In production' }, { wo: 'WO-7100-1', value: 200, dueDate: '06/11/2026', step: '9. JOB SHIPPED' }, { wo: 'wo-7100-1 ', value: 300, dueDate: 46340 }]);
   rec('duplicate 3x: one job, earliest due (6 Nov), flagged', p.newOrders.length === 1 && p.newOrders[0].dueDate === '2026-11-06' && p.flagged.some(f => /duplicate/.test(f.why)), JSON.stringify(p.newOrders.map(o => [o.wo, o.dueDate, o.value, o.step])));
   rec('duplicate 3x: value is not silently the FIRST line only when lines differ (100 vs 200 vs 300) — at least flagged', p.flagged.some(f => /value/i.test(f.why)), 'value used=' + (p.newOrders[0] || {}).value + ' flags=' + JSON.stringify(p.flagged.map(f => f.why)));
   rec('duplicate 3x: one line says shipped, another in production — conflict is flagged', p.flagged.some(f => /step|ship/i.test(f.why)), 'step used=' + (p.newOrders[0] || {}).step);
@@ -98,10 +100,15 @@ const NOW = '2026-10-19T10:00:00Z';
     { wo: 'WO-9-3', step: 'Deposit invoiced', dueDate: '2026-11-02' },
     { wo: 'WO-9-4', step: 'Not shipped', dueDate: '2026-11-02' },
     { wo: 'WO-9-5', step: 'SHIPPED ', dueDate: '2026-11-02' },
+    { wo: 'WO-9-7', step: ' 9.job shipped  ', dueDate: '2026-11-02' },
+    { wo: 'WO-9-8', step: '8. Job shipped', dueDate: '2026-11-02' },
     { wo: 'WO-9-6', step: 'Awaiting material', dueDate: '2026-11-02' },
   ]);
   const shp = p.shipped.map(s => s.wo);
-  rec('steps: "SHIPPED " (caps, trailing space) → Shipped', shp.includes('WO-9-5'), shp.join());
+  // Garry's Cienapps ladder (ROADMAP, 22 Oct): shipped = steps 9/10/11 by number only; unnumbered wording is flagged, never off the board
+  rec('steps (ladder): " 9.job shipped  " (case, spaces, no space after dot) → Shipped', shp.includes('WO-9-7'), shp.join());
+  rec('steps (ladder): unnumbered "SHIPPED " stays on the board and is flagged', !shp.includes('WO-9-5') && p.flagged.some(f => f.wo === 'WO-9-5'), shp.join());
+  rec('steps (ladder): "8. Job shipped" is step 8 PALLETED — not shipped, flagged', !shp.includes('WO-9-8') && p.flagged.some(f => f.wo === 'WO-9-8'), shp.join());
   rec('steps: "Ready to be shipped" must NOT take a job in the factory off the board', !shp.includes('WO-9-1'), shp.join());
   rec('steps: "Part shipped" must NOT take the job off the board', !shp.includes('WO-9-2'), shp.join());
   rec('steps: "Deposit invoiced" must NOT take the job off the board', !shp.includes('WO-9-3'), shp.join());
