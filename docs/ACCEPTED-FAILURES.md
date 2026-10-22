@@ -1,5 +1,5 @@
 # Accepted test failures (Garry to confirm each)
-Updated 22 Oct 2026 after the Stage 2 round-2 fixes (branch `feature/stage2-imports`). Full suite incl. Stage 1 t1 ×5: 698 pass, 11 fail — every failure is listed here.
+Updated 22 Oct 2026 after the Stage 2 round-3 fixes (branch `feature/stage2-imports`). Full suite (every test file once) 692 pass / 4 fail, plus Stage 1 t1 ×10 all clean (140/140) — every failure is listed here.
 
 | Test | Why it fails | Fixed in | Accepted? |
 |---|---|---|---|
@@ -10,3 +10,9 @@ Updated 22 Oct 2026 after the Stage 2 round-2 fixes (branch `feature/stage2-impo
 | baseline weeks.test.js "Monday 00:30 (summer time) is in the new week" | "this week" is worked out in UTC, so 00:00–01:00 on an Irish summer Monday still counts as last week. Not in the Stage 2 plan | weeks fix TBD | pending |
 
 Fixed by Stage 2 and removed from this list: import.test.js (17 of 19), datasafety 3/5/6 (all 11 now pass), weeks 2 and 8 (and the year-end autoSchedule check), stage1 t5 "shipped job returns if edited elsewhere" (rewritten as acceptance check 27 — imports never remove a job, so it can't happen; stage1 t8 rewritten the same way).
+
+
+## Intermittent soak findings (round 3, 22 Oct)
+- **Lost notes (1 in 48 t1 runs) — cause found and fixed (R3 fix 2).** Reproduced again in t1 ×20 (seed 120: saw's last note and two ticks lost, removed by the office writing v74). Cause: after a successful save the screen took the version number from the save reply. The fake server builds that reply after its delay, so if another screen saved in between, the reply carried the *later* number; the screen then believed it already had that later save, and its next save overwrote it without merging. Real Supabase returns the number it wrote, so this was very unlikely live, but the app now always records VER+1 (the number it asked for). Deterministic check: tests/stage2/coder-r3.test.js #2 (fails on the old code). Also checked and ruled out for `notes`: the 3-way field merge (one owner per job in the soak, so only a stale replay could revert it), pending-copy replay on reopen (entries are per job and merged field by field against the latest copy, database wins on a clash), the unconfirmed-save (UNSURE) base swap, and stale refresh replies (dropped by the version check). After the fix: t1-trace ×30 had no lost notes; t1 ×10 clean.
+- **Zombie untick (unconfirmed, 2 in ~50 soak runs: t1-trace seed 1 "stores-29", a probe run "stores-23").** A tick written by a save whose reply was lost, then unticked on the same phone; the untick never reached the database. Not notes-related and not caused by the version fix (seen without it). Tester to chase with a trace of the stores device (tab reopen + pending replay is the first suspect).
+- **stage1 t4 "2,500 jobs … under 10 s" occasionally fails (3 in 15 in a loop) — test timing, not lost data.** PC B's startup save is still in flight when the test calls saveDB(), which then only queues B's edit and returns; B's note lands a moment later (confirmed by waiting). Tester to wait for `!SAVING` before checking.
