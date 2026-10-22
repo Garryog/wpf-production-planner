@@ -589,7 +589,7 @@ function writePend(){
     const has=new Set(d.map(e=>JSON.stringify(e.p)));
     us.forEach(ud=>ud.forEach(e=>{const k=JSON.stringify(e.p),pre=JSON.stringify(e.p.slice(0,2));if(has.has(k)||has.has(pre))return;has.add(k);d.push({p:e.p,b:e.b,m:valAt(mine,e.p)});}));
     let tabs={};try{tabs=pendAll();}catch(e){}
-    if(d.length)tabs[TAB_ID]={at:Date.now(),d,us};else delete tabs[TAB_ID];
+    if(d.length)tabs[TAB_ID]={at:Date.now(),d,us,uv:UNSURE.map(x=>USV.get(x)||0)};else delete tabs[TAB_ID];
     pendPut(tabs);
     DB.pendFail=false;
   }catch(e){DB.pendFail=true;console.warn('Planner: could NOT keep unsaved changes on this device',e&&e.message);}
@@ -838,9 +838,12 @@ async function loadDB(){
     // Every tab's slot on this device is merged in (oldest first); this tab then holds them all in its own slot.
     const pend=!DB.loaded&&row?readPend():[];
     if(pend.length){
-      let cur=noWB(BASE);const ren={};
+      let cur=noWB(BASE);const ren={},ku=[];
       pend.forEach(s=>{const b=pbuild(cur,s.d,'b'),us=(Array.isArray(s.us)?s.us:[]).map(ud=>pbuild(b,ud,'m'));
+        us.forEach((x,i)=>ku.push([x,Array.isArray(s.uv)?+s.uv[i]||0:0]));
         const m=mergePlan(b,pbuild(cur,s.d,'m'),cur,{theirsWins:true,unsure:us});cur=m.plan;Object.assign(ren,m.ren);});
+      // a save sent just before the tab closed may land after this load — this screen still counts it as its own
+      if(row.version!==undefined)ku.forEach(([x,v])=>{if(v>(+row.version||1)){UNSURE.push(x);USV.set(x,v);}});
       if(Object.keys(ren).length)setTimeout(()=>noteMerge([],ren),0);
       cur.settings.listWBs=BASE.settings.listWBs;
       applyPlan(cur);
