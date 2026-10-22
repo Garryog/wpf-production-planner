@@ -660,7 +660,9 @@ function m3(b,m,t,path,N,o,u){
       const bb=isObj(b)?b:{},r={};
       const hu=path[0]==='orders'&&path.length===2?mHours(bb,m,t,path,N,o,u):null;
       if(hu)HRS_K.forEach(k=>{if(hu[k]!==undefined)r[k]=hu[k];});
-      [...new Set([...Object.keys(m),...Object.keys(t)])].forEach(k=>{if(hu&&HRS_K.includes(k))return;const v=m3(bb[k],m[k],t[k],path.concat(k),N,o,u.map(x=>isObj(x)?x[k]:NOU));if(v!==undefined)r[k]=v;});
+      const dl=path[0]==='orders'&&path.length===2?mDel(bb,m,t,path,N,o,u):null;
+      if(dl)DEL_K.forEach(k=>{if(dl[k]!==undefined)r[k]=dl[k];});
+      [...new Set([...Object.keys(m),...Object.keys(t)])].forEach(k=>{if(hu&&HRS_K.includes(k))return;if(dl&&DEL_K.includes(k))return;const v=m3(bb[k],m[k],t[k],path.concat(k),N,o,u.map(x=>isObj(x)?x[k]:NOU));if(v!==undefined)r[k]=v;});
       return r;
     }
   }
@@ -688,6 +690,26 @@ function mHours(b,m,t,path,N,o,u){
   const hm=hand(M),ht=hand(T);
   const win=hm!==ht?(hm?M:T):(o.theirsWins?T:M);
   N.push({path:path.concat('hours'),kept:win.hours,lost:(win===M?T:M).hours});
+  return win;
+}
+/* A job's delivery fields are one unit too — never mixed field by field (that could leave a job LOADED on a van but
+   untagged with no van/day, so it vanishes from Deliveries and the driver's run). Changed on one side only → that side.
+   Changed on both: a side that has it loaded / on the road / delivered beats a side that untagged it (e.g. going on
+   hold while the driver loads it) — logged on the job. Any other two-sided change (e.g. office moves the day while
+   the driver loads it) merges field by field as before, so neither the move nor the load is lost. */
+const DEL_K=['delv','delVeh','delDay','delLoadedAt','delDispAt','delDelivAt','ldBy','delivBy','delDone','holdDel'];
+function mDel(b,m,t,path,N,o,u){
+  const pick=x=>{const r={};DEL_K.forEach(k=>{if(x&&x[k]!==undefined)r[k]=x[k];});return r;};
+  const ts=x=>!!(x.delLoadedAt||x.delDispAt||x.delDelivAt);
+  const untag=x=>!ts(x)&&!x.delv&&!x.delVeh&&!x.delDay;
+  const desc=x=>(x.delDelivAt||x.delDone)?'delivered':x.delDispAt?'on the road':x.delLoadedAt?'loaded':(x.delv||x.delVeh||x.delDay)?'tagged '+([x.delVeh,x.delDay].filter(Boolean).join(' ')||'no van/day'):'untagged';
+  let B=pick(b);const M=pick(m),T=pick(t);
+  for(const x of u)if(x!==NOU&&x&&typeof x==='object'&&same(T,pick(x))){B=pick(x);break;}
+  if(same(M,T)||same(T,B))return M;
+  if(same(M,B))return T;
+  const win=ts(M)&&untag(T)?M:ts(T)&&untag(M)?T:null;
+  if(!win)return null;
+  N.push({path:path.concat('delivery'),kept:desc(win),lost:desc(win===M?T:M)});
   return win;
 }
 function mergePlan(base,mine,theirs,o){
@@ -2912,7 +2934,7 @@ function dchip(o,showCust){
     </div>
     <div class="dchip-t">${escA(o.title)||'—'}</div>
     ${st?`<div class="dstg s-${st}">${dStageLbl[st]}${dStageTime(o)?' '+dStageTime(o):''}${st==='deliv'&&o.delivBy?' — '+escA(o.delivBy):st==='load'&&o.ldBy?' — '+escA(o.ldBy):''}</div>`:''}
-    ${rd?`<div class="rdy-tag">${RDY_LBL[rd.lvl]}</div>`:''}${(o.delMoves||[]).length?`<div class="dmoved" title="${escA(o.delMoves.map(m=>m.why+' — '+m.by).join(' | '))}">🔁 moved${o.delMoves.length>1?' ×'+o.delMoves.length:''}</div>`:''}
+    ${isOnHold(o)?`<div class="rdy-tag" style="background:#fde8e8;color:#b42318" title="Step 12 in Cienapps — kept here because it's already loaded / on the road">⏸ ON HOLD in Cienapps</div>`:''}${rd?`<div class="rdy-tag">${RDY_LBL[rd.lvl]}</div>`:''}${(o.delMoves||[]).length?`<div class="dmoved" title="${escA(o.delMoves.map(m=>m.why+' — '+m.by).join(' | '))}">🔁 moved${o.delMoves.length>1?' ×'+o.delMoves.length:''}</div>`:''}
     ${showCust?`<div class="dchip-c">${escA(o.customer)}</div>`:''}
   </div>`;
 }
@@ -4365,7 +4387,8 @@ function planDiff(a,b,moves){
   return{added,dropped,applied,changed};
 }
 // Going on hold: off the Deliveries board — tag, van and day cleared, what it was is noted on the job (and its history).
-// Coming back restores none of it. A job already loaded / on the road / delivered is left alone.
+// Coming back restores none of it. A job already loaded / on the road / delivered is left alone (it stays on
+// Deliveries with an ON HOLD marker on its chip).
 function holdUntag(ex){
   if(!ex.delv&&!ex.delVeh&&!ex.delDay)return;
   if(!delHidden(ex))return;
