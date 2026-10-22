@@ -1815,7 +1815,13 @@ function listDueKey2(arr){let b='';arr.forEach(l=>{const k=listDueKey(l);if(k&&(
 function listCust(l){for(const w of (l.wos||[])){const o=DB.orders.find(x=>x.wo===w);if(o&&o.customer)return o.customer;}return'';}
 // The factory rule: cutting and fittings must be finished THE DAY BEFORE delivery.
 function todayLocal(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
-function listDeadline(l){const d=listDueKey(l);if(!d)return'';const t=new Date(d);t.setDate(t.getDate()-1);return t.toISOString().slice(0,10);}
+function listDeadline(l){ // calendar day before delivery — local-date arithmetic (UTC ms slipped a day when the clocks change)
+  const d=listDueKey(l);if(!d)return'';
+  const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(String(d));
+  const t=m?new Date(+m[1],+m[2]-1,+m[3],12):new Date(d);if(isNaN(t))return'';
+  t.setDate(t.getDate()-1);
+  return t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
+}
 function listOverdue(l){const dl=listDeadline(l);return !!dl&&dl<todayLocal();}
 function woFinished(o){return !!o&&(/shipped|invoiced|delivered/i.test(o.step||'')||!!o.delDelivAt||!!o.delDone);}
 function listFinished(l){ // every tagged job shipped/delivered (or none tagged but both sides signed off) — nothing left for the factory to do
