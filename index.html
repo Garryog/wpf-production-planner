@@ -655,7 +655,9 @@ function m3(b,m,t,path,N,o,u){
     if(Array.isArray(m)&&Array.isArray(t))return mArr(Array.isArray(b)?b:[],m,t,path,N,o,u);
     if(isObj(m)&&isObj(t)){
       const bb=isObj(b)?b:{},r={};
-      [...new Set([...Object.keys(m),...Object.keys(t)])].forEach(k=>{const v=m3(bb[k],m[k],t[k],path.concat(k),N,o,u.map(x=>isObj(x)?x[k]:NOU));if(v!==undefined)r[k]=v;});
+      const hu=path[0]==='orders'&&path.length===2?mHours(bb,m,t,path,N,o,u):null;
+      if(hu)HRS_K.forEach(k=>{if(hu[k]!==undefined)r[k]=hu[k];});
+      [...new Set([...Object.keys(m),...Object.keys(t)])].forEach(k=>{if(hu&&HRS_K.includes(k))return;const v=m3(bb[k],m[k],t[k],path.concat(k),N,o,u.map(x=>isObj(x)?x[k]:NOU));if(v!==undefined)r[k]=v;});
       return r;
     }
   }
@@ -667,6 +669,22 @@ function m3(b,m,t,path,N,o,u){
   if((m===true&&!t)||(t===true&&!m))return true; // done wins, silently
   const win=o.theirsWins?t:m;
   N.push({path,kept:win,lost:win===m?t:m});
+  return win;
+}
+/* A job's hours, hoursSrc and hoursEstimated are one unit — never mixed field by field (that could pair a planner's
+   'hand' label with the import's estimate). Changed on one side only → that side. Changed on both: hand-set beats an
+   estimate / Cienapps figure; both hand-set (or both not) → the usual rule (the save going in now wins), logged. */
+const HRS_K=['hours','hoursSrc','hoursEstimated'];
+function mHours(b,m,t,path,N,o,u){
+  const pick=x=>{const r={};HRS_K.forEach(k=>{if(x&&x[k]!==undefined)r[k]=x[k];});return r;};
+  const hand=x=>(x.hoursSrc||(x.hoursEstimated?'est':'hand'))==='hand'&&x.hours!==undefined;
+  let B=pick(b);const M=pick(m),T=pick(t);
+  for(const x of u)if(x!==NOU&&x&&typeof x==='object'&&same(T,pick(x))){B=pick(x);break;}
+  if(same(M,T)||same(T,B))return M;
+  if(same(M,B))return T;
+  const hm=hand(M),ht=hand(T);
+  const win=hm!==ht?(hm?M:T):(o.theirsWins?T:M);
+  N.push({path:path.concat('hours'),kept:win.hours,lost:(win===M?T:M).hours});
   return win;
 }
 function mergePlan(base,mine,theirs,o){
