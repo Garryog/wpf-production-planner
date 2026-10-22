@@ -21,7 +21,7 @@ const res = []; const rec = (n, ok, d) => { res.push(ok); console.log((ok ? 'PAS
       { wo: 'WO-1-3', value: 5000, step: '4. Assembly', dueDate: '2026-11-02' },
       { wo: 'WO-S-55', value: 1, step: 'Job shipped', dueDate: '2026-11-02' },
       { wo: 'WO-S-56', value: 1, step: '3. In production', dueDate: '2026-11-02' },
-      { wo: 'WO-1-4', value: 4000, step: '7. Job shipped', dueDate: '2026-11-02' },
+      { wo: 'WO-1-4', value: 4000, step: '9. JOB SHIPPED', dueDate: '2026-11-02' },
       { wo: 'WO-1-5', value: 4000, step: '3. In production', dueDate: '2026-11-02' },
       { wo: 'WO-1-6A', value: 2000, title: 'extra doors', dueDate: '2026-11-05' },
       { wo: 'WO-1-6', value: 3000, dueDate: '2026-11-05' },

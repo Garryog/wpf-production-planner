@@ -45,7 +45,7 @@ const NOW = '2026-10-19T10:00:00Z';
   {
     const orders = [H.order({ wo: 'WO-5-1', title: 'Kitchen 12', plannedWeek: '2026-10-19', hours: 30, delv: true, delVeh: 'IVECO', delDay: 'Tue' }), H.order({ wo: 'WO-5-2', title: 'Kitchen 14', plannedWeek: '2026-10-19', hours: 10 })];
     t = await H.open({ browser, now: NOW, row: { id: 'main', orders, nid: 3, settings: {} } });
-    const file = [HDR, ['WO-5-1', 'Kitchen 12', 'Cust', 46331, '8. Job shipped', 4000], ['WO-5-2', 'Kitchen 14', 'Cust', 46331, '3. In production', 4000]];
+    const file = [HDR, ['WO-5-1', 'Kitchen 12', 'Cust', 46331, '9. JOB SHIPPED', 4000], ['WO-5-2', 'Kitchen 14', 'Cust', 46331, '3. In production', 4000]];
     let r = await H.importAoa(t.page, file);
     const a = await t.page.evaluate(() => { applyImport(IMPPLAN); showTab('b'); const board = [...document.querySelectorAll('tr[data-wo]')].map(x => x.dataset.wo); showTab('d'); const del = document.getElementById('app').innerText.includes('WO-5-1'); showTab('h'); const sh = document.getElementById('app').innerText; return { board, hrs: wkHrs('2026-10-19'), cnt: wkCnt('2026-10-19'), del, sh: sh.includes('WO-5-1') && !sh.includes('WO-5-2'), n: DB.orders.length }; });
     rec('AC21 shipped job leaves the board and week totals, appears on Shipped, stays on Deliveries', a.board.join() === 'WO-5-2' && a.hrs === 10 && a.cnt === 1 && a.sh && a.del && a.n === 2 && /Moving to the Shipped tab/.test(r.iprev), JSON.stringify(a));
@@ -78,7 +78,7 @@ const NOW = '2026-10-19T10:00:00Z';
 
   // AC22 WO-S on the board survives the import, untouched
   t = await H.open({ browser, now: NOW, row: { id: 'main', nid: 2, settings: {}, orders: [H.order({ wo: 'WO-S-12', title: 'Snag doors', value: 100, step: '3. In production' })] } });
-  await H.importAoa(t.page, [HDR, ['WO-S-12', 'Other title', 'C', 46331, '8. Job shipped', 999], ['WO-1-1', 'x', 'y', 46331, '3. In production', 1000]]);
+  await H.importAoa(t.page, [HDR, ['WO-S-12', 'Other title', 'C', 46331, '9. JOB SHIPPED', 999], ['WO-1-1', 'x', 'y', 46331, '3. In production', 1000]]);
   const s22 = await t.page.evaluate(() => { const before = JSON.stringify(DB.orders.find(o => o.wo === 'WO-S-12')); applyImport(IMPPLAN); const o = DB.orders.find(x => x.wo === 'WO-S-12'); return { same: JSON.stringify(o) === before, n: DB.orders.length }; });
   rec('AC22 a WO-S on the board survives the import unchanged', s22.same && s22.n === 2, JSON.stringify(s22));
   await t.close();
@@ -108,12 +108,12 @@ const NOW = '2026-10-19T10:00:00Z';
   {
     const base = { id: 'main', version: 1, orders: [H.order({ wo: 'WO-1', plannedWeek: '2026-10-26' }), H.order({ wo: 'WO-2', plannedWeek: '2026-10-26' }), H.order({ wo: 'WO-3', plannedWeek: '2026-10-26' })], nid: 5, settings: { exportBase: { wk: { 'WO-1': '2026-10-26', 'WO-2': '2026-10-26', 'WO-3': '2026-10-26' }, st: { 'WO-1': '3. In production', 'WO-2': '3. In production', 'WO-3': '3. In production' } } } };
     const S = makeServer(base); const A = await device(browser, S, { name: 'A' }), B = await device(browser, S, { name: 'B' });
-    await A.page.evaluate(() => { showTab('i'); IMPPLAN = analyzeImport(prepImport([{ wo: 'WO-3', step: '8. Job shipped', value: 4000, dueDate: '2026-11-02' }]), 'file'); });
+    await A.page.evaluate(() => { showTab('i'); IMPPLAN = analyzeImport(prepImport([{ wo: 'WO-3', step: '9. JOB SHIPPED', value: 4000, dueDate: '2026-11-02' }]), 'file'); });
     await B.page.evaluate(async () => { DB.orders[2].plannedWeek = '2026-11-16'; await saveDB(); }); // B moves it while A's preview is open
     await A.page.evaluate(async () => { applyImport(IMPPLAN); IMPPLAN = null; await saveDB(); });
     await A.page.evaluate(() => loadDB()); await B.page.evaluate(() => loadDB());
     const o = S.row.orders.filter(x => x.wo === 'WO-3');
-    rec('AC27 shipped job is never removed: one copy, shipped, and B\'s move is kept', o.length === 1 && !!o[0].shippedAt && o[0].plannedWeek === '2026-11-16' && o[0].step === '8. Job shipped', JSON.stringify(o.map(x => [x.plannedWeek, x.step, !!x.shippedAt])));
+    rec('AC27 shipped job is never removed: one copy, shipped, and B\'s move is kept', o.length === 1 && !!o[0].shippedAt && o[0].plannedWeek === '2026-11-16' && o[0].step === '9. JOB SHIPPED', JSON.stringify(o.map(x => [x.plannedWeek, x.step, !!x.shippedAt])));
     const ca = await A.page.evaluate(() => changes().map(o => o.wo).join()), cb = await B.page.evaluate(() => changes().map(o => o.wo).join());
     rec('AC27 the step change is not exported; B\'s week move is (on both PCs)', ca === 'WO-3' && cb === 'WO-3', 'A=' + ca + ' B=' + cb);
     rec('AC27 old-style plan.removals is ignored — no import can delete a job', await A.page.evaluate(() => { applyImport({ removals: [{ wo: 'WO-1', reason: 'shipped' }], updates: [], newOrders: [], counts: {} }); return DB.orders.some(o => o.wo === 'WO-1'); }));

@@ -1017,7 +1017,11 @@ function wkCap(k){return DB.weekCaps&&DB.weekCaps[k]?DB.weekCaps[k]:WCAP;}
 /* Shipped (Cienapps shipped/invoiced): off the Capacity Board and out of every week total, but kept — the Shipped tab
    holds it until installation is complete, and Deliveries keeps it until the driver confirms. */
 function isShipped(o){return !!(o&&o.shippedAt);}
-function planOrders(){return DB.orders.filter(o=>!isShipped(o));}
+/* 12 ON HOLD / DELETE in Cienapps (o.cienHold): out of sight — off the board, week totals, capacity, PM lists,
+   part-load and "lists needed"; listed in the On hold section of the Shipped tab. Never deleted: the next import
+   with any other step brings it back to the board (flagged "back from on hold"). */
+function isOnHold(o){return !!(o&&o.cienHold);}
+function planOrders(){return DB.orders.filter(o=>!isShipped(o)&&!isOnHold(o));}
 // Waiting (N/A) lines per WO, from the cutting/fittings lists it is tagged on. Follow-ons and snags join this in later stages.
 function attnMap(){
   const m=new Map();
@@ -1028,7 +1032,7 @@ function attnMap(){
   return m;
 }
 function needsAttention(o,m){return ((m||attnMap()).get(o.wo)||0)>0;}
-function boardOrders(){const m=attnMap();return DB.orders.filter(o=>!isShipped(o)||needsAttention(o,m));}
+function boardOrders(){const m=attnMap();return DB.orders.filter(o=>!isOnHold(o)&&(!isShipped(o)||needsAttention(o,m)));}
 function wkHrs(k){return planOrders().filter(o=>o.plannedWeek===k).reduce((a,o)=>a+(+o.hours||0),0);}
 function wkVal(k){return planOrders().filter(o=>o.plannedWeek===k).reduce((a,o)=>a+(o.value||0),0);}
 function wkCnt(k){return planOrders().filter(o=>o.plannedWeek===k).length;}
@@ -1783,7 +1787,7 @@ function renderBoard(app){
 
 /* ---------- 📦 Shipped tab: jobs Cienapps calls shipped/invoiced. Off the Capacity Board, kept here until the
    planner marks installation complete. Searchable; a job can be brought back to the board. Works on a phone (Chrome). ---------- */
-let shSrch='',shDel='',shDone=false;
+let shSrch='',shDel='',shDone=false,shHoldQ='';
 function renderShipped(app){
   const am=attnMap();
   const all=DB.orders.filter(isShipped);
@@ -1794,6 +1798,8 @@ function renderShipped(app){
   const shown=os.slice(0,300);
   const dt=s=>s?new Date(s).toLocaleDateString('en-IE',{day:'numeric',month:'short'}):'—';
   const nDone=all.filter(o=>o.completeAt).length;
+  const held=DB.orders.filter(o=>isOnHold(o)&&!isShipped(o));
+  const hs=shHoldQ?held.filter(o=>[o.wo,o.title,o.customer,o.floor,o.unit].some(v=>String(v||'').toLowerCase().includes(shHoldQ.toLowerCase()))):held;
   const card=o=>{
     const deliv=dStage(o)==='deliv',w=am.get(o.wo)||0,fu=[o.floor,o.unit].filter(Boolean).join(' · ');
     return `<div class="sh-card${o.completeAt?' sh-done':''}">
@@ -1802,6 +1808,7 @@ function renderShipped(app){
         ${w?`<span class="sh-pill warn" title="Waiting (N/A) lines on its cutting/fittings lists — also shown on the Capacity Board">⚠ ${w} waiting</span>`:''}</div>
       <div class="sh-t">${escA(o.title||'')}</div>
       <div class="sh-m">${escA(o.customer||'')} · shipped ${dt(o.shippedAt)} · Cienapps: ${escA(String(o.cienStep||o.shippedStep||o.step||'—').replace(/^\d+\.\s*/,''))}</div>
+      ${o.installedAt&&!o.completeAt?`<div class="sh-m" style="color:#0d6e46;font-weight:700">✓ Installed (Cienapps) ${dt(o.installedAt)} — to be invoiced</div>`:''}
       ${o.completeAt?`<div class="sh-m" style="color:#0d6e46;font-weight:700">✓ Installation complete ${dt(o.completeAt)}${o.completeBy?' — '+escA(o.completeBy):''}</div>`:''}
       <div class="sh-b">
         ${o.completeAt?`<button class="btn btn-s" data-shu="${escA(o.wo)}">Undo complete</button>`:`<button class="btn btn-g" data-shc="${escA(o.wo)}">✓ Installation complete</button>`}
@@ -1822,7 +1829,16 @@ function renderShipped(app){
     <div style="font-size:12px;color:var(--t2);margin:2px 0 10px">${os.length} shown · ${all.length} shipped in total. Shipped jobs are off the Capacity Board and out of the week totals; jobs on a van stay on 🚚 Deliveries until the driver confirms.</div>
     ${shown.length?shown.map(card).join(''):`<div class="empty">${all.length?'No shipped jobs match.':'No shipped jobs yet — they arrive here when a Cienapps import says shipped or invoiced.'}</div>`}
     ${os.length>shown.length?`<div style="font-size:12px;color:var(--t3);padding:6px 0">…and ${os.length-shown.length} more — search to narrow down</div>`:''}
+    <div id="sh-hold" style="margin-top:22px;border-top:2px solid var(--b2);padding-top:12px">
+      <div style="font-size:14px;font-weight:700;margin-bottom:4px">⏸ On hold in Cienapps <span id="sh-hcnt" style="font-weight:400;color:var(--t2)">(${held.length})</span></div>
+      <div style="font-size:12px;color:var(--t2);margin-bottom:8px">Step 12 ON HOLD / DELETE. Off the Capacity Board, week totals and capacity — never deleted. The next import with any other step puts the job back on the board.</div>
+      ${held.length?`<input class="search-input" id="sh-hq" placeholder="Search on-hold jobs…" value="${escA(shHoldQ)}" style="margin-bottom:8px">`:''}
+      ${hs.length?hs.slice(0,300).map(o=>`<div class="sh-card"><div class="sh-top"><span class="wo-num">${escA(o.wo)}</span>${[o.floor,o.unit].filter(Boolean).length?`<span class="fu-badge">${escA([o.floor,o.unit].filter(Boolean).join(' · '))}</span>`:''}<span class="sh-pill no">⏸ On hold</span></div>
+        <div class="sh-t">${escA(o.title||'')}</div><div class="sh-m">${escA(o.customer||'')} · on hold since ${dt(o.holdAt)} · ${o.hours!=null?escA(String(o.hours))+'h · ':''}due ${fmt(o.dueDate)}</div></div>`).join(''):`<div class="empty">${held.length?'No on-hold jobs match.':'No jobs on hold.'}</div>`}
+    </div>
   </div>`;
+  const hq=document.getElementById('sh-hq');
+  if(hq)hq.oninput=function(){shHoldQ=this.value;const pos=this.selectionStart;render();const n=document.getElementById('sh-hq');if(n){n.focus();try{n.setSelectionRange(pos,pos);}catch(e){}}};
   const q=document.getElementById('sh-q');
   if(q)q.oninput=function(){shSrch=this.value;const pos=this.selectionStart;render();const n=document.getElementById('sh-q');if(n){n.focus();try{n.setSelectionRange(pos,pos);}catch(e){}}};
   const sd=document.getElementById('sh-del');if(sd)sd.onchange=function(){shDel=this.value;render();};
@@ -1877,7 +1893,7 @@ function partLoadGaps(jobs){
   jobs.forEach(j=>{
     const rel=DB.orders.filter(o=>{
       if(inLoad.has(o.wo)||seen.has(o.wo))return false;
-      if(o.delDispAt||o.delDelivAt||o.delDone||(isShipped(o)&&!o.delv))return false;
+      if(o.delDispAt||o.delDelivAt||o.delDone||(isShipped(o)&&!o.delv)||isOnHold(o))return false;
       const sameUnit=j.orderNo&&o.orderNo===j.orderNo&&j.unit&&o.unit===j.unit&&!/multiple/i.test(j.unit||'');
       const sameGrp=j.grp&&o.grp===j.grp;
       return sameUnit||sameGrp;
@@ -1929,7 +1945,7 @@ function listsNeeded(){ // WOs scheduled to deliver inside the lead time with NO
   const tagged=new Set();lists().forEach(l=>(l.wos||[]).forEach(w=>tagged.add(w)));
   const lim=new Date(Date.now()+listLead()*86400000).toISOString().slice(0,10);
   return DB.orders.filter(o=>{
-    if(tagged.has(o.wo)||o.delDelivAt||o.delDone||woFinished(o))return false;
+    if(tagged.has(o.wo)||o.delDelivAt||o.delDone||woFinished(o)||isOnHold(o))return false;
     const planned=o.delv&&o.delDay;                 // already on the delivery board
     const dueSoon=o.dueDate&&o.dueDate<=lim;        // due date inside the lead window
     return planned||dueSoon;
@@ -2631,7 +2647,7 @@ function renderPM(app){
     const delivWk=mine.filter(o=>dStage(o)==='deliv').sort((a,b)=>String(b.delDelivAt||'').localeCompare(String(a.delDelivAt||'')));
     const past=Object.values(DB.delArchive||{}).flatMap(a=>a.jobs.filter(j=>(j.c||'')===c&&j.vAt).map(j=>({...j,_at:j.vAt})))
       .sort((a,b)=>String(b._at).localeCompare(String(a._at))).slice(0,15);
-    const coming=DB.orders.filter(o=>(o.customer||'')===c&&!o.delDay&&!o.delDone&&!isShipped(o)&&o.dueDate&&o.dueDate>=todayISO)
+    const coming=DB.orders.filter(o=>(o.customer||'')===c&&!o.delDay&&!o.delDone&&!isShipped(o)&&!isOnHold(o)&&o.dueDate&&o.dueDate>=todayISO)
       .sort((a,b)=>a.dueDate.localeCompare(b.dueDate)).slice(0,12);
     if(!sched.length&&!delivWk.length&&!past.length&&!coming.length)return'';
     const fu=o=>[o.floor||o.f,o.unit||o.u].filter(Boolean).join(' · ');
@@ -3912,22 +3928,41 @@ function importHours(key,step,value,r){
   if(!(+value>0))return{hours:1,hoursSrc:'est',hoursEstimated:false};
   return{hours:estimateHours(value),hoursSrc:'est',hoursEstimated:true};
 }
-/* Step order: the number at the front ("3." before "4."); otherwise the named ladder
-   Drawing < In production < Assembly < Assembly complete/Palleted < Production complete < Shipped < Invoiced.
+/* Cienapps status ladder (exact list from Garry, 22 Oct 2026 — docs/ROADMAP.md):
+   1.DRAWING · 2.NO SITE MEASURE DONE · 3. READY FOR UPLOAD · 4. READY FOR PRODUCTION · 5. WORK ORDER PROCESSED ·
+   6. JOB CUT COMPLETE · 7. ASSEMBLY COMPLETE · 8. PALLETED · 9. JOB SHIPPED · 10. INSTALLED TO BE INVOICE ·
+   11. COMPLETED AND INVOICED · 12. ON HOLD / DELETE
+   Steps rank by the leading number (missing space after the dot, case and trailing spaces don't matter).
+   Unnumbered wording falls back to the named ladder below, and is never read as shipped or on hold.
    stepCmp → >0 a is ahead, <0 behind, 0 same rank, null = can't tell. */
+function stepNo(s){const m=String(s||'').match(/^\s*(\d{1,2})\s*(?:[.)\-:]|(?=\s)|$)/);return m?+m[1]:null;}
+const stepNum=stepNo;
+/* stepIsShipped — THE one rule for "Cienapps says this job has left the factory": step 9 JOB SHIPPED,
+   10 INSTALLED TO BE INVOICE or 11 COMPLETED AND INVOICED (by number). Wording that mentions shipped/invoiced
+   without one of those numbers ("Part shipped", "Ready to be shipped", "8. Job shipped") is flagged and goes
+   to Differs — never off the board. Change only this function if the Cienapps list changes. */
+function stepIsShipped(s){const n=stepNo(s);return n===9||n===10||n===11;}
+function stepInvoiced(s){return stepNo(s)===11;}
+function stepInstalled(s){const n=stepNo(s);return n===10||n===11;}
+function stepOnHold(s){return stepNo(s)===12;} // 12. ON HOLD / DELETE
+function stepForDelivery(s){const n=stepNo(s);return n===7||n===8||(n===null&&/^(assembly\s*complete|palleted)$/i.test(stepWords(s)));}
+function stepShipWord(s){return !stepIsShipped(s)&&/ship|invoic|install/i.test(String(s||''));} // mentions it, but isn't a shipped step
+function stepWords(s){return String(s||'').trim().replace(/^\d{1,2}\s*[.)\-:]?\s*/,'').trim();}
 function stepLadder(s){
-  const t=String(s||'').toLowerCase().replace(/^\s*\d+\s*[.)\-:]?\s*/,'');
-  if(/invoic/.test(t))return 7;if(/shipped/.test(t))return 6;if(/production\s*complete/.test(t))return 5;
-  if(/assembly\s*complete|pallet/.test(t))return 4;if(/assembl/.test(t))return 3;if(/production/.test(t))return 2;if(/drawing/.test(t))return 1;
+  const t=stepWords(s).toLowerCase();
+  if(/ship|invoic|install|hold|delete/.test(t))return null; // unnumbered shipped / on-hold wording — can't rank it
+  if(/drawing/.test(t))return 1; // before "production": "Pre-production drawing" is drawing
+  if(/site\s*measure/.test(t))return 2;if(/ready\s*for\s*upload/.test(t))return 3;if(/ready\s*for\s*production/.test(t))return 4;
+  if(/production\s*complete/.test(t))return 8.5;
+  if(/pallet/.test(t))return 8;if(/assembly\s*complete/.test(t))return 7;if(/assembl/.test(t))return 6.5;
+  if(/cut/.test(t))return 6;if(/work\s*order\s*processed|production/.test(t))return 5;
   return null;
 }
-function stepNum(s){const m=String(s||'').match(/^\s*(\d+)\s*[.)\-:]?(\s|$)/);return m?+m[1]:null;}
+function stepRank(s){const n=stepNo(s);return n!==null?n:stepLadder(s);}
 function stepCmp(a,b){
-  const na=stepNum(a),nb=stepNum(b);
-  if(na!==null&&nb!==null)return na-nb;
-  const la=stepLadder(a),lb=stepLadder(b);
-  if(la!==null&&lb!==null)return la-lb;
-  return null;
+  const ra=stepRank(a),rb=stepRank(b);
+  if(ra===null||rb===null)return null;
+  return ra-rb;
 }
 const addsSum=(a,k)=>Object.keys(a||{}).reduce((s,x)=>s+(+(a[x]||{})[k]||0),0);
 /* analyzeImport: builds the plan WITHOUT touching the board. `input` is prepImport's output (or raw rows).
@@ -3936,14 +3971,16 @@ const addsSum=(a,k)=>Object.keys(a||{}).reduce((s,x)=>s+(+(a[x]||{})[k]||0),0);
 function analyzeImport(input,source){
     if(Array.isArray(input))input=prepImport(input);
     const board=boardMap(),recs=input.recs||[],skip=input.skip||{};
-    const newOrders=[],updates=[],fills=[],synced=[],shipped=[],inTransit=[],dispGaps=[],flagged=[],stepDiffs=[],exCounts={};
+    const newOrders=[],updates=[],fills=[],synced=[],shipped=[],inTransit=[],dispGaps=[],flagged=[],stepDiffs=[],exCounts={},marks=[],unsched=[];
     let unchanged=0,excluded=0;
     const sh=s=>String(s||'—').replace(/^\d+\.\s*/,'');
     recs.forEach(r=>{
       const ex=board.get(r.key);
       const cs=r.has.step?r.step:'';
-      const isShipC=/shipped|invoiced/i.test(cs),isDrawC=/drawing/i.test(cs),isWOD=r.key.indexOf('WO-D')>-1;
+      const isShipC=stepIsShipped(cs),isHoldC=stepOnHold(cs),isDrawC=/drawing/i.test(cs),isWOD=r.key.indexOf('WO-D')>-1;
       const flags=r.flags.slice();
+      if(stepShipWord(cs))flags.push('check: Cienapps step "'+cs+'" is not a shipped step (9, 10 or 11) — kept on the board');
+      if(isHoldC)flags.push('on hold in Cienapps (12) — goes to the On hold section of the Shipped tab, off the board, until the step changes');
       // value: base line + its A/C additions (additions seen before are kept, so the value never drops)
       let value=r.has.value?r.value:undefined,adds=null;
       if(r.adds){
@@ -3955,7 +3992,7 @@ function analyzeImport(input,source){
       }else if(ex&&ex.adds&&r.has.value)value=r.value+addsSum(ex.adds,'value');
       if(!ex){
         if(r.synth)return;
-        const why=isWOD?'WO-D':isDrawC?'drawing':isShipC?(/invoiced/i.test(cs)?'invoiced':'shipped')+' (not on the board)':'';
+        const why=isWOD?'WO-D':isDrawC?'drawing':isShipC?(stepInvoiced(cs)?'invoiced':'shipped')+' (not on the board)':'';
         if(why){excluded++;exCounts[why]=(exCounts[why]||0)+1;return;}
         const val=value===undefined?0:value;
         let hr=importHours(r.key,cs,val,r);
@@ -3964,6 +4001,7 @@ function analyzeImport(input,source){
           hours:hr.hours,hoursEstimated:hr.hoursEstimated,hoursSrc:hr.hoursSrc,dueDate:r.dueDate||'',origDueDate:r.dueDate||'',step:cs,
           salesRep:r.salesRep||'',orderNo:r.orderNo||'',value:val,plannedWeek:'',notes:'',colour:''};
         if(cs)o.cienStep=cs;
+        if(isHoldC){o.cienHold=true;unsched.push(r.key);}
         if(r.has.sheets)o.sheetsCien=r.sheets;
         if(adds)o.adds=adds;
         newOrders.push(o);
@@ -3986,8 +4024,11 @@ function analyzeImport(input,source){
       // step: the planner only ever moves forward
       const ps=String(ex.step||'').trim();
       let newStep=ps;
-      if(cs&&cs!==ps){
-        const c=ps?stepCmp(cs,ps):1;
+      // 12 ON HOLD is not progress: the step stays where it is, the job is held (out of week totals) until the step changes
+      if(isHoldC&&!ex.cienHold){set.cienHold=true;what.push('ON HOLD in Cienapps');}
+      if(cs&&!isHoldC&&ex.cienHold){set.cienHold=false;what.push('back from on hold');flags.push('back from on hold — returns to the board (Cienapps: '+cs+')');}
+      if(cs&&cs!==ps&&!isHoldC){
+        const c=!ps||stepOnHold(ps)?1:stepCmp(cs,ps);
         if(c===null){stepDiffs.push({wo:ex.wo,title:ex.title||'',planner:ps,cien:cs,why:"can't tell which is further on — nothing moved"});}
         else if(c>0){newStep=cs;set.step=cs;what.push('step: '+sh(ps||'(none)')+' → '+sh(cs));}
         else if(c<0){stepDiffs.push({wo:ex.wo,title:ex.title||'',planner:ps,cien:cs,why:'planner is ahead — stays on the Export Changes list for Cienapps'});}
@@ -4018,8 +4059,13 @@ function analyzeImport(input,source){
       if(isShipC&&!ex.shippedAt&&!(ex.shipBack&&ex.shipBack.cs===cs)){
         const onVan=!!((ex.delv||ex.delLoadedAt||ex.delDispAt)&&!ex.delDelivAt&&!ex.delDone);
         shipped.push({wo:ex.wo,key:r.key,title:ex.title||'',customer:ex.customer||'',cs,onVan});
-        if(onVan)inTransit.push({wo:ex.wo,title:ex.title||'',reason:/invoiced/i.test(cs)?'invoiced':'shipped',veh:vehLbl(ex.delVeh)||'',day:ex.delDay||''});
-        if(!ex.delDispAt&&!ex.delDelivAt&&!ex.delDone)dispGaps.push({wo:ex.wo,title:ex.title||'',customer:ex.customer||'',unit:[ex.floor,ex.unit].filter(Boolean).join(' · '),reason:/invoiced/i.test(cs)?'invoiced':'shipped'});
+        if(onVan)inTransit.push({wo:ex.wo,title:ex.title||'',reason:stepInvoiced(cs)?'invoiced':'shipped',veh:vehLbl(ex.delVeh)||'',day:ex.delDay||''});
+        if(!ex.delDispAt&&!ex.delDelivAt&&!ex.delDone)dispGaps.push({wo:ex.wo,title:ex.title||'',customer:ex.customer||'',unit:[ex.floor,ex.unit].filter(Boolean).join(' · '),reason:stepInvoiced(cs)?'invoiced':'shipped'});
+      }
+      // 10 INSTALLED TO BE INVOICE → marked installed on the Shipped tab; 11 COMPLETED AND INVOICED → marked complete
+      if(stepInstalled(cs)&&(ex.shippedAt||shipped.some(s=>s.key===r.key))){
+        const mk={wo:ex.wo,key:r.key,cs,inst:!ex.installedAt,done:stepInvoiced(cs)&&!ex.completeAt};
+        if(mk.inst||mk.done)marks.push(mk);
       }
       if(isDrawC&&!ex.shippedAt)flags.push('check: Cienapps shows this job at drawing stage — kept on the board');
       if(isWOD)flags.push('check: WO-D (drawing work order) — kept on the board');
@@ -4036,7 +4082,7 @@ function analyzeImport(input,source){
       importError('None of the '+(input.rows||recs.length)+' rows had a usable WO number, so nothing was imported.','Check that the WO number column is mapped to the column holding values like WO-2604-7.');
       return null;
     }
-    return{source:source||'file',input,newOrders,updates,fills,synced,shipped,inTransit,dispGaps,flagged,folds:input.folds||[],stepDiffs,exCounts,
+    return{source:source||'file',input,marks,unsched,newOrders,updates,fills,synced,shipped,inTransit,dispGaps,flagged,folds:input.folds||[],stepDiffs,exCounts,
       removals:[],backfills:[],
       counts:{added,updated,skipped:unchanged,noWo:skip.noWo||0,totals:skip.totals||0,snag:skip.snag||0,excluded,shipped:shipped.length,folded:(input.folds||[]).length,rows:input.rows||recs.length}};
 }
@@ -4058,7 +4104,7 @@ function renderImportPreview(plan){
   el.innerHTML=`<div style="margin-top:14px">
     <div style="background:#eaf2ff;border:2px solid #1a56db;border-radius:8px;padding:12px 15px;margin-bottom:12px">
       <div style="font-size:14px;font-weight:800;color:#14335c;margin-bottom:4px">Import preview — nothing has changed yet</div>
-      <div style="font-size:13px;color:#14335c">${c.added} new · ${c.updated} updated · ${c.skipped} unchanged · ${plan.shipped.length} to 📦 Shipped${c.folded?` · ${c.folded} addition${c.folded!==1?'s':''} folded in`:''}${plan.flagged.length?` · <b>${plan.flagged.length} flagged</b>`:''} · <b>nothing is removed</b></div>
+      <div style="font-size:13px;color:#14335c">${c.added} new · ${c.updated} updated · ${c.skipped} unchanged · ${plan.shipped.length} to 📦 Shipped${c.folded?` · ${c.folded} addition${c.folded!==1?'s':''} folded in`:''}${(plan.marks||[]).length?` · ${plan.marks.length} marked installed/complete (Cienapps 10/11)`:''}${plan.flagged.length?` · <b>${plan.flagged.length} flagged</b>`:''} · <b>nothing is removed</b></div>
       ${skips.length?`<div style="font-size:12px;color:#14335c;opacity:.8;margin-top:3px">${skips.join(' · ')}</div>`:''}
     </div>
     ${plan.changedNote?`<div id="imp-changed" style="background:#fdecea;border:2px solid #e57368;border-radius:8px;padding:12px 15px;margin-bottom:12px">
@@ -4171,6 +4217,7 @@ function applyImport(plan){
       const ex=get(u);if(!ex)return; // deleted on another screen meanwhile — nothing to update
       const s=u.set||{};
       Object.keys(s).forEach(k=>{if(k!=='dueDate')ex[k]=s[k];});
+      if('cienHold' in s){if(s.cienHold)ex.holdAt=at;else{delete ex.cienHold;delete ex.holdAt;ex.holdBack=at;}}
       if('dueDate' in s){
         if(dec[u.wo]==='keep')ex.dueKeep=s.dueDate; // planner date kept; this Cienapps date won't be asked about again
         else{if(!ex.origDueDate)ex.origDueDate=ex.dueDate||'';ex.dueDate=s.dueDate;delete ex.dueKeep;}
@@ -4185,10 +4232,15 @@ function applyImport(plan){
     // shipped / invoiced → Shipped tab (first time seen)
     let nShip=0;
     (plan.shipped||[]).forEach(s=>{const ex=get(s);if(!ex||ex.shippedAt)return;ex.shippedAt=at;ex.shippedStep=s.cs;delete ex.shipBack;nShip++;logEdit(ex,'Moved to Shipped — Cienapps: '+s.cs,'(import)');});
+    (plan.marks||[]).forEach(m=>{const ex=get(m);if(!ex||!ex.shippedAt)return;
+      if(m.inst&&!ex.installedAt){ex.installedAt=at;logEdit(ex,'Installed — Cienapps: '+m.cs,'(import)');}
+      if(m.done&&!ex.completeAt){ex.completeAt=at;ex.completeBy='Cienapps';logEdit(ex,'Installation complete — Cienapps: '+m.cs,'(import)');}});
     // new orders — skip any that another screen added meanwhile, then schedule to their due-date week
     const fresh=(plan.newOrders||[]).filter(o=>!board.has(woKey(o.wo)));
-    autoSchedule(fresh.slice()); // (autoSchedule sorts its list; the jobs keep the file's order on the board data)
+    const noAuto=new Set(plan.unsched||[]); // on hold / unreadable due date: left unscheduled
+    autoSchedule(fresh.filter(o=>!noAuto.has(woKey(o.wo)))); // (autoSchedule sorts its list; the jobs keep the file's order on the board data)
     fresh.forEach(o=>{
+      if(o.cienHold)o.holdAt=at;
       DB.orders.push(o);board.set(woKey(o.wo),o);
       orig[o.wo]=o.plannedWeek||'';origStep[o.wo]=o.step||''; // baseline AFTER auto-schedule so auto-assignments don't show as changes
     });
@@ -4775,7 +4827,7 @@ function renderProd(app){
   const later=live.filter(o=>o.delDay!==td&&o.delDay!==tm&&DEL_DAYS.indexOf(o.delDay)>ix&&rdy(o).lvl!=='green');
   const perf=weekPerf(liveWeekJobs(),ix);
   const lim=new Date(Date.now()+7*86400000).toISOString().slice(0,10);
-  const unplaced=DB.orders.filter(o=>!o.delDay&&!o.delDone&&!o.delDelivAt&&!isShipped(o)&&o.dueDate&&o.dueDate<=lim&&!/assembly complete|pallet/i.test(o.step||'')).sort((a,b)=>a.dueDate.localeCompare(b.dueDate));
+  const unplaced=DB.orders.filter(o=>!o.delDay&&!o.delDone&&!o.delDelivAt&&!isShipped(o)&&!isOnHold(o)&&o.dueDate&&o.dueDate<=lim&&!/assembly complete|pallet/i.test(o.step||'')).sort((a,b)=>a.dueDate.localeCompare(b.dueDate));
   const holds=allHolds(['saw','fit'],'hold');
   const missNo=missedJobs().filter(o=>!o.missWhy);
   const moved=all.filter(o=>(o.delMoves||[]).length);

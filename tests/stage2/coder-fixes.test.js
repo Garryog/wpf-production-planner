@@ -28,6 +28,47 @@ const res = []; const rec = (n, ok, d) => { res.push(ok); console.log((ok ? 'PAS
     rec('1: database unreachable at Apply → import not applied, preview kept', r.still && r.v === 4000, JSON.stringify(r));
     await A.close();
   }
+  // ---- single-PC checks (items 2–9)
+  const t = await H.open({ browser, now: '2026-10-19T10:00:00Z', row: { id: 'main', nid: 9, settings: {}, orders: [
+    H.order({ wo: 'WO-2604-1', value: 4000, hours: 6, hoursEstimated: true, hoursSrc: 'est', step: '3. In production', dueDate: '2026-11-20' }),
+    H.order({ wo: 'WO-8000-1', step: '3. In production' }), H.order({ wo: 'WO-8000-2', step: '3. In production' }), H.order({ wo: 'WO-8000-3', step: '3. In production', delv: true }),
+  ] } });
+  const P = rows => t.page.evaluate(rows => { const p = analyzeImport(prepImport(rows), 'file'); return p && JSON.parse(JSON.stringify(p, (k, v) => k === 'input' ? undefined : v)); }, rows);
+  const ev = (fn, arg) => t.page.evaluate(fn, arg);
+  // 2. Cienapps status ladder (Garry, 22 Oct) — every step 1–12, incl. "2.NO SITE" with no space
+  const LAD = ['1.DRAWING', '2.NO SITE MEASURE DONE', '3. READY FOR UPLOAD', '4. READY FOR PRODUCTION', '5. WORK ORDER PROCESSED', '6. JOB CUT COMPLETE', '7. ASSEMBLY COMPLETE', '8. PALLETED', '9. JOB SHIPPED', '10. INSTALLED TO BE INVOICE', '11. COMPLETED AND INVOICED', '12. ON HOLD / DELETE'];
+  const lad = await ev(L => L.map(s => [stepNo(s), stepNo(' ' + s.toLowerCase() + '  '), stepIsShipped(s), stepOnHold(s), stepForDelivery(s)]), LAD);
+  LAD.forEach((s, i) => rec('2: "' + s + '" → step ' + (i + 1) + (i >= 8 && i <= 10 ? ', shipped' : '') + (i === 11 ? ', on hold' : '') + (i === 6 || i === 7 ? ', delivery' : ''),
+    lad[i][0] === i + 1 && lad[i][1] === i + 1 && lad[i][2] === (i >= 8 && i <= 10) && lad[i][3] === (i === 11) && lad[i][4] === (i === 6 || i === 7), JSON.stringify(lad[i])));
+  const cmp = await ev(L => L.slice(0, 11).map((s, i) => i ? stepCmp(s, L[i - 1]) > 0 : true).every(Boolean), LAD);
+  rec('2: steps 1–11 each rank ahead of the one before', cmp);
+  const s2 = await ev(() => ['Ready to be shipped', 'Part shipped', 'Not shipped', 'Deposit invoiced', 'Job shipped', 'SHIPPED', '8. Job shipped'].map(s => stepIsShipped(s)));
+  rec('2: unnumbered / mis-numbered shipped wording is never "shipped"', s2.every(x => x === false), JSON.stringify(s2));
+  let p = await P([{ wo: 'WO-8000-1', step: 'Part shipped', dueDate: '2026-11-20' }]);
+  rec('2: "Part shipped" on a board job → flagged + Differs, not Shipped, step not moved', !p.shipped.length && p.flagged.some(f => f.wo === 'WO-8000-1' && /not a shipped step/.test(f.why)) && p.stepDiffs.some(s => s.wo === 'WO-8000-1') && !p.updates.some(u => u.set.step), JSON.stringify([p.flagged, p.stepDiffs]));
+  // 9 / 10 / 11 on board jobs → Shipped; 10 marked installed, 11 marked complete
+  p = await P([{ wo: 'WO-8000-1', step: '9. JOB SHIPPED' }, { wo: 'WO-8000-2', step: '10. INSTALLED TO BE INVOICE' }, { wo: 'WO-8000-3', step: '11. COMPLETED AND INVOICED ' }]);
+  rec('2: steps 9/10/11 → Shipped; 10 installed, 11 complete', p.shipped.length === 3 && p.marks.length === 2 && p.marks.find(m => m.wo === 'WO-8000-2').inst && !p.marks.find(m => m.wo === 'WO-8000-2').done && p.marks.find(m => m.wo === 'WO-8000-3').done, JSON.stringify(p.marks));
+  const ap = await ev(() => { applyImport(analyzeImport(prepImport([{ wo: 'WO-8000-2', step: '10. INSTALLED TO BE INVOICE' }, { wo: 'WO-8000-3', step: '11. COMPLETED AND INVOICED' }]), 'file')); const g = w => DB.orders.find(o => o.wo === w); return [!!g('WO-8000-2').shippedAt, !!g('WO-8000-2').installedAt, !!g('WO-8000-2').completeAt, !!g('WO-8000-3').shippedAt, !!g('WO-8000-3').completeAt]; });
+  rec('2: applied — 10 shipped+installed (not complete), 11 shipped+complete', JSON.stringify(ap) === '[true,true,false,true,true]', JSON.stringify(ap));
+  // 12 on hold: out of sight (board, totals, part-load, PM), listed in the Shipped tab's On hold section; back when the step changes
+  const h = await ev(() => {
+    const wk = get8Wks()[1]; const o = DB.orders.find(x => x.wo === 'WO-2604-1'); o.plannedWeek = wk; o.orderNo = '2604'; o.unit = 'U1'; const before = wkHrs(wk);
+    DB.orders.find(x => x.wo === 'WO-8000-1').orderNo = '2604'; DB.orders.find(x => x.wo === 'WO-8000-1').unit = 'U1';
+    const p = analyzeImport(prepImport([{ wo: 'WO-2604-1', step: '12. ON HOLD / DELETE' }]), 'file'); applyImport(p);
+    showTab('b'); const row = document.querySelector('tr[data-wo="WO-2604-1"]');
+    showTab('h'); const sec = (document.getElementById('sh-hold') || {}).textContent || '';
+    const r = { before, held: wkHrs(wk), on: DB.orders.includes(o), step: o.step, flag: p.flagged.some(f => /on hold/.test(f.why)), onBoard: !!row, inBO: boardOrders().includes(o),
+      partLoad: partLoadGaps([DB.orders.find(x => x.wo === 'WO-8000-1')]).some(g => g.wo === 'WO-2604-1'), shTab: /WO-2604-1/.test(sec) && /\(1\)/.test(sec), holdAt: !!o.holdAt };
+    const i = document.getElementById('sh-hq'); i.value = 'nomatch'; i.oninput.call(i); r.search0 = /No on-hold jobs match/.test(document.getElementById('sh-hold').textContent); i.value = ''; shHoldQ = '';
+    const p2 = analyzeImport(prepImport([{ wo: 'WO-2604-1', step: '6. JOB CUT COMPLETE' }]), 'file'); applyImport(p2);
+    r.backFlag = p2.flagged.some(f => /back from on hold/.test(f.why)); r.after = wkHrs(wk) - (+o.hours || 0); r.step2 = o.step; r.hold2 = !!o.cienHold; r.inBO2 = boardOrders().includes(o); return r; });
+  rec('2: 12 ON HOLD — kept (never deleted), flagged, off the board, out of week totals and part-load', h.on && h.flag && h.step === '3. In production' && h.held === h.before - 6 && !h.onBoard && !h.inBO && !h.partLoad && h.holdAt, JSON.stringify(h));
+  rec('2: 12 ON HOLD — listed in the Shipped tab On hold section with count and search', h.shTab && h.search0, JSON.stringify(h));
+  rec('2: step changes (6.) → back on the board, flagged "back from on hold", back in totals', !h.hold2 && h.inBO2 && h.backFlag && h.after === h.held && h.step2 === '6. JOB CUT COMPLETE', JSON.stringify(h));
+  p = await P([{ wo: 'WO-8100-1', step: '12. ON HOLD / DELETE', value: 3000, dueDate: '2026-10-20' }]);
+  rec('2: new job at 12 → added on hold, left unscheduled', p.newOrders.length === 1 && p.newOrders[0].cienHold && p.unsched.includes('WO-8100-1'), JSON.stringify(p.newOrders));
+  await t.close();
   await browser.close();
   console.log(res.filter(x => !x).length + ' failed of ' + res.length);
 })().catch(e => { console.error(e); process.exit(1); });
