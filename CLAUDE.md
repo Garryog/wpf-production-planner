@@ -19,27 +19,9 @@ Loop: if Tester or Manager finds Critical/Blocker issues → back to Coder (or A
 - Cienapps export headers can have trailing spaces — always trim.
 - Never delete production data.
 
-## Saw/Stores release decisions (21 Oct 2026)
-- Saw label printer: Zebra ZD420 (direct thermal, 203 dpi, 104 mm max print width; label size, connection and saw device TBC).
-- Labels: per-line print AND a group print (print labels for all lines on screen / selected lines in one go).
-
-## Stores report + Driver POD decisions (21 Oct 2026)
-- Stores "Items sent" report: per customer/project, by date — date, WO, item/list, who got it out, delivered yes/no; print + Excel.
-- Driver: tick + photo PER WORK ORDER (extra photos optional); photo gets a burned-in date/time stamp; driver name recorded. No typed name or signature for now.
-- Drivers only see their own deliveries. Two drivers on one run: each picks their own name from the staff list; both recorded on the run; either can tick/photograph.
-
-## Delivery proof decisions (21 Oct 2026, supersedes earlier POD note)
-- Snags are the main delivery problem; full kitchens are usually fine unless the site isn't ready.
-- Kitchens (full jobs): tick "Delivered to location" is enough; photo optional. "Site not ready" option with photo of where it was left.
-- Snags: each snag item is its own line on the driver's run (own section whether on a kitchen run or a separate run). Per snag: tick + stamped photo in place + one-tap "handed to" name. "Couldn't place" = reason list + photo; logged on the run, assigned to nobody, but VISIBLE to PM (own projects), Production Manager (all) and Office (Deliveries tab).
-- Driver's snag tick + photo automatically marks the snag "delivered" on the PM's snag table (raised → in production → on van → delivered with photo).
-- Weekly summary per driver: snags delivered, placed vs couldn't place, reasons. Records are permanent; drivers can add, not delete. Office must not tick "delivered" on a driver's behalf.
-- Proof of delivery visible to Production Manager and PMs.
-
-## Future phase: Fitters view / fitter management (noted 21 Oct 2026 — not yet planned)
-- Fitters get their own view. Delivered snags, with photo and site location / "handed to", must appear on the fitter's view for their project.
-- Fitter management is a major area for the next phase after saving, saw/stores, cutting lists/snags, deliveries and CNC/forklift. Design the snag and delivery data so a fitter view can read it without rework.
-- ZD420 spec confirmed (sheet from Garry): 203 dpi, 104 mm max print width, USB standard (Ethernet/Wi-Fi/Bluetooth optional), ZPL + EPL. It will be the DEFAULT printer on the saw's PC → use label-sized HTML print page + Chrome kiosk-printing (no dialog). ZPL via Browser Print only if barcodes need to scan.
-- Label contents (confirmed 21 Oct): WO, project/customer, house or room, part name, L × W, material, edging, quantity. Per-line print + group print. No barcode requested. Label size still TBC.
-- Missing items (N/A → WAITING), confirmed 21 Oct: one tap, no reason asked. Waiting rows surface on the Production Manager view (count per material, he chases) AND on an Office "Material to order" list (purchasing). Anyone on Saw/Stores releases via "Release all" per material. Dispatch with rows waiting: warn but allow (part-load warning); driver's run and delivery note must show what's missing.
-- Incomplete deliveries (confirmed 21 Oct): a job ships with WAITING lines → driver's run shows "N items to follow" and the delivery note lists them for site. Job state "delivered, N to follow" (not complete). When the waiting lines are released and ticked done, they drop into the SAME bin as snags ("Snags & follow-ons") on Deliveries and the driver's run, as per-line items (project, apartment, item) with tick + photo + handed-to. Job is COMPLETE (board green) only when every line incl. follow-ons is delivered. Board: amber waiting → blue to-follow → green. Production Manager view gets a "To follow" count.
+## Where things are written down
+- `docs/ROADMAP.md` — build order, every decision Garry has made, open questions. Read it before planning or building.
+- `docs/ACCEPTED-FAILURES.md` — failing tests Garry has knowingly accepted, with reason and the stage that fixes them. A failing test not on this list is a bug.
+- `docs/CODE-HEALTH.md` — Coder's code audit.
+- Coder runs the FULL test suite before handing back to the Tester.
+- Every new Supabase table needs its own GRANT lines in the same SQL block (Supabase change from 30 Oct 2026).
