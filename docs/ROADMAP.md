@@ -61,3 +61,6 @@ Rule: cap each release at one area of the floor. Nothing new is decided until th
 - Capacity: 30 sheets/machine/day when all one colour; each colour change that day reduces it (3 colour changes → 26 sheets). Per-machine numbers adjustable in Settings; per-day overrides.
 - Carry-over: unfinished sheets roll to the next day on the same machine, flagged "carried over".
 - Johnny's sheet: read AUTOMATICALLY from SharePoint (Microsoft link / Power Automate), not manual upload.
+- CNC auto-plan priority: COLOUR FIRST within a 2-day window (a job may move up to 2 days early/late to join its colour on a machine), then cut-by date; never later than cut-by + 2 days.
+- Stock levels: not yet; forklift view shows need only.
+- CNC floor screens: one PC/tablet per machine; the operator ticks CUT on that machine's screen.
