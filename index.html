@@ -3552,8 +3552,15 @@ let PEND=null;
    parseNum: "€12,500.00" → 12500 · blank → null (not supplied) · unreadable → NaN.
    parseDateIE: Irish day/month/year → 'YYYY-MM-DD' (UTC, no time-zone shift) · blank → '' · unreadable or impossible → null.
    parseHours: "8h" → {h:8} · blank → null · ≤0 or >500 → {bad:true} (bad data; hours get estimated instead). */
-// A totals / subtotal line: the WO cell has no digits ("Total", "Grand total") or starts with "Total".
-function isTotalsWo(w){const s=String(w==null?'':w).trim();return !/\d/.test(s)||/^(sub\s*-?\s*)?total/i.test(s);}
+// A totals / count line, not a job: the WO cell says total / count / sum anywhere ("Grand Total: 1 orders", "Count: 245"),
+// or has no WO-shaped token — letters/digits joined by _ or - with a digit in it (WO-2604-7, 2557_01) — and isn't a
+// plain number either (1234). So "245 jobs" and "Total" are skipped; they are listed under Skipped in the preview.
+function isTotalsWo(w){
+  const s=String(w==null?'':w).trim();
+  if(/total|count|sum/i.test(s))return true;
+  if(/^\d+(\.0+)?$/.test(s))return false;
+  return !s.split(/\s+/).some(t=>/\d/.test(t)&&/^[A-Za-z0-9]+([_-][A-Za-z0-9]+)+$/.test(t));
+}
 function woKey(w){return String(w==null?'':w).trim().toUpperCase();}
 function blankCell(v){return v==null||(typeof v==='string'&&!v.trim());}
 function parseNum(v){
@@ -3907,15 +3914,15 @@ function runImport(rows){
 const isSnagWo=k=>woKey(k).indexOf('WO-S')===0; // snag WOs belong to the planner — imports never add, change or remove them
 function boardMap(){const m=new Map();DB.orders.forEach(o=>{const k=woKey(o.wo);if(k&&!m.has(k))m.set(k,o);});return m;}
 function prepImport(rows,board){
-  const skip={noWo:0,totals:0,snag:0},recs=[];
-  (rows||[]).forEach(row=>{
+  const skip={noWo:0,totals:0,snag:0},recs=[],skipped=[];
+  (rows||[]).forEach((row,i)=>{
     const r=normaliseRow(row||{});
-    if(r.skip){skip[r.skip]++;return;}
+    if(r.skip){skip[r.skip]++;if(r.skip==='totals')skipped.push({line:i+1,wo:String(row.wo).trim(),why:'totals / count row — not a work order'});return;}
     if(isSnagWo(r.key)){skip.snag++;return;}
     recs.push(r);
   });
   const c=combineRows(recs,board||boardMap());
-  return{recs:c.recs,folds:c.folds,skip,rows:(rows||[]).length,raw:rows||[]};
+  return{recs:c.recs,folds:c.folds,skip,skipped,rows:(rows||[]).length,raw:rows||[]};
 }
 // Hours source: 'hand' (set in the planner — imports never touch it), 'cien' (Cienapps Hours column), 'est' (estimated / rule).
 // Jobs saved before Stage 2 have no hoursSrc: hoursEstimated:false counts as hand-set.
@@ -4084,7 +4091,7 @@ function analyzeImport(input,source){
       importError('None of the '+(input.rows||recs.length)+' rows had a usable WO number, so nothing was imported.','Check that the WO number column is mapped to the column holding values like WO-2604-7.');
       return null;
     }
-    return{source:source||'file',input,marks,unsched,autoTag,newOrders,updates,fills,synced,shipped,inTransit,dispGaps,flagged,folds:input.folds||[],stepDiffs,exCounts,
+    return{source:source||'file',input,skipped:input.skipped||[],marks,unsched,autoTag,newOrders,updates,fills,synced,shipped,inTransit,dispGaps,flagged,folds:input.folds||[],stepDiffs,exCounts,
       removals:[],backfills:[],
       counts:{added,updated,skipped:unchanged,noWo:skip.noWo||0,totals:skip.totals||0,snag:skip.snag||0,excluded,shipped:shipped.length,folded:(input.folds||[]).length,rows:input.rows||recs.length}};
 }
@@ -4142,6 +4149,7 @@ function renderImportPreview(plan){
     </div>`:''}
     ${section('📦 Moving to the Shipped tab — shipped/invoiced in Cienapps (off the Capacity Board; kept until installation is complete)','#b9cdec','#eef3fb',plan.shipped,s=>line(s.wo,s.title,escA(sh(s.cs))+(s.onVan?' · <b>stays on Deliveries until the driver confirms</b>':'')),15)}
     ${section('➕ Additions — A/C lines folded into their base work order','#c9b6f0','#f6f2fd',plan.folds,f=>line(f.wo,f.title,'→ '+escA(f.base)+' · +€'+Math.round(f.value||0).toLocaleString()+(f.hours!=null?' · +'+f.hours+'h':'')),15)}
+    ${section('⤼ Skipped — rows in the file that are not work orders','#d1d5db','#f9fafb',plan.skipped||[],s=>line(s.wo,'line '+s.line,escA(s.why)),20)}
     ${section('⚑ Flagged — check these','#e57368','#fdf3f2',plan.flagged,f=>line(f.wo,f.title,escA(f.why)),20)}
     ${section('🆕 New work orders — will be added and scheduled to their due-date week','#b3e0c4','#f4fbf6',plan.newOrders,o=>line(o.wo,o.title,o.hours+'h · due '+(o.dueDate?fmt(o.dueDate):'—')),15)}
     ${section('✏ Other updates to existing work orders','#f5d89b','#fffbeb',plan.updates.filter(u=>!u.dateChanged||u.what),u=>line(u.wo,u.exTitle,escA(u.what||'due date')),15)}

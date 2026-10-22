@@ -78,6 +78,12 @@ const res = []; const rec = (n, ok, d) => { res.push(ok); console.log((ok ? 'PAS
     o.delv = true; const p3 = analyzeImport(prepImport([{ wo: 'WO-8000-1', step: '9. JOB SHIPPED' }]), 'file'); applyImport(p3); r.kept = o.delv; return r; });
   rec('3: board job moved to 8 by import → tagged, no van/day; preview says "1 auto-tagged for delivery"', at.delv === true && !at.veh && !at.day && at.txt, JSON.stringify(at));
   rec('3: a planner untag is not undone by a re-import of the same step; import never untags', at.reTag === false && at.kept === true, JSON.stringify(at));
+  // 4. totals / count rows skipped and listed
+  const tot = await ev(() => { const rows = [{ wo: 'Grand Total: 1 orders', value: 9 }, { wo: 'Count: 245' }, { wo: '245 jobs' }, { wo: 'Summary 12' }, { wo: 'TOTAL 245' }, { wo: 'WO-8400-1', value: 100, dueDate: '2026-11-20' }, { wo: 1234, value: 5 }, { wo: '2557_09', value: 5 }];
+    const p = analyzeImport(prepImport(rows), 'file'); IMPPLAN = p; showTab('i'); renderImportPreview(p); const txt = document.getElementById('iprev').textContent; IMPPLAN = null;
+    return { n: p.newOrders.map(o => o.wo), sk: p.skipped.map(s => s.wo), txt: /Skipped/.test(txt) && /245 jobs/.test(txt) && /Grand Total: 1 orders/.test(txt) }; });
+  rec('4: totals/count/sum rows and rows with no WO-shaped token skipped; 1234 and 2557_09 kept', tot.n.join() === 'WO-8400-1,1234,2557_09' && tot.sk.length === 5, JSON.stringify(tot));
+  rec('4: skipped rows listed in the preview Skipped section', tot.txt, JSON.stringify(tot));
   await t.close();
   await browser.close();
   console.log(res.filter(x => !x).length + ' failed of ' + res.length);
