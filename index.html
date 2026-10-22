@@ -888,7 +888,10 @@ async function pushPlan(){
       throw new Error('HTTP '+(resp?resp.status:'?'));
     }
     let d=null;try{d=await resp.json();}catch(e){}
-    if(Array.isArray(d)&&d.length){VER=+d[0].version||VER+1;BASE=mine;UNSURE=[];return;}
+    // Saved. The row we wrote is VER+1 by definition (we matched version=VER and the trigger sets old+1). Never take a
+    // higher number from the reply: if a later save had already landed, adopting its number would make this screen's
+    // next save overwrite that save's changes without merging them.
+    if(Array.isArray(d)&&d.length){const nv=VER+1;if(+d[0].version!==nv)console.warn('Planner: save reply said version '+d[0].version+', expected '+nv+' — using '+nv);VER=nv;BASE=mine;UNSURE=[];return;}
     if(!Array.isArray(d))throw new Error('unexpected save reply');
     // Nothing updated: another screen saved first. Fetch theirs, merge, try again.
     const row=checkRow(await fetchMain());
