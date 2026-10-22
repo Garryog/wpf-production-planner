@@ -3425,7 +3425,8 @@ const IMP_FIELDS=[
   {k:'floor',   label:'Floor',      req:false, al:['floor','level','flr','storey']},
   {k:'unit',    label:'Unit',       req:false, al:['position','unit','unit no','house','house no','plot','apt','apartment','pos']},
   {k:'orderNo', label:'Order #',    req:false, al:['order #','order no','order number','order']},
-  {k:'salesRep',label:'Sales rep',  req:false, al:['sales rep','rep','salesperson','sales person','sales']}
+  {k:'salesRep',label:'Sales rep',  req:false, al:['sales rep','rep','salesperson','sales person','sales']},
+  {k:'sheets',  label:'Sheets',     req:false, al:['sheets','no of sheets','no. of sheets','number of sheets','sheet count','boards','no of boards','board count']}
 ];
 const nrmH=s=>String(s==null?'':s).toLowerCase().replace(/\s+/g,' ').trim();
 const colLtr=i=>{let s='',n=i;while(n>=0){s=String.fromCharCode(65+(n%26))+s;n=Math.floor(n/26)-1;}return s;};
@@ -3436,6 +3437,8 @@ let PEND=null;
    parseNum: "€12,500.00" → 12500 · blank → null (not supplied) · unreadable → NaN.
    parseDateIE: Irish day/month/year → 'YYYY-MM-DD' (UTC, no time-zone shift) · blank → '' · unreadable or impossible → null.
    parseHours: "8h" → {h:8} · blank → null · ≤0 or >500 → {bad:true} (bad data; hours get estimated instead). */
+// A totals / subtotal line: the WO cell has no digits ("Total", "Grand total") or starts with "Total".
+function isTotalsWo(w){const s=String(w==null?'':w).trim();return !/\d/.test(s)||/^(sub\s*-?\s*)?total/i.test(s);}
 function woKey(w){return String(w==null?'':w).trim().toUpperCase();}
 function blankCell(v){return v==null||(typeof v==='string'&&!v.trim());}
 function parseNum(v){
@@ -3478,9 +3481,9 @@ function parseHours(v){
   return{h:Math.round(n*100)/100};
 }
 
-// Find a real header row anywhere in the first 12 rows. Returns row index or -1.
+// Find a real header row anywhere in the sheet (Cienapps title blocks can push it past row 12). Returns row index or -1.
 function findHeaderRow(aoa){
-  for(let r=0;r<Math.min(12,aoa.length);r++){
+  for(let r=0;r<aoa.length;r++){
     const cells=(aoa[r]||[]).map(nrmH);
     let hits=0,hasWo=false;
     IMP_FIELDS.forEach(f=>{
@@ -3499,6 +3502,8 @@ function mapFromHeader(hdrCells){
       if(idx>-1&&Object.keys(m).every(k=>k===f.k||m[k]!==idx))m[f.k]=idx;
     }
   });
+  // Sheets: any other header containing "sheet" or "board" (Cienapps wording varies)
+  if(m.sheets<0){const idx=hdrCells.findIndex((c,i)=>/sheet|board/.test(nrmH(c))&&Object.keys(m).every(k=>m[k]!==i));if(idx>-1)m.sheets=idx;}
   return m;
 }
 
@@ -3724,6 +3729,7 @@ function analyzeImport(rows){
     rows.forEach(row=>{
       const wo=String(row.wo==null?'':row.wo).trim();
       if(!wo||wo==='NaT'||wo==='nan'||wo==='undefined'){noWo++;return;}
+      if(isTotalsWo(wo)){noWo++;return;}
       // Floor & Unit — from their own columns, else parsed out of the Reference (order-seq-floor-unit)
       const refStr=String(row.ref==null?'':row.ref).trim();
       let flr=String(row.floor==null?'':row.floor).trim();
