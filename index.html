@@ -347,6 +347,7 @@ button,input,select{font-family:inherit;cursor:pointer}
 .hold-gh{display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap;font-size:16px;font-weight:800;color:#6b3f00;margin-bottom:6px}
 .hold-row{display:flex;gap:10px;align-items:center;padding:10px;border-bottom:1px solid var(--border);font-size:14px;cursor:pointer}
 .hold-row input{width:24px;height:24px}
+.hold-gh>span,.hold-row>span{min-width:0;overflow-wrap:anywhere}
 .wl-hint{font-size:14px;color:var(--t2);margin:-4px 0 12px}
 .wl-print{display:flex;gap:6px}
 .wl-tabs .wl-print button{flex:0 0 auto;font-size:14px;padding:10px 12px;color:#14335c;border-color:#9cb3d3}
@@ -404,13 +405,13 @@ button,input,select{font-family:inherit;cursor:pointer}
 .wl-rdone td{color:#8e99ab;text-decoration:line-through}
 .wl-rdone td.tkc{text-decoration:none}
 .wl-rdone td.num{font-weight:400}
-.wl-ph{display:none;font-size:12px;color:var(--t2);margin-top:2px}
+.wl-ph{display:none;font-size:12px;color:var(--t2);margin-top:2px;overflow-wrap:anywhere}
 @media(max-width:700px){.wl-tbl .c-mt{display:none}.wl-ph{display:block}.wl-tbl th,.wl-tbl td{padding:3px 5px}.wl-tbl td{overflow-wrap:anywhere}}
 .sn-wrap{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 12px}
-.sn-box{flex:1;min-width:260px;background:#f4f7fb;border:1px solid var(--border);border-radius:8px;padding:8px 12px}
+.sn-box{flex:1;min-width:min(260px,100%);background:#f4f7fb;border:1px solid var(--border);border-radius:8px;padding:8px 12px}
 .sn-h{font-size:14px;font-weight:800;color:#14335c;margin-bottom:4px}.sn-h span{font-weight:400;color:var(--t3);font-size:12px}
 .sn-r{display:flex;gap:10px;align-items:baseline;font-size:14px;padding:2px 0;border-top:1px solid #e3e8f0}
-.sn-n{min-width:74px;font-weight:800;color:#0b5e33}.sn-m{flex:1}.sn-a{color:var(--t3);font-size:12px;white-space:nowrap}
+.sn-n{min-width:74px;font-weight:800;color:#0b5e33}.sn-m{flex:1;min-width:0;overflow-wrap:anywhere}.sn-a{color:var(--t3);font-size:12px;white-space:nowrap}
 .sn-w{font-size:12px;color:#8a5a00;font-weight:700;margin-top:3px}.sn-ft{font-size:11px;color:var(--t3);margin-top:4px}
 .wl-cust{display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin:0 0 8px}
 .wl-cust span{font-size:11px;color:var(--t3);text-transform:uppercase;font-weight:700;margin-right:2px}
