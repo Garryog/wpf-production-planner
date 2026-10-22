@@ -996,7 +996,7 @@ function wkNum(d){ // ISO-8601 week number — matches Irish calendars and Ciena
 function wkLbl(k){if(!k)return'—';const d=new Date(k);return'Wk '+wkNum(d)+' · '+d.toLocaleDateString('en-IE',{day:'numeric',month:'short'});}
 function get8Wks(){const w=[];let d=getMonday(new Date());for(let i=0;i<8;i++){w.push(wkKey(d));d=new Date(d);d.setDate(d.getDate()+7);}return w;}
 function wkCap(k){return DB.weekCaps&&DB.weekCaps[k]?DB.weekCaps[k]:WCAP;}
-function wkHrs(k){return DB.orders.filter(o=>o.plannedWeek===k).reduce((a,o)=>a+o.hours,0);}
+function wkHrs(k){return DB.orders.filter(o=>o.plannedWeek===k).reduce((a,o)=>a+(+o.hours||0),0);}
 function wkVal(k){return DB.orders.filter(o=>o.plannedWeek===k).reduce((a,o)=>a+(o.value||0),0);}
 function wkCnt(k){return DB.orders.filter(o=>o.plannedWeek===k).length;}
 let VCAP=250000;
@@ -1349,7 +1349,7 @@ function renderBoard(app){
   if(fCust)orders=orders.filter(o=>o.customer===fCust);
   if(fDel)orders=orders.filter(o=>o.delv);
   if(fLate)orders=orders.filter(isLateVsDue);
-  if(srch){const q=srch.toLowerCase();orders=orders.filter(o=>o.title.toLowerCase().includes(q)||o.wo.toLowerCase().includes(q)||o.customer.toLowerCase().includes(q)||String(o.floor||'').toLowerCase().includes(q)||String(o.unit||'').toLowerCase().includes(q));}
+  if(srch){const q=srch.toLowerCase();orders=orders.filter(o=>(o.title||'').toLowerCase().includes(q)||String(o.wo||'').toLowerCase().includes(q)||(o.customer||'').toLowerCase().includes(q)||String(o.floor||'').toLowerCase().includes(q)||String(o.unit||'').toLowerCase().includes(q));}
   // Per-column contains filters — all applied together (AND), like Excel column filters
   const colVal=(o,k)=>{
     switch(k){
@@ -1396,10 +1396,10 @@ function renderBoard(app){
     } else items.push({o,customer:o.customer||''});
   });
 
-  const unschHrs=DB.orders.filter(o=>!o.plannedWeek).reduce((a,o)=>a+o.hours,0);
+  const unschHrs=DB.orders.filter(o=>!o.plannedWeek).reduce((a,o)=>a+(+o.hours||0),0);
   const unschCnt=DB.orders.filter(o=>!o.plannedWeek).length;
   const selOrders=DB.orders.filter(o=>grpSel.has(o.wo));
-  const selH=selOrders.reduce((a,o)=>a+o.hours,0), selV=selOrders.reduce((a,o)=>a+(o.value||0),0);
+  const selH=selOrders.reduce((a,o)=>a+(+o.hours||0),0), selV=selOrders.reduce((a,o)=>a+(o.value||0),0);
 
   const weekOpts=(cur,mixed)=>`${mixed?'<option value="__MIX" selected disabled>— Mixed weeks —</option>':''}
       <option value=""${!mixed&&!cur?' selected':''}>— Unscheduled —</option>
@@ -1417,7 +1417,7 @@ function renderBoard(app){
           <td>${o.unit?`<span class="fu-badge">${escA(o.unit)}</span>`:'<span style="color:var(--t3)">—</span>'}</td>
           <td><span class="wo-title" title="${escA(o.title)}">${escA(o.title)}</span></td>
           <td><span class="wo-cust" title="${escA(o.customer)}">${escA(o.customer)}</span></td>
-          <td style="text-align:right"><input type="number" step="0.5" min="0" style="width:52px;text-align:right;border:1px solid ${o.hoursEstimated?'#f59e0b':'var(--b2)'};border-radius:4px;padding:2px 4px;font-size:12px;font-weight:600;background:${o.hoursEstimated?'#fffbeb':'#fff'}" title="${o.hoursEstimated?'Estimated from value — verify':'Actual hours from Cienapps'}" data-hi="${escA(o.wo)}" value="${o.hours}"></td>
+          <td style="text-align:right"><input type="number" step="0.5" min="0" style="width:52px;text-align:right;border:1px solid ${o.hoursEstimated?'#f59e0b':'var(--b2)'};border-radius:4px;padding:2px 4px;font-size:12px;font-weight:600;background:${o.hoursEstimated?'#fffbeb':'#fff'}" title="${o.hoursEstimated?'Estimated from value — verify':'Actual hours from Cienapps'}" data-hi="${escA(o.wo)}" value="${+o.hours||0}"></td>
           <td>${dueBadge(o.dueDate,o.plannedWeek,o.origDueDate)}</td>
           <td style="text-align:right;font-size:12px;color:var(--t2)">€${Math.round(o.value||0).toLocaleString()}</td>
           <td><select class="step-sel" data-stepsel="${escA(o.wo)}" style="font-size:11px;padding:3px 4px;border-radius:6px;border:1px solid var(--b2);background:#fff;color:var(--text);max-width:120px">
@@ -1431,7 +1431,7 @@ function renderBoard(app){
   const grpRowHTML=(gid,sep)=>{
     const g=DB.grps[gid];
     const ms=grpMembers(gid).sort(woCmp);
-    const th=ms.reduce((a,o)=>a+o.hours,0), tv=ms.reduce((a,o)=>a+(o.value||0),0);
+    const th=ms.reduce((a,o)=>a+(+o.hours||0),0), tv=ms.reduce((a,o)=>a+(o.value||0),0);
     const wks=[...new Set(ms.map(o=>o.plannedWeek||''))];
     const mixed=wks.length>1, wk=mixed?'':wks[0];
     const cs=[...new Set(ms.map(o=>o.customer||''))];
@@ -1567,9 +1567,9 @@ function renderBoard(app){
       </tbody>
     </table>
     <div class="table-footer">
-      <span>Shown: <strong>${orders.reduce((a,o)=>a+o.hours,0)}h</strong></span>
+      <span>Shown: <strong>${Math.round(orders.reduce((a,o)=>a+(+o.hours||0),0)*10)/10}h</strong></span>
       <span>Total orders: <strong>${DB.orders.length}</strong></span>
-      <span>Total hours: <strong>${DB.orders.reduce((a,o)=>a+o.hours,0)}h</strong></span>
+      <span>Total hours: <strong>${Math.round(DB.orders.reduce((a,o)=>a+(+o.hours||0),0)*10)/10}h</strong></span>
       <span>Total value: <strong>${fmtVal(DB.orders.reduce((a,o)=>a+(o.value||0),0))}</strong></span>
       ${(()=>{const weeks=get8Wks();const overH=weeks.filter(w=>wkHrs(w)>wkCap(w));const overV=weeks.filter(w=>wkVal(w)>VCAP);return overH.length>0?'<span style="color:var(--red);font-weight:600">⚠ '+overH.length+' week'+(overH.length!==1?'s':'')+' over hours capacity</span>':'';})()}
       ${(()=>{const weeks=get8Wks();const overV=weeks.filter(w=>wkVal(w)>VCAP);return overV.length>0?'<span style="color:var(--red);font-weight:600">⚠ '+overV.length+' week'+(overV.length!==1?'s':'')+' over value capacity</span>':'';})()}
@@ -1712,7 +1712,7 @@ function renderBoard(app){
   document.querySelectorAll('[data-wsel]').forEach(sel=>sel.onchange=function(){const o=DB.orders.find(x=>x.wo===this.dataset.wsel);const v=this.value;if(o)officeWho(by=>{const was=o.plannedWeek||'';o.plannedWeek=v;logEdit(o,'Build week '+(was?wkLbl(was):'unscheduled')+' → '+(v?wkLbl(v):'unscheduled'),by);sched();render();},()=>render());});
   document.querySelectorAll('[data-stepsel]').forEach(sel=>sel.onchange=function(){const o=DB.orders.find(x=>x.wo===this.dataset.stepsel);const v=this.value;if(o)officeWho(by=>{logEdit(o,'Step '+(o.step||'—')+' → '+v,by);o.step=v;sched();render();toast('Step updated');},()=>render());});
   document.querySelectorAll('[data-hl]').forEach(el=>el.onclick=function(){const o=DB.orders.find(x=>x.wo===this.dataset.hl);if(o){o.hl=!o.hl;sched();render();}});
-  document.querySelectorAll('[data-hi]').forEach(inp=>inp.onchange=function(){const o=DB.orders.find(x=>x.wo===this.dataset.hi);const v=parseFloat(this.value)||0;if(o)officeWho(by=>{logEdit(o,'Hours '+o.hours+' → '+v,by);o.hours=v;o.hoursEstimated=false;sched();render();},()=>render());});
+  document.querySelectorAll('[data-hi]').forEach(inp=>inp.onchange=function(){const o=DB.orders.find(x=>x.wo===this.dataset.hi);const v=parseFloat(this.value)||0;if(o)officeWho(by=>{logEdit(o,'Hours '+o.hours+' → '+v,by);o.hours=v;o.hoursEstimated=false;o.hoursSrc='hand';sched();render();},()=>render());});
   document.querySelectorAll('[data-del]').forEach(btn=>btn.onclick=()=>{
     if(!confirm('Delete '+btn.dataset.del+' from the planner?'))return;
     officeWho(by=>{
@@ -3384,8 +3384,11 @@ function autoSchedule(newOrders){
   const weeks=get8Wks();
   const currentWeek=weeks[0];
   const wkLoad={};
-  DB.orders.forEach(o=>{if(o.plannedWeek)wkLoad[o.plannedWeek]=(wkLoad[o.plannedWeek]||0)+o.hours;});
-  newOrders.forEach(o=>{if(o.plannedWeek)wkLoad[o.plannedWeek]=(wkLoad[o.plannedWeek]||0)+o.hours;});
+  // Jobs due after the 8-week window stay unscheduled — they are planned when their week comes into view
+  const endD=new Date(weeks[weeks.length-1]+'T00:00:00Z');endD.setUTCDate(endD.getUTCDate()+7);
+  const windowEnd=wkKey(endD);
+  DB.orders.forEach(o=>{if(o.plannedWeek)wkLoad[o.plannedWeek]=(wkLoad[o.plannedWeek]||0)+(+o.hours||0);});
+  newOrders.forEach(o=>{if(o.plannedWeek)wkLoad[o.plannedWeek]=(wkLoad[o.plannedWeek]||0)+(+o.hours||0);});
   newOrders.sort((a,b)=>(a.dueDate||'9999').localeCompare(b.dueDate||'9999'));
   newOrders.forEach(o=>{
     if(o.plannedWeek)return;
@@ -3397,6 +3400,8 @@ function autoSchedule(newOrders){
       if(due<currentWeek){
         // Overdue — put in current week
         assigned=currentWeek;
+      } else if(due>=windowEnd){
+        assigned=''; // beyond the 8 weeks — unscheduled
       } else {
         // Match to the exact week the due date falls in
         for(let i=0;i<weeks.length;i++){
@@ -3408,7 +3413,7 @@ function autoSchedule(newOrders){
       }
     }
     o.plannedWeek=assigned;
-    wkLoad[assigned]=(wkLoad[assigned]||0)+o.hours;
+    if(assigned)wkLoad[assigned]=(wkLoad[assigned]||0)+(+o.hours||0);
   });
 }
 
@@ -4068,7 +4073,7 @@ function renderExport(app){
         <tbody>${chg.map(o=>`<tr>
           <td><span class="wo-num">${escA(o.wo)}</span></td>
           <td>${escA(o.title)}</td><td style="color:var(--t2)">${escA(o.customer)}</td>
-          <td style="text-align:right"><input type="number" step="0.5" min="0" style="width:52px;text-align:right;border:1px solid ${o.hoursEstimated?'#f59e0b':'var(--b2)'};border-radius:4px;padding:2px 4px;font-size:12px;font-weight:600;background:${o.hoursEstimated?'#fffbeb':'#fff'}" title="${o.hoursEstimated?'Estimated from value — verify':'Actual hours from Cienapps'}" data-hi="${escA(o.wo)}" value="${o.hours}"></td>
+          <td style="text-align:right"><input type="number" step="0.5" min="0" style="width:52px;text-align:right;border:1px solid ${o.hoursEstimated?'#f59e0b':'var(--b2)'};border-radius:4px;padding:2px 4px;font-size:12px;font-weight:600;background:${o.hoursEstimated?'#fffbeb':'#fff'}" title="${o.hoursEstimated?'Estimated from value — verify':'Actual hours from Cienapps'}" data-hi="${escA(o.wo)}" value="${+o.hours||0}"></td>
           <td style="text-align:right;font-size:12px">€${Math.round(o.value||0).toLocaleString()}</td>
           <td style="color:var(--t3)">${wkLbl(orig[o.wo])||'Unscheduled'}</td>
           <td style="font-weight:600;color:${(orig[o.wo]||'')!==(o.plannedWeek||'')?'var(--blue)':'var(--t3)'}">${wkLbl(o.plannedWeek)||'Unscheduled'}</td>
@@ -4092,7 +4097,7 @@ function renderExport(app){
   </div>
   </div>`;
   // hours inputs on this tab must save exactly like the board's (they looked live but were dead)
-  document.querySelectorAll('[data-hi]').forEach(inp=>inp.onchange=function(){const o=DB.orders.find(x=>x.wo===this.dataset.hi);const v=parseFloat(this.value)||0;if(o)officeWho(by=>{logEdit(o,'Hours '+o.hours+' → '+v,by);o.hours=v;o.hoursEstimated=false;sched();render();},()=>render());});
+  document.querySelectorAll('[data-hi]').forEach(inp=>inp.onchange=function(){const o=DB.orders.find(x=>x.wo===this.dataset.hi);const v=parseFloat(this.value)||0;if(o)officeWho(by=>{logEdit(o,'Hours '+o.hours+' → '+v,by);o.hours=v;o.hoursEstimated=false;o.hoursSrc='hand';sched();render();},()=>render());});
   document.getElementById('btn-xchg')?.addEventListener('click',()=>{
     const wb=XLSX.utils.book_new();
     const rows=[['WO #','Title','Customer','Hours','Week Was','Week Now','Step Was','Step Now','Week Start','Due Date','Notes'],
@@ -4109,7 +4114,7 @@ function renderExport(app){
     const wb=XLSX.utils.book_new();
     const sorted=[...DB.orders].sort((a,b)=>{if(!a.plannedWeek&&b.plannedWeek)return 1;if(a.plannedWeek&&!b.plannedWeek)return-1;return(a.plannedWeek||'').localeCompare(b.plannedWeek||'');});
     const rows=[['WO #','Title','Customer','Hours','Planned Week','Week Start','Due Date','Step','Sales Rep','Notes','Vehicle','Delivery Day','Delivered At','Delivered By'],
-      ...sorted.map(o=>[o.wo,o.title,o.customer,o.hours,wkLbl(o.plannedWeek)||'Unscheduled',o.plannedWeek||'',o.dueDate||'',o.step.replace(/^\d\.\s*/,''),o.salesRep||'',o.notes||'',o.delVeh?(vehLbl(o.delVeh)||o.delVeh):'',o.delDay||'',o.delDelivAt?new Date(o.delDelivAt).toLocaleString('en-IE'):'',o.delivBy||''])];
+      ...sorted.map(o=>[o.wo,o.title,o.customer,o.hours,wkLbl(o.plannedWeek)||'Unscheduled',o.plannedWeek||'',o.dueDate||'',(o.step||'').replace(/^\d+\.\s*/,''),o.salesRep||'',o.notes||'',o.delVeh?(vehLbl(o.delVeh)||o.delVeh):'',o.delDay||'',o.delDelivAt?new Date(o.delDelivAt).toLocaleString('en-IE'):'',o.delivBy||''])];
     const ws=XLSX.utils.aoa_to_sheet(rows);
     ws['!cols']=[{wch:16},{wch:35},{wch:28},{wch:7},{wch:16},{wch:13},{wch:12},{wch:20},{wch:16},{wch:30},{wch:12},{wch:10},{wch:18},{wch:14}];
     XLSX.utils.book_append_sheet(wb,ws,'Full Schedule');
