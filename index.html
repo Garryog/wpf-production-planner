@@ -510,7 +510,11 @@ let BASE=null;   // the plan exactly as last agreed with the database (load or s
 let VER=null;    // database version of BASE; null = version column missing → old save behaviour
 let SAVING=false,SAVE_AGAIN=false;
 let UNSURE=[]; // plans sent by saves whose reply never arrived (each may or may not have landed)
-function unsureAdd(p){UNSURE.push(p);if(UNSURE.length>5)UNSURE.shift();}
+const USV=new WeakMap(); // unconfirmed save → the version it would have written
+// No cap by count: a record is kept until a save is confirmed or a load shows a version at/after the one it sent.
+// An identical resend (e.g. 30-s retries while offline) isn't stored twice.
+function unsureAdd(p,v){const l=UNSURE[UNSURE.length-1];if(l&&USV.get(l)===v&&same(l,p))return;UNSURE.push(p);if(v!=null)USV.set(p,v);}
+function unsureKeep(row){const v=row&&row.version!==undefined?(+row.version||1):null;UNSURE=v===null?[]:UNSURE.filter(p=>(USV.get(p)||0)>v);}
 function unsureDel(p){const i=UNSURE.indexOf(p);if(i>=0)UNSURE.splice(i,1);} // a definite reply: that save did not land
 function clone(x){return x===undefined?undefined:JSON.parse(JSON.stringify(x));}
 function same(a,b){
@@ -811,7 +815,7 @@ async function loadDB(){
       const theirs=planOf(row,BASE.settings);
       const m=mergePlan(BASE,snap(),theirs,{unsure:UNSURE});
       applyPlan(m.plan);noteMerge(m.notes,m.ren,row.updated_by);
-      BASE=clone(theirs);UNSURE=[];VER=row.version===undefined?null:(+row.version||1);
+      BASE=clone(theirs);unsureKeep(row);VER=row.version===undefined?null:(+row.version||1);
       DB.loadFailed=false;
       sched();setSS('s');
       return;
@@ -872,7 +876,7 @@ async function pushPlan(){
         const row=checkRow(await fetchMain());
         const theirs=planOf(row,BASE.settings),m=mergePlan(BASE,snap(),theirs,{unsure:UNSURE});
         applyPlan(m.plan);noteMerge(m.notes,m.ren,row.updated_by);mergedRender();
-        BASE=clone(theirs);UNSURE=[];
+        BASE=clone(theirs);unsureKeep(row);
       }
       const mine=snap();
       unsureAdd(mine); // counts as "may have landed" from the moment it's sent (the tab may close before the reply)
@@ -884,7 +888,7 @@ async function pushPlan(){
     // (SUPABASE_CHANGES.md) also sets old+1 on every update — same number, so never a double bump — and
     // bumps it for old-code tabs too. The reply carries just the new version number.
     let resp;
-    unsureAdd(mine); // counts as "may have landed" from the moment it's sent — a tab closed mid-save keeps the record
+    unsureAdd(mine,VER+1); // counts as "may have landed" from the moment it's sent — a tab closed mid-save keeps the record
     try{resp=await fetch(SUPA_URL+'/production_planner?id=eq.main&version=eq.'+VER+'&select=version',{method:'PATCH',headers:{...SUPA_WHDR,'Prefer':'return=representation'},
       body:JSON.stringify({...mine,version:VER+1,updated_by:whoTag()})});}
     catch(e){throw e;} // no reply: it may have landed — it stays in UNSURE so it isn't mistaken for someone else's change
@@ -905,7 +909,7 @@ async function pushPlan(){
     const theirs=planOf(row,BASE.settings);
     const m=mergePlan(BASE,snap(),theirs,{unsure:UNSURE});
     applyPlan(m.plan);noteMerge(m.notes,m.ren,row.updated_by);
-    BASE=clone(theirs);UNSURE=[];VER=row.version===undefined?null:(+row.version||1);
+    BASE=clone(theirs);unsureKeep(row);VER=row.version===undefined?null:(+row.version||1);
     mergedRender();
   }
   throw new Error('kept clashing with other screens');
