@@ -462,7 +462,10 @@ let WCAP=350;
 
 let DB={orders:[],nid:1,weekCaps:{}};
 // Default value-to-hours scale (editable in Settings tab)
-function getSteps(){const base=['Assembly complete','Production complete','Job shipped'];const s=new Set([...DB.orders.map(o=>o.step||'').filter(Boolean),...base]);return[...s].sort();}
+// Board step dropdown: Cienapps steps 1–8 only (exact Cienapps wording). Shipped / installed / invoiced / on hold
+// (9–12) only ever come from a Cienapps import. A job already at another step keeps it (shown as its own option).
+const MANUAL_STEPS=['1. DRAWING','2. NO SITE MEASURE DONE','3. READY FOR UPLOAD','4. READY FOR PRODUCTION','5. WORK ORDER PROCESSED','6. JOB CUT COMPLETE','7. ASSEMBLY COMPLETE','8. PALLETED'];
+function getSteps(){return MANUAL_STEPS.slice();}
 let HOUR_SCALE=[
   {maxVal:1000,  hours:1},
   {maxVal:3000,  hours:3},
@@ -1955,7 +1958,16 @@ function listDeadline(l){ // calendar day before delivery — local-date arithme
   return t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
 }
 function listOverdue(l){const dl=listDeadline(l);return !!dl&&dl<todayLocal();}
-function woFinished(o){return !!o&&(/shipped|invoiced|delivered/i.test(o.step||'')||!!o.delDelivAt||!!o.delDone||isShipped(o));}
+/* Nothing left for the factory: on the Shipped tab, Cienapps step 9/10/11 (stepIsShipped — the one rule), or delivered.
+   A job brought back to the board from Shipped is live again (its lists show, it can need a list) until it is
+   delivered again or Cienapps moves it on (which ships it again). */
+function woFinished(o){
+  if(!o)return false;
+  if(isShipped(o))return true;
+  const b=o.shipBack&&o.shipBack.at||'';
+  if(b)return !!(o.delDelivAt&&String(o.delDelivAt)>String(b));
+  return stepIsShipped(o.step)||!!o.delDelivAt||!!o.delDone;
+}
 function listFinished(l){ // every tagged job shipped/delivered (or none tagged but both sides signed off) — nothing left for the factory to do
   const ws=(l.wos||[]).map(w=>DB.orders.find(o=>o.wo===w));
   if(ws.length&&ws.every(o=>!o||woFinished(o)))return true;
