@@ -91,10 +91,16 @@ const base = () => ({ id: 'main', version: 1, orders: [H.order({ wo: 'WO-1' }), 
     const big = base(); big.orders = []; for (let i = 0; i < 2500; i++) big.orders.push(H.order({ wo: 'WO-' + i, log: Array.from({ length: 20 }, (_, j) => ({ at: '2026-10-01', by: 'x', what: 'edit ' + j })) }));
     const S = makeServer(big); const A = await device(browser, S, { name: 'A' }), B = await device(browser, S, { name: 'B' });
     const t = Date.now();
+    // Round 4: wait for each screen's save to SETTLE (no save in flight, nothing queued, screen == last agreed copy)
+    // instead of trusting saveDB()'s return — a startup save still in flight makes saveDB() only queue the edit.
+    const settled = P => P.waitForFunction(() => !SAVING && !saveT && !DB.saveFailed && same(snap(), BASE), null, { timeout: 30000, polling: 50 }).then(() => true, () => false);
     await A.page.evaluate(async () => { DB.orders[5].notes = 'A'; await saveDB(); });
+    const sa = await settled(A.page);
     await B.page.evaluate(async () => { DB.orders[2000].notes = 'B'; await saveDB(); });
+    const sb = await settled(B.page);
     const ms = Date.now() - t;
-    rec('2,500 jobs: concurrent saves merge, under 10s', S.row.orders[5].notes === 'A' && S.row.orders[2000].notes === 'B' && ms < 10000, ms + 'ms, payload ' + Math.round(JSON.stringify(S.row).length / 1024) + 'KB');
+    if (!sa || !sb) console.log('  (a save did not settle within 30 s: A ' + sa + ', B ' + sb + ')');
+    rec('2,500 jobs: concurrent saves merge, under 10s', S.row.orders[5].notes === 'A' && S.row.orders[2000].notes === 'B' && ms < 10000, 'both notes on server: ' + (S.row.orders[5].notes === 'A' && S.row.orders[2000].notes === 'B') + ', settled ' + sa + '/' + sb + ', ' + ms + 'ms, payload ' + Math.round(JSON.stringify(S.row).length / 1024) + 'KB');
     await A.close(); await B.close();
   }
   await browser.close();
