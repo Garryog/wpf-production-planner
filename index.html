@@ -3564,6 +3564,9 @@ function isTotalsWo(w){
   return !s.split(/\s+/).some(t=>/\d/.test(t)&&/^[A-Za-z0-9]+([_-][A-Za-z0-9]+)+$/.test(t));
 }
 function woKey(w){return String(w==null?'':w).trim().toUpperCase();}
+// Tidy a WO cell before matching: no-break spaces, spaces around - _ / collapsed ("WO - 2604 - 1" → "WO-2604-1"),
+// a space before a single suffix letter dropped ("2557_01 A" → "2557_01A").
+function woNorm(w){return String(w==null?'':w).replace(/[\u00a0\u202f\u2009]/g,' ').trim().replace(/\s*([-_\/])\s*/g,'$1').replace(/(\d)\s+([A-Za-z])$/,'$1$2');}
 function blankCell(v){return v==null||(typeof v==='string'&&!v.trim());}
 /* parseNum: Irish "€12,500.00" = 12500 and European "€12.500,00" = 12500 · "12,5" / "8,5" (decimal comma) = 12.5 / 8.5 ·
    "1,000 EUR" = 1000 · "(1,200)" = -1200 · one dot is always a decimal point ("12.500" = 12.5) · blank → null · unreadable → NaN */
@@ -3601,7 +3604,9 @@ function parseDateIE(v){
     const d=new Date(Math.round((v-25569)*86400000));
     return ymd(d.getUTCFullYear(),d.getUTCMonth()+1,d.getUTCDate());
   }
-  const s=String(v).trim().toLowerCase().replace(/(\d)(st|nd|rd|th)\b/g,'$1');
+  const s=String(v).trim().toLowerCase().replace(/(\d)(st|nd|rd|th)\b/g,'$1')
+    .replace(/^(mon|tue|wed|thu|fri|sat|sun)[a-z]*\.?,?\s+/,'') // "Thu 05/11/2026"
+    .replace(/(\d)[\st]+\d{1,2}:\d{2}(:\d{2}(\.\d+)?)?\s*(am|pm|z)?$/,'$1'); // a time after the date ("05/11/2026 00:00")
   let m;
   if((m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[t\s].*)?$/)))return ymd(m[1],m[2],m[3]); // ISO
   if((m=s.match(/^(\d{1,2})[\/\-.\s]+(\d{1,2})[\/\-.\s]+(\d{2}|\d{4})$/)))return ymd(m[3],m[2],m[1]); // d/m/y — never m/d
@@ -3614,7 +3619,7 @@ function parseDateIE(v){
    so a blank cell means "not supplied" and can never wipe what the planner already holds. Returns {skip} for
    rows with no WO number or totals lines. A future Cienapps API feed builds records in this same shape. */
 function normaliseRow(row){
-  const wo=String(row.wo==null?'':row.wo).trim();
+  const wo=woNorm(row.wo);
   if(!wo||/^(nat|nan|undefined|null)$/i.test(wo))return{skip:'noWo'};
   if(isTotalsWo(wo))return{skip:'totals'};
   const r={wo,key:woKey(wo),has:{},flags:[]};
@@ -3639,8 +3644,10 @@ function normaliseRow(row){
 }
 // "+A" / "+A+C" badge for a WO with A/C lines folded into it (letters from o.adds)
 function addBadge(o){const ks=Object.keys((o&&o.adds)||{});if(!ks.length)return'';const ls=ks.map(k=>(acBase(k)||{}).letter||'?');return`<span class="fu-badge" style="background:#f6f2fd;border-color:#c9b6f0;color:#5b3fa8;margin-left:4px" title="Additions folded in: ${escA(ks.join(', '))}">+${escA(ls.join('+'))}</span>`;}
-// A/C suffix: one letter straight after the number, with or without a dash (2557_01A, WO-2604-7-C) → base WO key, or null
-function acBase(key){const m=String(key).match(/^(.*\d)-?([A-Z])$/);return m?{base:m[1],letter:m[2]}:null;}
+// A/C suffix: one letter A–F straight after the number, with or without a dash (2557_01A, WO-2604-7-C) → base WO key, or null.
+// Other letters (R etc.) are NOT additions — those lines stay their own job and are flagged "suffix?".
+function acBase(key){const m=String(key).match(/^(.*\d)-?([A-F])$/);return m?{base:m[1],letter:m[2]}:null;}
+function oddSuffix(key){const m=String(key).match(/^(.*\d)-?([G-Z])$/);return m?{base:m[1],letter:m[2]}:null;}
 /* combineRows: same WO twice in the file → one record (filled cells win, earliest due date, flagged).
    A/C lines fold into their base WO (base in the file, or on the board via `board`, a Map woKey → order):
    their value/hours go into base.adds and the line is listed as an Addition. A line whose base can't be found,
@@ -3673,13 +3680,19 @@ function combineRows(recs,board){
   const keep=[],folds=[],synth=new Map();
   out.forEach(r=>{
     const ac=acBase(r.key);
-    if(!ac||board.has(r.key)){keep.push(r);return;}
+    if(!ac||board.has(r.key)){
+      const od=!ac&&!board.has(r.key)&&oddSuffix(r.key);
+      if(od&&(by.has(od.base)||board.has(od.base)))r.flags.push('suffix? — letter '+od.letter+' is not an addition letter (A–F); kept as its own job, not folded into '+od.base);
+      keep.push(r);return;}
     let base=by.get(ac.base); // a base key always ends in a digit, so it is never itself an A/C line
     if(!base&&!board.has(ac.base)){r.flags.push('base '+ac.base+' not found — kept as its own job');keep.push(r);return;}
     if(!base){ // base only on the board: a record that carries just the addition
       base=synth.get(ac.base);
       if(!base){const o=board.get(ac.base);base={wo:o.wo,key:ac.base,has:{},flags:[],synth:true};synth.set(ac.base,base);keep.push(base);}
     }
+    // an addition due earlier than its base brings the base's due date forward
+    if(r.has.dueDate){const cur=base.has.dueDate?base.dueDate:(base.synth?(board.get(ac.base).dueDate||''):'');
+      if(!cur||r.dueDate<cur){base.dueDate=r.dueDate;base.has.dueDate=1;base.flags.push('due date brought forward to '+r.dueDate+' by addition '+r.wo+(cur?' (was '+cur+')':''));}}
     base.adds=base.adds||{};
     base.adds[r.key]={value:r.has.value?r.value:0,...(r.has.hours?{hours:r.hours}:{}),title:r.title||''};
     folds.push({wo:r.wo,base:base.wo,letter:ac.letter,value:r.has.value?r.value:0,hours:r.has.hours?r.hours:null,title:r.title||'',step:r.step||''});
@@ -4030,7 +4043,7 @@ function analyzeImport(input,source){
         const val=value===undefined?0:value;
         let hr=importHours(r.key,cs,val,r);
         if(r.adds&&r.has.hours)hr={...hr,hours:Math.round((r.hours+addsSum(r.adds,'hours'))*100)/100};
-        const o={wo:r.wo,ref:r.ref||'',floor:r.floor||'',unit:r.unit||'',title:r.title||r.ref||r.wo,customer:r.customer||'',
+        const o={wo:r.key,ref:r.ref||'',floor:r.floor||'',unit:r.unit||'',title:r.title||r.ref||r.wo,customer:r.customer||'',
           hours:hr.hours,hoursEstimated:hr.hoursEstimated,hoursSrc:hr.hoursSrc,dueDate:r.dueDate||'',origDueDate:r.dueDate||'',step:cs,
           salesRep:r.salesRep||'',orderNo:r.orderNo||'',value:val,plannedWeek:'',notes:'',colour:''};
         if(cs)o.cienStep=cs;

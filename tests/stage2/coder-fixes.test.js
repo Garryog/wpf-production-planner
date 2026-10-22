@@ -97,6 +97,18 @@ const res = []; const rec = (n, ok, d) => { res.push(ok); console.log((ok ? 'PAS
   const d7 = await ev(() => { const p = analyzeImport(prepImport([{ wo: 'WO-8700-1', value: 100, dueDate: '20/11/2026', step: '3. READY FOR UPLOAD' }, { wo: 'WO-8700-1', value: 200, dueDate: '06/11/2026', step: '9. JOB SHIPPED' }, { wo: 'wo-8700-1 ', value: 300 }]), 'file');
     IMPPLAN = p; showTab('i'); renderImportPreview(p); const txt = (document.getElementById('imp-dups') || {}).textContent || ''; IMPPLAN = null; return { why: p.flagged.map(f => f.why).join('|'), txt }; });
   rec('7: duplicate lines — value/step used with line numbers and alternatives, in the preview', /value €100 used \(line 1\) — also €200 \(line 2\), €300 \(line 3\)/.test(d7.txt) && /step "3. READY FOR UPLOAD" used \(line 1\) — also "9. JOB SHIPPED" \(line 2\)/.test(d7.txt) && /due date 2026-11-06 used \(line 2/.test(d7.txt) && /duplicate in file \(3 lines: 1, 2, 3\)/.test(d7.why), JSON.stringify(d7));
+  // 9. dates with times, WO tidy-up, upper case, A–F only, A-line brings base due forward
+  const d9 = await ev(() => [parseDateIE('05/11/2026 00:00'), parseDateIE('05/11/2026 14:30:00'), parseDateIE('Thu 05/11/2026'), parseDateIE('2026-11-05 08:00')]);
+  rec('9: dates with a time read', d9.every(x => x === '2026-11-05'), JSON.stringify(d9));
+  p = await P([{ wo: ' WO - 2604 - 1 ', value: 4000 }, { wo: 'wo-8900-1', value: 100, dueDate: '2026-11-20' }]);
+  rec('9: "WO - 2604 - 1" matches WO-2604-1; new job stored upper case', !p.newOrders.some(o => /2604/.test(o.wo)) && p.newOrders.map(o => o.wo).join() === 'WO-8900-1', JSON.stringify(p.newOrders.map(o => o.wo)));
+  p = await P([{ wo: 'WO-2604-1 A', value: 200 }, { wo: 'WO-2604-1R', value: 50 }, { wo: 'WO-2604-1G', value: 50 }]);
+  rec('9: "WO-2604-1 A" folds; R/G stay own jobs, flagged suffix?', p.folds.length === 1 && p.folds[0].letter === 'A' && p.newOrders.length === 2 && p.flagged.filter(f => /suffix\?/.test(f.why)).length === 2, JSON.stringify([p.folds, p.flagged]));
+  p = await P([{ wo: 'WO-2604-1C', value: 300, dueDate: '2026-11-02' }]);
+  const u9 = p.updates.find(u => u.wo === 'WO-2604-1');
+  rec('9: addition due earlier than its board base brings the base due date forward (flagged)', u9 && u9.set.dueDate === '2026-11-02' && p.flagged.some(f => f.wo === 'WO-2604-1' && /brought forward/.test(f.why)), JSON.stringify([u9 && u9.set, p.flagged]));
+  p = await P([{ wo: '3000_05B', value: 300, dueDate: '2026-11-02' }, { wo: '3000_05', value: 1000, dueDate: '2026-11-09' }]);
+  rec('9: addition due earlier than its base in the same file → base due brought forward (flagged)', p.newOrders.length === 1 && p.newOrders[0].dueDate === '2026-11-02' && p.flagged.some(f => /brought forward/.test(f.why)), JSON.stringify([p.newOrders, p.flagged]));
   await t.close();
   await browser.close();
   console.log(res.filter(x => !x).length + ' failed of ' + res.length);
