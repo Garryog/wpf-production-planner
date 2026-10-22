@@ -3940,55 +3940,75 @@ function analyzeImport(input,source){
       counts:{added,updated,skipped:unchanged,noWo:skip.noWo||0,totals:skip.totals||0,snag:skip.snag||0,excluded,shipped:shipped.length,folded:(input.folds||[]).length,rows:input.rows||recs.length}};
 }
 function renderImportPreview(plan){
-  const c=plan.counts;
-  const line=(wo,title,extra)=>`<div class="preview-row"><span style="font-family:monospace;color:var(--t2);width:140px;flex-shrink:0">${escA(wo)}</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escA(title||'')}</span><span style="color:var(--t3);font-size:11px;white-space:nowrap">${extra||''}</span></div>`;
+  const c=plan.counts,el=document.getElementById('iprev');if(!el)return;
+  const line=(wo,title,extra)=>`<div class="preview-row"><span style="font-family:monospace;color:var(--t2);width:140px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis">${escA(wo)}</span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escA(title||'')}</span><span style="color:var(--t3);font-size:11px;white-space:nowrap">${extra||''}</span></div>`;
   const section=(title,color,bg,items,fmtr,cap)=>items.length?`<div style="background:${bg};border:1px solid ${color};border-radius:8px;padding:10px 13px;margin-bottom:10px">
     <div style="font-size:13px;font-weight:700;margin-bottom:6px">${title}</div>
     ${items.slice(0,cap||12).map(fmtr).join('')}
     ${items.length>(cap||12)?`<div style="font-size:11px;color:var(--t3);padding-top:4px">…and ${items.length-(cap||12)} more</div>`:''}
   </div>`:'';
-  document.getElementById('iprev').innerHTML=`<div style="margin-top:14px">
+  const sh=s=>String(s||'—').replace(/^\d+\.\s*/,'');
+  const dc=plan.updates.filter(u=>u.dateChanged),sd=plan.stepDiffs||[],skips=[];
+  if(c.snag)skips.push(c.snag+' snag (WO-S) ignored');
+  if(c.excluded)skips.push(c.excluded+' not added ('+Object.keys(plan.exCounts).map(k=>plan.exCounts[k]+' '+escA(k)).join(', ')+')');
+  if(c.totals)skips.push(c.totals+' totals row'+(c.totals!==1?'s':'')+' skipped');
+  if(c.noWo)skips.push(c.noWo+' rows with no WO number');
+  const nChg=c.added+c.updated+plan.shipped.length;
+  el.innerHTML=`<div style="margin-top:14px">
     <div style="background:#eaf2ff;border:2px solid #1a56db;border-radius:8px;padding:12px 15px;margin-bottom:12px">
       <div style="font-size:14px;font-weight:800;color:#14335c;margin-bottom:4px">Import preview — nothing has changed yet</div>
-      <div style="font-size:13px;color:#14335c">${c.added} new · ${c.updated} updated · ${c.skipped} unchanged · ${plan.removals.length} removed from board${plan.inTransit.length?` · <b>${plan.inTransit.length} protected (out for delivery)</b>`:''}${c.excluded?` · ${c.excluded} excluded (${Object.keys(plan.exCounts).map(k=>plan.exCounts[k]+' '+k).join(', ')})`:''}${c.noWo?` · ${c.noWo} rows with no WO number`:''}</div>
+      <div style="font-size:13px;color:#14335c">${c.added} new · ${c.updated} updated · ${c.skipped} unchanged · ${plan.shipped.length} to 📦 Shipped${c.folded?` · ${c.folded} addition${c.folded!==1?'s':''} folded in`:''}${plan.flagged.length?` · <b>${plan.flagged.length} flagged</b>`:''} · <b>nothing is removed</b></div>
+      ${skips.length?`<div style="font-size:12px;color:#14335c;opacity:.8;margin-top:3px">${skips.join(' · ')}</div>`:''}
     </div>
     ${plan.dispGaps.length?`<div style="background:#fdecea;border:2px solid #e57368;border-radius:8px;padding:12px 15px;margin-bottom:12px">
       <div style="font-size:13px;font-weight:700;color:#8a1c10;margin-bottom:6px">⚠ CHECK THESE — Cienapps says shipped/invoiced, but the planner has NO dispatch record:</div>
       ${plan.dispGaps.map(g=>`<div style="font-size:12px;color:#8a1c10;padding:2px 0"><b style="font-family:monospace">${escA(g.wo)}</b>${g.unit?' · '+escA(g.unit):''} — ${escA(g.title)}${g.customer?' <span style="opacity:.75">('+escA(g.customer)+')</span>':''} <span style="font-weight:700">[${escA(g.reason)} in Cienapps]</span></div>`).join('')}
       <div style="font-size:11px;color:#8a1c10;margin-top:6px">If any of these are still in the factory, Cienapps is ahead of reality — fix the status there and get the job on a van.</div>
     </div>`:''}
-    ${section('🛡 Protected — tagged for delivery, NOT removed although Cienapps says shipped/invoiced','#ecd394','#fff8e6',plan.inTransit,t=>line(t.wo,t.title,(escA([t.veh,t.day].filter(Boolean).join(' '))||'on the delivery board')+' · stays until the driver confirms delivery'),12)}
-    ${section('➕ New work orders — will be added and scheduled to their due-date week','#b3e0c4','#f4fbf6',plan.newOrders,o=>line(o.wo,o.title,o.hours+'h · due '+(o.dueDate?fmt(o.dueDate):'—')),15)}
-    ${(dc=>dc.length?`<div style="background:#fffbeb;border:2px solid #e8b931;border-radius:8px;padding:12px 15px;margin-bottom:10px">
-      <div style="font-size:13px;font-weight:800;color:#8a6d00;margin-bottom:3px">📅 Due dates changed in Cienapps — decide each job's week</div>
-      <div style="font-size:11px;color:#8a6d00;margin-bottom:8px">The planner never moves a planned week by itself. For each date change, keep the week the meeting chose, or move the job to its new due-date week. <b style="color:#c0392b">LATE</b> = the current planned week now ends after the new due date.</div>
-      ${dc.slice(0,25).map(u=>`<div style="display:flex;gap:10px;align-items:center;padding:4px 0;border-bottom:1px solid #f1e3b8;font-size:12px;flex-wrap:wrap">
+    ${dc.length||sd.length?`<div id="imp-differs" style="background:#fffbeb;border:2px solid #e8b931;border-radius:8px;padding:12px 15px;margin-bottom:10px">
+      <div style="font-size:13px;font-weight:800;color:#8a6d00;margin-bottom:3px">⇄ Differs — Cienapps and the planner disagree</div>
+      ${dc.length?`<div style="font-size:11px;color:#8a6d00;margin-bottom:8px">Due dates: <b>Take</b> uses the Cienapps date (the customer date); <b>Keep</b> keeps the planner's date and won't ask again about the same Cienapps date. The planned week never moves by itself — pick "Move to" to re-plan. <b style="color:#c0392b">LATE</b> = the planned week ends after the new due date.</div>
+      <div style="display:flex;gap:8px;margin-bottom:6px;flex-wrap:wrap"><button class="btn btn-s" id="dk-take" style="padding:4px 10px;font-size:12px">Take all</button><button class="btn btn-s" id="dk-keep" style="padding:4px 10px;font-size:12px">Keep all</button></div>
+      <div style="max-height:420px;overflow:auto">
+      ${dc.map((u,i)=>`<div style="display:flex;gap:10px;align-items:center;padding:4px 0;border-bottom:1px solid #f1e3b8;font-size:12px;flex-wrap:wrap">
         <span style="font-family:monospace;font-weight:700;width:140px;flex-shrink:0">${escA(u.wo)}</span>
         <span style="flex:1;min-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escA(u.exTitle||'')}</span>
         <span style="white-space:nowrap">${u.oldDue?fmt(u.oldDue):'—'} → <b>${fmt(u.dueDate)}</b></span>
         <span style="white-space:nowrap">planned ${u.pw?wkLbl(u.pw):'—'}${u.lateNow?' <b style="color:#c0392b;background:#fdecea;border-radius:4px;padding:0 5px">LATE</b>':u.pw?' <span style="color:#0d6e46">✓ still fits</span>':''}</span>
+        <span style="white-space:nowrap"><label><input type="radio" name="dk${i}" data-dk="${escA(u.wo)}" value="take" checked> Take</label> <label style="margin-left:6px"><input type="radio" name="dk${i}" data-dk="${escA(u.wo)}" value="keep"> Keep</label></span>
         ${u.sugWk&&u.sugWk!==u.pw?`<select data-rmv="${escA(u.wo)}" style="padding:3px 6px;border:1px solid ${u.lateNow?'#e57368':'var(--b2)'};border-radius:5px;font-size:11px;background:#fff">
           <option value="">Keep ${u.pw?wkLbl(u.pw):'unscheduled'}</option>
           <option value="${escA(u.sugWk)}">Move to ${wkLbl(u.sugWk)} (due week)</option>
         </select>`:''}
-      </div>`).join('')}
-      ${dc.length>25?`<div style="font-size:11px;color:#8a6d00;padding-top:4px">…and ${dc.length-25} more date changes (all applied; use the ⚠ late-vs-due filter on the board to re-plan them)</div>`:''}
-    </div>`:'')(plan.updates.filter(u=>u.dateChanged))}
-    ${section('✏ Other updates to existing work orders','#f5d89b','#fffbeb',plan.updates.filter(u=>!u.dateChanged),u=>line(u.wo,u.exTitle,escA(u.what)),15)}
-    ${section('🗑 Will be removed from the board (shipped / invoiced / drawing / snag)','#e57368','#fdf3f2',plan.removals,r=>line(r.wo,r.title,escA(r.reason)),15)}
+      </div>`).join('')}</div>`:''}
+      ${sd.length?`<div style="font-size:12px;font-weight:700;color:#8a6d00;margin:${dc.length?'10px':'0'} 0 4px">Steps (nothing moves backwards):</div>
+      ${sd.slice(0,40).map(s=>line(s.wo,s.title,'planner '+escA(sh(s.planner))+' · Cienapps '+escA(sh(s.cien))+' — '+escA(s.why))).join('')}
+      ${sd.length>40?`<div style="font-size:11px;color:#8a6d00">…and ${sd.length-40} more</div>`:''}`:''}
+    </div>`:''}
+    ${section('📦 Moving to the Shipped tab — shipped/invoiced in Cienapps (off the Capacity Board; kept until installation is complete)','#b9cdec','#eef3fb',plan.shipped,s=>line(s.wo,s.title,escA(sh(s.cs))+(s.onVan?' · <b>stays on Deliveries until the driver confirms</b>':'')),15)}
+    ${section('➕ Additions — A/C lines folded into their base work order','#c9b6f0','#f6f2fd',plan.folds,f=>line(f.wo,f.title,'→ '+escA(f.base)+' · +€'+Math.round(f.value||0).toLocaleString()+(f.hours!=null?' · +'+f.hours+'h':'')),15)}
+    ${section('⚑ Flagged — check these','#e57368','#fdf3f2',plan.flagged,f=>line(f.wo,f.title,escA(f.why)),20)}
+    ${section('🆕 New work orders — will be added and scheduled to their due-date week','#b3e0c4','#f4fbf6',plan.newOrders,o=>line(o.wo,o.title,o.hours+'h · due '+(o.dueDate?fmt(o.dueDate):'—')),15)}
+    ${section('✏ Other updates to existing work orders','#f5d89b','#fffbeb',plan.updates.filter(u=>!u.dateChanged||u.what),u=>line(u.wo,u.exTitle,escA(u.what||'due date')),15)}
     <div style="display:flex;gap:10px;margin-top:6px;flex-wrap:wrap">
-      <button class="btn btn-g" id="imp-apply" style="font-size:14px;padding:10px 22px">✓ Apply import — ${c.added+c.updated+plan.removals.length} change${c.added+c.updated+plan.removals.length!==1?'s':''}</button>
+      <button class="btn btn-g" id="imp-apply" style="font-size:14px;padding:10px 22px">✓ Apply import — ${nChg} change${nChg!==1?'s':''}</button>
       <button class="btn btn-s" id="imp-cancel">✕ Cancel — change nothing</button>
     </div>
   </div>`;
-  document.getElementById('imp-cancel').onclick=()=>{IMPPLAN=null;document.getElementById('iprev').innerHTML='<div style="margin-top:14px;font-size:13px;color:var(--t3)">Import cancelled — nothing was changed.</div>';};
+  const setAll=v=>el.querySelectorAll('[data-dk]').forEach(r=>{if(r.value===v)r.checked=true;});
+  const tk=document.getElementById('dk-take'),kp=document.getElementById('dk-keep');
+  if(tk)tk.onclick=()=>setAll('take');if(kp)kp.onclick=()=>setAll('keep');
+  document.getElementById('imp-cancel').onclick=()=>{IMPPLAN=null;el.innerHTML='<div style="margin-top:14px;font-size:13px;color:var(--t3)">Import cancelled — nothing was changed.</div>';};
   document.getElementById('imp-apply').onclick=async()=>{
     if(!IMPPLAN)return;
-    if(IMPPLAN.removals.length&&!await backupFirst('import removing '+IMPPLAN.removals.length+' work order'+(IMPPLAN.removals.length!==1?'s':'')))return;
+    // capture the decisions made in the preview before the DOM goes
+    const moves={},dueDec={};
+    document.querySelectorAll('[data-rmv]').forEach(s=>{if(s.value)moves[s.dataset.rmv]=s.value;});
+    document.querySelectorAll('[data-dk]').forEach(r=>{if(r.checked)dueDec[r.dataset.dk]=r.value;});
+    const ns=IMPPLAN.shipped.length;
+    if(ns>20&&!await backupFirst('import moving '+ns+' work orders to Shipped'))return;
     if(!IMPPLAN)return;
-    // capture the week decisions made on the date-reconciliation rows before the preview DOM goes
-    const moves={};document.querySelectorAll('[data-rmv]').forEach(s=>{if(s.value)moves[s.dataset.rmv]=s.value;});
-    IMPPLAN.moves=moves;
+    IMPPLAN.moves=moves;IMPPLAN.dueDec=dueDec;
     applyImport(IMPPLAN);IMPPLAN=null;
   };
 }
