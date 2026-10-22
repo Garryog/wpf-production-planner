@@ -1704,7 +1704,7 @@ function renderBoard(app){
   // Delivery tag toggle — in place, no re-render, so the list doesn't jump while reviewing
   document.querySelectorAll('[data-dv]').forEach(b=>b.onclick=()=>{
     const o=DB.orders.find(x=>x.wo===b.dataset.dv);if(!o)return;
-    o.delv=!o.delv;
+    o.delv=!o.delv;delvMark(o);
     if(!o.delv){o.delVeh='';o.delDay='';o.delDone=false;}
     b.className='dvbtn'+(o.delv?' on':'');
     b.title=o.delv?'On the delivery board — click to untag':'Put on the delivery board';
@@ -1749,7 +1749,7 @@ function renderBoard(app){
   document.querySelectorAll('[data-gdv]').forEach(b=>b.onclick=()=>{
     const ms=grpMembers(b.dataset.gdv);
     const on=!ms.every(o=>o.delv);
-    ms.forEach(o=>{o.delv=on;if(!on){o.delVeh='';o.delDay='';o.delDone=false;}});
+    ms.forEach(o=>{o.delv=on;delvMark(o);if(!on){o.delVeh='';o.delDay='';o.delDone=false;}});
     updDelBadge();sched();render();
     if(on)showReadiness(ms.map(o=>o.wo),'group put on the delivery board');
     else toast('Group untagged');
@@ -1866,9 +1866,9 @@ function renderShipped(app){
   const sc=document.getElementById('sh-done');if(sc)sc.onchange=function(){shDone=this.checked;render();};
   const find=wo=>DB.orders.find(x=>x.wo===wo);
   app.querySelectorAll('[data-shc]').forEach(b=>b.onclick=()=>{const o=find(b.dataset.shc);if(!o)return;
-    officeWho(by=>{o.completeAt=nowISO();o.completeBy=by;logEdit(o,'Installation complete',by);sched();render();toast(o.wo+' — installation complete ✓');});});
+    officeWho(by=>{o.completeAt=nowISO();o.completeBy=by;delete o.completeOverride;logEdit(o,'Installation complete',by);sched();render();toast(o.wo+' — installation complete ✓');});});
   app.querySelectorAll('[data-shu]').forEach(b=>b.onclick=()=>{const o=find(b.dataset.shu);if(!o)return;
-    officeWho(by=>{delete o.completeAt;delete o.completeBy;logEdit(o,'Installation complete undone',by);sched();render();});});
+    officeWho(by=>{delete o.completeAt;delete o.completeBy;o.completeOverride=o.cienStep||o.shippedStep||o.step||'(none)';logEdit(o,'Installation complete undone',by);sched();render();});});
   app.querySelectorAll('[data-shb]').forEach(b=>b.onclick=()=>{const o=find(b.dataset.shb);if(!o)return;
     if(!confirm('Bring '+o.wo+' back to the Capacity Board?\n\nIt stays there even though Cienapps says shipped — until Cienapps moves it on (e.g. to invoiced).'))return;
     officeWho(by=>{o.shipBack={at:nowISO(),by,cs:o.cienStep||o.shippedStep||''};delete o.shippedAt;delete o.completeAt;delete o.completeBy;logEdit(o,'Brought back to the board from Shipped',by);sched();render();toast(o.wo+' is back on the Capacity Board');});});
@@ -1891,6 +1891,10 @@ const delSel=new Set();
 /* On hold in Cienapps (12): off the Deliveries board and badge. A job already loaded / on the road / delivered stays —
    it is physically on a van and the driver must not lose it. */
 function delHidden(o){return isOnHold(o)&&!o.delLoadedAt&&!o.delDispAt&&!o.delDelivAt&&!o.delDone;}
+/* Planner overrides an import respects until the Cienapps step moves beyond the step they were made at:
+   delvOverride — untagged from delivery by hand (stops the 7/8 auto-tag); completeOverride — "Undo complete" (stops 11 re-completing). */
+function delvMark(o){if(o.delv)delete o.delvOverride;else o.delvOverride=o.step||o.cienStep||'(none)';}
+function ovrHolds(ov,cs){if(!ov)return false;const a=stepRank(cs),b=stepRank(ov);return !(a!==null&&b!==null&&a>b);}
 function delAll(){return[...DB.orders.filter(o=>o.delv&&!delHidden(o)),...(DB.delx||[])];}
 function findDel(wo){return DB.orders.find(o=>o.wo===wo)||(DB.delx||[]).find(o=>o.wo===wo);}
 function woCmp(a,b){
@@ -3079,7 +3083,7 @@ function renderDeliveries(app){
     const o=findDel(b.dataset.dx);if(!o)return;
     if(o.delDay){placeJobs([o],'','');return;}
     else if(o.manual){DB.delx=(DB.delx||[]).filter(x=>x.wo!==o.wo);toast(o.wo+' deleted');}
-    else{o.delv=false;o.delVeh='';o.delDay='';o.delDone=false;delete o.delLoadedAt;delete o.delDispAt;delete o.delDelivAt;delete o.ldBy;delete o.delivBy;toast(o.wo+' removed from delivery plan');}
+    else{o.delv=false;delvMark(o);o.delVeh='';o.delDay='';o.delDone=false;delete o.delLoadedAt;delete o.delDispAt;delete o.delDelivAt;delete o.ldBy;delete o.delivBy;toast(o.wo+' removed from delivery plan');}
     delSel.delete(o.wo);sched();render();
   });
   // Every placement is stamped with who; every MOVE of a planned job also needs a reason (placeJobs)
@@ -4121,11 +4125,15 @@ function analyzeImport(input,source){
         const c=!ps||stepOnHold(ps)?1:stepCmp(cs,ps);
         if(c===null){stepDiffs.push({wo:ex.wo,title:ex.title||'',planner:ps,cien:cs,why:"can't tell which is further on — nothing moved"});}
         else if(c>0){newStep=cs;set.step=cs;what.push('step: '+sh(ps||'(none)')+' → '+sh(cs));
-          if(stepForDelivery(cs)&&!ex.delv&&!ex.shippedAt){set.delv=true;autoTag.push(ex.wo);what.push('auto-tagged for delivery');}} // never untags
+          if(stepForDelivery(cs)&&!ex.delv&&!ex.shippedAt){
+            if(ovrHolds(ex.delvOverride,cs))flags.push('untagged from delivery by hand at '+sh(ex.delvOverride)+' — not auto-tagged');
+            else{set.delv=true;autoTag.push(ex.wo);what.push('auto-tagged for delivery');}}} // never untags
         else if(c<0){stepDiffs.push({wo:ex.wo,title:ex.title||'',planner:ps,cien:cs,why:'planner is ahead — stays on the Export Changes list for Cienapps'});}
         else stepDiffs.push({wo:ex.wo,title:ex.title||'',planner:ps,cien:cs,why:'same stage, different wording — nothing moved'});
       }else if(cs&&cs===ps&&origStep[ex.wo]!==undefined&&origStep[ex.wo]!==cs)synced.push({wo:ex.wo,key:r.key,step:cs}); // Cienapps has caught up
       if(cs&&ex.cienStep!==cs)fill.cienStep=cs;
+      if(cs&&ex.delvOverride&&!ovrHolds(ex.delvOverride,cs))fill.delvOverride=undefined;     // Cienapps has moved beyond the planner's untag
+      if(cs&&ex.completeOverride&&!ovrHolds(ex.completeOverride,cs))fill.completeOverride=undefined;
       // hours: planner-set hours always win
       const src=hSrc(ex);
       if(src!=='hand'&&!(src==='cien'&&!r.has.hours&&!/assembly\s*complete|pallet/i.test(newStep))){
@@ -4155,7 +4163,9 @@ function analyzeImport(input,source){
       }
       // 10 INSTALLED TO BE INVOICE → marked installed on the Shipped tab; 11 COMPLETED AND INVOICED → marked complete
       if(stepInstalled(cs)&&(ex.shippedAt||shipped.some(s=>s.key===r.key))){
-        const mk={wo:ex.wo,key:r.key,cs,inst:!ex.installedAt,done:stepInvoiced(cs)&&!ex.completeAt};
+        const keepUndo=stepInvoiced(cs)&&!ex.completeAt&&ovrHolds(ex.completeOverride,cs);
+        if(keepUndo)flags.push('planner pressed "Undo complete" — not marked complete again until Cienapps moves on');
+        const mk={wo:ex.wo,key:r.key,cs,inst:!ex.installedAt,done:stepInvoiced(cs)&&!ex.completeAt&&!keepUndo};
         if(mk.inst||mk.done)marks.push(mk);
       }
       if(isDrawC&&!ex.shippedAt)flags.push('check: Cienapps shows this job at drawing stage — kept on the board');
