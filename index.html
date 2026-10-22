@@ -2123,6 +2123,10 @@ const IE_BANK_HOLS=['2026-01-01','2026-02-02','2026-03-17','2026-04-06','2026-05
   '2027-01-01','2027-02-01','2027-03-17','2027-03-29','2027-05-03','2027-06-07','2027-08-02','2027-10-25','2027-12-27','2027-12-28'];
 function isWorkDay(iso){return ![0,6].includes(new Date(iso+'T12:00:00').getDay())&&!IE_BANK_HOLS.includes(iso);}
 function nextWorkDay(iso){let d=addDayISO(iso,1);while(!isWorkDay(d))d=addDayISO(d,1);return d;} // Fri → Mon; skips bank holidays
+// Last cut-by date that is today's work: a cut-by on a weekend / bank holiday is done the working day before it.
+// ONE rule for the Saw/Stores queue, "Print today" and the sheets panel.
+function cutTodayEnd(t){t=t||todayLocal();return addDayISO(nextWorkDay(t),-1);}
+function dueToday(l,t){const d=listDeadline(l);return !!d&&d<=cutTodayEnd(t);}
 // ls: lists to look at; a list counts when its cut-by date is within [fromISO,toISO] ('' = open-ended).
 // opt.cutSince (YYYY-MM-DD): lines/lists finished before that day are left out; lines cut on or after it still count.
 // Lines waiting on material are left out. Dims are mm. Returns {mats:[{mat,m2,sheets,lines,check}],noSize,noQty,lines,sheets}.
@@ -2163,7 +2167,7 @@ function sheetNeedBox(title,sub,r){
 function sheetNeedHTML(){
   // A cut-by date on a weekend / bank holiday has to be cut on the working day before it: so "today" runs up to the
   // day before the next working day, and "next working day" up to the day before the one after.
-  const t=todayLocal(),nx=nextWorkDay(t),nx2=nextWorkDay(nx),ls2=lists(),tEnd=addDayISO(nx,-1);
+  const t=todayLocal(),nx=nextWorkDay(t),nx2=nextWorkDay(nx),ls2=lists(),tEnd=cutTodayEnd(t);
   const a=sheetNeed(ls2,'',tEnd,{cutSince:t}),b=sheetNeed(ls2,nx,addDayISO(nx2,-1),{cutSince:t});
   const short=iso=>new Date(iso+'T12:00:00').toLocaleDateString('en-IE',{weekday:'short',day:'numeric',month:'short'});
   return `<div class="sn-wrap">${sheetNeedBox('today','incl. overdue'+(tEnd>t?' + cut-by to '+short(tEnd)+' (not a working day)':''),a)}${sheetNeedBox('next working day',new Date(nx+'T12:00:00').toLocaleDateString('en-IE',{weekday:'short',day:'numeric',month:'short'}),b)}</div>
@@ -2333,8 +2337,8 @@ function renderWorkList(app,mode){
   const open=rel.filter(l=>!listDone(l.id)[mode]||relRows(l)).sort(srtDue);
   const closed=rel.filter(l=>listDone(l.id)[mode]&&!relRows(l)).sort((a,b)=>String(listDone(b.id)[mode].at).localeCompare(String(listDone(a.id)[mode].at)));
   // The bench sees TODAY's work plus anything not cleared from past days — nothing else.
-  const dueNow=open.filter(l=>{const d=listDeadline(l);return d&&d<=todayISO;});   // cut/pick by today, incl. overdue
-  const upcoming=open.filter(l=>{const d=listDeadline(l);return d&&d>todayISO;});  // later days — hidden unless peeked
+  const dueNow=open.filter(l=>dueToday(l,todayISO));                              // cut/pick by today, incl. overdue + cut-by on the non-working days ahead
+  const upcoming=open.filter(l=>listDeadline(l)&&!dueToday(l,todayISO));           // later days — hidden unless peeked
   const undated=open.filter(l=>!listDeadline(l));                                  // no delivery date yet (office to tag)
   const holdModes=mode==='saw'?['saw']:['fit','saw']; // stores books material in, so it can release saw holds too
   const nHold=allHolds(holdModes,'hold').length;
@@ -4367,7 +4371,7 @@ function workListFor(mode,days){
   const limISO=lim.getFullYear()+'-'+String(lim.getMonth()+1).padStart(2,'0')+'-'+String(lim.getDate()).padStart(2,'0');
   return lists().filter(l=>(mode==='saw'?l.saw:l.fit)>0)
     .filter(l=>!listDone(l.id)[mode]||listHoldRows(l,mode,'rel').length)
-    .filter(l=>{const d=listDeadline(l);return d&&d<=(days>1?limISO:today);})
+    .filter(l=>{const d=listDeadline(l),e=cutTodayEnd(today);return d&&d<=(days>1&&limISO>e?limISO:e);})
     .sort((a,b)=>(listDueKey(a)||'9999').localeCompare(listDueKey(b)||'9999'));
 }
 function printWorkList(mode,days){
