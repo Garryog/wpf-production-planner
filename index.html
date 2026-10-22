@@ -748,9 +748,11 @@ function checkRow(row){
 }
 async function loadDB(){
   try{
+    DB.lastLoadOk=false; // set true once this refresh really got the database copy (an import's Apply checks it)
     if(SAVING)return; // a save is mid-flight — the next refresh picks the result up
     const row=checkRow(await fetchMain());
     if(SAVING)return;
+    DB.lastLoadOk=true;
     // A slow refresh reply that left the database before this screen's own save landed is out of date — ignore it
     if(row&&VER!==null&&row.version!==undefined&&(+row.version||1)<VER){setSS(DB.saveFailed?'e':'ok');return;}
     DB.remoteBroken=false;
@@ -804,6 +806,7 @@ async function loadDB(){
     if(migr)sched(); // store the migrated baseline
     if(DB.orders.length)ls.set('wpfSawJobs','1');
   }catch(e){
+    DB.lastLoadOk=false;
     if(e&&e.broken){DB.remoteBroken=e.message;console.error('Planner: refused to load — '+e.message+'. Nothing will be saved over it.');}
     setSS('e');
     // Only a page that has NEVER loaded the plan is dangerous to save from.
@@ -3896,7 +3899,7 @@ function prepImport(rows,board){
     recs.push(r);
   });
   const c=combineRows(recs,board||boardMap());
-  return{recs:c.recs,folds:c.folds,skip,rows:(rows||[]).length};
+  return{recs:c.recs,folds:c.folds,skip,rows:(rows||[]).length,raw:rows||[]};
 }
 // Hours source: 'hand' (set in the planner — imports never touch it), 'cien' (Cienapps Hours column), 'est' (estimated / rule).
 // Jobs saved before Stage 2 have no hoursSrc: hoursEstimated:false counts as hand-set.
@@ -4033,7 +4036,7 @@ function analyzeImport(input,source){
       importError('None of the '+(input.rows||recs.length)+' rows had a usable WO number, so nothing was imported.','Check that the WO number column is mapped to the column holding values like WO-2604-7.');
       return null;
     }
-    return{source:source||'file',newOrders,updates,fills,synced,shipped,inTransit,dispGaps,flagged,folds:input.folds||[],stepDiffs,exCounts,
+    return{source:source||'file',input,newOrders,updates,fills,synced,shipped,inTransit,dispGaps,flagged,folds:input.folds||[],stepDiffs,exCounts,
       removals:[],backfills:[],
       counts:{added,updated,skipped:unchanged,noWo:skip.noWo||0,totals:skip.totals||0,snag:skip.snag||0,excluded,shipped:shipped.length,folded:(input.folds||[]).length,rows:input.rows||recs.length}};
 }
@@ -4058,6 +4061,12 @@ function renderImportPreview(plan){
       <div style="font-size:13px;color:#14335c">${c.added} new · ${c.updated} updated · ${c.skipped} unchanged · ${plan.shipped.length} to 📦 Shipped${c.folded?` · ${c.folded} addition${c.folded!==1?'s':''} folded in`:''}${plan.flagged.length?` · <b>${plan.flagged.length} flagged</b>`:''} · <b>nothing is removed</b></div>
       ${skips.length?`<div style="font-size:12px;color:#14335c;opacity:.8;margin-top:3px">${skips.join(' · ')}</div>`:''}
     </div>
+    ${plan.changedNote?`<div id="imp-changed" style="background:#fdecea;border:2px solid #e57368;border-radius:8px;padding:12px 15px;margin-bottom:12px">
+      <div style="font-size:13px;font-weight:800;color:#8a1c10;margin-bottom:4px">⚠ The plan changed while you were reviewing — ${plan.changedNote.added.length} difference${plan.changedNote.added.length!==1?'s':''}. Nothing was applied.</div>
+      <div style="font-size:12px;color:#8a1c10;margin-bottom:4px">Another PC changed the planner since this preview was built. This is the import worked out again on the latest data — check it, then Apply.</div>
+      ${plan.changedNote.added.slice(0,20).map(l=>`<div style="font-size:12px;color:#8a1c10;padding:1px 0">• ${escA(l)}</div>`).join('')}
+      ${plan.changedNote.added.length>20?`<div style="font-size:11px;color:#8a1c10">…and ${plan.changedNote.added.length-20} more</div>`:''}
+    </div>`:''}
     ${plan.dispGaps.length?`<div style="background:#fdecea;border:2px solid #e57368;border-radius:8px;padding:12px 15px;margin-bottom:12px">
       <div style="font-size:13px;font-weight:700;color:#8a1c10;margin-bottom:6px">⚠ CHECK THESE — Cienapps says shipped/invoiced, but the planner has NO dispatch record:</div>
       ${plan.dispGaps.map(g=>`<div style="font-size:12px;color:#8a1c10;padding:2px 0"><b style="font-family:monospace">${escA(g.wo)}</b>${g.unit?' · '+escA(g.unit):''} — ${escA(g.title)}${g.customer?' <span style="opacity:.75">('+escA(g.customer)+')</span>':''} <span style="font-weight:700">[${escA(g.reason)} in Cienapps]</span></div>`).join('')}
@@ -4106,9 +4115,51 @@ function renderImportPreview(plan){
     const ns=IMPPLAN.shipped.length;
     if(ns>20&&!await backupFirst('import moving '+ns+' work orders to Shipped'))return;
     if(!IMPPLAN)return;
-    IMPPLAN.moves=moves;IMPPLAN.dueDec=dueDec;
-    applyImport(IMPPLAN);IMPPLAN=null;
+    const prev=IMPPLAN,btn=document.getElementById('imp-apply'),btxt=btn?btn.textContent:'';
+    if(btn){btn.disabled=true;btn.textContent='Checking for changes made on other PCs…';}
+    // Another PC may have edited jobs while this preview was open: load the database copy NOW and plan again on it
+    const ok=await freshForImport();
+    if(IMPPLAN!==prev)return; // cancelled meanwhile
+    if(!ok){if(btn){btn.disabled=false;btn.textContent=btxt;}toast('Could not check the database for changes made on other PCs — import NOT applied. Check the connection and try again.');return;}
+    const fresh=reanalyzeImport(prev);
+    if(!fresh){IMPPLAN=null;return;}
+    const d=planDiff(prev,fresh);
+    if(d.added.length){ // the import would now do something that wasn't in the preview — show it again, apply nothing
+      fresh.changedNote=d;IMPPLAN=fresh;renderImportPreview(fresh);
+      document.querySelectorAll('[data-dk]').forEach(r=>{if(dueDec[r.dataset.dk])r.checked=dueDec[r.dataset.dk]===r.value;});
+      document.querySelectorAll('[data-rmv]').forEach(s=>{if(moves[s.dataset.rmv]&&[...s.options].some(o=>o.value===moves[s.dataset.rmv]))s.value=moves[s.dataset.rmv];});
+      toast('The plan changed while you were reviewing — check the preview again');
+      return;
+    }
+    // Same or fewer changes: anything dropped was edited on another PC meanwhile, and the planner's edit wins
+    fresh.moves=moves;fresh.dueDec=dueDec;fresh.dropped=d.dropped;
+    applyImport(fresh);IMPPLAN=null;
   };
+}
+// Apply's fresh load: wait for a save in flight, then reload. False = the database copy could not be fetched.
+async function freshForImport(){
+  for(let i=0;i<150&&SAVING;i++)await new Promise(r=>setTimeout(r,100));
+  if(SAVING)return false;
+  await loadDB();
+  return !!DB.lastLoadOk;
+}
+function reanalyzeImport(p){
+  const inp=p.input;if(!inp)return p; // a plan built without its input can't be re-run; applyImport still looks every job up again
+  return analyzeImport(inp.raw?prepImport(inp.raw):inp,p.source);
+}
+// Every change a plan would make, as key → plain-English label (what's compared between preview and Apply)
+function planActs(p){
+  const m=new Map(),v=x=>x===undefined||x===''?'(none)':String(x);
+  (p.newOrders||[]).forEach(o=>m.set('new|'+woKey(o.wo)+'|'+JSON.stringify([o.value,o.hours,o.dueDate,o.step,!!o.delv,o.plannedWeek||'']),o.wo+': new job'));
+  (p.updates||[]).forEach(u=>Object.keys(u.set||{}).forEach(k=>{if(k==='hoursSrc'||k==='hoursEstimated')return;m.set('upd|'+u.key+'|'+k+'|'+JSON.stringify(u.set[k]),u.wo+': '+k+' → '+v(u.set[k]));}));
+  (p.shipped||[]).forEach(s=>m.set('ship|'+s.key+'|'+s.cs,s.wo+': to Shipped ('+s.cs+')'));
+  return m;
+}
+function planDiff(a,b){
+  const A=planActs(a),B=planActs(b),added=[],dropped=[];
+  B.forEach((l,k)=>{if(!A.has(k))added.push(l);});
+  A.forEach((l,k)=>{if(!B.has(k))dropped.push(l);});
+  return{added,dropped};
 }
 function applyImport(plan){
     plan=plan||{};
@@ -4146,6 +4197,7 @@ function applyImport(plan){
     const c=plan.counts||{},el=document.getElementById('iprev');
     if(el)el.innerHTML=`<div style="margin-top:14px">
       <div style="font-size:13px;font-weight:600;color:var(--green);margin-bottom:10px">✓ Import applied: ${fresh.length} added · ${(plan.updates||[]).length} updated · ${c.skipped||0} unchanged · ${nShip} moved to 📦 Shipped · nothing removed</div>
+      ${plan.dropped&&plan.dropped.length?`<div style="font-size:12px;color:#8a6d00;margin-bottom:10px">${plan.dropped.length} change${plan.dropped.length!==1?'s':''} from the preview not made — edited on another PC meanwhile (the planner's edit wins): ${escA(plan.dropped.slice(0,10).join(' · '))}${plan.dropped.length>10?' …':''}</div>`:''}
       <button class="btn btn-g" onclick="showTab('b')">Go to Capacity Board →</button>
       ${nShip?`<button class="btn btn-s" style="margin-left:8px" onclick="showTab('h')">Open Shipped →</button>`:''}
     </div>`;
