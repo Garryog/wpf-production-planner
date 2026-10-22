@@ -651,9 +651,12 @@ function m3(b,m,t,path,N,o,u){
   // what that save sent, it's our own write — not another screen's change — so it counts as the base.
   for(const x of u)if(x!==NOU&&same(t,x)){b=x;break;}
   if(same(m,t))return m;
-  if(same(m,b))return t;
-  if(same(t,b))return m;
   const isObj=x=>!!x&&typeof x==='object'&&!Array.isArray(x);
+  // "Mine matches base" doesn't mean untouched if an unconfirmed save from here sent something else (a tick sent, then
+  // unticked): look inside instead, so each part is checked against what this screen sent.
+  const deep=!MERGE_ATOMIC[path[path.length-1]]&&((Array.isArray(m)&&Array.isArray(t))||(isObj(m)&&isObj(t)));
+  if(same(m,b)&&!(deep&&u.some(x=>x!==NOU&&!same(x,b))))return t;
+  if(same(t,b))return m;
   if(!MERGE_ATOMIC[path[path.length-1]]){
     if(Array.isArray(m)&&Array.isArray(t))return mArr(Array.isArray(b)?b:[],m,t,path,N,o,u);
     if(isObj(m)&&isObj(t)){
@@ -706,7 +709,7 @@ function mDel(b,m,t,path,N,o,u){
   let B=pick(b);const M=pick(m),T=pick(t);
   for(const x of u)if(x!==NOU&&x&&typeof x==='object'&&same(T,pick(x))){B=pick(x);break;}
   if(same(M,T)||same(T,B))return M;
-  if(same(M,B))return T;
+  if(same(M,B)&&!u.some(x=>x!==NOU&&x&&typeof x==='object'&&!same(pick(x),B)))return T; // else e.g. "delivered" sent then undone here
   const win=ts(M)&&untag(T)?M:ts(T)&&untag(M)?T:null;
   if(!win)return null;
   N.push({path:path.concat('delivery'),kept:desc(win),lost:desc(win===M?T:M)});
