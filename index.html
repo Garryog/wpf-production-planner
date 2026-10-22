@@ -1201,7 +1201,7 @@ function render(){
 }
 function updDelBadge(){
   const el=document.getElementById('delcnt');if(!el)return;
-  const n=DB.orders.filter(o=>o.delv&&!o.delDone).length+(DB.delx||[]).filter(o=>!o.delDone).length;
+  const n=DB.orders.filter(o=>o.delv&&!o.delDone&&!delHidden(o)).length+(DB.delx||[]).filter(o=>!o.delDone).length;
   el.textContent=n;el.style.display=n?'inline':'none';
   const el2=document.getElementById('listcnt');
   if(el2){const m=listsNeeded().length;el2.textContent=m;el2.style.display=m?'inline':'none';}
@@ -1851,8 +1851,8 @@ function renderShipped(app){
       <div style="font-size:14px;font-weight:700;margin-bottom:4px">⏸ On hold in Cienapps <span id="sh-hcnt" style="font-weight:400;color:var(--t2)">(${held.length})</span></div>
       <div style="font-size:12px;color:var(--t2);margin-bottom:8px">Step 12 ON HOLD / DELETE. Off the Capacity Board, week totals and capacity — never deleted. The next import with any other step puts the job back on the board.</div>
       ${held.length?`<input class="search-input" id="sh-hq" placeholder="Search on-hold jobs…" value="${escA(shHoldQ)}" style="margin-bottom:8px">`:''}
-      ${hs.length?hs.slice(0,300).map(o=>`<div class="sh-card"><div class="sh-top"><span class="wo-num">${escA(o.wo)}</span>${[o.floor,o.unit].filter(Boolean).length?`<span class="fu-badge">${escA([o.floor,o.unit].filter(Boolean).join(' · '))}</span>`:''}<span class="sh-pill no">⏸ On hold</span></div>
-        <div class="sh-t">${escA(o.title||'')}</div><div class="sh-m">${escA(o.customer||'')} · on hold since ${dt(o.holdAt)} · ${o.hours!=null?escA(String(o.hours))+'h · ':''}due ${fmt(o.dueDate)}</div></div>`).join(''):`<div class="empty">${held.length?'No on-hold jobs match.':'No jobs on hold.'}</div>`}
+      ${hs.length?hs.slice(0,300).map(o=>`<div class="sh-card"><div class="sh-top"><span class="wo-num">${escA(o.wo)}</span>${[o.floor,o.unit].filter(Boolean).length?`<span class="fu-badge">${escA([o.floor,o.unit].filter(Boolean).join(' · '))}</span>`:''}<span class="sh-pill no">⏸ On hold</span>${(am.get(o.wo)||0)?`<span class="sh-pill warn" title="Waiting (N/A) lines on its cutting/fittings lists">⚠ ${am.get(o.wo)} line${am.get(o.wo)!==1?'s':''} waiting</span>`:''}${!delHidden(o)&&o.delv?'<span class="sh-pill warn">🚚 Already loaded / on a van</span>':''}</div>
+        <div class="sh-t">${escA(o.title||'')}</div><div class="sh-m">${escA(o.customer||'')} · on hold since ${dt(o.holdAt)} · ${o.hours!=null?escA(String(o.hours))+'h · ':''}due ${fmt(o.dueDate)}</div>${o.holdDel?`<div class="sh-m">Taken off Deliveries when it went on hold (was ${escA(o.holdDel)}) — not put back automatically</div>`:''}</div>`).join(''):`<div class="empty">${held.length?'No on-hold jobs match.':'No jobs on hold.'}</div>`}
     </div>
   </div>`;
   const hq=document.getElementById('sh-hq');
@@ -1885,7 +1885,10 @@ const vehLbl=k=>{const v=DEL_VEH.find(x=>x.k===k);return v?v.n:'';};
 let delDragList=null,delFilter='';
 const delSel=new Set();
 
-function delAll(){return[...DB.orders.filter(o=>o.delv),...(DB.delx||[])];}
+/* On hold in Cienapps (12): off the Deliveries board and badge. A job already loaded / on the road / delivered stays —
+   it is physically on a van and the driver must not lose it. */
+function delHidden(o){return isOnHold(o)&&!o.delLoadedAt&&!o.delDispAt&&!o.delDelivAt&&!o.delDone;}
+function delAll(){return[...DB.orders.filter(o=>o.delv&&!delHidden(o)),...(DB.delx||[])];}
 function findDel(wo){return DB.orders.find(o=>o.wo===wo)||(DB.delx||[]).find(o=>o.wo===wo);}
 function woCmp(a,b){
   const na=(String(a.wo).match(/\d+/g)||[]).map(Number),nb=(String(b.wo).match(/\d+/g)||[]).map(Number);
@@ -1958,6 +1961,13 @@ function listFinished(l){ // every tagged job shipped/delivered (or none tagged 
   if(ws.length&&ws.every(o=>!o||woFinished(o)))return true;
   const dn=listDone(l.id);return !ws.length&&!!dn.saw&&!!dn.fit;
 }
+// Every tagged job is on hold in Cienapps (or finished, with at least one on hold): nothing to cut or pick for now —
+// left out of the Saw/Stores queues, "Print today", the sheets panel and the dashboard counts until a job comes back.
+function listParked(l){
+  const ws=(l.wos||[]).map(w=>DB.orders.find(o=>o.wo===w));
+  return ws.some(o=>o&&isOnHold(o))&&ws.every(o=>!o||isOnHold(o)||woFinished(o));
+}
+function workLists(){return lists().filter(l=>!listParked(l));}
 let lstShowFin=false; // library: completed lists hidden unless asked for
 function listsNeeded(){ // WOs scheduled to deliver inside the lead time with NO cutting list tagged
   const tagged=new Set();lists().forEach(l=>(l.wos||[]).forEach(w=>tagged.add(w)));
@@ -2305,7 +2315,7 @@ function sheetNeedBox(title,sub,r){
 function sheetNeedHTML(){
   // A cut-by date on a weekend / bank holiday has to be cut on the working day before it: so "today" runs up to the
   // day before the next working day, and "next working day" up to the day before the one after.
-  const t=todayLocal(),nx=nextWorkDay(t),nx2=nextWorkDay(nx),ls2=lists(),tEnd=cutTodayEnd(t);
+  const t=todayLocal(),nx=nextWorkDay(t),nx2=nextWorkDay(nx),ls2=workLists(),tEnd=cutTodayEnd(t);
   const a=sheetNeed(ls2,'',tEnd,{cutSince:t}),b=sheetNeed(ls2,nx,addDayISO(nx2,-1),{cutSince:t});
   const short=iso=>new Date(iso+'T12:00:00').toLocaleDateString('en-IE',{weekday:'short',day:'numeric',month:'short'});
   return `<div class="sn-wrap">${sheetNeedBox('today','incl. overdue'+(tEnd>t?' + cut-by to '+short(tEnd)+' (not a working day)':''),a)}${sheetNeedBox('next working day',new Date(nx+'T12:00:00').toLocaleDateString('en-IE',{weekday:'short',day:'numeric',month:'short'}),b)}</div>
@@ -2468,7 +2478,7 @@ function printLabels(lsArr,mode){
 function renderWorkList(app,mode){
   const cfg=mode==='saw'?{icon:'🪚',title:'SAW — Cutting Queue',done:'✓ CUT COMPLETE',cnt:l=>l.saw||0}
                         :{icon:'🧰',title:'STORES — Fittings Queue',done:'✓ FITTINGS PICKED',cnt:l=>l.fit||0};
-  const rel=lists().filter(l=>cfg.cnt(l)>0);
+  const rel=workLists().filter(l=>cfg.cnt(l)>0);
   const todayISO=todayLocal();
   const srtDue=(a,b)=>(listDueKey(a)||'9999').localeCompare(listDueKey(b)||'9999');
   const relRows=l=>listHoldRows(l,mode,'rel').length;
@@ -2604,10 +2614,10 @@ function renderDash(app){
   const loadedNotGone=all.filter(o=>st(o)==='load');
   const missed=planned.filter(o=>DEL_DAYS.indexOf(o.delDay)<todayIx&&st(o)!=='deliv');
   const val=a=>a.reduce((s,o)=>s+(+o.value||0),0);
-  const sawOpen=lists().filter(l=>(l.saw||0)>0&&!listDone(l.id).saw);
-  const sawDone=lists().filter(l=>(l.saw||0)>0&&listDone(l.id).saw);
-  const fitOpen=lists().filter(l=>(l.fit||0)>0&&!listDone(l.id).fit);
-  const fitDone=lists().filter(l=>(l.fit||0)>0&&listDone(l.id).fit);
+  const sawOpen=workLists().filter(l=>(l.saw||0)>0&&!listDone(l.id).saw);
+  const sawDone=workLists().filter(l=>(l.saw||0)>0&&listDone(l.id).saw);
+  const fitOpen=workLists().filter(l=>(l.fit||0)>0&&!listDone(l.id).fit);
+  const fitDone=workLists().filter(l=>(l.fit||0)>0&&listDone(l.id).fit);
   const needed=listsNeeded();
   const srt=(a,b)=>(listDueKey(a)||'9999').localeCompare(listDueKey(b)||'9999');
   const tile=(n,lbl,sub,color)=>`<div class="dsh-tile" style="border-top:4px solid ${color}"><div class="dsh-n" style="color:${color}">${n}</div><div class="dsh-l">${lbl}</div>${sub?`<div class="dsh-s">${sub}</div>`:''}</div>`;
@@ -4332,6 +4342,15 @@ function planDiff(a,b,moves){
   });
   return{added,dropped,applied,changed};
 }
+// Going on hold: off the Deliveries board — tag, van and day cleared, what it was is noted on the job (and its history).
+// Coming back restores none of it. A job already loaded / on the road / delivered is left alone.
+function holdUntag(ex){
+  if(!ex.delv&&!ex.delVeh&&!ex.delDay)return;
+  if(!delHidden(ex))return;
+  const was=[ex.delVeh?vehLbl(ex.delVeh)||ex.delVeh:'',ex.delDay||''].filter(Boolean).join(' · ')||'tagged, no van/day';
+  ex.holdDel=was;ex.delv=false;ex.delVeh='';ex.delDay='';
+  logEdit(ex,'On hold in Cienapps — taken off Deliveries (was '+was+')','(import)');
+}
 function applyImport(plan){
     plan=plan||{};
     // Look every job up again NOW — another screen may have added, edited or deleted jobs since the preview was built.
@@ -4342,7 +4361,7 @@ function applyImport(plan){
       const ex=get(u);if(!ex)return; // deleted on another screen meanwhile — nothing to update
       const s=u.set||{};
       Object.keys(s).forEach(k=>{if(k!=='dueDate')ex[k]=s[k];});
-      if('cienHold' in s){if(s.cienHold)ex.holdAt=at;else{delete ex.cienHold;delete ex.holdAt;ex.holdBack=at;}}
+      if('cienHold' in s){if(s.cienHold){ex.holdAt=at;holdUntag(ex);}else{delete ex.cienHold;delete ex.holdAt;ex.holdBack=at;}}
       if('dueDate' in s){
         if(dec[u.wo]==='keep')ex.dueKeep=s.dueDate; // planner date kept; this Cienapps date won't be asked about again
         else{if(!ex.origDueDate)ex.origDueDate=ex.dueDate||'';ex.dueDate=s.dueDate;delete ex.dueKeep;}
@@ -4868,7 +4887,7 @@ function workListFor(mode,days){
   const today=todayLocal();
   const lim=new Date();lim.setDate(lim.getDate()+Math.max(0,days-1));
   const limISO=lim.getFullYear()+'-'+String(lim.getMonth()+1).padStart(2,'0')+'-'+String(lim.getDate()).padStart(2,'0');
-  return lists().filter(l=>(mode==='saw'?l.saw:l.fit)>0)
+  return workLists().filter(l=>(mode==='saw'?l.saw:l.fit)>0)
     .filter(l=>!listDone(l.id)[mode]||listHoldRows(l,mode,'rel').length)
     .filter(l=>{const d=listDeadline(l),e=cutTodayEnd(today);return d&&d<=(days>1&&limISO>e?limISO:e);})
     .sort((a,b)=>(listDueKey(a)||'9999').localeCompare(listDueKey(b)||'9999'));
