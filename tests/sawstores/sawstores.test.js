@@ -101,6 +101,16 @@ const click = (page, attr, i) => page.evaluate(({ attr, i }) => { const k = list
     }
     await A.close(); await B.close();
   }
+  { // ---- bank-holiday list expiry notice (Settings) + listDeadline across the clock change
+    for (const [now, want] of [['2028-11-30T09:00:00Z', false], ['2028-12-01T09:00:00Z', true]]) {
+      const S = makeServer(row('2026-10-26'));
+      const A = await open(browser, S, { now });
+      const o = await A.page.evaluate(() => { showTab('s'); return { n: !!document.querySelector('.bh-stale'), dl: listDeadline(lists()[0]) }; });
+      rec('Settings bank-holiday notice ' + (want ? 'shown from 1 Dec 2028' : 'hidden on 30 Nov 2028'), o.n === want, JSON.stringify(o));
+      if (!want) rec('Mon 26 Oct 2026 delivery → cut by Sun 25 (clock change)', o.dl === '2026-10-25', o.dl);
+      await A.close();
+    }
+  }
   await browser.close();
   const f = res.filter(x => !x).length; console.log(f + ' failed of ' + res.length); if (f) process.exitCode = 1;
 })().catch(e => { console.error(e); process.exit(1); });
