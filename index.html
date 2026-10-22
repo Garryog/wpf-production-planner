@@ -3563,12 +3563,25 @@ function isTotalsWo(w){
 }
 function woKey(w){return String(w==null?'':w).trim().toUpperCase();}
 function blankCell(v){return v==null||(typeof v==='string'&&!v.trim());}
+/* parseNum: Irish "€12,500.00" = 12500 and European "€12.500,00" = 12500 · "12,5" / "8,5" (decimal comma) = 12.5 / 8.5 ·
+   "1,000 EUR" = 1000 · "(1,200)" = -1200 · one dot is always a decimal point ("12.500" = 12.5) · blank → null · unreadable → NaN */
 function parseNum(v){
   if(blankCell(v))return null;
   if(typeof v==='number')return isFinite(v)?v:NaN;
-  const s=String(v).replace(/[€$£\s ]/g,'').replace(/,/g,'').replace(/^eur/i,'');
-  if(!/^[-+]?(\d+\.?\d*|\.\d+)$/.test(s))return NaN;
-  return parseFloat(s);
+  let s=String(v).replace(/[€$£\s\u00a0\u202f\u2009]/g,'').replace(/^eur|eur$/i,'');
+  let neg=false;const pm=s.match(/^\((.*)\)$/);if(pm){neg=true;s=pm[1];}
+  const sg=s.match(/^[-+]/);if(sg){if(sg[0]==='-')neg=!neg;s=s.slice(1);}
+  const hasC=s.indexOf(',')>-1,hasD=s.indexOf('.')>-1;
+  if(hasC&&hasD){ // the last one is the decimal mark
+    if(s.lastIndexOf(',')>s.lastIndexOf('.')){if(!/^\d{1,3}(\.\d{3})*,\d+$/.test(s))return NaN;s=s.replace(/\./g,'').replace(',','.');}
+    else{if(!/^\d{1,3}(,\d{3})*\.\d+$/.test(s))return NaN;s=s.replace(/,/g,'');}
+  }else if(hasC){
+    if(/^\d{1,3}(,\d{3})+$/.test(s))s=s.replace(/,/g,''); // 12,500 · 1,000,000
+    else if(/^\d+,\d{1,2}$/.test(s))s=s.replace(',','.'); // 12,5 · 8,50
+    else return NaN;
+  }else if(/^\d{1,3}(\.\d{3}){2,}$/.test(s))s=s.replace(/\./g,''); // 1.000.000
+  if(!/^(\d+\.?\d*|\.\d+)$/.test(s))return NaN;
+  const n=parseFloat(s);return neg?-n:n;
 }
 const MONTHS={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,sept:9,oct:10,nov:11,dec:12};
 function ymd(y,m,d){ // a real calendar date, or null (31/02 is rejected)
@@ -3612,7 +3625,7 @@ function normaliseRow(row){
     if(!r.has.unit&&ps.slice(3).join('-').trim()){r.unit=ps.slice(3).join('-').trim();r.has.unit=1;}
   }
   const v=parseNum(row.value);
-  if(v!==null){if(isNaN(v))r.flags.push('value "'+String(row.value).slice(0,20)+'" unreadable — value not changed');else{r.value=v;r.has.value=1;}}
+  if(v!==null){if(isNaN(v))r.flags.push('value "'+String(row.value).slice(0,20)+'" unreadable — value not changed');else{r.value=v;r.has.value=1;if(v<0)r.flags.push('credit? value is negative (€'+v+') — kept as is');}}
   const sh=parseNum(row.sheets);
   if(sh!==null){if(isNaN(sh)||sh<0)r.flags.push('sheets "'+String(row.sheets).slice(0,20)+'" unreadable');else{r.sheets=sh;r.has.sheets=1;}}
   const h=parseHours(row.hours);

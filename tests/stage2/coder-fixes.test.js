@@ -88,6 +88,11 @@ const res = []; const rec = (n, ok, d) => { res.push(ok); console.log((ok ? 'PAS
   const u5 = await ev(() => { const p = analyzeImport(prepImport([{ wo: 'WO-8500-1', value: 5000, dueDate: '29/02/2027' }, { wo: 'WO-8500-2', value: 5000, dueDate: '2026-10-21' }]), 'file'); applyImport(p);
     const g = w => DB.orders.find(o => o.wo === w); return { a: g('WO-8500-1').plannedWeek, b: g('WO-8500-2').plannedWeek, f: p.flagged.some(f => f.wo === 'WO-8500-1' && /unscheduled/.test(f.why)) }; });
   rec('5: new job with unreadable due date → unscheduled and flagged; a good date still scheduled', u5.a === '' && u5.b === '2026-10-19' && u5.f, JSON.stringify(u5));
+  // 6. numbers
+  const n6 = await ev(() => [parseNum('€12.500,00'), parseNum('12,5'), parseNum('€12,500.00'), parseNum('12,500'), parseNum('1,000 EUR'), parseNum('EUR 1.234,5'), parseNum('(1,200)'), parseNum('-500'), parseNum('1.000.000'), parseNum('12.5'), parseNum('1,2,3'), parseHours('8,5'), parseHours('8,5 hrs')]);
+  rec('6: EU/IE numbers and hours read right', JSON.stringify(n6) === JSON.stringify([12500, 12.5, 12500, 12500, 1000, 1234.5, -1200, -500, 1000000, 12.5, null, { h: 8.5 }, { h: 8.5 }]).replace('null', 'NaN') || (n6[10] !== n6[10] && JSON.stringify(n6.slice(0, 10)) === '[12500,12.5,12500,12500,1000,1234.5,-1200,-500,1000000,12.5]' && n6[11].h === 8.5 && n6[12].h === 8.5), JSON.stringify(n6));
+  p = await P([{ wo: 'WO-8000-2', value: '-500' }]);
+  rec('6: negative value kept as is and flagged "credit?"', p.updates.some(u => u.wo === 'WO-8000-2' && u.set.value === -500) && p.flagged.some(f => f.wo === 'WO-8000-2' && /credit\?/.test(f.why)), JSON.stringify(p.flagged));
   await t.close();
   await browser.close();
   console.log(res.filter(x => !x).length + ' failed of ' + res.length);
