@@ -28,7 +28,7 @@ const chg = p => p.evaluate(() => changes().map(o => o.wo + ':' + orig[o.wo] + '
     // one copy, shipped (off the board, on the Shipped tab), B's move kept. Replaces the old "removed job comes back" check.
     const S = makeServer(base()); const A = await device(browser, S, { name: 'A' }), B = await device(browser, S, { name: 'B' });
     await B.page.evaluate(async () => { DB.orders[2].plannedWeek = '2026-11-16'; await saveDB(); });
-    await A.page.evaluate(async () => { showTab('i'); applyImport(analyzeImport(prepImport([{ wo: 'WO-3', step: '8. Job shipped', value: 4000, dueDate: '2026-11-02' }]), 'file')); await saveDB(); });
+    await A.page.evaluate(async () => { showTab('i'); applyImport(analyzeImport(prepImport([{ wo: 'WO-3', step: '9. JOB SHIPPED', value: 4000, dueDate: '2026-11-02' }]), 'file')); await saveDB(); });
     const o = S.row.orders.filter(x => x.wo === 'WO-3');
     rec('import marking a job shipped vs remote move: one copy, shipped, move kept (never removed)', o.length === 1 && !!o[0].shippedAt && o[0].plannedWeek === '2026-11-16', JSON.stringify(o.map(x => [x.plannedWeek, !!x.shippedAt])));
     await A.close(); await B.close();

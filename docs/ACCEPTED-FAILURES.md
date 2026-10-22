@@ -1,5 +1,5 @@
 # Accepted test failures (Garry to confirm each)
-Updated 22 Oct 2026 after Stage 2 (branch `feature/stage2-imports`). Full suite: 385 pass, 7 fail — every failure is listed here.
+Updated 22 Oct 2026 after the Stage 2 review fixes (branch `feature/stage2-imports`). Full suite: 590 pass, 8 fail — every failure is listed here.
 
 | Test | Why it fails | Fixed in | Accepted? |
 |---|---|---|---|
@@ -11,5 +11,7 @@ Updated 22 Oct 2026 after Stage 2 (branch `feature/stage2-imports`). Full suite:
 | baseline import.test.js "Messy/reordered headers" | test is stale: it expects Excel day 46330 to be 5 Nov 2026; 46330 is Wed 4 Nov (46331 = 5 Nov, as the other tests use). The mapping itself is right — tests/stage2 check 1 passes | Tester to update test | n/a |
 | baseline import.test.js "€12,500 read as 12500 (14h)" | value IS read as 12500 (the bug is fixed). The 14h is stale: the Settings hour scale gives 16h above €12,000 (14h is up to €12,000). tests/stage2 check 6 uses the scale | Tester to update test (or Garry changes the scale) | n/a |
 | sawstores attack-sheets "31 Dec → 1 Jan" | test is stale: 1 Jan is a bank holiday, Mon 4 Jan is correct | Tester to update test | n/a |
+| stage2 attack-parse "SHIPPED " → Shipped | test is stale since Garry's Cienapps status ladder (22 Oct): only steps numbered 9/10/11 are shipped; unnumbered wording is flagged and never taken off the board | Tester to update test | n/a |
+| stage2 attack-file 2,500 rows "286 shipped" | test is stale: its file uses "8. Job shipped" — step 8 is PALLETED in the Cienapps ladder, so 0 shipped is right (timings pass) | Tester to update test (use "9. JOB SHIPPED") | n/a |
 
 Fixed by Stage 2 and removed from this list: import.test.js (17 of 19), datasafety 3/5/6 (all 11 now pass), weeks 2 and 8 (and the year-end autoSchedule check), stage1 t5 "shipped job returns if edited elsewhere" (rewritten as acceptance check 27 — imports never remove a job, so it can't happen; stage1 t8 rewritten the same way).
