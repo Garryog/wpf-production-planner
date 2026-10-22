@@ -3358,16 +3358,18 @@ function exportSnapshot(){
     <td class="cust">${E(o.customer)}</td><td class="r">${o.hours}h</td>
     <td>${o.dueDate?fmt(o.dueDate):'—'}</td><td class="r">€${Math.round(o.value||0).toLocaleString()}</td>
     <td class="step">${E((o.step||'—').replace(/^\d+\.\s*/,''))}</td></tr>`;
+  const BO=boardOrders();
   const wkSection=(wk,label)=>{
-    const os=DB.orders.filter(o=>(o.plannedWeek||'')===wk).sort((a,b)=>(a.customer||'').localeCompare(b.customer||'')||woCmp(a,b));
+    // same rule as the board: shipped and on-hold jobs are out (a shipped job with waiting lines is listed, but not counted)
+    const os=BO.filter(o=>(o.plannedWeek||'')===wk).sort((a,b)=>(a.customer||'').localeCompare(b.customer||'')||woCmp(a,b));
     if(!os.length)return'';
-    const th=os.reduce((a,o)=>a+o.hours,0),tv=os.reduce((a,o)=>a+(o.value||0),0);
-    return `<h2>${E(label)} <span>${os.length} jobs · ${Math.round(th*10)/10}h · €${Math.round(tv).toLocaleString()}</span></h2>
+    const cnt=os.filter(o=>!isShipped(o)),th=cnt.reduce((a,o)=>a+(+o.hours||0),0),tv=cnt.reduce((a,o)=>a+(+o.value||0),0);
+    return `<h2>${E(label)} <span>${cnt.length} jobs · ${Math.round(th*10)/10}h · €${Math.round(tv).toLocaleString()}</span></h2>
     <table><thead><tr><th>WO #</th><th>Floor·Unit</th><th>Title</th><th>Customer</th><th class="r">Hrs</th><th>Due</th><th class="r">Value</th><th>Step</th></tr></thead>
     <tbody>${os.map(rowT).join('')}</tbody></table>`;
   };
   const knownWks=new Set(weeks);
-  const extraWks=[...new Set(DB.orders.map(o=>o.plannedWeek||'').filter(w=>w&&!knownWks.has(w)))].sort();
+  const extraWks=[...new Set(BO.map(o=>o.plannedWeek||'').filter(w=>w&&!knownWks.has(w)))].sort();
   const boardHTML=weeks.map(w=>wkSection(w,wkLbl(w))).join('')
     +extraWks.map(w=>wkSection(w,wkLbl(w))).join('')
     +wkSection('','Unscheduled');
