@@ -511,6 +511,7 @@ let VER=null;    // database version of BASE; null = version column missing → 
 let SAVING=false,SAVE_AGAIN=false;
 let UNSURE=[]; // plans sent by saves whose reply never arrived (each may or may not have landed)
 function unsureAdd(p){UNSURE.push(p);if(UNSURE.length>5)UNSURE.shift();}
+function unsureDel(p){const i=UNSURE.indexOf(p);if(i>=0)UNSURE.splice(i,1);} // a definite reply: that save did not land
 function clone(x){return x===undefined?undefined:JSON.parse(JSON.stringify(x));}
 function same(a,b){
   if(a===b)return true;
@@ -874,18 +875,20 @@ async function pushPlan(){
         BASE=clone(theirs);UNSURE=[];
       }
       const mine=snap();
-      let resp;try{resp=await fetch(SUPA_URL+'/production_planner?id=eq.main',{method:'PATCH',headers:SUPA_WHDR,body:JSON.stringify(mine)});}catch(e){unsureAdd(mine);throw e;}
-      if(resp&&resp.ok===false)throw new Error('HTTP '+resp.status);
+      unsureAdd(mine); // counts as "may have landed" from the moment it's sent (the tab may close before the reply)
+      let resp;try{resp=await fetch(SUPA_URL+'/production_planner?id=eq.main',{method:'PATCH',headers:SUPA_WHDR,body:JSON.stringify(mine)});}catch(e){throw e;}
+      if(resp&&resp.ok===false){unsureDel(mine);throw new Error('HTTP '+resp.status);}
       BASE=mine;UNSURE=[];return;
     }
     // Only saves if the database is still at the version we loaded. We ask for VER+1; the database trigger
     // (SUPABASE_CHANGES.md) also sets old+1 on every update — same number, so never a double bump — and
     // bumps it for old-code tabs too. The reply carries just the new version number.
     let resp;
+    unsureAdd(mine); // counts as "may have landed" from the moment it's sent — a tab closed mid-save keeps the record
     try{resp=await fetch(SUPA_URL+'/production_planner?id=eq.main&version=eq.'+VER+'&select=version',{method:'PATCH',headers:{...SUPA_WHDR,'Prefer':'return=representation'},
       body:JSON.stringify({...mine,version:VER+1,updated_by:whoTag()})});}
-    catch(e){unsureAdd(mine);throw e;} // no reply: it may have landed — remember what we sent so it isn't mistaken for someone else's change
-    if(!resp||resp.ok===false){
+    catch(e){throw e;} // no reply: it may have landed — it stays in UNSURE so it isn't mistaken for someone else's change
+    if(!resp||resp.ok===false){unsureDel(mine);
       const tx=resp?await resp.text().catch(()=>''):'';
       if(/version|updated_by/.test(tx)&&/column/i.test(tx)){VER=null;legacyWarn('save');continue;} // SQL not run — old way
       throw new Error('HTTP '+(resp?resp.status:'?'));
@@ -896,6 +899,7 @@ async function pushPlan(){
     // next save overwrite that save's changes without merging them.
     if(Array.isArray(d)&&d.length){const nv=VER+1;if(+d[0].version!==nv)console.warn('Planner: save reply said version '+d[0].version+', expected '+nv+' — using '+nv);VER=nv;BASE=mine;UNSURE=[];return;}
     if(!Array.isArray(d))throw new Error('unexpected save reply');
+    unsureDel(mine); // "nothing updated" — it didn't land
     // Nothing updated: another screen saved first. Fetch theirs, merge, try again.
     const row=checkRow(await fetchMain());
     const theirs=planOf(row,BASE.settings);
