@@ -4009,6 +4009,7 @@ function analyzeImport(input,source){
           salesRep:r.salesRep||'',orderNo:r.orderNo||'',value:val,plannedWeek:'',notes:'',colour:''};
         if(cs)o.cienStep=cs;
         if(isHoldC){o.cienHold=true;unsched.push(r.key);}
+        else if(r.dueBad){unsched.push(r.key);flags.push('new job with an unreadable due date — left unscheduled (not put in this week)');}
         if(stepForDelivery(cs)){o.delv=true;autoTag.push(o.wo);} // 7 ASSEMBLY COMPLETE / 8 PALLETED → on the delivery board (no van/day)
         if(r.has.sheets)o.sheetsCien=r.sheets;
         if(adds)o.adds=adds;

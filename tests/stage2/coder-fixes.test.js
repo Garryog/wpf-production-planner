@@ -84,6 +84,10 @@ const res = []; const rec = (n, ok, d) => { res.push(ok); console.log((ok ? 'PAS
     return { n: p.newOrders.map(o => o.wo), sk: p.skipped.map(s => s.wo), txt: /Skipped/.test(txt) && /245 jobs/.test(txt) && /Grand Total: 1 orders/.test(txt) }; });
   rec('4: totals/count/sum rows and rows with no WO-shaped token skipped; 1234 and 2557_09 kept', tot.n.join() === 'WO-8400-1,1234,2557_09' && tot.sk.length === 5, JSON.stringify(tot));
   rec('4: skipped rows listed in the preview Skipped section', tot.txt, JSON.stringify(tot));
+  // 5. new job, unreadable due date → unscheduled + flagged
+  const u5 = await ev(() => { const p = analyzeImport(prepImport([{ wo: 'WO-8500-1', value: 5000, dueDate: '29/02/2027' }, { wo: 'WO-8500-2', value: 5000, dueDate: '2026-10-21' }]), 'file'); applyImport(p);
+    const g = w => DB.orders.find(o => o.wo === w); return { a: g('WO-8500-1').plannedWeek, b: g('WO-8500-2').plannedWeek, f: p.flagged.some(f => f.wo === 'WO-8500-1' && /unscheduled/.test(f.why)) }; });
+  rec('5: new job with unreadable due date → unscheduled and flagged; a good date still scheduled', u5.a === '' && u5.b === '2026-10-19' && u5.f, JSON.stringify(u5));
   await t.close();
   await browser.close();
   console.log(res.filter(x => !x).length + ' failed of ' + res.length);
