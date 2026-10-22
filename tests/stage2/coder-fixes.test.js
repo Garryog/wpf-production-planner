@@ -68,6 +68,16 @@ const res = []; const rec = (n, ok, d) => { res.push(ok); console.log((ok ? 'PAS
   rec('2: step changes (6.) → back on the board, flagged "back from on hold", back in totals', !h.hold2 && h.inBO2 && h.backFlag && h.after === h.held && h.step2 === '6. JOB CUT COMPLETE', JSON.stringify(h));
   p = await P([{ wo: 'WO-8100-1', step: '12. ON HOLD / DELETE', value: 3000, dueDate: '2026-10-20' }]);
   rec('2: new job at 12 → added on hold, left unscheduled', p.newOrders.length === 1 && p.newOrders[0].cienHold && p.unsched.includes('WO-8100-1'), JSON.stringify(p.newOrders));
+  // 3. auto-tag for delivery at 7 / 8
+  p = await P([{ wo: 'WO-8300-1', step: '7. ASSEMBLY COMPLETE', value: 2000, dueDate: '2026-11-20' }, { wo: 'WO-8300-2', step: '8.PALLETED', value: 2000, dueDate: '2026-11-20' }, { wo: 'WO-8300-3', step: '6. JOB CUT COMPLETE', value: 2000, dueDate: '2026-11-20' }]);
+  rec('3: new jobs at 7 / 8 auto-tagged (delv, no van/day); 6 not', p.newOrders.filter(o => o.delv).map(o => o.wo).join() === 'WO-8300-1,WO-8300-2' && p.newOrders.every(o => !o.delVeh && !o.delDay) && p.autoTag.length === 2, JSON.stringify(p.autoTag));
+  const at = await ev(() => { const o = DB.orders.find(x => x.wo === 'WO-8000-1'); delete o.shippedAt; o.step = '6. JOB CUT COMPLETE'; o.delv = false;
+    const p = analyzeImport(prepImport([{ wo: 'WO-8000-1', step: '8. PALLETED' }]), 'file'); IMPPLAN = p; showTab('i'); renderImportPreview(p); const txt = document.getElementById('iprev').textContent;
+    applyImport(p); IMPPLAN = null; const r = { delv: o.delv, veh: o.delVeh || '', day: o.delDay || '', txt: /1 auto-tagged for delivery/.test(txt) };
+    o.delv = false; o.planUntag = 1; const p2 = analyzeImport(prepImport([{ wo: 'WO-8000-1', step: '8. PALLETED' }]), 'file'); applyImport(p2); r.reTag = o.delv;
+    o.delv = true; const p3 = analyzeImport(prepImport([{ wo: 'WO-8000-1', step: '9. JOB SHIPPED' }]), 'file'); applyImport(p3); r.kept = o.delv; return r; });
+  rec('3: board job moved to 8 by import → tagged, no van/day; preview says "1 auto-tagged for delivery"', at.delv === true && !at.veh && !at.day && at.txt, JSON.stringify(at));
+  rec('3: a planner untag is not undone by a re-import of the same step; import never untags', at.reTag === false && at.kept === true, JSON.stringify(at));
   await t.close();
   await browser.close();
   console.log(res.filter(x => !x).length + ' failed of ' + res.length);

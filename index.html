@@ -3971,7 +3971,7 @@ const addsSum=(a,k)=>Object.keys(a||{}).reduce((s,x)=>s+(+(a[x]||{})[k]||0),0);
 function analyzeImport(input,source){
     if(Array.isArray(input))input=prepImport(input);
     const board=boardMap(),recs=input.recs||[],skip=input.skip||{};
-    const newOrders=[],updates=[],fills=[],synced=[],shipped=[],inTransit=[],dispGaps=[],flagged=[],stepDiffs=[],exCounts={},marks=[],unsched=[];
+    const newOrders=[],updates=[],fills=[],synced=[],autoTag=[],shipped=[],inTransit=[],dispGaps=[],flagged=[],stepDiffs=[],exCounts={},marks=[],unsched=[];
     let unchanged=0,excluded=0;
     const sh=s=>String(s||'—').replace(/^\d+\.\s*/,'');
     recs.forEach(r=>{
@@ -4002,6 +4002,7 @@ function analyzeImport(input,source){
           salesRep:r.salesRep||'',orderNo:r.orderNo||'',value:val,plannedWeek:'',notes:'',colour:''};
         if(cs)o.cienStep=cs;
         if(isHoldC){o.cienHold=true;unsched.push(r.key);}
+        if(stepForDelivery(cs)){o.delv=true;autoTag.push(o.wo);} // 7 ASSEMBLY COMPLETE / 8 PALLETED → on the delivery board (no van/day)
         if(r.has.sheets)o.sheetsCien=r.sheets;
         if(adds)o.adds=adds;
         newOrders.push(o);
@@ -4030,7 +4031,8 @@ function analyzeImport(input,source){
       if(cs&&cs!==ps&&!isHoldC){
         const c=!ps||stepOnHold(ps)?1:stepCmp(cs,ps);
         if(c===null){stepDiffs.push({wo:ex.wo,title:ex.title||'',planner:ps,cien:cs,why:"can't tell which is further on — nothing moved"});}
-        else if(c>0){newStep=cs;set.step=cs;what.push('step: '+sh(ps||'(none)')+' → '+sh(cs));}
+        else if(c>0){newStep=cs;set.step=cs;what.push('step: '+sh(ps||'(none)')+' → '+sh(cs));
+          if(stepForDelivery(cs)&&!ex.delv&&!ex.shippedAt){set.delv=true;autoTag.push(ex.wo);what.push('auto-tagged for delivery');}} // never untags
         else if(c<0){stepDiffs.push({wo:ex.wo,title:ex.title||'',planner:ps,cien:cs,why:'planner is ahead — stays on the Export Changes list for Cienapps'});}
         else stepDiffs.push({wo:ex.wo,title:ex.title||'',planner:ps,cien:cs,why:'same stage, different wording — nothing moved'});
       }else if(cs&&cs===ps&&origStep[ex.wo]!==undefined&&origStep[ex.wo]!==cs)synced.push({wo:ex.wo,key:r.key,step:cs}); // Cienapps has caught up
@@ -4082,7 +4084,7 @@ function analyzeImport(input,source){
       importError('None of the '+(input.rows||recs.length)+' rows had a usable WO number, so nothing was imported.','Check that the WO number column is mapped to the column holding values like WO-2604-7.');
       return null;
     }
-    return{source:source||'file',input,marks,unsched,newOrders,updates,fills,synced,shipped,inTransit,dispGaps,flagged,folds:input.folds||[],stepDiffs,exCounts,
+    return{source:source||'file',input,marks,unsched,autoTag,newOrders,updates,fills,synced,shipped,inTransit,dispGaps,flagged,folds:input.folds||[],stepDiffs,exCounts,
       removals:[],backfills:[],
       counts:{added,updated,skipped:unchanged,noWo:skip.noWo||0,totals:skip.totals||0,snag:skip.snag||0,excluded,shipped:shipped.length,folded:(input.folds||[]).length,rows:input.rows||recs.length}};
 }
@@ -4104,7 +4106,7 @@ function renderImportPreview(plan){
   el.innerHTML=`<div style="margin-top:14px">
     <div style="background:#eaf2ff;border:2px solid #1a56db;border-radius:8px;padding:12px 15px;margin-bottom:12px">
       <div style="font-size:14px;font-weight:800;color:#14335c;margin-bottom:4px">Import preview — nothing has changed yet</div>
-      <div style="font-size:13px;color:#14335c">${c.added} new · ${c.updated} updated · ${c.skipped} unchanged · ${plan.shipped.length} to 📦 Shipped${c.folded?` · ${c.folded} addition${c.folded!==1?'s':''} folded in`:''}${(plan.marks||[]).length?` · ${plan.marks.length} marked installed/complete (Cienapps 10/11)`:''}${plan.flagged.length?` · <b>${plan.flagged.length} flagged</b>`:''} · <b>nothing is removed</b></div>
+      <div style="font-size:13px;color:#14335c">${c.added} new · ${c.updated} updated · ${c.skipped} unchanged · ${plan.shipped.length} to 📦 Shipped${c.folded?` · ${c.folded} addition${c.folded!==1?'s':''} folded in`:''}${(plan.autoTag||[]).length?` · <b>${plan.autoTag.length} auto-tagged for delivery</b>`:''}${(plan.marks||[]).length?` · ${plan.marks.length} marked installed/complete (Cienapps 10/11)`:''}${plan.flagged.length?` · <b>${plan.flagged.length} flagged</b>`:''} · <b>nothing is removed</b></div>
       ${skips.length?`<div style="font-size:12px;color:#14335c;opacity:.8;margin-top:3px">${skips.join(' · ')}</div>`:''}
     </div>
     ${plan.changedNote?`<div id="imp-changed" style="background:#fdecea;border:2px solid #e57368;border-radius:8px;padding:12px 15px;margin-bottom:12px">
