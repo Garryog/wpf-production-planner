@@ -65,3 +65,7 @@ Rule: cap each release at one area of the floor. Nothing new is decided until th
 - Stock levels: not yet; forklift view shows need only.
 - CNC floor screens: one PC/tablet per machine; the operator ticks CUT on that machine's screen.
 - Stage 2 addition (22 Oct): a Cienapps import that brings a job in at "Assembly complete" or "Palleted" automatically puts it on the delivery board (delv=true; no van/day assigned; never untags; preview shows "N auto-tagged for delivery").
+
+### Cienapps status ladder (exact wording, from Garry's screenshot 22 Oct 2026)
+1. DRAWING · 2. NO SITE MEASURE DONE · 3. READY FOR UPLOAD · 4. READY FOR PRODUCTION · 5. WORK ORDER PROCESSED · 6. JOB CUT COMPLETE · 7. ASSEMBLY COMPLETE · 8. PALLETED · 9. JOB SHIPPED · 10. INSTALLED TO BE INVOICE · 11. COMPLETED AND INVOICED · 12. ON HOLD / DELETE
+Rules: rank by the leading number. "Shipped" = step 9 only (left the factory → Shipped tab). Steps 10 and 11 = installed/invoiced → Shipped tab, marked installed/complete respectively. Step 12 ON HOLD / DELETE → never removed; flagged "on hold" and taken out of week totals until it changes. Auto-tag for delivery = steps 7 and 8. Step 5 WORK ORDER PROCESSED = Johnny has programmed it (CNC "programmed"); step 6 = CNC "cut". Note "2.NO SITE MEASURE DONE" has no space after the dot in Cienapps.
