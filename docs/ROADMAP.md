@@ -45,3 +45,11 @@ Rule: cap each release at one area of the floor. Nothing new is decided until th
 - Cutting-list revisions: unchanged lines keep their ticks; changed lines reset and are flagged so the saw sees exactly what changed.
 - Driver photos: private (logged-in users only) from Stage 4.
 - CNC sheet counts: Cienapps already works out sheets from m² (approximate). Use that figure from the Cienapps export as the sheet count for the CNC calendar and forklift view; the planner's own m²/5.75 calc is the fallback/cross-check for lines Cienapps hasn't counted. Johnny's sheet is the source of machine + date + material split.
+
+### Decisions 22 Oct 2026 (before Garry's holiday 23 Oct – 2 Nov)
+- Stage 1 go-live waits until Garry is back (3 Nov). Nothing merges to main while he is away; agents plan/build/test on branches.
+- Shipped jobs move OFF the main board to a "Shipped" tab (kept until installation is complete; searchable; a job returns to view when it has follow-ons/snags).
+- Cutting/fittings lists are the MOST CRITICAL part of the move to the planner. Production Manager must see: structured saving, a database of lists, create a new list, template lists per project (per type), pick a project's list and attach it to a work order — seamless.
+- Templates are created/maintained by the Production Manager and the design office; everyone else picks and attaches.
+- Authority while away: agents may BUILD the cutting-list system on top of the Stage 3 design (new tables, permanent line IDs) following the Architect's plan without further sign-off; Garry reviews plan + build + tests on 3 Nov.
+- Holiday-week work order: (1) Architect plans cutting-list system + Stage 3 tables; (2) Stage 2 imports incl. Shipped tab; (3) build + test cutting-list system; (4) Saw/Stores re-test + Manager re-review; (5) labels if label size arrives.
