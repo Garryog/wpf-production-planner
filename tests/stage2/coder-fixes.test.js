@@ -93,6 +93,10 @@ const res = []; const rec = (n, ok, d) => { res.push(ok); console.log((ok ? 'PAS
   rec('6: EU/IE numbers and hours read right', JSON.stringify(n6) === JSON.stringify([12500, 12.5, 12500, 12500, 1000, 1234.5, -1200, -500, 1000000, 12.5, null, { h: 8.5 }, { h: 8.5 }]).replace('null', 'NaN') || (n6[10] !== n6[10] && JSON.stringify(n6.slice(0, 10)) === '[12500,12.5,12500,12500,1000,1234.5,-1200,-500,1000000,12.5]' && n6[11].h === 8.5 && n6[12].h === 8.5), JSON.stringify(n6));
   p = await P([{ wo: 'WO-8000-2', value: '-500' }]);
   rec('6: negative value kept as is and flagged "credit?"', p.updates.some(u => u.wo === 'WO-8000-2' && u.set.value === -500) && p.flagged.some(f => f.wo === 'WO-8000-2' && /credit\?/.test(f.why)), JSON.stringify(p.flagged));
+  // 7. duplicates: which line was used + alternatives
+  const d7 = await ev(() => { const p = analyzeImport(prepImport([{ wo: 'WO-8700-1', value: 100, dueDate: '20/11/2026', step: '3. READY FOR UPLOAD' }, { wo: 'WO-8700-1', value: 200, dueDate: '06/11/2026', step: '9. JOB SHIPPED' }, { wo: 'wo-8700-1 ', value: 300 }]), 'file');
+    IMPPLAN = p; showTab('i'); renderImportPreview(p); const txt = (document.getElementById('imp-dups') || {}).textContent || ''; IMPPLAN = null; return { why: p.flagged.map(f => f.why).join('|'), txt }; });
+  rec('7: duplicate lines — value/step used with line numbers and alternatives, in the preview', /value €100 used \(line 1\) — also €200 \(line 2\), €300 \(line 3\)/.test(d7.txt) && /step "3. READY FOR UPLOAD" used \(line 1\) — also "9. JOB SHIPPED" \(line 2\)/.test(d7.txt) && /due date 2026-11-06 used \(line 2/.test(d7.txt) && /duplicate in file \(3 lines: 1, 2, 3\)/.test(d7.why), JSON.stringify(d7));
   await t.close();
   await browser.close();
   console.log(res.filter(x => !x).length + ' failed of ' + res.length);

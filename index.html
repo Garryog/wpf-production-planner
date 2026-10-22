@@ -3646,9 +3646,12 @@ function acBase(key){const m=String(key).match(/^(.*\d)-?([A-Z])$/);return m?{ba
 function combineRows(recs,board){
   board=board||new Map();
   const by=new Map(),out=[];
+  const DUPK=['value','step','dueDate'],dv=(r,k)=>r.has[k]?[r.line,r[k]]:null;
   recs.forEach(r=>{
     const e=by.get(r.key);
     if(!e){by.set(r.key,r);out.push(r);return;}
+    if(!e.dupv){e.dupv={};DUPK.forEach(k=>{e.dupv[k]=[dv(e,k)].filter(Boolean);});e.dupLines=[e.line];}
+    DUPK.forEach(k=>{const x=dv(r,k);if(x)e.dupv[k].push(x);});e.dupLines.push(r.line);
     Object.keys(r.has).forEach(k=>{
       if(k==='dueDate'){if(!e.has.dueDate||r.dueDate<e.dueDate){e.dueDate=r.dueDate;e.has.dueDate=1;}return;}
       if(!e.has[k]){e[k]=r[k];e.has[k]=1;}
@@ -3657,7 +3660,14 @@ function combineRows(recs,board){
     if(r.hoursBad&&!e.has.hours)e.hoursBad=true;
     e.dup=(e.dup||1)+1;
   });
-  out.forEach(e=>{if(e.dup)e.flags.unshift('duplicate in file ('+e.dup+' lines) — combined into one, earliest due date used');});
+  // Which line's value / step / due date was used, and the alternatives (shown in the preview)
+  out.forEach(e=>{if(!e.dup)return;
+    const L=x=>'line '+x,f={value:v=>'€'+Math.round(v).toLocaleString(),step:v=>'"'+v+'"',dueDate:v=>v};
+    const parts=DUPK.map(k=>{const xs=e.dupv[k]||[];if(!xs.length)return'';const used=xs.find(x=>String(x[1])===String(e[k]))||xs[0];
+      const others=xs.filter(x=>String(x[1])!==String(used[1]));
+      return (k==='dueDate'?'due date':k)+' '+f[k](used[1])+' used ('+L(used[0])+(k==='dueDate'?', earliest':'')+')'+(others.length?' — also '+others.map(x=>f[k](x[1])+' ('+L(x[0])+')').join(', '):'');}).filter(Boolean);
+    e.dupInfo={lines:e.dupLines,parts};
+    e.flags.unshift('duplicate in file ('+e.dup+' lines: '+e.dupLines.join(', ')+') — combined into one'+(parts.length?': '+parts.join(' · '):''));});
   const keep=[],folds=[],synth=new Map();
   out.forEach(r=>{
     const ac=acBase(r.key);
@@ -3930,6 +3940,7 @@ function prepImport(rows,board){
   const skip={noWo:0,totals:0,snag:0},recs=[],skipped=[];
   (rows||[]).forEach((row,i)=>{
     const r=normaliseRow(row||{});
+    r.line=i+1;
     if(r.skip){skip[r.skip]++;if(r.skip==='totals')skipped.push({line:i+1,wo:String(row.wo).trim(),why:'totals / count row — not a work order'});return;}
     if(isSnagWo(r.key)){skip.snag++;return;}
     recs.push(r);
@@ -3991,7 +4002,7 @@ const addsSum=(a,k)=>Object.keys(a||{}).reduce((s,x)=>s+(+(a[x]||{})[k]||0),0);
 function analyzeImport(input,source){
     if(Array.isArray(input))input=prepImport(input);
     const board=boardMap(),recs=input.recs||[],skip=input.skip||{};
-    const newOrders=[],updates=[],fills=[],synced=[],autoTag=[],shipped=[],inTransit=[],dispGaps=[],flagged=[],stepDiffs=[],exCounts={},marks=[],unsched=[];
+    const dups=[],newOrders=[],updates=[],fills=[],synced=[],autoTag=[],shipped=[],inTransit=[],dispGaps=[],flagged=[],stepDiffs=[],exCounts={},marks=[],unsched=[];
     let unchanged=0,excluded=0;
     const sh=s=>String(s||'—').replace(/^\d+\.\s*/,'');
     recs.forEach(r=>{
@@ -4027,6 +4038,7 @@ function analyzeImport(input,source){
         if(r.has.sheets)o.sheetsCien=r.sheets;
         if(adds)o.adds=adds;
         newOrders.push(o);
+        if(r.dupInfo)dups.push({wo:o.wo,...r.dupInfo});
         if(flags.length)flagged.push({wo:r.wo,title:o.title,why:flags.join(' · '),isNew:true});
         return;
       }
@@ -4093,6 +4105,7 @@ function analyzeImport(input,source){
       if(isDrawC&&!ex.shippedAt)flags.push('check: Cienapps shows this job at drawing stage — kept on the board');
       if(isWOD)flags.push('check: WO-D (drawing work order) — kept on the board');
       if(r.synth)flags.push('addition only — base line not in this file');
+      if(r.dupInfo)dups.push({wo:ex.wo,...r.dupInfo});
       if(flags.length)flagged.push({wo:ex.wo,title:ex.title||'',why:flags.join(' · ')});
       if(Object.keys(fill).length)fills.push({wo:ex.wo,key:r.key,set:fill});
       if(Object.keys(set).length){
@@ -4105,7 +4118,7 @@ function analyzeImport(input,source){
       importError('None of the '+(input.rows||recs.length)+' rows had a usable WO number, so nothing was imported.','Check that the WO number column is mapped to the column holding values like WO-2604-7.');
       return null;
     }
-    return{source:source||'file',input,skipped:input.skipped||[],marks,unsched,autoTag,newOrders,updates,fills,synced,shipped,inTransit,dispGaps,flagged,folds:input.folds||[],stepDiffs,exCounts,
+    return{source:source||'file',input,dups,skipped:input.skipped||[],marks,unsched,autoTag,newOrders,updates,fills,synced,shipped,inTransit,dispGaps,flagged,folds:input.folds||[],stepDiffs,exCounts,
       removals:[],backfills:[],
       counts:{added,updated,skipped:unchanged,noWo:skip.noWo||0,totals:skip.totals||0,snag:skip.snag||0,excluded,shipped:shipped.length,folded:(input.folds||[]).length,rows:input.rows||recs.length}};
 }
@@ -4163,6 +4176,11 @@ function renderImportPreview(plan){
     </div>`:''}
     ${section('📦 Moving to the Shipped tab — shipped/invoiced in Cienapps (off the Capacity Board; kept until installation is complete)','#b9cdec','#eef3fb',plan.shipped,s=>line(s.wo,s.title,escA(sh(s.cs))+(s.onVan?' · <b>stays on Deliveries until the driver confirms</b>':'')),15)}
     ${section('➕ Additions — A/C lines folded into their base work order','#c9b6f0','#f6f2fd',plan.folds,f=>line(f.wo,f.title,'→ '+escA(f.base)+' · +€'+Math.round(f.value||0).toLocaleString()+(f.hours!=null?' · +'+f.hours+'h':'')),15)}
+    ${(plan.dups||[]).length?`<div id="imp-dups" style="background:#fdf3f2;border:1px solid #e57368;border-radius:8px;padding:10px 13px;margin-bottom:10px">
+      <div style="font-size:13px;font-weight:700;margin-bottom:6px">⧉ Same WO on more than one line — combined into one job</div>
+      ${plan.dups.slice(0,30).map(d=>`<div style="font-size:12px;padding:3px 0;border-bottom:1px solid #f5d0cc"><b style="font-family:monospace">${escA(d.wo)}</b> — lines ${escA(d.lines.join(', '))}${d.parts.map(p=>`<div style="padding-left:14px">${escA(p)}</div>`).join('')}</div>`).join('')}
+      ${plan.dups.length>30?`<div style="font-size:11px;color:var(--t3)">…and ${plan.dups.length-30} more</div>`:''}
+    </div>`:''}
     ${section('⤼ Skipped — rows in the file that are not work orders','#d1d5db','#f9fafb',plan.skipped||[],s=>line(s.wo,'line '+s.line,escA(s.why)),20)}
     ${section('⚑ Flagged — check these','#e57368','#fdf3f2',plan.flagged,f=>line(f.wo,f.title,escA(f.why)),20)}
     ${section('🆕 New work orders — will be added and scheduled to their due-date week','#b3e0c4','#f4fbf6',plan.newOrders,o=>line(o.wo,o.title,o.hours+'h · due '+(o.dueDate?fmt(o.dueDate):'—')),15)}
