@@ -4013,47 +4013,45 @@ function renderImportPreview(plan){
   };
 }
 function applyImport(plan){
-    // removals (delivered or never-dispatched excluded jobs) — also release their cutting-list tags
-    plan.removals.forEach(r=>{
-      DB.orders=DB.orders.filter(o=>o.wo!==r.wo);
-      delete orig[r.wo];delete origStep[r.wo];
-      lists().forEach(l=>{if((l.wos||[]).includes(r.wo))l.wos=l.wos.filter(w=>w!==r.wo);});
+    plan=plan||{};
+    // Look every job up again NOW — another screen may have added, edited or deleted jobs since the preview was built.
+    // No import ever removes a job (an old-style plan.removals list is ignored).
+    const board=boardMap(),get=x=>board.get(x.key||woKey(x.wo));
+    const dec=plan.dueDec||{},at=nowISO();
+    (plan.updates||[]).forEach(u=>{
+      const ex=get(u);if(!ex)return; // deleted on another screen meanwhile — nothing to update
+      const s=u.set||{};
+      Object.keys(s).forEach(k=>{if(k!=='dueDate')ex[k]=s[k];});
+      if('dueDate' in s){
+        if(dec[u.wo]==='keep')ex.dueKeep=s.dueDate; // planner date kept; this Cienapps date won't be asked about again
+        else{if(!ex.origDueDate)ex.origDueDate=ex.dueDate||'';ex.dueDate=s.dueDate;delete ex.dueKeep;}
+      }
+      if('step' in s)origStep[ex.wo]=s.step; // the step came FROM Cienapps — nothing to send back
+      if(u.what)logEdit(ex,'Cienapps import: '+u.what+('dueDate' in s?(u.what?' · ':'')+'due '+(dec[u.wo]==='keep'?'kept '+(ex.dueDate||'—'):'→ '+s.dueDate):''),'(import)');
     });
-    // updates
-    plan.updates.forEach(u=>{
-      const ex=DB.orders.find(o=>o.wo===u.wo);if(!ex)return;
-      if(u.dateChanged&&!ex.origDueDate)ex.origDueDate=ex.dueDate;
-      ex.hours=u.hours;ex.hoursEstimated=u.hoursEstimated;ex.dueDate=u.dueDate;ex.step=u.step;
-      if(u.title&&u.title!==ex.title)ex.title=u.title;
-      if(u.flr)ex.floor=u.flr;if(u.unt)ex.unit=u.unt;
-      if(u.rowVal>0)ex.value=u.rowVal;
-      if(u.refStr&&!ex.ref)ex.ref=u.refStr;
-      if(u.orderNo&&!ex.orderNo)ex.orderNo=u.orderNo;
-      if(u.salesRep&&!ex.salesRep)ex.salesRep=u.salesRep;
-    });
-    // week moves chosen on the date-reconciliation rows (shows in the change tracker, as it should)
-    if(plan.moves)Object.keys(plan.moves).forEach(wo=>{const ex=DB.orders.find(o=>o.wo===wo);if(ex)ex.plannedWeek=plan.moves[wo];});
-    // backfills on unchanged orders
-    plan.backfills.forEach(b=>{
-      const ex=DB.orders.find(o=>o.wo===b.wo);if(!ex)return;
-      if(b.flr&&!ex.floor)ex.floor=b.flr;if(b.unt&&!ex.unit)ex.unit=b.unt;
-      if(b.rowVal>0&&!ex.value)ex.value=b.rowVal;
-      if(b.refStr&&!ex.ref)ex.ref=b.refStr;
-    });
-    // new orders — scheduled to their due-date week
-    autoSchedule(plan.newOrders);
-    plan.newOrders.forEach(o=>{
-      DB.orders.push(o);
+    (plan.fills||[]).forEach(f=>{const ex=get(f);if(!ex)return;Object.keys(f.set).forEach(k=>{if(f.set[k]===undefined)delete ex[k];else ex[k]=f.set[k];});});
+    (plan.synced||[]).forEach(s=>{const ex=get(s);if(ex&&String(ex.step||'').trim()===s.step)origStep[ex.wo]=ex.step;});
+    // week moves chosen on the Differs rows (these DO show in Export Changes, as they should)
+    if(plan.moves)Object.keys(plan.moves).forEach(wo=>{const ex=board.get(woKey(wo));if(ex)ex.plannedWeek=plan.moves[wo];});
+    // shipped / invoiced → Shipped tab (first time seen)
+    let nShip=0;
+    (plan.shipped||[]).forEach(s=>{const ex=get(s);if(!ex||ex.shippedAt)return;ex.shippedAt=at;ex.shippedStep=s.cs;delete ex.shipBack;nShip++;logEdit(ex,'Moved to Shipped — Cienapps: '+s.cs,'(import)');});
+    // new orders — skip any that another screen added meanwhile, then schedule to their due-date week
+    const fresh=(plan.newOrders||[]).filter(o=>!board.has(woKey(o.wo)));
+    autoSchedule(fresh);
+    fresh.forEach(o=>{
+      DB.orders.push(o);board.set(woKey(o.wo),o);
       orig[o.wo]=o.plannedWeek||'';origStep[o.wo]=o.step||''; // baseline AFTER auto-schedule so auto-assignments don't show as changes
     });
     cleanGroups();
     sched();
-    const c=plan.counts;
-    document.getElementById('iprev').innerHTML=`<div style="margin-top:14px">
-      <div style="font-size:13px;font-weight:600;color:var(--green);margin-bottom:10px">✓ Import applied: ${c.added} added · ${c.updated} updated · ${c.skipped} unchanged · ${plan.removals.length} removed${plan.inTransit.length?` · ${plan.inTransit.length} kept (out for delivery)`:''}</div>
+    const c=plan.counts||{},el=document.getElementById('iprev');
+    if(el)el.innerHTML=`<div style="margin-top:14px">
+      <div style="font-size:13px;font-weight:600;color:var(--green);margin-bottom:10px">✓ Import applied: ${fresh.length} added · ${(plan.updates||[]).length} updated · ${c.skipped||0} unchanged · ${nShip} moved to 📦 Shipped · nothing removed</div>
       <button class="btn btn-g" onclick="showTab('b')">Go to Capacity Board →</button>
+      ${nShip?`<button class="btn btn-s" style="margin-left:8px" onclick="showTab('h')">Open Shipped →</button>`:''}
     </div>`;
-    toast(`Import applied — ${c.added} added, ${c.updated} updated`);
+    toast(`Import applied — ${fresh.length} added, ${(plan.updates||[]).length} updated${nShip?', '+nShip+' to Shipped':''}`);
 }
 
 function renderExport(app){
