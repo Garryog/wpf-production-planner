@@ -4035,7 +4035,7 @@ const addsSum=(a,k)=>Object.keys(a||{}).reduce((s,x)=>s+(+(a[x]||{})[k]||0),0);
 function analyzeImport(input,source){
     if(Array.isArray(input))input=prepImport(input);
     const board=boardMap(),recs=input.recs||[],skip=input.skip||{};
-    const dups=[],newOrders=[],updates=[],fills=[],synced=[],autoTag=[],shipped=[],inTransit=[],dispGaps=[],flagged=[],stepDiffs=[],exCounts={},marks=[],unsched=[];
+    const dups=[],newOrders=[],updates=[],fills=[],synced=[],autoTag=[],shipped=[],inTransit=[],dispGaps=[],flagged=[],stepDiffs=[],exCounts={},marks=[],unsched=[],pre={};
     let unchanged=0,excluded=0;
     const sh=s=>String(s||'—').replace(/^\d+\.\s*/,'');
     recs.forEach(r=>{
@@ -4076,6 +4076,7 @@ function analyzeImport(input,source){
         return;
       }
       // ---- existing job
+      pre[r.key]=preOf(ex); // the job as it stood when this plan was worked out (Apply compares it with the latest)
       const set={},fill={},what=[];
       const ch=(k,v,label)=>{if(v===undefined)return;if(String(ex[k]==null?'':ex[k])!==String(v)){set[k]=v;if(label)what.push(label+': '+(ex[k]===undefined||ex[k]===''?'(none)':ex[k])+' → '+(v===''?'(none)':v));}};
       if(!r.synth){
@@ -4151,7 +4152,7 @@ function analyzeImport(input,source){
       importError('None of the '+(input.rows||recs.length)+' rows had a usable WO number, so nothing was imported.','Check that the WO number column is mapped to the column holding values like WO-2604-7.');
       return null;
     }
-    return{source:source||'file',input,dups,skipped:input.skipped||[],marks,unsched,autoTag,newOrders,updates,fills,synced,shipped,inTransit,dispGaps,flagged,folds:input.folds||[],stepDiffs,exCounts,
+    return{source:source||'file',input,pre,dups,skipped:input.skipped||[],marks,unsched,autoTag,newOrders,updates,fills,synced,shipped,inTransit,dispGaps,flagged,folds:input.folds||[],stepDiffs,exCounts,
       removals:[],backfills:[],
       counts:{added,updated,skipped:unchanged,noWo:skip.noWo||0,totals:skip.totals||0,snag:skip.snag||0,excluded,shipped:shipped.length,folded:(input.folds||[]).length,rows:input.rows||recs.length}};
 }
@@ -4169,6 +4170,7 @@ function renderImportPreview(plan){
   if(c.excluded)skips.push(c.excluded+' not added ('+Object.keys(plan.exCounts).map(k=>plan.exCounts[k]+' '+escA(k)).join(', ')+')');
   if(c.totals)skips.push(c.totals+' totals row'+(c.totals!==1?'s':'')+' skipped');
   if(c.noWo)skips.push(c.noWo+' rows with no WO number');
+  if((plan.gone||[]).length)skips.push(plan.gone.length+' deleted on another PC while this preview was open — skipped, not re-added ('+escA(plan.gone.slice(0,10).join(', '))+(plan.gone.length>10?' …':'')+')');
   const nChg=c.added+c.updated+plan.shipped.length;
   el.innerHTML=`<div style="margin-top:14px">
     <div style="background:#eaf2ff;border:2px solid #1a56db;border-radius:8px;padding:12px 15px;margin-bottom:12px">
@@ -4244,16 +4246,20 @@ function renderImportPreview(plan){
     if(!ok){if(btn){btn.disabled=false;btn.textContent=btxt;}toast('Could not check the database for changes made on other PCs — import NOT applied. Check the connection and try again.');return;}
     const fresh=reanalyzeImport(prev);
     if(!fresh){IMPPLAN=null;return;}
-    const d=planDiff(prev,fresh);
-    if(d.added.length){ // the import would now do something that wasn't in the preview — show it again, apply nothing
-      fresh.changedNote=d;IMPPLAN=fresh;renderImportPreview(fresh);
-      document.querySelectorAll('[data-dk]').forEach(r=>{if(dueDec[r.dataset.dk])r.checked=dueDec[r.dataset.dk]===r.value;});
-      document.querySelectorAll('[data-rmv]').forEach(s=>{if(moves[s.dataset.rmv]&&[...s.options].some(o=>o.value===moves[s.dataset.rmv]))s.value=moves[s.dataset.rmv];});
+    const d=planDiff(prev,fresh,moves);
+    // carried over from earlier re-shows, so the final message lists everything
+    fresh.dropped=(prev.dropped||[]).concat(d.dropped);fresh.applied=(prev.applied||[]).concat(d.applied);
+    if(d.added.length||d.changed.length){ // the import would now do something that wasn't in the preview, or would write to a job someone else just changed — show it again, apply nothing
+      fresh.changedNote={added:d.changed.map(x=>x.l).concat(d.added)};IMPPLAN=fresh;renderImportPreview(fresh);
+      // choices made before another PC changed that job aren't carried over: the row starts at Keep (the other PC's date) and the job's week stays
+      const chg=new Set(d.changed.map(x=>x.key));
+      document.querySelectorAll('[data-dk]').forEach(r=>{const k=woKey(r.dataset.dk);if(chg.has(k))r.checked=r.value==='keep';else if(dueDec[r.dataset.dk])r.checked=dueDec[r.dataset.dk]===r.value;});
+      document.querySelectorAll('[data-rmv]').forEach(s=>{if(chg.has(woKey(s.dataset.rmv)))return;if(moves[s.dataset.rmv]&&[...s.options].some(o=>o.value===moves[s.dataset.rmv]))s.value=moves[s.dataset.rmv];});
       toast('The plan changed while you were reviewing — check the preview again');
       return;
     }
-    // Same or fewer changes: anything dropped was edited on another PC meanwhile, and the planner's edit wins
-    fresh.moves=moves;fresh.dueDec=dueDec;fresh.dropped=d.dropped;
+    // Same or fewer changes: each dropped one was either already applied by another PC, or edited there (the planner's edit wins)
+    fresh.moves=moves;fresh.dueDec=dueDec;
     applyImport(fresh);IMPPLAN=null;
   };
 }
@@ -4266,21 +4272,65 @@ async function freshForImport(){
 }
 function reanalyzeImport(p){
   const inp=p.input;if(!inp)return p; // a plan built without its input can't be re-run; applyImport still looks every job up again
-  return analyzeImport(inp.raw?prepImport(inp.raw):inp,p.source);
+  const f=analyzeImport(inp.raw?prepImport(inp.raw):inp,p.source);
+  if(!f)return f;
+  // A job that was on the planner when the preview was built but has been deleted on another PC since: skipped, never re-added
+  const pp=p.pre||{},fp=f.pre||{},gone=Object.keys(pp).filter(k=>!(k in fp));
+  if(gone.length){const g=new Set(gone);f.newOrders=f.newOrders.filter(o=>!g.has(woKey(o.wo)));f.counts.added=f.newOrders.length;}
+  f.gone=[...new Set((p.gone||[]).concat(gone))];
+  return f;
+}
+/* What the planner holds for a job, for every field an import can write or depends on (due date, step, hours and
+   where they came from, week, delivery tag/van/day, shipped / on hold / installed / complete, the planner's overrides).
+   Apply compares this between the preview and the latest database copy. */
+const PRE_K=['dueDate','dueKeep','step','hours','plannedWeek','delv','delVeh','delDay','delLoadedAt','shippedAt','shipBack','cienHold','installedAt','completeAt','completeOverride','delvOverride'];
+const PRE_L={dueDate:'due date',dueKeep:'due date',step:'step',hours:'hours',plannedWeek:'week',delv:'delivery tag',delVeh:'van',delDay:'delivery day',delLoadedAt:'loaded',shippedAt:'shipped',shipBack:'brought back',cienHold:'on hold',installedAt:'installed',completeAt:'complete',completeOverride:'complete undone',delvOverride:'untagged'};
+function preOf(ex){return JSON.stringify(PRE_K.map(k=>ex[k]==null||ex[k]===''||ex[k]===false?null:ex[k]).concat(hSrc(ex)));}
+function preWhat(a,b){
+  try{const A=JSON.parse(a),B=JSON.parse(b),r=new Set();PRE_K.forEach((k,i)=>{if(JSON.stringify(A[i])!==JSON.stringify(B[i]))r.add(PRE_L[k]);});
+    if(A[PRE_K.length]!==B[PRE_K.length])r.add('hours');return[...r].join(', ');}catch(e){return'';}
 }
 // Every change a plan would make, as key → plain-English label (what's compared between preview and Apply)
 function planActs(p){
   const m=new Map(),v=x=>x===undefined||x===''?'(none)':String(x);
-  (p.newOrders||[]).forEach(o=>m.set('new|'+woKey(o.wo)+'|'+JSON.stringify([o.value,o.hours,o.dueDate,o.step,!!o.delv,o.plannedWeek||'']),o.wo+': new job'));
-  (p.updates||[]).forEach(u=>Object.keys(u.set||{}).forEach(k=>{if(k==='hoursSrc'||k==='hoursEstimated')return;m.set('upd|'+u.key+'|'+k+'|'+JSON.stringify(u.set[k]),u.wo+': '+k+' → '+v(u.set[k]));}));
+  (p.newOrders||[]).forEach(o=>m.set('new|'+woKey(o.wo)+'|'+JSON.stringify([o.value,o.hours,o.hoursSrc||'',o.dueDate,o.step,!!o.delv,!!o.cienHold,o.plannedWeek||'']),o.wo+': new job'));
+  (p.updates||[]).forEach(u=>{const s=u.set||{};Object.keys(s).forEach(k=>{if(k==='hoursSrc'||k==='hoursEstimated')return;
+    const val=k==='hours'?[s.hours,s.hoursSrc||'']:s[k];
+    m.set('upd|'+u.key+'|'+k+'|'+JSON.stringify(val),u.wo+': '+k+' → '+v(s[k]));});});
   (p.shipped||[]).forEach(s=>m.set('ship|'+s.key+'|'+s.cs,s.wo+': to Shipped ('+s.cs+')'));
+  (p.marks||[]).forEach(x=>m.set('mark|'+x.key+'|'+JSON.stringify([!!x.inst,!!x.done]),x.wo+': marked '+(x.done?'complete':'installed')+' ('+x.cs+')'));
   return m;
 }
-function planDiff(a,b){
-  const A=planActs(a),B=planActs(b),added=[],dropped=[];
+// Is a preview change no longer needed because the job already holds it (another PC applied the same import)?
+function actDone(k,board){
+  const p=k.split('|'),ex=board.get(p[1]);
+  if(p[0]==='new')return !!ex;
+  if(!ex)return false;
+  if(p[0]==='ship')return !!ex.shippedAt;
+  let v;try{v=JSON.parse(p.slice(p[0]==='upd'?3:2).join('|'));}catch(e){return false;}
+  if(p[0]==='mark')return(!v[0]||!!ex.installedAt)&&(!v[1]||!!ex.completeAt);
+  const f=p[2];
+  if(f==='hours')return +ex.hours===+v[0]&&hSrc(ex)===v[1];
+  if(f==='dueDate')return ex.dueDate===v||ex.dueKeep===v;
+  if(f==='cienHold')return !!ex.cienHold===!!v;
+  if(f==='delv')return !!ex.delv===!!v;
+  return String(ex[f]==null?'':ex[f])===String(v==null?'':v);
+}
+/* Preview (a) vs the import worked out again on the latest data (b). The preview is shown again when
+   - the import would now do something it didn't show (added), or
+   - another PC changed a job (due date, step, hours, week, delivery, shipped/on hold…) that the import still
+     writes to, or that has a "Move to" chosen (changed).
+   Changes that dropped out are either already applied by another PC, or the other PC's edit wins (dropped). */
+function planDiff(a,b,moves){
+  const A=planActs(a),B=planActs(b),added=[],dropped=[],applied=[],changed=[],board=boardMap();
   B.forEach((l,k)=>{if(!A.has(k))added.push(l);});
-  A.forEach((l,k)=>{if(!B.has(k))dropped.push(l);});
-  return{added,dropped};
+  A.forEach((l,k)=>{if(B.has(k))return;if(actDone(k,board))applied.push(l);else if(board.has(k.split('|')[1]))dropped.push(l);});
+  const pa=a.pre||{},pb=b.pre||{},inB=new Set([...B.keys()].map(k=>k.split('|')[1])),mv=new Set(Object.keys(moves||{}).map(woKey));
+  Object.keys(pa).forEach(k=>{
+    if(!(k in pb)||pa[k]===pb[k]||!(inB.has(k)||mv.has(k)))return;
+    const ex=board.get(k);changed.push({key:k,l:(ex?ex.wo:k)+': changed on another PC ('+(preWhat(pa[k],pb[k])||'details')+')'});
+  });
+  return{added,dropped,applied,changed};
 }
 function applyImport(plan){
     plan=plan||{};
@@ -4324,7 +4374,9 @@ function applyImport(plan){
     const c=plan.counts||{},el=document.getElementById('iprev');
     if(el)el.innerHTML=`<div style="margin-top:14px">
       <div style="font-size:13px;font-weight:600;color:var(--green);margin-bottom:10px">✓ Import applied: ${fresh.length} added · ${(plan.updates||[]).length} updated · ${c.skipped||0} unchanged · ${nShip} moved to 📦 Shipped · nothing removed</div>
+      ${plan.applied&&plan.applied.length?`<div style="font-size:12px;color:var(--t2);margin-bottom:10px">${plan.applied.length} change${plan.applied.length!==1?'s':''} already applied by another PC: ${escA(plan.applied.slice(0,10).join(' · '))}${plan.applied.length>10?' …':''}</div>`:''}
       ${plan.dropped&&plan.dropped.length?`<div style="font-size:12px;color:#8a6d00;margin-bottom:10px">${plan.dropped.length} change${plan.dropped.length!==1?'s':''} from the preview not made — edited on another PC meanwhile (the planner's edit wins): ${escA(plan.dropped.slice(0,10).join(' · '))}${plan.dropped.length>10?' …':''}</div>`:''}
+      ${plan.gone&&plan.gone.length?`<div style="font-size:12px;color:#8a6d00;margin-bottom:10px">Skipped — deleted on another PC while the preview was open (not re-added): ${escA(plan.gone.slice(0,20).join(', '))}${plan.gone.length>20?' …':''}</div>`:''}
       <button class="btn btn-g" onclick="showTab('b')">Go to Capacity Board →</button>
       ${nShip?`<button class="btn btn-s" style="margin-left:8px" onclick="showTab('h')">Open Shipped →</button>`:''}
     </div>`;
