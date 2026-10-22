@@ -53,3 +53,11 @@ Rule: cap each release at one area of the floor. Nothing new is decided until th
 - Templates are created/maintained by the Production Manager and the design office; everyone else picks and attaches.
 - Authority while away: agents may BUILD the cutting-list system on top of the Stage 3 design (new tables, permanent line IDs) following the Architect's plan without further sign-off; Garry reviews plan + build + tests on 3 Nov.
 - Holiday-week work order: (1) Architect plans cutting-list system + Stage 3 tables; (2) Stage 2 imports incl. Shipped tab; (3) build + test cutting-list system; (4) Saw/Stores re-test + Manager re-review; (5) labels if label size arrives.
+
+### CNC planning decisions (22 Oct 2026)
+- Two stages per job: PROGRAMMED (Johnny nests/programs it — his strike-through) and CUT (CNC operator ticks on the planner, per job per machine; = Cienapps "cut" stage).
+- Machine assignment: Johnny decides, but the planner must plan by sheet count per machine per day AND by material colour — group same-colour jobs on a machine/day to minimise colour changes. Dates still matter.
+- Cut-by date today = Cienapps due date minus 7 days.
+- Capacity: 30 sheets/machine/day when all one colour; each colour change that day reduces it (3 colour changes → 26 sheets). Per-machine numbers adjustable in Settings; per-day overrides.
+- Carry-over: unfinished sheets roll to the next day on the same machine, flagged "carried over".
+- Johnny's sheet: read AUTOMATICALLY from SharePoint (Microsoft link / Power Automate), not manual upload.
