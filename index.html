@@ -3779,140 +3779,165 @@ function renderMapping(note){
    Nothing changes — and nothing is saved — until Apply is clicked. */
 let IMPPLAN=null;
 function runImport(rows){
-    const plan=analyzeImport(rows);
+    const plan=analyzeImport(prepImport(rows),'file');
     if(!plan)return;
     IMPPLAN=plan;
     renderImportPreview(plan);
 }
-function analyzeImport(rows){
-    let added=0,updated=0,skipped=0,noWo=0,excluded=0;
-    const dispGaps=[]; // Cienapps says shipped/invoiced but the planner has no dispatch record
-    const exCounts={};
-    const newOrders=[],updates=[],backfills=[],removals=[],inTransit=[];
-
-    rows.forEach(row=>{
-      const wo=String(row.wo==null?'':row.wo).trim();
-      if(!wo||wo==='NaT'||wo==='nan'||wo==='undefined'){noWo++;return;}
-      if(isTotalsWo(wo)){noWo++;return;}
-      // Floor & Unit — from their own columns, else parsed out of the Reference (order-seq-floor-unit)
-      const refStr=String(row.ref==null?'':row.ref).trim();
-      let flr=String(row.floor==null?'':row.floor).trim();
-      let unt=String(row.unit==null?'':row.unit).trim();
-      if((!flr||!unt)&&refStr.split('-').length>=4){
-        const ps=refStr.split('-');
-        if(!flr)flr=ps[2];
-        if(!unt)unt=ps.slice(3).join('-');
-      }
-      const rawHours=parseFloat(row.hours||0)||0;
-      const rowVal=parseFloat(row.value||0)||0;
-      const exOrd=DB.orders.find(o=>o.wo===wo);
-      // Hours rules: 'Assembly complete' means the assembly work is already done — 0h on the board;
-      // WO-S, WO-BI, WO-PF prefixes and zero value all get 1h
-      const effStep=String(row.step==null?'':row.step).trim()||(exOrd&&exOrd.step)||'';
-      // Excluded from the planner entirely — never added, and removed from the board if still on it:
-      //  · WO number starts with "WO-S" (snag work orders)
-      //  · WO number contains "WO-D" (drawing work orders)
-      //  · step contains "drawing" (still at drawing stage — not ready to plan)
-      //  · step contains "shipped" (job shipped)
-      //  · step contains "invoiced" (completed & invoiced, installed to be invoiced, …)
-      const exReason=
-        wo.toUpperCase().indexOf('WO-S')===0?'WO-S snag':
-        wo.toUpperCase().indexOf('WO-D')>-1?'WO-D':
-        /drawing/i.test(effStep)?'drawing':
-        /shipped/i.test(effStep)?'shipped':
-        /invoiced/i.test(effStep)?'invoiced':'';
-      if(exReason){
-        excluded++;exCounts[exReason]=(exCounts[exReason]||0)+1;
-        if(exOrd){
-          // Cienapps cross-check: it says shipped/invoiced, but the planner never recorded a dispatch.
-          // That's a "house 18" — the paperwork moved on while the job may still be in the factory.
-          if((exReason==='shipped'||exReason==='invoiced')&&!exOrd.delDispAt&&!exOrd.delDelivAt&&!exOrd.delDone){
-            dispGaps.push({wo,title:exOrd.title||'',customer:exOrd.customer||'',unit:[exOrd.floor,exOrd.unit].filter(Boolean).join(' · '),reason:exReason});
-          }
-          // PROTECTED: a job that is tagged for delivery, loaded or dispatched — but NOT yet
-          // confirmed delivered — must never vanish from the board, whatever Cienapps says.
-          // The delivery plan outranks a status change; it stays until the driver confirms.
-          if((exOrd.delv||exOrd.delLoadedAt||exOrd.delDispAt)&&!exOrd.delDelivAt&&!exOrd.delDone){
-            inTransit.push({wo,title:exOrd.title||'',reason:exReason,veh:vehLbl(exOrd.delVeh)||'',day:exOrd.delDay||''});
-          }else{
-            removals.push({wo,reason:exReason,title:exOrd.title||'',customer:exOrd.customer||'',hours:exOrd.hours});
-          }
-        }
+/* ---------- Stage 2 import pipeline ----------
+   file → rows (doImport) → normaliseRow → combineRows → analyzeImport (plan, board untouched) → preview → applyImport.
+   A Cienapps API feed later hands its records to prepImport/combineRows and the rest is the same. */
+const isSnagWo=k=>woKey(k).indexOf('WO-S')===0; // snag WOs belong to the planner — imports never add, change or remove them
+function boardMap(){const m=new Map();DB.orders.forEach(o=>{const k=woKey(o.wo);if(k&&!m.has(k))m.set(k,o);});return m;}
+function prepImport(rows,board){
+  const skip={noWo:0,totals:0,snag:0},recs=[];
+  (rows||[]).forEach(row=>{
+    const r=normaliseRow(row||{});
+    if(r.skip){skip[r.skip]++;return;}
+    if(isSnagWo(r.key)){skip.snag++;return;}
+    recs.push(r);
+  });
+  const c=combineRows(recs,board||boardMap());
+  return{recs:c.recs,folds:c.folds,skip,rows:(rows||[]).length};
+}
+// Hours source: 'hand' (set in the planner — imports never touch it), 'cien' (Cienapps Hours column), 'est' (estimated / rule).
+// Jobs saved before Stage 2 have no hoursSrc: hoursEstimated:false counts as hand-set.
+function hSrc(o){return o.hoursSrc||(o.hoursEstimated?'est':'hand');}
+// Hours rules: assembly complete / palleted = 0h · WO-BI / WO-PF = 1h · Cienapps Hours column · no value = 1h · else estimate from value
+function importHours(key,step,value,r){
+  if(/assembly\s*complete/i.test(step)||/pallet/i.test(step))return{hours:0,hoursSrc:'est',hoursEstimated:false};
+  if(key.indexOf('WO-BI-')===0||key.indexOf('WO-PF-')===0)return{hours:1,hoursSrc:'est',hoursEstimated:false};
+  if(r&&r.has.hours)return{hours:r.hours,hoursSrc:'cien',hoursEstimated:false};
+  if(!(+value>0))return{hours:1,hoursSrc:'est',hoursEstimated:false};
+  return{hours:estimateHours(value),hoursSrc:'est',hoursEstimated:true};
+}
+/* Step order: the number at the front ("3." before "4."); otherwise the named ladder
+   Drawing < In production < Assembly < Assembly complete/Palleted < Production complete < Shipped < Invoiced.
+   stepCmp → >0 a is ahead, <0 behind, 0 same rank, null = can't tell. */
+function stepLadder(s){
+  const t=String(s||'').toLowerCase().replace(/^\s*\d+\s*[.)\-:]?\s*/,'');
+  if(/invoic/.test(t))return 7;if(/shipped/.test(t))return 6;if(/production\s*complete/.test(t))return 5;
+  if(/assembly\s*complete|pallet/.test(t))return 4;if(/assembl/.test(t))return 3;if(/production/.test(t))return 2;if(/drawing/.test(t))return 1;
+  return null;
+}
+function stepNum(s){const m=String(s||'').match(/^\s*(\d+)\s*[.)\-:]?(\s|$)/);return m?+m[1]:null;}
+function stepCmp(a,b){
+  const na=stepNum(a),nb=stepNum(b);
+  if(na!==null&&nb!==null)return na-nb;
+  const la=stepLadder(a),lb=stepLadder(b);
+  if(la!==null&&lb!==null)return la-lb;
+  return null;
+}
+const addsSum=(a,k)=>Object.keys(a||{}).reduce((s,x)=>s+(+(a[x]||{})[k]||0),0);
+/* analyzeImport: builds the plan WITHOUT touching the board. `input` is prepImport's output (or raw rows).
+   Ownership: Cienapps sets value, customer, title, floor/unit and sheet count; the planner keeps planned week,
+   ticks, holds and hand-set hours. Steps only ever move forward. No import removes a job. */
+function analyzeImport(input,source){
+    if(Array.isArray(input))input=prepImport(input);
+    const board=boardMap(),recs=input.recs||[],skip=input.skip||{};
+    const newOrders=[],updates=[],fills=[],synced=[],shipped=[],inTransit=[],dispGaps=[],flagged=[],stepDiffs=[],exCounts={};
+    let unchanged=0,excluded=0;
+    const sh=s=>String(s||'—').replace(/^\d+\.\s*/,'');
+    recs.forEach(r=>{
+      const ex=board.get(r.key);
+      const cs=r.has.step?r.step:'';
+      const isShipC=/shipped|invoiced/i.test(cs),isDrawC=/drawing/i.test(cs),isWOD=r.key.indexOf('WO-D')>-1;
+      const flags=r.flags.slice();
+      // value: base line + its A/C additions (additions seen before are kept, so the value never drops)
+      let value=r.has.value?r.value:undefined,adds=null;
+      if(r.adds){
+        adds={...((ex&&ex.adds)||{}),...r.adds};
+        const prev=addsSum(ex&&ex.adds,'value');
+        if(r.has.value)value=r.value+addsSum(adds,'value');
+        else if(ex)value=(+ex.value||0)-prev+addsSum(adds,'value');
+        else value=addsSum(adds,'value');
+      }else if(ex&&ex.adds&&r.has.value)value=r.value+addsSum(ex.adds,'value');
+      if(!ex){
+        if(r.synth)return;
+        const why=isWOD?'WO-D':isDrawC?'drawing':isShipC?(/invoiced/i.test(cs)?'invoiced':'shipped')+' (not on the board)':'';
+        if(why){excluded++;exCounts[why]=(exCounts[why]||0)+1;return;}
+        const val=value===undefined?0:value;
+        let hr=importHours(r.key,cs,val,r);
+        if(r.adds&&r.has.hours)hr={...hr,hours:Math.round((r.hours+addsSum(r.adds,'hours'))*100)/100};
+        const o={wo:r.wo,ref:r.ref||'',floor:r.floor||'',unit:r.unit||'',title:r.title||r.ref||r.wo,customer:r.customer||'',
+          hours:hr.hours,hoursEstimated:hr.hoursEstimated,hoursSrc:hr.hoursSrc,dueDate:r.dueDate||'',origDueDate:r.dueDate||'',step:cs,
+          salesRep:r.salesRep||'',orderNo:r.orderNo||'',value:val,plannedWeek:'',notes:'',colour:''};
+        if(cs)o.cienStep=cs;
+        if(r.has.sheets)o.sheetsCien=r.sheets;
+        if(adds)o.adds=adds;
+        newOrders.push(o);
+        if(flags.length)flagged.push({wo:r.wo,title:o.title,why:flags.join(' · '),isNew:true});
         return;
       }
-      let hours, hoursEstimated;
-      // Assembly complete or palleted (also matches palletised/palletized) = assembly work done, 0h
-      if(/assembly\s*complete/i.test(effStep)||/pallet/i.test(effStep)){
-        hours=0; hoursEstimated=false;
-      } else if(wo.startsWith('WO-BI-')||wo.startsWith('WO-PF-')||rowVal===0){
-        hours=1; hoursEstimated=false;
-      } else if(rawHours>0){
-        hours=rawHours; hoursEstimated=false;
-      } else {
-        hours=estimateHours(rowVal); hoursEstimated=true;
+      // ---- existing job
+      const set={},fill={},what=[];
+      const ch=(k,v,label)=>{if(v===undefined)return;if(String(ex[k]==null?'':ex[k])!==String(v)){set[k]=v;if(label)what.push(label+': '+(ex[k]===undefined||ex[k]===''?'(none)':ex[k])+' → '+(v===''?'(none)':v));}};
+      if(!r.synth){
+        ch('title',r.has.title?r.title:undefined,'title');
+        ch('customer',r.has.customer?r.customer:undefined,'customer');
+        ch('floor',r.has.floor?r.floor:undefined,'floor');
+        ch('unit',r.has.unit?r.unit:undefined,'unit');
+        if(r.has.sheets&&ex.sheetsCien!==r.sheets){set.sheetsCien=r.sheets;what.push('sheets: '+(ex.sheetsCien==null?'(none)':ex.sheetsCien)+' → '+r.sheets);}
+        ['ref','orderNo','salesRep'].forEach(k=>{if(r.has[k]&&!ex[k])fill[k]=r[k];}); // only fills gaps
       }
-      let dueDate=''; // '' = no date in the row · null = a date was there but unreadable (keep the existing one)
-      const rd=row.dueDate;
-      if(rd){try{
-        if(typeof rd==='number'){
-          // Excel serial date
-          const d=new Date(Math.round((rd-25569)*86400*1000));
-          dueDate=d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0')+'-'+String(d.getUTCDate()).padStart(2,'0');
-        } else if(rd instanceof Date){
-          // XLSX Date object — use UTC to avoid timezone shift
-          dueDate=rd.getUTCFullYear()+'-'+String(rd.getUTCMonth()+1).padStart(2,'0')+'-'+String(rd.getUTCDate()).padStart(2,'0');
-        } else if(typeof rd==='string'&&rd.match(/^\d{4}-\d{2}-\d{2}/)){
-          // Already a YYYY-MM-DD string
-          dueDate=rd.substring(0,10);
-        } else if(typeof rd==='string'&&/^\d{1,2}\/\d{1,2}\/\d{4}/.test(rd.trim())){
-          // Irish d/m/y text date — never let 04/10 become April 10
-          const m=rd.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-          dueDate=m[3]+'-'+String(m[2]).padStart(2,'0')+'-'+String(m[1]).padStart(2,'0');
-        } else {
-          // Try parsing as date using UTC; an unreadable date must keep the existing one, not wipe it
-          const parsed=new Date(rd);
-          dueDate=isNaN(parsed)?null:parsed.getUTCFullYear()+'-'+String(parsed.getUTCMonth()+1).padStart(2,'0')+'-'+String(parsed.getUTCDate()).padStart(2,'0');
+      if(value!==undefined&&Math.abs((+ex.value||0)-value)>0.004){set.value=Math.round(value*100)/100;what.push('value: €'+Math.round(+ex.value||0).toLocaleString()+' → €'+Math.round(value).toLocaleString());}
+      if(adds&&JSON.stringify(adds)!==JSON.stringify(ex.adds||{}))fill.adds=adds;
+      // step: the planner only ever moves forward
+      const ps=String(ex.step||'').trim();
+      let newStep=ps;
+      if(cs&&cs!==ps){
+        const c=ps?stepCmp(cs,ps):1;
+        if(c===null){stepDiffs.push({wo:ex.wo,title:ex.title||'',planner:ps,cien:cs,why:"can't tell which is further on — nothing moved"});}
+        else if(c>0){newStep=cs;set.step=cs;what.push('step: '+sh(ps||'(none)')+' → '+sh(cs));}
+        else if(c<0){stepDiffs.push({wo:ex.wo,title:ex.title||'',planner:ps,cien:cs,why:'planner is ahead — stays on the Export Changes list for Cienapps'});}
+        else stepDiffs.push({wo:ex.wo,title:ex.title||'',planner:ps,cien:cs,why:'same stage, different wording — nothing moved'});
+      }else if(cs&&cs===ps&&origStep[ex.wo]!==undefined&&origStep[ex.wo]!==cs)synced.push({wo:ex.wo,key:r.key,step:cs}); // Cienapps has caught up
+      if(cs&&ex.cienStep!==cs)fill.cienStep=cs;
+      // hours: planner-set hours always win
+      const src=hSrc(ex);
+      if(src!=='hand'&&!(src==='cien'&&!r.has.hours&&!/assembly\s*complete|pallet/i.test(newStep))){
+        const val=value!==undefined?value:(+ex.value||0);
+        let hr=importHours(r.key,newStep,val,r);
+        if(r.has.hours&&adds)hr={...hr,hours:Math.round((r.hours+addsSum(adds,'hours'))*100)/100};
+        if(r.synth&&src==='cien'&&r.adds){const d=addsSum(adds,'hours')-addsSum(ex.adds,'hours');hr={hours:Math.round(((+ex.hours||0)+d)*100)/100,hoursSrc:'cien',hoursEstimated:false};}
+        if(+ex.hours!==hr.hours){set.hours=hr.hours;set.hoursSrc=hr.hoursSrc;set.hoursEstimated=hr.hoursEstimated;what.push('hours: '+(ex.hours==null?'(none)':ex.hours)+' → '+hr.hours);}
+        else if(ex.hoursSrc!==hr.hoursSrc||!!ex.hoursEstimated!==hr.hoursEstimated){fill.hoursSrc=hr.hoursSrc;fill.hoursEstimated=hr.hoursEstimated;} // same hours — just record where they came from
+      }else if(src==='hand'&&r.has.hours&&+ex.hours!==r.hours)flags.push('Cienapps says '+r.hours+'h — planner hours ('+ex.hours+'h) kept');
+      // due date: Cienapps holds the customer date → Take is the default; a "Keep" is remembered in dueKeep
+      let due=null;
+      if(r.has.dueDate&&r.dueDate!==ex.dueDate){
+        if(ex.dueKeep!==r.dueDate){
+          const sugWk=wkKey(new Date(r.dueDate+'T00:00:00Z'));
+          let lateNow=false;if(ex.plannedWeek){const pe=new Date(ex.plannedWeek+'T00:00:00Z');pe.setUTCDate(pe.getUTCDate()+4);lateNow=pe>new Date(r.dueDate+'T00:00:00Z');}
+          due={dueDate:r.dueDate,oldDue:ex.dueDate||'',sugWk,lateNow};
+          set.dueDate=r.dueDate;
         }
-      }catch(ex){dueDate=null;}}
-      const ex=exOrd;
-      if(ex){
-        const newStep=String(row.step==null?ex.step:row.step);
-        const effDue=(dueDate===null)?ex.dueDate:dueDate; // unreadable date keeps the existing one
-        const dateChanged=ex.dueDate!==effDue;
-        const hoursChanged=ex.hours!==hours;
-        const stepChanged=(ex.step||'')!==newStep;
-        if(dateChanged||hoursChanged||stepChanged){
-          const what=[];
-          if(dateChanged)what.push('date: '+(ex.dueDate||'(none)')+' → '+effDue);
-          if(stepChanged)what.push('step: '+(ex.step||'(none)').replace(/^\d+\.\s*/,'')+' → '+newStep.replace(/^\d+\.\s*/,''));
-          if(hoursChanged&&!dateChanged&&!stepChanged)what.push('hours: '+ex.hours+' → '+hours);
-          // Date reconciliation: where will this job's current planned week stand against the NEW due date?
-          let sugWk='',lateNow=false;
-          if(dateChanged&&effDue){
-            sugWk=wkKey(new Date(effDue)); // the week the new due date falls in
-            if(ex.plannedWeek){const pe=new Date(ex.plannedWeek);pe.setDate(pe.getDate()+4);lateNow=pe>new Date(effDue);}
-          }
-          updates.push({wo,hours,hoursEstimated,dueDate:effDue,dateChanged,oldDue:ex.dueDate||'',sugWk,lateNow,step:newStep,
-            title:String(row.title||row.ref||'').trim(),flr,unt,rowVal,refStr,
-            orderNo:row.orderNo!=null?String(row.orderNo).trim():'',salesRep:row.salesRep!=null?String(row.salesRep).trim():'',
-            what:what.join(' · '),status:dateChanged?'date changed':(stepChanged?'step changed':'updated'),exTitle:ex.title,pw:ex.plannedWeek});
-          updated++;
-        } else {
-          backfills.push({wo,flr,unt,rowVal,refStr});
-          skipped++;
-        }
-      } else {
-        const newO={wo,ref:refStr,floor:flr,unit:unt,title:String(row.title||row.ref||wo).trim(),customer:String(row.customer==null?'':row.customer),hours,hoursEstimated,dueDate:dueDate||'',origDueDate:dueDate||'',step:String(row.step==null?'':row.step),salesRep:String(row.salesRep==null?'':row.salesRep),orderNo:String(row.orderNo==null?'':row.orderNo),value:rowVal,plannedWeek:'',notes:'',colour:''};
-        newOrders.push(newO);
-        added++;
+      }else if(r.has.dueDate&&ex.dueKeep&&r.dueDate===ex.dueDate)fill.dueKeep=undefined;
+      // shipped / invoiced in Cienapps → the Shipped tab (once; "Bring back to board" is respected until Cienapps moves on)
+      if(isShipC&&!ex.shippedAt&&!(ex.shipBack&&ex.shipBack.cs===cs)){
+        const onVan=!!((ex.delv||ex.delLoadedAt||ex.delDispAt)&&!ex.delDelivAt&&!ex.delDone);
+        shipped.push({wo:ex.wo,key:r.key,title:ex.title||'',customer:ex.customer||'',cs,onVan});
+        if(onVan)inTransit.push({wo:ex.wo,title:ex.title||'',reason:/invoiced/i.test(cs)?'invoiced':'shipped',veh:vehLbl(ex.delVeh)||'',day:ex.delDay||''});
+        if(!ex.delDispAt&&!ex.delDelivAt&&!ex.delDone)dispGaps.push({wo:ex.wo,title:ex.title||'',customer:ex.customer||'',unit:[ex.floor,ex.unit].filter(Boolean).join(' · '),reason:/invoiced/i.test(cs)?'invoiced':'shipped'});
       }
+      if(isDrawC&&!ex.shippedAt)flags.push('check: Cienapps shows this job at drawing stage — kept on the board');
+      if(isWOD)flags.push('check: WO-D (drawing work order) — kept on the board');
+      if(r.synth)flags.push('addition only — base line not in this file');
+      if(flags.length)flagged.push({wo:ex.wo,title:ex.title||'',why:flags.join(' · ')});
+      if(Object.keys(fill).length)fills.push({wo:ex.wo,key:r.key,set:fill});
+      if(Object.keys(set).length){
+        updates.push({wo:ex.wo,key:r.key,set,what:what.join(' · '),dateChanged:!!due,...(due||{}),dueDate:due?due.dueDate:(ex.dueDate||''),
+          step:newStep,status:due?'date changed':set.step?'step changed':'updated',exTitle:ex.title||'',pw:ex.plannedWeek||''});
+      }else unchanged++;
     });
-
-    if(added+updated+skipped+excluded===0){
-      importError('None of the '+rows.length+' rows had a usable WO number, so nothing was imported.','Check that the WO number column is mapped to the column holding values like WO-2604-7.');
+    const added=newOrders.length,updated=updates.length;
+    if(added+updated+unchanged+excluded+shipped.length===0&&!fills.length){
+      importError('None of the '+(input.rows||recs.length)+' rows had a usable WO number, so nothing was imported.','Check that the WO number column is mapped to the column holding values like WO-2604-7.');
       return null;
     }
-    return{newOrders,updates,backfills,removals,inTransit,dispGaps,exCounts,counts:{added,updated,skipped,noWo,excluded,rows:rows.length}};
+    return{source:source||'file',newOrders,updates,fills,synced,shipped,inTransit,dispGaps,flagged,folds:input.folds||[],stepDiffs,exCounts,
+      removals:[],backfills:[],
+      counts:{added,updated,skipped:unchanged,noWo:skip.noWo||0,totals:skip.totals||0,snag:skip.snag||0,excluded,shipped:shipped.length,folded:(input.folds||[]).length,rows:input.rows||recs.length}};
 }
 function renderImportPreview(plan){
   const c=plan.counts;
