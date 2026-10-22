@@ -72,3 +72,12 @@ Rules: rank by the leading number. "Shipped" = step 9 only (left the factory →
 - (22 Oct) Step 12 ON HOLD / DELETE: move OUT OF SIGHT — into an "On hold" section of the Shipped tab (or its own "On hold" tab), out of the board and all totals; never deleted; comes back to the board automatically when the step changes.
 - (22 Oct, Stage 2 R2) Going on hold takes a job off Deliveries (tag, van and day cleared, what it was noted on the job) — but a job already LOADED, on the road or delivered stays on Deliveries, the floor screen and the driver's run, with an "ON HOLD" marker. If one PC puts a job on hold while a driver loads it at the same moment, the load wins.
 - (22 Oct, Stage 2 R2) Import preview re-shown because another PC changed the plan: rows for jobs changed on the other PC go back to "Keep" with no "Move" ticked — the planner decides again.
+
+### Projects hub / Project Manager view (decided 22 Oct 2026 — plan WITH the cutting-list system, shared tables)
+- Today the PM view has nothing editable. PMs need: snag tables per project, a project set-up page, delivery sequencing, and live project details (spec).
+- Set-up: PM creates the project and its locations at award; design office fills the specification as drawings are signed off; both maintain materials.
+- Specification: a FIXED checklist per project type plus extras — Garry will attach WPF's current "drawing details" table as the source for the checklist items. Each item: not specified → proposed → signed off (who/when). A WO whose project has unsigned items shows a RED "spec not signed off: <items>" flag on the board, cutting list and saw view; production is NOT blocked. Spec prints with the cutting list. (Root problem: items not signed off at drawing stage and information not reaching the factory floor.)
+- Locations & sequence: list of units (block / floor / apt / room) in delivery order with a target week, from the main contractor's programme; PM reorders (drag) as it changes; full history. Sequences change constantly.
+- WO linking: WO numbers arrive too late, so locations exist first. On import the planner SUGGESTS the location by matching the Cienapps title tokens (block, floor, apt no.); PM confirms with one tap or picks; unlinked WOs show "needs location". Once linked, the project sequence drives delivery order.
+- Snags per project: PM creates → Production Manager transfers to a cutting list → delivery (photo) → fitter's view. Materials and locations come from the project set-up.
+- PM view: own projects only — spec status, sequence, snags, deliveries + proof.
