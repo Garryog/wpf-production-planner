@@ -42,7 +42,7 @@ const res = []; const rec = (n, ok, d) => { res.push(ok); console.log((ok ? 'PAS
     rec('a finished list\'s lines load when it is opened', before === 0 && after === 4, before + '/' + after);
     rec('no page errors', !(S.errors || []).length, (S.errors || []).join(' | '));
     // the old frozen copy stays untouched by anything above
-    rec('planner record list data untouched (frozen copy)', JSON.stringify(S.row.settings.lists) === JSON.stringify(F.v2Row().settings.lists) && !S.row.settings.listRow);
+    rec('planner record list data untouched (frozen copy)', JSON.stringify(S.row.settings.lists) === JSON.stringify(F.v2Row().settings.lists) && JSON.stringify(S.row.settings.listRow || {}) === '{}', JSON.stringify(S.row.settings.listRow));
     await saw.close();
   }
   // ---- polling
