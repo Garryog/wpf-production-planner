@@ -28,8 +28,12 @@ const tap = (p, attr, id, i) => p.evaluate(({ attr, id, i }) => { const k = list
   const st = await A.page.evaluate(() => ({ done: !!listDone('L1').saw, r: woReady('WO-1') }));
   rec('tick the other line → list auto-done, still amber because of waiting line', st.done && st.r.lvl === 'amber' && st.r.saw === 'hold', JSON.stringify(st));
   // combined table excludes the N/A line
-  const cmb = await A.page.evaluate(() => combineLists(lists(), 'saw').map(r => r.item + ':' + r.qty).join(','));
-  rec('combined table leaves out the N/A line for House 1', cmb.split(',').sort().join() === 'Side:4,Top:4', cmb);
+  // Agreed 2 Nov (commit 7f195fa, Garry's "don't cut twice"): lines already ticked cut are left out too, so House 1
+  // (Side = N/A, Top = ticked) adds nothing; only House 2's Side 4 + Top 2 remain.
+  const cmbR = await A.page.evaluate(() => combineLists(lists(), 'saw').map(r => ({ i: r.item, q: r.qty, per: Object.keys(r.per) })));
+  const cmb = cmbR.map(r => r.i + ':' + r.q).join(',');
+  const sideH1 = cmbR.some(r => r.i === 'Side' && r.per.includes('House 1'));
+  rec('combined table leaves out the N/A line for House 1 (and the ticked-cut line)', cmb.split(',').sort().join() === 'Side:4,Top:2' && !sideH1, cmb + ' perSide=' + JSON.stringify((cmbR.find(r => r.i === 'Side') || {}).per));
   // Labels: does an N/A (not cut) line still get a label?
   const lb = await A.page.evaluate(() => { window.__opened = []; printLabels([lists()[0]], 'saw'); const h = window.__opened.slice(-1)[0] || ''; return (h.match(/class="lb-item">([^<]*)/g) || []).join('|'); });
   rec('(pre-existing) A4 labels: no location label printed for a line that is waiting (not cut)', !/>Side$|>Side\|/.test(lb), lb);
