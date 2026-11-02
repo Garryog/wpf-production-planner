@@ -25,11 +25,17 @@ Newest at the top. Each block must be run in Supabase BEFORE the matching code g
 ### Steps for Garry
 1. Go to https://supabase.com/dashboard and open the WPF project (`klyropbsupqfmtjjwlfa`).
 2. In the left menu click **SQL Editor**, then **New query**.
-3. Copy everything in the grey box below, paste it into the editor and click **Run**.
-4. Expected result: **"Success. No rows returned"**. If you see a red error, stop and send a screenshot — do not merge.
-5. Check: **Table Editor** shows the new tables `projects`, `project_materials`, `lists`, `list_lines`, `list_revisions`, `list_events`, `snags` (all empty).
-6. Check: **Database → Functions** shows `apply_line_changes`, `list_attach`, `list_set_done`, `save_list_revision`, `snags_to_list`.
-7. If the line `alter publication supabase_realtime ...` gives an error saying the table is already in the publication, that's fine — delete that one line and Run again.
+3. **Step 0 — check first.** Paste just this one line and click **Run**:
+   ```sql
+   select data_type from information_schema.columns where table_schema='public' and table_name='production_planner' and column_name='settings';
+   ```
+   It should say **json** or **jsonb** (both are fine). If it says anything else (e.g. text) or nothing, stop and send a screenshot.
+   The Stage 1 block (further down this file, 2026-10-20) must already have been run: `production_planner` must have a `version` column.
+4. Clear the editor, copy everything in the grey box below, paste it and click **Run**.
+5. Expected result: **"Success. No rows returned"**. If you see a red error, stop and send a screenshot — do not merge.
+6. Check: **Table Editor** shows the new tables `projects`, `project_materials`, `lists`, `list_lines`, `list_revisions`, `list_events`, `snags` (all empty).
+7. Check: **Database → Functions** shows `apply_line_changes`, `list_attach`, `list_set_done`, `save_list_revision`, `snags_to_list`.
+8. If the line `alter publication supabase_realtime ...` gives an error saying the table is already in the publication, that's fine — delete that one line and Run again.
 
 ```sql
 -- ===================== PLAN A — lists data foundation =====================
@@ -100,6 +106,9 @@ grant select, insert on list_revisions, list_events to anon, authenticated;
 grant usage, select on sequence list_revisions_id_seq, list_events_id_seq to anon, authenticated;
 grant all on projects, project_materials, lists, list_lines, list_revisions, list_events to service_role;
 grant usage, select on sequence list_revisions_id_seq, list_events_id_seq to service_role;
+-- Supabase gives new tables every right by default: take away delete / truncate, and edits to the history tables
+revoke delete, truncate on projects, project_materials, lists, list_lines, list_revisions, list_events from anon, authenticated;
+revoke update on list_revisions, list_events from anon, authenticated;
 
 do $$ declare t text; begin foreach t in array array['projects','project_materials','lists','list_lines','list_revisions','list_events'] loop
   execute format('alter table %1$s enable row level security;
@@ -319,11 +328,15 @@ grant execute on function save_list_revision(jsonb,jsonb,int,text,text) to anon,
 -- The lists switch lives in the planner record's settings (listStore / listStoreAt). A tab still running OLD code saves
 -- its whole settings object without those keys, which would quietly switch every screen back to the old lists. This
 -- trigger keeps the switch whenever a save leaves it out; only a save that names it (Switch back writes 'v1') changes it.
+-- Works whether the settings column is json or jsonb (Step 0 shows which): it compares as jsonb and writes back the same type.
 create or replace function production_planner_keep_switch() returns trigger language plpgsql as $$
+declare o jsonb := old.settings::jsonb; n jsonb := new.settings::jsonb; m jsonb;
 begin
- if old.settings is not null and old.settings ? 'listStore' and (new.settings is null or not (new.settings ? 'listStore')) then
-  new.settings := coalesce(new.settings,'{}'::jsonb) || jsonb_build_object('listStore',old.settings->'listStore')
-    || case when old.settings ? 'listStoreAt' then jsonb_build_object('listStoreAt',old.settings->'listStoreAt') else '{}'::jsonb end;
+ if o is not null and o ? 'listStore' and (n is null or not (n ? 'listStore')) then
+  m := coalesce(n,'{}'::jsonb) || jsonb_build_object('listStore',o->'listStore')
+    || case when o ? 'listStoreAt' then jsonb_build_object('listStoreAt',o->'listStoreAt') else '{}'::jsonb end;
+  if pg_typeof(new.settings) = 'jsonb'::regtype then new.settings := m;
+  else new.settings := m::json; end if;
  end if;
  return new;
 end $$;
@@ -365,6 +378,7 @@ drop policy if exists "snags edit" on snags; create policy "snags edit" on snags
 -- Grants (30 Oct rule). No DELETE: a snag is cancelled, never deleted.
 grant select, insert, update on snags to anon, authenticated;
 grant all on snags to service_role;
+revoke delete, truncate on snags from anon, authenticated;
 
 -- Ticked snags → one snag list per project (type 'snag', deliver_by set), one line per snag.
 -- Refuses the WHOLE transfer if any snag isn't 'raised', so two people can't transfer the same snag twice.
