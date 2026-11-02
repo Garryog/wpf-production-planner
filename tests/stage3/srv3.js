@@ -26,6 +26,7 @@ function match(r, k, f) {
   if (op === 'not') return !match(r, k, v);
   throw new Error('fake server: unsupported filter ' + f);
 }
+const MAX_ROWS = 1000;
 const SPECIAL = new Set(['select', 'order', 'limit', 'offset', 'on_conflict', 'columns']);
 function select(rows, q) {
   q.forEach(([k, f]) => { if (!SPECIAL.has(k)) rows = rows.filter(r => match(r, k, f)); });
@@ -33,7 +34,7 @@ function select(rows, q) {
   if (o) { const [c, dir] = o[1].split('.'); rows = rows.slice().sort((a, b) => (a[c] < b[c] ? -1 : a[c] > b[c] ? 1 : 0) * (dir === 'desc' ? -1 : 1)); }
   const off = q.find(([k]) => k === 'offset'); if (off) rows = rows.slice(+off[1]);
   const lim = q.find(([k]) => k === 'limit'); if (lim) rows = rows.slice(0, +lim[1]);
-  return rows;
+  return rows.slice(0, MAX_ROWS); // Supabase's API "Max rows" (1,000 by default): a bigger answer is cut short
 }
 const J = (route, status, body) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
 const ERR = (route, e) => J(route, e.code === '23505' ? 409 : 400, { code: e.code || 'P0001', message: e.message, details: null, hint: null });

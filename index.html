@@ -1995,10 +1995,18 @@ function confirmPartLoad(jobs){
    when the screens read it, so a tick shows at once and the database still decides. */
 const LST={l:new Map(),ln:new Map(),full:new Set(),fetching:new Set(),p:new Map(),m:new Map(),s:new Map(),since:{},loaded:false,loading:null,polling:false,gen:0,err:'',timer:null,ms:0,ck:'',c:null};
 const LS_T={lists:'l',list_lines:'ln',projects:'p',project_materials:'m',snags:'s'};
-async function lsGet(q){
+async function lsGet1(q){
   const r=await fetch(SUPA_URL+'/'+q,{headers:SUPA_HDR});const d=await r.json().catch(()=>null);
   if(!r.ok||!Array.isArray(d))throw new Error('lists load failed: '+r.status+' '+JSON.stringify(d).slice(0,120));
   return d;
+}
+// Supabase answers at most 1,000 rows per request ("Max rows"): read in pages, in a fixed order, until a short page
+const LS_PAGE=1000;
+async function lsGet(q){
+  const base=q+(/[?&]order=/.test(q)?'':(q.includes('?')?'&':'?')+'order=id.asc')+(q.includes('?')||/[?&]order=/.test(q)?'&':'?');
+  const out=[];
+  for(let off=0;;off+=LS_PAGE){const d=await lsGet1(base+'limit='+LS_PAGE+'&offset='+off);out.push(...d);if(d.length<LS_PAGE)break;}
+  return out;
 }
 // Keep a database row unless we already hold that version or a newer one (the 30-second overlap re-sends rows we have)
 function lsPut(t,rows,part){
