@@ -263,7 +263,12 @@ begin
      status_at=case when (e->>'reset')::boolean then null else status_at end,
      released_at=case when (e->>'reset')::boolean then null else released_at end,
      changed_rev=case when (e->>'reset')::boolean then nrev else changed_rev end
-    where id=ex.id;
+    where id=ex.id   -- an unchanged line is left alone (its version and time don't move — other editors can tell what changed)
+      and (coalesce((e->>'reset')::boolean,false) or ex.removed_rev is not null
+        or row(ex.seq,ex.kind,ex.section,ex.part,ex.length_mm,ex.width_mm,ex.qty,ex.material,ex.material_other,ex.edging,ex.note)
+           is distinct from row(coalesce((e->>'seq')::int,ex.seq),coalesce(e->>'kind',ex.kind),e->>'section',e->>'part',(e->>'length_mm')::numeric,
+             (e->>'width_mm')::numeric,e->>'qty',e->>'material',coalesce((e->>'material_other')::boolean,false),e->>'edging',e->>'note')
+        or (e->>'snag_id' is not null and e->>'snag_id' is distinct from ex.snag_id));
   else
    -- 3. new lines
    insert into list_lines(id,list_id,seq,kind,section,part,length_mm,width_mm,qty,material,material_other,edging,note,snag_id,src_line_id,added_rev)

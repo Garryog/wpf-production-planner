@@ -174,7 +174,9 @@ function saveListRevision(d, pl, lines, expect, by, reason) {
       const p = { seq: e.seq != null ? +e.seq : ex.seq, kind: e.kind || ex.kind, material_other: !!e.material_other, snag_id: e.snag_id != null ? e.snag_id : ex.snag_id, removed_rev: null };
       LINE_F.forEach(k => { p[k] = e[k] === undefined ? null : e[k]; });
       if (e.reset) Object.assign(p, { status: 'todo', status_by: null, status_at: null, released_at: null, changed_rev: nrev });
-      update(d, 'list_lines', ex, p);
+      const num = v => v == null || v === '' ? null : +v;
+      const diff = e.reset || ex.removed_rev != null || Object.keys(p).some(k => k !== 'removed_rev' && (['length_mm', 'width_mm'].includes(k) ? num(p[k]) !== num(ex[k]) : (p[k] == null ? null : p[k]) !== (ex[k] == null ? null : ex[k])));
+      if (diff) update(d, 'list_lines', ex, p); // an unchanged line is left alone (version and time don't move)
     } else {
       const p = { id: e.id, list_id: r.id, seq: e.seq != null ? +e.seq : 0, kind: e.kind, material_other: !!e.material_other, snag_id: e.snag_id || null, src_line_id: e.src_line_id || null, added_rev: nrev };
       LINE_F.forEach(k => { p[k] = e[k] === undefined ? null : e[k]; });
