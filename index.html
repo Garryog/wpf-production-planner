@@ -2236,6 +2236,8 @@ window.addEventListener('storage',e=>{if(e.key==='wpfLineQ'){LQ.q=lqRead();LQ.ge
 
 /* Write helpers (build note b). Old mode runs today's exact code; V2 sends the change through the line queue and
    never writes the frozen copy in the planner record. */
+// After a list action: today's save of the planner record; in V2 the line queue sends it instead (plan A "Saving lines")
+function lsSched(){if(!V2())sched();}
 function listTag(l,wo,on,by){
   if(V2()){lqList({t:'attach',list:l.id,wo,on:!!on,by});return;}
   if(on){l.wos=l.wos||[];if(!l.wos.includes(wo))l.wos.push(wo);}
@@ -2571,7 +2573,7 @@ function renderLists(app){
     e.stopPropagation();
     const[id,wo]=b.dataset.attdo.split('|');const l=lists().find(x=>x.id===id);if(!l)return;
     listTag(l,wo,true);
-    lstAttachOpen=null;sched();render();toast(wo+' attached to "'+l.name+'" — it\'s now on the saw and stores queues');
+    lstAttachOpen=null;lsSched();render();toast(wo+' attached to "'+l.name+'" — it\'s now on the saw and stores queues');
   });
   document.querySelectorAll('[data-attsel]').forEach(b=>b.onclick=e=>{
     e.stopPropagation();
@@ -2579,7 +2581,7 @@ function renderLists(app){
     const l=lists().find(x=>x.id===sel.value);if(!l)return;
     const wo=b.dataset.attsel;
     listTag(l,wo,true);
-    lstAttachOpen=null;sched();render();toast(wo+' attached to "'+l.name+'"');
+    lstAttachOpen=null;lsSched();render();toast(wo+' attached to "'+l.name+'"');
   });
   // library filter (keeps focus while typing) and project group collapse
   const lfi=document.getElementById('lst-filter');
@@ -2597,18 +2599,18 @@ function renderLists(app){
   document.querySelectorAll('[data-tag]').forEach(b=>b.onclick=()=>{lstTagOpen=lstTagOpen===b.dataset.tag?null:b.dataset.tag;render();});
   document.querySelectorAll('[data-tagadd]').forEach(b=>b.onclick=()=>{
     const[id,wo]=b.dataset.tagadd.split('|');const l=lists().find(x=>x.id===id);if(!l)return;
-    listTag(l,wo,true);sched();render();
+    listTag(l,wo,true);lsSched();render();
   });
   document.querySelectorAll('[data-tagman]').forEach(b=>b.onclick=()=>{
     const l=lists().find(x=>x.id===b.dataset.tagman);if(!l)return;
     const inp=document.getElementById('tagin-'+l.id);const wo=(inp.value||'').trim();
     if(!wo)return;
     if(!DB.orders.find(o=>o.wo===wo)){toast(wo+' is not on the board — check the WO number');return;}
-    listTag(l,wo,true);sched();render();
+    listTag(l,wo,true);lsSched();render();
   });
   document.querySelectorAll('[data-untag]').forEach(b=>b.onclick=()=>{
     const[id,wo]=b.dataset.untag.split('|');const l=lists().find(x=>x.id===id);if(!l)return;
-    listTag(l,wo,false);sched();render();
+    listTag(l,wo,false);lsSched();render();
   });
   // Done is done: finished work only goes back to a bench through this deliberate, reasoned action
   document.querySelectorAll('[data-lreset]').forEach(b=>b.onclick=()=>{
@@ -2618,7 +2620,7 @@ function renderLists(app){
     const[id,f]=this.dataset.lflag.split('|');const l=lists().find(x=>x.id===id);if(!l)return;
     if(this.checked&&((f==='noCut'&&l.noFit&&!l.fit)||(f==='noFit'&&l.noCut&&!l.saw))){this.checked=false;toast('A list can\'t be both no cutting and no fittings');return;}
     const on=this.checked;
-    officeWho(by=>{listSetFlag(l,f,on,by);sched();render();toast(l.name+' — '+(f==='noCut'?'no cutting':'no fittings')+(on?' confirmed':' cleared'));},()=>render());
+    officeWho(by=>{listSetFlag(l,f,on,by);lsSched();render();toast(l.name+' — '+(f==='noCut'?'no cutting':'no fittings')+(on?' confirmed':' cleared'));},()=>render());
   });
   document.querySelectorAll('[data-ledit]').forEach(b=>b.onclick=()=>openListEditor(b.dataset.ledit));
   document.querySelectorAll('[data-mtype]').forEach(b=>b.onclick=e=>{e.stopPropagation();openListEditor(null,b.dataset.mtype);});
@@ -2628,7 +2630,7 @@ function renderLists(app){
     const l=lists().find(x=>x.id===b.dataset.ldel);if(!l)return;
     if(!confirm((V2()?'Archive':'Delete')+' the list "'+l.name+'" ('+(l.project||'')+')? The saw and stores will no longer see it.'))return;
     listArchive(l,whoNow());
-    sched();render();toast(V2()?'List archived':'List deleted');
+    lsSched();render();toast(V2()?'List archived':'List deleted');
   });
   document.querySelectorAll('[data-lview]').forEach(b=>b.onclick=()=>{
     const l=lists().find(x=>x.id===b.dataset.lview);if(!l)return;
@@ -2802,7 +2804,7 @@ function openCombined(lsArr,mode){
     pickName(mode,(saw?'Batch cut complete':'Batch picked')+' — '+lsArr.length+' houses',by=>{
       lsArr.forEach(l=>tickableRows(l,mode).forEach(r=>{if(!rowTicked(l.id,rowKey(r)))setRowTick(l,rowKey(r),mode,by,true);}));
       markListDone(lsArr.map(l=>l.id),mode,by);clearReleased(lsArr,mode,by);
-      wlSel.clear();ov.remove();sched();render();
+      wlSel.clear();ov.remove();lsSched();render();
       toast(lsArr.length+' lists marked '+(saw?'cut complete':'picked')+' ✓');
     });
   };
@@ -2939,7 +2941,7 @@ function renderWorkList(app,mode){
         markListDone([id],mode,by);clearReleased([l],mode,by);wlSel.delete(id);
         toast(l.name+' — all rows ticked · '+(mode==='saw'?'cut complete':'fittings picked')+' ✓');
       }
-      sched();render();
+      lsSched();render();
     };
     const last=ls.get('wpfOpName');
     if(!on||last)go(last||'');else pickName(mode,(mode==='saw'?'Cutting':'Picking')+' — '+l.name,go);
@@ -2952,7 +2954,7 @@ function renderWorkList(app,mode){
     const on=!heldRow(l,k);
     if(on&&rowTicked(id,k))return;
     const go=by=>{
-      if(on?holdOne(l,k,mode,by):unholdOne(l,k,mode,by)){sched();render();toast(on?'Line parked — find it under ⏸ WAITING':'Line back in the queue');}
+      if(on?holdOne(l,k,mode,by):unholdOne(l,k,mode,by)){lsSched();render();toast(on?'Line parked — find it under ⏸ WAITING':'Line back in the queue');}
     };
     const last=ls.get('wpfOpName');
     if(last)go(last);else pickName(mode,'Not available — '+l.name,go);
@@ -2973,7 +2975,7 @@ function renderWorkList(app,mode){
       tickableRows(l,mode).forEach(r=>{if(!rowTicked(l.id,rowKey(r)))setRowTick(l,rowKey(r),mode,by,true);});
       markListDone([l.id],mode,by);clearReleased([l],mode,by);
       wlSel.delete(l.id);
-      sched();render();toast(l.name+' — '+(mode==='saw'?'cut complete':'fittings picked')+' ✓');
+      lsSched();render();toast(l.name+' — '+(mode==='saw'?'cut complete':'fittings picked')+' ✓');
     });
   });
   document.querySelectorAll('[data-wlundo]').forEach(b=>b.onclick=()=>{
@@ -2982,7 +2984,7 @@ function renderWorkList(app,mode){
     const lu=lists().find(x=>x.id===id);
     listSetDone(lu||{id},mode,false,ls.get('wpfOpName')||'');
     if(lu)clearRowTicks(lu,mode,ls.get('wpfOpName')||'');
-    sched();render();
+    lsSched();render();
   });
 }
 
@@ -5094,7 +5096,7 @@ function openHold(l,mode){
     if(!keys.length){toast('Tick at least one row');return;}
     ov.remove();
     pickName(mode,'Waiting on '+(mode==='saw'?'material':'stock')+' — '+l.name,by=>{
-      holdRows(l,keys,mode,by);sched();render();
+      holdRows(l,keys,mode,by);lsSched();render();
       toast(keys.length+' row'+(keys.length!==1?'s':'')+' waiting — find them under ⏸ WAITING');
     });
   };
@@ -5113,7 +5115,7 @@ function holdGrp(x){return x.v.m==='saw'?(String(x.v.mat||'').trim()||'(material
 function bindHoldBook(modes,whoFn){
   const hs=allHolds(modes,'hold');
   const gname=x=>holdGrp(x).toLowerCase();
-  const go=(items,label)=>whoFn('Released — '+label,by=>{releaseHolds(items,by);sched();render();toast(items.length+' row'+(items.length!==1?'s':'')+' released — back in the queue as due work');});
+  const go=(items,label)=>whoFn('Released — '+label,by=>{releaseHolds(items,by);lsSched();render();toast(items.length+' row'+(items.length!==1?'s':'')+' released — back in the queue as due work');});
   document.querySelectorAll('[data-relg]').forEach(b=>b.onclick=()=>{const items=hs.filter(x=>gname(x)===String(b.dataset.relg).trim().toLowerCase());if(items.length)go(items,b.dataset.relg);});
   document.querySelectorAll('[data-rel1]').forEach(b=>b.onclick=()=>{const v=b.dataset.rel1,i=v.indexOf('|'),id=v.slice(0,i),k=v.slice(i+1);const items=hs.filter(x=>x.l.id===id&&x.k===k);if(items.length)go(items,items[0].v.item||'row');});
 }
@@ -5126,7 +5128,7 @@ function sendBack(l,mode){
     if(why===null)return;
     if(!why.trim()){toast('A reason is needed to send work back');return;}
     listSetDone(l,mode,false,by,why.trim());
-    sched();render();toast(l.name+' is back on the '+(mode==='saw'?'saw':'stores')+' queue');
+    lsSched();render();toast(l.name+' is back on the '+(mode==='saw'?'saw':'stores')+' queue');
   });
 }
 

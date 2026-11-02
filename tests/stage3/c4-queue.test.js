@@ -13,6 +13,8 @@ const reload = p => p.evaluate(async () => { await lsPoll(); render(); });
   {
     const S = F.makeServer(F.v2Row()); F.seedList(S, 'L1');
     const saw = await F.dev(browser, S, 'saw');
+    await saw.page.evaluate(async () => { if (saveT) { clearTimeout(saveT); await saveDB(); } }); // a save left from set-up
+    const p0 = S.patches.length, v0 = S.row.version;
     rec('A2: tap tick on line 1 of two identical lines', (await F.tapRow(saw.page, 'data-rt', 'L1:1')) === 'ok');
     const a = await saw.page.evaluate(() => ({ t1: rowTicked('L1', 'L1:1'), t2: rowTicked('L1', 'L1:2'), on1: !!document.querySelector('[data-rt="L1|L1:1"].on'), on2: !!document.querySelector('[data-rt="L1|L1:2"].on'), dots: document.querySelectorAll('.lq-dot').length, q: JSON.parse(localStorage.getItem('wpfLineQ')).length }));
     rec('A2: shows ticked straight away, the identical line stays unticked, one "not sent" dot, queued on the device', a.t1 && !a.t2 && a.on1 && !a.on2 && a.dots === 1 && a.q === 1, JSON.stringify(a));
@@ -20,6 +22,7 @@ const reload = p => p.evaluate(async () => { await lsPoll(); render(); });
     rec('A2: sent by itself within 2 s; database has line 1 cut, line 2 todo', L(S, 'L1:1').status === 'cut' && L(S, 'L1:2').status === 'todo' && L(S, 'L1:1').status_by === 'Op', L(S, 'L1:1').status + '/' + L(S, 'L1:2').status);
     const b = await saw.page.evaluate(() => ({ q: LQ.q.length, dots: document.querySelectorAll('.lq-dot').length, t2: rowTicked('L1', 'L1:2') }));
     rec('A2: queue empty, dot gone, other line still unticked', b.q === 0 && b.dots === 0 && !b.t2, JSON.stringify(b));
+    rec('A2: a bench tick no longer saves the planner record (no PATCH, version unchanged)', S.patches.length === p0 && S.row.version === v0, S.patches.length - p0);
     rec('A2: the tick locked the list (first accepted change)', D.find(S.db, 'lists', 'L1').locked === true);
     // N/A on one of two identical lines parks only that one (the old "identical lines share one record" failure)
     await F.tapRow(saw.page, 'data-rna', 'L1:2'); await F.send(saw.page);
