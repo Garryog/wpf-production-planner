@@ -2074,7 +2074,7 @@ function lsQty(q){const s=q==null?'':String(q);return /^\d+(\.\d+)?$/.test(s)?+s
 function lsAdapt(r){
   const a={id:r.id,v2:true,name:r.name||'',sheet:r.name||'',project:lsProjName(r.project_id),pid:r.project_id||'',sdate:r.sdate||'',
     wos:(r.wos||[]).slice(),noCut:!!r.no_cut,noFit:!!r.no_fit,log:r.log||[],up:r.updated_at,manual:r.source==='manual',
-    rev:r.rev||1,locked:!!r.locked,ltype:r.list_type||'',typeName:r.type_name||'',tpl:!!r.is_template,archived:!!r.archived,deliverBy:r.deliver_by||'',ver:r.version,done:{}};
+    rev:r.rev||1,locked:!!r.locked,ltype:r.list_type||'',typeName:r.type_name||'',tpl:!!r.is_template,templateId:r.template_id||'',templateRev:r.template_rev||null,sentAt:r.sent_at||'',archived:!!r.archived,deliverBy:r.deliver_by||'',ver:r.version,done:{}};
   if(r.saw_done_at)a.done.saw={at:r.saw_done_at,by:r.saw_done_by||''};
   if(r.fit_done_at)a.done.fit={at:r.fit_done_at,by:r.fit_done_by||''};
   LQ.q.forEach(e=>{if(e.list!==r.id)return; // this device's unsent list changes show straight away
@@ -2330,6 +2330,15 @@ async function lsSaveManual(d,by,ex){
   let reason='';
   if(ex){if(!LST.full.has(id))await lsReloadList(id);reason=lsAskReason(lsList(id));if(reason===null)throw new Error('not saved — a reason is needed for a new revision');}
   const lines=d.rows.map(r=>lsRowToLine(r,true));lsFlagMats(lines,pid);
+  if(ex&&ex.templateId&&!ex.tpl){
+    const tl=await lsTplLines(ex),miss=tl?lsMissing(tl,lines):[];
+    if(miss.length){
+      if(!confirm('⚠ Parts from the template are missing or short:\n\n'+miss.map(x=>'  • '+x).join('\n')+'\n\nSave anyway?'))throw new Error('template parts are missing — nothing saved');
+      const w=prompt('Why are these parts left out? (goes in the list history)','');
+      if(w===null||!w.trim())throw new Error('a reason is needed to save with template parts missing');
+      reason=(reason?reason+' · ':'')+'Template parts left out: '+miss.join(', ')+' — '+w.trim();
+    }
+  }
   const pl={id,name:String(d.name).trim(),project_id:pid,no_cut:!!d.noCut,no_fit:!!d.noFit};
   if(d.ltype)pl.list_type=d.ltype;if(d.tname!==undefined)pl.type_name=String(d.tname||'').trim()||null;
   if(!ex)Object.assign(pl,d.tpl?{wos:[],source:'manual',is_template:true}:{wos:[d.wo],source:'manual'},{list_type:d.ltype||'house'});
@@ -2690,7 +2699,7 @@ function lsHomeHTML(){
   const sel=(id,v,opts)=>`<select id="${id}" style="${LS_INP}">${opts.map(([k,t])=>`<option value="${escA(k)}"${k===v?' selected':''}>${escA(t)}</option>`).join('')}</select>`;
   const prog=(l,m)=>{const n=m==='saw'?l.saw:l.fit;if(!n)return(m==='saw'?l.noCut:l.noFit)?'n/a':'—';if(listDone(l.id)[m])return'✓';const t=Object.values(rowTicks(l.id)).filter(x=>x.m===m).length;return t+'/'+n;};
   const row=l=>{const[st,col]=LS_STATE[lsState(l)];return `<tr data-lhrow="${escA(l.id)}"><td><b>${escA(l.name)}</b>${l.tpl?' <span class="lst-chip" style="background:#efe7ff;color:#5b21b6">TEMPLATE'+(l.typeName?' · '+escA(l.typeName):'')+'</span>':''}</td>
-    <td>${escA(LS_KINDS[l.ltype]||l.ltype||'')}</td><td>${(l.wos||[]).map(w=>`<span class="lst-chip">${escA(w)}</span>`).join('')||'<span style="color:var(--t3)">—</span>'}</td>
+    <td>${escA(LS_KINDS[l.ltype]||l.ltype||'')}${l.templateId?`<div style="font-size:11px;color:#5b21b6">${escA(lsTplInfo(l))}</div>`:''}</td><td>${(l.wos||[]).map(w=>`<span class="lst-chip">${escA(w)}</span>`).join('')||'<span style="color:var(--t3)">—</span>'}</td>
     <td>${(+l.rev||1)>1?`<span class="lst-chip" style="background:#fff4d6;color:#7a5200">Rev ${+l.rev}</span>`:'Rev 1'}</td><td><span style="color:${col};font-weight:700">${st}</span></td><td>🪚 ${prog(l,'saw')}</td><td>🧰 ${prog(l,'fit')}</td>
     <td style="white-space:nowrap"><button class="btn btn-s" data-lhedit="${escA(l.id)}" style="padding:2px 8px;font-size:11px">✎ Edit</button> <button class="btn btn-s" data-lhview="${escA(l.id)}" style="padding:2px 8px;font-size:11px">View</button>${l.archived?'':` <button class="btn btn-s" data-lharc="${escA(l.id)}" style="padding:2px 8px;font-size:11px;color:var(--red);border-color:var(--red)">Archive</button>`}</td></tr>`;};
   return `<div class="exp-panel" id="lh">
@@ -2703,7 +2712,7 @@ function lsHomeHTML(){
       ${sel('lh-rev',LH.rev,[['','Any revision'],['revised','Revised (rev 2+)']])}
       ${sel('lh-state',LH.state,[['','Not archived'],['draft','Draft'],['live','Live (with the saw)'],['done','Done'],['archived','Archived']])}
       ${LH.q||LH.proj||LH.type||LH.kind!=='live'||LH.rev||LH.state?'<button class="btn btn-s" id="lh-x" style="font-size:12px">✕ Clear</button>':''}
-      <span style="flex:1"></span><button class="btn btn-s" id="lh-projs">🏗 Projects</button><button class="btn btn-g" id="lh-new">＋ New list</button>
+      <span style="flex:1"></span>${LH.kind==='tpl'?`<button class="btn btn-s" id="lh-copy"${LH.proj?'':' disabled title="Pick the project first"'}>⧉ Copy from another project</button><button class="btn btn-g" id="lh-newtpl"${LH.proj?'':' disabled title="Pick the project first"'}>＋ New template</button>`:''}<button class="btn btn-s" id="lh-projs">🏗 Projects</button><button class="btn btn-g" id="lh-new">＋ New list</button>
     </div>
     <input type="file" id="lh-file" accept=".xlsx,.xls" style="display:none"><div id="lh-upmsg" style="font-size:12px;margin-bottom:6px"></div>
     ${keys.length?keys.map(k=>{const a=grp.get(k);return `<div class="lh-grp" style="margin-bottom:12px"><div style="background:#14335c;color:#fff;border-radius:6px 6px 0 0;padding:7px 10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -2721,6 +2730,8 @@ function lsHomeBind(){
   const x=document.getElementById('lh-x');if(x)x.onclick=()=>{Object.assign(LH,{q:'',proj:'',type:'',kind:'live',rev:'',state:''});render();};
   const pj=document.getElementById('lh-projs');if(pj)pj.onclick=()=>lsProjectsDlg();
   const nw=document.getElementById('lh-new');if(nw)nw.onclick=()=>openListEditor(null,'',LH.proj||'');
+  const nt=document.getElementById('lh-newtpl');if(nt)nt.onclick=()=>openListEditor(null,'',LH.proj,{tpl:true});
+  const cp=document.getElementById('lh-copy');if(cp)cp.onclick=()=>lsCopyDlg(LH.proj);
   document.querySelectorAll('[data-lhtpl]').forEach(b=>b.onclick=()=>{LH.proj=b.dataset.lhtpl;LH.kind='tpl';render();});
   document.querySelectorAll('[data-lhmat]').forEach(b=>b.onclick=()=>lsMaterialsDlg(b.dataset.lhmat));
   document.querySelectorAll('[data-lhnew]').forEach(b=>b.onclick=()=>openListEditor(null,'',b.dataset.lhnew));
@@ -2783,15 +2794,17 @@ function waitListHTML(){
    Saw material: only the project's sheet materials (no free typing). Fittings spec: the project's fittings, or "Other…"
    typed — that line gets an amber flag. A material already on a line but not on the project list stays, flagged. */
 function lsProjForCust(c){c=String(c||'').trim().toLowerCase();if(!c)return null;return lsProjects().find(p=>[p.name,p.customer,...(p.cien_names||[])].some(n=>String(n||'').trim().toLowerCase()===c))||null;}
-function openListEditor2(listId,presetWo,presetPid){
+function openListEditor2(listId,presetWo,presetPid,opt){
+  opt=opt||{};
   const ex=listId?lsList(listId):null;
   const o0=!ex&&presetWo?DB.orders.find(x=>x.wo===presetWo):null;
   const st={rows:ex?lsEditRows(ex.id):[{k:'saw',item:'',qty:'',L:'',W:'',mat:'',edging:'',note:''}],
     wo:ex?((ex.wos||[])[0]||''):(presetWo||''),name:ex?ex.name:'',pid:ex?ex.pid:(presetPid||((lsProjForCust(o0&&o0.customer)||{}).id)||''),
-    ltype:ex?(ex.ltype||'house'):'house',tname:ex?ex.typeName:'',tpl:ex?ex.tpl:false,noCut:ex?!!ex.noCut:false,noFit:ex?!!ex.noFit:false,newWO:false,pw:{title:'',cust:'',floor:'',unit:'',due:'',val:'',hrs:''}};
+    ltype:ex?(ex.ltype||'house'):(opt.tpl?'kitchen':'house'),tname:ex?ex.typeName:'',tpl:ex?ex.tpl:!!opt.tpl,noCut:ex?!!ex.noCut:false,noFit:ex?!!ex.noFit:false,newWO:false,pw:{title:'',cust:'',floor:'',unit:'',due:'',val:'',hrs:''}};
   const live=()=>DB.orders.filter(o=>!o.delDone&&!o.delDelivAt).slice().sort(woCmp);
   const defName=wo=>{const o=DB.orders.find(x=>x.wo===wo);return o?([o.floor,o.unit].filter(Boolean).join(' ')||o.title||wo):'';};
   if(!ex&&st.wo)st.name=defName(st.wo);
+  if(st.tpl&&!lsEditOk())return; // templates: Production Manager, Design office or Admin
   const sheetMats=()=>lsMats(st.pid,'sheet').map(m=>m.name),fitMats=()=>lsMats(st.pid,'other').map(m=>m.name);
   st.rows.forEach(r=>{if(r.k==='fit'&&r.mat&&!fitMats().some(n=>n.toLowerCase()===String(r.mat).trim().toLowerCase())){r.matOther=true;}});
   const ov=document.createElement('div');ov.className='pod-ovl';
@@ -2814,6 +2827,7 @@ function openListEditor2(listId,presetWo,presetPid){
       <td><button class="btn btn-s" data-mrx="${i}" title="Delete row" style="color:var(--red);border-color:var(--red);padding:3px 8px">✕</button></td></tr>`).join('');
     ov.innerHTML=`<div class="pod-in" style="min-width:min(1100px,97vw)">
       <div style="font-weight:800;color:#14335c;font-size:17px;margin-bottom:2px">✍ ${ex?'Edit':'New'} ${st.tpl?'template':'cutting list'}${ex&&(+ex.rev||1)>1?' · Rev '+(+ex.rev):''}</div>
+      ${ex&&ex.templateId?`<div style="font-size:12px;color:#5b21b6;font-weight:700;margin-bottom:4px">📐 ${escA(lsTplInfo(ex))}</div>`:''}
       <div style="font-size:12px;color:var(--t3);margin-bottom:10px">Saw rows go to the <b>Saw</b>, fittings rows to <b>Stores</b>. Materials come from the project's list — add one under <b>Materials</b> if it's missing.${ex&&ex.locked?' <b style="color:#8a5a00">The saw already has this list — saving makes a new revision.</b>':''}</div>
       <div class="me-top">
         <div><label>Project</label><div style="display:flex;gap:6px"><select id="me-pid" style="${inp};max-width:230px"><option value="">— pick the project —</option>${lsProjects().map(p=>`<option value="${escA(p.id)}"${p.id===st.pid?' selected':''}>${escA(p.name)}</option>`).join('')}<option value="__new">＋ New project…</option></select>
@@ -2904,17 +2918,19 @@ function lsUnknownMats(wb,entries,pid){
   entries.forEach(e=>(wb.sheets[e.sheet]||[]).forEach(r=>{if(r.k!=='saw')return;const m=String(r.mat||'').trim();if(m&&!k.has(m.toLowerCase())&&!seen.has(m.toLowerCase()))seen.set(m.toLowerCase(),m);}));
   return[...seen.values()];
 }
-function lsMatchDlg(names,pid,done){
+function lsMatchDlg(names,pid,done,opt){
+  opt=opt||{};
   const ms=lsMats(pid,'sheet');
   const ov=document.createElement('div');ov.className='pod-ovl';
   ov.innerHTML=`<div class="pod-in" style="min-width:min(720px,96vw)"><div style="font-weight:800;color:#14335c;font-size:17px;margin-bottom:2px">🧱 Materials not on the ${escA((LST.p.get(pid)||{}).name||'')} list</div>
     <div style="font-size:12px;color:var(--t3);margin-bottom:10px">Match each name to a project material — the match is remembered next time. Anything left as typed is saved, flagged for the Production Manager; the saw still gets the list.</div>
-    <table class="lst-tbl"><thead><tr><th>In the workbook</th><th>Use</th></tr></thead><tbody>${names.map((n,i)=>`<tr><td><b>${escA(n)}</b></td><td><select data-mm="${i}" style="${LS_INP};width:100%"><option value="">Keep as typed (flagged)</option>${ms.map(m=>`<option value="${escA(m.id)}">${escA(m.name)}</option>`).join('')}<option value="__add">＋ Add "${escA(n)}" to the project list</option></select></td></tr>`).join('')}</tbody></table>
+    <table class="lst-tbl"><thead><tr><th>In the workbook</th><th>Use</th></tr></thead><tbody>${names.map((n,i)=>`<tr><td><b>${escA(n)}</b></td><td><select data-mm="${i}" style="${LS_INP};width:100%"><option value="">${opt.noKeep?'— match or add —':'Keep as typed (flagged)'}</option>${ms.map(m=>`<option value="${escA(m.id)}">${escA(m.name)}</option>`).join('')}<option value="__add">＋ Add "${escA(n)}" to the project list</option></select></td></tr>`).join('')}</tbody></table>
     <div style="margin-top:12px;display:flex;gap:10px;justify-content:flex-end"><button class="btn btn-s" id="mm-x">Cancel upload</button><button class="btn btn-g" id="mm-ok">Save the lists</button></div></div>`;
   document.body.appendChild(ov);
   ov.querySelector('#mm-x').onclick=()=>{ov.remove();done(null);};
   ov.querySelector('#mm-ok').onclick=async()=>{
     const pick=names.map((n,i)=>[n,ov.querySelector('[data-mm="'+i+'"]').value]);
+    if(opt.noKeep&&pick.some(([,v])=>!v)){toast('Match or add every material first');return;}
     if(pick.some(([,v])=>v)&&!lsEditOk())return;
     const map={};
     try{
@@ -2925,6 +2941,90 @@ function lsMatchDlg(names,pid,done){
     }catch(e){toast('Materials not saved — '+e.message);return;}
     ov.remove();done(map);
   };
+}
+/* ---------- S5 / S6 (V2 only): templates, copy from another project, make a live list from a template, missing-part check ---------- */
+function lsTplInfo(l){ // "template is now rev 5 (this copy rev 3)" — information only; template changes never touch live copies
+  if(!l||!l.templateId)return'';const t=LST.l.get(l.templateId);if(!t)return'';
+  return (+t.rev||1)!==(+l.templateRev||1)?'template "'+t.name+'" is now rev '+(+t.rev||1)+' (this copy rev '+(+l.templateRev||1)+')':'from template "'+t.name+'" rev '+(+l.templateRev||1);
+}
+async function lsCopyLines(srcId,map){
+  if(!LST.full.has(srcId))await lsReloadList(srcId);
+  map=map||{};
+  return lsLinesOf(srcId).filter(x=>x.removed_rev==null&&x.status!=='na').map(x=>{const m=x.kind==='saw'&&map[String(x.material||'').trim().toLowerCase()];
+    return{kind:x.kind,section:x.section,part:x.part,length_mm:x.length_mm,width_mm:x.width_mm,qty:x.qty,material:m||x.material,material_other:m?false:!!x.material_other,edging:x.edging,note:x.note,src_line_id:x.id};});
+}
+async function lsCreateFromTpl(tid,wos,name,by){
+  if(!LST.full.has(tid))await lsReloadList(tid);
+  const t=LST.l.get(tid);if(!t)throw new Error('the template is no longer there');
+  const pl={id:uid('L'),name,project_id:t.project_id,list_type:t.list_type==='snag'?'house':t.list_type,type_name:t.type_name||null,template_id:tid,template_rev:+t.rev||1,wos,source:'template'};
+  const res=await lsSaveList(pl,await lsCopyLines(tid),by,'Made from template "'+t.name+'" rev '+(+t.rev||1));
+  return res.list;
+}
+function lsTemplatesFor(pid){return lsCache().all.filter(l=>l.tpl&&!l.archived&&l.pid===pid).sort((a,b)=>String(a.typeName||a.name).localeCompare(String(b.typeName||b.name)));}
+// From a work order with no list: tap a template → preview with the WO ticked (+ other jobs of the project that need a list) → name → Create & attach
+function lsTplDlg(tid,wo){
+  const t=lsList(tid);if(!t)return;
+  const o=DB.orders.find(x=>x.wo===wo),defName=x=>x?([x.floor,x.unit].filter(Boolean).join(' ')||x.title||x.wo):'';
+  const more=listsNeeded().filter(x=>x.wo!==wo&&(lsProjForCust(x.customer)||{}).id===t.pid);
+  const ov=lsDlg(`<div style="font-weight:800;color:#14335c;font-size:17px;margin-bottom:2px">📐 ${escA(t.typeName||t.name)} · Rev ${+t.rev||1} → ${escA(wo)}</div>
+    <div style="font-size:12px;color:var(--t3);margin-bottom:8px">${escA(t.project)} — a live copy of the template is made and attached. Later template changes never change it.</div>
+    <div style="margin-bottom:8px"><label style="font-size:12px;color:var(--t2)">List name</label><br><input id="tp-name" value="${escA(defName(o))}" style="${LS_INP};width:240px"></div>
+    <div style="font-size:12px;font-weight:700;color:#14335c;margin-bottom:4px">Work orders</div>
+    <label class="hold-row"><input type="checkbox" data-tpwo="${escA(wo)}" checked><span><b>${escA(wo)}</b> ${escA(o?[o.floor,o.unit,o.title].filter(Boolean).join(' · '):'')}</span></label>
+    ${more.map(x=>`<label class="hold-row"><input type="checkbox" data-tpwo="${escA(x.wo)}"><span><b>${escA(x.wo)}</b> ${escA([x.floor,x.unit,x.title].filter(Boolean).join(' · '))}</span></label>`).join('')}
+    <div style="max-height:30vh;overflow:auto;margin-top:8px">${listTableHTML(t,'all')}</div>
+    <div id="tp-err" style="color:#b42318;font-weight:700;font-size:13px;min-height:18px"></div>
+    <div style="text-align:right"><button class="btn btn-g" id="tp-go" style="font-size:14px;padding:9px 20px">Create &amp; attach</button></div>`,820);
+  ov.querySelector('#tp-go').onclick=()=>{
+    const wos=[...ov.querySelectorAll('[data-tpwo]:checked')].map(c=>c.dataset.tpwo),name=ov.querySelector('#tp-name').value.trim(),err=t2=>{ov.querySelector('#tp-err').textContent=t2;};
+    if(!wos.length)return err('Tick at least one work order.');if(!name)return err('Give the list a name.');
+    officeWho(by=>{const b=ov.querySelector('#tp-go');b.disabled=true;err('Saving…');
+      lsCreateFromTpl(tid,wos,name,by).then(l=>{ov.remove();lstAttachOpen=null;render();toast('"'+l.name+'" made from '+(t.typeName||t.name)+' and attached to '+wos.join(', ')+' ✓');})
+        .catch(e=>{b.disabled=false;err('Not saved — '+e.message);});});
+  };
+}
+// Copy a template or live list from another project into this one as a template (decision 7); its boards must be matched
+// or added to this project's materials first.
+function lsCopyDlg(pid){
+  if(!lsEditOk())return;
+  const others=lsProjects().filter(p=>p.id!==pid&&lsCache().all.some(l=>l.pid===p.id&&!l.archived));
+  let from='';
+  const ov=lsDlg('<div id="cp-body"></div>',760);
+  const draw=()=>{
+    const src=from?lsCache().all.filter(l=>l.pid===from&&!l.archived).sort((a,b)=>(b.tpl?1:0)-(a.tpl?1:0)||String(a.name).localeCompare(String(b.name))):[];
+    ov.querySelector('#cp-body').innerHTML=`<div style="font-weight:800;color:#14335c;font-size:17px;margin-bottom:8px">⧉ Copy into ${escA(lsProjName(pid))} as a template</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">${others.map(p=>`<button class="btn ${p.id===from?'btn-g':'btn-s'}" data-cpp="${escA(p.id)}">${escA(p.name)}</button>`).join('')||'<span style="color:var(--t3)">No other project has lists yet.</span>'}</div>
+      ${from?src.map(l=>`<div class="wl-drow"><b>${escA(l.typeName||l.name)}</b><span class="dsh-t">${l.tpl?'Template':'Live list'} · Rev ${+l.rev||1} · ${l.saw} saw / ${l.fit} fittings</span><button class="btn btn-g" data-cpl="${escA(l.id)}" style="font-size:12px">Copy</button></div>`).join('')||'<div style="color:var(--t3)">Nothing to copy in this project.</div>':''}
+      <div id="cp-err" style="color:#b42318;font-weight:700;font-size:13px;min-height:18px"></div>`;
+    ov.querySelectorAll('[data-cpp]').forEach(b=>b.onclick=()=>{from=b.dataset.cpp;draw();});
+    ov.querySelectorAll('[data-cpl]').forEach(b=>b.onclick=async()=>{
+      const s=lsList(b.dataset.cpl),err=t=>{const e=ov.querySelector('#cp-err');if(e)e.textContent=t;};
+      try{
+        if(!LST.full.has(s.id))await lsReloadList(s.id);
+        const k=lsMatSet(pid),unk=[...new Set(lsLinesOf(s.id).filter(x=>x.kind==='saw'&&x.removed_rev==null&&x.material&&!k.has(String(x.material).trim().toLowerCase())).map(x=>String(x.material).trim()))];
+        const map=unk.length?await new Promise(r=>lsMatchDlg(unk,pid,r,{noKeep:true})):{};
+        if(!map)return;
+        const lines=await lsCopyLines(s.id,map);lsFlagMats(lines,pid);
+        const r=s.ltype==='snag'?'other':s.ltype||'house';
+        const res=await lsSaveList({id:uid('L'),name:s.typeName||s.name,project_id:pid,is_template:true,list_type:r,type_name:s.typeName||s.name,source:'template',wos:[]},lines,whoNow(),'Copied from '+s.project+' — '+s.name+' rev '+(+s.rev||1));
+        ov.remove();LH.proj=pid;LH.kind='tpl';render();toast('Copied — "'+res.list.name+'" is now a template in '+lsProjName(pid));
+      }catch(e){err('Not copied — '+e.message);}
+    });
+  };
+  draw();
+}
+// Missing-part check (Plan B): a live list made from a template warns about template parts left out or with a lower quantity
+async function lsTplLines(l){
+  const t=LST.l.get(l.templateId);if(!t)return null;
+  if((+t.rev||1)===(+l.templateRev||1)){if(!LST.full.has(t.id))await lsReloadList(t.id);return lsLinesOf(t.id).filter(x=>x.removed_rev==null);}
+  const r=await lsGet('list_revisions?select=lines&list_id=eq.'+encodeURIComponent(t.id)+'&rev=eq.'+(+l.templateRev||1));
+  return r[0]&&Array.isArray(r[0].lines)?r[0].lines:null;
+}
+function lsMissing(tpl,lines){
+  const key=x=>x.kind+'|'+String(x.part||'').trim().toLowerCase(),sum=a=>{const m=new Map();(a||[]).forEach(x=>{if(x.kind==='hdr'||x.status==='na')return;const k=key(x),q=parseFloat(x.qty);const e=m.get(k)||{q:0,n:String(x.part||'').trim()||'(unnamed)'};e.q+=isFinite(q)?q:0;m.set(k,e);});return m;};
+  const A=sum(tpl),B=sum(lines),out=[];
+  A.forEach((e,k)=>{const b=B.get(k);if(!b)out.push(e.n+' (left out)');else if(b.q<e.q)out.push(e.n+' ('+b.q+' of '+e.q+')');});
+  return out;
 }
 /* diffLines:start */
 /* Revision comparison — pure (no screen, no database), so the tests can check it on its own.
@@ -3097,7 +3197,7 @@ function renderLists(app){
         <td style="white-space:nowrap"><button class="btn btn-s" data-natt="${escA(o.wo)}" style="padding:2px 8px;font-size:11px">${lstAttachOpen===o.wo?'✕ close':'➕ Attach list'}</button></td></tr>
       ${lstAttachOpen===o.wo?`<tr><td colspan="7" style="background:#fff;border:1px solid var(--b2);padding:10px">
         <div style="font-size:12px;font-weight:700;color:#14335c;margin-bottom:6px">Attach a cutting list to ${escA(o.wo)}${o.unit?' (unit '+escA(o.unit)+')':''}:</div>
-        <button class="btn btn-g" data-mtype="${escA(o.wo)}" style="margin:2px 6px 6px 0;font-size:12px">✍ Type a list for ${escA(o.wo)}</button><br>
+        ${V2()?((p=>p?lsTemplatesFor(p.id).map(t=>`<button class="btn btn-s" data-tplatt="${escA(t.id)}|${escA(o.wo)}" style="margin:2px 6px 6px 0;font-size:12px;border-color:#5b21b6;color:#5b21b6">📐 ${escA(t.typeName||t.name)} · Rev ${+t.rev||1}</button>`).join(''):'')(lsProjForCust(o.customer))):''}<button class="btn btn-g" data-mtype="${escA(o.wo)}" style="margin:2px 6px 6px 0;font-size:12px">✍ Type a list for ${escA(o.wo)}</button><br>
         ${cands.length?cands.slice(0,8).map(l=>`<button class="btn btn-s" data-attdo="${escA(l.id)}|${escA(o.wo)}" style="margin:2px;font-size:11px">+ ${escA(l.project||'')} — ${escA(l.name)}</button>`).join(''):`<span style="font-size:12px;color:var(--t3)">No library list matches unit ${escA(o.unit||'?')} — pick one below or upload the workbook.</span>`}
         <div style="margin-top:6px;display:flex;gap:6px;align-items:center;flex-wrap:wrap"><span style="font-size:11px;color:var(--t3)">Any list:</span>
           <select id="att-sel" style="padding:4px 8px;border:1px solid var(--b2);border-radius:5px;font-size:12px;max-width:340px">${all.map(l=>`<option value="${escA(l.id)}">${escA(l.project||'')} — ${escA(l.name)}</option>`).join('')}</select>
@@ -3299,6 +3399,7 @@ function renderLists(app){
     lsSched();render();toast(V2()?'List archived':'List deleted');
   });
   if(V2())lsHomeMount();
+  document.querySelectorAll('[data-tplatt]').forEach(b=>b.onclick=e=>{e.stopPropagation();const v=b.dataset.tplatt,i=v.indexOf('|'),tid=v.slice(0,i),go=()=>lsTplDlg(tid,v.slice(i+1));if(LST.full.has(tid))go();else lsReloadList(tid).then(go).catch(x=>toast('Could not open the template — '+x.message));});
   document.querySelectorAll('[data-lview]').forEach(b=>b.onclick=()=>{
     const l=lists().find(x=>x.id===b.dataset.lview);if(!l)return;
     const ov=document.createElement('div');ov.className='pod-ovl';
@@ -5860,8 +5961,8 @@ function saveManualList(d,by,existing){ // pure-ish: writes DB, returns the list
   }
   return l;
 }
-function openListEditor(listId,presetWo,presetPid){
-  if(V2())return openListEditor2(listId,presetWo,presetPid); // V2: project picker, type, materials from the project
+function openListEditor(listId,presetWo,presetPid,opt){
+  if(V2())return openListEditor2(listId,presetWo,presetPid,opt); // V2: project picker, type, materials from the project
   const ex=listId?lists().find(l=>l.id===listId):null;
   const st={rows:ex?(V2()?lsEditRows(ex.id):listRows(ex).filter(r=>r.k!=='hdr').map(r=>({...r}))):[{k:'saw',item:'',qty:'',L:'',W:'',mat:'',note:''}],
     wo:ex?((ex.wos||[])[0]||''):(presetWo||''),name:ex?ex.name:'',project:ex?ex.project:'',noCut:ex?!!ex.noCut:false,noFit:ex?!!ex.noFit:false,newWO:false,pw:{title:'',cust:'',floor:'',unit:'',due:'',val:'',hrs:''}};
