@@ -2291,12 +2291,12 @@ function lsRowToLine(r,typed){
   if(r.k==='hdr')return{kind:'hdr',part:s(r.item),note:s(r.note)};
   const ln={kind:r.k,section:s(r.sec),part:s(r.item),qty:s(r.qty),material:s(r.mat)};
   if(r.k==='saw'){ln.length_mm=r.L;ln.width_mm=r.W;ln.edging=typed?s(r.edging):s(r.note);ln.note=typed?s(r.note):'';}
-  else{ln.edging='';ln.note=s(r.note);}
+  else{ln.edging='';ln.note=s(r.note);if(typed&&r.matOther)ln.material_other=true;}
   return ln;
 }
 function lsFlagMats(lines,pid){ // sheet material not on the project's list → saved, but flagged (decision 7); only once the project has a list
   const k=lsMatSet(pid);let n=0;
-  lines.forEach(ln=>{ln.material_other=false;if(k.size&&ln.kind==='saw'&&ln.material&&!k.has(ln.material.toLowerCase())){ln.material_other=true;n++;}});
+  lines.forEach(ln=>{if(ln.kind!=='saw'){ln.material_other=!!ln.material_other;return;}ln.material_other=false;if(k.size&&ln.material&&!k.has(ln.material.toLowerCase())){ln.material_other=true;n++;}});
   return n;
 }
 async function lsReloadList(id){
@@ -2325,15 +2325,16 @@ function lsAskReason(l){ // a list the saw already has: saving makes revision n+
 }
 async function lsSaveManual(d,by,ex){
   const o=DB.orders.find(x=>x.wo===d.wo);
-  const pid=await lsProject(String(d.project||'').trim()||(o&&o.customer)||'Unassigned',o&&o.customer);
+  const pid=d.pid&&LST.p.has(d.pid)?d.pid:await lsProject(String(d.project||'').trim()||(o&&o.customer)||'Unassigned',o&&o.customer);
   const id=ex?ex.id:uid('L');
   let reason='';
   if(ex){if(!LST.full.has(id))await lsReloadList(id);reason=lsAskReason(lsList(id));if(reason===null)throw new Error('not saved — a reason is needed for a new revision');}
   const lines=d.rows.map(r=>lsRowToLine(r,true));lsFlagMats(lines,pid);
   const pl={id,name:String(d.name).trim(),project_id:pid,no_cut:!!d.noCut,no_fit:!!d.noFit};
-  if(!ex)Object.assign(pl,{wos:[d.wo],source:'manual',list_type:'house'});
+  if(d.ltype)pl.list_type=d.ltype;if(d.tname!==undefined)pl.type_name=String(d.tname||'').trim()||null;
+  if(!ex)Object.assign(pl,d.tpl?{wos:[],source:'manual',is_template:true}:{wos:[d.wo],source:'manual'},{list_type:d.ltype||'house'});
   const res=await lsSaveList(pl,lines,by,reason||(ex?'List edited':null));
-  if(ex){const was=(ex.wos||[])[0];if(d.wo&&d.wo!==was){if(was)listTag(ex,was,false,by);listTag(ex,d.wo,true,by);}
+  if(ex&&!ex.tpl){const was=(ex.wos||[])[0];if(d.wo&&d.wo!==was){if(was)listTag(ex,was,false,by);listTag(ex,d.wo,true,by);}
     // rows added to a side that was already signed off put that side back on the bench — and say so
     ['saw','fit'].forEach(m=>{const n=res.diff.lines.filter(x=>x.kind===m&&res.diff.added.includes(x.id)).length;
       if(n&&listDone(id)[m])listSetDone({id},m,false,by,n+' row'+(n!==1?'s':'')+' added after it was signed off');});}
@@ -2346,7 +2347,8 @@ async function lsImportWB(wb,entries,fname,by,opt){
   const out={n:0,replaced:0,auto:0,flagged:0,revised:0};
   for(const e of entries){
     let sec='';
-    const lines=(wb.sheets[e.sheet]||[]).map(r=>{if(r.k==='hdr'){sec=String(r.item||'').trim();return lsRowToLine(r);}return lsRowToLine({...r,sec});});
+    const mp=opt.map||{};
+    const lines=(wb.sheets[e.sheet]||[]).map(r=>{if(r.k==='hdr'){sec=String(r.item||'').trim();return lsRowToLine(r);}const ln=lsRowToLine({...r,sec});if(ln.kind==='saw'&&mp[String(ln.material||'').toLowerCase()])ln.material=mp[ln.material.toLowerCase()];return ln;});
     out.flagged+=lsFlagMats(lines,pid);
     const live=lists();
     // re-uploading a corrected workbook revises the same list — tags and ticks carry across (diffLines)
@@ -2379,8 +2381,13 @@ function lsUpload(f,pid){
     try{
       const{wb,entries}=parseListWorkbook(rd.result);
       if(!entries.length)return bad('No usable sheets found — expected columns: Item | Qty | Length | Width | Material | Edging.');
+      const proj=pid&&LST.p.has(pid)?LST.p.get(pid).name:wb.project||String(f.name||'').replace(/\.(xlsx|xls)$/i,'');
+      const pid2=pid&&LST.p.has(pid)?pid:await lsProject(proj);
+      const unk=lsUnknownMats(wb,entries,pid2);
+      const map=unk.length?await new Promise(r=>lsMatchDlg(unk,pid2,r)):{};
+      if(!map)return bad('Upload cancelled — nothing saved.');
       if(msg)msg.textContent='Saving '+entries.length+' list'+(entries.length!==1?'s':'')+'…';
-      const s=await lsImportWB(wb,entries,f.name,whoNow(),{pid});
+      const s=await lsImportWB(wb,entries,f.name,whoNow(),{pid:pid2,map});
       render();
       toast(s.n+' lists imported from '+(wb.project||f.name)+(s.replaced?' — '+s.replaced+' replaced with this newer version'+(s.revised?' ('+s.revised+' new revision'+(s.revised!==1?'s':'')+' for the saw)':''):'')+(s.auto?' — '+s.auto+' work orders auto-tagged. Check the tags.':'')+(s.flagged?' — '+s.flagged+' line'+(s.flagged!==1?'s':'')+' use a material not on the project list (flagged)':''));
     }catch(e){bad('Could not save that file: '+e.message);}
@@ -2771,6 +2778,153 @@ function waitListHTML(){
     <div style="font-size:15px;font-weight:800;color:${od?'#8a1c10':'#7a4a00'};margin-bottom:6px">📋 WAITING FOR A LIST — ${rows.length} job${rows.length!==1?'s':''}${od?` · <span style="color:#c0392b">${od} overdue</span>`:''}</div>
     ${rows.map(({o,cut,due})=>{const late=due&&due<today;return `<div class="wl-drow" data-waitwo="${escA(o.wo)}" style="${late?'background:#c0392b;color:#fff;':''}border-radius:5px;padding:5px 8px"><b>${escA(o.wo)}</b><span class="dsh-c">${escA(o.customer||'')}</span><span class="dsh-t">${escA([o.floor,o.unit].filter(Boolean).join(' '))}</span><span class="dsh-x">${late?'⚠ OVERDUE · ':''}cut by ${cut?fmt(cut):'—'} · list due by ${due?fmt(due):'—'} · owner ${escA(lsOwnerFor(o))}</span></div>`;}).join('')}
   </div>`;
+}
+/* ---------- S4 (V2 only): the list editor with project picker, type, edging, and materials picked from the project ----------
+   Saw material: only the project's sheet materials (no free typing). Fittings spec: the project's fittings, or "Other…"
+   typed — that line gets an amber flag. A material already on a line but not on the project list stays, flagged. */
+function lsProjForCust(c){c=String(c||'').trim().toLowerCase();if(!c)return null;return lsProjects().find(p=>[p.name,p.customer,...(p.cien_names||[])].some(n=>String(n||'').trim().toLowerCase()===c))||null;}
+function openListEditor2(listId,presetWo,presetPid){
+  const ex=listId?lsList(listId):null;
+  const o0=!ex&&presetWo?DB.orders.find(x=>x.wo===presetWo):null;
+  const st={rows:ex?lsEditRows(ex.id):[{k:'saw',item:'',qty:'',L:'',W:'',mat:'',edging:'',note:''}],
+    wo:ex?((ex.wos||[])[0]||''):(presetWo||''),name:ex?ex.name:'',pid:ex?ex.pid:(presetPid||((lsProjForCust(o0&&o0.customer)||{}).id)||''),
+    ltype:ex?(ex.ltype||'house'):'house',tname:ex?ex.typeName:'',tpl:ex?ex.tpl:false,noCut:ex?!!ex.noCut:false,noFit:ex?!!ex.noFit:false,newWO:false,pw:{title:'',cust:'',floor:'',unit:'',due:'',val:'',hrs:''}};
+  const live=()=>DB.orders.filter(o=>!o.delDone&&!o.delDelivAt).slice().sort(woCmp);
+  const defName=wo=>{const o=DB.orders.find(x=>x.wo===wo);return o?([o.floor,o.unit].filter(Boolean).join(' ')||o.title||wo):'';};
+  if(!ex&&st.wo)st.name=defName(st.wo);
+  const sheetMats=()=>lsMats(st.pid,'sheet').map(m=>m.name),fitMats=()=>lsMats(st.pid,'other').map(m=>m.name);
+  st.rows.forEach(r=>{if(r.k==='fit'&&r.mat&&!fitMats().some(n=>n.toLowerCase()===String(r.mat).trim().toLowerCase())){r.matOther=true;}});
+  const ov=document.createElement('div');ov.className='pod-ovl';
+  const inp='padding:7px 8px;border:1px solid var(--b2);border-radius:6px;font-size:13px';
+  const amber='background:#fff4d6;border-color:#e0a43a';
+  const draw=()=>{
+    const sm=sheetMats(),fm=fitMats();
+    const matSel=(r,i)=>{const v=String(r.mat||'').trim(),on=sm.find(n=>n.toLowerCase()===v.toLowerCase());
+      return `<select data-mr="${i}|mat" style="${inp};width:100%${v&&!on?';'+amber:''}"><option value="">— material —</option>${sm.map(n=>`<option value="${escA(n)}"${on===n?' selected':''}>${escA(n)}</option>`).join('')}${v&&!on?`<option value="${escA(v)}" selected>⚠ ${escA(v)} (not on the project list)</option>`:''}</select>`;};
+    const fitSel=(r,i)=>{const v=String(r.mat||'').trim(),on=!r.matOther&&fm.find(n=>n.toLowerCase()===v.toLowerCase());
+      return `<select data-mr="${i}|fsel" style="${inp};width:100%${r.matOther?';'+amber:''}"><option value="">— spec —</option>${fm.map(n=>`<option value="${escA(n)}"${on===n?' selected':''}>${escA(n)}</option>`).join('')}<option value="__other"${r.matOther?' selected':''}>Other…</option></select>${r.matOther?`<input data-mr="${i}|mat" value="${escA(v)}" placeholder="Type the spec" style="${inp};width:100%;margin-top:3px;${amber}" title="Not on the project list — flagged for the Production Manager">`:''}`;};
+    const rowsH=st.rows.map((r,i)=>`<tr class="${r.k==='saw'?'me-saw':'me-fit'}"${r.k==='fit'&&r.matOther?' data-flag="1"':''}>
+      <td><span class="me-k">${r.k==='saw'?'🪚 SAW':'🧰 FIT'}</span></td>
+      <td><input data-mr="${i}|item" value="${escA(r.item)}" placeholder="${r.k==='saw'?'Part — e.g. Base end':'Item — e.g. Gola rail'}" style="${inp};width:100%"></td>
+      <td><input data-mr="${i}|qty" type="number" min="0" value="${escA(r.qty)}" style="${inp};width:62px"></td>
+      ${r.k==='saw'?`<td><input data-mr="${i}|L" type="number" min="0" value="${escA(r.L)}" placeholder="L mm" style="${inp};width:78px"></td><td><input data-mr="${i}|W" type="number" min="0" value="${escA(r.W)}" placeholder="W mm" style="${inp};width:78px"></td><td>${matSel(r,i)}</td>
+        <td><input data-mr="${i}|edging" value="${escA(r.edging||'')}" placeholder="Edging" style="${inp};width:100%"></td>`
+      :`<td colspan="2"></td><td>${fitSel(r,i)}</td><td></td>`}
+      <td><input data-mr="${i}|note" value="${escA(r.note)}" placeholder="Note" style="${inp};width:100%"></td>
+      <td><button class="btn btn-s" data-mrx="${i}" title="Delete row" style="color:var(--red);border-color:var(--red);padding:3px 8px">✕</button></td></tr>`).join('');
+    ov.innerHTML=`<div class="pod-in" style="min-width:min(1100px,97vw)">
+      <div style="font-weight:800;color:#14335c;font-size:17px;margin-bottom:2px">✍ ${ex?'Edit':'New'} ${st.tpl?'template':'cutting list'}${ex&&(+ex.rev||1)>1?' · Rev '+(+ex.rev):''}</div>
+      <div style="font-size:12px;color:var(--t3);margin-bottom:10px">Saw rows go to the <b>Saw</b>, fittings rows to <b>Stores</b>. Materials come from the project's list — add one under <b>Materials</b> if it's missing.${ex&&ex.locked?' <b style="color:#8a5a00">The saw already has this list — saving makes a new revision.</b>':''}</div>
+      <div class="me-top">
+        <div><label>Project</label><div style="display:flex;gap:6px"><select id="me-pid" style="${inp};max-width:230px"><option value="">— pick the project —</option>${lsProjects().map(p=>`<option value="${escA(p.id)}"${p.id===st.pid?' selected':''}>${escA(p.name)}</option>`).join('')}<option value="__new">＋ New project…</option></select>
+          <button class="btn btn-s" id="me-mats" style="font-size:12px"${st.pid?'':' disabled'}>Materials</button></div></div>
+        ${st.tpl?'':`<div><label>Work order</label>
+          ${st.newWO?`<div style="font-size:12px;color:#5b21b6;font-weight:700;padding:7px 0">New work order ${escA(nextPNumber())} <button class="btn btn-s" id="me-pick" style="font-size:11px;padding:2px 8px">use an existing WO instead</button></div>`
+          :`<div style="display:flex;gap:6px"><select id="me-wo" style="${inp};max-width:330px"><option value="">— pick a work order —</option>${live().map(o=>`<option value="${escA(o.wo)}"${o.wo===st.wo?' selected':''}>${escA(o.wo)} · ${escA([o.floor,o.unit].filter(Boolean).join(' '))} · ${escA((o.title||'').slice(0,30))} · ${escA(o.customer||'')}</option>`).join('')}</select>
+            ${ex?'':`<button class="btn btn-s" id="me-new" style="font-size:12px;white-space:nowrap">＋ New P-number</button>`}</div>`}</div>`}
+        <div><label>House / list name</label><input id="me-name" value="${escA(st.name)}" placeholder="e.g. House 18" style="${inp};width:160px"></div>
+        <div><label>Type</label><select id="me-type" style="${inp}">${['kitchen','house','room','other'].map(k=>`<option value="${k}"${st.ltype===k?' selected':''}>${LS_KINDS[k]}</option>`).join('')}</select>
+          <input id="me-tname" value="${escA(st.tname||'')}" placeholder="e.g. Type B 3-bed" style="${inp};width:140px"></div>
+      </div>
+      ${st.newWO?`<div class="me-newwo">
+        <input id="me-ptitle" placeholder="Title *" value="${escA(st.pw.title)}" style="${inp};flex:1;min-width:200px"><input id="me-pcust" placeholder="Customer" value="${escA(st.pw.cust||(LST.p.get(st.pid)||{}).customer||'')}" style="${inp};width:170px">
+        <input id="me-pfloor" placeholder="Floor" value="${escA(st.pw.floor)}" style="${inp};width:70px"><input id="me-punit" placeholder="Unit" value="${escA(st.pw.unit)}" style="${inp};width:70px">
+        <label style="font-size:12px;color:var(--t2)">Due *</label><input id="me-pdue" type="date" value="${escA(st.pw.due)}" style="${inp}">
+        <input id="me-pval" type="number" min="0" placeholder="€ value" value="${escA(st.pw.val)}" style="${inp};width:100px"><input id="me-phrs" type="number" min="0" step="0.5" placeholder="Hours" value="${escA(st.pw.hrs)}" style="${inp};width:80px"></div>`:''}
+      ${st.pid&&!sm.length?'<div style="font-size:12px;color:#8a5a00;font-weight:700;margin-top:8px">⚠ This project has no sheet materials yet — add them under Materials so the saw rows can be given one.</div>':''}
+      <div style="max-height:46vh;overflow:auto;margin-top:10px"><table class="me-tbl"><thead><tr><th></th><th>Item</th><th>Qty</th><th>Length</th><th>Width</th><th>Material / spec</th><th>Edging</th><th>Note</th><th></th></tr></thead><tbody>${rowsH||'<tr><td colspan="9" style="color:var(--t3);padding:10px">No rows yet — add a saw or fittings row.</td></tr>'}</tbody></table></div>
+      <div style="display:flex;gap:8px;margin:8px 0;flex-wrap:wrap">
+        <button class="btn btn-s" id="me-addsaw" ${st.noCut?'disabled':''}>＋ Saw row</button>
+        <button class="btn btn-s" id="me-addfit" ${st.noFit?'disabled':''}>＋ Fittings row</button>
+        <span style="flex:1"></span>
+        <label class="me-flag"><input type="checkbox" id="me-nocut"${st.noCut?' checked':''}> No cutting on this job</label>
+        <label class="me-flag"><input type="checkbox" id="me-nofit"${st.noFit?' checked':''}> No fittings on this job</label>
+      </div>
+      <div id="me-err" style="color:#b42318;font-weight:700;font-size:13px;min-height:18px"></div>
+      <div style="display:flex;gap:10px;justify-content:flex-end"><button class="btn btn-s" id="pod-x">Cancel</button><button class="btn btn-g" id="me-save" style="font-size:14px;padding:9px 20px">${ex?'Save changes':st.tpl?'Save template':'Save list → Saw & Stores'}</button></div>
+    </div>`;
+    ov.querySelectorAll('[data-mr]').forEach(el=>el.oninput=el.onchange=()=>{const[i,f]=el.dataset.mr.split('|'),r=st.rows[+i];
+      if(f==='fsel'){if(el.value==='__other'){r.matOther=true;r.mat='';}else{r.matOther=false;r.mat=el.value;}keep();draw();return;}
+      r[f]=el.value;});
+    ov.querySelectorAll('[data-mrx]').forEach(b=>b.onclick=()=>{keep();st.rows.splice(+b.dataset.mrx,1);draw();});
+    const g=id=>ov.querySelector('#'+id);
+    const nb=g('me-new');if(nb)nb.onclick=()=>{keep();st.newWO=true;draw();};
+    const pb=g('me-pick');if(pb)pb.onclick=()=>{keep();st.newWO=false;draw();};
+    g('me-addsaw').onclick=()=>{keep();st.rows.push({k:'saw',item:'',qty:'',L:'',W:'',mat:'',edging:'',note:''});draw();};
+    g('me-addfit').onclick=()=>{keep();st.rows.push({k:'fit',item:'',qty:'',mat:'',note:''});draw();};
+    g('me-nocut').onchange=e=>{keep();st.noCut=e.target.checked;draw();};
+    g('me-nofit').onchange=e=>{keep();st.noFit=e.target.checked;draw();};
+    g('me-mats').onclick=()=>{keep();if(st.pid)lsMaterialsDlg(st.pid,()=>draw());};
+    g('me-pid').onchange=e=>{keep();
+      if(e.target.value==='__new'){if(!lsEditOk()){draw();return;}const n=prompt('New project name:','');if(!n||!n.trim()){draw();return;}
+        lsProject(n.trim()).then(id=>{st.pid=id;draw();}).catch(x=>{draw();g('me-err').textContent='Project not added — '+x.message;});return;}
+      st.pid=e.target.value;draw();};
+    const w=g('me-wo');if(w)w.onchange=()=>{const prev=st.wo;st.wo=w.value;const ne=g('me-name');if(ne&&(!ne.value||ne.value===defName(prev)))ne.value=defName(st.wo);
+      const o=DB.orders.find(x=>x.wo===st.wo),p=o&&lsProjForCust(o.customer);if(!st.pid&&p){keep();st.pid=p.id;draw();}};
+    g('me-save').onclick=()=>save();
+  };
+  const keep=()=>{const g=id=>ov.querySelector('#'+id);const n=g('me-name');if(n)st.name=n.value;const w=g('me-wo');if(w)st.wo=w.value;
+    const t=g('me-type');if(t)st.ltype=t.value;const tn=g('me-tname');if(tn)st.tname=tn.value;
+    ['title','cust','floor','unit','due','val','hrs'].forEach(k=>{const e=g('me-p'+k);if(e)st.pw[k]=e.value;});};
+  const save=()=>{
+    keep();const g=id=>ov.querySelector('#'+id),err=t=>{g('me-err').textContent=t;};
+    if(!st.pid)return err('Pick the project.');
+    const sm=sheetMats().map(n=>n.toLowerCase());
+    if(sm.length&&st.rows.some(r=>r.k==='saw'&&!String(r.mat||'').trim()))return err('Pick the material for every saw row.');
+    if(st.rows.some(r=>r.k==='fit'&&r.matOther&&!String(r.mat||'').trim()))return err('Type the spec for every "Other…" fittings row.');
+    let wo=st.wo;
+    if(st.newWO){const title=(g('me-ptitle').value||'').trim(),due=g('me-pdue').value;
+      if(!title)return err('The new work order needs a title.');if(!due)return err('The new work order needs a due date — it drives the cutting deadline.');wo='__NEW__';}
+    const d={...st,wo,project:(LST.p.get(st.pid)||{}).name||''};
+    const e=manualListValidate({...d,wo:st.tpl?'(template)':d.wo});if(e)return err(e);
+    officeWho(by=>{
+      if(st.newWO){
+        const pwo=nextPNumber(),val=parseFloat(g('me-pval').value)||0;
+        let hours=parseFloat(g('me-phrs').value),hoursEstimated=false;
+        if(isNaN(hours)||hours<=0){hours=estimateHours(val);hoursEstimated=true;}
+        const due=g('me-pdue').value;
+        DB.orders.push({wo:pwo,ref:'',floor:(g('me-pfloor').value||'').trim(),unit:(g('me-punit').value||'').trim(),title:g('me-ptitle').value.trim(),customer:(g('me-pcust').value||'').trim()||d.project,hours,hoursEstimated,
+          dueDate:due,origDueDate:due,step:'Planner WO',salesRep:'',orderNo:'',value:val,plannedWeek:wkKey(new Date(due)),notes:'',colour:'',log:[{at:nowISO(),by,what:'Work order created with a typed cutting list'}]});
+        orig[pwo]='';origStep[pwo]='Planner WO';d.wo=pwo;st.newWO=false;st.wo=pwo; // a failed save tried again reuses this P-number
+      }
+      const sb=g('me-save');if(sb)sb.disabled=true;err('Saving…');
+      lsSaveManual(d,by,ex).then(l=>{ov.remove();sched();render();
+        toast((ex?'List updated':'List saved')+' — '+l.name+' → '+(l.saw?l.saw+' saw row'+(l.saw!==1?'s':''):'no cutting')+' · '+(l.fit?l.fit+' fittings':'no fittings')+(d.wo&&!st.tpl?' · tagged '+d.wo:''));})
+        .catch(x=>{if(sb)sb.disabled=false;err('Not saved — '+x.message);});
+    });
+  };
+  ov.onclick=e=>{if(e.target===ov||e.target.id==='pod-x')ov.remove();};
+  document.body.appendChild(ov);draw();
+}
+/* Excel material matching: board names in a workbook that aren't on the project list are shown for matching before the
+   lists are saved. A match is remembered as an alias; "keep as typed" saves the line flagged; "add" puts it on the list. */
+function lsUnknownMats(wb,entries,pid){
+  const k=lsMatSet(pid);if(!k.size)return[];
+  const seen=new Map();
+  entries.forEach(e=>(wb.sheets[e.sheet]||[]).forEach(r=>{if(r.k!=='saw')return;const m=String(r.mat||'').trim();if(m&&!k.has(m.toLowerCase())&&!seen.has(m.toLowerCase()))seen.set(m.toLowerCase(),m);}));
+  return[...seen.values()];
+}
+function lsMatchDlg(names,pid,done){
+  const ms=lsMats(pid,'sheet');
+  const ov=document.createElement('div');ov.className='pod-ovl';
+  ov.innerHTML=`<div class="pod-in" style="min-width:min(720px,96vw)"><div style="font-weight:800;color:#14335c;font-size:17px;margin-bottom:2px">🧱 Materials not on the ${escA((LST.p.get(pid)||{}).name||'')} list</div>
+    <div style="font-size:12px;color:var(--t3);margin-bottom:10px">Match each name to a project material — the match is remembered next time. Anything left as typed is saved, flagged for the Production Manager; the saw still gets the list.</div>
+    <table class="lst-tbl"><thead><tr><th>In the workbook</th><th>Use</th></tr></thead><tbody>${names.map((n,i)=>`<tr><td><b>${escA(n)}</b></td><td><select data-mm="${i}" style="${LS_INP};width:100%"><option value="">Keep as typed (flagged)</option>${ms.map(m=>`<option value="${escA(m.id)}">${escA(m.name)}</option>`).join('')}<option value="__add">＋ Add "${escA(n)}" to the project list</option></select></td></tr>`).join('')}</tbody></table>
+    <div style="margin-top:12px;display:flex;gap:10px;justify-content:flex-end"><button class="btn btn-s" id="mm-x">Cancel upload</button><button class="btn btn-g" id="mm-ok">Save the lists</button></div></div>`;
+  document.body.appendChild(ov);
+  ov.querySelector('#mm-x').onclick=()=>{ov.remove();done(null);};
+  ov.querySelector('#mm-ok').onclick=async()=>{
+    const pick=names.map((n,i)=>[n,ov.querySelector('[data-mm="'+i+'"]').value]);
+    if(pick.some(([,v])=>v)&&!lsEditOk())return;
+    const map={};
+    try{
+      for(const[n,v]of pick){
+        if(v==='__add'){await lsWrite('project_materials',{id:uid('M'),project_id:pid,name:n,kind:'sheet',sort:lsMats(pid,'',true).length});}
+        else if(v){const m=LST.m.get(v);map[n.toLowerCase()]=m.name;const al=[...new Set([...(m.aliases||[]),n])];await lsWrite('project_materials',m,{aliases:al});}
+      }
+    }catch(e){toast('Materials not saved — '+e.message);return;}
+    ov.remove();done(map);
+  };
 }
 /* diffLines:start */
 /* Revision comparison — pure (no screen, no database), so the tests can check it on its own.
@@ -5706,7 +5860,8 @@ function saveManualList(d,by,existing){ // pure-ish: writes DB, returns the list
   }
   return l;
 }
-function openListEditor(listId,presetWo){
+function openListEditor(listId,presetWo,presetPid){
+  if(V2())return openListEditor2(listId,presetWo,presetPid); // V2: project picker, type, materials from the project
   const ex=listId?lists().find(l=>l.id===listId):null;
   const st={rows:ex?(V2()?lsEditRows(ex.id):listRows(ex).filter(r=>r.k!=='hdr').map(r=>({...r}))):[{k:'saw',item:'',qty:'',L:'',W:'',mat:'',note:''}],
     wo:ex?((ex.wos||[])[0]||''):(presetWo||''),name:ex?ex.name:'',project:ex?ex.project:'',noCut:ex?!!ex.noCut:false,noFit:ex?!!ex.noFit:false,newWO:false,pw:{title:'',cust:'',floor:'',unit:'',due:'',val:'',hrs:''}};

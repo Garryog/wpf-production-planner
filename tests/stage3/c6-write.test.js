@@ -7,9 +7,9 @@ const L = F.line;
 const xlsx = (p, sheets) => p.evaluate(sheets => { const wb = XLSX.utils.book_new(); Object.keys(sheets).forEach(n => XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sheets[n]), n)); return XLSX.write(wb, { type: 'base64', bookType: 'xlsx' }); }, sheets);
 const upload = async (p, name, sheets) => {
   const b64 = await xlsx(p, sheets);
-  await p.evaluate(() => { showTab('l'); });
+  await p.evaluate(() => { showTab('l'); document.getElementById('toast').textContent = ''; });
   await p.setInputFiles('#lst-file', { name, mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer: Buffer.from(b64, 'base64') });
-  for (let i = 0; i < 40; i++) { await F.sleep(100); const t = await p.evaluate(() => document.getElementById('toast').textContent); if (/imported|Could not/.test(t)) return t; const m = await p.evaluate(() => (document.getElementById('lst-upmsg') || {}).textContent || ''); if (/Could not|No usable/.test(m)) return m; }
+  for (let i = 0; i < 40; i++) { await F.sleep(100); await p.evaluate(() => { const b = document.getElementById('mm-ok'); if (b) b.click(); }); /* material matching: keep as typed */ const t = await p.evaluate(() => document.getElementById('toast').textContent); if (/imported|Could not/.test(t)) return t; const m = await p.evaluate(() => (document.getElementById('lst-upmsg') || {}).textContent || ''); if (/Could not|No usable/.test(m)) return m; }
   return 'timeout';
 };
 const HOUSE7 = [['Aderrig', null, null, null, null, null], ['Item', 'Qty', 'Length', 'Width', 'Material', 'Edging'], ['BASE UNITS'],
@@ -51,6 +51,7 @@ const HOUSE7 = [['Aderrig', null, null, null, null, null], ['Item', 'Qty', 'Leng
     await off.page.evaluate(() => { openListEditor(null, 'WO-1'); });
     await off.page.evaluate(() => {
       const ov = document.querySelector('.pod-ovl');
+      const pk = ov.querySelector('#me-pid'); pk.value = 'P1'; pk.onchange({ target: pk }); // the project first: its materials fill the dropdown
       const set = (k, v) => { const e = ov.querySelector('[data-mr="' + k + '"]'); e.value = v; e.oninput(); };
       set('0|item', 'Gable'); set('0|qty', '2'); set('0|L', '900'); set('0|W', '560'); set('0|mat', 'MFC White'); set('0|edging', '2mm PVC'); set('0|note', 'grain up');
       ov.querySelector('#me-name').value = 'House 1 typed';
@@ -60,7 +61,7 @@ const HOUSE7 = [['Aderrig', null, null, null, null, null], ['Item', 'Qty', 'Leng
     const tl = S.db.t.lists.find(l => l.name === 'House 1 typed'), tln = tl && S.db.t.list_lines.find(x => x.list_id === tl.id);
     const proj = tl && D.find(S.db, 'projects', tl.project_id);
     rec('typed list: saved to the tables (manual, tagged WO-1), editor closed', tl && tl.source === 'manual' && tl.wos.join() === 'WO-1' && !(await off.page.evaluate(() => !!document.querySelector('.pod-ovl'))), JSON.stringify(tl && { s: tl.source, w: tl.wos }));
-    rec('typed list: edging and note kept apart; project from the WO customer', tln && tln.edging === '2mm PVC' && tln.note === 'grain up' && proj && proj.name === 'Aderrig Homes', JSON.stringify([tln && tln.edging, tln && tln.note, proj && proj.name]));
+    rec('typed list: edging and note kept apart; project picked (Aderrig)', tln && tln.edging === '2mm PVC' && tln.note === 'grain up' && proj && proj.name === 'Aderrig', JSON.stringify([tln && tln.edging, tln && tln.note, proj && proj.name]));
     // edit before the saw starts: same rev, same line id
     await off.page.evaluate(async () => { await lsPoll(); const l = lists().find(x => x.name === 'House 1 typed'); openListEditor(l.id); const ov = document.querySelector('.pod-ovl'); const e = ov.querySelector('[data-mr="0|qty"]'); e.value = '3'; e.oninput(); ov.querySelector('#me-save').click(); });
     await F.sleep(600);
@@ -72,7 +73,7 @@ const HOUSE7 = [['Aderrig', null, null, null, null, null], ['Item', 'Qty', 'Leng
     await F.sleep(600);
     rec('typed list edited after a tick: rev 2 with the reason, tick kept, fittings line added', D.find(S.db, 'lists', tl.id).rev === 2 && L(S, tl.id + ':1').status === 'cut' && S.db.t.list_lines.some(x => x.list_id === tl.id && x.part === 'Handle' && x.added_rev === 2) && S.db.t.list_revisions.some(r => r.list_id === tl.id && r.reason === 'Tester'), JSON.stringify(D.find(S.db, 'lists', tl.id).log.map(x => x.what)));
     // a typed list for WO-9 is superseded by the workbook sheet for unit 9 — same id, ticks kept, becomes an Excel list
-    await off.page.evaluate(() => { openListEditor(null, 'WO-9'); const ov = document.querySelector('.pod-ovl'); const s = (k, v) => { const e = ov.querySelector('[data-mr="' + k + '"]'); e.value = v; e.oninput(); }; s('0|item', 'Side'); s('0|qty', '2'); s('0|L', '720'); s('0|W', '560'); s('0|mat', 'MFC White'); s('0|edging', '1mm ABS'); ov.querySelector('#me-name').value = 'Typed 9'; ov.querySelector('#me-proj').value = 'Aderrig'; ov.querySelector('#me-save').click(); });
+    await off.page.evaluate(() => { openListEditor(null, 'WO-9'); const ov = document.querySelector('.pod-ovl'); const pk = ov.querySelector('#me-pid'); pk.value = 'P1'; pk.onchange({ target: pk }); const s = (k, v) => { const e = ov.querySelector('[data-mr="' + k + '"]'); e.value = v; e.oninput(); }; s('0|item', 'Side'); s('0|qty', '2'); s('0|L', '720'); s('0|W', '560'); s('0|mat', 'MFC White'); s('0|edging', '1mm ABS'); ov.querySelector('#me-name').value = 'Typed 9'; ov.querySelector('#me-save').click(); });
     await F.sleep(600);
     const m9 = S.db.t.lists.find(l => l.name === 'Typed 9');
     D.applyLineChanges(S.db, [{ id: m9.id + ':1', status: 'cut', cid: 'd', rev: 1 }], 'Sean');
@@ -93,8 +94,8 @@ const HOUSE7 = [['Aderrig', null, null, null, null, null], ['Item', 'Qty', 'Leng
     const off = await F.dev(browser, S, 'office');
     S.fail3 = true;
     await off.page.evaluate(() => { openListEditor(null, ''); const ov = document.querySelector('.pod-ovl'); ov.querySelector('#me-new').click(); });
-    await off.page.evaluate(() => { const ov = document.querySelector('.pod-ovl'); const s = (k, v) => { const e = ov.querySelector('[data-mr="' + k + '"]'); e.value = v; e.oninput(); }; s('0|item', 'A'); s('0|qty', '1'); s('0|L', '100'); s('0|mat', 'MFC White');
-      ov.querySelector('#me-name').value = 'New job'; ov.querySelector('#me-proj').value = 'Aderrig'; ov.querySelector('#me-ptitle').value = 'Snag job'; ov.querySelector('#me-pdue').value = '2026-10-30'; ov.querySelector('#me-save').click(); });
+    await off.page.evaluate(() => { const ov = document.querySelector('.pod-ovl'); const pk = ov.querySelector('#me-pid'); pk.value = 'P1'; pk.onchange({ target: pk }); const s = (k, v) => { const e = ov.querySelector('[data-mr="' + k + '"]'); e.value = v; e.oninput(); }; s('0|item', 'A'); s('0|qty', '1'); s('0|L', '100'); s('0|mat', 'MFC White');
+      ov.querySelector('#me-name').value = 'New job'; ov.querySelector('#me-ptitle').value = 'Snag job'; ov.querySelector('#me-pdue').value = '2026-10-30'; ov.querySelector('#me-save').click(); });
     await F.sleep(500);
     const e1 = await off.page.evaluate(() => ({ open: !!document.querySelector('.pod-ovl'), err: (document.getElementById('me-err') || {}).textContent, p: DB.orders.filter(o => /^P-/.test(o.wo)).map(o => o.wo) }));
     S.fail3 = false;

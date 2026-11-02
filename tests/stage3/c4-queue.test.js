@@ -166,7 +166,7 @@ const reload = p => p.evaluate(async () => { await lsPoll(); render(); });
     const lg = D.find(S.db, 'lists', 'L1').log.slice(-1)[0];
     rec('send back for re-picking: cleared, reason + "was done by Mary" in the history', !D.find(S.db, 'lists', 'L1').fit_done_at && /Sent back for re-picking \(was done .* by Mary\)/.test(lg.what) && lg.why === 'Tester', JSON.stringify(lg));
     // delete → archive (never deleted)
-    await o1.page.evaluate(() => { showTab('l'); const b = document.querySelector('[data-ldel="L2"]'); if (b) b.click(); });
+    await o1.page.evaluate(() => { showTab('l'); const b = document.querySelector('[data-lharc="L2"]'); if (b) b.click(); });
     const gone = await o1.page.evaluate(() => !lists().some(l => l.id === 'L2'));
     await F.send(o1.page);
     rec('Delete on the Lists tab archives the list: gone from screens, kept in the database', gone && D.find(S.db, 'lists', 'L2').archived === true && D.find(S.db, 'lists', 'L2').log.some(x => x.what === 'Archived') && !S.deletes3, JSON.stringify({ gone, a: D.find(S.db, 'lists', 'L2').archived }));

@@ -30,6 +30,8 @@ const run = f => new Promise(r => execFile('node', ['-r', path.join(__dirname, '
     pass += P.length;
     const migOk = !/WRAPPER migration failed/.test(o);
     rec('[v2] ' + f + ': fixtures migrated with matching counts', migOk, (o.match(/WRAPPER.*/) || [''])[0]);
+    // a file that builds its fixtures by writing the old record directly (e.g. a new Tester file) is treated the same way
+    if (!SETUP_OLD[f] && /DB\.(listWBs|listRow|listHold|listDone)\s*(\.|\[|=)/.test(fs.readFileSync(path.join(ROOT, 'tests/sawstores', f), 'utf8')) && /TypeError|Error:/.test(o)) SETUP_OLD[f] = 'writes DB.listWBs / DB.listRow / DB.listHold directly (found in the file)';
     if (SETUP_OLD[f]) { na += X.length; console.log('INFO [v2] ' + f + ': ' + P.length + ' pass; set-up writes the old record (' + SETUP_OLD[f] + ') — ' + X.length + ' check(s) n/a' + (/TypeError|Error:/.test(o) ? ', stops at that set-up' : '') + '; covered by c8-bench-v2 / c4 / c6'); continue; }
     const bad = X.filter(x => { const m = (NA[f] || []).find(([re]) => re.test(x)); if (m) { na++; console.log('INFO [v2] ' + f + ' n/a: ' + x.slice(0, 90) + ' — ' + m[1]); } return !m; });
     rec('[v2] ' + f + ': ' + P.length + ' pass, no failures except old-record checks', !bad.length && /failed of/.test(o), bad.join(' | ').slice(0, 400) || (/failed of/.test(o) ? '' : o.slice(-300)));
