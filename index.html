@@ -2377,7 +2377,8 @@ async function lsSaveList(pl,lines,by,reason){
 }
 function lsLineSig(x){return JSON.stringify([x.kind,x.section||'',x.part||'',x.length_mm==null?'':+x.length_mm,x.width_mm==null?'':+x.width_mm,String(x.qty==null?'':x.qty),x.material||'',x.edging||'',x.note||'']);}
 function lsEditRows(id){ // the typed-list editor's rows, with edging and note kept apart; each remembers its line and when the editor opened
-  const at=(LST.l.get(id)||{}).updated_at||'';
+  // 'opened' = the newest database time on the list or any of its lines (a tick can land on a line after the list's own time)
+  const at=lsLinesOf(id).reduce((m,x)=>String(x.updated_at||'')>m?String(x.updated_at):m,String((LST.l.get(id)||{}).updated_at||''));
   return lsLinesOf(id).filter(x=>x.removed_rev==null&&x.kind!=='hdr').map(x=>({k:x.kind,item:x.part||'',qty:lsQty(x.qty),L:x.length_mm==null?'':+x.length_mm,W:x.width_mm==null?'':+x.width_mm,mat:x.material||'',edging:x.edging||'',note:x.note||'',sec:x.section||'',lid:x.id,sig:lsLineSig(x),opened:at}));
 }
 // Another office saved this list after this editor opened it: name what changed and ask — never overwrite silently.
