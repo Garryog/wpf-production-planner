@@ -1057,6 +1057,7 @@ function updSaveBar(){
   b.hidden=!on;
   if(on&&lq&&!DB.saveFailed&&!DB.remoteBroken){b.textContent=LQ.memOnly
     ?'⚠ NOT KEPT ON THIS DEVICE — storage is full or blocked, so '+LQ.q.length+' tick'+(LQ.q.length!==1?'s are':' is')+' only on this open page. Keep this page open and in signal until this bar goes.'
+    :/switched back/.test(LQ.err)?'⚠ THE LISTS ARE BEING SWITCHED BACK — '+LQ.q.length+' tick'+(LQ.q.length!==1?'s are':' is')+' held on this device and will go into the lists automatically when it finishes. Keep this page open.'
     :'⚠ NOT SENT YET — '+LQ.q.length+' tick'+(LQ.q.length!==1?'s':'')+' waiting for signal. '+(LQ.q.length!==1?'They are':'It is')+' kept on this device and will be sent automatically. Keep this page open.';return;}
   const kept=DB.pendFail?'This device could NOT keep a copy of your changes (storage full or blocked) — keep this page open and in signal until this bar goes.':'Your changes are kept on this device';
   if(on)b.textContent=DB.remoteBroken
