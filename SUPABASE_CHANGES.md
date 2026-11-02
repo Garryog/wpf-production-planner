@@ -353,16 +353,22 @@ grant execute on function save_list_revision(jsonb,jsonb,int,text,text) to anon,
 
 -- The lists switch lives in the planner record's settings (listStore / listStoreAt). A tab still running OLD code saves
 -- its whole settings object without those keys, which would quietly switch every screen back to the old lists. This
--- trigger keeps the switch whenever a save leaves it out, and only lets 'v2' change to 'switching' (Switch back's first step).
+-- trigger keeps the switch whenever a save leaves it out, and only lets it move the way Migrate and Switch back move it:
+--   off/'v1' -> 'migrating' -> 'v2' (or back to 'v1' if the migration stops);  'v2' -> 'switching' -> 'v1' (or back to 'v2').
+-- Any other change (an old backup pasted back, an old tab's copy) keeps the stored switch.
 -- Works whether the settings column is json or jsonb (Step 0 shows which): it compares as jsonb and writes back the same type.
 create or replace function production_planner_keep_switch() returns trigger language plpgsql as $$
 declare o jsonb := old.settings::jsonb; n jsonb := new.settings::jsonb; m jsonb;
+  os text := coalesce(nullif(old.settings::jsonb->>'listStore',''),'v1');
+  ns text := coalesce(nullif(new.settings::jsonb->>'listStore',''),'v1');
 begin
- -- keep the stored switch when a save leaves it out, OR when it would move the lists off the new store ('v2') any way
- -- other than a Switch back (which goes through 'switching') — e.g. an old backup or an old tab's copy pasted back
- if o is not null and o ? 'listStore' and (n is null or not (n ? 'listStore')
-    or (o->>'listStore'='v2' and coalesce(n->>'listStore','') not in ('v2','switching'))) then
-  m := coalesce(n,'{}'::jsonb) || jsonb_build_object('listStore',o->'listStore')
+ -- keep the stored switch when a save leaves it out, OR when the move is not one Migrate / Switch back makes
+ if (o is not null and o ? 'listStore' and (n is null or not (n ? 'listStore')))
+    or (n is not null and n ? 'listStore' and ns<>os and not (
+         (os='v1' and ns='migrating') or (os='migrating' and ns in ('v2','v1'))
+      or (os='v2' and ns='switching') or (os='switching' and ns in ('v1','v2')))) then
+  m := (coalesce(n,'{}'::jsonb) - 'listStore' - 'listStoreAt')
+    || case when o ? 'listStore' then jsonb_build_object('listStore',o->'listStore') else '{}'::jsonb end
     || case when o ? 'listStoreAt' then jsonb_build_object('listStoreAt',o->'listStoreAt') else '{}'::jsonb end;
   if pg_typeof(new.settings) = 'jsonb'::regtype then new.settings := m;
   else new.settings := m::json; end if;

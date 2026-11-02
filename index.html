@@ -982,12 +982,14 @@ function staffFor(role){return staff().filter(s=>(s.r||[]).includes(role)&&(s.n|
    The first office screen each day takes the daily copy; copies older than 30 days are pruned. */
 const BAK={last:null,n:null,err:'',busy:false,asked:false};
 function bakErrText(r,t){return /planner_backups|42P01|PGRST205|PGRST202/.test(t||'')||r.status===404?'the backups table is not set up yet (run the Stage 1 SQL in SUPABASE_CHANGES.md)':'HTTP '+r.status+' '+String(t||'').slice(0,80);}
-function bakSettings(noSwitch){const s=fullSettings();if(noSwitch){delete s.listStore;delete s.listStoreAt;}return s;} // a copy that can't move the lists switch
-async function backupNow(reason,noSwitch){
+// Every backup (database copy or download) leaves out the lists switch: pasting one back can never turn the new lists on
+// or off — only Migrate and Switch back move it (and the database's keep-switch rule keeps it when a save leaves it out)
+function bakSettings(){const s=fullSettings();delete s.listStore;delete s.listStoreAt;return s;}
+async function backupNow(reason){
   if(!DB.loaded||DB.loadFailed)throw new Error('the plan is not loaded on this screen');
   const n=DB.orders.length;
   const r=await fetch(SUPA_URL+'/planner_backups',{method:'POST',headers:{...SUPA_WHDR,'Prefer':'return=representation'},
-    body:JSON.stringify({reason:reason+' · '+whoTag(),orders_count:n,payload:{orders:DB.orders,nid:DB.nid,settings:bakSettings(noSwitch)}})});
+    body:JSON.stringify({reason:reason+' · '+whoTag(),orders_count:n,payload:{orders:DB.orders,nid:DB.nid,settings:bakSettings()}})});
   if(!r.ok)throw new Error(bakErrText(r,await r.text().catch(()=>'')));
   const d=await r.json().catch(()=>null);
   const id=d&&d[0]&&d[0].id;if(!id)throw new Error('the database did not confirm the backup');
@@ -1363,7 +1365,7 @@ function renderSettings(app){
   updBakLine();lsBindPanel();
   if(!BAK.busy)lastBackup().then(()=>{BAK.err=BAK.err||'';updBakLine();}).catch(e=>{BAK.err=e.message;updBakLine();});
   document.getElementById('btn-backup')?.addEventListener('click',()=>{
-    const data={backedUpAt:new Date().toISOString(),orders:DB.orders,nid:DB.nid,settings:fullSettings()};
+    const data={backedUpAt:new Date().toISOString(),orders:DB.orders,nid:DB.nid,settings:bakSettings()};
     const a=document.createElement('a');
     a.href=URL.createObjectURL(new Blob([JSON.stringify(data)],{type:'application/json'}));
     a.download='WPF_Backup_'+new Date().toISOString().slice(0,10)+'.json';
@@ -2638,8 +2640,8 @@ async function lsMigrate(by){
   const src=clone({lists:DB.lists||[],listWBs:DB.listWBs||{},listRow:DB.listRow||{},listHold:DB.listHold||{},listDone:DB.listDone||{},holdLog:DB.holdLog||[]});
   // 1. a verified copy in planner_backups, and one on this PC — taken before the switch is touched, and without the
   //    switch in it: pasting it back can never turn the new lists on or off (only Migrate / Switch back do that)
-  await backupNow('pre-lists-v2',true);updBakLine();
-  lsDownload('WPF_Backup_pre-lists-v2_'+new Date().toISOString().slice(0,10)+'.json',{backedUpAt:new Date().toISOString(),orders:DB.orders,nid:DB.nid,settings:bakSettings(true)});
+  await backupNow('pre-lists-v2');updBakLine();
+  lsDownload('WPF_Backup_pre-lists-v2_'+new Date().toISOString().slice(0,10)+'.json',{backedUpAt:new Date().toISOString(),orders:DB.orders,nid:DB.nid,settings:bakSettings()});
   // 'migrating' first: the new tables only take writes while the switch is 'migrating' or 'v2' (database rule)
   DB.listStore='migrating';clearTimeout(saveT);await saveDB();
   if(DB.saveFailed){DB.listStore='v1';throw new Error('could not start the migration (the planner record was not saved) — nothing changed');}
@@ -2785,7 +2787,7 @@ function lsPanelHTML(){
     +'<p style="font-size:12px;color:var(--t3);margin-bottom:10px">'+(on
       ?'Lists are in their own database tables (switched on '+escA(DB.listStoreAt?new Date(DB.listStoreAt).toLocaleString('en-IE'):'')+'). The old list data in the planner record is a frozen copy.'
       :'Lists are kept inside the planner record (today\'s way). <b>Migrate lists</b> copies every list, line, tick and waiting line into their own tables, checks the counts match exactly, and only then switches over. A backup is saved and downloaded first. Admin PIN.')+'</p>'
-    +(DB.listStore==='switching'?'<div style="color:#c0392b;font-weight:700;margin-bottom:8px">⚠ A switch back was started but did not finish — the floor can\'t tick until it does. Finish it, or stay on the new lists.</div><button class="btn btn-s" id="ls-back">↩ Finish switch back</button> <button class="btn btn-g" id="ls-stay">Stay on the new lists</button>'
+    +(DB.listStore==='switching'?'<div style="color:#c0392b;font-weight:700;margin-bottom:8px">⚠ A switch back was started but did not finish — ticks on the floor are held on each device until it does. Finish it, or stay on the new lists.</div><button class="btn btn-s" id="ls-back">↩ Finish switch back</button> <button class="btn btn-g" id="ls-stay">Stay on the new lists</button>'
       :on?'<button class="btn btn-s" id="ls-back">↩ Switch back to old lists</button>':'<button class="btn btn-g" id="ls-mig">⇪ Migrate lists</button>')
     +'<div id="ls-msg" style="font-size:12px;margin-top:8px"></div></div>';
 }

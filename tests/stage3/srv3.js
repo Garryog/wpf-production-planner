@@ -46,11 +46,15 @@ async function handle(S, route) {
   const rpc = /^\/rpc\/([a-z_]+)/.exec(path);
   if (!rpc && !(tm && D.TABLES.includes(tm[1]))) {
     // production_planner_keep_switch trigger (SUPABASE_CHANGES.md): a save that leaves out settings.listStore keeps the stored one
-    if (m === 'PATCH' && /\/production_planner/.test(path) && S.row && S.row.settings && S.row.settings.listStore) {
+    // ... and only lets it move the way Migrate (v1 → migrating → v2|v1) and Switch back (v2 → switching → v1|v2) move it
+    if (m === 'PATCH' && /\/production_planner/.test(path) && S.row) {
       let b = null; try { b = JSON.parse(req.postData() || '{}'); } catch (e) {}
-      const ns = b && b.settings && b.settings.listStore, os = S.row.settings.listStore;
-      if (b && 'settings' in b && (!b.settings || !('listStore' in b.settings) || (os === 'v2' && !['v2', 'switching'].includes(ns || '')))) { // ... and 'v2' only moves to 'switching'
-        b.settings = Object.assign({}, b.settings || {}, { listStore: S.row.settings.listStore }, 'listStoreAt' in S.row.settings ? { listStoreAt: S.row.settings.listStoreAt } : {});
+      const cur = S.row.settings || {}, has = 'listStore' in cur;
+      const os = cur.listStore || 'v1', ns = (b && b.settings && b.settings.listStore) || 'v1';
+      const okMove = (os === 'v1' && ns === 'migrating') || (os === 'migrating' && ['v2', 'v1'].includes(ns)) || (os === 'v2' && ns === 'switching') || (os === 'switching' && ['v1', 'v2'].includes(ns));
+      if (b && 'settings' in b && ((has && (!b.settings || !('listStore' in b.settings))) || (b.settings && 'listStore' in b.settings && ns !== os && !okMove))) {
+        const s = Object.assign({}, b.settings || {}); delete s.listStore; delete s.listStoreAt;
+        b.settings = Object.assign(s, has ? { listStore: cur.listStore } : {}, 'listStoreAt' in cur ? { listStoreAt: cur.listStoreAt } : {});
         S.keptSwitch = (S.keptSwitch || 0) + 1;
         return route.fallback({ postData: JSON.stringify(b) });
       }

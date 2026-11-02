@@ -36,7 +36,10 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   {
     const S = makeServer(row());
     const A = await open(browser, S, { now: NOW }), B = await open(browser, S, { now: NOW });
-    await A.page.evaluate(async () => { DB.listStore = 'v2'; DB.listStoreAt = new Date().toISOString(); clearTimeout(saveT); await saveDB(); });
+    // the database only lets the switch move the way Migrate does: straight to 'v2' (e.g. an old backup) is refused
+    await A.page.evaluate(async () => { DB.listStore = 'v2'; DB.listStoreAt = new Date().toISOString(); clearTimeout(saveT); await saveDB(); await loadDB(); });
+    rec("a raw save of 'v2' over a switched-off record is refused (only Migrate turns the new lists on)", !S.row.settings.listStore);
+    await A.page.evaluate(async () => { DB.listStore = 'migrating'; clearTimeout(saveT); await saveDB(); await loadDB(); DB.listStore = 'v2'; DB.listStoreAt = new Date().toISOString(); clearTimeout(saveT); await saveDB(); });
     await B.page.evaluate(async () => { DB.orders[0].notes = 'B note'; clearTimeout(saveT); await saveDB(); });
     rec("switch set on PC A survives PC B's save (merged, not overwritten)", S.row.settings.listStore === 'v2' && S.row.orders[0].notes === 'B note', JSON.stringify({ ls: S.row.settings.listStore, n: S.row.orders[0].notes }));
     const bv = await B.page.evaluate(() => V2());
