@@ -3398,9 +3398,12 @@ function diffLines(old,nw,opt){
     if(c.length){match[i]=c[0];used.add(c[0].id);return true;}return false;};
   // 0. a line that names its own id (the editor knows which row is which) pairs with exactly that line — twins can't swap
   nw.forEach((x,i)=>{if(x.id==null)return;const o=live.find(y=>y.id===x.id&&!used.has(y.id));if(!o)return;match[i]=o;used.add(o.id);how[i]=key(o)!==key(x)?'changed':T(o.note)!==T(x.note)?'note':'same';});
-  nw.forEach((x,i)=>{if(match[i])return;const k=key(x);if(pick(i,o=>key(o)===k&&T(o.note)===T(x.note),true))how[i]='same';});
-  nw.forEach((x,i)=>{if(match[i])return;const k=key(x);if(pick(i,o=>key(o)===k,true))how[i]='note';});
-  nw.forEach((x,i)=>{if(match[i])return;const k=pk(x);if(pick(i,o=>pk(o)===k,false))how[i]='changed';});
+  // ... and a row naming a line that has since been removed is put back as a NEW line — it never takes another line's id
+  const gone=new Set(old.filter(x=>x.removed_rev!=null).map(x=>x.id));
+  const free=i=>!match[i]&&!(nw[i].id!=null&&gone.has(nw[i].id));
+  nw.forEach((x,i)=>{if(!free(i))return;const k=key(x);if(pick(i,o=>key(o)===k&&T(o.note)===T(x.note),true))how[i]='same';});
+  nw.forEach((x,i)=>{if(!free(i))return;const k=key(x);if(pick(i,o=>key(o)===k,true))how[i]='note';});
+  nw.forEach((x,i)=>{if(!free(i))return;const k=pk(x);if(pick(i,o=>pk(o)===k,false))how[i]='changed';});
   const tail=x=>{const m=/:(\d+)$/.exec(String(x.id||''));return m?+m[1]:sq(x);};
   let top=Math.max(0,...old.map(tail));
   const mk=opt.mkId||(()=>(opt.listId||'L')+':'+(++top));
