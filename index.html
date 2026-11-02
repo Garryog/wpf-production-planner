@@ -2258,6 +2258,52 @@ function listArchive(l,by){ // V2: Delete becomes Archive — nothing is ever de
   if(DB.listDone)delete DB.listDone[l.id];
   if(!lists().some(x=>x.wb===l.wb)&&DB.listWBs)delete DB.listWBs[l.wb]; // last list of this workbook — drop the stored rows too
 }
+/* diffLines:start */
+/* Revision comparison — pure (no screen, no database), so the tests can check it on its own.
+   old: the list's lines as stored; nw: the edited / re-uploaded lines in their new order. In this order:
+   1. identical lines (kind, part, L, W, qty, material, edging) keep their id and status — a note-only change keeps the tick
+      but is flagged. Between identical twins, a ticked one is kept first (so a tick is never thrown away for an untouched twin).
+   2. leftovers with the same kind, part and section pair in order: CHANGED (reset to todo).
+   3. only in the new version: ADDED (new id after the highest one ever used).
+   4. only in the old version: REMOVED — never deleted; kept aside if already cut / got out.
+   Returns the lines for save_list_revision (reset:true where the content changed) plus the ids in each group. */
+function diffLines(old,nw,opt){
+  opt=opt||{};old=old||[];nw=nw||[];
+  const T=v=>String(v==null?'':v).trim().replace(/\s+/g,' ').toLowerCase();
+  const N=v=>{const s=String(v==null?'':v).trim();if(s==='')return'';const n=Number(s);return isNaN(n)?s.toLowerCase().replace(/\s+/g,' '):String(n);};
+  const key=x=>[T(x.kind),T(x.part),N(x.length_mm),N(x.width_mm),N(x.qty),T(x.material),T(x.edging)].join('|');
+  const pk=x=>[T(x.kind),T(x.part),T(x.section)].join('|');
+  const isDone=x=>x.status==='cut'||x.status==='got-out';
+  const sq=x=>+x.seq||0;
+  const live=old.filter(x=>x.removed_rev==null),used=new Set(),match=nw.map(()=>null),how=nw.map(()=>'');
+  const pick=(i,f,doneFirst)=>{const c=live.filter(x=>!used.has(x.id)&&f(x));
+    c.sort((a,b)=>(doneFirst?(isDone(b)?1:0)-(isDone(a)?1:0):0)||sq(a)-sq(b));
+    if(c.length){match[i]=c[0];used.add(c[0].id);return true;}return false;};
+  nw.forEach((x,i)=>{const k=key(x);if(pick(i,o=>key(o)===k&&T(o.note)===T(x.note),true))how[i]='same';});
+  nw.forEach((x,i)=>{if(match[i])return;const k=key(x);if(pick(i,o=>key(o)===k,true))how[i]='note';});
+  nw.forEach((x,i)=>{if(match[i])return;const k=pk(x);if(pick(i,o=>pk(o)===k,false))how[i]='changed';});
+  const tail=x=>{const m=/:(\d+)$/.exec(String(x.id||''));return m?+m[1]:sq(x);};
+  let top=Math.max(0,...old.map(tail));
+  const mk=opt.mkId||(()=>(opt.listId||'L')+':'+(++top));
+  const num=v=>v==null||String(v).trim()===''||isNaN(+v)?null:+v;
+  const txt=v=>v==null||String(v).trim()===''?null:String(v).trim();
+  const out={lines:[],changed:[],added:[],removed:[],keepAside:[],noteOnly:[]};
+  nw.forEach((x,i)=>{
+    const o=match[i],id=o?o.id:mk();
+    const ln={id,seq:i+1,kind:x.kind,section:txt(x.section),part:txt(x.part),length_mm:num(x.length_mm),width_mm:num(x.width_mm),qty:txt(x.qty),
+      material:txt(x.material),material_other:!!x.material_other,edging:txt(x.edging),note:txt(x.note)};
+    if(x.snag_id)ln.snag_id=x.snag_id;
+    if(x.src_line_id)ln.src_line_id=x.src_line_id;
+    if(how[i]==='changed'){ln.reset=true;out.changed.push(id);}
+    else if(how[i]==='note')out.noteOnly.push(id);
+    else if(!o)out.added.push(id);
+    out.lines.push(ln);
+  });
+  live.forEach(x=>{if(!used.has(x.id)){out.removed.push(x.id);if(isDone(x))out.keepAside.push(x.id);}});
+  out.summary={changed:out.changed.length,added:out.added.length,removed:out.removed.length,noteOnly:out.noteOnly.length,keepAside:out.keepAside.length};
+  return out;
+}
+/* diffLines:end */
 function lists(){if(V2())return lsCache().all.filter(l=>!l.archived&&!l.tpl);return DB.lists||[];}
 function listRows(l){if(V2())return lsView(l.id,true).rows;const wb=(DB.listWBs||{})[l.wb];return wb&&wb.sheets&&wb.sheets[l.sheet]?wb.sheets[l.sheet]:[];}
 function listDone(id){if(V2()){const a=lsList(id);return a?a.done:{};}return (DB.listDone||{})[id]||{};}
