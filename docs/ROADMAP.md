@@ -82,3 +82,9 @@ Rules: rank by the leading number. "Shipped" = step 9 only (left the factory →
 - Snags per project: PM creates → Production Manager transfers to a cutting list → delivery (photo) → fitter's view. Materials and locations come from the project set-up.
 - PM view: own projects only — spec status, sequence, snags, deliveries + proof.
 - Spec checklist source (Garry's "Project Details" table, 22 Oct): Carcass Material · Carcass Edgeing · Exposed Material · Plinth on/Built in · Door and Drawer Detail · Door and Drawer Material · Door and Drawer Edging · Wall unit door material · Hinges · Handles · Drawer Construction · Worktop Style · Worktop Colour · Sink Type · Tap Type · Kicker type · Kicker Height · Appliance Details · Oven Details · Cornice · Kitchen Accessories · Other Information (free text). Example values: "18mm MFC EG H1146 Grey Bardolino Oak", "1mm To Match Carcase", "Hettich Dowel Fix 105 (Made Doors)", "Gola Profile", "Hettich Stock", "Hafele Calder", "TBC" (= not signed off), "None", "Built in". A value of "TBC" or blank = not signed off → red flag. Items whose value is a material should be selectable from the project material list.
+
+## Progress log
+### 2 Nov 2026 (scheduled run)
+- Architect confirmed the cutting-list plan against the code; build notes and build order added to docs/PLAN-cutting-lists-stage3.md (fixed garbled characters in both plan files).
+- Saw/Stores re-test: Garry's three rules all pass (N/A → Waiting, sheets = m² ÷ 5.75 + 10%, never both got-out and missing). New file tests/sawstores/retest-nov.test.js found 5 smaller bugs (combined list qty "2x2" shown as 0; combined list counts already-cut lines; "MFC White" vs "mfc white " split in the waiting book; stale "Release all" brings back a finished list; per-line Release button off-screen at 360px).
+- Assumption: Office "Material to order" list is step 4 of the build order (after this release), not part of Saw/Stores — not built now.

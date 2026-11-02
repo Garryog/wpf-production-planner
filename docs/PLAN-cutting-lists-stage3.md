@@ -10,7 +10,7 @@ Each cutting or fittings list gets its own records in the database instead of be
 
 ---
 
-# PLAN A â Data foundation
+# PLAN A — Data foundation
 
 ## Supabase SQL (run before deploying; Coder copies it into SUPABASE_CHANGES.md)
 ```sql
@@ -121,7 +121,7 @@ The Coder writes three more functions into the same SQL block. These rules are f
 ## Line statuses
 | Status | Meaning |
 |---|---|
-| `todo` | Still to do. If `released_at` is set, it shows "MATERIAL IN â DO NOW" |
+| `todo` | Still to do. If `released_at` is set, it shows "MATERIAL IN — DO NOW" |
 | `cut` | Done at the saw |
 | `got-out` | Done at stores |
 | `waiting` | The bench tapped N/A (material not in) |
@@ -140,10 +140,10 @@ The "Migrate lists" button (Admin PIN, Settings screen) does this:
 1. Puts a full copy of the planner record into `planner_backups` with reason `pre-lists-v2`, and downloads a JSON copy to the PC.
 2. Creates projects from the project names already in use (ignoring case and extra spaces). The customer comes from the work orders tagged to each list.
 3. Copies each list using its existing ID. Lines get fixed IDs in the form `listId:seq`, so running it twice gives the same result. Each line's status comes from the old records:
-   - ticked â cut or got-out
-   - parked â waiting
-   - released â todo with `released_at` set
-   - both ticked and parked â done
+   - ticked → cut or got-out
+   - parked → waiting
+   - released → todo with `released_at` set
+   - both ticked and parked → done
    
    Old column F (`note`) goes into `edging`. Sign-off dates, no-cut/no-fittings flags, history and tagged work orders are copied onto the list.
 4. Copies the old waiting history (`holdLog`) into `list_events`, matched to lists by name and project.
@@ -157,7 +157,7 @@ The "Migrate lists" button (Admin PIN, Settings screen) does this:
 ## Saving lines
 - Each tick, N/A or release joins a queue stored on that device (`wpfLineQ`) and shows on screen straight away with a small "not sent" dot.
 - The queue is sent to `apply_line_changes` within 2 seconds, retried every 10 seconds, and sent again when the connection comes back. Closing the tab with unsent changes triggers a warning.
-- If the database refuses a change, the app reloads that line and says why ("already cut by SeÃ¡n 10:42").
+- If the database refuses a change, the app reloads that line and says why ("already cut by Seán 10:42").
 - List actions no longer call `sched()`. The main record's saving (Stage 1) is untouched.
 
 ## Keeping screens up to date
@@ -178,7 +178,7 @@ The existing helpers keep the same names and return the same shapes, so the scre
 
 ---
 
-# PLAN B â Cutting and fittings list system
+# PLAN B — Cutting and fittings list system
 
 ## Who can do what
 - The Production Manager view gets a **Lists** tab.
@@ -199,7 +199,7 @@ The existing helpers keep the same names and return the same shapes, so the scre
   - a Type field
   - a separate Edging field
   - material as a dropdown of the project's sheet materials, with **no free typing**
-  - fittings spec picked from the project's "other" items, or "Otherâ¦" typed (the line gets an amber flag)
+  - fittings spec picked from the project's "other" items, or "Other…" typed (the line gets an amber flag)
 - **Excel import:** `parseListWorkbook` stays as it is. Column F now goes into Edging.
   - Material names not on the project list are shown for matching to a project material. The match is remembered as an alternative name (alias).
   - Anything left unmatched is saved with a "material not on project list" flag and counted on the Production Manager view. The saw still gets the list.
@@ -226,9 +226,9 @@ Editing a locked list creates revision n+1 (reasons offered: drawing changed / s
 1. Lines where part, L, W, qty, material, edging and kind are all identical keep their ID and status.
 2. Leftover lines with the same kind, part and section are paired in order. They count as **changed**: status resets to todo, and they're flagged CHANGED.
 3. Lines only in the new version are **added** (NEW badge).
-4. Lines only in the old version are **removed**. They're hidden from the saw unless already cut, in which case they show greyed as "REMOVED â part already cut, keep aside".
+4. Lines only in the old version are **removed**. They're hidden from the saw unless already cut, in which case they show greyed as "REMOVED — part already cut, keep aside".
 
-A change to the note only keeps the tick but is flagged. The saw card shows "REV 3 â 2 changed, 1 added, 1 removed". Printouts and labels carry "Rev n".
+A change to the note only keeps the tick but is flagged. The saw card shows "REV 3 — 2 changed, 1 added, 1 removed". Printouts and labels carry "Rev n".
 
 **The saw never cuts from an old revision:** screens only ever show the current lines, and a tick on a line changed by a new revision is refused by the database.
 
@@ -246,11 +246,11 @@ Anything overdue is red.
 ## Tap targets
 | Task | Taps |
 |---|---|
-| Make a list from a template and attach it | Attach â template â Create & attach â name = **4** |
-| Attach an existing list to another work order | + WO â suggested WO = **2** |
-| Copy a template from another project | Templates â Copy from â project â template â Copy = **5** (plus material matching if needed) |
-| Revise a locked list | Edit â (changes) â Save revision â reason â name = **4** |
-| Add a project material | Materials â + Add â name/kind â Save = **4** |
+| Make a list from a template and attach it | Attach → template → Create & attach → name = **4** |
+| Attach an existing list to another work order | + WO → suggested WO = **2** |
+| Copy a template from another project | Templates → Copy from → project → template → Copy = **5** (plus material matching if needed) |
+| Revise a locked list | Edit → (changes) → Save revision → reason → name = **4** |
+| Add a project material | Materials → + Add → name/kind → Save = **4** |
 
 ## What must NOT change
 - Red/amber/green board status
@@ -315,3 +315,51 @@ Anything overdue is red.
 10. **No delete permission on the new tables.** Removed lines are marked, never erased.
 
 ---
+
+---
+
+# Build notes — 2 Nov 2026 (Architect addendum; Garry pre-approved building from this plan)
+
+## 1. Coverage of Garry's six items
+1. Permanent line IDs — Plan A `list_lines.id`; migration IDs `listId:seq`; `rowKey(r)` returns `r.id`.
+2. Templates per project / room type — Plan B "Templates" (`is_template`, `list_type`, `type_name`, rev + `list_revisions`).
+3. Copy from other projects — Plan B "Copy from another project".
+4. "Waiting for list" strip on the saw — Plan B section; corrected in (j).
+5. Snag table per project + transfer to a cutting list — PLAN-projects-hub (`snags`, `snags_to_list`). Built in this phase with a free-text location (see decision 6).
+6. Project material lists — Plan A `project_materials`; Plan B Materials screen, editor dropdown, Excel alias matching.
+
+## 2. Corrections after reading index.html
+a. Lists live in SETTINGS (`fullSettings`, `settingsFrom`, `applyPlan`). `listStore`/`listStoreAt` go in all three. Blank values are skipped on merge, so "switch back" writes `listStore:'v1'` (anything not `'v2'` = old mode) instead of deleting the key.
+b. Direct writes that bypass the helpers (DB.listDone deletes in renderWorkList undo, sendBack, saveManualList, Excel upload; DB.lists/listWBs writes in the Excel upload, tag/untag/attach handlers, no-cut/no-fit flag, list delete, saveManualList) are routed through new helpers `listTag`, `listSetDone`, `listSetFlag`, `listArchive`. In old mode each runs today's exact code. In v2 no `DB.lists=` write is allowed (frozen copy).
+c. `rowTicks(id)` → `{lineId:{m,at,by}}` and `holdsOf(id)` → `{lineId:{m,st,at,by,item,mat,qty,L,W,relAt,relBy}}` keep their shapes, so rowTicked, heldRow, listHoldRows, allHolds, tickableRows, holdOne, unholdOne, openHold, sideState, combineLists, sheetNeed need no rewrite. In v2 `clearReleased` and `holdLog` are no-ops; `knownMaterials()` returns project materials.
+d. Add `n_saw`, `n_fit` count columns to `lists` (finished lists' lines aren't loaded at start-up but counts are shown everywhere).
+e. `listRows` keeps `{k,item,qty,L,W,mat,note}` + `id`; note = edging · note; removed and `na` lines are left out.
+f. `apply_line_changes`: refuse cut/got-out when `changed_rev` is newer than the rev the screen showed; set `lists.locked=true` on the first accepted change.
+g. `list_set_done` gets `p_why` and modes `no_cut`/`no_fit`; the database writes `lists.log`, never the browser.
+h. Polling uses the newest server `updated_at` seen (minus 30 s), never the device clock.
+i. Polling is its own timer, with the same "don't redraw while typing or a dialog is open" rule. The line-queue sender never pauses.
+j. Waiting-for-list: cut-by here = `listDeadline()`; list due by = new `prevWorkDay(cut-by)`; reuse `listsNeeded()`; strip goes in `renderWorkList(app,'saw')` above the sheets panel.
+k. Production Manager = ROLE `prod`, Project Manager = `pm`. Prod gets an in-page strip Today | Lists | Snags. New role `design` added in ROLE_LBL, pins(), rolePicker, render(), startAutoRefresh.
+l. Migration: 'Manual lists'/file-name projects go to the first tagged WO's customer, else "Unassigned". Reuse `backupNow(reason)` and the Settings JSON download. Count check reads back from the database. Upsert `on_conflict=id` so a re-run gives the same result.
+m. Excel re-upload and "manual list superseded by workbook" both go through `diffLines` + `save_list_revision` in v2.
+n. `beforeunload` also warns while `wpfLineQ` has unsent changes.
+o. Projects-hub SQL runs in the SAME block, AFTER Plan A.
+p. New test mock `tests/stage3/srv3.js` reuses `attach()`; `tests/stage1/srv.js` is untouched. The real SQL can't run here — the Manager reads it line by line against the mock.
+
+## 3. Build order (switch OFF = exactly as today after every step)
+CORE: C0 SQL + mock · C1 switch plumbing · C2 v2 store + polling · C3 read adapters + write-helper refactor · C4 line queue + attach/done RPCs · C5 `diffLines` (pure, tests first) · C6 imports/editor/attach/archive write to tables in v2 · C7 Migrate / count check / switch back / rescue old-tab ticks · C8 saw/stores suite in both modes.
+SCREENS (v2 only): S1 Design office role, prod Lists tab, Projects + Materials · S2 Waiting-for-list strip · S3 Lists home · S4 editor upgrade + Excel material matching · S5 templates + copy-from-project · S6 create-from-template + attach + missing-part check · S7 snags (free-text where) + transfer to list · S8 locking/revision UI · S9 full run + attack tests.
+
+## 4. Decisions made on Garry's behalf (review 3 Nov)
+1. Switch OFF → no calls to new tables, no new screens; every new screen is v2-only.
+2. Switch back writes `listStore:'v1'`.
+3. Old 'Manual lists'/blank projects → tagged WO's customer, else "Unassigned".
+4. `na` (not needed) lines are hidden from the bench, shown only in the Lists editor.
+5. In v2 Delete becomes Archive. Nothing is ever deleted.
+6. Snags built with a free-text location; Hub locations, spec checklist, WO matching and PM home come later.
+7. Copy-from offers templates and live lists from other projects; the copy becomes a template in this project.
+8. List history is written by the database, never the browser.
+9. Design office default PIN 8888, changeable in Settings.
+10. Date-based lock worked out in the browser; tick-based lock in the database.
+11. Template/material editing from Office asks once for a Prod/Design/Admin PIN, stored on the device.
+12. Existing behaviour flagged for Garry: the daily backup deletes `planner_backups` copies older than 30 days.
