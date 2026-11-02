@@ -115,6 +115,13 @@ let cid = 0; const C = o => Object.assign({ cid: 'c' + (++cid), rev: 1 }, o);
   r = D.listSetDone(d, 'L1', 'no_fit', true, 'Office');
   rec('no_fit flag + log', r.no_fit === true && r.log.some(x => x.what === 'No fittings ticked'));
   rec('bad mode refused', throws(() => D.listSetDone(d, 'L1', 'bogus', true, 'x')));
+  const n0 = D.find(d, 'lists', 'L1').log.length;
+  D.listSetDone(d, 'L1', 'fit', true, 'Mary', null, 'k1'); D.listSetDone(d, 'L1', 'fit', true, 'Mary', null, 'k1');
+  rec('sign-off resent with the same client id: one history line, one event', D.find(d, 'lists', 'L1').log.length === n0 + 1 && d.t.list_events.filter(e => e.cid === 'k1').length === 1);
+  D.listAttach(d, 'L1', 'WO-7', true, 'O', 'k2'); D.listAttach(d, 'L1', 'WO-7', false, 'O', 'k3'); D.listAttach(d, 'L1', 'WO-7', true, 'O', 'k2');
+  rec('attach resent after a later detach does not re-attach (same client id)', !D.find(d, 'lists', 'L1').wos.includes('WO-7'));
+  r = D.listSetDone(d, 'L1', 'archive', true, 'Office');
+  rec('archive mode: archived, history "Archived", nothing deleted', r.archived === true && r.log.some(x => x.what === 'Archived') && !!D.find(d, 'lists', 'L1'));
 }
 // save_list_revision
 {

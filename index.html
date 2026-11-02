@@ -2189,15 +2189,15 @@ async function lqSend(){
         fn='apply_line_changes';args={p_changes:batch.map(e=>({id:e.id,cid:e.cid,act:e.act,status:e.status,v:e.v,rev:e.rev,from:e.from,at:e.at})),p_by:h.by};
       }else{
         batch=[h];
-        if(h.t==='attach'){fn='list_attach';args={p_list:h.list,p_wo:h.wo,p_on:!!h.on,p_by:h.by};}
-        else if(h.t==='done'){fn='list_set_done';args={p_list:h.list,p_mode:h.mode,p_on:!!h.on,p_by:h.by,p_why:h.why==null?null:h.why};}
+        if(h.t==='attach'){fn='list_attach';args={p_list:h.list,p_wo:h.wo,p_on:!!h.on,p_by:h.by,p_cid:h.cid};}
+        else if(h.t==='done'){fn='list_set_done';args={p_list:h.list,p_mode:h.mode,p_on:!!h.on,p_by:h.by,p_why:h.why==null?null:h.why,p_cid:h.cid};}
+        else if(h.t==='archive'){fn='list_set_done';args={p_list:h.list,p_mode:'archive',p_on:true,p_by:h.by,p_why:null,p_cid:h.cid};}
       }
       const cids=new Set(batch.map(e=>e.cid));
       let r=null,d=null;
       batch.forEach(e=>LQ.fly.add(e.cid));
       try{
-        if(h.t==='archive')r=await fetch(SUPA_URL+'/lists?id=eq.'+encodeURIComponent(h.list),{method:'PATCH',headers:{...SUPA_HDR,'Prefer':'return=representation'},body:JSON.stringify({archived:true,updated_by:h.by})});
-        else if(fn)r=await fetch(SUPA_URL+'/rpc/'+fn,{method:'POST',headers:SUPA_HDR,body:JSON.stringify(args)});
+        if(fn)r=await fetch(SUPA_URL+'/rpc/'+fn,{method:'POST',headers:SUPA_HDR,body:JSON.stringify(args)});
         d=r?await r.json().catch(()=>null):null;
       }finally{batch.forEach(e=>LQ.fly.delete(e.cid));}
       if(!r){lqDrop(cids);continue;} // an entry this version doesn't know

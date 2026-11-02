@@ -161,11 +161,13 @@ begin
 grant execute on function apply_line_changes(jsonb,text) to anon, authenticated, service_role;
 
 -- Add or remove ONE work order on a list in one step (race-safe), with a history line and an event.
-create or replace function list_attach(p_list text, p_wo text, p_on boolean, p_by text) returns jsonb language plpgsql as $$
+-- p_cid: the device's id for this tap — the same tap sent again (reply lost) changes nothing and adds no history.
+create or replace function list_attach(p_list text, p_wo text, p_on boolean, p_by text, p_cid text default null) returns jsonb language plpgsql as $$
 declare r lists%rowtype; had boolean;
 begin
  select * into r from lists where id=p_list for update;
  if not found then raise exception 'missing list %', p_list; end if;
+ if p_cid is not null and exists(select 1 from list_events e where e.cid=p_cid) then return to_jsonb(r); end if;
  had:= p_wo = any(r.wos);
  if p_on and not had then
   update lists set wos=array_append(wos,p_wo), updated_by=p_by,
@@ -174,18 +176,20 @@ begin
   update lists set wos=array_remove(wos,p_wo), updated_by=p_by,
     log=log||jsonb_build_array(jsonb_build_object('at',now(),'by',p_by,'what','Work order '||p_wo||' taken off')) where id=p_list returning * into r;
  end if;
- if p_on<>had then insert into list_events(list_id,act,by,note) values(p_list,case when p_on then 'attach' else 'detach' end,p_by,p_wo); end if;
+ if p_on<>had then insert into list_events(list_id,act,by,note,cid) values(p_list,case when p_on then 'attach' else 'detach' end,p_by,p_wo,p_cid); end if;
  return to_jsonb(r);
 end $$;
-grant execute on function list_attach(text,text,boolean,text) to anon, authenticated, service_role;
+grant execute on function list_attach(text,text,boolean,text,text) to anon, authenticated, service_role;
 
--- Sign-offs and flags (build note g). p_mode: 'saw' | 'fit' (sign-off; off = send back / undo) | 'no_cut' | 'no_fit'.
--- The database writes the history line, never the browser.
-create or replace function list_set_done(p_list text, p_mode text, p_on boolean, p_by text, p_why text default null) returns jsonb language plpgsql as $$
+-- Sign-offs and flags (build note g). p_mode: 'saw' | 'fit' (sign-off; off = send back / undo) | 'no_cut' | 'no_fit'
+-- | 'archive' (Delete on the Lists tab — the list is hidden, never deleted). The database writes the history line, never the browser.
+-- p_cid: the device's id for this tap — the same tap sent again (reply lost) changes nothing and adds no history.
+create or replace function list_set_done(p_list text, p_mode text, p_on boolean, p_by text, p_why text default null, p_cid text default null) returns jsonb language plpgsql as $$
 declare r lists%rowtype; what text;
 begin
  select * into r from lists where id=p_list for update;
  if not found then raise exception 'missing list %', p_list; end if;
+ if p_cid is not null and exists(select 1 from list_events e where e.cid=p_cid) then return to_jsonb(r); end if;
  if p_mode='saw' then
   what:=case when p_on then 'Cut complete' else 'Sent back for re-cutting'||coalesce(' (was done '||to_char(r.saw_done_at,'DD/MM/YYYY')||coalesce(' by '||r.saw_done_by,'')||')','') end;
   update lists set saw_done_at=case when p_on then now() end, saw_done_by=case when p_on then p_by end, updated_by=p_by,
@@ -200,11 +204,14 @@ begin
  elsif p_mode='no_fit' then
   update lists set no_fit=p_on, updated_by=p_by,
     log=log||jsonb_build_array(jsonb_build_object('at',now(),'by',p_by,'what','No fittings'||case when p_on then ' ticked' else ' unticked' end,'why',p_why)) where id=p_list returning * into r;
+ elsif p_mode='archive' then
+  update lists set archived=p_on, updated_by=p_by,
+    log=log||jsonb_build_array(jsonb_build_object('at',now(),'by',p_by,'what',case when p_on then 'Archived' else 'Brought back from the archive' end,'why',p_why)) where id=p_list returning * into r;
  else raise exception 'bad mode %', p_mode; end if;
- insert into list_events(list_id,act,by,note) values(p_list,p_mode||case when p_on then '-on' else '-off' end,p_by,p_why);
+ insert into list_events(list_id,act,by,note,cid) values(p_list,p_mode||case when p_on then '-on' else '-off' end,p_by,p_why,p_cid);
  return to_jsonb(r);
 end $$;
-grant execute on function list_set_done(text,text,boolean,text,text) to anon, authenticated, service_role;
+grant execute on function list_set_done(text,text,boolean,text,text,text) to anon, authenticated, service_role;
 
 -- Save an edit or a new revision in one go.
 -- p_list: the list's fields ({id, name, project_id, ...}; missing keys are left as they are).

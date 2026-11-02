@@ -108,18 +108,20 @@ function applyLineChanges(d, changes, by) {
 }
 
 // ---- list_attach(p_list, p_wo, p_on, p_by)
-function listAttach(d, id, wo, on, by) {
+function listAttach(d, id, wo, on, by, cid) {
   const r = find(d, 'lists', id); if (!r) throw new DbError('missing list ' + id);
+  if (cid != null && d.t.list_events.some(e => e.cid === cid)) return clone(r); // the same tap resent
   const had = r.wos.includes(wo);
   if (on && !had) update(d, 'lists', r, { wos: r.wos.concat([wo]), updated_by: by, log: logAdd(r, { at: now(), by, what: 'Work order ' + wo + ' attached' }) });
   else if (!on && had) update(d, 'lists', r, { wos: r.wos.filter(w => w !== wo), updated_by: by, log: logAdd(r, { at: now(), by, what: 'Work order ' + wo + ' taken off' }) });
-  if (!!on !== had) insert(d, 'list_events', { list_id: id, act: on ? 'attach' : 'detach', by, note: wo });
+  if (!!on !== had) insert(d, 'list_events', { list_id: id, act: on ? 'attach' : 'detach', by, note: wo, cid: cid == null ? null : cid });
   return clone(r);
 }
 
 // ---- list_set_done(p_list, p_mode, p_on, p_by, p_why)
-function listSetDone(d, id, mode, on, by, why) {
+function listSetDone(d, id, mode, on, by, why, cid) {
   const r = find(d, 'lists', id); if (!r) throw new DbError('missing list ' + id);
+  if (cid != null && d.t.list_events.some(e => e.cid === cid)) return clone(r); // the same tap resent
   const dd = x => { const t = new Date(x); return String(t.getUTCDate()).padStart(2, '0') + '/' + String(t.getUTCMonth() + 1).padStart(2, '0') + '/' + t.getUTCFullYear(); };
   why = why == null ? null : why;
   if (mode === 'saw' || mode === 'fit') {
@@ -130,8 +132,10 @@ function listSetDone(d, id, mode, on, by, why) {
   } else if (mode === 'no_cut' || mode === 'no_fit') {
     const f = mode;
     update(d, 'lists', r, { [f]: !!on, updated_by: by, log: logAdd(r, { at: now(), by, what: (f === 'no_cut' ? 'No cutting' : 'No fittings') + (on ? ' ticked' : ' unticked'), why }) });
+  } else if (mode === 'archive') {
+    update(d, 'lists', r, { archived: !!on, updated_by: by, log: logAdd(r, { at: now(), by, what: on ? 'Archived' : 'Brought back from the archive', why }) });
   } else throw new DbError('bad mode ' + mode);
-  insert(d, 'list_events', { list_id: id, act: mode + (on ? '-on' : '-off'), by, note: why });
+  insert(d, 'list_events', { list_id: id, act: mode + (on ? '-on' : '-off'), by, note: why, cid: cid == null ? null : cid });
   return clone(r);
 }
 
@@ -218,8 +222,8 @@ function snagsToList(d, ids, deliverBy, by) {
 
 const RPC = {
   apply_line_changes: (d, a) => applyLineChanges(d, a.p_changes, a.p_by),
-  list_attach: (d, a) => listAttach(d, a.p_list, a.p_wo, a.p_on, a.p_by),
-  list_set_done: (d, a) => listSetDone(d, a.p_list, a.p_mode, a.p_on, a.p_by, a.p_why),
+  list_attach: (d, a) => listAttach(d, a.p_list, a.p_wo, a.p_on, a.p_by, a.p_cid),
+  list_set_done: (d, a) => listSetDone(d, a.p_list, a.p_mode, a.p_on, a.p_by, a.p_why, a.p_cid),
   save_list_revision: (d, a) => saveListRevision(d, a.p_list, a.p_lines, a.p_expect, a.p_by, a.p_reason),
   snags_to_list: (d, a) => snagsToList(d, a.p_ids, a.p_deliver_by, a.p_by),
 };

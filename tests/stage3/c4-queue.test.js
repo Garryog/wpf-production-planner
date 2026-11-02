@@ -130,6 +130,11 @@ const reload = p => p.evaluate(async () => { await lsPoll(); render(); });
     await saw.page.evaluate(() => { wlShowDone = true; render(); document.querySelector('[data-wlundo="L1"]').click(); });
     await F.send(saw.page);
     rec('Undo: sign-off cleared and the saw lines unticked in the database', !D.find(S.db, 'lists', 'L1').saw_done_at && ['L1:1', 'L1:2', 'L1:3'].every(id => L(S, id).status === 'todo'), ['L1:1', 'L1:2', 'L1:3'].map(id => L(S, id).status).join());
+    S.dropReply = 1; // the sign-off lands but its reply is lost
+    await saw.page.evaluate(() => listSetDone(lists().find(l => l.id === 'L1'), 'fit', true, 'Mary'));
+    await F.send(saw.page); await F.send(saw.page);
+    rec('sign-off whose reply was lost is resent but written once (one "Fittings picked" line)', D.find(S.db, 'lists', 'L1').log.filter(x => x.what === 'Fittings picked').length === 1 && !!D.find(S.db, 'lists', 'L1').fit_done_at, JSON.stringify(D.find(S.db, 'lists', 'L1').log.map(x => x.what)));
+    D.listSetDone(S.db, 'L1', 'fit', false, 'reset');
     await saw.page.evaluate(() => { wlShowDone = false; render(); });
     // park with "Material not in", then release from the waiting book
     await saw.page.evaluate(() => { document.querySelector('[data-wlhold="L1"]').click(); const c = document.querySelector('[data-hk="L1:3"]'); c.checked = true; document.getElementById('hold-ok').click(); });
@@ -164,7 +169,7 @@ const reload = p => p.evaluate(async () => { await lsPoll(); render(); });
     await o1.page.evaluate(() => { showTab('l'); const b = document.querySelector('[data-ldel="L2"]'); if (b) b.click(); });
     const gone = await o1.page.evaluate(() => !lists().some(l => l.id === 'L2'));
     await F.send(o1.page);
-    rec('Delete on the Lists tab archives the list: gone from screens, kept in the database', gone && D.find(S.db, 'lists', 'L2').archived === true && !S.deletes3, JSON.stringify({ gone, a: D.find(S.db, 'lists', 'L2').archived }));
+    rec('Delete on the Lists tab archives the list: gone from screens, kept in the database', gone && D.find(S.db, 'lists', 'L2').archived === true && D.find(S.db, 'lists', 'L2').log.some(x => x.what === 'Archived') && !S.deletes3, JSON.stringify({ gone, a: D.find(S.db, 'lists', 'L2').archived }));
     rec('planner record list data never written in V2', JSON.stringify(S.row.settings.lists) === JSON.stringify(F.v2Row().settings.lists) && [S.row.settings.listDone, S.row.settings.listRow, S.row.settings.listHold].every(x => JSON.stringify(x || {}) === '{}') && !(S.row.settings.holdLog || []).length, JSON.stringify([S.row.settings.listDone, S.row.settings.listRow, S.row.settings.listHold, S.row.settings.holdLog]));
     rec('no page errors', !(S.errors || []).length, (S.errors || []).join(' | '));
     await saw.close(); await o1.close(); await o2.close();
