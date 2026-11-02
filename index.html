@@ -2889,6 +2889,7 @@ function lsHomeBind(){
     lsDlg(`<div style="font-weight:700;color:#14335c;margin-bottom:8px">${escA(l.project||'')} — ${escA(l.name)} · Rev ${+l.rev||1}</div>${listTableHTML(l,'all')}`);});
   document.querySelectorAll('[data-lhsend]').forEach(b=>b.onclick=()=>{const l=lsList(b.dataset.lhsend);if(!l)return;lqList({t:'done',list:l.id,mode:'send',on:true,by:whoNow()});render();toast('"'+l.name+'" sent to the saw — later changes make a new revision');});
   document.querySelectorAll('[data-lharc]').forEach(b=>b.onclick=()=>{const l=lsList(b.dataset.lharc);if(!l)return;
+    if(l.tpl&&!lsEditOk())return; // templates: Production Manager, Design office or Admin
     if(!confirm('Archive the list "'+l.name+'" ('+(l.project||'')+')? The saw and stores will no longer see it. Nothing is deleted.'))return;
     listArchive(l,whoNow());render();toast('List archived');});
 }
