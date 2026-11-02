@@ -2334,6 +2334,8 @@ function dueToday(l,t){const d=listDeadline(l);return !!d&&d<=cutTodayEnd(t);}
 // ls: lists to look at; a list counts when its cut-by date is within [fromISO,toISO] ('' = open-ended).
 // opt.cutSince (YYYY-MM-DD): lines/lists finished before that day are left out; lines cut on or after it still count.
 // Lines waiting on material are left out. Dims are mm. Returns {mats:[{mat,m2,sheets,lines,check}],noSize,noQty,lines,sheets}.
+/* One key per board name for grouping: same letters (é typed either way), any case, any run of spaces/NBSP = same board */
+function matKey(s){return String(s==null?'':s).normalize('NFKC').replace(/\s+/g,' ').trim().toLowerCase();}
 function sheetNeed(ls,fromISO,toISO,opt){
   opt=opt||{};const since=opt.cutSince||'';
   const day=at=>at?isoOf(new Date(at)):'';
@@ -2352,7 +2354,7 @@ function sheetNeed(ls,fromISO,toISO,opt){
       if(!(L>0)||!(W>0)){noSize++;return;}
       if(!qs){noQty++;return;}
       if(!/^\d+$/.test(qs)||!(q>0)){badQty++;return;} // "2x2", "1.5", "4 off" — never guessed
-      const m=String(r.mat||'').trim()||'(no material)',mk=m.toLowerCase();
+      const m=String(r.mat||'').trim()||'(no material)',mk=matKey(m);
       const g=by[mk]=by[mk]||{mat:m,m2:0,lines:0,check:false};
       g.m2+=L*W*q/1e6;g.lines++;lines++;
       if(L<SHEET_MIN_DIM||W<SHEET_MIN_DIM||L>SHEET_MAX_DIM||W>SHEET_MAX_DIM)g.check=true; // cm, metres or a typo
@@ -4773,7 +4775,7 @@ function openHold(l,mode){
 function holdBookHTML(modes){
   const hs=allHolds(modes,'hold');
   if(!hs.length)return `<div class="flr-none">Nothing waiting on material ✓</div>`;
-  const grp={};hs.forEach(x=>{const n=holdGrp(x),gk=n.toLowerCase();(grp[gk]=grp[gk]||{n,a:[]}).a.push(x);}); // same board, any case/spacing = one group (first spelling shown)
+  const grp={};hs.forEach(x=>{const n=holdGrp(x),gk=matKey(n);(grp[gk]=grp[gk]||{n,a:[]}).a.push(x);}); // same board, any case/spacing = one group (first spelling shown)
   return Object.keys(grp).sort().map(gk=>{const g=grp[gk].n,a=grp[gk].a;return `<div class="hold-grp">
     <div class="hold-gh"><span>${escA(g)} — ${a.length} row${a.length!==1?'s':''} waiting</span><button class="wl-btn" data-relg="${escA(g)}" style="padding:10px 18px;font-size:15px">▶ ARRIVED — RELEASE ALL</button></div>
     ${a.map(x=>`<div class="wl-drow"><b>${escA(x.l.name)}</b><span class="dsh-t">${escA(x.v.item||'')} ×${escA(x.v.qty)}${x.v.L||x.v.W?' · '+escA(x.v.L)+' × '+escA(x.v.W):''}</span><span class="dsh-c">${escA(listCust(x.l))}</span><span class="dsh-x">since ${new Date(x.v.at).toLocaleDateString('en-IE',{day:'numeric',month:'short'})}${x.v.by?' · '+escA(x.v.by):''}${listDueKey(x.l)?' · delivers '+fmt(listDueKey(x.l)):''}</span><button class="wl-undo" data-rel1="${escA(x.l.id)}|${escA(x.k)}">Release</button></div>`).join('')}
@@ -4782,9 +4784,9 @@ function holdBookHTML(modes){
 function holdGrp(x){return x.v.m==='saw'?(String(x.v.mat||'').trim()||'(material not named)'):('🧰 '+(String(x.v.item||x.v.mat||'').trim()||'fitting'));}
 function bindHoldBook(modes,whoFn){
   const hs=allHolds(modes,'hold');
-  const gname=x=>holdGrp(x).toLowerCase();
+  const gname=x=>matKey(holdGrp(x));
   const go=(items,label)=>whoFn('Released — '+label,by=>{releaseHolds(items,by);sched();render();toast(items.length+' row'+(items.length!==1?'s':'')+' released — back in the queue as due work');});
-  document.querySelectorAll('[data-relg]').forEach(b=>b.onclick=()=>{const items=hs.filter(x=>gname(x)===String(b.dataset.relg).trim().toLowerCase());if(items.length)go(items,b.dataset.relg);});
+  document.querySelectorAll('[data-relg]').forEach(b=>b.onclick=()=>{const items=hs.filter(x=>gname(x)===matKey(b.dataset.relg));if(items.length)go(items,b.dataset.relg);});
   document.querySelectorAll('[data-rel1]').forEach(b=>b.onclick=()=>{const v=b.dataset.rel1,i=v.indexOf('|'),id=v.slice(0,i),k=v.slice(i+1);const items=hs.filter(x=>x.l.id===id&&x.k===k);if(items.length)go(items,items[0].v.item||'row');});
 }
 const officeWhoFn=(what,cb)=>officeWho(cb);
