@@ -2439,7 +2439,7 @@ function combineLists(lsArr,mode){
   const projs=new Set(lsArr.map(l=>l.project||''));
   const hname=l=>projs.size>1?((l.project?l.project+' — ':'')+l.name):l.name;
   lsArr.forEach(l=>{
-    const hb=holdsOf(l.id),relOnly=!!listDone(l.id)[mode]&&listHoldRows(l,mode,'rel').length>0;
+    const hb=holdsOf(l.id),relOnly=!!listDone(l.id)[mode]&&relOpen(l,mode);
     listRows(l).filter(r=>r.k===mode).filter(r=>{const h=hb[rowKey(r)];if(heldRow(l,rowKey(r)))return false;return !relOnly||(h&&h.st==='rel');})
       .filter(r=>!rowTicked(l.id,rowKey(r))).forEach(r=>{ // already cut/picked — not added to the total again
       const key=[String(r.item).trim(),r.L,r.W,String(r.mat).trim(),String(r.note).trim()].join('|').toLowerCase();
@@ -2539,8 +2539,8 @@ function renderWorkList(app,mode){
   const todayISO=todayLocal();
   const srtDue=(a,b)=>(listDueKey(a)||'9999').localeCompare(listDueKey(b)||'9999');
   const relRows=l=>listHoldRows(l,mode,'rel').length;
-  const open=rel.filter(l=>!listDone(l.id)[mode]||relRows(l)).sort(srtDue);
-  const closed=rel.filter(l=>listDone(l.id)[mode]&&!relRows(l)).sort((a,b)=>String(listDone(b.id)[mode].at).localeCompare(String(listDone(a.id)[mode].at)));
+  const open=rel.filter(l=>!listDone(l.id)[mode]||relOpen(l,mode)).sort(srtDue);
+  const closed=rel.filter(l=>listDone(l.id)[mode]&&!relOpen(l,mode)).sort((a,b)=>String(listDone(b.id)[mode].at).localeCompare(String(listDone(a.id)[mode].at)));
   // The bench sees TODAY's work plus anything not cleared from past days — nothing else.
   const dueNow=open.filter(l=>dueToday(l,todayISO));                              // cut/pick by today, incl. overdue + cut-by on the non-working days ahead
   const upcoming=open.filter(l=>listDeadline(l)&&!dueToday(l,todayISO));           // later days — hidden unless peeked
@@ -2554,7 +2554,7 @@ function renderWorkList(app,mode){
   [...wlSel].forEach(id=>{if(!visible.some(l=>l.id===id))wlSel.delete(id);}); // selections only valid while visible in the queue
   const selLists=visible.filter(l=>wlSel.has(l.id));
   const woChips=l=>(l.wos||[]).map(w=>{const o=DB.orders.find(x=>x.wo===w);return `<span class="lst-chip">${escA(w)}${o&&(o.floor||o.unit)?' · '+escA([o.floor,o.unit].filter(Boolean).join(' ')):''}</span>`;}).join('');
-  const card=(l,isDone)=>{const dn=listDone(l.id)[mode];const due=listDueKey(l);const relOnly=!isDone&&!!dn&&relRows(l)>0;const nh=listHoldRows(l,mode,'hold').length;return `<div class="wl-card${isDone?' cdone':''}">
+  const card=(l,isDone)=>{const dn=listDone(l.id)[mode];const due=listDueKey(l);const relOnly=!isDone&&!!dn&&relOpen(l,mode);const nh=listHoldRows(l,mode,'hold').length;return `<div class="wl-card${isDone?' cdone':''}">
     <div class="wl-h"><div style="display:flex;gap:10px;align-items:flex-start">${!isDone?`<button class="wl-chk${wlSel.has(l.id)?' on':''}" data-wlsel="${escA(l.id)}" title="Select for batch cutting across houses">${wlSel.has(l.id)?'✓':''}</button>`:''}<div><span class="wn">${escA(l.name)}</span> <span class="wd">${escA(l.project||'')}${(c=>c&&c!==l.project?' · '+escA(c):'')(listCust(l))}</span><div style="margin-top:3px">${woChips(l)}</div></div></div>
     ${due?(od=>`<span class="wl-due"${od?' style="background:#c0392b;color:#fff"':''}>${od?'⚠ OVERDUE — ':''}${mode==='saw'?'CUT':'PICK'} BY ${fmt(listDeadline(l))} · DELIVERS ${fmt(due)}</span>`)(!isDone&&listOverdue(l)):'<span class="wd">no delivery date yet</span>'}</div>
     ${relOnly?`<div class="rel-note">▶ MATERIAL HAS ARRIVED — ${relRows(l)} row${relRows(l)!==1?'s':''} released from the waiting list. The rest of this house was done ${new Date(dn.at).toLocaleDateString('en-IE')}${dn.by?' by '+escA(dn.by):''}.</div>`:''}
@@ -4674,15 +4674,18 @@ function clearRowTicks(l,mode,by){const t=rowTicks(l.id);let n=0;Object.keys(t).
   if(n)holdLog('na-cleared',l,n,mode,by); // N/A left under a tick by another screen — superseded, not brought back
 }
 function tickableRows(l,mode){ // rows the bench can tick right now: not held; only released rows when the rest was already signed off
-  const h=holdsOf(l.id),relOnly=!!listDone(l.id)[mode]&&listHoldRows(l,mode,'rel').length>0;
+  const h=holdsOf(l.id),relOnly=!!listDone(l.id)[mode]&&relOpen(l,mode);
   return listRows(l).filter(r=>r.k===mode).filter(r=>{const x=h[rowKey(r)];if(heldRow(l,rowKey(r)))return false;return !relOnly||(x&&x.st==='rel');});
 }
+/* Released rows still to do on a signed-off list. A released row that is already ticked is finished work — a stale
+   "Release" from an out-of-date screen can merge in after the list was cut; it must not reopen the list. */
+function relOpen(l,mode){return listHoldRows(l,mode,'rel').some(x=>!rowTicked(l.id,x.k));}
 function listHoldRows(l,mode,st){return Object.entries(holdsOf(l.id)).filter(([k,v])=>v.m===mode&&(!st||v.st===st)&&!(v.st==='hold'&&rowTicked(l.id,k))).map(([k,v])=>({k,...v}));}
 function sideState(l,mode){ // 'na' | 'unset' | 'hold' | 'open' | 'done'
   const n=mode==='saw'?(l.saw||0):(l.fit||0);
   if(!n)return (mode==='saw'?l.noCut:l.noFit)?'na':'unset';
   if(listHoldRows(l,mode,'hold').length)return'hold';
-  if(listDone(l.id)[mode]&&!listHoldRows(l,mode,'rel').length)return'done';
+  if(listDone(l.id)[mode]&&!relOpen(l,mode))return'done';
   return'open';
 }
 const SIDE_WHY={saw:{open:'Not cut yet',hold:'Saw waiting on material',unset:'No saw rows — tick "no cutting" if none are needed'},
@@ -4719,7 +4722,9 @@ function holdRows(l,keys,mode,by){
 }
 function releaseHolds(items,by){
   const at=nowISO();
-  items.forEach(({l,k})=>{const h=holdsOf(l.id)[k];if(h&&h.st==='hold'){h.st='rel';h.relAt=at;h.relBy=by;}});
+  items.forEach(({l,k})=>{const h=holdsOf(l.id)[k];if(!(h&&h.st==='hold'))return;
+    if(rowTicked(l.id,k)){dropHold(l,k);return;} // already cut/picked: releasing only clears the hold, never turns it back into work
+    h.st='rel';h.relAt=at;h.relBy=by;});
   const byL={};items.forEach(i=>{byL[i.l.id]=(byL[i.l.id]||0)+1;});
   Object.keys(byL).forEach(id=>{const l=lists().find(x=>x.id===id);if(l)holdLog('release',l,byL[id],'',by);});
 }
@@ -4953,7 +4958,7 @@ function workListFor(mode,days){
   const lim=new Date();lim.setDate(lim.getDate()+Math.max(0,days-1));
   const limISO=lim.getFullYear()+'-'+String(lim.getMonth()+1).padStart(2,'0')+'-'+String(lim.getDate()).padStart(2,'0');
   return workLists().filter(l=>(mode==='saw'?l.saw:l.fit)>0)
-    .filter(l=>!listDone(l.id)[mode]||listHoldRows(l,mode,'rel').length)
+    .filter(l=>!listDone(l.id)[mode]||relOpen(l,mode))
     .filter(l=>{const d=listDeadline(l),e=cutTodayEnd(today);return d&&d<=(days>1&&limISO>e?limISO:e);})
     .sort((a,b)=>(listDueKey(a)||'9999').localeCompare(listDueKey(b)||'9999'));
 }
@@ -4963,7 +4968,7 @@ function printWorkList(mode,days){
   const today=new Date().toLocaleDateString('en-IE',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   const block=l=>{
     const done=listDone(l.id)[mode],h=holdsOf(l.id);
-    const relOnly=done&&listHoldRows(l,mode,'rel').length;
+    const relOnly=done&&relOpen(l,mode);
     const rows=listRows(l).filter(r=>r.k===mode&&(!relOnly||(h[rowKey(r)]&&h[rowKey(r)].st==='rel')));
     return `<div class="blk"><div class="bh"><span class="hs">${E(l.name)}</span><span>${E(l.project||'')}${listCust(l)&&listCust(l)!==l.project?' · '+E(listCust(l)):''}</span>
       <span class="dl">${listOverdue(l)?'OVERDUE · ':''}${saw?'CUT':'PICK'} BY ${E(fmt(listDeadline(l)))} · DELIVERS ${E(fmt(listDueKey(l)))}</span></div>
