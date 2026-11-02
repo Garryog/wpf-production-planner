@@ -110,13 +110,20 @@ grant usage, select on sequence list_revisions_id_seq, list_events_id_seq to ser
 revoke delete, truncate on projects, project_materials, lists, list_lines, list_revisions, list_events from anon, authenticated;
 revoke update on list_revisions, list_events from anon, authenticated;
 
+-- The new tables only take writes while the lists are on the new store ('v2') or being migrated ('migrating'): a screen
+-- that missed a Switch back can't add snags, materials or lines to tables nobody reads. (Reads are always allowed.)
+create or replace function lists_writable() returns boolean language sql stable security definer set search_path=public as $$
+ select coalesce((select settings->>'listStore' from production_planner where id='main'),'') in ('v2','migrating')
+$$;
+grant execute on function lists_writable() to anon, authenticated, service_role;
+
 do $$ declare t text; begin foreach t in array array['projects','project_materials','lists','list_lines','list_revisions','list_events'] loop
   execute format('alter table %1$s enable row level security;
     drop policy if exists "%1$s read" on %1$s; create policy "%1$s read" on %1$s for select to anon, authenticated using (true);
-    drop policy if exists "%1$s add" on %1$s; create policy "%1$s add" on %1$s for insert to anon, authenticated with check (true);',t);
+    drop policy if exists "%1$s add" on %1$s; create policy "%1$s add" on %1$s for insert to anon, authenticated with check (lists_writable());',t);
 end loop;
 foreach t in array array['projects','project_materials','lists','list_lines'] loop
-  execute format('drop policy if exists "%1$s edit" on %1$s; create policy "%1$s edit" on %1$s for update to anon, authenticated using (true) with check (true);',t);
+  execute format('drop policy if exists "%1$s edit" on %1$s; create policy "%1$s edit" on %1$s for update to anon, authenticated using (lists_writable()) with check (lists_writable());',t);
 end loop; end $$;
 
 alter publication supabase_realtime add table lists, list_lines; -- ready for later; the app polls for now
@@ -373,8 +380,8 @@ drop trigger if exists snags_touch on snags;
 create trigger snags_touch before update on snags for each row execute function lists_touch();
 alter table snags enable row level security;
 drop policy if exists "snags read" on snags; create policy "snags read" on snags for select to anon, authenticated using (true);
-drop policy if exists "snags add" on snags; create policy "snags add" on snags for insert to anon, authenticated with check (true);
-drop policy if exists "snags edit" on snags; create policy "snags edit" on snags for update to anon, authenticated using (true) with check (true);
+drop policy if exists "snags add" on snags; create policy "snags add" on snags for insert to anon, authenticated with check (lists_writable());
+drop policy if exists "snags edit" on snags; create policy "snags edit" on snags for update to anon, authenticated using (lists_writable()) with check (lists_writable());
 -- Grants (30 Oct rule). No DELETE: a snag is cancelled, never deleted.
 grant select, insert, update on snags to anon, authenticated;
 grant all on snags to service_role;

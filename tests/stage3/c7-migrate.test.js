@@ -46,7 +46,7 @@ const cnt = S => ({ p: S.db.t.projects.length, l: S.db.t.lists.length, ln: S.db.
   const bad = await migrateUI(off.page);
   S.onPost = null;
   const msg = await off.page.evaluate(() => document.getElementById('ls-msg').innerText);
-  rec('count mismatch: NOT switched over, the report names the list', bad.ok === false && bad.check.bad.length === 1 && bad.check.bad[0].id === 'L1' && !S.row.settings.listStore && !(await off.page.evaluate(() => V2())) && /Counts did not match/.test(msg) && /House 1/.test(msg), JSON.stringify(bad.check && bad.check.bad) + ' ' + msg.slice(0, 120));
+  rec('count mismatch: NOT switched over (switch back to \'v1\'), the report names the list', bad.ok === false && bad.check.bad.length === 1 && bad.check.bad[0].id === 'L1' && S.row.settings.listStore === 'v1' /* 'migrating' undone */ && !(await off.page.evaluate(() => V2())) && /Counts did not match/.test(msg) && /House 1/.test(msg), JSON.stringify(bad.check && bad.check.bad) + ' ' + msg.slice(0, 120));
   rec('a backup was taken (pre-lists-v2) and downloaded before anything was copied', S.backups.some(b => /pre-lists-v2/.test(b.reason)) && downloads >= 1, S.backups.map(b => b.reason).join() + ' dl=' + downloads);
   // ---- migrate for real
   const r = await migrateUI(off.page);

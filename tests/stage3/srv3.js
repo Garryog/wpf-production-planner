@@ -73,6 +73,8 @@ async function handle(S, route) {
       return J(route, 200, out);
     }
     const t = tm[1], q = parseQ(url), rows = S.db.t[t];
+    // lists_writable() row-level rule: writes only while the switch is 'v2' or 'migrating'
+    if ((m === 'POST' || m === 'PATCH') && S.row && !S.noSwitchCheck && !['v2', 'migrating'].includes((S.row.settings || {}).listStore)) return J(route, 403, { code: '42501', message: 'new row violates row-level security policy for table "' + t + '"' });
     if (m === 'GET') return J(route, 200, select(rows, q));
     if (m === 'POST') {
       let b = JSON.parse(req.postData() || '[]'); if (!Array.isArray(b)) b = [b];

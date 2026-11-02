@@ -2617,12 +2617,19 @@ async function lsMigrate(by){
   const t0=nowISO();
   await loadDB();if(!DB.lastLoadOk)throw new Error('could not read the latest planner record — check the connection and try again');
   if(V2())throw new Error('the new lists were switched on by another screen meanwhile');
+  if(DB.listStore==='migrating'&&!confirm('A migration was started and did not finish — or is running on another screen right now.\n\nRun it now?'))throw new Error('not started — another migration may be running');
   const src=clone({lists:DB.lists||[],listWBs:DB.listWBs||{},listRow:DB.listRow||{},listHold:DB.listHold||{},listDone:DB.listDone||{},holdLog:DB.holdLog||[]});
+  // 'migrating' first: the new tables only take writes while the switch is 'migrating' or 'v2' (database rule)
+  DB.listStore='migrating';clearTimeout(saveT);await saveDB();
+  if(DB.saveFailed){DB.listStore='v1';throw new Error('could not start the migration (the planner record was not saved) — nothing changed');}
+  const undo=async()=>{DB.listStore='v1';clearTimeout(saveT);await saveDB();}; // stopped: the floor stays on the old lists
+  let m,ck;
+  try{
   // 1. a verified copy in planner_backups, and one on this PC
   await backupNow('pre-lists-v2');updBakLine();
   lsDownload('WPF_Backup_pre-lists-v2_'+new Date().toISOString().slice(0,10)+'.json',{backedUpAt:new Date().toISOString(),orders:DB.orders,nid:DB.nid,settings:fullSettings()});
   // 2-4. projects, lists, lines (fixed ids, so a second run gives the same result), old waiting history
-  const m=lsMigrationRows(await lsGet('projects?select=*'),src);
+  m=lsMigrationRows(await lsGet('projects?select=*'),src);
   await lsUpsert('projects',m.projects);
   await lsUpsert('lists',m.lists);
   await lsUpsert('list_lines',m.lines);
@@ -2632,12 +2639,13 @@ async function lsMigrate(by){
   const seen=new Set((await lsGet('list_events?select=cid&cid=like.mig:*')).map(e=>e.cid)),ev=m.events.filter(e=>!seen.has(e.cid));
   for(let i=0;i<ev.length;i+=400){const r=await fetch(SUPA_URL+'/list_events',{method:'POST',headers:SUPA_WHDR,body:JSON.stringify(ev.slice(i,i+400))});if(!r.ok)throw new Error('saving the waiting history failed: HTTP '+r.status);}
   // 5. count check — any difference stops here and the switch is NOT set
-  const ck=await lsCountCheck(src);
-  if(ck.bad.length)return{ok:false,check:ck,m};
+  ck=await lsCountCheck(src);
+  if(ck.bad.length){await undo();return{ok:false,check:ck,m};}
+  }catch(e){await undo();throw e;}
   // 6. switch on. listStoreAt = when this migration started: old-format ticks after that are rescued by every screen.
   DB.listStore='v2';DB.listStoreAt=t0;
   clearTimeout(saveT);await saveDB();
-  if(DB.saveFailed){DB.listStore='';delete DB.listStoreAt;throw new Error('the lists were copied and checked, but the switch could not be saved — try again');}
+  if(DB.saveFailed){DB.listStore='v1';throw new Error('the lists were copied and checked, but the switch could not be saved — try again');}
   lsReset();await lsLoad();lsStart();
   // 7. anything another screen saved in the old format while this was copying (whatever its clock says) goes in now
   await loadDB();
