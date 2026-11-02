@@ -3397,7 +3397,9 @@ function diffLines(old,nw,opt){
     c.sort((a,b)=>(doneFirst?(isDone(b)?1:0)-(isDone(a)?1:0):0)||sq(a)-sq(b));
     if(c.length){match[i]=c[0];used.add(c[0].id);return true;}return false;};
   // 0. a line that names its own id (the editor knows which row is which) pairs with exactly that line — twins can't swap
-  nw.forEach((x,i)=>{if(x.id==null)return;const o=live.find(y=>y.id===x.id&&!used.has(y.id));if(!o)return;match[i]=o;used.add(o.id);how[i]=key(o)!==key(x)?'changed':T(o.note)!==T(x.note)?'note':'same';});
+  //    ... but only while it is still the same kind of part: a cut "Side" overtyped into "Shelf" is a removed Side + a new Shelf (so the saw is told to keep the Side aside)
+  const kp=x=>T(x.kind)+'|'+T(x.part);
+  nw.forEach((x,i)=>{if(x.id==null)return;const o=live.find(y=>y.id===x.id&&!used.has(y.id));if(!o||kp(o)!==kp(x))return;match[i]=o;used.add(o.id);how[i]=key(o)!==key(x)?'changed':T(o.note)!==T(x.note)?'note':'same';});
   // ... and a row naming a line that has since been removed is put back as a NEW line — it never takes another line's id
   const gone=new Set(old.filter(x=>x.removed_rev!=null).map(x=>x.id));
   const free=i=>!match[i]&&!(nw[i].id!=null&&gone.has(nw[i].id));
