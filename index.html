@@ -2440,7 +2440,11 @@ function combineLists(lsArr,mode){
   // aggregate identical items (same item + dims + material + edging) across houses, keeping the per-house split
   const byKey={},order=[];
   const projs=new Set(lsArr.map(l=>l.project||''));
-  const hname=l=>projs.size>1?((l.project?l.project+' — ':'')+l.name):l.name;
+  const hbase=l=>projs.size>1?((l.project?l.project+' — ':'')+l.name):l.name;
+  // per-house split is by list, not by name: two selected houses both called "House 1" become "House 1" and "House 1 (2)"
+  const lbl={},seen={};
+  lsArr.forEach(l=>{if(lbl[l.id]!==undefined)return;const b=hbase(l);let n=seen[b]||0,t;do{n++;t=n>1?b+' ('+n+')':b;}while(Object.values(lbl).includes(t));seen[b]=n;lbl[l.id]=t;});
+  const hname=l=>lbl[l.id];
   lsArr.forEach(l=>{
     const hb=holdsOf(l.id),relOnly=!!listDone(l.id)[mode]&&relOpen(l,mode);
     listRows(l).filter(r=>r.k===mode).filter(r=>{const h=hb[rowKey(r)];if(heldRow(l,rowKey(r)))return false;return !relOnly||(h&&h.st==='rel');})
