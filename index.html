@@ -4767,17 +4767,18 @@ function openHold(l,mode){
 function holdBookHTML(modes){
   const hs=allHolds(modes,'hold');
   if(!hs.length)return `<div class="flr-none">Nothing waiting on material ✓</div>`;
-  const grp={};hs.forEach(x=>{const g=(x.v.m==='saw'?(x.v.mat||'(material not named)'):('🧰 '+(x.v.item||x.v.mat||'fitting')));(grp[g]=grp[g]||[]).push(x);});
-  return Object.keys(grp).sort().map(g=>`<div class="hold-grp">
-    <div class="hold-gh"><span>${escA(g)} — ${grp[g].length} row${grp[g].length!==1?'s':''} waiting</span><button class="wl-btn" data-relg="${escA(g)}" style="padding:10px 18px;font-size:15px">▶ ARRIVED — RELEASE ALL</button></div>
-    ${grp[g].map(x=>`<div class="wl-drow"><b>${escA(x.l.name)}</b><span class="dsh-t">${escA(x.v.item||'')} ×${escA(x.v.qty)}${x.v.L||x.v.W?' · '+escA(x.v.L)+' × '+escA(x.v.W):''}</span><span class="dsh-c">${escA(listCust(x.l))}</span><span class="dsh-x">since ${new Date(x.v.at).toLocaleDateString('en-IE',{day:'numeric',month:'short'})}${x.v.by?' · '+escA(x.v.by):''}${listDueKey(x.l)?' · delivers '+fmt(listDueKey(x.l)):''}</span><button class="wl-undo" data-rel1="${escA(x.l.id)}|${escA(x.k)}">Release</button></div>`).join('')}
-  </div>`).join('');
+  const grp={};hs.forEach(x=>{const n=holdGrp(x),gk=n.toLowerCase();(grp[gk]=grp[gk]||{n,a:[]}).a.push(x);}); // same board, any case/spacing = one group (first spelling shown)
+  return Object.keys(grp).sort().map(gk=>{const g=grp[gk].n,a=grp[gk].a;return `<div class="hold-grp">
+    <div class="hold-gh"><span>${escA(g)} — ${a.length} row${a.length!==1?'s':''} waiting</span><button class="wl-btn" data-relg="${escA(g)}" style="padding:10px 18px;font-size:15px">▶ ARRIVED — RELEASE ALL</button></div>
+    ${a.map(x=>`<div class="wl-drow"><b>${escA(x.l.name)}</b><span class="dsh-t">${escA(x.v.item||'')} ×${escA(x.v.qty)}${x.v.L||x.v.W?' · '+escA(x.v.L)+' × '+escA(x.v.W):''}</span><span class="dsh-c">${escA(listCust(x.l))}</span><span class="dsh-x">since ${new Date(x.v.at).toLocaleDateString('en-IE',{day:'numeric',month:'short'})}${x.v.by?' · '+escA(x.v.by):''}${listDueKey(x.l)?' · delivers '+fmt(listDueKey(x.l)):''}</span><button class="wl-undo" data-rel1="${escA(x.l.id)}|${escA(x.k)}">Release</button></div>`).join('')}
+  </div>`;}).join('');
 }
+function holdGrp(x){return x.v.m==='saw'?(String(x.v.mat||'').trim()||'(material not named)'):('🧰 '+(String(x.v.item||x.v.mat||'').trim()||'fitting'));}
 function bindHoldBook(modes,whoFn){
   const hs=allHolds(modes,'hold');
-  const gname=x=>(x.v.m==='saw'?(x.v.mat||'(material not named)'):('🧰 '+(x.v.item||x.v.mat||'fitting')));
+  const gname=x=>holdGrp(x).toLowerCase();
   const go=(items,label)=>whoFn('Released — '+label,by=>{releaseHolds(items,by);sched();render();toast(items.length+' row'+(items.length!==1?'s':'')+' released — back in the queue as due work');});
-  document.querySelectorAll('[data-relg]').forEach(b=>b.onclick=()=>{const items=hs.filter(x=>gname(x)===b.dataset.relg);if(items.length)go(items,b.dataset.relg);});
+  document.querySelectorAll('[data-relg]').forEach(b=>b.onclick=()=>{const items=hs.filter(x=>gname(x)===String(b.dataset.relg).trim().toLowerCase());if(items.length)go(items,b.dataset.relg);});
   document.querySelectorAll('[data-rel1]').forEach(b=>b.onclick=()=>{const v=b.dataset.rel1,i=v.indexOf('|'),id=v.slice(0,i),k=v.slice(i+1);const items=hs.filter(x=>x.l.id===id&&x.k===k);if(items.length)go(items,items[0].v.item||'row');});
 }
 const officeWhoFn=(what,cb)=>officeWho(cb);
