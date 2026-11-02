@@ -1225,7 +1225,7 @@ function render(){
   if(ROLE==='office')tryDailyBackup(); // once per day, silent
   if(ROLE==='floor'){renderFloor(app);return;}
   if(ROLE==='dash'){renderDash(app);return;}
-  if(ROLE==='pm'){renderPM(app);return;}
+  if(ROLE==='pm'){if(V2())renderPMV2(app);else renderPM(app);return;}
   if(ROLE==='prod'){if(V2())renderProdV2(app);else renderProd(app);return;}
   if(ROLE==='design'){renderDesign(app);return;}
   if(ROLE==='saw'){renderWorkList(app,'saw');return;}
@@ -1993,8 +1993,8 @@ function confirmPartLoad(jobs){
    Lists, lines, projects and materials come from their own tables (SUPABASE_CHANGES.md, 2 Nov 2026) and are held here.
    LST holds exactly what the database last said; this device's unsent changes (LQ, the line queue) are laid over it
    when the screens read it, so a tick shows at once and the database still decides. */
-const LST={l:new Map(),ln:new Map(),full:new Set(),fetching:new Set(),p:new Map(),m:new Map(),since:{},loaded:false,loading:null,polling:false,gen:0,err:'',timer:null,ms:0,ck:'',c:null};
-const LS_T={lists:'l',list_lines:'ln',projects:'p',project_materials:'m'};
+const LST={l:new Map(),ln:new Map(),full:new Set(),fetching:new Set(),p:new Map(),m:new Map(),s:new Map(),since:{},loaded:false,loading:null,polling:false,gen:0,err:'',timer:null,ms:0,ck:'',c:null};
+const LS_T={lists:'l',list_lines:'ln',projects:'p',project_materials:'m',snags:'s'};
 async function lsGet(q){
   const r=await fetch(SUPA_URL+'/'+q,{headers:SUPA_HDR});const d=await r.json().catch(()=>null);
   if(!r.ok||!Array.isArray(d))throw new Error('lists load failed: '+r.status+' '+JSON.stringify(d).slice(0,120));
@@ -2028,8 +2028,8 @@ async function lsLoad(){
   if(LST.loading)return LST.loading;
   LST.loading=(async()=>{
     try{
-      const[p,m,l]=await Promise.all([lsGet('projects?select=*'),lsGet('project_materials?select=*'),lsGet('lists?select=*')]);
-      lsPut('projects',p);lsPut('project_materials',m);lsPut('lists',l);
+      const[p,m,l,sn]=await Promise.all([lsGet('projects?select=*'),lsGet('project_materials?select=*'),lsGet('lists?select=*'),lsGet('snags?select=*')]);
+      lsPut('projects',p);lsPut('project_materials',m);lsPut('lists',l);lsPut('snags',sn);
       await lsLines(l.filter(x=>!lsFinishedRow(x)).map(x=>x.id)); // finished lists' lines load when someone opens them
       LST.loaded=true;LST.err='';lsRescue();
     }catch(e){LST.err=e.message;console.warn('Planner lists: '+e.message);}
@@ -2037,14 +2037,14 @@ async function lsLoad(){
   })();
   return LST.loading;
 }
-function lsReset(){['l','ln','p','m'].forEach(k=>LST[k].clear());LST.full.clear();LST.since={};LST.loaded=false;LST.gen++;}
+function lsReset(){['l','ln','p','m','s'].forEach(k=>LST[k].clear());LST.full.clear();LST.since={};LST.loaded=false;LST.gen++;}
 // "Changed since": newest database updated_at seen minus 30 s (catches stragglers); rows already held are skipped by version
 async function lsPoll(){
   if(!V2()||LST.polling)return;
   if(!LST.loaded){await lsLoad();if(LST.loaded)lsRedraw();return;}
   LST.polling=true;let n=0;
   try{
-    for(const t of ['lists','list_lines','projects','project_materials']){
+    for(const t of ['lists','list_lines','projects','project_materials','snags']){
       const s=LST.since[t]||LST.since.lists;
       n+=lsPut(t,await lsGet(t+'?select=*'+(s?'&updated_at=gt.'+encodeURIComponent(new Date(Date.parse(s)-30000).toISOString()):'')+'&order=updated_at.asc'));
     }
@@ -2770,7 +2770,6 @@ function renderProdV2(app){
   app.insertAdjacentHTML('afterbegin',`<div id="prod-strip" style="max-width:1400px;margin:10px auto 0;padding:0 20px;display:flex;gap:8px">${t('today','🧭 Today')}${t('lists','📋 Lists')}${t('snags','🩹 Snags')}</div>`);
   document.querySelectorAll('[data-prodtab]').forEach(b=>b.onclick=()=>{prodTab=b.dataset.prodtab;if(prodTab==='lists')lsStart();render();});
 }
-function renderSnags(app){app.innerHTML='<div class="pg"><div class="exp-panel" style="font-size:14px">🩹 Snags arrive with the next build step.</div></div>';}
 /* "Waiting for a list" on the saw (build note j): each planned job with no list, with its cut-by date, the list due by
    (the working day before, so the saw sees it a day ahead) and who owns the list. Overdue is red. */
 function prevWorkDay(iso){let d=addDayISO(iso,-1);while(!isWorkDay(d))d=addDayISO(d,-1);return d;}
@@ -3025,6 +3024,84 @@ function lsMissing(tpl,lines){
   const A=sum(tpl),B=sum(lines),out=[];
   A.forEach((e,k)=>{const b=B.get(k);if(!b)out.push(e.n+' (left out)');else if(b.q<e.q)out.push(e.n+' ('+b.q+' of '+e.q+')');});
   return out;
+}
+/* ---------- S7 (V2 only): snags — raised per project with a free-text location, cancelled (never deleted), and turned into
+   cutting lists by the Production Manager in one step (snags_to_list: one list per project, refuses snags already moved). ---------- */
+const SN={sel:new Set(),form:false,kind:'saw',pid:'',err:''};
+const SN_ST={raised:['Raised','#c0392b'],'on-list':['On a list','#1a56db'],cut:['Cut / got out','#0d6e46'],'on-van':['On the van','#5b21b6'],delivered:['Delivered','#0d6e46'],placed:['Placed','#0d6e46'],'couldnt-place':["Couldn't place",'#c0392b'],closed:['Closed','#8e99ab'],cancelled:['Cancelled','#8e99ab']};
+function snAll(){return[...LST.s.values()].sort((a,b)=>String(a.raised_at).localeCompare(String(b.raised_at))||String(a.id).localeCompare(String(b.id)));}
+function snMat(s){const m=s.material_id&&LST.m.get(s.material_id);return m?m.name:(s.material_text||'');}
+function renderSnags(app){
+  const all=snAll(),open=all.filter(s=>!['closed','cancelled'].includes(s.status));
+  [...SN.sel].forEach(id=>{const s=LST.s.get(id);if(!s||s.status!=='raised')SN.sel.delete(id);});
+  const grp=new Map();open.forEach(s=>{if(!grp.has(s.project_id))grp.set(s.project_id,[]);grp.get(s.project_id).push(s);});
+  const pid=SN.pid||(lsProjects()[0]||{}).id||'';
+  const sm=lsMats(pid,'sheet'),fm=lsMats(pid,'other');
+  const form=`<div class="exp-panel" id="sn-form" style="border:2px solid #1a56db">
+    <div style="font-size:15px;font-weight:700;color:#14335c;margin-bottom:8px">＋ New snag</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+      <div><label style="font-size:12px;color:var(--t2)">Project</label><br><select id="sn-pid" style="${LS_INP}">${lsProjects().map(p=>`<option value="${escA(p.id)}"${p.id===pid?' selected':''}>${escA(p.name)}</option>`).join('')}</select></div>
+      <div><label style="font-size:12px;color:var(--t2)">Where (block / floor / apt / room)</label><br><input id="sn-where" value="${escA(ls.get('wpfSnagWhere'))}" placeholder="e.g. Blk C · 1st · Apt 31 · kitchen" style="${LS_INP};width:240px"></div>
+      <div><label style="font-size:12px;color:var(--t2)">For</label><br><button class="btn ${SN.kind==='saw'?'btn-g':'btn-s'}" data-snk="saw">🪚 Saw</button> <button class="btn ${SN.kind==='fit'?'btn-g':'btn-s'}" data-snk="fit">🧰 Stores</button></div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+      <input id="sn-item" placeholder="${SN.kind==='saw'?'Part — e.g. Door 720':'Item — e.g. Hinge'}" style="${LS_INP};flex:1;min-width:180px">
+      <input id="sn-qty" type="number" inputmode="numeric" min="1" value="1" style="${LS_INP};width:70px" title="Quantity">
+      ${SN.kind==='saw'?`<input id="sn-L" type="number" inputmode="numeric" placeholder="L mm" style="${LS_INP};width:90px"><input id="sn-W" type="number" inputmode="numeric" placeholder="W mm" style="${LS_INP};width:90px">
+        <select id="sn-mat" style="${LS_INP}"><option value="">— material —</option>${sm.map(m=>`<option value="${escA(m.id)}">${escA(m.name)}</option>`).join('')}</select><input id="sn-edge" placeholder="Edging" style="${LS_INP};width:110px">`
+      :`<select id="sn-mat" style="${LS_INP}"><option value="">— spec —</option>${fm.map(m=>`<option value="${escA(m.id)}">${escA(m.name)}</option>`).join('')}<option value="__other">Other…</option></select><input id="sn-mtext" placeholder="Spec if Other…" style="${LS_INP};width:160px">`}
+      <input id="sn-note" placeholder="Note" style="${LS_INP};flex:1;min-width:140px">
+    </div>
+    <div id="sn-err" style="color:#b42318;font-weight:700;font-size:13px;min-height:18px">${escA(SN.err)}</div>
+    <div style="text-align:right"><button class="btn btn-s" id="sn-cancel">Cancel</button> <button class="btn btn-g" id="sn-save" style="font-size:15px;padding:9px 22px">Save snag</button></div></div>`;
+  app.innerHTML=`<div class="pg"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px"><h1 style="font-size:22px;color:#14335c;margin:0">🩹 Snags — ${open.length} open</h1><span style="flex:1"></span>
+      ${SN.sel.size&&ROLE==='prod'?`<b>${SN.sel.size} ticked</b> <button class="btn btn-g" id="sn-tolist">Create cutting list</button>`:''}<button class="btn btn-g" id="sn-new">＋ Snag</button></div>
+    ${SN.form?form:''}
+    ${[...grp.keys()].sort((a,b)=>lsProjName(a).localeCompare(lsProjName(b))).map(p=>{const a=grp.get(p),r=a.filter(s=>s.status==='raised');return `<div class="exp-panel">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px"><b style="font-size:15px;color:#14335c">${escA(lsProjName(p)||'?')}</b><span style="font-size:12px;color:var(--t3)">${r.length} raised · ${a.length-r.length} in progress</span><span style="flex:1"></span>${r.length&&ROLE==='prod'?`<button class="btn btn-s" data-snall="${escA(p)}">Tick all for project</button>`:''}</div>
+      ${a.map(s=>{const[st,col]=SN_ST[s.status]||[s.status,'#5b6b82'];return `<div class="wl-drow" data-snrow="${escA(s.id)}">${s.status==='raised'&&ROLE==='prod'?`<input type="checkbox" data-sn="${escA(s.id)}"${SN.sel.has(s.id)?' checked':''} style="width:22px;height:22px">`:'<span style="width:22px"></span>'}
+        <b>${s.kind==='saw'?'🪚':'🧰'} ${escA(s.item)}</b><span class="dsh-t">×${escA(s.qty)}${s.length_mm||s.width_mm?' · '+escA(s.length_mm||'')+' × '+escA(s.width_mm||''):''}${snMat(s)?' · '+escA(snMat(s)):''}${s.material_id||!s.material_text?'':' ⚠'}${s.edging?' · '+escA(s.edging):''}</span>
+        <span class="dsh-c">${escA(s.where_text||'')}</span><span class="dsh-x">${escA(s.raised_by||'')} ${s.raised_at?fmt(s.raised_at):''}${s.note?' · '+escA(s.note):''} · <b style="color:${col}">${st}</b>${s.list_id&&LST.l.has(s.list_id)?' · '+escA(LST.l.get(s.list_id).name):''}</span>
+        ${s.status==='raised'?`<button class="wl-undo" data-sncan="${escA(s.id)}">Cancel</button>`:''}</div>`;}).join('')}</div>`;}).join('')||'<div class="exp-panel" style="color:var(--t3)">No open snags.</div>'}
+  </div>`;
+  const g=id=>document.getElementById(id);
+  g('sn-new').onclick=()=>{SN.form=true;SN.err='';render();};
+  if(SN.form){
+    g('sn-cancel').onclick=()=>{SN.form=false;render();};
+    g('sn-pid').onchange=e=>{SN.pid=e.target.value;render();};
+    document.querySelectorAll('[data-snk]').forEach(b=>b.onclick=()=>{SN.kind=b.dataset.snk;render();});
+    g('sn-save').onclick=()=>{
+      const v=id=>(g(id)||{}).value||'',item=v('sn-item').trim(),q=parseFloat(v('sn-qty'));
+      const err=t=>{SN.err=t;g('sn-err').textContent=t;};
+      if(!pid)return err('Pick the project.');if(!item)return err('What is the snag? Type the part or item.');if(!(q>0))return err('Give a quantity.');
+      const mv=v('sn-mat'),row={id:uid('S'),project_id:pid,where_text:v('sn-where').trim()||null,raised_by:lqBy(''),kind:SN.kind,item,qty:q,note:v('sn-note').trim()||null};
+      if(SN.kind==='saw'){const L=parseFloat(v('sn-L')),W=parseFloat(v('sn-W'));if(!(L>0)&&!(W>0))return err('A saw snag needs a length or width.');row.length_mm=L>0?L:null;row.width_mm=W>0?W:null;row.edging=v('sn-edge').trim()||null;
+        if(mv)row.material_id=mv;else if(sm.length)return err('Pick the material.');}
+      else{if(mv==='__other'||!mv){const t=v('sn-mtext').trim();if(mv==='__other'&&!t)return err('Type the spec for Other….');row.material_text=t||null;}else row.material_id=mv;}
+      ls.set('wpfSnagWhere',row.where_text||'');
+      g('sn-save').disabled=true;
+      lsWrite('snags',row).then(()=>{SN.form=false;SN.err='';render();toast('Snag saved ✓');}).catch(e=>{g('sn-save').disabled=false;err('Not saved — '+e.message);});
+    };
+  }
+  document.querySelectorAll('[data-sn]').forEach(c=>c.onchange=()=>{c.checked?SN.sel.add(c.dataset.sn):SN.sel.delete(c.dataset.sn);render();});
+  document.querySelectorAll('[data-snall]').forEach(b=>b.onclick=()=>{open.filter(s=>s.project_id===b.dataset.snall&&s.status==='raised').forEach(s=>SN.sel.add(s.id));render();});
+  document.querySelectorAll('[data-sncan]').forEach(b=>b.onclick=()=>{const s=LST.s.get(b.dataset.sncan);if(!s||!confirm('Cancel the snag "'+s.item+'"? It stays on record as cancelled.'))return;
+    lsWrite('snags',s,{status:'cancelled',status_by:lqBy(''),status_at:nowISO()}).then(()=>{SN.sel.delete(s.id);render();toast('Snag cancelled');}).catch(e=>toast('Not cancelled — '+e.message));});
+  const tl=g('sn-tolist');
+  if(tl)tl.onclick=()=>{
+    const d=prompt('Deliver by (YYYY-MM-DD)? The saw and stores see it the working day before.',nextWorkDay(nextWorkDay(todayLocal())));
+    if(d===null)return;if(!/^\d{4}-\d{2}-\d{2}$/.test(d.trim())){toast('Type the date as YYYY-MM-DD');return;}
+    const ids=[...SN.sel];tl.disabled=true;
+    lsRpc('snags_to_list',{p_ids:ids,p_deliver_by:d.trim(),p_by:lqBy('')}).then(async out=>{SN.sel.clear();await lsPoll();render();toast((out||[]).length+' snag list'+((out||[]).length!==1?'s':'')+' made — on the saw and stores for '+fmt(d.trim()));})
+      .catch(async e=>{tl.disabled=false;await lsPoll();SN.sel.clear();render();toast('Not made — '+(/not raised/.test(e.message)?'some of these snags were already moved by someone else. Nothing was made; tick again.':e.message));});
+  };
+}
+let pmTab='';
+function renderPMV2(app){
+  if(pmTab==='snags')renderSnags(app);else renderPM(app);
+  const t=(k,l)=>`<button data-pmtab="${k}" style="padding:9px 18px;border:none;border-radius:6px;font-size:15px;font-weight:700;cursor:pointer;${pmTab===k?'background:#14335c;color:#fff':'background:#e6ebf2;color:#14335c'}">${l}</button>`;
+  app.insertAdjacentHTML('afterbegin',`<div id="pm-strip" style="max-width:1400px;margin:10px auto 0;padding:0 20px;display:flex;gap:8px">${t('','🚚 Deliveries')}${t('snags','🩹 Snags')}</div>`);
+  document.querySelectorAll('[data-pmtab]').forEach(b=>b.onclick=()=>{pmTab=b.dataset.pmtab;render();});
 }
 /* diffLines:start */
 /* Revision comparison — pure (no screen, no database), so the tests can check it on its own.
