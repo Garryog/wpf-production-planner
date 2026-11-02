@@ -363,3 +363,11 @@ SCREENS (v2 only): S1 Design office role, prod Lists tab, Projects + Materials �
 10. Date-based lock worked out in the browser; tick-based lock in the database.
 11. Template/material editing from Office asks once for a Prod/Design/Admin PIN, stored on the device.
 12. Existing behaviour flagged for Garry: the daily backup deletes `planner_backups` copies older than 30 days.
+
+## 5. What is NOT built yet (as of 2 Nov 2026, branch feature/cutting-lists)
+Built and tested on this branch: C0–C8 (tables, switch, store, queue, revisions, imports, migrate / switch back) and screens S1–S8 (Design office, Lists home, Projects + Materials, editor, templates + copy, create-from-template, snags with free-text location, revisions on screen). See docs/RUNBOOK-lists-switch.md for the go-live steps. Still to come:
+- **Projects hub:** locations (blocks / floors / units in delivery order, re-sequencing, `move_location`), the spec checklist and the red "spec not signed off" flag, WO ↔ location matching (`titleTokens`, scoring, Needs location), and the PM home page. Snags use a free-text "where" until then.
+- **Zebra labels** (ZD420 label size still to be confirmed); labels are A4 sheets today.
+- **Realtime** updates: screens poll (10 s on Saw / Stores / Lists, 60 s elsewhere); Realtime is switched on in the database for later.
+- **Office "Material to order"** list (purchasing view of waiting lines).
+- **Real-device checks:** Chrome on Android phones, the Windows saw PC, and the stores tablet — all testing so far is in a headless browser against a fake database. The SQL has been checked line by line against the fake, but has not yet run on Supabase.
