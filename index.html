@@ -1049,8 +1049,12 @@ function setSS(st){
 // Permanent red bar on every view while anything is unsaved — stays until a save gets through.
 function updSaveBar(){
   const b=document.getElementById('savebar');if(!b)return;
-  const on=!!(DB.saveFailed||DB.remoteBroken);
+  const lq=V2()&&LQ.q.length>0&&(LQ.memOnly||!!LQ.err); // line queue can't keep / can't send (switch on only)
+  const on=!!(DB.saveFailed||DB.remoteBroken||lq);
   b.hidden=!on;
+  if(on&&lq&&!DB.saveFailed&&!DB.remoteBroken){b.textContent=LQ.memOnly
+    ?'⚠ NOT KEPT ON THIS DEVICE — storage is full or blocked, so '+LQ.q.length+' tick'+(LQ.q.length!==1?'s are':' is')+' only on this open page. Keep this page open and in signal until this bar goes.'
+    :'⚠ NOT SENT YET — '+LQ.q.length+' tick'+(LQ.q.length!==1?'s':'')+' waiting for signal. '+(LQ.q.length!==1?'They are':'It is')+' kept on this device and will be sent automatically. Keep this page open.';return;}
   const kept=DB.pendFail?'This device could NOT keep a copy of your changes (storage full or blocked) — keep this page open and in signal until this bar goes.':'Your changes are kept on this device';
   if(on)b.textContent=DB.remoteBroken
     ?'⚠ NOT SAVING — the planner database came back empty or damaged ('+DB.remoteBroken+'). Nothing is being written over it. '+kept+(DB.pendFail?'':'. Tell the office.')
@@ -2140,6 +2144,7 @@ function lqMut(fn){
   const q=LQ.memOnly?LQ.q.slice():lqRead();fn(q);
   try{localStorage.setItem('wpfLineQ',JSON.stringify(q));LQ.memOnly=false;}catch(e){LQ.memOnly=true;console.warn('Planner: could NOT keep unsent ticks on this device',e&&e.message);}
   LQ.q=q;LQ.gen++;
+  if(typeof updSaveBar==='function')updSaveBar();
 }
 LQ.q=lqRead();
 function lqId(){return 'q'+Date.now().toString(36)+Math.random().toString(36).slice(2,8);}
@@ -2279,8 +2284,8 @@ async function lqSend(){
   }catch(e){LQ.err=(e&&e.message)||'no signal';}
   finally{
     LQ.busy=false;
-    if(!LQ.q.length){clearInterval(LQ.iv);LQ.iv=null;}
-    lsRedraw();
+    if(!LQ.q.length){clearInterval(LQ.iv);LQ.iv=null;LQ.err='';}
+    updSaveBar();lsRedraw();
   }
 }
 window.addEventListener('online',()=>{if(LQ.q.length)lqSend();});
@@ -2351,10 +2356,18 @@ async function lsReloadList(id){
   lsPut('lists',await lsGet('lists?select=*&id=eq.'+encodeURIComponent(id)));
   LST.full.add(id);lsPut('list_lines',await lsGet('list_lines?select=*&list_id=eq.'+encodeURIComponent(id)));
 }
+function lsSame(cur,pl,df){
+  if(df.changed.length||df.added.length||df.removed.length||df.noteOnly.length)return false;
+  const old=new Map(lsLinesOf(cur.id).map(x=>[x.id,x]));
+  if(!df.lines.every(ln=>{const o=old.get(ln.id);return o&&(+o.seq||0)===ln.seq&&(o.section||null)===(ln.section||null)&&!!o.material_other===!!ln.material_other;}))return false;
+  const nz=v=>v==null||v===''?null:String(v);
+  return['name','project_id','list_type','type_name','no_cut','no_fit','sdate','source','deliver_by','is_template'].every(k=>!(k in pl)||nz(pl[k])===nz(cur[k]));
+}
 async function lsSaveList(pl,lines,by,reason){
   for(let i=0;;i++){
     if(LST.l.has(pl.id)&&!LST.full.has(pl.id))await lsReloadList(pl.id);
     const cur=LST.l.get(pl.id),df=diffLines(cur?lsLinesOf(pl.id):[],lines,{listId:pl.id});
+    if(cur&&lsSame(cur,pl,df))return{list:cur,diff:df,same:true}; // nothing changed: no save, no new revision for the saw
     try{
       const out=await lsRpc('save_list_revision',{p_list:pl,p_lines:df.lines,p_expect:cur?cur.version:null,p_by:lqBy(by),p_reason:reason||null});
       LST.full.add(out.list.id);lsPut('lists',[out.list]);lsPut('list_lines',out.lines);
@@ -2419,7 +2432,7 @@ async function lsImportWB(wb,entries,fname,by,opt){
   opt=opt||{};
   const proj=opt.pid&&LST.p.has(opt.pid)?LST.p.get(opt.pid).name:wb.project||String(fname||'').replace(/\.(xlsx|xls)$/i,'');
   const pid=opt.pid&&LST.p.has(opt.pid)?opt.pid:await lsProject(proj);
-  const out={n:0,replaced:0,auto:0,flagged:0,revised:0};
+  const out={n:0,replaced:0,auto:0,flagged:0,revised:0,same:0};
   for(const e of entries){
     let sec='';
     const mp=opt.map||{};
@@ -2442,8 +2455,9 @@ async function lsImportWB(wb,entries,fname,by,opt){
     }
     const pl={id:old?old.id:uid('L'),name:e.sheet,project_id:pid,sdate:e.sdate||null,source:'excel'};
     if(!old){pl.wos=l.wos;pl.list_type='house';out.auto+=l.wos.length;}else out.replaced++;
-    if(old&&lsLocked(old)){out.revised++;pl.lock=true;}
-    await lsSaveList(pl,lines,by,old?'Workbook re-uploaded'+(fname?' ('+fname+')':''):null);
+    if(old&&lsLocked(old))pl.lock=true;
+    const res=await lsSaveList(pl,lines,by,old?'Workbook re-uploaded'+(fname?' ('+fname+')':''):null);
+    if(res.same){out.same++;if(old)out.replaced--;}else if(old&&pl.lock)out.revised++;
     out.n++;
   }
   return out;
@@ -2464,7 +2478,7 @@ function lsUpload(f,pid){
       if(msg)msg.textContent='Saving '+entries.length+' list'+(entries.length!==1?'s':'')+'…';
       const s=await lsImportWB(wb,entries,f.name,whoNow(),{pid:pid2,map});
       render();
-      toast(s.n+' lists imported from '+(wb.project||f.name)+(s.replaced?' — '+s.replaced+' replaced with this newer version'+(s.revised?' ('+s.revised+' new revision'+(s.revised!==1?'s':'')+' for the saw)':''):'')+(s.auto?' — '+s.auto+' work orders auto-tagged. Check the tags.':'')+(s.flagged?' — '+s.flagged+' line'+(s.flagged!==1?'s':'')+' use a material not on the project list (flagged)':''));
+      toast(s.n+' lists imported from '+(wb.project||f.name)+(s.same?' — '+s.same+' unchanged':'')+(s.replaced?' — '+s.replaced+' replaced with this newer version'+(s.revised?' ('+s.revised+' new revision'+(s.revised!==1?'s':'')+' for the saw)':''):'')+(s.auto?' — '+s.auto+' work orders auto-tagged. Check the tags.':'')+(s.flagged?' — '+s.flagged+' line'+(s.flagged!==1?'s':'')+' use a material not on the project list (flagged)':''));
     }catch(e){bad('Could not save that file: '+e.message);}
   };
   rd.readAsArrayBuffer(f);
@@ -2517,9 +2531,11 @@ function lsMigrationRows(existing,src){
       source:l.manual?'manual':'migrated',sdate:/^\d{4}-\d{2}-\d{2}$/.test(l.sdate||'')?l.sdate:null,log:Array.isArray(l.log)?l.log:[],n_saw:ns,n_fit:nf,
       locked:touched||!!dn.saw||!!dn.fit,archived:false,created_at:l.up||nowISO(),created_by:l.by||null,updated_by:'migration'});
   });
+  const seenE={};
   (src.holdLog||[]).forEach((e,i)=>{ // the old waiting history, matched to lists by name and project
+    const js=JSON.stringify(e),nth=seenE[js]=(seenE[js]||0)+1; // same entry → same id, wherever it sits after the 300 cap rolls over
     const l=lists0.find(x=>x.name===e.list&&String(x.project||'')===String(e.proj||''));
-    EV.push({list_id:l?l.id:null,act:'old-'+(e.act||''),n:+e.n||1,by:e.by||null,at:e.at||nowISO(),note:'from the old waiting history'+(l?'':' — list "'+String(e.list||'')+'"'),cid:'mig:'+lsHash(i+'|'+JSON.stringify(e))});
+    EV.push({list_id:l?l.id:null,act:'old-'+(e.act||''),n:+e.n||1,by:e.by||null,at:e.at||nowISO(),note:'from the old waiting history'+(l?'':' — list "'+String(e.list||'')+'"'),cid:'mig:'+lsHash(js)+'.'+nth});
   });
   return{projects:[...projs.values()].filter(p=>!p.keep).map(p=>({id:p.id,name:p.name,customer:p.customer||null,updated_by:'migration'})),lists:L,lines:LN,events:EV};
 }
@@ -3233,7 +3249,7 @@ function lsLineBadge(id){
 function diffLines(old,nw,opt){
   opt=opt||{};old=old||[];nw=nw||[];
   const T=v=>String(v==null?'':v).trim().replace(/\s+/g,' ').toLowerCase();
-  const N=v=>{const s=String(v==null?'':v).trim();if(s==='')return'';const n=Number(s);return isNaN(n)?s.toLowerCase().replace(/\s+/g,' '):String(n);};
+  const N=v=>{const s=String(v==null?'':v).trim().replace(/\s*mm$/i,'');if(s==='')return'';const n=Number(s);return isNaN(n)?s.toLowerCase().replace(/\s+/g,' '):String(n);};
   const key=x=>[T(x.kind),T(x.part),N(x.length_mm),N(x.width_mm),N(x.qty),T(x.material),T(x.edging)].join('|');
   const pk=x=>[T(x.kind),T(x.part),T(x.section)].join('|');
   const isDone=x=>x.status==='cut'||x.status==='got-out';
@@ -3248,7 +3264,7 @@ function diffLines(old,nw,opt){
   const tail=x=>{const m=/:(\d+)$/.exec(String(x.id||''));return m?+m[1]:sq(x);};
   let top=Math.max(0,...old.map(tail));
   const mk=opt.mkId||(()=>(opt.listId||'L')+':'+(++top));
-  const num=v=>v==null||String(v).trim()===''||isNaN(+v)?null:+v;
+  const num=v=>{const s=String(v==null?'':v).trim().replace(/\s*mm$/i,'');return s===''||isNaN(+s)?null:+s;}; // "720mm" = 720
   const txt=v=>v==null||String(v).trim()===''?null:String(v).trim();
   const out={lines:[],changed:[],added:[],removed:[],keepAside:[],noteOnly:[]};
   nw.forEach((x,i)=>{

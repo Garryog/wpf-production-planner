@@ -32,11 +32,19 @@ const CHECKS = {
   snags: r => ['saw', 'fit'].includes(r.kind) && ['raised', 'on-list', 'cut', 'on-van', 'delivered', 'placed', 'couldnt-place', 'closed', 'cancelled'].includes(r.status),
 };
 class DbError extends Error { constructor(m, code) { super(m); this.code = code || 'P0001'; } }
+// Postgres column types: '' or rubbish in a date / number column is an error, not a blank (the SQL casts with ::date / ::numeric)
+const DATES = ['sdate', 'deliver_by', 'sent_at', 'saw_done_at', 'fit_done_at', 'status_at', 'released_at', 'raised_at'], NUMS = ['length_mm', 'width_mm', 'seq', 'template_rev', 'rev', 'added_rev', 'changed_rev', 'removed_rev', 'n_saw', 'n_fit', 'sort'];
+function typeCheck(t, r) {
+  DATES.forEach(k => { if (k in r && r[k] != null && (r[k] === '' || isNaN(Date.parse(r[k])))) throw new DbError('invalid input syntax for type date/timestamp: "' + r[k] + '"', '22007'); });
+  NUMS.forEach(k => { if (k in r && r[k] != null && (r[k] === '' || typeof r[k] === 'boolean' || isNaN(+r[k]))) throw new DbError('invalid input syntax for type numeric: "' + r[k] + '"', '22P02'); });
+  if (t === 'snags' && 'qty' in r && r.qty != null && (r.qty === '' || isNaN(+r.qty))) throw new DbError('invalid input syntax for type numeric: "' + r.qty + '"', '22P02');
+}
 
 function makeDb() { const d = { t: {}, seq: { list_revisions: 1, list_events: 1 } }; TABLES.forEach(t => { d.t[t] = []; }); return d; }
 function find(d, t, id) { return d.t[t].find(r => r.id === id); }
 function insert(d, t, r) {
   const row = defaults(t, r);
+  typeCheck(t, row);
   if (t === 'list_revisions' || t === 'list_events') row.id = d.seq[t]++;
   else if (row.id == null || row.id === '') throw new DbError('null value in column "id"', '23502');
   if (row.id != null && d.t[t].some(x => x.id === row.id)) throw new DbError('duplicate key value violates unique constraint "' + t + '_pkey"', '23505');
@@ -47,6 +55,7 @@ function insert(d, t, r) {
 }
 // UPDATE … — the lists_touch trigger bumps version and updated_at; the snag trigger runs after a line's status changes
 function update(d, t, row, patch) {
+  typeCheck(t, patch);
   const old = clone(row);
   Object.assign(row, clone(patch));
   if (CHECKS[t] && !CHECKS[t](row)) { Object.keys(row).forEach(k => delete row[k]); Object.assign(row, old); throw new DbError('new row violates check constraint', '23514'); }
@@ -149,6 +158,7 @@ function saveListRevision(d, pl, lines, expect, by, reason) {
   if (!r && expect != null) throw new DbError('stale: list ' + pl.id + ' is missing');
   if (r && (expect == null || r.version !== +expect)) throw new DbError('stale: list ' + r.id + ' is at version ' + r.version + ', editor had ' + expect);
   for (const e of lines || []) {
+    if (e.id == null || e.id === '') throw new DbError('null value in column "id" of relation "list_lines"', '23502');
     const ex = find(d, 'list_lines', e.id);
     if (ex && r && ex.list_id !== r.id) throw new DbError('duplicate key value violates unique constraint "list_lines_pkey"', '23505');
     if (!ex && !['saw', 'fit', 'hdr'].includes(e.kind)) throw new DbError('new row violates check constraint', '23514');
@@ -224,11 +234,14 @@ function snagsToList(d, ids, deliverBy, by) {
   return out;
 }
 
-const RPC = {
+// Each database function runs in one transaction: an error part-way leaves nothing behind
+const txn = f => (d, a) => { const snap = clone(d.t), seq = clone(d.seq); try { return f(d, a); } catch (e) { d.t = snap; d.seq = seq; throw e; } };
+const RPC0 = {
   apply_line_changes: (d, a) => applyLineChanges(d, a.p_changes, a.p_by),
   list_attach: (d, a) => listAttach(d, a.p_list, a.p_wo, a.p_on, a.p_by, a.p_cid),
   list_set_done: (d, a) => listSetDone(d, a.p_list, a.p_mode, a.p_on, a.p_by, a.p_why, a.p_cid),
   save_list_revision: (d, a) => saveListRevision(d, a.p_list, a.p_lines, a.p_expect, a.p_by, a.p_reason),
   snags_to_list: (d, a) => snagsToList(d, a.p_ids, a.p_deliver_by, a.p_by),
 };
+const RPC = {}; Object.keys(RPC0).forEach(k => { RPC[k] = txn(RPC0[k]); });
 module.exports = { makeDb, insert, update, find, applyLineChanges, listAttach, listSetDone, saveListRevision, snagsToList, RPC, TABLES, DbError, clone };

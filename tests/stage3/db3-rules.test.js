@@ -196,4 +196,19 @@ let cid = 0; const C = o => Object.assign({ cid: 'c' + (++cid), rev: 1 }, o);
   rec('project names unique ignoring case', throws(() => D.insert(d, 'projects', { id: 'P9', name: 'ADERRIG' })));
   rec('every update bumps version and updated_at', (() => { const l = D.find(d, 'lists', 'L1'), v = l.version; D.update(d, 'lists', l, { name: 'x' }); return l.version === v + 1; })());
 }
+// SQL-vs-fake gaps (Tester): all-or-nothing, column types, lines without ids, unchanged lines, resend version
+{
+  const d = seed();
+  const v = D.find(d, 'lists', 'L1').version, n0 = d.t.list_lines.length, ev0 = d.t.list_events.length;
+  const bad = [{ id: 'L1:1', seq: 1, kind: 'saw', part: 'Side', qty: '2' }, { id: 'L1:9', seq: 2, kind: 'saw', part: 'X', length_mm: '' }];
+  rec('fake: a blank number ("") is a type error like Postgres, and the whole save is undone (all-or-nothing)', throws(() => D.RPC.save_list_revision(d, { p_list: { id: 'L1' }, p_lines: bad, p_expect: v, p_by: 'O' }), /numeric/) && d.t.list_lines.length === n0 && D.find(d, 'lists', 'L1').version === v && !D.find(d, 'list_lines', 'L1:9'));
+  rec('fake: a blank date ("") is a type error', throws(() => D.RPC.save_list_revision(d, { p_list: { id: 'L1', sdate: '' }, p_lines: [], p_expect: v, p_by: 'O' }), /date/));
+  rec('fake: a line without an id is refused (not-null), nothing written', throws(() => D.RPC.save_list_revision(d, { p_list: { id: 'L1' }, p_lines: [{ seq: 1, kind: 'saw', part: 'Y' }], p_expect: v, p_by: 'O' }), /null value/) && d.t.list_lines.length === n0 && d.t.list_events.length === ev0);
+  const v2 = D.find(d, 'lists', 'L1').version;
+  D.saveListRevision(d, { id: 'L1' }, d.t.list_lines.filter(x => x.list_id === 'L1').map(x => ({ id: x.id, seq: x.seq, kind: x.kind, part: x.part, qty: x.qty, material: x.material, length_mm: x.length_mm, width_mm: x.width_mm, edging: x.edging, note: x.note, section: x.section })), v2, 'O', null);
+  rec('fake: saving identical lines leaves them alone (versions unchanged)', d.t.list_lines.filter(x => x.list_id === 'L1').every(x => x.version === 1));
+  D.applyLineChanges(d, [{ id: 'L1:1', status: 'cut', cid: 'va1', rev: 1 }], 'S');
+  const r = D.applyLineChanges(d, [{ id: 'L1:1', status: 'cut', cid: 'va1', rev: 1 }], 'S');
+  rec('fake: a resend reports the version its tap produced (va)', r[0].dup && r[0].va === 2);
+}
 console.log(res.filter(x => !x).length + ' failed of ' + res.length);
