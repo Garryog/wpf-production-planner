@@ -972,7 +972,7 @@ window.addEventListener('beforeunload',e=>{if(saveT||DB.saveFailed||lqPending())
 function fullSettings(){return{weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP,delx:DB.delx||[],delNotes:DB.delNotes||{},grps:DB.grps||{},pins:DB.pins||{},pod:DB.pod||{},lists:DB.lists||[],listWBs:DB.listWBs||{},listDone:DB.listDone||{},listLead:DB.listLead||5,delArchive:DB.delArchive||{},staff:DB.staff||[],listHold:DB.listHold||{},holdLog:DB.holdLog||[],listRow:DB.listRow||{},exportBase:{wk:orig,st:origStep},...(DB.listStore?{listStore:DB.listStore,listStoreAt:DB.listStoreAt||''}:{})};}
 /* Stage 3 switch: settings.listStore==='v2' → cutting lists live in their own tables (lists, list_lines…).
    Missing, blank or anything else (switch back writes 'v1') → today's lists in the planner record, untouched. */
-function V2(){return DB.listStore==='v2';}
+function V2(){return DB.listStore==='v2'||DB.listStore==='switching';} // 'switching' = a Switch back is rebuilding the old lists: screens still read the tables, the database takes no changes
 /* Staff roster: {id, n:name, r:[roles]} — one source of names for drivers, saw and stores,
    so every "loaded by / delivered by / cut by" record uses the same spelling of the same person. */
 function staff(){return DB.staff||[];}
@@ -2246,7 +2246,8 @@ async function lqSwitchNow(){
 async function lqSwitchedOff(sv){ // the database says the lists are not on the new store: reload, then fold the queue in
   if(sv===undefined){try{sv=await lqSwitchNow();}catch(e){LQ.err=(e&&e.message)||'no signal';updSaveBar();return;}}
   if(sv==='v2')return;
-  if(sv==='switching'){LQ.err='the lists are being switched back — waiting';updSaveBar();lqKick(1000);return;} // keep everything; try again shortly
+  if(sv==='switching'){LQ.err='the lists are being switched back — waiting';updSaveBar();LQ.swTries=(LQ.swTries||0)+1;lqKick(LQ.swTries<20?250:5000);return;} // keep everything; try again shortly
+  LQ.swTries=0;
   await loadDB();
   if(!DB.lastLoadOk){LQ.err='could not reload the planner after the lists were switched back — kept on this device';updSaveBar();lqKick(10000);return;} // never fold into a stale copy
   if(V2())DB.listStore=sv||'v1'; // the database's word wins over this screen's copy
@@ -2672,6 +2673,14 @@ async function lsSwitchBack(by){
   lsRescue();
   await lqSend();
   if(LQ.q.length)throw new Error('this screen still has '+LQ.q.length+' unsent change'+(LQ.q.length!==1?'s':'')+' — get a signal and try again');
+  // 'switching' first: from now on the database refuses every list change (lists_switch_on), so nothing can land in the
+  // tables after they are read below; devices keep such ticks queued and put them in the old lists once it says 'v1'
+  DB.listStore='switching';clearTimeout(saveT);await saveDB();
+  if(DB.saveFailed){DB.listStore='v2';throw new Error('could not start the switch back (planner not saved) — nothing changed');}
+  try{return await lsSwitchBack2();}
+  catch(e){DB.listStore='v2';clearTimeout(saveT);await saveDB();throw e;} // put the switch back on 'v2': nothing half-done
+}
+async function lsSwitchBack2(){
   const ls0=(await lsGet('lists?select=*')).filter(l=>!l.archived&&!l.is_template);
   const pj=new Map((await lsGet('projects?select=*')).map(p=>[p.id,p.name]));
   const lines=await lsGetIn('list_lines','list_id',ls0.map(l=>l.id));
@@ -2692,7 +2701,7 @@ async function lsSwitchBack(by){
   DB.lists=NL;DB.listWBs=WB;DB.listRow=LR;DB.listHold=LH;DB.listDone=LD;
   DB.listStore='v1';DB.listStoreAt=nowISO(); // 'v1', not blank: a blank value is skipped by the merge
   lsStart();clearTimeout(saveT);await saveDB();
-  if(DB.saveFailed)throw new Error('the old lists were rebuilt on this screen but not saved yet — keep this page open, it retries');
+  if(DB.saveFailed){DB.saveFailed=false;throw new Error('the old lists were rebuilt but could not be saved — the switch stays on the new lists; try again');}
   return{lists:NL.length};
 }
 /* Tabs still on the old code after the switch keep writing ticks / holds into the frozen copy. Anything newer than
@@ -2738,7 +2747,8 @@ function lsPanelHTML(){
     +'<p style="font-size:12px;color:var(--t3);margin-bottom:10px">'+(on
       ?'Lists are in their own database tables (switched on '+escA(DB.listStoreAt?new Date(DB.listStoreAt).toLocaleString('en-IE'):'')+'). The old list data in the planner record is a frozen copy.'
       :'Lists are kept inside the planner record (today\'s way). <b>Migrate lists</b> copies every list, line, tick and waiting line into their own tables, checks the counts match exactly, and only then switches over. A backup is saved and downloaded first. Admin PIN.')+'</p>'
-    +(on?'<button class="btn btn-s" id="ls-back">↩ Switch back to old lists</button>':'<button class="btn btn-g" id="ls-mig">⇪ Migrate lists</button>')
+    +(DB.listStore==='switching'?'<div style="color:#c0392b;font-weight:700;margin-bottom:8px">⚠ A switch back was started but did not finish — the floor can\'t tick until it does. Finish it, or stay on the new lists.</div><button class="btn btn-s" id="ls-back">↩ Finish switch back</button> <button class="btn btn-g" id="ls-stay">Stay on the new lists</button>'
+      :on?'<button class="btn btn-s" id="ls-back">↩ Switch back to old lists</button>':'<button class="btn btn-g" id="ls-mig">⇪ Migrate lists</button>')
     +'<div id="ls-msg" style="font-size:12px;margin-top:8px"></div></div>';
 }
 function lsBindPanel(){
@@ -2750,6 +2760,8 @@ function lsBindPanel(){
       if(r.ok){render();toast('Lists migrated — '+r.check.lists+' lists, '+r.check.lines+' lines, counts match ✓');}
       else{mg.disabled=false;msg('<b style="color:#c0392b">Counts did not match — NOT switched over.</b> Nothing changed for the floor.<br>'+r.check.bad.slice(0,20).map(b=>escA(b.project+' — '+b.name)+': old '+b.old.n+'/'+b.old.done+'/'+b.old.wait+' · new '+b.now.n+'/'+b.now.done+'/'+b.now.wait+' (lines/done/waiting)').join('<br>'));}})
     .catch(e=>{mg.disabled=false;window.LSMIG={ok:false,err:e.message};msg('<b style="color:#c0392b">Migration stopped: '+escA(e.message)+'</b> — the switch was not set.');});};
+  const sy=document.getElementById('ls-stay');
+  if(sy)sy.onclick=()=>{if(!lsAdminOk())return;DB.listStore='v2';clearTimeout(saveT);saveDB().then(()=>{render();toast(DB.saveFailed?'Not saved yet — retrying':'Back on the new lists ✓');});};
   const bk=document.getElementById('ls-back');
   if(bk)bk.onclick=()=>{if(!lsAdminOk())return;if(!confirm('Switch back to the old lists? The old format is rebuilt from the tables (lists made since included). Templates and revisions stay in the tables.'))return;
     bk.disabled=true;msg('Switching back…');

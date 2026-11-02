@@ -114,9 +114,13 @@ alter publication supabase_realtime add table lists, list_lines; -- ready for la
 
 -- Every list function refuses while the lists are switched back to the old store: a device that missed the switch
 -- (offline at the time) then puts its change into the old lists instead of into tables nobody is reading.
+-- 'for share': a Switch back first saves listStore='switching', which has to wait for every list change already running —
+-- so nothing can land in the tables after the switch back has read them.
 create or replace function lists_switch_on() returns void language plpgsql as $$
+declare s text;
 begin
- if coalesce((select settings->>'listStore' from production_planner where id='main'),'') <> 'v2' then
+ select settings->>'listStore' into s from production_planner where id='main' for share;
+ if coalesce(s,'') <> 'v2' then
   raise exception 'switched off: the cutting lists are on the old store' using errcode='P0001';
  end if;
 end $$;
