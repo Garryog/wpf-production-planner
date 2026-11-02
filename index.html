@@ -4975,7 +4975,7 @@ function printWorkList(mode,days){
       <span class="dl">${listOverdue(l)?'OVERDUE · ':''}${saw?'CUT':'PICK'} BY ${E(fmt(listDeadline(l)))} · DELIVERS ${E(fmt(listDueKey(l)))}</span></div>
       <div class="wos">${(l.wos||[]).map(E).join(' · ')}${relOnly?' · <b>MATERIAL ARRIVED — these rows only</b>':''}</div>
       <table><thead><tr><th class="tk">✓</th><th>Item</th><th class="n">Qty</th>${saw?'<th class="n">Length</th><th class="n">Width</th><th>Material</th><th>Edging / note</th>':'<th>Spec</th><th>Note</th>'}<th class="in">Initials</th></tr></thead><tbody>
-      ${rows.map(r=>{const held=heldRow(l,rowKey(r));return `<tr${held?' class="held"':''}><td class="tk">${held?'⏸':'☐'}</td><td>${held?'<b>WAITING ON MATERIAL</b> — ':''}${E(r.item||'')}</td><td class="n">${E(r.qty)}</td>${saw?`<td class="n">${E(r.L)}</td><td class="n">${E(r.W)}</td><td>${E(r.mat)}</td><td>${E(r.note)}</td>`:`<td>${E(r.mat)}</td><td>${E(r.note)}</td>`}<td class="in"></td></tr>`;}).join('')}
+      ${rows.map(r=>{const k=rowKey(r),held=heldRow(l,k),tkd=!held&&rowTicked(l.id,k);return `<tr${held?' class="held"':tkd?' class="done"':''}><td class="tk">${held?'⏸':tkd?'✓':'☐'}</td><td>${held?'<b>WAITING ON MATERIAL</b> — ':''}${E(r.item||'')}</td><td class="n">${E(r.qty)}</td>${saw?`<td class="n">${E(r.L)}</td><td class="n">${E(r.W)}</td><td>${E(r.mat)}</td><td>${E(r.note)}</td>`:`<td>${E(r.mat)}</td><td>${E(r.note)}</td>`}<td class="in"></td></tr>`;}).join('')}
       </tbody></table>
       <div class="sig">${saw?'Cut complete':'Picked'} — signed: ______________________ &nbsp; time: ________</div></div>`;
   };
@@ -4990,7 +4990,7 @@ function printWorkList(mode,days){
   .wos{font-family:monospace;font-size:10px;color:#555;margin:1mm 0 2mm}
   table{width:100%;border-collapse:collapse}th,td{border:1px solid #888;padding:4px 5px;text-align:left;vertical-align:top}th{background:#eef1f6;font-size:10px;text-transform:uppercase}
   .n{text-align:right;font-family:monospace;font-size:13px}.tk{width:9mm;text-align:center;font-size:16px}.in{width:18mm}
-  tr.held td{background:#f3f3f3;color:#666}.sig{margin-top:3mm;font-size:12px}
+  tr.held td{background:#f3f3f3;color:#666}tr.done td{background:#f3f3f3;color:#666;text-decoration:line-through}tr.done td.tk{text-decoration:none;font-weight:800}.sig{margin-top:3mm;font-size:12px}
   @media print{@page{size:A4 portrait;margin:8mm}body{padding:0}}
   </style></head><body><h1><span>${saw?'🪚 SAW — cutting sheet':'🧰 STORES — fittings sheet'}</span><span>${E(today)}</span></h1>
   <div class="note">Paper fallback — tick each row as you go and sign each house. Hand the sheet to the office so it can be entered in the planner. ${days>1?'Covers the next '+days+' days and anything overdue.':'Today\'s work and anything overdue.'}</div>
