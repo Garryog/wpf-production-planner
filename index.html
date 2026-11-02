@@ -1051,7 +1051,7 @@ function setSS(st){
 // Permanent red bar on every view while anything is unsaved — stays until a save gets through.
 function updSaveBar(){
   const b=document.getElementById('savebar');if(!b)return;
-  const lq=V2()&&LQ.q.length>0&&(LQ.memOnly||!!LQ.err); // line queue can't keep / can't send (switch on only)
+  const lq=LQ.q.length>0&&(LQ.memOnly||!!LQ.err); // line queue can't keep / can't send / can't place (only ever non-empty after the switch was on)
   const on=!!(DB.saveFailed||DB.remoteBroken||lq);
   b.hidden=!on;
   if(on&&lq&&!DB.saveFailed&&!DB.remoteBroken){b.textContent=LQ.memOnly
@@ -2197,17 +2197,21 @@ function lqWhy(x){
   return'Not saved — "'+part+'" ('+(x.why||'refused')+').';
 }
 /* The lists were switched back while this device still held unsent changes: apply them to the old lists (after a switch
-   back every line carries its id) and save at once — never left in the queue to fire later. */
+   back every line carries its id) and save at once. Only on a planner copy this screen has JUST loaded, and only one that
+   really is a switched-back copy (its lines carry ids) — never on a stale frozen copy. A change that can't be placed is
+   kept on the device and shown, never thrown away. */
 async function lqFoldV1(){
-  if(V2()||LQ.folding||!DB.loaded||DB.loadFailed)return 0;
+  if(V2()||LQ.folding||!DB.loaded||DB.loadFailed||!DB.lastLoadOk)return 0;
   const q=lqRead();if(!q.length)return 0;
-  LQ.folding=true;let n=0,lost=0;
+  const rebuilt=(DB.lists||[]).some(l=>lsOldRows(l).some(r=>r.lid));
+  if(!rebuilt){LQ.err='the old lists on this screen are not the switched-back copy yet';updSaveBar();return 0;}
+  LQ.folding=true;let n=0;const placed=new Set();
   try{
     q.forEach(e=>{
       const l=(DB.lists||[]).find(x=>x.id===e.list),by=e.by||'';
-      if(!l){lost++;return;}
+      if(!l)return;
       if(e.t==='line'){
-        const r=lsOldRows(l).find(x=>x.lid===e.id);if(!r){lost++;return;}
+        const r=lsOldRows(l).find(x=>x.lid===e.id);if(!r)return;
         const k=v1Key(r),mode=r.k==='fit'?'fit':'saw';
         if(e.act==='release'){if(heldRow(l,k))releaseHolds([{l,k}],by);}
         else if(e.status==='cut'||e.status==='got-out')setRowTick(l,k,mode,by,true);
@@ -2218,12 +2222,15 @@ async function lqFoldV1(){
         else if(e.mode==='no_cut'||e.mode==='no_fit')listSetFlag(l,e.mode==='no_cut'?'noCut':'noFit',!!e.on,by);
       }else if(e.t==='attach')listTag(l,e.wo,!!e.on,by);
       else if(e.t==='archive')listArchive(l,by);
-      n++;
+      n++;placed.add(e.cid);
     });
-    lqMut(qq=>qq.splice(0,qq.length));
+    lqMut(qq=>qq.splice(0,qq.length,...qq.filter(e=>!placed.has(e.cid)))); // only what was placed leaves the queue
     clearTimeout(saveT);await saveDB();
-    if(ROLE)render();
-    toast(n+' change'+(n!==1?'s':'')+' made on this device before the lists were switched back '+(n!==1?'were':'was')+' added to the lists'+(lost?' — '+lost+' for lists no longer there':''));
+    const left=LQ.q.length;
+    LQ.err=left?left+' change'+(left!==1?'s':'')+' could not be placed in the old lists':'';
+    updSaveBar();if(ROLE)render();
+    if(n)lqSay(n+' change'+(n!==1?'s':'')+' made on this device before the lists were switched back '+(n!==1?'were':'was')+' added to the lists'+(left?' — '+left+' could not be placed and '+(left!==1?'are':'is')+' kept on this device: tell the office':''));
+    else if(left)lqSay(left+' change'+(left!==1?'s':'')+' could not be placed in the old lists — kept on this device: tell the office');
   }finally{LQ.folding=false;}
   return n;
 }
@@ -2236,9 +2243,13 @@ async function lqSwitchNow(){
   const d=await r.json().catch(()=>null);if(!r.ok||!Array.isArray(d)||!d[0])throw new Error('could not check the lists switch');
   return 'ls' in d[0]?d[0].ls:((d[0].settings||{}).listStore||'');
 }
-async function lqSwitchedOff(){ // the database says the lists are back on the old store: reload, then fold the queue in
+async function lqSwitchedOff(sv){ // the database says the lists are not on the new store: reload, then fold the queue in
+  if(sv===undefined){try{sv=await lqSwitchNow();}catch(e){LQ.err=(e&&e.message)||'no signal';updSaveBar();return;}}
+  if(sv==='v2')return;
+  if(sv==='switching'){LQ.err='the lists are being switched back — waiting';updSaveBar();lqKick(1000);return;} // keep everything; try again shortly
   await loadDB();
-  if(V2()){DB.listStore='v1';} // loadDB merge kept this screen's 'v2' — the database's word wins here
+  if(!DB.lastLoadOk){LQ.err='could not reload the planner after the lists were switched back — kept on this device';updSaveBar();lqKick(10000);return;} // never fold into a stale copy
+  if(V2())DB.listStore=sv||'v1'; // the database's word wins over this screen's copy
   lsStart();await lqFoldV1();
 }
 async function lqSend(){
@@ -2246,7 +2257,7 @@ async function lqSend(){
   if(LQ.busy)return;
   if(!V2()){await lqFoldV1();return;} // switched back: unsent changes go into the old lists
   if(!lqRead().length&&!LQ.q.length)return;
-  try{if(await lqSwitchNow()!=='v2'){await lqSwitchedOff();return;}}catch(e){LQ.err=(e&&e.message)||'no signal';updSaveBar();return;}
+  try{const sv=await lqSwitchNow();if(sv!=='v2'){await lqSwitchedOff(sv);return;}}catch(e){LQ.err=(e&&e.message)||'no signal';updSaveBar();return;}
   if(!LQ.memOnly)LQ.q=lqRead();LQ.gen++;
   if(!LQ.q.length){clearInterval(LQ.iv);LQ.iv=null;return;}
   LQ.busy=true;clearTimeout(LQ.t);
