@@ -182,7 +182,7 @@ function saveListRevision(d, pl, lines, expect, by, reason) {
   d.t.list_lines.filter(x => x.list_id === r.id && x.removed_rev == null && !ids.includes(x.id)).forEach(x => update(d, 'list_lines', x, { removed_rev: nrev }));
   const live = d.t.list_lines.filter(x => x.list_id === r.id && x.removed_rev == null);
   const patch = { rev: nrev, updated_by: by, n_saw: live.filter(x => x.kind === 'saw').length, n_fit: live.filter(x => x.kind === 'fit').length };
-  ['name', 'list_type'].forEach(k => { if (pl[k] != null) patch[k] = pl[k]; });
+  ['name', 'list_type', 'source'].forEach(k => { if (pl[k] != null) patch[k] = pl[k]; });
   ['project_id', 'type_name', 'sdate', 'deliver_by'].forEach(k => { if (k in pl) patch[k] = pl[k]; });
   ['no_cut', 'no_fit'].forEach(k => { if (pl[k] != null) patch[k] = !!pl[k]; });
   if (!isnew) patch.log = logAdd(r, { at: now(), by, what: nrev > r.rev ? 'Revision ' + nrev : 'List edited', why: reason == null ? null : reason });

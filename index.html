@@ -2260,6 +2260,128 @@ function listArchive(l,by){ // V2: Delete becomes Archive — nothing is ever de
   if(DB.listDone)delete DB.listDone[l.id];
   if(!lists().some(x=>x.wb===l.wb)&&DB.listWBs)delete DB.listWBs[l.wb]; // last list of this workbook — drop the stored rows too
 }
+/* ---------- Writing whole lists to the tables (V2 only): Excel upload, re-upload and typed lists ----------
+   Every save goes through diffLines + save_list_revision: unchanged lines keep their id and tick, a locked list goes
+   up one revision, and "stale" (another PC changed the list since) reloads it and compares again. Office-only and
+   online: a failed save says so and leaves the editor open (ticks from the bench use the line queue instead). */
+async function lsRpc(fn,args){
+  const r=await fetch(SUPA_URL+'/rpc/'+fn,{method:'POST',headers:SUPA_HDR,body:JSON.stringify(args)});
+  const d=await r.json().catch(()=>null);
+  if(!r.ok){const e=new Error((d&&d.message)||('HTTP '+r.status));e.status=r.status;throw e;}
+  return d;
+}
+function lsProjFind(name){const k=String(name||'').trim().toLowerCase();return[...LST.p.values()].find(p=>String(p.name||'').trim().toLowerCase()===k)||null;}
+async function lsProject(name,customer){ // the project with this name (any case / spacing), made if it's new
+  const n=String(name||'').trim()||'Unassigned';
+  let p=lsProjFind(n);if(p)return p.id;
+  const r=await fetch(SUPA_URL+'/projects',{method:'POST',headers:{...SUPA_HDR,'Prefer':'return=representation'},body:JSON.stringify({id:uid('P'),name:n,customer:customer||null,updated_by:lqBy('')})});
+  const d=await r.json().catch(()=>null);
+  if(r.ok&&Array.isArray(d)&&d[0]){lsPut('projects',d);return d[0].id;}
+  if(r.status===409){lsPut('projects',await lsGet('projects?select=*'));p=lsProjFind(n);if(p)return p.id;} // made on another PC at the same moment
+  throw new Error('could not set up the project "'+n+'" (HTTP '+r.status+')');
+}
+function lsMatSet(pid){const s=new Set();LST.m.forEach(m=>{if(m.project_id===pid&&m.active!==false&&m.kind==='sheet'){s.add(String(m.name||'').trim().toLowerCase());(m.aliases||[]).forEach(a=>s.add(String(a||'').trim().toLowerCase()));}});return s;}
+// An old-shape row → a line. Excel column F is Edging on a saw line (decision 4); typed rows carry edging and note separately.
+function lsRowToLine(r,typed){
+  const s=v=>v==null?'':String(v).trim();
+  if(r.k==='hdr')return{kind:'hdr',part:s(r.item),note:s(r.note)};
+  const ln={kind:r.k,section:s(r.sec),part:s(r.item),qty:s(r.qty),material:s(r.mat)};
+  if(r.k==='saw'){ln.length_mm=r.L;ln.width_mm=r.W;ln.edging=typed?s(r.edging):s(r.note);ln.note=typed?s(r.note):'';}
+  else{ln.edging='';ln.note=s(r.note);}
+  return ln;
+}
+function lsFlagMats(lines,pid){ // sheet material not on the project's list → saved, but flagged (decision 7); only once the project has a list
+  const k=lsMatSet(pid);let n=0;
+  lines.forEach(ln=>{ln.material_other=false;if(k.size&&ln.kind==='saw'&&ln.material&&!k.has(ln.material.toLowerCase())){ln.material_other=true;n++;}});
+  return n;
+}
+async function lsReloadList(id){
+  lsPut('lists',await lsGet('lists?select=*&id=eq.'+encodeURIComponent(id)));
+  LST.full.add(id);lsPut('list_lines',await lsGet('list_lines?select=*&list_id=eq.'+encodeURIComponent(id)));
+}
+async function lsSaveList(pl,lines,by,reason){
+  for(let i=0;;i++){
+    if(LST.l.has(pl.id)&&!LST.full.has(pl.id))await lsReloadList(pl.id);
+    const cur=LST.l.get(pl.id),df=diffLines(cur?lsLinesOf(pl.id):[],lines,{listId:pl.id});
+    try{
+      const out=await lsRpc('save_list_revision',{p_list:pl,p_lines:df.lines,p_expect:cur?cur.version:null,p_by:lqBy(by),p_reason:reason||null});
+      LST.full.add(out.list.id);lsPut('lists',[out.list]);lsPut('list_lines',out.lines);
+      return{list:out.list,diff:df};
+    }catch(e){if(!/stale/.test(e.message)||i>=2)throw e;await lsReloadList(pl.id);} // changed on another PC meanwhile: compare again
+  }
+}
+function lsEditRows(id){ // the typed-list editor's rows, with edging and note kept apart
+  return lsLinesOf(id).filter(x=>x.removed_rev==null&&x.kind!=='hdr').map(x=>({k:x.kind,item:x.part||'',qty:lsQty(x.qty),L:x.length_mm==null?'':+x.length_mm,W:x.width_mm==null?'':+x.width_mm,mat:x.material||'',edging:x.edging||'',note:x.note||'',sec:x.section||''}));
+}
+function lsAskReason(l){ // a list the saw already has: saving makes revision n+1, so say why
+  if(!l||!l.locked)return'';
+  const r=prompt('"'+l.name+'" is already with the saw — saving makes revision '+((+l.rev||1)+1)+'.\n\nWhy is it changing? (drawing changed / site measure / error / other)','drawing changed');
+  if(r===null)return null;
+  return r.trim()||null;
+}
+async function lsSaveManual(d,by,ex){
+  const o=DB.orders.find(x=>x.wo===d.wo);
+  const pid=await lsProject(String(d.project||'').trim()||(o&&o.customer)||'Unassigned',o&&o.customer);
+  const id=ex?ex.id:uid('L');
+  let reason='';
+  if(ex){if(!LST.full.has(id))await lsReloadList(id);reason=lsAskReason(lsList(id));if(reason===null)throw new Error('not saved — a reason is needed for a new revision');}
+  const lines=d.rows.map(r=>lsRowToLine(r,true));lsFlagMats(lines,pid);
+  const pl={id,name:String(d.name).trim(),project_id:pid,no_cut:!!d.noCut,no_fit:!!d.noFit};
+  if(!ex)Object.assign(pl,{wos:[d.wo],source:'manual',list_type:'house'});
+  const res=await lsSaveList(pl,lines,by,reason||(ex?'List edited':null));
+  if(ex){const was=(ex.wos||[])[0];if(d.wo&&d.wo!==was){if(was)listTag(ex,was,false,by);listTag(ex,d.wo,true,by);}
+    // rows added to a side that was already signed off put that side back on the bench — and say so
+    ['saw','fit'].forEach(m=>{const n=res.diff.lines.filter(x=>x.kind===m&&res.diff.added.includes(x.id)).length;
+      if(n&&listDone(id)[m])listSetDone({id},m,false,by,n+' row'+(n!==1?'s':'')+' added after it was signed off');});}
+  return lsList(id)||lsAdapt(res.list);
+}
+async function lsImportWB(wb,entries,fname,by){
+  const proj=wb.project||String(fname||'').replace(/\.(xlsx|xls)$/i,'');
+  const pid=await lsProject(proj);
+  const out={n:0,replaced:0,auto:0,flagged:0,revised:0};
+  for(const e of entries){
+    let sec='';
+    const lines=(wb.sheets[e.sheet]||[]).map(r=>{if(r.k==='hdr'){sec=String(r.item||'').trim();return lsRowToLine(r);}return lsRowToLine({...r,sec});});
+    out.flagged+=lsFlagMats(lines,pid);
+    const live=lists();
+    // re-uploading a corrected workbook revises the same list — tags and ticks carry across (diffLines)
+    let old=live.find(x=>x.pid===pid&&x.name===e.sheet)||null;
+    const l={name:e.sheet,sheet:e.sheet,project:proj,wos:old?old.wos.slice():[]};
+    if(!l.wos.length){
+      const sugg=suggestWOs(l),pw=proj.toLowerCase().split(/\s+/).filter(x=>x.length>2);
+      const strong=sugg.filter(o=>pw.some(w=>(o.customer||'').toLowerCase().includes(w)));
+      l.wos=(strong.length?strong:sugg).slice(0,6).map(o=>o.wo);
+    }
+    // a typed list for these same jobs and project is superseded by the workbook — same list, its ticks kept
+    if(!old&&l.wos.length){
+      const pl0=proj.toLowerCase();
+      const sameProj=x=>x.pid===pid||l.wos.some(w=>{const o=DB.orders.find(y=>y.wo===w);return o&&o.customer&&pl0.includes(o.customer.toLowerCase().split(/\s+/)[0]);});
+      old=live.find(x=>x.manual&&(x.wos||[]).length&&x.wos.every(w=>l.wos.includes(w))&&sameProj(x))||null;
+    }
+    const pl={id:old?old.id:uid('L'),name:e.sheet,project_id:pid,sdate:e.sdate||null,source:'excel'};
+    if(!old){pl.wos=l.wos;pl.list_type='house';out.auto+=l.wos.length;}else out.replaced++;
+    if(old&&old.locked)out.revised++;
+    await lsSaveList(pl,lines,by,old?'Workbook re-uploaded'+(fname?' ('+fname+')':''):null);
+    out.n++;
+  }
+  return out;
+}
+function lsUpload(f){
+  const msg=document.getElementById('lst-upmsg');if(msg)msg.textContent='Reading '+f.name+'…';
+  const bad=t=>{const m=document.getElementById('lst-upmsg');if(m)m.innerHTML='<span style="color:var(--red)">'+escA(t)+'</span>';};
+  const rd=new FileReader();
+  rd.onload=async()=>{
+    try{
+      const{wb,entries}=parseListWorkbook(rd.result);
+      if(!entries.length)return bad('No usable sheets found — expected columns: Item | Qty | Length | Width | Material | Edging.');
+      if(msg)msg.textContent='Saving '+entries.length+' list'+(entries.length!==1?'s':'')+'…';
+      const s=await lsImportWB(wb,entries,f.name,whoNow());
+      render();
+      toast(s.n+' lists imported from '+(wb.project||f.name)+(s.replaced?' — '+s.replaced+' replaced with this newer version'+(s.revised?' ('+s.revised+' new revision'+(s.revised!==1?'s':'')+' for the saw)':''):'')+(s.auto?' — '+s.auto+' work orders auto-tagged. Check the tags.':'')+(s.flagged?' — '+s.flagged+' line'+(s.flagged!==1?'s':'')+' use a material not on the project list (flagged)':''));
+    }catch(e){bad('Could not save that file: '+e.message);}
+  };
+  rd.readAsArrayBuffer(f);
+}
 /* diffLines:start */
 /* Revision comparison — pure (no screen, no database), so the tests can check it on its own.
    old: the list's lines as stored; nw: the edited / re-uploaded lines in their new order. In this order:
@@ -2507,7 +2629,7 @@ function renderLists(app){
   const fi=document.getElementById('lst-file');
   if(fi)fi.onchange=()=>{
     const f=fi.files[0];if(!f)return;
-    if(V2()){toast('Uploading lists into the new lists store comes with the next build step — not available yet');fi.value='';return;}
+    if(V2()){lsUpload(f);fi.value='';return;} // V2: into the lists tables (re-upload = a compared revision)
     const msg=document.getElementById('lst-upmsg');msg.textContent='Reading '+f.name+'…';
     const rd=new FileReader();
     rd.onload=()=>{
@@ -5193,7 +5315,7 @@ function saveManualList(d,by,existing){ // pure-ish: writes DB, returns the list
 }
 function openListEditor(listId,presetWo){
   const ex=listId?lists().find(l=>l.id===listId):null;
-  const st={rows:ex?listRows(ex).filter(r=>r.k!=='hdr').map(r=>({...r})):[{k:'saw',item:'',qty:'',L:'',W:'',mat:'',note:''}],
+  const st={rows:ex?(V2()?lsEditRows(ex.id):listRows(ex).filter(r=>r.k!=='hdr').map(r=>({...r}))):[{k:'saw',item:'',qty:'',L:'',W:'',mat:'',note:''}],
     wo:ex?((ex.wos||[])[0]||''):(presetWo||''),name:ex?ex.name:'',project:ex?ex.project:'',noCut:ex?!!ex.noCut:false,noFit:ex?!!ex.noFit:false,newWO:false,pw:{title:'',cust:'',floor:'',unit:'',due:'',val:'',hrs:''}};
   const live=()=>DB.orders.filter(o=>!o.delDone&&!o.delDelivAt).slice().sort(woCmp);
   const defName=wo=>{const o=DB.orders.find(x=>x.wo===wo);return o?([o.floor,o.unit].filter(Boolean).join(' ')||o.title||wo):'';};
@@ -5209,7 +5331,7 @@ function openListEditor(listId,presetWo){
       ${r.k==='saw'?`<td><input data-mr="${i}|L" type="number" min="0" value="${escA(r.L)}" placeholder="L mm" style="${inp};width:78px"></td><td><input data-mr="${i}|W" type="number" min="0" value="${escA(r.W)}" placeholder="W mm" style="${inp};width:78px"></td>
         <td><input data-mr="${i}|mat" list="me-mats" value="${escA(r.mat)}" placeholder="Material" style="${inp};width:100%"></td>`
       :`<td colspan="2"></td><td><input data-mr="${i}|mat" value="${escA(r.mat)}" placeholder="Spec" style="${inp};width:100%"></td>`}
-      <td><input data-mr="${i}|note" value="${escA(r.note)}" placeholder="${r.k==='saw'?'Edging / note':'Note'}" style="${inp};width:100%"></td>
+      <td>${V2()&&r.k==='saw'?`<input data-mr="${i}|edging" value="${escA(r.edging||'')}" placeholder="Edging" style="${inp};width:100%;margin-bottom:3px">`:''}<input data-mr="${i}|note" value="${escA(r.note)}" placeholder="${V2()?'Note':r.k==='saw'?'Edging / note':'Note'}" style="${inp};width:100%"></td>
       <td><button class="btn btn-s" data-mrx="${i}" title="Delete row" style="color:var(--red);border-color:var(--red);padding:3px 8px">✕</button></td></tr>`).join('');
     ov.innerHTML=`<div class="pod-in" style="min-width:min(1000px,96vw)">
       <div style="font-weight:800;color:#14335c;font-size:17px;margin-bottom:2px">✍ ${ex?'Edit':'Type'} a cutting list</div>
@@ -5255,7 +5377,6 @@ function openListEditor(listId,presetWo){
     g('me-save').onclick=()=>{
       keep();
       const err=t=>{g('me-err').textContent=t;};
-      if(V2())return err('Typed lists in the new lists store come with the next build step — not available yet.');
       let wo=st.wo;
       if(st.newWO){
         const title=(g('me-ptitle').value||'').trim(),due=g('me-pdue').value;
@@ -5275,6 +5396,14 @@ function openListEditor(listId,presetWo){
             dueDate:due,origDueDate:due,step:'Planner WO',salesRep:'',orderNo:'',value:val,plannedWeek:wkKey(new Date(due)),notes:'',colour:'',log:[{at:nowISO(),by,what:'Work order created with a typed cutting list'}]});
           orig[pwo]='';origStep[pwo]='Planner WO';
           d.wo=pwo;
+          if(V2()){st.newWO=false;st.wo=pwo;} // a failed save tried again uses this P-number, never makes a second one
+        }
+        if(V2()){ // into the lists tables — online; on failure the editor stays open
+          const sb=g('me-save');if(sb)sb.disabled=true;err('Saving…');
+          lsSaveManual(d,by,ex).then(l=>{ov.remove();sched();render();
+            toast((ex?'List updated':'List saved')+' — '+l.name+' → '+(l.saw?l.saw+' saw row'+(l.saw!==1?'s':''):'no cutting')+' · '+(l.fit?l.fit+' fittings':'no fittings')+' · tagged '+d.wo);})
+            .catch(e=>{if(sb)sb.disabled=false;err('Not saved — '+e.message);});
+          return;
         }
         const l=saveManualList(d,by,ex);
         ov.remove();sched();render();

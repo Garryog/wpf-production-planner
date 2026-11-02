@@ -269,7 +269,7 @@ begin
  update list_lines set removed_rev=nrev where list_id=r.id and removed_rev is null and not (id = any(ids));
  update lists set rev=nrev, updated_by=p_by,
    name=coalesce(p_list->>'name',name), project_id=case when p_list ? 'project_id' then p_list->>'project_id' else project_id end,
-   list_type=coalesce(p_list->>'list_type',list_type), type_name=case when p_list ? 'type_name' then p_list->>'type_name' else type_name end,
+   list_type=coalesce(p_list->>'list_type',list_type), source=coalesce(p_list->>'source',source), type_name=case when p_list ? 'type_name' then p_list->>'type_name' else type_name end,
    no_cut=coalesce((p_list->>'no_cut')::boolean,no_cut), no_fit=coalesce((p_list->>'no_fit')::boolean,no_fit),
    sdate=case when p_list ? 'sdate' then (p_list->>'sdate')::date else sdate end,
    deliver_by=case when p_list ? 'deliver_by' then (p_list->>'deliver_by')::date else deliver_by end,
