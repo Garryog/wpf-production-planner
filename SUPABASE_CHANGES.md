@@ -81,8 +81,10 @@ create table if not exists list_revisions(id bigserial primary key, list_id text
   unique(list_id,rev));
 create table if not exists list_events(id bigserial primary key, list_id text, line_id text, act text not null,
   from_status text, to_status text, n int default 1, by text, at timestamptz default now(), client_at timestamptz, note text,
-  cid text);                                                            -- the device's id for one tap: a resend is recognised, never applied twice
+  cid text,                                                             -- the device's id for one tap: a resend is recognised, never applied twice
+  v_after int);                                                         -- the line's version right after this tap (what a resend reports back)
 alter table list_events add column if not exists cid text;
+alter table list_events add column if not exists v_after int;
 create unique index if not exists le_cid on list_events(cid) where cid is not null;
 create index if not exists le_list on list_events(list_id);
 
@@ -110,7 +112,7 @@ alter publication supabase_realtime add table lists, list_lines; -- ready for la
 
 -- One status change per line, with the "done wins" rules applied by the database.
 -- Each change: {id, status | act:'release', v (line version the screen saw — needed to untick), rev (list rev the screen
--- showed), cid (device id for this tap), from, at}. Reply per change: {id, cid, ok, why, status, v, by, at, rel, relby, dup}.
+-- showed), cid (device id for this tap), from, at}. Reply per change: {id, cid, ok, why, status, v, by, at, rel, relby, dup, va = for a resend, the version that tap produced}.
 -- why: missing | removed | changed (a newer revision changed the line) | not-needed | wrong-kind | done (already cut/got out)
 --      | stale (someone changed the line since this screen saw it) | not-waiting | bad
 create or replace function apply_line_changes(p_changes jsonb, p_by text) returns jsonb language plpgsql as $$
@@ -123,7 +125,7 @@ begin
   if not found then res:=res||jsonb_build_object('id',c->>'id','cid',c->>'cid','ok',false,'why','missing'); continue; end if;
   -- the same tap sent again (the first reply was lost): report the line as it is now, change nothing
   if c->>'cid' is not null and exists(select 1 from list_events e where e.cid=c->>'cid') then
-   res:=res||jsonb_build_object('id',c->>'id','cid',c->>'cid','ok',true,'dup',true,'status',l.status,'v',l.version,'by',l.status_by,'at',l.status_at,'rel',l.released_at,'relby',l.released_by);
+   res:=res||jsonb_build_object('id',c->>'id','cid',c->>'cid','ok',true,'dup',true,'va',(select e.v_after from list_events e where e.cid=c->>'cid' limit 1),'status',l.status,'v',l.version,'by',l.status_by,'at',l.status_at,'rel',l.released_at,'relby',l.released_by);
    continue;
   end if;
   a:=coalesce(c->>'act','status'); w:=c->>'status'; noop:=false; why:=null; ok:=false;
@@ -155,8 +157,8 @@ begin
    update lists set locked=true, updated_by=p_by where id=l.list_id and not locked;  -- build note f: first accepted change locks the list
   end if;
   if ok then
-   insert into list_events(list_id,line_id,act,from_status,to_status,by,client_at,cid)
-     values(l.list_id,l.id,a,c->>'from',l.status,p_by,(c->>'at')::timestamptz,c->>'cid');
+   insert into list_events(list_id,line_id,act,from_status,to_status,by,client_at,cid,v_after)
+     values(l.list_id,l.id,a,c->>'from',l.status,p_by,(c->>'at')::timestamptz,c->>'cid',l.version);
   end if;
   res:=res||jsonb_build_object('id',l.id,'cid',c->>'cid','ok',ok,'why',why,'status',l.status,'v',l.version,'by',l.status_by,'at',l.status_at,'rel',l.released_at,'relby',l.released_by);
  end loop; return res; end $$;

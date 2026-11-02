@@ -2152,8 +2152,10 @@ function lqLine(lineId,st,by){
   const e={t:'line',cid:lqId(),id:lineId,list:x.list_id,act,v:+x.version,rev:+((LST.l.get(x.list_id)||{}).rev)||1,from:lnSt(x),at:nowISO(),by:lqBy(by)};
   if(act==='status')e.status=st;
   lqMut(q=>{
-    const i=q.findIndex(y=>y.t==='line'&&y.id===lineId&&!LQ.fly.has(y.cid));
-    if(i>=0)q.splice(i,1); // one unsent change per line: the newest replaces it
+    // one unsent change per line: the newest replaces it. A change already sent once may have landed (reply lost, or
+    // another tab on this device is sending it) — it stays, and this tap goes after it.
+    const i=q.findIndex(y=>y.t==='line'&&y.id===lineId&&!y.sent&&!LQ.fly.has(y.cid));
+    if(i>=0)q.splice(i,1);
     const fly=q.some(y=>y.t==='line'&&y.id===lineId);
     if(!fly&&act==='status'&&st===x.status)return; // back to what the database already has — nothing to send
     q.push(e);
@@ -2242,6 +2244,7 @@ async function lqSend(){
       const cids=new Set(batch.map(e=>e.cid));
       let r=null,d=null;
       batch.forEach(e=>LQ.fly.add(e.cid));
+      lqMut(q=>q.forEach(e=>{if(cids.has(e.cid))e.sent=true;})); // from now on it may have landed — kept for every tab to see
       try{
         if(fn)r=await fetch(SUPA_URL+'/rpc/'+fn,{method:'POST',headers:SUPA_HDR,body:JSON.stringify(args)});
         d=r?await r.json().catch(()=>null):null;
@@ -2260,7 +2263,8 @@ async function lqSend(){
         d.forEach(x=>{
           const e=batch.find(b=>b.cid===x.cid)||batch.find(b=>b.id===x.id);
           if(x.v!=null&&LST.ln.has(x.id))lsPut('list_lines',[{id:x.id,list_id:LST.ln.get(x.id).list_id,status:x.status,version:x.v,status_by:x.by,status_at:x.at,released_at:x.rel,released_by:x.relby}],true);
-          if(e&&x.ok&&x.v!=null&&+x.v!==+e.v)bump.push([x.id,+e.v,+x.v]); // our own change moved the line on: later taps here build on it
+          const va=x.va!=null?+x.va:+x.v; // a resend reports the version THIS tap produced, not whatever the line is at now
+          if(e&&x.ok&&x.v!=null&&va!==+e.v)bump.push([x.id,+e.v,va]); // our own change moved the line on: later taps here build on it
           if(!x.ok&&!(e&&e.quiet))bad.push(x); // a rescued old-tab tick that the database turns down is expected — no message
         });
         lqMut(q=>{q.splice(0,q.length,...q.filter(e=>!cids.has(e.cid)));q.forEach(e=>{const b=bump.find(z=>z[0]===e.id&&z[1]===e.v);if(b)e.v=b[2];});});

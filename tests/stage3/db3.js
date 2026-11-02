@@ -18,7 +18,7 @@ function defaults(t, r) {
       status: 'todo', status_by: null, status_at: null, released_at: null, released_by: null, added_rev: null, changed_rev: null, removed_rev: null,
       src_line_id: null, snag_id: null, version: 1, updated_at: n },
     list_revisions: { meta: null, reason: null, made_by: null, made_at: n },
-    list_events: { from_status: null, to_status: null, n: 1, by: null, at: n, client_at: null, note: null, cid: null, line_id: null },
+    list_events: { from_status: null, to_status: null, n: 1, by: null, at: n, client_at: null, note: null, cid: null, line_id: null, v_after: null },
     snags: { location_id: null, where_text: null, raised_at: n, material_id: null, material_text: null, qty: 1, length_mm: null, width_mm: null, edging: null, note: null,
       status: 'raised', status_by: null, status_at: null, list_id: null, list_line_id: null, delivery_item_id: null, photo_path: null, handed_to: null,
       couldnt_reason: null, cien_wo: null, version: 1, updated_at: n, updated_by: null },
@@ -67,8 +67,8 @@ function applyLineChanges(d, changes, by) {
   const res = [];
   for (const c of changes || []) {
     if (c.cid != null && d.t.list_events.some(e => e.cid === c.cid)) {
-      const l = find(d, 'list_lines', c.id) || {};
-      res.push({ id: c.id, cid: c.cid, ok: true, dup: true, status: l.status, v: l.version, by: l.status_by, at: l.status_at, rel: l.released_at, relby: l.released_by });
+      const l = find(d, 'list_lines', c.id) || {}, ev = d.t.list_events.find(e => e.cid === c.cid);
+      res.push({ id: c.id, cid: c.cid, ok: true, dup: true, va: ev ? ev.v_after : null, status: l.status, v: l.version, by: l.status_by, at: l.status_at, rel: l.released_at, relby: l.released_by });
       continue;
     }
     let l = find(d, 'list_lines', c.id);
@@ -101,7 +101,7 @@ function applyLineChanges(d, changes, by) {
       const li = find(d, 'lists', l.list_id);
       if (li && !li.locked) update(d, 'lists', li, { locked: true, updated_by: by });
     }
-    if (ok) insert(d, 'list_events', { list_id: l.list_id, line_id: l.id, act: a, from_status: c.from == null ? null : c.from, to_status: l.status, by, client_at: c.at || null, cid: c.cid == null ? null : c.cid });
+    if (ok) insert(d, 'list_events', { list_id: l.list_id, line_id: l.id, act: a, from_status: c.from == null ? null : c.from, to_status: l.status, by, client_at: c.at || null, cid: c.cid == null ? null : c.cid, v_after: l.version });
     res.push({ id: l.id, cid: c.cid, ok, why, status: l.status, v: l.version, by: l.status_by, at: l.status_at, rel: l.released_at, relby: l.released_by });
   }
   return res;
