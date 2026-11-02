@@ -70,13 +70,13 @@ const cnt = S => ({ p: S.db.t.projects.length, l: S.db.t.lists.length, ln: S.db.
   const at = new Date(Date.parse(S.row.settings.listStoreAt) + 60000).toISOString();
   S.row.settings.listRow.L1[k(ROWS1[5])] = { m: 'saw', at, by: 'OldTab' }; // Back
   S.row.settings.listHold.L1[k(SIDE)] = { m: 'saw', st: 'hold', at, by: 'OldTab', item: 'Side' }; // parking a line already cut → done wins
-  S.row.settings.listRow.L3 = { [k(ROWS3[0])]: { m: 'fit', at: '2026-10-01T00:00:00Z', by: 'Ancient' } }; // older than the switch: ignored
+  S.row.settings.listRow.L3 = { [k(ROWS3[0])]: { m: 'fit', at: '2026-10-01T00:00:00Z', by: 'Ancient' } }; // a slow tab's clock: time before the switch, but not in the migrated copy
   S.row.version++;
   const saw = await F.dev(browser, S, 'saw');
   await saw.page.evaluate(async () => { await new Promise(r => setTimeout(r, 200)); await lqSend(); });
   rec('rescue: an old tab\'s tick newer than the switch reaches the tables (Back cut by OldTab)', L('L1:6').status === 'cut' && L('L1:6').status_by === 'OldTab', L('L1:6').status);
   rec('rescue: the old tab parking a cut line doesn\'t undo it, and no message is shown', L('L1:2').status === 'cut' && !(await saw.page.evaluate(() => LQ.msgs.length)));
-  rec('rescue: ticks from before the switch are not replayed', L('L3:1').status === 'todo');
+  rec('rescue: a tick the migration never saw is rescued even when its time says before the switch (a slow clock) — fingerprint, not clock', L('L3:1').status === 'got-out', L('L3:1').status);
   // a second screen finds the same old ticks: applied once only
   const ev0 = S.db.t.list_events.filter(e => /^rescue:/.test(e.cid || '')).length;
   const saw2 = await F.dev(browser, S, 'saw'); await saw2.page.evaluate(async () => { lsRescue(); await lqSend(); });

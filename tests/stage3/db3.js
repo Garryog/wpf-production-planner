@@ -16,7 +16,7 @@ function defaults(t, r) {
       deliver_by: null, archived: false, log: [], n_saw: 0, n_fit: 0, version: 1, created_at: n, created_by: null, updated_at: n, updated_by: null },
     list_lines: { section: null, part: null, length_mm: null, width_mm: null, qty: null, material: null, material_other: false, edging: null, note: null,
       status: 'todo', status_by: null, status_at: null, released_at: null, released_by: null, added_rev: null, changed_rev: null, removed_rev: null,
-      src_line_id: null, snag_id: null, version: 1, updated_at: n },
+      src_line_id: null, snag_id: null, mig_sig: null, version: 1, updated_at: n },
     list_revisions: { meta: null, reason: null, made_by: null, made_at: n },
     list_events: { from_status: null, to_status: null, n: 1, by: null, at: n, client_at: null, note: null, cid: null, line_id: null, v_after: null },
     snags: { location_id: null, where_text: null, raised_at: n, material_id: null, material_text: null, qty: 1, length_mm: null, width_mm: null, edging: null, note: null,

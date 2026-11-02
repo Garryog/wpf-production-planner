@@ -72,7 +72,9 @@ create table if not exists list_lines(id text primary key, list_id text not null
   status text not null default 'todo' check(status in('todo','cut','got-out','waiting','na')),
   status_by text, status_at timestamptz, released_at timestamptz, released_by text,
   added_rev int, changed_rev int, removed_rev int, src_line_id text,
+  mig_sig text,                                                         -- fingerprint of the old-format tick / N/A copied at migration
   version int not null default 1, updated_at timestamptz not null default now());
+alter table list_lines add column if not exists mig_sig text;
 create index if not exists ll_list on list_lines(list_id);
 create index if not exists ll_upd on list_lines(updated_at);
 

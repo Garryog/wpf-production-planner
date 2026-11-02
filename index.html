@@ -2548,7 +2548,8 @@ function lsMigrationRows(existing,src){
     lsOldRows(l,src).forEach((r,i)=>{
       const k2=v1Key(r),tk=t[k2],hd=h[k2];
       const ln={id:r.lid||(l.id+':'+(i+1)),list_id:l.id,seq:i+1,kind:r.k,section:null,part:String(r.item||'').trim()||null,length_mm:null,width_mm:null,qty:null,
-        material:null,material_other:false,edging:null,note:null,status:'todo',status_by:null,status_at:null,released_at:null,released_by:null,added_rev:1,removed_rev:null};
+        material:null,material_other:false,edging:null,note:null,status:'todo',status_by:null,status_at:null,released_at:null,released_by:null,added_rev:1,removed_rev:null,
+        mig_sig:r.k==='hdr'?null:lsHash(JSON.stringify({t:tk||null,h:hd||null}))}; // what the old record said about this line when copied
       if(r.k==='hdr'){sec=String(r.item||'').trim();ln.note=String(r.note||'').trim()||null;}
       else{
         ln.section=sec||null;ln.qty=r.qty==null||r.qty===''?null:String(r.qty);ln.material=String(r.mat||'').trim()||null;
@@ -2689,24 +2690,31 @@ async function lsSwitchBack(by){
 function lsRescue(pick){
   if(!V2()||!LST.loaded||!DB.listStoreAt)return 0;
   const T=DB.listStoreAt;let n=0;
-  pick=pick||((kind,v)=>String((kind==='rel'?v.relAt:v.at)||'')>T);
+  // Default: an old-format entry that differs from what the line's migration copied (its fingerprint) — never the device
+  // clock. Lines without a fingerprint (made after the switch) fall back to "newer than the switch".
+  const custom=!!pick,sigNow=(lid,k)=>lsHash(JSON.stringify({t:((DB.listRow||{})[lid]||{})[k]||null,h:((DB.listHold||{})[lid]||{})[k]||null}));
+  const recent=(kind,v)=>String((kind==='rel'?v.relAt:v.at)||'')>new Date(Date.parse(T)-86400000).toISOString(); // a day either side of the switch
+  pick=pick||recent;
+  const ok=(kind,v,lid,k,x)=>custom?pick(kind,v,lid,k):x.mig_sig!=null?x.mig_sig!==sigNow(lid,k):String((kind==='rel'?v.relAt:v.at)||'')>T;
   const want=new Set();
   Object.entries(DB.listRow||{}).forEach(([lid,t])=>Object.entries(t||{}).forEach(([k,v])=>{if(v&&pick('tick',v,lid,k))want.add(lid);}));
   Object.entries(DB.listHold||{}).forEach(([lid,h])=>Object.entries(h||{}).forEach(([k,v])=>{if(v&&pick(v.st==='rel'?'rel':'hold',v,lid,k))want.add(lid);}));
-  const need=[...want].filter(id=>!LST.full.has(id));
+  const need=[...want].filter(id=>!LST.full.has(id)); // only lists with recent entries are fetched; loaded lists are all checked below
   if(need.length){if(!LST.rescuing)LST.rescuing=lsGetIn('lists','id',need.filter(id=>!LST.l.has(id))).then(r=>{lsPut('lists',r);return lsLines(need);}).catch(()=>{}).then(()=>{LST.rescuing=null;if([...want].every(id=>LST.full.has(id)))lsRescue(pick);});return 0;}
   const byList=new Map();
   const lineOf=(lid,k)=>{let m=byList.get(lid);if(!m){m=new Map();lsLinesOf(lid).forEach(x=>{if(x.removed_rev!=null||x.kind==='hdr'||x.status==='na')return;
       const kk=v1Key({k:x.kind,item:x.part,L:x.kind==='saw'&&x.length_mm!=null?+x.length_mm:'',W:x.kind==='saw'&&x.width_mm!=null?+x.width_mm:'',mat:x.material,note:x.kind==='saw'?[x.edging,x.note].filter(s=>String(s||'').trim()).join(' · '):x.note});
       if(!m.has(kk))m.set(kk,[]);m.get(kk).push(x);});byList.set(lid,m);}return m.get(k)||[];};
-  const send=(x,st,by,tag)=>{const cid='rescue:'+lsHash(x.id+'|'+tag);if(LQ.q.some(e=>e.cid===cid))return;
+  let done0;try{done0=new Set(JSON.parse(localStorage.getItem('wpfRescued')||'[]'));}catch(e){done0=new Set();}
+  const send=(x,st,by,tag)=>{const cid='rescue:'+lsHash(x.id+'|'+tag);if(done0.has(cid)||LQ.q.some(e=>e.cid===cid))return;
+    done0.add(cid);try{localStorage.setItem('wpfRescued',JSON.stringify([...done0].slice(-2000)));}catch(e){} // once per device; the database also applies it once
     const e={t:'line',cid,id:x.id,list:x.list_id,act:st==='release'?'release':'status',v:+x.version,rev:+((LST.l.get(x.list_id)||{}).rev)||1,from:x.status,at:nowISO(),by:lqBy(by),quiet:true};
     if(st!=='release')e.status=st;lqMut(q=>q.push(e));n++;};
-  Object.entries(DB.listRow||{}).forEach(([lid,t])=>Object.entries(t||{}).forEach(([k,v])=>{if(!v||!pick('tick',v,lid,k))return;
-    lineOf(lid,k).forEach(x=>{const st=x.kind==='saw'?'cut':'got-out';if(x.status!==st)send(x,st,v.by,'t|'+k+'|'+v.at);});}));
+  Object.entries(DB.listRow||{}).forEach(([lid,t])=>Object.entries(t||{}).forEach(([k,v])=>{if(!v)return;
+    lineOf(lid,k).forEach(x=>{if(!ok('tick',v,lid,k,x))return;const st=x.kind==='saw'?'cut':'got-out';if(x.status!==st)send(x,st,v.by,'t|'+k+'|'+v.at);});}));
   Object.entries(DB.listHold||{}).forEach(([lid,h])=>Object.entries(h||{}).forEach(([k,v])=>{if(!v)return;
-    if(v.st==='hold'&&pick('hold',v,lid,k))lineOf(lid,k).forEach(x=>{if(x.status==='todo')send(x,'waiting',v.by,'h|'+k+'|'+v.at);});
-    if(v.st==='rel'&&pick('rel',v,lid,k))lineOf(lid,k).forEach(x=>{if(x.status==='waiting')send(x,'release',v.relBy,'r|'+k+'|'+v.relAt);});}));
+    if(v.st==='hold')lineOf(lid,k).forEach(x=>{if(ok('hold',v,lid,k,x)&&x.status==='todo')send(x,'waiting',v.by,'h|'+k+'|'+v.at);});
+    if(v.st==='rel')lineOf(lid,k).forEach(x=>{if(ok('rel',v,lid,k,x)&&x.status==='waiting')send(x,'release',v.relBy,'r|'+k+'|'+v.relAt);});}));
   if(n)lqKick(0);
   return n;
 }
