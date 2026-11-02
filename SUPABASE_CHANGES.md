@@ -164,7 +164,10 @@ begin
   a:=coalesce(c->>'act','status'); w:=c->>'status'; noop:=false; why:=null; ok:=false;
   if l.removed_rev is not null then why:='removed';
   elsif a='release' then
-   if l.status='waiting' then ok:=true;
+   -- a release only counts if the line is as the screen saw it (a late offline 'Release all' can't release a line
+   -- that was let go and parked again since)
+   if l.status='waiting' and (c->>'v' is null or l.version=(c->>'v')::int) then ok:=true;
+   elsif l.status='waiting' then why:='stale';
    elsif l.status in('cut','got-out') then ok:=true; noop:=true;      -- already done: releasing only clears the wait
    else why:='not-waiting'; end if;
   elsif w in('cut','got-out') then

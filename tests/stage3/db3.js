@@ -94,7 +94,8 @@ function applyLineChanges(d, changes, by) {
     const a = c.act || 'status', w = c.status; let ok = false, noop = false, why = null;
     if (l.removed_rev != null) why = 'removed';
     else if (a === 'release') {
-      if (l.status === 'waiting') ok = true;
+      if (l.status === 'waiting' && (c.v == null || l.version === +c.v)) ok = true;
+      else if (l.status === 'waiting') why = 'stale'; // changed since the screen saw it (e.g. released and parked again)
       else if (['cut', 'got-out'].includes(l.status)) { ok = true; noop = true; }
       else why = 'not-waiting';
     } else if (w === 'cut' || w === 'got-out') {
