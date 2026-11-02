@@ -218,8 +218,9 @@ async function strandSwitching(browser, S, off) {
     const off = await F.open(browser, S, { now: F.NOW, role: 'office' });
     await off.page.evaluate(async () => (await lsMigrate('Garry')).ok); await idle(off.page);
     const b = S.backups.find(x => /pre-lists-v2/.test(x.reason || '')), ls = b && b.payload && b.payload.settings ? b.payload.settings.listStore : '(none)';
-    rec('B1 the pre-lists-v2 backup carries no listStore that would turn the switch off if pasted back (runbook: restoring a backup will NOT turn the switch off)', !ls || ls === '(none)' || ls === 'v2',
-      'backup settings.listStore=' + JSON.stringify(ls) + ' — the keep-switch trigger only keeps the stored value when the saved settings have NO listStore key, so restoring this payload sets the record to "' + ls + '" (V2() false: the floor drops back to the pre-migration lists)');
+    const bs = (b && b.payload && b.payload.settings) || null;
+    rec('B1 the pre-lists-v2 backup carries no listStore / listStoreAt at all, so pasting it back cannot move the switch (runbook: restoring a backup will NOT turn the switch off)', !!bs && !('listStore' in bs) && !('listStoreAt' in bs),
+      'backup settings.listStore=' + JSON.stringify(ls) + ' — since 2165095 bakSettings() leaves listStore/listStoreAt out of every backup, and the keep-switch trigger keeps the stored value when a save has no listStore key, so pasting this back cannot move the switch');
     await off.close();
   }
   await browser.close(); A.done();

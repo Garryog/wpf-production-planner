@@ -42,6 +42,13 @@ const sw = p => p.evaluate(async () => { try { return await lsSwitchBack('Garry'
     const tbl = L(S, 'L1:3').status, names = oldNames(S), q = await saw.page.evaluate(() => LQ.q.length);
     rec('R1 a tick sent while Switch back is rebuilding (after it read the lines, before it saved v1) is not lost: it is in the old lists or still queued',
       !back.err && (names.includes('top') || q > 0), 'switchback=' + JSON.stringify(back) + ' Top in tables=' + tbl + ' Top in old lists=' + names.includes('top') + ' saw queue=' + q + ' (lsSwitchBack: reads lines, then saves v1 — RPCs are still accepted in between)');
+    // R1 leaves the tick in the saw's queue; the app retries by itself (lqKick, at most ~10 s). A re-migration a few
+    // seconds later — the realistic order — must find it in the old lists. Wait (up to 15 s) for the saw's OWN retry,
+    // no help from the test, then re-migrate. (The other order — re-migrating before the retry — is attack6 W4.)
+    let drained = false;
+    for (let i = 0; i < 150 && !drained; i++) { await F.sleep(100); drained = (await saw.page.evaluate(() => LQ.q.length + JSON.parse(localStorage.getItem('wpfLineQ') || '[]').length)) === 0; }
+    const inOld = oldNames(S).includes('top');
+    rec('R1a within 15 s the saw\'s own retry puts the held Top tick into the old lists and empties its queue', drained && inOld, 'queue empty=' + drained + ' Top in old lists=' + inOld);
     // and what a re-migration later does to it
     const re = await off.page.evaluate(async () => { await loadDB(); try { const r = await lsMigrate('Garry'); return { ok: r.ok }; } catch (e) { return { err: e.message }; } });
     rec('R1b after a later re-migration the tick is still there (re-migration copies the old lists over the tables)', L(S, 'L1:3').status === 'cut', 're-migrate=' + JSON.stringify(re) + ' Top=' + L(S, 'L1:3').status);

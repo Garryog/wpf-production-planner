@@ -49,7 +49,7 @@ const raw = (t, ls) => t.page.evaluate(async ls => { const s = fullSettings(); s
   const before6 = S.row.settings.listStore;
   await restore(off, daily.payload); const g6 = S.row.settings.listStore;
   rec('G6 after Switch back, restoring a daily backup taken while on the new lists must not switch the floor back onto the (now stale) tables',
-    g6 === 'v1', 'before=' + before6 + ' after restore=' + g6 + ' (backupNow("daily") stores fullSettings() incl. listStore; keep-switch only guards a stored "v2")');
+    g6 === 'v1', 'before=' + before6 + ' after restore=' + g6 + ' (since 2165095 backupNow() stores bakSettings(): no listStore/listStoreAt in any backup; and the trigger only lets the switch move v1→migrating→v2 / v2→switching→v1)');
   // put it back to v1 for the rest (via a raw save, allowed from v2 only via switching — so go through Finish)
   if (S.row.settings.listStore !== 'v1') { S.row.settings.listStore = 'v1'; S.row.settings.listStoreAt = new Date().toISOString(); }
   // G7: the floor ticks Top on the old lists, then Migrate AGAIN (v1 → migrating → v2 must work; tables already hold L1)
