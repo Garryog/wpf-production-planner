@@ -3162,11 +3162,11 @@ function lsUnknownMats(wb,entries,pid){
 }
 function lsMatchDlg(names,pid,done,opt){
   opt=opt||{};
-  const ms=lsMats(pid,'sheet');
+  const ms=lsMats(pid,'sheet'),old=lsMats(pid,'sheet',true).filter(m=>m.active===false); // retired ones are offered too (picking one brings it back)
   const ov=document.createElement('div');ov.className='pod-ovl';
   ov.innerHTML=`<div class="pod-in" style="min-width:min(720px,96vw)"><div style="font-weight:800;color:#14335c;font-size:17px;margin-bottom:2px">🧱 Materials not on the ${escA((LST.p.get(pid)||{}).name||'')} list</div>
     <div style="font-size:12px;color:var(--t3);margin-bottom:10px">Match each name to a project material — the match is remembered next time. Anything left as typed is saved, flagged for the Production Manager; the saw still gets the list.</div>
-    <table class="lst-tbl"><thead><tr><th>In the workbook</th><th>Use</th></tr></thead><tbody>${names.map((n,i)=>`<tr><td><b>${escA(n)}</b></td><td><select data-mm="${i}" style="${LS_INP};width:100%"><option value="">${opt.noKeep?'— match or add —':'Keep as typed (flagged)'}</option>${ms.map(m=>`<option value="${escA(m.id)}">${escA(m.name)}</option>`).join('')}<option value="__add">＋ Add "${escA(n)}" to the project list</option></select></td></tr>`).join('')}</tbody></table>
+    <table class="lst-tbl"><thead><tr><th>In the workbook</th><th>Use</th></tr></thead><tbody>${names.map((n,i)=>`<tr><td><b>${escA(n)}</b></td><td><select data-mm="${i}" style="${LS_INP};width:100%"><option value="">${opt.noKeep?'— match or add —':'Keep as typed (flagged)'}</option>${ms.map(m=>`<option value="${escA(m.id)}">${escA(m.name)}</option>`).join('')}${old.length?`<optgroup label="Retired — picking one brings it back">${old.map(m=>`<option value="${escA(m.id)}">${escA(m.name)} (retired)</option>`).join('')}</optgroup>`:''}<option value="__add">＋ Add "${escA(n)}" to the project list</option></select></td></tr>`).join('')}</tbody></table>
     <div style="margin-top:12px;display:flex;gap:10px;justify-content:flex-end"><button class="btn btn-s" id="mm-x">Cancel upload</button><button class="btn btn-g" id="mm-ok">Save the lists</button></div></div>`;
   document.body.appendChild(ov);
   ov.querySelector('#mm-x').onclick=()=>{ov.remove();done(null);};
@@ -3182,8 +3182,10 @@ function lsMatchDlg(names,pid,done,opt){
           if(ex){if(ex.active===false)await lsWrite('project_materials',ex,{active:true});map[matKey(n)]=ex.name;} // already answers to that name (maybe a fitting, an other spelling, or retired): use it
           else await lsWrite('project_materials',{id:uid('M'),project_id:pid,name:n,kind:'sheet',sort:lsMats(pid,'',true).length});}
         else if(v){const m=LST.m.get(v),cl=lsMatClash(pid,n,v);
-          if(cl){toast('"'+n+'" is already '+(matKey(cl.name)===matKey(n)?'':'another spelling of ')+'"'+cl.name+'" on this project — pick that one');return;}
-          map[matKey(n)]=m.name;if(!(m.aliases||[]).some(a=>matKey(a)===matKey(n))&&matKey(m.name)!==matKey(n))await lsWrite('project_materials',m,{aliases:[...(m.aliases||[]),n]});}
+          if(cl){toast('"'+n+'" is already '+(matKey(cl.name)===matKey(n)?'':'another spelling of ')+'"'+cl.name+'"'+(cl.active===false?' (retired — listed under Retired)':'')+' on this project — pick that one');return;}
+          map[matKey(n)]=m.name;const pa={};if(m.active===false)pa.active=true; // a retired material picked here is brought back
+          if(!(m.aliases||[]).some(a=>matKey(a)===matKey(n))&&matKey(m.name)!==matKey(n))pa.aliases=[...(m.aliases||[]),n];
+          if(Object.keys(pa).length)await lsWrite('project_materials',m,pa);}
       }
     }catch(e){toast('Materials not saved — '+e.message);return;}
     ov.remove();done(map);
