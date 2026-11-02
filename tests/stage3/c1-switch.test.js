@@ -42,7 +42,10 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     const bv = await B.page.evaluate(() => V2());
     rec('PC B now reads V2() true after the merge', bv === true);
     // switch back writes 'v1' — blank would be skipped by the merge, so it must be a real value
+    // a raw 'v2' → 'v1' save is refused by the keep-switch rule (only Switch back's 'switching' step may leave 'v2')
     await A.page.evaluate(async () => { await loadDB(); DB.listStore = 'v1'; clearTimeout(saveT); await saveDB(); });
+    rec("a raw save of 'v1' over 'v2' is refused (an old copy can't turn the new lists off)", S.row.settings.listStore === 'v2');
+    await A.page.evaluate(async () => { await loadDB(); DB.listStore = 'switching'; clearTimeout(saveT); await saveDB(); await loadDB(); DB.listStore = 'v1'; clearTimeout(saveT); await saveDB(); });
     await B.page.evaluate(async () => { await loadDB(); });
     rec("switch back to 'v1' reaches PC B", (await B.page.evaluate(() => V2())) === false && S.row.settings.listStore === 'v1');
     await A.close(); await B.close();
