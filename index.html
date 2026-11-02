@@ -28,7 +28,7 @@ button,input,select{font-family:inherit;cursor:pointer}
 .lm{width:32px;height:32px;background:var(--accent);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#1a1d23}
 .lt{font-size:14px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:#fff}
 .ls{font-size:10px;color:var(--accent);letter-spacing:1px;text-transform:uppercase}
-.sync{font-size:11px;color:rgba(255,255,255,.5);display:flex;align-items:center;gap:5px}
+.sync{font-size:11px;color:rgba(255,255,255,.5);display:flex;align-items:center;gap:5px;flex-wrap:wrap;min-width:0}
 .dot{width:6px;height:6px;border-radius:50%;background:#4caf50;display:inline-block}
 .dot.s{background:var(--accent)}.dot.e{background:#e53935}
 .tabs{background:#fff;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;box-shadow:0 1px 4px rgba(0,0,0,.06)}
@@ -181,6 +181,7 @@ button,input,select{font-family:inherit;cursor:pointer}
 .wl-dday{font-size:13px;font-weight:800;color:#14335c;text-transform:uppercase;letter-spacing:.5px;margin:16px 0 6px;border-bottom:2px solid #14335c;padding-bottom:3px}
 .wl-drow{display:flex;gap:10px;align-items:center;background:#fff;border:1px solid var(--border);border-radius:8px;padding:9px 12px;margin-bottom:6px;font-size:14px}
 .wl-drow>b{font-size:16px;color:#14335c}
+.hold-grp .wl-drow{flex-wrap:wrap}.hold-grp .wl-drow>.dsh-t{flex-basis:120px}.hold-grp .wl-drow>.wl-undo{margin-left:auto} /* phone: the Release button drops to its own line instead of pushing the page sideways */
 /* batch-cut selection + combined view + per-house splits */
 .wl-chk{width:44px;height:44px;border-radius:9px;border:2px solid rgba(255,255,255,.65);background:transparent;cursor:pointer;color:#14335c;font-weight:800;font-size:20px;line-height:1;flex-shrink:0}
 .wl-chk.on{background:#e8b931;border-color:#e8b931}
