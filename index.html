@@ -2227,10 +2227,24 @@ async function lqFoldV1(){
 }
 function lqSay(m){LQ.msgs.push(m);if(LQ.msgs.length>20)LQ.msgs.shift();toast(m);}
 function lqDrop(cids){lqMut(q=>q.splice(0,q.length,...q.filter(e=>!cids.has(e.cid))));}
+// The switch as the database has it now (not this screen's copy): a device that was offline during a switch back
+// must not send into tables nobody reads. Only the switch is fetched, not the whole plan.
+async function lqSwitchNow(){
+  const r=await fetch(SUPA_URL+'/production_planner?id=eq.main&select=ls:settings->>listStore',{headers:SUPA_HDR});
+  const d=await r.json().catch(()=>null);if(!r.ok||!Array.isArray(d)||!d[0])throw new Error('could not check the lists switch');
+  return 'ls' in d[0]?d[0].ls:((d[0].settings||{}).listStore||'');
+}
+async function lqSwitchedOff(){ // the database says the lists are back on the old store: reload, then fold the queue in
+  await loadDB();
+  if(V2()){DB.listStore='v1';} // loadDB merge kept this screen's 'v2' — the database's word wins here
+  lsStart();await lqFoldV1();
+}
 async function lqSend(){
   if(LST.rescuing)await LST.rescuing; // old-tab ticks being copied in go with this send
   if(LQ.busy)return;
   if(!V2()){await lqFoldV1();return;} // switched back: unsent changes go into the old lists
+  if(!lqRead().length&&!LQ.q.length)return;
+  try{if(await lqSwitchNow()!=='v2'){await lqSwitchedOff();return;}}catch(e){LQ.err=(e&&e.message)||'no signal';updSaveBar();return;}
   if(!LQ.memOnly)LQ.q=lqRead();LQ.gen++;
   if(!LQ.q.length){clearInterval(LQ.iv);LQ.iv=null;return;}
   LQ.busy=true;clearTimeout(LQ.t);
@@ -2258,6 +2272,7 @@ async function lqSend(){
       if(LQ.solo>0)LQ.solo--;
       if(!r.ok){
         // the database refused the call itself: a batch of ticks is retried one at a time, so only the bad one is dropped
+        if(r.status===400&&/switched off/.test((d&&d.message)||'')){LQ.busy=false;await lqSwitchedOff();return;} // switched back meanwhile
         if((r.status===400||r.status===409||r.status===422)&&h.t==='line'&&batch.length>1){LQ.solo=batch.length;continue;}
         if(r.status===400||r.status===409||r.status===422){lqDrop(cids);lqSay('Not saved — the database refused it ('+String((d&&d.message)||r.status).slice(0,80)+')');continue;}
         throw new Error('HTTP '+r.status);

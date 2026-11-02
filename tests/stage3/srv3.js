@@ -64,6 +64,8 @@ async function handle(S, route) {
   try {
     if (rpc) {
       const f = D.RPC[rpc[1]]; if (!f) return J(route, 404, { code: 'PGRST202', message: 'Could not find the function ' + rpc[1] });
+      // lists_switch_on(): every list function refuses while the planner record says the lists are not switched on
+      if (S.row && (!S.row.settings || S.row.settings.listStore !== 'v2') && !S.noSwitchCheck) return J(route, 400, { code: 'P0001', message: 'switched off: the cutting lists are on the old store' });
       const args = JSON.parse(req.postData() || '{}');
       S.rpcCalls.push({ fn: rpc[1], args });
       const out = f(S.db, args);

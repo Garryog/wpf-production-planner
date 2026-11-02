@@ -110,6 +110,16 @@ end loop; end $$;
 
 alter publication supabase_realtime add table lists, list_lines; -- ready for later; the app polls for now
 
+-- Every list function refuses while the lists are switched back to the old store: a device that missed the switch
+-- (offline at the time) then puts its change into the old lists instead of into tables nobody is reading.
+create or replace function lists_switch_on() returns void language plpgsql as $$
+begin
+ if coalesce((select settings->>'listStore' from production_planner where id='main'),'') <> 'v2' then
+  raise exception 'switched off: the cutting lists are on the old store' using errcode='P0001';
+ end if;
+end $$;
+grant execute on function lists_switch_on() to anon, authenticated, service_role;
+
 -- One status change per line, with the "done wins" rules applied by the database.
 -- Each change: {id, status | act:'release', v (line version the screen saw — needed to untick), rev (list rev the screen
 -- showed), cid (device id for this tap), from, at}. Reply per change: {id, cid, ok, why, status, v, by, at, rel, relby, dup, va = for a resend, the version that tap produced}.
@@ -118,6 +128,7 @@ alter publication supabase_realtime add table lists, list_lines; -- ready for la
 create or replace function apply_line_changes(p_changes jsonb, p_by text) returns jsonb language plpgsql as $$
 declare c jsonb; l list_lines%rowtype; w text; a text; ok boolean; noop boolean; why text; res jsonb:='[]';
 begin
+ perform lists_switch_on();
  for c in select * from jsonb_array_elements(p_changes) loop
   -- lock the line FIRST: a resend racing the original waits here until the original has committed its event,
   -- then sees it below as "already applied" (instead of failing on the unique cid)
@@ -169,6 +180,7 @@ grant execute on function apply_line_changes(jsonb,text) to anon, authenticated,
 create or replace function list_attach(p_list text, p_wo text, p_on boolean, p_by text, p_cid text default null) returns jsonb language plpgsql as $$
 declare r lists%rowtype; had boolean;
 begin
+ perform lists_switch_on();
  select * into r from lists where id=p_list for update;
  if not found then raise exception 'missing list %', p_list; end if;
  if p_cid is not null and exists(select 1 from list_events e where e.cid=p_cid) then return to_jsonb(r); end if;
@@ -191,6 +203,7 @@ grant execute on function list_attach(text,text,boolean,text,text) to anon, auth
 create or replace function list_set_done(p_list text, p_mode text, p_on boolean, p_by text, p_why text default null, p_cid text default null) returns jsonb language plpgsql as $$
 declare r lists%rowtype; what text;
 begin
+ perform lists_switch_on();
  select * into r from lists where id=p_list for update;
  if not found then raise exception 'missing list %', p_list; end if;
  if p_cid is not null and exists(select 1 from list_events e where e.cid=p_cid) then return to_jsonb(r); end if;
@@ -228,6 +241,7 @@ grant execute on function list_set_done(text,text,boolean,text,text,text) to ano
 create or replace function save_list_revision(p_list jsonb, p_lines jsonb, p_expect int, p_by text, p_reason text) returns jsonb language plpgsql as $$
 declare r lists%rowtype; e jsonb; nrev int; ids text[]:='{}'; ex list_lines%rowtype; isnew boolean:=false;
 begin
+ perform lists_switch_on();
  select * into r from lists where id=p_list->>'id' for update;
  if not found then
   if p_expect is not null then raise exception 'stale: list % is missing', p_list->>'id'; end if;
@@ -351,6 +365,7 @@ grant all on snags to service_role;
 create or replace function snags_to_list(p_ids text[], p_deliver_by date, p_by text) returns jsonb language plpgsql as $$
 declare s record; pid text; lid text; seq int; out jsonb:='[]'; bad text; lnid text; pname text;
 begin
+ perform lists_switch_on();
  perform 1 from snags where id = any(p_ids) for update;
  select string_agg(id||' ('||status||')',', ') into bad from snags where id = any(p_ids) and status<>'raised';
  if bad is not null then raise exception 'not raised: %', bad; end if;
