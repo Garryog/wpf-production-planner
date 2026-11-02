@@ -2748,7 +2748,13 @@ async function lsSwitchBack2(){
   if(q0.length){const got=new Set((await lsGetIn('list_events','cid',q0.map(e=>e.cid).filter(Boolean))).map(e=>e.cid));
     if(got.size)lqMut(qq=>qq.splice(0,qq.length,...qq.filter(e=>!got.has(e.cid))));}
   lsStart();clearTimeout(saveT);await saveDB();
-  if(DB.saveFailed){DB.saveFailed=false;throw new Error('the old lists were rebuilt but could not be saved — the switch stays on the new lists; try again');}
+  if(DB.saveFailed){DB.saveFailed=false;
+    // the save may have landed with only the reply lost: ask the record what it really says before telling the office anything
+    let sv=null;try{sv=await lqSwitchNow();}catch(e){}
+    if(sv!=='v1')throw new Error(sv==null?'the old lists were rebuilt but the save could not be confirmed (no reply) — refresh Settings to see which lists the floor is on before trying again'
+      :'the old lists were rebuilt but could not be saved — the planner record still says "'+sv+'", so the switch stays on the new lists; try again');
+    await loadDB(); // it did land: carry on from the record as saved
+  }
   if(lqRead().length)await lqFoldV1(); // folds and saves; anything it can't place stays queued and is shown
   return{lists:NL.length};
 }
