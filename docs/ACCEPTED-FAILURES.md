@@ -8,6 +8,8 @@ Updated 22 Oct 2026 after the zombie-untick save fixes (branch `feature/stage2-i
 | sawstores attack-devices identical lines share one record | ticks keyed by line content | line IDs (before snags) | pending |
 | sawstores attack-regress A4 label for waiting line | pre-existing | labels step | pending |
 | baseline weeks.test.js "Monday 00:30 (summer time) is in the new week" | "this week" is worked out in UTC, so 00:00–01:00 on an Irish summer Monday still counts as last week. Not in the Stage 2 plan | weeks fix TBD | pending |
+| stage3 attack3-switch R1b "re-migration keeps the tick" | Tester round 4 found this is test timing (the tick is never lost); still fails in a sequential run on 2 Nov | test to be rewritten to wait for the save | pending |
+| stage3 attack-poll P5 | marked "information only" inside the test itself | — | pending |
 
 Fixed by Stage 2 and removed from this list: import.test.js (17 of 19), datasafety 3/5/6 (all 11 now pass), weeks 2 and 8 (and the year-end autoSchedule check), stage1 t5 "shipped job returns if edited elsewhere" (rewritten as acceptance check 27 — imports never remove a job, so it can't happen; stage1 t8 rewritten the same way).
 
