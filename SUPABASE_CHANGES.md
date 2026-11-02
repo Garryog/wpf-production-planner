@@ -33,9 +33,10 @@ Newest at the top. Each block must be run in Supabase BEFORE the matching code g
    The Stage 1 block (further down this file, 2026-10-20) must already have been run: `production_planner` must have a `version` column.
 4. Clear the editor, copy everything in the grey box below, paste it and click **Run**.
 5. Expected result: **"Success. No rows returned"**. If you see a red error, stop and send a screenshot — do not merge.
-6. Check: **Table Editor** shows the new tables `projects`, `project_materials`, `lists`, `list_lines`, `list_revisions`, `list_events`, `snags` (all empty).
-7. Check: **Database → Functions** shows `apply_line_changes`, `list_attach`, `list_set_done`, `save_list_revision`, `snags_to_list`.
-8. If the line `alter publication supabase_realtime ...` gives an error saying the table is already in the publication, that's fine — delete that one line and Run again.
+6. **Straight away, check the planner still saves.** This SQL adds a trigger to the planner record itself, so: make one normal save on the live site (e.g. type a note on a job), refresh the page, and check the note stuck. If saving fails, the new trigger is at fault: stop and send a screenshot.
+7. Check: **Table Editor** shows the new tables `projects`, `project_materials`, `lists`, `list_lines`, `list_revisions`, `list_events`, `snags` (all empty).
+8. Check: **Database → Functions** shows these 12: the five the app calls — `apply_line_changes`, `list_attach`, `list_set_done`, `save_list_revision`, `snags_to_list` — and seven helpers — `lists_switch_on`, `lists_writable`, `lists_touch`, `pm_key`, `pm_no_clash`, `production_planner_keep_switch`, `snag_line_done`.
+9. If the line `alter publication supabase_realtime ...` gives an error saying the table is already in the publication, that's fine — delete that one line and Run again.
 
 ```sql
 -- ===================== PLAN A — lists data foundation =====================
