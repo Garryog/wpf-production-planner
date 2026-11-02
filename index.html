@@ -2372,6 +2372,7 @@ function lsRowToLine(r,typed){
   const s=v=>v==null?'':String(v).trim();
   if(r.k==='hdr')return{kind:'hdr',part:s(r.item),note:s(r.note)};
   const ln={kind:r.k,section:s(r.sec),part:s(r.item),qty:s(r.qty),material:s(r.mat)};
+  if(typed&&r.lid)ln.id=r.lid; // the editor row's own line: saved onto that line, never onto its twin
   if(r.k==='saw'){ln.length_mm=r.L;ln.width_mm=r.W;ln.edging=typed?s(r.edging):s(r.note);ln.note=typed?s(r.note):'';}
   else{ln.edging='';ln.note=s(r.note);if(typed&&r.matOther)ln.material_other=true;}
   return ln;
@@ -2422,7 +2423,7 @@ function lsEditMerge(id,rows,lines){
   const now=lsLinesOf(id).filter(x=>x.removed_rev==null&&x.kind!=='hdr'),byId=new Map(now.map(x=>[x.id,x]));
   const mine=new Set(rows.filter(r=>r.lid).map(r=>r.lid));
   const nm=x=>(x.part||x.material||'line')+' ×'+(x.qty==null?'':x.qty);
-  const asLine=x=>({kind:x.kind,section:x.section,part:x.part,length_mm:x.length_mm,width_mm:x.width_mm,qty:x.qty,material:x.material,material_other:!!x.material_other,edging:x.edging,note:x.note});
+  const asLine=x=>({id:x.id,kind:x.kind,section:x.section,part:x.part,length_mm:x.length_mm,width_mm:x.width_mm,qty:x.qty,material:x.material,material_other:!!x.material_other,edging:x.edging,note:x.note});
   const over=[];let kept=0;
   rows.forEach((r,i)=>{
     if(!r.lid||!r.sig)return;
@@ -3357,7 +3358,9 @@ function diffLines(old,nw,opt){
   const pick=(i,f,doneFirst)=>{const c=live.filter(x=>!used.has(x.id)&&f(x));
     c.sort((a,b)=>(doneFirst?(isDone(b)?1:0)-(isDone(a)?1:0):0)||sq(a)-sq(b));
     if(c.length){match[i]=c[0];used.add(c[0].id);return true;}return false;};
-  nw.forEach((x,i)=>{const k=key(x);if(pick(i,o=>key(o)===k&&T(o.note)===T(x.note),true))how[i]='same';});
+  // 0. a line that names its own id (the editor knows which row is which) pairs with exactly that line — twins can't swap
+  nw.forEach((x,i)=>{if(x.id==null)return;const o=live.find(y=>y.id===x.id&&!used.has(y.id));if(!o)return;match[i]=o;used.add(o.id);how[i]=key(o)!==key(x)?'changed':T(o.note)!==T(x.note)?'note':'same';});
+  nw.forEach((x,i)=>{if(match[i])return;const k=key(x);if(pick(i,o=>key(o)===k&&T(o.note)===T(x.note),true))how[i]='same';});
   nw.forEach((x,i)=>{if(match[i])return;const k=key(x);if(pick(i,o=>key(o)===k,true))how[i]='note';});
   nw.forEach((x,i)=>{if(match[i])return;const k=pk(x);if(pick(i,o=>pk(o)===k,false))how[i]='changed';});
   const tail=x=>{const m=/:(\d+)$/.exec(String(x.id||''));return m?+m[1]:sq(x);};
