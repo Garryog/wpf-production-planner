@@ -22,6 +22,7 @@ function match(r, k, f) {
   if (op === 'is') return v === 'null' ? x == null : s(x) === v;
   if (op === 'in') { const a = v.replace(/^\(|\)$/g, '').split(',').map(z => z.replace(/^"|"$/g, '')); return a.includes(s(x)); }
   if (op === 'cs') { const a = v.replace(/^\{|\}$/g, '').split(',').filter(Boolean); return Array.isArray(x) && a.every(z => x.includes(z)); }
+  if (op === 'like') { const re = new RegExp('^' + v.split('*').map(z => z.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*') + '$'); return x != null && re.test(String(x)); }
   if (op === 'not') return !match(r, k, v);
   throw new Error('fake server: unsupported filter ' + f);
 }
@@ -61,6 +62,7 @@ async function handle(S, route) {
     if (m === 'GET') return J(route, 200, select(rows, q));
     if (m === 'POST') {
       let b = JSON.parse(req.postData() || '[]'); if (!Array.isArray(b)) b = [b];
+      if (S.onPost) b = S.onPost(t, b) || b; // a test can lose or change rows on the way in
       const up = /merge-duplicates/.test(pre), out = [];
       b.forEach(r => { const ex = up && r.id != null ? D.find(S.db, t, r.id) : null; out.push(ex ? D.update(S.db, t, ex, r) : D.insert(S.db, t, r)); });
       if (S.dropReply && S.dropReply-- > 0) return route.abort('connectionreset');

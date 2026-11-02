@@ -1323,7 +1323,7 @@ function renderSettings(app){
     +'<button class="btn btn-g" id="btn-backup">⬇ Download full backup (JSON)</button>'
     +'<div id="bak-last" style="font-size:13px;font-weight:700;margin-top:12px">Last good backup: checking…</div>'
     +'<div style="font-size:11px;color:var(--t3);margin-top:3px">Automatic: the first office screen each day saves a copy to the database (kept 30 days). Clear Week and other bulk deletes take one first.</div>'
-    +'</div></div>';
+    +'</div>'+lsPanelHTML()+'</div>';
 
   // staff roster: edit in place, add, remove
   const uidS=()=>'S'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
@@ -1350,7 +1350,7 @@ function renderSettings(app){
     sched();render();toast(n+' added — tick the jobs they do');
   };
   document.getElementById('st-new')?.addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('st-add').click();});
-  updBakLine();
+  updBakLine();lsBindPanel();
   if(!BAK.busy)lastBackup().then(()=>{BAK.err=BAK.err||'';updBakLine();}).catch(e=>{BAK.err=e.message;updBakLine();});
   document.getElementById('btn-backup')?.addEventListener('click',()=>{
     const data={backedUpAt:new Date().toISOString(),orders:DB.orders,nid:DB.nid,settings:fullSettings()};
@@ -2028,7 +2028,7 @@ async function lsLoad(){
       const[p,m,l]=await Promise.all([lsGet('projects?select=*'),lsGet('project_materials?select=*'),lsGet('lists?select=*')]);
       lsPut('projects',p);lsPut('project_materials',m);lsPut('lists',l);
       await lsLines(l.filter(x=>!lsFinishedRow(x)).map(x=>x.id)); // finished lists' lines load when someone opens them
-      LST.loaded=true;LST.err='';
+      LST.loaded=true;LST.err='';lsRescue();
     }catch(e){LST.err=e.message;console.warn('Planner lists: '+e.message);}
     finally{LST.loading=null;}
   })();
@@ -2050,6 +2050,7 @@ async function lsPoll(){
     LST.err='';
   }catch(e){LST.err=e.message;}
   finally{LST.polling=false;}
+  lsRescue();
   if(n)lsRedraw();
 }
 function lsRedraw(){mergedRender();} // the same rule as a merge: never redraw under someone's fingers or over an open dialog
@@ -2213,7 +2214,7 @@ async function lqSend(){
           const e=batch.find(b=>b.cid===x.cid)||batch.find(b=>b.id===x.id);
           if(x.v!=null&&LST.ln.has(x.id))lsPut('list_lines',[{id:x.id,list_id:LST.ln.get(x.id).list_id,status:x.status,version:x.v,status_by:x.by,status_at:x.at,released_at:x.rel,released_by:x.relby}],true);
           if(e&&x.ok&&x.v!=null&&+x.v!==+e.v)bump.push([x.id,+e.v,+x.v]); // our own change moved the line on: later taps here build on it
-          if(!x.ok)bad.push(x);
+          if(!x.ok&&!(e&&e.quiet))bad.push(x); // a rescued old-tab tick that the database turns down is expected — no message
         });
         lqMut(q=>{q.splice(0,q.length,...q.filter(e=>!cids.has(e.cid)));q.forEach(e=>{const b=bump.find(z=>z[0]===e.id&&z[1]===e.v);if(b)e.v=b[2];});});
         if(bad.length){lqSay(lqWhy(bad[0])+(bad.length>1?' (+'+(bad.length-1)+' more)':''));
@@ -2381,6 +2382,199 @@ function lsUpload(f){
     }catch(e){bad('Could not save that file: '+e.message);}
   };
   rd.readAsArrayBuffer(f);
+}
+/* ---------- Migrate lists (old record → tables), count check, switch back, rescue of old-tab ticks ----------
+   One hard cut-over, reversible. Nothing is deleted: the old list data stays in the planner record as a frozen copy;
+   lines the tables no longer need are marked removed, never erased. */
+function v1Key(r){return[r.k,String(r.item||'').trim(),r.L,r.W,String(r.mat||'').trim(),String(r.note||'').trim()].join('|').toLowerCase();} // today's rowKey
+function lsHash(s){let h=5381;s=String(s);for(let i=0;i<s.length;i++)h=((h*33)^s.charCodeAt(i))>>>0;return h.toString(36);}
+function lsOldRows(l){const wb=(DB.listWBs||{})[l.wb];return wb&&wb.sheets&&wb.sheets[l.sheet]?wb.sheets[l.sheet]:[];}
+function lsOldCounts(l){ // what the old screens show: lines, done, waiting (read-time rules: a tick beats a hold)
+  const t=(DB.listRow||{})[l.id]||{},h=(DB.listHold||{})[l.id]||{};let n=0,dn=0,w=0;
+  lsOldRows(l).forEach(r=>{if(r.k==='hdr')return;n++;const k=v1Key(r);if(t[k])dn++;else if(h[k]&&h[k].st==='hold')w++;});
+  return{n,done:dn,wait:w};
+}
+const LS_NOPROJ=/^(manual lists)?$/i;
+// The tables' rows for the old data (pure apart from reading DB): projects, lists, lines, holdLog events. Same input → same rows.
+function lsMigrationRows(existing){
+  const cust=l=>{for(const w of (l.wos||[])){const o=DB.orders.find(x=>x.wo===w);if(o&&o.customer)return String(o.customer).trim();}return'';};
+  const projs=new Map(),pidOf=new Map();
+  (existing||[]).forEach(p=>projs.set(String(p.name).trim().toLowerCase(),{id:p.id,name:p.name,customer:p.customer||null,keep:true}));
+  const lists0=DB.lists||[],L=[],LN=[],EV=[];
+  lists0.forEach(l=>{
+    let pn=String(l.project||'').trim();
+    if(LS_NOPROJ.test(pn))pn=cust(l)||'Unassigned'; // 'Manual lists' / blank → the tagged job's customer (decision 3)
+    const k=pn.toLowerCase();
+    if(!projs.has(k))projs.set(k,{id:'PJ'+lsHash(k),name:pn,customer:cust(l)||null});
+    const p=projs.get(k);if(!p.customer&&cust(l))p.customer=cust(l);
+    pidOf.set(l.id,p.id);
+    const t=(DB.listRow||{})[l.id]||{},h=(DB.listHold||{})[l.id]||{},dn=(DB.listDone||{})[l.id]||{};
+    let sec='',ns=0,nf=0,touched=false;
+    lsOldRows(l).forEach((r,i)=>{
+      const k2=v1Key(r),tk=t[k2],hd=h[k2];
+      const ln={id:r.lid||(l.id+':'+(i+1)),list_id:l.id,seq:i+1,kind:r.k,section:null,part:String(r.item||'').trim()||null,length_mm:null,width_mm:null,qty:null,
+        material:null,material_other:false,edging:null,note:null,status:'todo',status_by:null,status_at:null,released_at:null,released_by:null,added_rev:1,removed_rev:null};
+      if(r.k==='hdr'){sec=String(r.item||'').trim();ln.note=String(r.note||'').trim()||null;}
+      else{
+        ln.section=sec||null;ln.qty=r.qty==null||r.qty===''?null:String(r.qty);ln.material=String(r.mat||'').trim()||null;
+        if(r.k==='saw'){ln.length_mm=r.L===''||r.L==null?null:+r.L;ln.width_mm=r.W===''||r.W==null?null:+r.W;ln.edging=String(r.note||'').trim()||null;ns++;} // old column F → Edging
+        else{ln.note=String(r.note||'').trim()||null;nf++;}
+        if(tk){ln.status=r.k==='saw'?'cut':'got-out';ln.status_by=tk.by||null;ln.status_at=tk.at||null;touched=true;} // ticked (also ticked + parked) = done
+        else if(hd&&hd.st==='hold'){ln.status='waiting';ln.status_by=hd.by||null;ln.status_at=hd.at||null;touched=true;}
+        if(hd&&hd.st==='rel'){ln.released_at=hd.relAt||null;ln.released_by=hd.relBy||null;}
+      }
+      LN.push(ln);
+    });
+    L.push({id:l.id,project_id:p.id,name:String(l.name||l.sheet||'(no name)'),list_type:'house',wos:(l.wos||[]).slice(),no_cut:!!l.noCut,no_fit:!!l.noFit,
+      saw_done_at:dn.saw?dn.saw.at:null,saw_done_by:dn.saw?dn.saw.by||null:null,fit_done_at:dn.fit?dn.fit.at:null,fit_done_by:dn.fit?dn.fit.by||null:null,
+      source:l.manual?'manual':'migrated',sdate:/^\d{4}-\d{2}-\d{2}$/.test(l.sdate||'')?l.sdate:null,log:Array.isArray(l.log)?l.log:[],n_saw:ns,n_fit:nf,
+      locked:touched||!!dn.saw||!!dn.fit,archived:false,created_at:l.up||nowISO(),created_by:l.by||null,updated_by:'migration'});
+  });
+  (DB.holdLog||[]).forEach((e,i)=>{ // the old waiting history, matched to lists by name and project
+    const l=lists0.find(x=>x.name===e.list&&String(x.project||'')===String(e.proj||''));
+    EV.push({list_id:l?l.id:null,act:'old-'+(e.act||''),n:+e.n||1,by:e.by||null,at:e.at||nowISO(),note:'from the old waiting history'+(l?'':' — list "'+String(e.list||'')+'"'),cid:'mig:'+lsHash(i+'|'+JSON.stringify(e))});
+  });
+  return{projects:[...projs.values()].filter(p=>!p.keep).map(p=>({id:p.id,name:p.name,customer:p.customer||null,updated_by:'migration'})),lists:L,lines:LN,events:EV};
+}
+async function lsUpsert(t,rows){
+  for(let i=0;i<rows.length;i+=400){
+    const r=await fetch(SUPA_URL+'/'+t+'?on_conflict=id',{method:'POST',headers:{...SUPA_HDR,'Prefer':'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(rows.slice(i,i+400))});
+    if(!r.ok)throw new Error('saving '+t+' failed: HTTP '+r.status+' '+(await r.text().catch(()=>'')).slice(0,120));
+  }
+}
+async function lsGetIn(t,col,ids){const out=[];for(let i=0;i<ids.length;i+=60)out.push(...await lsGet(t+'?select=*&'+col+'=in.('+ids.slice(i,i+60).map(id=>'"'+encodeURIComponent(id)+'"').join(',')+')'));return out;}
+// Count check, read back from the database: lines, done and waiting per list must match the old screens exactly
+async function lsCountCheck(){
+  const ids=(DB.lists||[]).map(l=>l.id),got=await lsGetIn('list_lines','list_id',ids),bad=[];
+  (DB.lists||[]).forEach(l=>{
+    const a=lsOldCounts(l),ln=got.filter(x=>x.list_id===l.id&&x.removed_rev==null&&x.kind!=='hdr');
+    const b={n:ln.length,done:ln.filter(x=>x.status==='cut'||x.status==='got-out').length,wait:ln.filter(x=>x.status==='waiting').length};
+    if(a.n!==b.n||a.done!==b.done||a.wait!==b.wait)bad.push({id:l.id,name:l.name,project:l.project||'',old:a,now:b});
+  });
+  return{lists:ids.length,lines:got.filter(x=>x.removed_rev==null&&x.kind!=='hdr').length,bad};
+}
+function lsDownload(name,data){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(data)],{type:'application/json'}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),5000);}
+async function lsMigrate(by){
+  if(V2())throw new Error('the new lists are already switched on');
+  if(!DB.loaded||DB.loadFailed)throw new Error('the plan is not loaded on this screen');
+  // 1. a verified copy in planner_backups, and one on this PC
+  await backupNow('pre-lists-v2');updBakLine();
+  lsDownload('WPF_Backup_pre-lists-v2_'+new Date().toISOString().slice(0,10)+'.json',{backedUpAt:new Date().toISOString(),orders:DB.orders,nid:DB.nid,settings:fullSettings()});
+  // 2-4. projects, lists, lines (fixed ids, so a second run gives the same result), old waiting history
+  const m=lsMigrationRows(await lsGet('projects?select=*'));
+  await lsUpsert('projects',m.projects);
+  await lsUpsert('lists',m.lists);
+  await lsUpsert('list_lines',m.lines);
+  const have=new Set(m.lists.map(l=>l.id)),mine=new Set(m.lines.map(x=>x.id));
+  const extra=(await lsGetIn('list_lines','list_id',[...have])).filter(x=>x.removed_rev==null&&!mine.has(x.id)); // e.g. from an earlier switch-on
+  for(const x of extra){const r=await fetch(SUPA_URL+'/list_lines?id=eq.'+encodeURIComponent(x.id),{method:'PATCH',headers:SUPA_WHDR,body:JSON.stringify({removed_rev:+((m.lists.find(l=>l.id===x.list_id)||{}).rev)||1})});if(!r.ok)throw new Error('could not set aside line '+x.id);}
+  const seen=new Set((await lsGet('list_events?select=cid&cid=like.mig:*')).map(e=>e.cid)),ev=m.events.filter(e=>!seen.has(e.cid));
+  for(let i=0;i<ev.length;i+=400){const r=await fetch(SUPA_URL+'/list_events',{method:'POST',headers:SUPA_WHDR,body:JSON.stringify(ev.slice(i,i+400))});if(!r.ok)throw new Error('saving the waiting history failed: HTTP '+r.status);}
+  // 5. count check — any difference stops here and the switch is NOT set
+  const ck=await lsCountCheck();
+  if(ck.bad.length)return{ok:false,check:ck,m};
+  // 6. switch on
+  DB.listStore='v2';DB.listStoreAt=nowISO();
+  clearTimeout(saveT);await saveDB();
+  if(DB.saveFailed){DB.listStore='';delete DB.listStoreAt;throw new Error('the lists were copied and checked, but the switch could not be saved — try again');}
+  lsReset();await lsLoad();lsStart();
+  return{ok:true,check:ck,m};
+}
+// Switch back: rebuild the old-format data from the tables (lists made since included), then listStore 'v1'
+function lsOldFrom(listRows0,lines){
+  const rows=[],ticks={},holds={};
+  lines.filter(x=>x.removed_rev==null&&x.status!=='na').sort((a,b)=>(a.seq||0)-(b.seq||0)).forEach(x=>{
+    const n=v=>v==null||v===''?'':+v;
+    const r=x.kind==='hdr'?{k:'hdr',item:x.part||'',note:x.note||''}
+      :x.kind==='saw'?{k:'saw',item:x.part||'',qty:lsQty(x.qty),L:n(x.length_mm),W:n(x.width_mm),mat:x.material||'',note:[x.edging,x.note].filter(s=>String(s||'').trim()).join(' · ')}
+      :{k:'fit',item:x.part||'',qty:lsQty(x.qty),mat:x.material||'',note:x.note||''};
+    r.lid=x.id;rows.push(r);
+    if(x.kind==='hdr')return;
+    const k=v1Key(r);
+    if(x.status==='cut'||x.status==='got-out')ticks[k]={m:x.kind,at:x.status_at||'',by:x.status_by||''};
+    const base={m:x.kind,item:r.item,mat:r.mat,qty:r.qty,L:r.L||'',W:r.W||''};
+    if(x.status==='waiting')holds[k]={...base,st:'hold',at:x.status_at||'',by:x.status_by||''};
+    else if(x.released_at&&x.status==='todo')holds[k]={...base,st:'rel',at:x.status_at||'',by:x.status_by||'',relAt:x.released_at,relBy:x.released_by||''};
+  });
+  return{rows,ticks,holds};
+}
+async function lsSwitchBack(by){
+  if(!V2())throw new Error('the new lists are not switched on');
+  // latest planner record first: old-tab ticks in it are rescued into the tables, then the rebuild replaces them
+  // (rebuilt from an out-of-date copy, the merge would treat them as another screen's change and keep them)
+  await loadDB();if(!DB.lastLoadOk)throw new Error('could not reach the planner database');
+  if(!V2())throw new Error('the lists were switched back on another screen');
+  lsReset();await lsLoad();if(!LST.loaded)throw new Error('could not reach the lists tables');
+  lsRescue();
+  await lqSend();
+  if(LQ.q.length)throw new Error('this screen still has '+LQ.q.length+' unsent change'+(LQ.q.length!==1?'s':'')+' — get a signal and try again');
+  const ls0=(await lsGet('lists?select=*')).filter(l=>!l.archived&&!l.is_template);
+  const pj=new Map((await lsGet('projects?select=*')).map(p=>[p.id,p.name]));
+  const lines=await lsGetIn('list_lines','list_id',ls0.map(l=>l.id));
+  const frozen=new Map((DB.lists||[]).map(l=>[l.id,l]));
+  const NL=[],WB={},LR={},LH={},LD={};
+  ls0.forEach(r=>{
+    const o=lsOldFrom([],lines.filter(x=>x.list_id===r.id)),f=frozen.get(r.id);
+    const wb=f&&f.wb?f.wb:'WB'+r.id,sheet=r.name;
+    WB[wb]=WB[wb]||{project:pj.get(r.project_id)||'',sheets:{},...(r.source==='manual'?{manual:true}:{})};
+    WB[wb].sheets[sheet]=o.rows;
+    NL.push({id:r.id,wb,sheet,name:r.name,project:pj.get(r.project_id)||'',sdate:r.sdate||'',saw:o.rows.filter(x=>x.k==='saw').length,fit:o.rows.filter(x=>x.k==='fit').length,
+      wos:(r.wos||[]).slice(),up:r.updated_at,noCut:!!r.no_cut,noFit:!!r.no_fit,...(r.source==='manual'?{manual:true}:{}),log:r.log||[]});
+    if(Object.keys(o.ticks).length)LR[r.id]=o.ticks;
+    LH[r.id]=o.holds;
+    const d={};if(r.saw_done_at)d.saw={at:r.saw_done_at,by:r.saw_done_by||''};if(r.fit_done_at)d.fit={at:r.fit_done_at,by:r.fit_done_by||''};
+    if(Object.keys(d).length)LD[r.id]=d;
+  });
+  DB.lists=NL;DB.listWBs=WB;DB.listRow=LR;DB.listHold=LH;DB.listDone=LD;
+  DB.listStore='v1';DB.listStoreAt=nowISO(); // 'v1', not blank: a blank value is skipped by the merge
+  lsStart();clearTimeout(saveT);await saveDB();
+  if(DB.saveFailed)throw new Error('the old lists were rebuilt on this screen but not saved yet — keep this page open, it retries');
+  return{lists:NL.length};
+}
+/* Tabs still on the old code after the switch keep writing ticks / holds into the frozen copy. Anything newer than
+   listStoreAt is copied into the tables (done still wins — the database decides). Each one has a fixed id, so every
+   screen that finds it sends the same change and the database applies it once. */
+function lsRescue(){
+  if(!V2()||!LST.loaded||!DB.listStoreAt)return 0;
+  const T=DB.listStoreAt;let n=0;
+  const byList=new Map();
+  const lineOf=(lid,k)=>{let m=byList.get(lid);if(!m){m=new Map();lsLinesOf(lid).forEach(x=>{if(x.removed_rev!=null||x.kind==='hdr'||x.status==='na')return;
+      const kk=v1Key({k:x.kind,item:x.part,L:x.kind==='saw'&&x.length_mm!=null?+x.length_mm:'',W:x.kind==='saw'&&x.width_mm!=null?+x.width_mm:'',mat:x.material,note:x.kind==='saw'?[x.edging,x.note].filter(s=>String(s||'').trim()).join(' · '):x.note});
+      if(!m.has(kk))m.set(kk,[]);m.get(kk).push(x);});byList.set(lid,m);}return m.get(k)||[];};
+  const send=(x,st,by,tag)=>{const cid='rescue:'+lsHash(x.id+'|'+tag);if(LQ.q.some(e=>e.cid===cid))return;
+    const e={t:'line',cid,id:x.id,list:x.list_id,act:st==='release'?'release':'status',v:+x.version,rev:+((LST.l.get(x.list_id)||{}).rev)||1,from:x.status,at:nowISO(),by:lqBy(by),quiet:true};
+    if(st!=='release')e.status=st;lqMut(q=>q.push(e));n++;};
+  Object.entries(DB.listRow||{}).forEach(([lid,t])=>Object.entries(t||{}).forEach(([k,v])=>{if(!v||!(String(v.at||'')>T))return;
+    lineOf(lid,k).forEach(x=>{const st=x.kind==='saw'?'cut':'got-out';if(x.status!==st)send(x,st,v.by,'t|'+k+'|'+v.at);});}));
+  Object.entries(DB.listHold||{}).forEach(([lid,h])=>Object.entries(h||{}).forEach(([k,v])=>{if(!v)return;
+    if(v.st==='hold'&&String(v.at||'')>T)lineOf(lid,k).forEach(x=>{if(x.status==='todo')send(x,'waiting',v.by,'h|'+k+'|'+v.at);});
+    if(v.st==='rel'&&String(v.relAt||'')>T)lineOf(lid,k).forEach(x=>{if(x.status==='waiting')send(x,'release',v.relBy,'r|'+k+'|'+v.relAt);});}));
+  if(n)lqKick(0);
+  return n;
+}
+function lsAdminOk(){const p=prompt('Admin PIN:','');if(p===null)return false;if(p.trim()!==pins().admin){toast('Wrong Admin PIN');return false;}return true;}
+function lsPanelHTML(){
+  const on=V2();
+  return '<div class="exp-panel" id="ls-panel"><div style="font-size:14px;font-weight:600;margin-bottom:6px">Cutting lists store</div>'
+    +'<p style="font-size:12px;color:var(--t3);margin-bottom:10px">'+(on
+      ?'Lists are in their own database tables (switched on '+escA(DB.listStoreAt?new Date(DB.listStoreAt).toLocaleString('en-IE'):'')+'). The old list data in the planner record is a frozen copy.'
+      :'Lists are kept inside the planner record (today\'s way). <b>Migrate lists</b> copies every list, line, tick and waiting line into their own tables, checks the counts match exactly, and only then switches over. A backup is saved and downloaded first. Admin PIN.')+'</p>'
+    +(on?'<button class="btn btn-s" id="ls-back">↩ Switch back to old lists</button>':'<button class="btn btn-g" id="ls-mig">⇪ Migrate lists</button>')
+    +'<div id="ls-msg" style="font-size:12px;margin-top:8px"></div></div>';
+}
+function lsBindPanel(){
+  const msg=t=>{const e=document.getElementById('ls-msg');if(e)e.innerHTML=t;};
+  const mg=document.getElementById('ls-mig');
+  if(mg)mg.onclick=()=>{if(!lsAdminOk())return;if(!confirm('Copy all cutting lists into the new tables and switch over?\n\nClose every other planner tab and phone first (saw, stores, office) — like on Stage 1 go-live day.'))return;
+    mg.disabled=true;msg('Migrating… do not close this page.');
+    lsMigrate(whoNow()).then(r=>{window.LSMIG=r;
+      if(r.ok){render();toast('Lists migrated — '+r.check.lists+' lists, '+r.check.lines+' lines, counts match ✓');}
+      else{mg.disabled=false;msg('<b style="color:#c0392b">Counts did not match — NOT switched over.</b> Nothing changed for the floor.<br>'+r.check.bad.slice(0,20).map(b=>escA(b.project+' — '+b.name)+': old '+b.old.n+'/'+b.old.done+'/'+b.old.wait+' · new '+b.now.n+'/'+b.now.done+'/'+b.now.wait+' (lines/done/waiting)').join('<br>'));}})
+    .catch(e=>{mg.disabled=false;window.LSMIG={ok:false,err:e.message};msg('<b style="color:#c0392b">Migration stopped: '+escA(e.message)+'</b> — the switch was not set.');});};
+  const bk=document.getElementById('ls-back');
+  if(bk)bk.onclick=()=>{if(!lsAdminOk())return;if(!confirm('Switch back to the old lists? The old format is rebuilt from the tables (lists made since included). Templates and revisions stay in the tables.'))return;
+    bk.disabled=true;msg('Switching back…');
+    lsSwitchBack(whoNow()).then(r=>{window.LSBACK=r;render();toast('Back on the old lists — '+r.lists+' lists rebuilt');}).catch(e=>{bk.disabled=false;window.LSBACK={err:e.message};msg('<b style="color:#c0392b">Not switched back: '+escA(e.message)+'</b>');});};
 }
 /* diffLines:start */
 /* Revision comparison — pure (no screen, no database), so the tests can check it on its own.
