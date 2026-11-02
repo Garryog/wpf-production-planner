@@ -2442,9 +2442,10 @@ function combineLists(lsArr,mode){
     const hb=holdsOf(l.id),relOnly=!!listDone(l.id)[mode]&&listHoldRows(l,mode,'rel').length>0;
     listRows(l).filter(r=>r.k===mode).filter(r=>{const h=hb[rowKey(r)];if(heldRow(l,rowKey(r)))return false;return !relOnly||(h&&h.st==='rel');}).forEach(r=>{
       const key=[String(r.item).trim(),r.L,r.W,String(r.mat).trim(),String(r.note).trim()].join('|').toLowerCase();
-      if(!byKey[key]){byKey[key]={item:r.item,L:r.L,W:r.W,mat:r.mat,note:r.note,k:r.k,qty:0,per:{}};order.push(key);}
-      byKey[key].qty+=(+r.qty||0);
-      byKey[key].per[hname(l)]=(byKey[key].per[hname(l)]||0)+(+r.qty||0);
+      if(!byKey[key]){byKey[key]={item:r.item,L:r.L,W:r.W,mat:r.mat,note:r.note,k:r.k,qty:0,bad:0,per:{}};order.push(key);}
+      const g=byKey[key],h=hname(l),qs=String(r.qty==null?'':r.qty).trim(),q=+qs;
+      if(/^\d+$/.test(qs)&&q>0){g.qty+=q;g.per[h]=typeof g.per[h]==='string'?g.per[h]+' + '+q:(g.per[h]||0)+q;}
+      else{g.bad++;const t=qs||'no qty';g.per[h]=g.per[h]===undefined?t:g.per[h]+' + '+t;} // "2x2", blank — shown as typed, never guessed
     });
   });
   return order.map(k=>byKey[k]);
@@ -2460,8 +2461,8 @@ function openCombined(lsArr,mode){
       ${lsArr.map(l=>{let o=null;for(const w of (l.wos||[])){o=DB.orders.find(x=>x.wo===w);if(o)break;}return `<div style="font-size:12px;color:#14335c;padding:1px 0"><b>${escA(l.name)}</b>${o&&(o.floor||o.unit)?' · '+escA([o.floor,o.unit].filter(Boolean).join(' · ')):''}${o&&o.title?' · '+escA(o.title):''}${o&&o.customer?' · <b>'+escA(o.customer)+'</b>':''}</div>`;}).join('')}
     </div>
     <table class="wl-tbl"><thead><tr><th style="width:24%">Item</th><th>Total</th>${saw?'<th>Length</th><th>Width</th>':''}<th>${saw?'Material':'Spec'}</th><th>${saw?'Edging / Note':'Note'}</th><th style="width:26%">Per house</th></tr></thead><tbody>
-    ${rows.map(r=>`<tr><td>${escA(r.item)||'—'}</td><td class="num" style="font-size:17px">${r.qty}</td>${saw?`<td class="num">${escA(r.L)}</td><td class="num">${escA(r.W)}</td>`:''}<td>${escA(r.mat)}</td><td>${escA(r.note)}</td>
-      <td>${Object.entries(r.per).map(([h,q])=>`<span class="ph-chip">${escA(h)} <b>×${q}</b></span>`).join('')}</td></tr>`).join('')}
+    ${rows.map(r=>`<tr><td>${escA(r.item)||'—'}</td><td class="num" style="font-size:17px">${r.qty}${r.bad?`<div style="font-size:12px;color:#c0392b;font-weight:700;white-space:nowrap">+ ${r.bad} not added — check quantity</div>`:''}</td>${saw?`<td class="num">${escA(r.L)}</td><td class="num">${escA(r.W)}</td>`:''}<td>${escA(r.mat)}</td><td>${escA(r.note)}</td>
+      <td>${Object.entries(r.per).map(([h,q])=>`<span class="ph-chip"${typeof q==='string'?' style="border-color:#c0392b;color:#c0392b"':''}>${escA(h)} <b>×${escA(q)}</b>${typeof q==='string'?' ⚠ check quantity':''}</span>`).join('')}</td></tr>`).join('')}
     </tbody></table>
     <div style="margin-top:12px;display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">
       <button class="btn btn-s" id="cmb-lbl">🏷 Print location labels</button>
