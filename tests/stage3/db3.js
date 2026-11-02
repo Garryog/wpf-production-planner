@@ -87,6 +87,8 @@ function snagLineDone(d, old, nw) {
 const logAdd = (r, e) => (r.log || []).concat([e]);
 
 // ---- apply_line_changes(p_changes jsonb, p_by text)
+// Lock order in the SQL: every list in the batch (id order), then each line — the same order as save_list_revision, so no
+// deadlock. The fake database runs one call at a time, so there is nothing to lock here.
 function applyLineChanges(d, changes, by) {
   const res = [];
   for (const c of changes || []) {
@@ -100,7 +102,10 @@ function applyLineChanges(d, changes, by) {
     const a = c.act || 'status', w = c.status; let ok = false, noop = false, why = null;
     if (l.removed_rev != null) why = 'removed';
     else if (a === 'release') {
-      if (l.status === 'waiting' && (c.v == null || l.version === +c.v)) ok = true;
+      // still the same wait the screen saw: status_at / released_at unchanged (an office note or order edit doesn't count)
+      const same = (x, y) => (x == null && y == null) || (x != null && y != null && Date.parse(x) === Date.parse(y));
+      const fresh = 'sa' in c ? same(l.status_at, c.sa) && (!('ra' in c) || same(l.released_at, c.ra)) : (c.v == null || l.version === +c.v);
+      if (l.status === 'waiting' && fresh) ok = true;
       else if (l.status === 'waiting') why = 'stale'; // changed since the screen saw it (e.g. released and parked again)
       else if (['cut', 'got-out'].includes(l.status)) { ok = true; noop = true; }
       else why = 'not-waiting';

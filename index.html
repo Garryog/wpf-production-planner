@@ -2161,7 +2161,7 @@ function lqLine(lineId,st,by){
   const x=LST.ln.get(lineId);if(!x)return false;
   const act=st==='release'?'release':'status';
   const e={t:'line',cid:lqId(),id:lineId,list:x.list_id,act,v:+x.version,rev:+((LST.l.get(x.list_id)||{}).rev)||1,from:lnSt(x),at:nowISO(),by:lqBy(by)};
-  if(act==='status')e.status=st;
+  if(act==='status')e.status=st;else{e.sa=x.status_at==null?null:x.status_at;e.ra=x.released_at==null?null:x.released_at;} // the wait this screen saw
   lqMut(q=>{
     // one unsent change per line: the newest replaces it. A change already sent once may have landed (reply lost, or
     // another tab on this device is sending it) — it stays, and this tap goes after it.
@@ -2292,7 +2292,7 @@ async function lqSend(){
       const h=LQ.q[0];let batch,fn=null,args=null;
       if(h.t==='line'){
         batch=[];for(const e of LQ.q){if(e.t!=='line'||e.by!==h.by||batch.length>=(LQ.solo>0?1:50)||batch.some(b=>b.id===e.id))break;batch.push(e);}
-        fn='apply_line_changes';args={p_changes:batch.map(e=>({id:e.id,cid:e.cid,act:e.act,status:e.status,v:e.v,rev:e.rev,from:e.from,at:e.at})),p_by:h.by};
+        fn='apply_line_changes';args={p_changes:batch.map(e=>({id:e.id,cid:e.cid,act:e.act,status:e.status,v:e.v,sa:e.sa,ra:e.ra,rev:e.rev,from:e.from,at:e.at})),p_by:h.by};
       }else{
         batch=[h];
         if(h.t==='attach'){fn='list_attach';args={p_list:h.list,p_wo:h.wo,p_on:!!h.on,p_by:h.by,p_cid:h.cid};}
@@ -2312,6 +2312,7 @@ async function lqSend(){
       if(!r.ok){
         // the database refused the call itself: a batch of ticks is retried one at a time, so only the bad one is dropped
         if(r.status===400&&/switched off/.test((d&&d.message)||'')){LQ.busy=false;await lqSwitchedOff();return;} // switched back meanwhile
+        if(d&&(d.code==='40P01'||d.code==='40001'))throw new Error('busy — will try again'); // deadlock / clash with another save: nothing landed, retry later
         if((r.status===400||r.status===409||r.status===422)&&h.t==='line'&&batch.length>1){LQ.solo=batch.length;continue;}
         if(r.status===400||r.status===409||r.status===422){lqDrop(cids);lqSay('Not saved — the database refused it ('+String((d&&d.message)||r.status).slice(0,80)+')');continue;}
         throw new Error('HTTP '+r.status);
@@ -2323,10 +2324,10 @@ async function lqSend(){
           const e=batch.find(b=>b.cid===x.cid)||batch.find(b=>b.id===x.id);
           if(x.v!=null&&LST.ln.has(x.id))lsPut('list_lines',[{id:x.id,list_id:LST.ln.get(x.id).list_id,status:x.status,version:x.v,status_by:x.by,status_at:x.at,released_at:x.rel,released_by:x.relby}],true);
           const va=x.va!=null?+x.va:+x.v; // a resend reports the version THIS tap produced, not whatever the line is at now
-          if(e&&x.ok&&x.v!=null&&va!==+e.v)bump.push([x.id,+e.v,va]); // our own change moved the line on: later taps here build on it
+          if(e&&x.ok&&x.v!=null&&va!==+e.v)bump.push([x.id,+e.v,va,x.at,x.rel]); // our own change moved the line on: later taps here build on it
           if(!x.ok&&!(e&&e.quiet))bad.push(x); // a rescued old-tab tick that the database turns down is expected — no message
         });
-        lqMut(q=>{q.splice(0,q.length,...q.filter(e=>!cids.has(e.cid)));q.forEach(e=>{const b=bump.find(z=>z[0]===e.id&&z[1]===e.v);if(b)e.v=b[2];});});
+        lqMut(q=>{q.splice(0,q.length,...q.filter(e=>!cids.has(e.cid)));q.forEach(e=>{const b=bump.find(z=>z[0]===e.id&&z[1]===e.v);if(b){e.v=b[2];if('sa' in e){e.sa=b[3]==null?null:b[3];e.ra=b[4]==null?null:b[4];}}});});
         if(bad.length){lqSay(lqWhy(bad[0])+(bad.length>1?' (+'+(bad.length-1)+' more)':''));
           lsGet('list_lines?select=*&id=in.('+bad.map(x=>'"'+encodeURIComponent(x.id)+'"').join(',')+')').then(rows=>{lsPut('list_lines',rows);lsRedraw();}).catch(()=>{});}
       }else{
@@ -2778,7 +2779,7 @@ function lsRescue(pick){
   const send=(x,st,by,tag)=>{const cid='rescue:'+lsHash(x.id+'|'+tag);if(done0.has(cid)||LQ.q.some(e=>e.cid===cid))return;
     done0.add(cid);try{localStorage.setItem('wpfRescued',JSON.stringify([...done0].slice(-2000)));}catch(e){} // once per device; the database also applies it once
     const e={t:'line',cid,id:x.id,list:x.list_id,act:st==='release'?'release':'status',v:+x.version,rev:+((LST.l.get(x.list_id)||{}).rev)||1,from:x.status,at:nowISO(),by:lqBy(by),quiet:true};
-    if(st!=='release')e.status=st;lqMut(q=>q.push(e));n++;};
+    if(st!=='release')e.status=st;else{e.sa=x.status_at==null?null:x.status_at;e.ra=x.released_at==null?null:x.released_at;}lqMut(q=>q.push(e));n++;};
   Object.entries(DB.listRow||{}).forEach(([lid,t])=>Object.entries(t||{}).forEach(([k,v])=>{if(!v)return;
     lineOf(lid,k).forEach(x=>{if(!ok('tick',v,lid,k,x))return;const st=x.kind==='saw'?'cut':'got-out';if(x.status!==st)send(x,st,v.by,'t|'+k+'|'+v.at);});}));
   Object.entries(DB.listHold||{}).forEach(([lid,h])=>Object.entries(h||{}).forEach(([k,v])=>{if(!v)return;

@@ -160,15 +160,19 @@ grant execute on function lists_switch_on() to anon, authenticated, service_role
 
 -- One status change per line, with the "done wins" rules applied by the database.
 -- Each change: {id, status | act:'release', v (line version the screen saw — needed to untick), rev (list rev the screen
--- showed), cid (device id for this tap), from, at}. Reply per change: {id, cid, ok, why, status, v, by, at, rel, relby, dup, va = for a resend, the version that tap produced}.
+-- showed), cid (device id for this tap), from, at, sa / ra (for a release: the line's status_at / released_at the screen saw)}. Reply per change: {id, cid, ok, why, status, v, by, at, rel, relby, dup, va = for a resend, the version that tap produced}.
 -- why: missing | removed | changed (a newer revision changed the line) | not-needed | wrong-kind | done (already cut/got out)
 --      | stale (someone changed the line since this screen saw it) | not-waiting | bad
 create or replace function apply_line_changes(p_changes jsonb, p_by text) returns jsonb language plpgsql as $$
 declare c jsonb; l list_lines%rowtype; w text; a text; ok boolean; noop boolean; why text; res jsonb:='[]';
 begin
  perform lists_switch_on();
+ -- Lock order is ALWAYS list first, then its lines (save_list_revision does the same): every list this batch touches is
+ -- locked up front, in id order, so a tick and a list edit at the same moment take turns instead of deadlocking.
+ perform 1 from lists where id in (select x.list_id from list_lines x
+   where x.id in (select y->>'id' from jsonb_array_elements(p_changes) y)) order by id for update;
  for c in select * from jsonb_array_elements(p_changes) loop
-  -- lock the line FIRST: a resend racing the original waits here until the original has committed its event,
+  -- then lock the line: a resend racing the original waits here until the original has committed its event,
   -- then sees it below as "already applied" (instead of failing on the unique cid)
   select * into l from list_lines where id=c->>'id' for update;
   if not found then res:=res||jsonb_build_object('id',c->>'id','cid',c->>'cid','ok',false,'why','missing'); continue; end if;
@@ -180,9 +184,11 @@ begin
   a:=coalesce(c->>'act','status'); w:=c->>'status'; noop:=false; why:=null; ok:=false;
   if l.removed_rev is not null then why:='removed';
   elsif a='release' then
-   -- a release only counts if the line is as the screen saw it (a late offline 'Release all' can't release a line
-   -- that was let go and parked again since)
-   if l.status='waiting' and (c->>'v' is null or l.version=(c->>'v')::int) then ok:=true;
+   -- a release only counts if the line is still the same wait the screen saw (a late offline 'Release all' can't release
+   -- a line that was let go and parked again since). An office edit (note, order) doesn't count as a new wait.
+   if l.status='waiting' and (case when c ? 'sa' then l.status_at is not distinct from (c->>'sa')::timestamptz
+        and (not c ? 'ra' or l.released_at is not distinct from (c->>'ra')::timestamptz)
+        else (c->>'v' is null or l.version=(c->>'v')::int) end) then ok:=true;
    elsif l.status='waiting' then why:='stale';
    elsif l.status in('cut','got-out') then ok:=true; noop:=true;      -- already done: releasing only clears the wait
    else why:='not-waiting'; end if;
