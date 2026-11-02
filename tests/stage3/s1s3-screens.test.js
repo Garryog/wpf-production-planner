@@ -114,7 +114,7 @@ function fixture(on) {
   const w = await saw.page.evaluate(() => { const e = document.getElementById('wait-list'); return e ? { t: e.innerText, rows: [...e.querySelectorAll('[data-waitwo]')].map(r => r.dataset.waitwo + ':' + (r.style.background ? 'red' : '')) } : null; });
   rec('saw strip: jobs with no list, above the sheets panel', w && w.rows.join() === 'WO-2:red,WO-4:' && (await saw.page.evaluate(() => { const a = document.getElementById('wait-list'), b = document.body.innerText.indexOf('Sheets need'); return document.body.innerText.indexOf('WAITING FOR A LIST') < b; })), JSON.stringify(w && w.rows));
   rec('saw strip: WO-2 cut by today (21 Oct), list due by Tue 20 Oct — overdue red; owner from the project', /WO-2[\s\S]*OVERDUE · cut by 21 Oct[\s\S]*list due by 20 Oct[\s\S]*owner Ciara \(design\)/.test(w.t), w.t);
-  rec('saw strip: WO-4 (delivers Mon 26) cut by Sun 25, list due by Fri 23 (the working day before); owner defaults to Production Manager', /WO-4[\s\S]*cut by 25 Oct[\s\S]*list due by 23 Oct[\s\S]*owner Production Manager/.test(w.t), w.t);
+  rec('saw strip: WO-4 (delivers Mon 26, a bank holiday) cut by Sun 25 → the saw cuts it Fri 23, so the list is due Thu 22; owner defaults to Production Manager', /WO-4[\s\S]*cut by 25 Oct[\s\S]*list due by 22 Oct[\s\S]*owner Production Manager/.test(w.t), w.t);
   rec('no page errors', !(S.errors || []).length, (S.errors || []).join(' | '));
   await des.close(); await off.close(); await pr.close(); await saw.close();
   await browser.close();

@@ -2920,6 +2920,10 @@ function renderProdV2(app){
 /* "Waiting for a list" on the saw (build note j): each planned job with no list, with its cut-by date, the list due by
    (the working day before, so the saw sees it a day ahead) and who owns the list. Overdue is red. */
 function prevWorkDay(iso){let d=addDayISO(iso,-1);while(!isWorkDay(d))d=addDayISO(d,-1);return d;}
+// The working day the saw actually cuts a list whose cut-by date is `cut` (same rule as dueToday / cutTodayEnd):
+// cut-by on a weekend or bank holiday → the working day before.
+function lsSawDay(cut){return !cut?'':isWorkDay(cut)?cut:prevWorkDay(cut);}
+function lsAddWorkDays(iso,n){let d=iso;for(let i=0;i<n;i++)d=nextWorkDay(d);return d;}
 function lsOwnerFor(o){
   const c=String(o&&o.customer||'').trim().toLowerCase();if(!c)return'Production Manager';
   const p=lsProjects().find(p=>[p.name,p.customer,...(p.cien_names||[])].some(n=>String(n||'').trim().toLowerCase()===c));
@@ -2928,7 +2932,7 @@ function lsOwnerFor(o){
 function waitListHTML(){
   if(!V2())return'';
   const today=todayLocal();
-  const rows=listsNeeded().map(o=>{const cut=listDeadline({wos:[o.wo]});return{o,cut,due:cut?prevWorkDay(cut):''};}).sort((a,b)=>(a.due||'9999').localeCompare(b.due||'9999'));
+  const rows=listsNeeded().map(o=>{const cut=listDeadline({wos:[o.wo]});return{o,cut,due:cut?prevWorkDay(lsSawDay(cut)):''};}) // due the working day before the saw cuts it.sort((a,b)=>(a.due||'9999').localeCompare(b.due||'9999'));
   if(!rows.length)return'';
   const od=rows.filter(r=>r.due&&r.due<today).length;
   return `<div class="exp-panel" id="wait-list" style="border:2px solid ${od?'#c0392b':'#d4880f'};background:${od?'#fdf3f2':'#fffaf0'};padding:10px 12px">
@@ -3257,7 +3261,7 @@ function renderPMV2(app){
 function lsLocked(l){
   if(!l||l.tpl)return false;
   if(l.locked||l.sentAt)return true;
-  const d=listDeadline(l);return !!d&&d<=nextWorkDay(todayLocal());
+  const d=listDeadline(l);return !!d&&lsSawDay(d)<=nextWorkDay(todayLocal()); // the saw cuts it today or the next working day
 }
 function lsRevInfo(id,mode){
   const r=LST.l.get(id),rev=+((r||{}).rev)||1,ls0=lsLinesOf(id).filter(x=>x.kind!=='hdr'&&(!mode||x.kind===mode));
@@ -3372,7 +3376,7 @@ function workLists(){return lists().filter(l=>!listParked(l));}
 let lstShowFin=false; // library: completed lists hidden unless asked for
 function listsNeeded(){ // WOs scheduled to deliver inside the lead time with NO cutting list tagged
   const tagged=new Set();lists().forEach(l=>(l.wos||[]).forEach(w=>tagged.add(w)));
-  const lim=new Date(Date.now()+listLead()*86400000).toISOString().slice(0,10);
+  const lim=V2()?lsAddWorkDays(todayLocal(),listLead()):new Date(Date.now()+listLead()*86400000).toISOString().slice(0,10); // V2: lead in working days (Christmas, bank holidays)
   return DB.orders.filter(o=>{
     if(tagged.has(o.wo)||o.delDelivAt||o.delDone||woFinished(o)||isOnHold(o))return false;
     const planned=o.delv&&o.delDay;                 // already on the delivery board
