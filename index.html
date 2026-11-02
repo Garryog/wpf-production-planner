@@ -2673,19 +2673,24 @@ function lsOldFrom(listRows0,lines){
   return{rows,ticks,holds};
 }
 async function lsSwitchBack(by){
+  if(DB.listStore==='v1'){await loadDB();if(DB.listStore==='v1')return{lists:(DB.lists||[]).length,already:true};} // already done (e.g. a second Finish)
   if(!V2())throw new Error('the new lists are not switched on');
   // latest planner record first: old-tab ticks in it are rescued into the tables, then the rebuild replaces them
   // (rebuilt from an out-of-date copy, the merge would treat them as another screen's change and keep them)
   await loadDB();if(!DB.lastLoadOk)throw new Error('could not reach the planner database');
-  if(!V2())throw new Error('the lists were switched back on another screen');
+  if(DB.listStore==='v1')return{lists:(DB.lists||[]).length,already:true}; // switched back on another screen meanwhile
+  if(!V2())throw new Error('the lists are not on the new store');
   lsReset();await lsLoad();if(!LST.loaded)throw new Error('could not reach the lists tables');
+  const finishing=DB.listStore==='switching'; // 'Finish switch back': the tables already refuse changes
   lsRescue();
-  await lqSend();
-  if(LQ.q.length)throw new Error('this screen still has '+LQ.q.length+' unsent change'+(LQ.q.length!==1?'s':'')+' — get a signal and try again');
-  // 'switching' first: from now on the database refuses every list change (lists_switch_on), so nothing can land in the
-  // tables after they are read below; devices keep such ticks queued and put them in the old lists once it says 'v1'
-  DB.listStore='switching';clearTimeout(saveT);await saveDB();
-  if(DB.saveFailed){DB.listStore='v2';throw new Error('could not start the switch back (planner not saved) — nothing changed');}
+  if(!finishing){
+    await lqSend();
+    if(LQ.q.length)throw new Error('this screen still has '+LQ.q.length+' unsent change'+(LQ.q.length!==1?'s':'')+' — get a signal and try again');
+    // 'switching' first: from now on the database refuses every list change (lists_switch_on), so nothing can land in the
+    // tables after they are read below; devices keep such ticks queued and put them in the old lists once it says 'v1'
+    DB.listStore='switching';clearTimeout(saveT);await saveDB();
+    if(DB.saveFailed){DB.listStore='v2';throw new Error('could not start the switch back (planner not saved) — nothing changed');}
+  }else if(LST.rescuing)await LST.rescuing; // finishing: rescued old-tab ticks are folded into the rebuilt old lists below
   try{return await lsSwitchBack2();}
   catch(e){DB.listStore='v2';clearTimeout(saveT);await saveDB();throw e;} // put the switch back on 'v2': nothing half-done
 }
@@ -2709,8 +2714,14 @@ async function lsSwitchBack2(){
   });
   DB.lists=NL;DB.listWBs=WB;DB.listRow=LR;DB.listHold=LH;DB.listDone=LD;
   DB.listStore='v1';DB.listStoreAt=nowISO(); // 'v1', not blank: a blank value is skipped by the merge
+  // Changes still queued on THIS screen (refused while 'switching', or rescued old-tab ticks): one the tables already
+  // applied (its tap id is in list_events) is in the rebuild — dropped; the rest go straight into the rebuilt old lists.
+  const q0=lqRead();
+  if(q0.length){const got=new Set((await lsGetIn('list_events','cid',q0.map(e=>e.cid).filter(Boolean))).map(e=>e.cid));
+    if(got.size)lqMut(qq=>qq.splice(0,qq.length,...qq.filter(e=>!got.has(e.cid))));}
   lsStart();clearTimeout(saveT);await saveDB();
   if(DB.saveFailed){DB.saveFailed=false;throw new Error('the old lists were rebuilt but could not be saved — the switch stays on the new lists; try again');}
+  if(lqRead().length)await lqFoldV1(); // folds and saves; anything it can't place stays queued and is shown
   return{lists:NL.length};
 }
 /* Tabs still on the old code after the switch keep writing ticks / holds into the frozen copy. Anything newer than
