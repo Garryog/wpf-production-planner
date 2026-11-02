@@ -68,15 +68,18 @@ const idle = p => p.evaluate(async () => { for (let i = 0; i < 60 && (SAVING || 
     big.forEach(z => { z.status = 'cut'; z.status_by = 'Other'; z.version++; z.updated_at = ts; });
     // Postgres gives NO stable order between rows with equal updated_at; page 2 can repeat / skip page-1 rows.
     // Emulate that: answer each page from a freshly shuffled tie order (same rows, same filter).
-    await saw.page.route(u => /\/list_lines\?.*order=updated_at\.asc/.test(String(u)), route => {
+    // (attack3: also intercepts the new 'order=updated_at,id' — ties are then broken by id, as Postgres does; with the old
+    // one-column order they are shuffled per page)
+    let pages = 0;
+    await saw.page.route(u => /\/list_lines\?.*order=updated_at/.test(String(u)), route => {
       const u = new URL(route.request().url()), gt = u.searchParams.get('updated_at'), off = +(u.searchParams.get('offset') || 0), lim = +(u.searchParams.get('limit') || 1000);
-      const since = gt ? gt.replace(/^gt\./, '') : '';
-      const rows = S.db.t.list_lines.filter(r => !since || r.updated_at > since).map(r => [r, Math.random()]).sort((a, b) => a[0].updated_at < b[0].updated_at ? -1 : a[0].updated_at > b[0].updated_at ? 1 : a[1] - b[1]).map(a => a[0]);
+      const since = gt ? gt.replace(/^gt\./, '') : '', byId = /updated_at(\.asc)?,id/.test(u.searchParams.get('order') || ''); pages++;
+      const rows = S.db.t.list_lines.filter(r => !since || r.updated_at > since).map(r => [r, byId ? 0 : Math.random()]).sort((a, b) => a[0].updated_at < b[0].updated_at ? -1 : a[0].updated_at > b[0].updated_at ? 1 : byId ? (a[0].id < b[0].id ? -1 : a[0].id > b[0].id ? 1 : 0) : a[1] - b[1]).map(a => a[0]);
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(rows.slice(off, off + lim).slice(0, 1000)) });
     });
     await saw.page.evaluate(async () => { await lsPoll(); });
     const seen1 = await saw.page.evaluate(n => [...LST.ln.values()].filter(z => z.list_id <= 'B0015' && z.list_id.startsWith('B') && z.status === 'cut').length, 0);
-    rec('V2b 1,500 lines changed in one transaction (same timestamp): one poll picks up all 1,500 (paging on updated_at alone is unstable on ties)', seen1 === 1500, 'seen after 1 poll=' + seen1 + ' of 1500 — orders by updated_at only, no id tie-breaker (lsPoll)');
+    rec('V2b 1,500 lines changed in one transaction (same timestamp): one poll picks up all 1,500 (paging on updated_at alone is unstable on ties)', seen1 === 1500 && pages >= 2, 'pages intercepted=' + pages + ' seen after 1 poll=' + seen1 + ' of 1500 — orders by updated_at only, no id tie-breaker (lsPoll)');
     await saw.close();
   }
   // ---------- V3: switch back while 3 devices hold unsent changes; they reconnect in different ways
