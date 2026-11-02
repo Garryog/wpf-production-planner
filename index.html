@@ -2836,10 +2836,12 @@ function lsMaterialsDlg(pid,after){
       <tr><td><input id="mt-new-n" placeholder="e.g. 18mm MFC White" style="${LS_INP};width:100%"></td><td><select id="mt-new-k" style="${LS_INP}"><option value="sheet">Sheet (saw)</option><option value="other">Fitting / other</option></select></td><td></td><td></td>
         <td><button class="btn btn-g" id="mt-add" style="font-size:12px;padding:4px 10px">＋ Add</button></td></tr></tbody></table><div id="mt-msg" style="font-size:12px;color:#b42318;font-weight:700;margin-top:6px"></div>`;
     const msg=t=>{const e=ov.querySelector('#mt-msg');if(e)e.textContent=t;};
-    const dup=(name,id)=>lsMats(pid,'',true).some(m=>m.id!==id&&String(m.name).trim().toLowerCase()===name.toLowerCase());
+    const lo=v=>String(v||'').trim().toLowerCase();
+    const dup=(name,id)=>lsMats(pid,'',true).some(m=>m.id!==id&&(lo(m.name)===lo(name)||(m.aliases||[]).some(a=>lo(a)===lo(name)))); // a name or another material's other spelling
     ov.querySelectorAll('[data-mts]').forEach(b=>b.onclick=()=>{const id=b.dataset.mts,m=LST.m.get(id);if(!m||!lsEditOk())return;
       const name=ov.querySelector('[data-mtn="'+id+'"]').value.trim();if(!name)return msg('A material needs a name.');if(dup(name,id))return msg('"'+name+'" is already on this project.');
       const aliases=ov.querySelector('[data-mta="'+id+'"]').value.split(',').map(s=>s.trim()).filter(Boolean);
+      const clash=aliases.find(a=>dup(a,id));if(clash)return msg('"'+clash+'" is already the name or another spelling of a different material on this project.');
       if(String(m.name).trim().toLowerCase()!==name.toLowerCase()&&!aliases.some(a=>a.toLowerCase()===String(m.name).trim().toLowerCase()))aliases.push(String(m.name).trim()); // renamed: the old name still matches
       lsWrite('project_materials',m,{name,kind:ov.querySelector('[data-mtk="'+id+'"]').value,aliases,active:ov.querySelector('[data-mtv="'+id+'"]').checked})
         .then(()=>{toast('Material saved');draw();}).catch(e=>{draw();msg('Not saved — '+e.message);});});
@@ -2960,7 +2962,7 @@ function lsOwnerFor(o){
 function waitListHTML(){
   if(!V2())return'';
   const today=todayLocal();
-  const rows=listsNeeded().map(o=>{const cut=listDeadline({wos:[o.wo]});return{o,cut,due:cut?prevWorkDay(lsSawDay(cut)):''};}) // due the working day before the saw cuts it.sort((a,b)=>(a.due||'9999').localeCompare(b.due||'9999'));
+  const rows=listsNeeded().map(o=>{const cut=listDeadline({wos:[o.wo]});return{o,cut,due:cut?prevWorkDay(lsSawDay(cut)):''};}).sort((a,b)=>(a.due||'9999').localeCompare(b.due||'9999')); // due = the working day before the saw cuts it; earliest first
   if(!rows.length)return'';
   const od=rows.filter(r=>r.due&&r.due<today).length;
   return `<div class="exp-panel" id="wait-list" style="border:2px solid ${od?'#c0392b':'#d4880f'};background:${od?'#fdf3f2':'#fffaf0'};padding:10px 12px">
