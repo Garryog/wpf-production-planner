@@ -109,7 +109,7 @@ alter publication supabase_realtime add table lists, list_lines; -- ready for la
 
 -- One status change per line, with the "done wins" rules applied by the database.
 -- Each change: {id, status | act:'release', v (line version the screen saw — needed to untick), rev (list rev the screen
--- showed), cid (device id for this tap), from, at}. Reply per change: {id, cid, ok, why, status, v, by, at, rel, dup}.
+-- showed), cid (device id for this tap), from, at}. Reply per change: {id, cid, ok, why, status, v, by, at, rel, relby, dup}.
 -- why: missing | removed | changed (a newer revision changed the line) | not-needed | wrong-kind | done (already cut/got out)
 --      | stale (someone changed the line since this screen saw it) | not-waiting | bad
 create or replace function apply_line_changes(p_changes jsonb, p_by text) returns jsonb language plpgsql as $$
@@ -119,7 +119,7 @@ begin
   -- the same tap sent again (the first reply was lost): report the line as it is now, change nothing
   if c->>'cid' is not null and exists(select 1 from list_events e where e.cid=c->>'cid') then
    select * into l from list_lines where id=c->>'id';
-   res:=res||jsonb_build_object('id',c->>'id','cid',c->>'cid','ok',true,'dup',true,'status',l.status,'v',l.version,'by',l.status_by,'at',l.status_at,'rel',l.released_at);
+   res:=res||jsonb_build_object('id',c->>'id','cid',c->>'cid','ok',true,'dup',true,'status',l.status,'v',l.version,'by',l.status_by,'at',l.status_at,'rel',l.released_at,'relby',l.released_by);
    continue;
   end if;
   select * into l from list_lines where id=c->>'id' for update;
@@ -156,7 +156,7 @@ begin
    insert into list_events(list_id,line_id,act,from_status,to_status,by,client_at,cid)
      values(l.list_id,l.id,a,c->>'from',l.status,p_by,(c->>'at')::timestamptz,c->>'cid');
   end if;
-  res:=res||jsonb_build_object('id',l.id,'cid',c->>'cid','ok',ok,'why',why,'status',l.status,'v',l.version,'by',l.status_by,'at',l.status_at,'rel',l.released_at);
+  res:=res||jsonb_build_object('id',l.id,'cid',c->>'cid','ok',ok,'why',why,'status',l.status,'v',l.version,'by',l.status_by,'at',l.status_at,'rel',l.released_at,'relby',l.released_by);
  end loop; return res; end $$;
 grant execute on function apply_line_changes(jsonb,text) to anon, authenticated, service_role;
 

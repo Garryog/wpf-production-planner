@@ -68,7 +68,7 @@ function applyLineChanges(d, changes, by) {
   for (const c of changes || []) {
     if (c.cid != null && d.t.list_events.some(e => e.cid === c.cid)) {
       const l = find(d, 'list_lines', c.id) || {};
-      res.push({ id: c.id, cid: c.cid, ok: true, dup: true, status: l.status, v: l.version, by: l.status_by, at: l.status_at, rel: l.released_at });
+      res.push({ id: c.id, cid: c.cid, ok: true, dup: true, status: l.status, v: l.version, by: l.status_by, at: l.status_at, rel: l.released_at, relby: l.released_by });
       continue;
     }
     let l = find(d, 'list_lines', c.id);
@@ -102,7 +102,7 @@ function applyLineChanges(d, changes, by) {
       if (li && !li.locked) update(d, 'lists', li, { locked: true, updated_by: by });
     }
     if (ok) insert(d, 'list_events', { list_id: l.list_id, line_id: l.id, act: a, from_status: c.from == null ? null : c.from, to_status: l.status, by, client_at: c.at || null, cid: c.cid == null ? null : c.cid });
-    res.push({ id: l.id, cid: c.cid, ok, why, status: l.status, v: l.version, by: l.status_by, at: l.status_at, rel: l.released_at });
+    res.push({ id: l.id, cid: c.cid, ok, why, status: l.status, v: l.version, by: l.status_by, at: l.status_at, rel: l.released_at, relby: l.released_by });
   }
   return res;
 }

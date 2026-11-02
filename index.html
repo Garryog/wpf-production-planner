@@ -2211,7 +2211,7 @@ async function lqSend(){
         const bump=[],bad=[];
         d.forEach(x=>{
           const e=batch.find(b=>b.cid===x.cid)||batch.find(b=>b.id===x.id);
-          if(x.v!=null&&LST.ln.has(x.id))lsPut('list_lines',[{id:x.id,list_id:LST.ln.get(x.id).list_id,status:x.status,version:x.v,status_by:x.by,status_at:x.at,released_at:x.rel}],true);
+          if(x.v!=null&&LST.ln.has(x.id))lsPut('list_lines',[{id:x.id,list_id:LST.ln.get(x.id).list_id,status:x.status,version:x.v,status_by:x.by,status_at:x.at,released_at:x.rel,released_by:x.relby}],true);
           if(e&&x.ok&&x.v!=null&&+x.v!==+e.v)bump.push([x.id,+e.v,+x.v]); // our own change moved the line on: later taps here build on it
           if(!x.ok)bad.push(x);
         });
