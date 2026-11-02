@@ -2868,15 +2868,16 @@ function lsMaterialsDlg(pid,after){
       const name=ov.querySelector('[data-mtn="'+id+'"]').value.trim();if(!name)return msg('A material needs a name.');
       const aliases=ov.querySelector('[data-mta="'+id+'"]').value.split(',').map(s=>s.trim()).filter(Boolean);
       const kind=ov.querySelector('[data-mtk="'+id+'"]').value,active=ov.querySelector('[data-mtv="'+id+'"]').checked;
-      if(!await fresh())return;const m=LST.m.get(id);
-      if(lsMatClash(pid,name,id))return msg('"'+name+'" is already on this project.');
+      const m=LST.m.get(id); // the version this screen showed: if another screen changed it since, the save is refused (not overwritten)
+      if(!await fresh())return;
+      if(lsMatClash(pid,name,id))return msg('"'+name+'" is already used on this project.');
       const clash=aliases.find(a=>lsMatClash(pid,a,id));if(clash)return msg('"'+clash+'" is already the name or another spelling of a different material on this project.');
       if(matKey(m.name)!==matKey(name)&&!aliases.some(a=>matKey(a)===matKey(m.name)))aliases.push(String(m.name).trim()); // renamed: the old name still matches
       lsWrite('project_materials',m,{name,kind,aliases,active})
         .then(()=>{toast('Material saved');draw();}).catch(e=>{draw();msg('Not saved — '+e.message);});});
     ov.querySelector('#mt-add').onclick=async()=>{if(!lsEditOk())return;const name=ov.querySelector('#mt-new-n').value.trim();if(!name)return msg('Type the material name first.');
       const kind=ov.querySelector('#mt-new-k').value;
-      if(!await fresh())return;if(lsMatClash(pid,name,''))return msg('"'+name+'" is already on this project.');
+      if(!await fresh())return;if(lsMatClash(pid,name,''))return msg('"'+name+'" is already used on this project.');
       lsWrite('project_materials',{id:uid('M'),project_id:pid,name,kind,sort:lsMats(pid,'',true).length}).then(()=>{toast(name+' added');draw();}).catch(e=>msg('Not added — '+e.message));};
   };
   draw();
