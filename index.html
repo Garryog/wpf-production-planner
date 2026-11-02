@@ -5155,6 +5155,7 @@ function manualListValidate(d){ // pure — used by the editor and the tests
   return'';
 }
 function saveManualList(d,by,existing){ // pure-ish: writes DB, returns the list
+  if(V2())throw new Error('typed lists go to the new lists tables in V2 (build step C6) — the old copy is frozen');
   const rows=d.rows.map(r=>r.k==='saw'?{k:'saw',item:String(r.item||'').trim(),qty:+r.qty,L:+r.L>0?+r.L:'',W:+r.W>0?+r.W:'',mat:String(r.mat||'').trim(),note:String(r.note||'').trim()}
                                     :{k:'fit',item:String(r.item||'').trim(),qty:+r.qty,mat:String(r.mat||'').trim(),note:String(r.note||'').trim()});
   DB.listWBs=DB.listWBs||{};DB.lists=DB.lists||[];
