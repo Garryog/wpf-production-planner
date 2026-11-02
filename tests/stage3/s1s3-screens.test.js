@@ -84,7 +84,7 @@ function fixture(on) {
   rec('Materials: add a sheet material and its other spellings', oak && oak.kind === 'sheet' && D.find(S.db, 'project_materials', oak.id).aliases.join('|') === 'Oak|oak veneer 18');
   await des.page.evaluate(() => { const o = document.querySelector('.pod-ovl'); o.querySelector('#mt-new-n').value = 'mfc white'; o.querySelector('#mt-add').click(); });
   await F.sleep(200);
-  rec('Materials: duplicate name refused', /already on this project/.test(await des.page.evaluate(() => document.querySelector('#mt-msg').textContent)));
+  rec('Materials: duplicate name refused', /already used on this project/.test(await des.page.evaluate(() => document.querySelector('#mt-msg').textContent)));
   await des.page.evaluate(id => { const o = document.querySelector('.pod-ovl'); o.querySelector('[data-mtv="' + id + '"]').checked = false; o.querySelector('[data-mts="' + id + '"]').click(); }, oak.id);
   await F.sleep(300);
   rec('Materials: retire (inactive) — kept, and no longer offered', D.find(S.db, 'project_materials', oak.id).active === false && !(await des.page.evaluate(() => knownMaterials().includes('18mm Oak veneer'))));
