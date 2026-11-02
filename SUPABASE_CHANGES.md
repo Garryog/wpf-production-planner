@@ -117,14 +117,15 @@ create or replace function apply_line_changes(p_changes jsonb, p_by text) return
 declare c jsonb; l list_lines%rowtype; w text; a text; ok boolean; noop boolean; why text; res jsonb:='[]';
 begin
  for c in select * from jsonb_array_elements(p_changes) loop
+  -- lock the line FIRST: a resend racing the original waits here until the original has committed its event,
+  -- then sees it below as "already applied" (instead of failing on the unique cid)
+  select * into l from list_lines where id=c->>'id' for update;
+  if not found then res:=res||jsonb_build_object('id',c->>'id','cid',c->>'cid','ok',false,'why','missing'); continue; end if;
   -- the same tap sent again (the first reply was lost): report the line as it is now, change nothing
   if c->>'cid' is not null and exists(select 1 from list_events e where e.cid=c->>'cid') then
-   select * into l from list_lines where id=c->>'id';
    res:=res||jsonb_build_object('id',c->>'id','cid',c->>'cid','ok',true,'dup',true,'status',l.status,'v',l.version,'by',l.status_by,'at',l.status_at,'rel',l.released_at,'relby',l.released_by);
    continue;
   end if;
-  select * into l from list_lines where id=c->>'id' for update;
-  if not found then res:=res||jsonb_build_object('id',c->>'id','cid',c->>'cid','ok',false,'why','missing'); continue; end if;
   a:=coalesce(c->>'act','status'); w:=c->>'status'; noop:=false; why:=null; ok:=false;
   if l.removed_rev is not null then why:='removed';
   elsif a='release' then

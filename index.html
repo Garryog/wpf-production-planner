@@ -2134,7 +2134,7 @@ function lsMaterials(){const s=new Set();LST.m.forEach(m=>{if(m.active!==false&&
 /* ---------- Line queue (V2 only): every tick / N/A / release / sign-off / tag waits on THIS device until the database has it ----------
    Kept in localStorage (wpfLineQ) so a closed tab or a dead battery loses nothing. Sent within 2 s, retried every 10 s and
    again when the connection comes back. Each tap has its own id (cid): a resend after a lost reply only counts once. */
-const LQ={q:[],gen:0,fly:new Set(),busy:false,t:null,iv:null,err:'',msgs:[],memOnly:false};
+const LQ={q:[],gen:0,fly:new Set(),busy:false,t:null,iv:null,err:'',msgs:[],memOnly:false,solo:0};
 function lqRead(){try{const v=JSON.parse(localStorage.getItem('wpfLineQ')||'[]');return Array.isArray(v)?v:[];}catch(e){return LQ.q.slice();}}
 function lqMut(fn){
   const q=LQ.memOnly?LQ.q.slice():lqRead();fn(q);
@@ -2231,7 +2231,7 @@ async function lqSend(){
     for(let guard=0;guard<200&&LQ.q.length;guard++){
       const h=LQ.q[0];let batch,fn=null,args=null;
       if(h.t==='line'){
-        batch=[];for(const e of LQ.q){if(e.t!=='line'||e.by!==h.by||batch.length>=50||batch.some(b=>b.id===e.id))break;batch.push(e);}
+        batch=[];for(const e of LQ.q){if(e.t!=='line'||e.by!==h.by||batch.length>=(LQ.solo>0?1:50)||batch.some(b=>b.id===e.id))break;batch.push(e);}
         fn='apply_line_changes';args={p_changes:batch.map(e=>({id:e.id,cid:e.cid,act:e.act,status:e.status,v:e.v,rev:e.rev,from:e.from,at:e.at})),p_by:h.by};
       }else{
         batch=[h];
@@ -2247,8 +2247,10 @@ async function lqSend(){
         d=r?await r.json().catch(()=>null):null;
       }finally{batch.forEach(e=>LQ.fly.delete(e.cid));}
       if(!r){lqDrop(cids);continue;} // an entry this version doesn't know
+      if(LQ.solo>0)LQ.solo--;
       if(!r.ok){
-        // the database refused the call itself (e.g. the list no longer exists): drop it and say so; anything else → retry later
+        // the database refused the call itself: a batch of ticks is retried one at a time, so only the bad one is dropped
+        if((r.status===400||r.status===409||r.status===422)&&h.t==='line'&&batch.length>1){LQ.solo=batch.length;continue;}
         if(r.status===400||r.status===409||r.status===422){lqDrop(cids);lqSay('Not saved — the database refused it ('+String((d&&d.message)||r.status).slice(0,80)+')');continue;}
         throw new Error('HTTP '+r.status);
       }
