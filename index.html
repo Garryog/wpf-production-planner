@@ -2975,6 +2975,8 @@ function dueToday(l,t){const d=listDeadline(l);return !!d&&d<=cutTodayEnd(t);}
 // ls: lists to look at; a list counts when its cut-by date is within [fromISO,toISO] ('' = open-ended).
 // opt.cutSince (YYYY-MM-DD): lines/lists finished before that day are left out; lines cut on or after it still count.
 // Lines waiting on material are left out. Dims are mm. Returns {mats:[{mat,m2,sheets,lines,check}],noSize,noQty,lines,sheets}.
+/* One key per board name for grouping: same letters (é typed either way), any case, any run of spaces/NBSP = same board */
+function matKey(s){return String(s==null?'':s).normalize('NFKC').replace(/\s+/g,' ').trim().toLowerCase();}
 function sheetNeed(ls,fromISO,toISO,opt){
   opt=opt||{};const since=opt.cutSince||'';
   const day=at=>at?isoOf(new Date(at)):'';
@@ -2993,7 +2995,7 @@ function sheetNeed(ls,fromISO,toISO,opt){
       if(!(L>0)||!(W>0)){noSize++;return;}
       if(!qs){noQty++;return;}
       if(!/^\d+$/.test(qs)||!(q>0)){badQty++;return;} // "2x2", "1.5", "4 off" — never guessed
-      const m=String(r.mat||'').trim()||'(no material)',mk=m.toLowerCase();
+      const m=String(r.mat||'').trim()||'(no material)',mk=matKey(m);
       const g=by[mk]=by[mk]||{mat:m,m2:0,lines:0,check:false};
       g.m2+=L*W*q/1e6;g.lines++;lines++;
       if(L<SHEET_MIN_DIM||W<SHEET_MIN_DIM||L>SHEET_MAX_DIM||W>SHEET_MAX_DIM)g.check=true; // cm, metres or a typo
@@ -5421,7 +5423,7 @@ function openHold(l,mode){
 function holdBookHTML(modes){
   const hs=allHolds(modes,'hold');
   if(!hs.length)return `<div class="flr-none">Nothing waiting on material ✓</div>`;
-  const grp={};hs.forEach(x=>{const n=holdGrp(x),gk=n.toLowerCase();(grp[gk]=grp[gk]||{n,a:[]}).a.push(x);}); // same board, any case/spacing = one group (first spelling shown)
+  const grp={};hs.forEach(x=>{const n=holdGrp(x),gk=matKey(n);(grp[gk]=grp[gk]||{n,a:[]}).a.push(x);}); // same board, any case/spacing = one group (first spelling shown)
   return Object.keys(grp).sort().map(gk=>{const g=grp[gk].n,a=grp[gk].a;return `<div class="hold-grp">
     <div class="hold-gh"><span>${escA(g)} — ${a.length} row${a.length!==1?'s':''} waiting</span><button class="wl-btn" data-relg="${escA(g)}" style="padding:10px 18px;font-size:15px">▶ ARRIVED — RELEASE ALL</button></div>
     ${a.map(x=>`<div class="wl-drow"><b>${escA(x.l.name)}</b><span class="dsh-t">${escA(x.v.item||'')} ×${escA(x.v.qty)}${x.v.L||x.v.W?' · '+escA(x.v.L)+' × '+escA(x.v.W):''}</span><span class="dsh-c">${escA(listCust(x.l))}</span><span class="dsh-x">since ${new Date(x.v.at).toLocaleDateString('en-IE',{day:'numeric',month:'short'})}${x.v.by?' · '+escA(x.v.by):''}${listDueKey(x.l)?' · delivers '+fmt(listDueKey(x.l)):''}</span><button class="wl-undo" data-rel1="${escA(x.l.id)}|${escA(x.k)}">Release</button></div>`).join('')}
@@ -5430,9 +5432,9 @@ function holdBookHTML(modes){
 function holdGrp(x){return x.v.m==='saw'?(String(x.v.mat||'').trim()||'(material not named)'):('🧰 '+(String(x.v.item||x.v.mat||'').trim()||'fitting'));}
 function bindHoldBook(modes,whoFn){
   const hs=allHolds(modes,'hold');
-  const gname=x=>holdGrp(x).toLowerCase();
+  const gname=x=>matKey(holdGrp(x));
   const go=(items,label)=>whoFn('Released — '+label,by=>{releaseHolds(items,by);lsSched();render();toast(items.length+' row'+(items.length!==1?'s':'')+' released — back in the queue as due work');});
-  document.querySelectorAll('[data-relg]').forEach(b=>b.onclick=()=>{const items=hs.filter(x=>gname(x)===String(b.dataset.relg).trim().toLowerCase());if(items.length)go(items,b.dataset.relg);});
+  document.querySelectorAll('[data-relg]').forEach(b=>b.onclick=()=>{const items=hs.filter(x=>gname(x)===matKey(b.dataset.relg));if(items.length)go(items,b.dataset.relg);});
   document.querySelectorAll('[data-rel1]').forEach(b=>b.onclick=()=>{const v=b.dataset.rel1,i=v.indexOf('|'),id=v.slice(0,i),k=v.slice(i+1);const items=hs.filter(x=>x.l.id===id&&x.k===k);if(items.length)go(items,items[0].v.item||'row');});
 }
 const officeWhoFn=(what,cb)=>officeWho(cb);
@@ -5631,7 +5633,7 @@ function printWorkList(mode,days){
       <span class="dl">${listOverdue(l)?'OVERDUE · ':''}${saw?'CUT':'PICK'} BY ${E(fmt(listDeadline(l)))} · DELIVERS ${E(fmt(listDueKey(l)))}</span></div>
       <div class="wos">${(l.wos||[]).map(E).join(' · ')}${relOnly?' · <b>MATERIAL ARRIVED — these rows only</b>':''}</div>
       <table><thead><tr><th class="tk">✓</th><th>Item</th><th class="n">Qty</th>${saw?'<th class="n">Length</th><th class="n">Width</th><th>Material</th><th>Edging / note</th>':'<th>Spec</th><th>Note</th>'}<th class="in">Initials</th></tr></thead><tbody>
-      ${rows.map(r=>{const held=heldRow(l,rowKey(r));return `<tr${held?' class="held"':''}><td class="tk">${held?'⏸':'☐'}</td><td>${held?'<b>WAITING ON MATERIAL</b> — ':''}${E(r.item||'')}</td><td class="n">${E(r.qty)}</td>${saw?`<td class="n">${E(r.L)}</td><td class="n">${E(r.W)}</td><td>${E(r.mat)}</td><td>${E(r.note)}</td>`:`<td>${E(r.mat)}</td><td>${E(r.note)}</td>`}<td class="in"></td></tr>`;}).join('')}
+      ${rows.map(r=>{const k=rowKey(r),held=heldRow(l,k),tkd=!held&&rowTicked(l.id,k);return `<tr${held?' class="held"':tkd?' class="done"':''}><td class="tk">${held?'⏸':tkd?'✓':'☐'}</td><td>${held?'<b>WAITING ON MATERIAL</b> — ':''}${E(r.item||'')}</td><td class="n">${E(r.qty)}</td>${saw?`<td class="n">${E(r.L)}</td><td class="n">${E(r.W)}</td><td>${E(r.mat)}</td><td>${E(r.note)}</td>`:`<td>${E(r.mat)}</td><td>${E(r.note)}</td>`}<td class="in"></td></tr>`;}).join('')}
       </tbody></table>
       <div class="sig">${saw?'Cut complete':'Picked'} — signed: ______________________ &nbsp; time: ________</div></div>`;
   };
@@ -5646,7 +5648,7 @@ function printWorkList(mode,days){
   .wos{font-family:monospace;font-size:10px;color:#555;margin:1mm 0 2mm}
   table{width:100%;border-collapse:collapse}th,td{border:1px solid #888;padding:4px 5px;text-align:left;vertical-align:top}th{background:#eef1f6;font-size:10px;text-transform:uppercase}
   .n{text-align:right;font-family:monospace;font-size:13px}.tk{width:9mm;text-align:center;font-size:16px}.in{width:18mm}
-  tr.held td{background:#f3f3f3;color:#666}.sig{margin-top:3mm;font-size:12px}
+  tr.held td{background:#f3f3f3;color:#666}tr.done td{background:#f3f3f3;color:#666;text-decoration:line-through}tr.done td.tk{text-decoration:none;font-weight:800}.sig{margin-top:3mm;font-size:12px}
   @media print{@page{size:A4 portrait;margin:8mm}body{padding:0}}
   </style></head><body><h1><span>${saw?'🪚 SAW — cutting sheet':'🧰 STORES — fittings sheet'}</span><span>${E(today)}</span></h1>
   <div class="note">Paper fallback — tick each row as you go and sign each house. Hand the sheet to the office so it can be entered in the planner. ${days>1?'Covers the next '+days+' days and anything overdue.':'Today\'s work and anything overdue.'}</div>
