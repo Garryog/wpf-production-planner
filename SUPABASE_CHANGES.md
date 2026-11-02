@@ -16,6 +16,7 @@ Newest at the top. Each block must be run in Supabase BEFORE the matching code g
   - `save_list_revision` — saves an edited list. Refuses with "stale" if someone changed the list since the editor opened it; keeps a copy of the old version when the list is locked; never touches a line's tick unless that line really changed; removed lines are marked, never deleted.
   - `snags_to_list` — makes one snag list per project; refuses any snag already transferred, so two people can't transfer the same snag twice.
 - A trigger moves a snag to "cut" when its line is cut or got out.
+- A trigger on the planner record keeps the lists switch: a planner tab left open on old code can't switch the floor back to the old lists by saving.
 - Nothing is deleted. The app gets NO delete permission on any new table. The existing planner record is untouched.
 - **The app does not use any of this until Garry presses "Migrate lists" (Admin PIN, Settings).** Until then it runs exactly as today, and makes no calls to these tables. So running this early is harmless.
 
@@ -286,6 +287,20 @@ begin
  return jsonb_build_object('list',to_jsonb(r),'lines',(select coalesce(jsonb_agg(to_jsonb(x) order by x.seq),'[]') from list_lines x where x.list_id=r.id));
 end $$;
 grant execute on function save_list_revision(jsonb,jsonb,int,text,text) to anon, authenticated, service_role;
+
+-- The lists switch lives in the planner record's settings (listStore / listStoreAt). A tab still running OLD code saves
+-- its whole settings object without those keys, which would quietly switch every screen back to the old lists. This
+-- trigger keeps the switch whenever a save leaves it out; only a save that names it (Switch back writes 'v1') changes it.
+create or replace function production_planner_keep_switch() returns trigger language plpgsql as $$
+begin
+ if old.settings is not null and old.settings ? 'listStore' and (new.settings is null or not (new.settings ? 'listStore')) then
+  new.settings := coalesce(new.settings,'{}'::jsonb) || jsonb_build_object('listStore',old.settings->'listStore')
+    || case when old.settings ? 'listStoreAt' then jsonb_build_object('listStoreAt',old.settings->'listStoreAt') else '{}'::jsonb end;
+ end if;
+ return new;
+end $$;
+drop trigger if exists production_planner_keep_switch on production_planner;
+create trigger production_planner_keep_switch before update on production_planner for each row execute function production_planner_keep_switch();
 
 -- ===================== PROJECTS HUB (snags part) — runs AFTER Plan A =====================
 alter table projects add column if not exists project_type text not null default 'kitchens'

@@ -43,7 +43,18 @@ async function handle(S, route) {
   const path = url.replace(/^.*rest\/v1/, '');
   const tm = /^\/([a-z_]+)(\?|$)/.exec(path);
   const rpc = /^\/rpc\/([a-z_]+)/.exec(path);
-  if (!rpc && !(tm && D.TABLES.includes(tm[1]))) return route.fallback();
+  if (!rpc && !(tm && D.TABLES.includes(tm[1]))) {
+    // production_planner_keep_switch trigger (SUPABASE_CHANGES.md): a save that leaves out settings.listStore keeps the stored one
+    if (m === 'PATCH' && /\/production_planner/.test(path) && S.row && S.row.settings && S.row.settings.listStore) {
+      let b = null; try { b = JSON.parse(req.postData() || '{}'); } catch (e) {}
+      if (b && (!b.settings || !('listStore' in b.settings)) && 'settings' in b) {
+        b.settings = Object.assign({}, b.settings || {}, { listStore: S.row.settings.listStore }, 'listStoreAt' in S.row.settings ? { listStoreAt: S.row.settings.listStoreAt } : {});
+        S.keptSwitch = (S.keptSwitch || 0) + 1;
+        return route.fallback({ postData: JSON.stringify(b) });
+      }
+    }
+    return route.fallback();
+  }
   S.log.push(m + ' ' + path);
   if (S.offline || S.offline3) return route.abort('internetdisconnected');
   if (S.hold3) await S.hold3; // a test can pause the new-table traffic

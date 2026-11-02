@@ -2020,7 +2020,7 @@ async function lsLines(ids){
   for(let i=0;i<ids.length;i+=60){
     const ch=ids.slice(i,i+60);
     const rows=await lsGet('list_lines?select=*&list_id=in.('+ch.map(id=>'"'+encodeURIComponent(id)+'"').join(',')+')');
-    ch.forEach(id=>LST.full.add(id));lsPut('list_lines',rows);LST.gen++;
+    ch.forEach(id=>{if(LST.l.has(id))LST.full.add(id);});lsPut('list_lines',rows);LST.gen++; // only lists we know: an unknown id is fetched again later
   }
 }
 async function lsLoad(){
@@ -2182,6 +2182,7 @@ function lqWhy(x){
 function lqSay(m){LQ.msgs.push(m);if(LQ.msgs.length>20)LQ.msgs.shift();toast(m);}
 function lqDrop(cids){lqMut(q=>q.splice(0,q.length,...q.filter(e=>!cids.has(e.cid))));}
 async function lqSend(){
+  if(LST.rescuing)await LST.rescuing; // old-tab ticks being copied in go with this send
   if(LQ.busy||!V2())return;
   if(!LQ.memOnly)LQ.q=lqRead();LQ.gen++;
   if(!LQ.q.length){clearInterval(LQ.iv);LQ.iv=null;return;}
@@ -2556,9 +2557,17 @@ async function lsSwitchBack(by){
 /* Tabs still on the old code after the switch keep writing ticks / holds into the frozen copy. Anything newer than
    listStoreAt is copied into the tables (done still wins — the database decides). Each one has a fixed id, so every
    screen that finds it sends the same change and the database applies it once. */
-function lsRescue(){
+// pick(kind,v): which old-format entries to copy — default: newer than the switch. Lines not loaded yet are fetched first
+// (the queue waits for that), so a fresh screen can rescue straight away.
+function lsRescue(pick){
   if(!V2()||!LST.loaded||!DB.listStoreAt)return 0;
   const T=DB.listStoreAt;let n=0;
+  pick=pick||((kind,v)=>String((kind==='rel'?v.relAt:v.at)||'')>T);
+  const want=new Set();
+  Object.entries(DB.listRow||{}).forEach(([lid,t])=>Object.values(t||{}).forEach(v=>{if(v&&pick('tick',v))want.add(lid);}));
+  Object.entries(DB.listHold||{}).forEach(([lid,h])=>Object.values(h||{}).forEach(v=>{if(v&&pick(v.st==='rel'?'rel':'hold',v))want.add(lid);}));
+  const need=[...want].filter(id=>!LST.full.has(id));
+  if(need.length){if(!LST.rescuing)LST.rescuing=lsGetIn('lists','id',need.filter(id=>!LST.l.has(id))).then(r=>{lsPut('lists',r);return lsLines(need);}).catch(()=>{}).then(()=>{LST.rescuing=null;if([...want].every(id=>LST.full.has(id)))lsRescue(pick);});return 0;}
   const byList=new Map();
   const lineOf=(lid,k)=>{let m=byList.get(lid);if(!m){m=new Map();lsLinesOf(lid).forEach(x=>{if(x.removed_rev!=null||x.kind==='hdr'||x.status==='na')return;
       const kk=v1Key({k:x.kind,item:x.part,L:x.kind==='saw'&&x.length_mm!=null?+x.length_mm:'',W:x.kind==='saw'&&x.width_mm!=null?+x.width_mm:'',mat:x.material,note:x.kind==='saw'?[x.edging,x.note].filter(s=>String(s||'').trim()).join(' · '):x.note});
@@ -2566,11 +2575,11 @@ function lsRescue(){
   const send=(x,st,by,tag)=>{const cid='rescue:'+lsHash(x.id+'|'+tag);if(LQ.q.some(e=>e.cid===cid))return;
     const e={t:'line',cid,id:x.id,list:x.list_id,act:st==='release'?'release':'status',v:+x.version,rev:+((LST.l.get(x.list_id)||{}).rev)||1,from:x.status,at:nowISO(),by:lqBy(by),quiet:true};
     if(st!=='release')e.status=st;lqMut(q=>q.push(e));n++;};
-  Object.entries(DB.listRow||{}).forEach(([lid,t])=>Object.entries(t||{}).forEach(([k,v])=>{if(!v||!(String(v.at||'')>T))return;
+  Object.entries(DB.listRow||{}).forEach(([lid,t])=>Object.entries(t||{}).forEach(([k,v])=>{if(!v||!pick('tick',v))return;
     lineOf(lid,k).forEach(x=>{const st=x.kind==='saw'?'cut':'got-out';if(x.status!==st)send(x,st,v.by,'t|'+k+'|'+v.at);});}));
   Object.entries(DB.listHold||{}).forEach(([lid,h])=>Object.entries(h||{}).forEach(([k,v])=>{if(!v)return;
-    if(v.st==='hold'&&String(v.at||'')>T)lineOf(lid,k).forEach(x=>{if(x.status==='todo')send(x,'waiting',v.by,'h|'+k+'|'+v.at);});
-    if(v.st==='rel'&&String(v.relAt||'')>T)lineOf(lid,k).forEach(x=>{if(x.status==='waiting')send(x,'release',v.relBy,'r|'+k+'|'+v.relAt);});}));
+    if(v.st==='hold'&&pick('hold',v))lineOf(lid,k).forEach(x=>{if(x.status==='todo')send(x,'waiting',v.by,'h|'+k+'|'+v.at);});
+    if(v.st==='rel'&&pick('rel',v))lineOf(lid,k).forEach(x=>{if(x.status==='waiting')send(x,'release',v.relBy,'r|'+k+'|'+v.relAt);});}));
   if(n)lqKick(0);
   return n;
 }
