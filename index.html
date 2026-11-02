@@ -2451,19 +2451,20 @@ function lsUpload(f,pid){
    lines the tables no longer need are marked removed, never erased. */
 function v1Key(r){return[r.k,String(r.item||'').trim(),r.L,r.W,String(r.mat||'').trim(),String(r.note||'').trim()].join('|').toLowerCase();} // today's rowKey
 function lsHash(s){let h=5381;s=String(s);for(let i=0;i<s.length;i++)h=((h*33)^s.charCodeAt(i))>>>0;return h.toString(36);}
-function lsOldRows(l){const wb=(DB.listWBs||{})[l.wb];return wb&&wb.sheets&&wb.sheets[l.sheet]?wb.sheets[l.sheet]:[];}
-function lsOldCounts(l){ // what the old screens show: lines, done, waiting (read-time rules: a tick beats a hold)
-  const t=(DB.listRow||{})[l.id]||{},h=(DB.listHold||{})[l.id]||{};let n=0,dn=0,w=0;
-  lsOldRows(l).forEach(r=>{if(r.k==='hdr')return;n++;const k=v1Key(r);if(t[k])dn++;else if(h[k]&&h[k].st==='hold')w++;});
+function lsOldRows(l,src){const wb=((src||DB).listWBs||{})[l.wb];return wb&&wb.sheets&&wb.sheets[l.sheet]?wb.sheets[l.sheet]:[];}
+function lsOldCounts(l,src){ // what the old screens show: lines, done, waiting (read-time rules: a tick beats a hold)
+  src=src||DB;const t=(src.listRow||{})[l.id]||{},h=(src.listHold||{})[l.id]||{};let n=0,dn=0,w=0;
+  lsOldRows(l,src).forEach(r=>{if(r.k==='hdr')return;n++;const k=v1Key(r);if(t[k])dn++;else if(h[k]&&h[k].st==='hold')w++;});
   return{n,done:dn,wait:w};
 }
 const LS_NOPROJ=/^(manual lists)?$/i;
 // The tables' rows for the old data (pure apart from reading DB): projects, lists, lines, holdLog events. Same input → same rows.
-function lsMigrationRows(existing){
+function lsMigrationRows(existing,src){
+  src=src||DB;
   const cust=l=>{for(const w of (l.wos||[])){const o=DB.orders.find(x=>x.wo===w);if(o&&o.customer)return String(o.customer).trim();}return'';};
   const projs=new Map(),pidOf=new Map();
   (existing||[]).forEach(p=>projs.set(String(p.name).trim().toLowerCase(),{id:p.id,name:p.name,customer:p.customer||null,keep:true}));
-  const lists0=DB.lists||[],L=[],LN=[],EV=[];
+  const lists0=src.lists||[],L=[],LN=[],EV=[];
   lists0.forEach(l=>{
     let pn=String(l.project||'').trim();
     if(LS_NOPROJ.test(pn))pn=cust(l)||'Unassigned'; // 'Manual lists' / blank → the tagged job's customer (decision 3)
@@ -2471,9 +2472,9 @@ function lsMigrationRows(existing){
     if(!projs.has(k))projs.set(k,{id:'PJ'+lsHash(k),name:pn,customer:cust(l)||null});
     const p=projs.get(k);if(!p.customer&&cust(l))p.customer=cust(l);
     pidOf.set(l.id,p.id);
-    const t=(DB.listRow||{})[l.id]||{},h=(DB.listHold||{})[l.id]||{},dn=(DB.listDone||{})[l.id]||{};
+    const t=(src.listRow||{})[l.id]||{},h=(src.listHold||{})[l.id]||{},dn=(src.listDone||{})[l.id]||{};
     let sec='',ns=0,nf=0,touched=false;
-    lsOldRows(l).forEach((r,i)=>{
+    lsOldRows(l,src).forEach((r,i)=>{
       const k2=v1Key(r),tk=t[k2],hd=h[k2];
       const ln={id:r.lid||(l.id+':'+(i+1)),list_id:l.id,seq:i+1,kind:r.k,section:null,part:String(r.item||'').trim()||null,length_mm:null,width_mm:null,qty:null,
         material:null,material_other:false,edging:null,note:null,status:'todo',status_by:null,status_at:null,released_at:null,released_by:null,added_rev:1,removed_rev:null};
@@ -2493,7 +2494,7 @@ function lsMigrationRows(existing){
       source:l.manual?'manual':'migrated',sdate:/^\d{4}-\d{2}-\d{2}$/.test(l.sdate||'')?l.sdate:null,log:Array.isArray(l.log)?l.log:[],n_saw:ns,n_fit:nf,
       locked:touched||!!dn.saw||!!dn.fit,archived:false,created_at:l.up||nowISO(),created_by:l.by||null,updated_by:'migration'});
   });
-  (DB.holdLog||[]).forEach((e,i)=>{ // the old waiting history, matched to lists by name and project
+  (src.holdLog||[]).forEach((e,i)=>{ // the old waiting history, matched to lists by name and project
     const l=lists0.find(x=>x.name===e.list&&String(x.project||'')===String(e.proj||''));
     EV.push({list_id:l?l.id:null,act:'old-'+(e.act||''),n:+e.n||1,by:e.by||null,at:e.at||nowISO(),note:'from the old waiting history'+(l?'':' — list "'+String(e.list||'')+'"'),cid:'mig:'+lsHash(i+'|'+JSON.stringify(e))});
   });
@@ -2507,10 +2508,11 @@ async function lsUpsert(t,rows){
 }
 async function lsGetIn(t,col,ids){const out=[];for(let i=0;i<ids.length;i+=60)out.push(...await lsGet(t+'?select=*&'+col+'=in.('+ids.slice(i,i+60).map(id=>'"'+encodeURIComponent(id)+'"').join(',')+')'));return out;}
 // Count check, read back from the database: lines, done and waiting per list must match the old screens exactly
-async function lsCountCheck(){
-  const ids=(DB.lists||[]).map(l=>l.id),got=await lsGetIn('list_lines','list_id',ids),bad=[];
-  (DB.lists||[]).forEach(l=>{
-    const a=lsOldCounts(l),ln=got.filter(x=>x.list_id===l.id&&x.removed_rev==null&&x.kind!=='hdr');
+async function lsCountCheck(src){
+  src=src||DB;
+  const ids=(src.lists||[]).map(l=>l.id),got=await lsGetIn('list_lines','list_id',ids),bad=[];
+  (src.lists||[]).forEach(l=>{
+    const a=lsOldCounts(l,src),ln=got.filter(x=>x.list_id===l.id&&x.removed_rev==null&&x.kind!=='hdr');
     const b={n:ln.length,done:ln.filter(x=>x.status==='cut'||x.status==='got-out').length,wait:ln.filter(x=>x.status==='waiting').length};
     if(a.n!==b.n||a.done!==b.done||a.wait!==b.wait)bad.push({id:l.id,name:l.name,project:l.project||'',old:a,now:b});
   });
@@ -2520,11 +2522,18 @@ function lsDownload(name,data){const a=document.createElement('a');a.href=URL.cr
 async function lsMigrate(by){
   if(V2())throw new Error('the new lists are already switched on');
   if(!DB.loaded||DB.loadFailed)throw new Error('the plan is not loaded on this screen');
+  // 0. this PC's own unsaved work first, then the latest planner record: ticks saved by other screens just before
+  //    Migrate was pressed are copied, not left behind
+  for(let i=0;i<100&&(saveT||SAVING);i++){if(saveT&&!SAVING){clearTimeout(saveT);saveT=null;await saveDB();}else await new Promise(r=>setTimeout(r,100));}
+  const t0=nowISO();
+  await loadDB();if(!DB.lastLoadOk)throw new Error('could not read the latest planner record — check the connection and try again');
+  if(V2())throw new Error('the new lists were switched on by another screen meanwhile');
+  const src=clone({lists:DB.lists||[],listWBs:DB.listWBs||{},listRow:DB.listRow||{},listHold:DB.listHold||{},listDone:DB.listDone||{},holdLog:DB.holdLog||[]});
   // 1. a verified copy in planner_backups, and one on this PC
   await backupNow('pre-lists-v2');updBakLine();
   lsDownload('WPF_Backup_pre-lists-v2_'+new Date().toISOString().slice(0,10)+'.json',{backedUpAt:new Date().toISOString(),orders:DB.orders,nid:DB.nid,settings:fullSettings()});
   // 2-4. projects, lists, lines (fixed ids, so a second run gives the same result), old waiting history
-  const m=lsMigrationRows(await lsGet('projects?select=*'));
+  const m=lsMigrationRows(await lsGet('projects?select=*'),src);
   await lsUpsert('projects',m.projects);
   await lsUpsert('lists',m.lists);
   await lsUpsert('list_lines',m.lines);
@@ -2534,13 +2543,18 @@ async function lsMigrate(by){
   const seen=new Set((await lsGet('list_events?select=cid&cid=like.mig:*')).map(e=>e.cid)),ev=m.events.filter(e=>!seen.has(e.cid));
   for(let i=0;i<ev.length;i+=400){const r=await fetch(SUPA_URL+'/list_events',{method:'POST',headers:SUPA_WHDR,body:JSON.stringify(ev.slice(i,i+400))});if(!r.ok)throw new Error('saving the waiting history failed: HTTP '+r.status);}
   // 5. count check — any difference stops here and the switch is NOT set
-  const ck=await lsCountCheck();
+  const ck=await lsCountCheck(src);
   if(ck.bad.length)return{ok:false,check:ck,m};
-  // 6. switch on
-  DB.listStore='v2';DB.listStoreAt=nowISO();
+  // 6. switch on. listStoreAt = when this migration started: old-format ticks after that are rescued by every screen.
+  DB.listStore='v2';DB.listStoreAt=t0;
   clearTimeout(saveT);await saveDB();
   if(DB.saveFailed){DB.listStore='';delete DB.listStoreAt;throw new Error('the lists were copied and checked, but the switch could not be saved — try again');}
   lsReset();await lsLoad();lsStart();
+  // 7. anything another screen saved in the old format while this was copying (whatever its clock says) goes in now
+  await loadDB();
+  const same=(a,b)=>JSON.stringify(a||null)===JSON.stringify(b||null);
+  lsRescue((kind,v,lid,k)=>!same(v,kind==='tick'?((src.listRow||{})[lid]||{})[k]:((src.listHold||{})[lid]||{})[k]));
+  await lqSend();
   return{ok:true,check:ck,m};
 }
 // Switch back: rebuild the old-format data from the tables (lists made since included), then listStore 'v1'
@@ -2604,8 +2618,8 @@ function lsRescue(pick){
   const T=DB.listStoreAt;let n=0;
   pick=pick||((kind,v)=>String((kind==='rel'?v.relAt:v.at)||'')>T);
   const want=new Set();
-  Object.entries(DB.listRow||{}).forEach(([lid,t])=>Object.values(t||{}).forEach(v=>{if(v&&pick('tick',v))want.add(lid);}));
-  Object.entries(DB.listHold||{}).forEach(([lid,h])=>Object.values(h||{}).forEach(v=>{if(v&&pick(v.st==='rel'?'rel':'hold',v))want.add(lid);}));
+  Object.entries(DB.listRow||{}).forEach(([lid,t])=>Object.entries(t||{}).forEach(([k,v])=>{if(v&&pick('tick',v,lid,k))want.add(lid);}));
+  Object.entries(DB.listHold||{}).forEach(([lid,h])=>Object.entries(h||{}).forEach(([k,v])=>{if(v&&pick(v.st==='rel'?'rel':'hold',v,lid,k))want.add(lid);}));
   const need=[...want].filter(id=>!LST.full.has(id));
   if(need.length){if(!LST.rescuing)LST.rescuing=lsGetIn('lists','id',need.filter(id=>!LST.l.has(id))).then(r=>{lsPut('lists',r);return lsLines(need);}).catch(()=>{}).then(()=>{LST.rescuing=null;if([...want].every(id=>LST.full.has(id)))lsRescue(pick);});return 0;}
   const byList=new Map();
@@ -2615,11 +2629,11 @@ function lsRescue(pick){
   const send=(x,st,by,tag)=>{const cid='rescue:'+lsHash(x.id+'|'+tag);if(LQ.q.some(e=>e.cid===cid))return;
     const e={t:'line',cid,id:x.id,list:x.list_id,act:st==='release'?'release':'status',v:+x.version,rev:+((LST.l.get(x.list_id)||{}).rev)||1,from:x.status,at:nowISO(),by:lqBy(by),quiet:true};
     if(st!=='release')e.status=st;lqMut(q=>q.push(e));n++;};
-  Object.entries(DB.listRow||{}).forEach(([lid,t])=>Object.entries(t||{}).forEach(([k,v])=>{if(!v||!pick('tick',v))return;
+  Object.entries(DB.listRow||{}).forEach(([lid,t])=>Object.entries(t||{}).forEach(([k,v])=>{if(!v||!pick('tick',v,lid,k))return;
     lineOf(lid,k).forEach(x=>{const st=x.kind==='saw'?'cut':'got-out';if(x.status!==st)send(x,st,v.by,'t|'+k+'|'+v.at);});}));
   Object.entries(DB.listHold||{}).forEach(([lid,h])=>Object.entries(h||{}).forEach(([k,v])=>{if(!v)return;
-    if(v.st==='hold'&&pick('hold',v))lineOf(lid,k).forEach(x=>{if(x.status==='todo')send(x,'waiting',v.by,'h|'+k+'|'+v.at);});
-    if(v.st==='rel'&&pick('rel',v))lineOf(lid,k).forEach(x=>{if(x.status==='waiting')send(x,'release',v.relBy,'r|'+k+'|'+v.relAt);});}));
+    if(v.st==='hold'&&pick('hold',v,lid,k))lineOf(lid,k).forEach(x=>{if(x.status==='todo')send(x,'waiting',v.by,'h|'+k+'|'+v.at);});
+    if(v.st==='rel'&&pick('rel',v,lid,k))lineOf(lid,k).forEach(x=>{if(x.status==='waiting')send(x,'release',v.relBy,'r|'+k+'|'+v.relAt);});}));
   if(n)lqKick(0);
   return n;
 }
