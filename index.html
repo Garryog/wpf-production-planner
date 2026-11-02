@@ -3364,7 +3364,10 @@ function woFinished(o){
 function listFinished(l){ // every tagged job shipped/delivered (or none tagged but both sides signed off) — nothing left for the factory to do
   const ws=(l.wos||[]).map(w=>DB.orders.find(o=>o.wo===w));
   if(ws.length&&ws.every(o=>!o||woFinished(o)))return true;
-  const dn=listDone(l.id);return !ws.length&&!!dn.saw&&!!dn.fit;
+  const dn=listDone(l.id);
+  if(V2()){const need=m=>(m==='saw'?l.saw:l.fit)>0&&!(m==='saw'?l.noCut:l.noFit); // V2: only the sides this list has (a saw-only snag list)
+    return !ws.length&&(need('saw')||need('fit'))&&(!need('saw')||!!dn.saw)&&(!need('fit')||!!dn.fit);}
+  return !ws.length&&!!dn.saw&&!!dn.fit;
 }
 // Every tagged job is on hold in Cienapps (or finished, with at least one on hold): nothing to cut or pick for now —
 // left out of the Saw/Stores queues, "Print today", the sheets panel and the dashboard counts until a job comes back.
