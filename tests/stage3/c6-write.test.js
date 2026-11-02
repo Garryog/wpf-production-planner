@@ -17,7 +17,7 @@ const HOUSE7 = [['Aderrig', null, null, null, null, null], ['Item', 'Qty', 'Leng
 (async () => {
   const browser = await H.chromium.launch();
   {
-    const row = F.v2Row(); row.orders.push(H.order({ wo: 'WO-7', unit: '7', customer: 'Aderrig Homes', dueDate: '2026-10-22', origDueDate: '2026-10-22' }), H.order({ wo: 'WO-9', unit: '9', customer: 'Aderrig Homes', dueDate: '2026-10-23', origDueDate: '2026-10-23' }));
+    const row = F.v2Row(); row.orders.push(H.order({ wo: 'WO-7', unit: '7', customer: 'Aderrig Homes', dueDate: '2026-10-22', origDueDate: '2026-10-22' }), H.order({ wo: 'WO-9', unit: '9', customer: 'Aderrig Homes', dueDate: '2026-10-23', origDueDate: '2026-10-23' }), H.order({ wo: 'WO-8', customer: 'Aderrig Homes', dueDate: '2026-10-30', origDueDate: '2026-10-30' })); // WO-8: cut-by well ahead, so not locked by date
     const S = F.makeServer(row); F.seedList(S, 'L1'); // project P1 'Aderrig' with sheet material 'MFC White'
     const off = await F.dev(browser, S, 'office');
     await off.page.evaluate(async () => { if (saveT) { clearTimeout(saveT); await saveDB(); } });
@@ -48,7 +48,7 @@ const HOUSE7 = [['Aderrig', null, null, null, null, null], ['Item', 'Qty', 'Leng
     const t3 = await upload(off.page, 'Aderrig.xlsx', { 'House 7': H3 });
     rec('re-upload while another PC changed the list ("stale"): reloaded, compared again, saved; WO-9 kept', /imported/.test(t3) && S.db.t.list_lines.some(x => x.list_id === l7.id && x.part === 'Back') && D.find(S.db, 'lists', l7.id).wos.join() === 'WO-7,WO-9' && L(S, l7.id + ':2').status === 'cut', t3);
     // ---- typed list through the editor
-    await off.page.evaluate(() => { openListEditor(null, 'WO-1'); });
+    await off.page.evaluate(() => { openListEditor(null, 'WO-8'); });
     await off.page.evaluate(() => {
       const ov = document.querySelector('.pod-ovl');
       const pk = ov.querySelector('#me-pid'); pk.value = 'P1'; pk.onchange({ target: pk }); // the project first: its materials fill the dropdown
@@ -60,7 +60,7 @@ const HOUSE7 = [['Aderrig', null, null, null, null, null], ['Item', 'Qty', 'Leng
     await F.sleep(600);
     const tl = S.db.t.lists.find(l => l.name === 'House 1 typed'), tln = tl && S.db.t.list_lines.find(x => x.list_id === tl.id);
     const proj = tl && D.find(S.db, 'projects', tl.project_id);
-    rec('typed list: saved to the tables (manual, tagged WO-1), editor closed', tl && tl.source === 'manual' && tl.wos.join() === 'WO-1' && !(await off.page.evaluate(() => !!document.querySelector('.pod-ovl'))), JSON.stringify(tl && { s: tl.source, w: tl.wos }));
+    rec('typed list: saved to the tables (manual, tagged WO-8), editor closed', tl && tl.source === 'manual' && tl.wos.join() === 'WO-8' && !(await off.page.evaluate(() => !!document.querySelector('.pod-ovl'))), JSON.stringify(tl && { s: tl.source, w: tl.wos }));
     rec('typed list: edging and note kept apart; project picked (Aderrig)', tln && tln.edging === '2mm PVC' && tln.note === 'grain up' && proj && proj.name === 'Aderrig', JSON.stringify([tln && tln.edging, tln && tln.note, proj && proj.name]));
     // edit before the saw starts: same rev, same line id
     await off.page.evaluate(async () => { await lsPoll(); const l = lists().find(x => x.name === 'House 1 typed'); openListEditor(l.id); const ov = document.querySelector('.pod-ovl'); const e = ov.querySelector('[data-mr="0|qty"]'); e.value = '3'; e.oninput(); ov.querySelector('#me-save').click(); });

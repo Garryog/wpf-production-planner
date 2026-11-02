@@ -2080,7 +2080,8 @@ function lsAdapt(r){
   LQ.q.forEach(e=>{if(e.list!==r.id)return; // this device's unsent list changes show straight away
     if(e.t==='attach'){if(e.on){if(!a.wos.includes(e.wo))a.wos.push(e.wo);}else a.wos=a.wos.filter(w=>w!==e.wo);}
     else if(e.t==='done'){if(e.mode==='no_cut')a.noCut=!!e.on;else if(e.mode==='no_fit')a.noFit=!!e.on;else if(e.on)a.done[e.mode]={at:e.at,by:e.by||''};else delete a.done[e.mode];}
-    else if(e.t==='archive')a.archived=true;});
+    else if(e.t==='archive')a.archived=true;
+    if(e.t==='done'&&e.mode==='send'){a.sentAt=a.sentAt||e.at;a.locked=true;}});
   const c=LST.c&&LST.c.byList;
   if(LST.full.has(r.id)&&c){const ls2=(c.get(r.id)||[]).filter(x=>x.removed_rev==null&&x.status!=='na');a.saw=ls2.filter(x=>x.kind==='saw').length;a.fit=ls2.filter(x=>x.kind==='fit').length;}
   else{a.saw=+r.n_saw||0;a.fit=+r.n_fit||0;}
@@ -2318,7 +2319,7 @@ function lsEditRows(id){ // the typed-list editor's rows, with edging and note k
   return lsLinesOf(id).filter(x=>x.removed_rev==null&&x.kind!=='hdr').map(x=>({k:x.kind,item:x.part||'',qty:lsQty(x.qty),L:x.length_mm==null?'':+x.length_mm,W:x.width_mm==null?'':+x.width_mm,mat:x.material||'',edging:x.edging||'',note:x.note||'',sec:x.section||''}));
 }
 function lsAskReason(l){ // a list the saw already has: saving makes revision n+1, so say why
-  if(!l||!l.locked)return'';
+  if(!l||!lsLocked(l))return'';
   const r=prompt('"'+l.name+'" is already with the saw — saving makes revision '+((+l.rev||1)+1)+'.\n\nWhy is it changing? (drawing changed / site measure / error / other)','drawing changed');
   if(r===null)return null;
   return r.trim()||null;
@@ -2340,6 +2341,7 @@ async function lsSaveManual(d,by,ex){
     }
   }
   const pl={id,name:String(d.name).trim(),project_id:pid,no_cut:!!d.noCut,no_fit:!!d.noFit};
+  if(ex&&!ex.tpl&&!ex.locked&&lsLocked(lsList(id)))pl.lock=true; // cut-by today / next working day: this save is a revision
   if(d.ltype)pl.list_type=d.ltype;if(d.tname!==undefined)pl.type_name=String(d.tname||'').trim()||null;
   if(!ex)Object.assign(pl,d.tpl?{wos:[],source:'manual',is_template:true}:{wos:[d.wo],source:'manual'},{list_type:d.ltype||'house'});
   const res=await lsSaveList(pl,lines,by,reason||(ex?'List edited':null));
@@ -2376,7 +2378,7 @@ async function lsImportWB(wb,entries,fname,by,opt){
     }
     const pl={id:old?old.id:uid('L'),name:e.sheet,project_id:pid,sdate:e.sdate||null,source:'excel'};
     if(!old){pl.wos=l.wos;pl.list_type='house';out.auto+=l.wos.length;}else out.replaced++;
-    if(old&&old.locked)out.revised++;
+    if(old&&lsLocked(old)){out.revised++;pl.lock=true;}
     await lsSaveList(pl,lines,by,old?'Workbook re-uploaded'+(fname?' ('+fname+')':''):null);
     out.n++;
   }
@@ -2677,7 +2679,7 @@ function lsMaterialsDlg(pid,after){
 }
 /* Lists home: search, filters, grouped by project. Shared by the office Lists tab, the Design office and the Production Manager. */
 const LH={q:'',proj:'',type:'',kind:'live',rev:'',state:''};
-function lsState(l){if(l.archived)return'archived';if(listFinished(l))return'done';return l.locked?'live':'draft';}
+function lsState(l){if(l.archived)return'archived';if(listFinished(l))return'done';return lsLocked(l)?'live':'draft';}
 const LS_STATE={draft:['Draft','#5b6b82'],live:['Live','#1a56db'],done:['Done','#0d6e46'],archived:['Archived','#8e99ab']};
 function lsHomeLists(){
   const q=LH.q.trim().toLowerCase();
@@ -2701,7 +2703,7 @@ function lsHomeHTML(){
   const row=l=>{const[st,col]=LS_STATE[lsState(l)];return `<tr data-lhrow="${escA(l.id)}"><td><b>${escA(l.name)}</b>${l.tpl?' <span class="lst-chip" style="background:#efe7ff;color:#5b21b6">TEMPLATE'+(l.typeName?' · '+escA(l.typeName):'')+'</span>':''}</td>
     <td>${escA(LS_KINDS[l.ltype]||l.ltype||'')}${l.templateId?`<div style="font-size:11px;color:#5b21b6">${escA(lsTplInfo(l))}</div>`:''}</td><td>${(l.wos||[]).map(w=>`<span class="lst-chip">${escA(w)}</span>`).join('')||'<span style="color:var(--t3)">—</span>'}</td>
     <td>${(+l.rev||1)>1?`<span class="lst-chip" style="background:#fff4d6;color:#7a5200">Rev ${+l.rev}</span>`:'Rev 1'}</td><td><span style="color:${col};font-weight:700">${st}</span></td><td>🪚 ${prog(l,'saw')}</td><td>🧰 ${prog(l,'fit')}</td>
-    <td style="white-space:nowrap"><button class="btn btn-s" data-lhedit="${escA(l.id)}" style="padding:2px 8px;font-size:11px">✎ Edit</button> <button class="btn btn-s" data-lhview="${escA(l.id)}" style="padding:2px 8px;font-size:11px">View</button>${l.archived?'':` <button class="btn btn-s" data-lharc="${escA(l.id)}" style="padding:2px 8px;font-size:11px;color:var(--red);border-color:var(--red)">Archive</button>`}</td></tr>`;};
+    <td style="white-space:nowrap"><button class="btn btn-s" data-lhedit="${escA(l.id)}" style="padding:2px 8px;font-size:11px">✎ Edit</button> <button class="btn btn-s" data-lhview="${escA(l.id)}" style="padding:2px 8px;font-size:11px">View</button>${!l.tpl&&!l.archived&&lsState(l)==='draft'?` <button class="btn btn-s" data-lhsend="${escA(l.id)}" style="padding:2px 8px;font-size:11px">➜ Send to saw</button>`:''}${l.archived?'':` <button class="btn btn-s" data-lharc="${escA(l.id)}" style="padding:2px 8px;font-size:11px;color:var(--red);border-color:var(--red)">Archive</button>`}</td></tr>`;};
   return `<div class="exp-panel" id="lh">
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
       <div style="font-size:15px;font-weight:700;color:#14335c">📋 Lists — ${ls0.length}</div>
@@ -2741,6 +2743,7 @@ function lsHomeBind(){
   document.querySelectorAll('[data-lhedit]').forEach(b=>b.onclick=()=>openListEditor(b.dataset.lhedit));
   document.querySelectorAll('[data-lhview]').forEach(b=>b.onclick=()=>{const l=lsList(b.dataset.lhview);if(!l)return;
     lsDlg(`<div style="font-weight:700;color:#14335c;margin-bottom:8px">${escA(l.project||'')} — ${escA(l.name)} · Rev ${+l.rev||1}</div>${listTableHTML(l,'all')}`);});
+  document.querySelectorAll('[data-lhsend]').forEach(b=>b.onclick=()=>{const l=lsList(b.dataset.lhsend);if(!l)return;lqList({t:'done',list:l.id,mode:'send',on:true,by:whoNow()});render();toast('"'+l.name+'" sent to the saw — later changes make a new revision');});
   document.querySelectorAll('[data-lharc]').forEach(b=>b.onclick=()=>{const l=lsList(b.dataset.lharc);if(!l)return;
     if(!confirm('Archive the list "'+l.name+'" ('+(l.project||'')+')? The saw and stores will no longer see it. Nothing is deleted.'))return;
     listArchive(l,whoNow());render();toast('List archived');});
@@ -2827,7 +2830,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     ov.innerHTML=`<div class="pod-in" style="min-width:min(1100px,97vw)">
       <div style="font-weight:800;color:#14335c;font-size:17px;margin-bottom:2px">✍ ${ex?'Edit':'New'} ${st.tpl?'template':'cutting list'}${ex&&(+ex.rev||1)>1?' · Rev '+(+ex.rev):''}</div>
       ${ex&&ex.templateId?`<div style="font-size:12px;color:#5b21b6;font-weight:700;margin-bottom:4px">📐 ${escA(lsTplInfo(ex))}</div>`:''}
-      <div style="font-size:12px;color:var(--t3);margin-bottom:10px">Saw rows go to the <b>Saw</b>, fittings rows to <b>Stores</b>. Materials come from the project's list — add one under <b>Materials</b> if it's missing.${ex&&ex.locked?' <b style="color:#8a5a00">The saw already has this list — saving makes a new revision.</b>':''}</div>
+      <div style="font-size:12px;color:var(--t3);margin-bottom:10px">Saw rows go to the <b>Saw</b>, fittings rows to <b>Stores</b>. Materials come from the project's list — add one under <b>Materials</b> if it's missing.${ex&&lsLocked(ex)?' <b style="color:#8a5a00">The saw already has this list — saving makes a new revision.</b>':''}</div>
       <div class="me-top">
         <div><label>Project</label><div style="display:flex;gap:6px"><select id="me-pid" style="${inp};max-width:230px"><option value="">— pick the project —</option>${lsProjects().map(p=>`<option value="${escA(p.id)}"${p.id===st.pid?' selected':''}>${escA(p.name)}</option>`).join('')}<option value="__new">＋ New project…</option></select>
           <button class="btn btn-s" id="me-mats" style="font-size:12px"${st.pid?'':' disabled'}>Materials</button></div></div>
@@ -3102,6 +3105,35 @@ function renderPMV2(app){
   const t=(k,l)=>`<button data-pmtab="${k}" style="padding:9px 18px;border:none;border-radius:6px;font-size:15px;font-weight:700;cursor:pointer;${pmTab===k?'background:#14335c;color:#fff':'background:#e6ebf2;color:#14335c'}">${l}</button>`;
   app.insertAdjacentHTML('afterbegin',`<div id="pm-strip" style="max-width:1400px;margin:10px auto 0;padding:0 20px;display:flex;gap:8px">${t('','🚚 Deliveries')}${t('snags','🩹 Snags')}</div>`);
   document.querySelectorAll('[data-pmtab]').forEach(b=>b.onclick=()=>{pmTab=b.dataset.pmtab;render();});
+}
+/* ---------- S8 (V2 only): locking and revisions on screen ----------
+   A live list locks when it's sent to the saw, when anything is ticked (the database), or when its cut-by date is today or
+   the next working day (worked out here — decision 10). Editing a locked list makes revision n+1. The saw only ever sees
+   the current lines, with what changed in the latest revision. */
+function lsLocked(l){
+  if(!l||l.tpl)return false;
+  if(l.locked||l.sentAt)return true;
+  const d=listDeadline(l);return !!d&&d<=nextWorkDay(todayLocal());
+}
+function lsRevInfo(id,mode){
+  const r=LST.l.get(id),rev=+((r||{}).rev)||1,ls0=lsLinesOf(id).filter(x=>x.kind!=='hdr'&&(!mode||x.kind===mode));
+  const out={rev,changed:0,added:0,removed:0,aside:[]};if(rev<2)return out;
+  ls0.forEach(x=>{
+    if(x.removed_rev!=null){if(+x.removed_rev===rev){out.removed++;if(x.status==='cut'||x.status==='got-out')out.aside.push(x);}return;}
+    if(+x.changed_rev===rev)out.changed++;else if(+x.added_rev===rev)out.added++;
+  });
+  return out;
+}
+function lsRevBanner(l,mode){
+  if(!V2())return'';const i=lsRevInfo(l.id,mode);if(i.rev<2)return'';
+  return `<div class="rev-note" style="background:#fff4d6;border:1px solid #e0a43a;color:#7a5200;border-radius:6px;padding:6px 10px;font-weight:800;margin:6px 0">REV ${i.rev} — ${i.changed} changed, ${i.added} added, ${i.removed} removed</div>`
+    +(i.aside.length?`<div class="rev-aside" style="background:#eef0f3;color:#5b6b82;border-radius:6px;padding:6px 10px;margin:4px 0;font-size:13px">${i.aside.map(x=>`<div><s>${escA(x.part||'')} ×${escA(x.qty)}${x.length_mm||x.width_mm?' · '+escA(x.length_mm==null?'':+x.length_mm)+' × '+escA(x.width_mm==null?'':+x.width_mm):''}</s> — <b>REMOVED — part already ${x.kind==='saw'?'cut':'got out'}, keep aside</b></div>`).join('')}</div>`:'');
+}
+function lsLineBadge(id){
+  if(!V2())return'';const x=LST.ln.get(id),r=x&&LST.l.get(x.list_id);if(!x||!r)return'';const rev=+r.rev||1;
+  if(rev>1&&+x.changed_rev===rev)return'<span class="rev-b" style="background:#c0392b;color:#fff;border-radius:4px;padding:1px 6px;font-size:11px;font-weight:800">CHANGED</span> ';
+  if(rev>1&&+x.added_rev===rev)return'<span class="rev-b" style="background:#1a56db;color:#fff;border-radius:4px;padding:1px 6px;font-size:11px;font-weight:800">NEW</span> ';
+  return'';
 }
 /* diffLines:start */
 /* Revision comparison — pure (no screen, no database), so the tests can check it on its own.
@@ -3562,7 +3594,7 @@ function listTableHTML(l,mode,opt){ // mode 'saw' | 'fit' | 'all'; opt.relOnly =
   const saw=mode!=='fit';
   return `<table class="wl-tbl"><thead><tr>${opt.tick?'<th class="tkh">✓</th><th class="nah" title="Not available — park this line until it comes in">N/A</th>':''}<th style="width:34%">Item</th><th>Qty</th>${saw?'<th>Length</th><th>Width</th>':''}<th class="c-mt">${mode==='fit'?'Spec':'Material'}</th><th class="c-mt">${mode==='fit'?'Note':'Edging / Note'}</th></tr></thead><tbody>
   ${keep.map(r=>r.k==='hdr'?`<tr class="wl-sec"><td colspan="${(saw?6:4)+(opt.tick?2:0)}">${escA(r.item)}${r.note?' · '+escA(r.note):''}</td></tr>`
-    :`<tr class="${(h=>h&&h.st==='hold'?'wl-held':'')(hs(r))}${opt.tick&&tk[rowKey(r)]?' wl-rdone':''}">${opt.tick?`<td class="tkc">${(h=>h&&h.st==='hold'?'<span class="tk-na">⏸</span>':`<button class="rtk${tk[rowKey(r)]?' on':''}" data-rt="${escA(l.id)}|${escA(rowKey(r))}" title="${tk[rowKey(r)]?'Done '+hhmm(tk[rowKey(r)].at)+(tk[rowKey(r)].by?' by '+escA(tk[rowKey(r)].by):'')+' — click to untick':'Tick when '+(mode==='saw'?'cut':'picked')}">${tk[rowKey(r)]?'✓':''}</button>`)(hs(r))}</td>${(h=>{const on=!!(h&&h.st==='hold'),t=tk[rowKey(r)];return `<td class="nac"><button class="rna${on?' on':''}" data-rna="${escA(l.id)}|${escA(rowKey(r))}"${t?' disabled':''} title="${on?'Waiting since '+escA(new Date(h.at).toLocaleDateString('en-IE',{day:'numeric',month:'short'}))+(h.by?' · '+escA(h.by):'')+' — tap to undo':t?'Already '+(mode==='saw'?'cut':'picked'):'Not available — park this line until it comes in'}">N/A</button></td>`;})(hs(r))}`:''}<td>${lqHas(rowKey(r))?'<span class="lq-dot" title="Not sent yet — it goes as soon as there is signal"></span>':''}${(h=>!h?'':h.st==='hold'?'<span class="hold-b">⏸ WAITING ON MATERIAL</span> ':'<span class="rel-b">▶ MATERIAL IN — DO NOW</span> ')(hs(r))}${escA(r.item)||'—'}${r.mat||r.note?`<div class="wl-ph">${escA(r.mat)}${r.mat&&r.note?' · ':''}${escA(r.note)}</div>`:''}</td><td class="num">${escA(r.qty)}</td>${saw?`<td class="num">${r.k==='saw'?escA(r.L):''}</td><td class="num">${r.k==='saw'?escA(r.W):''}</td>`:''}<td class="c-mt">${escA(r.mat)}</td><td class="c-mt">${escA(r.note)}</td></tr>`).join('')}
+    :`<tr class="${(h=>h&&h.st==='hold'?'wl-held':'')(hs(r))}${opt.tick&&tk[rowKey(r)]?' wl-rdone':''}">${opt.tick?`<td class="tkc">${(h=>h&&h.st==='hold'?'<span class="tk-na">⏸</span>':`<button class="rtk${tk[rowKey(r)]?' on':''}" data-rt="${escA(l.id)}|${escA(rowKey(r))}" title="${tk[rowKey(r)]?'Done '+hhmm(tk[rowKey(r)].at)+(tk[rowKey(r)].by?' by '+escA(tk[rowKey(r)].by):'')+' — click to untick':'Tick when '+(mode==='saw'?'cut':'picked')}">${tk[rowKey(r)]?'✓':''}</button>`)(hs(r))}</td>${(h=>{const on=!!(h&&h.st==='hold'),t=tk[rowKey(r)];return `<td class="nac"><button class="rna${on?' on':''}" data-rna="${escA(l.id)}|${escA(rowKey(r))}"${t?' disabled':''} title="${on?'Waiting since '+escA(new Date(h.at).toLocaleDateString('en-IE',{day:'numeric',month:'short'}))+(h.by?' · '+escA(h.by):'')+' — tap to undo':t?'Already '+(mode==='saw'?'cut':'picked'):'Not available — park this line until it comes in'}">N/A</button></td>`;})(hs(r))}`:''}<td>${lsLineBadge(rowKey(r))}${lqHas(rowKey(r))?'<span class="lq-dot" title="Not sent yet — it goes as soon as there is signal"></span>':''}${(h=>!h?'':h.st==='hold'?'<span class="hold-b">⏸ WAITING ON MATERIAL</span> ':'<span class="rel-b">▶ MATERIAL IN — DO NOW</span> ')(hs(r))}${escA(r.item)||'—'}${r.mat||r.note?`<div class="wl-ph">${escA(r.mat)}${r.mat&&r.note?' · ':''}${escA(r.note)}</div>`:''}</td><td class="num">${escA(r.qty)}</td>${saw?`<td class="num">${r.k==='saw'?escA(r.L):''}</td><td class="num">${r.k==='saw'?escA(r.W):''}</td>`:''}<td class="c-mt">${escA(r.mat)}</td><td class="c-mt">${escA(r.note)}</td></tr>`).join('')}
   </tbody></table>`;
 }
 /* Saw / Stores queue view: lists in delivery order, big type, tick-off with name + time.
@@ -3661,7 +3693,7 @@ function openCombined(lsArr,mode){
 function printLabels(lsArr,mode){
   const E=escA,saw=mode==='saw';
   const one=(l,r)=>`<div class="lb">
-    <div class="lb-top">${E(l.project||'')} · WESTERN POSTFORM</div>
+    <div class="lb-top">${E(l.project||'')} · WESTERN POSTFORM${V2()?' · REV '+(+l.rev||1):''}</div>
     <div class="lb-house">${E(l.name)}</div>
     ${listCust(l)?`<div class="lb-cust">${E(listCust(l))}</div>`:''}
     <div class="lb-item">${E(r.item||r.mat||'')}</div>
@@ -3672,7 +3704,7 @@ function printLabels(lsArr,mode){
   lsArr.forEach(l=>{
     const rows=listRows(l).filter(r=>r.k===mode);
     labels+=`<div class="lb lb-hd">
-      <div class="lb-top">${E(l.project||'')} · WESTERN POSTFORM</div>
+      <div class="lb-top">${E(l.project||'')} · WESTERN POSTFORM${V2()?' · REV '+(+l.rev||1):''}</div>
       <div class="lb-house">${E(l.name)}</div>
       ${listCust(l)?`<div class="lb-cust">${E(listCust(l))}</div>`:''}
       <div class="lb-item">${saw?'CUT PACK':'FITTINGS BOX'}</div>
@@ -3732,6 +3764,7 @@ function renderWorkList(app,mode){
     <div class="wl-h"><div style="display:flex;gap:10px;align-items:flex-start">${!isDone?`<button class="wl-chk${wlSel.has(l.id)?' on':''}" data-wlsel="${escA(l.id)}" title="Select for batch cutting across houses">${wlSel.has(l.id)?'✓':''}</button>`:''}<div><span class="wn">${escA(l.name)}</span> <span class="wd">${escA(l.project||'')}${(c=>c&&c!==l.project?' · '+escA(c):'')(listCust(l))}</span><div style="margin-top:3px">${woChips(l)}</div></div></div>
     ${due?(od=>`<span class="wl-due"${od?' style="background:#c0392b;color:#fff"':''}>${od?'⚠ OVERDUE — ':''}${mode==='saw'?'CUT':'PICK'} BY ${fmt(listDeadline(l))} · DELIVERS ${fmt(due)}</span>`)(!isDone&&listOverdue(l)):'<span class="wd">no delivery date yet</span>'}</div>
     ${relOnly?`<div class="rel-note">▶ MATERIAL HAS ARRIVED — ${relRows(l)} row${relRows(l)!==1?'s':''} released from the waiting list. The rest of this house was done ${new Date(dn.at).toLocaleDateString('en-IE')}${dn.by?' by '+escA(dn.by):''}.</div>`:''}
+    ${lsRevBanner(l,mode)}
     ${nh?`<div class="hold-note">⏸ ${nh} row${nh!==1?'s':''} waiting on ${mode==='saw'?'material':'stock'} — ${mode==='saw'?'cut':'pick'} the rest and tap ${cfg.done}; the waiting rows come back when released.</div>`:''}
     ${listTableHTML(l,mode,{relOnly,tick:!isDone})}
     <div class="wl-act">${isDone?`<span class="wl-donelbl">${cfg.done} — ${new Date(dn.at).toLocaleDateString('en-IE')} ${hhmm(dn.at)}${dn.by?' by '+escA(dn.by):''}</span><button class="wl-undo" data-wlundo="${escA(l.id)}">Undo</button>`
@@ -6159,7 +6192,7 @@ function printWorkList(mode,days){
     const done=listDone(l.id)[mode],h=holdsOf(l.id);
     const relOnly=done&&relOpen(l,mode);
     const rows=listRows(l).filter(r=>r.k===mode&&(!relOnly||(h[rowKey(r)]&&h[rowKey(r)].st==='rel')));
-    return `<div class="blk"><div class="bh"><span class="hs">${E(l.name)}</span><span>${E(l.project||'')}${listCust(l)&&listCust(l)!==l.project?' · '+E(listCust(l)):''}</span>
+    return `<div class="blk"><div class="bh"><span class="hs">${E(l.name)}${V2()?' · Rev '+(+l.rev||1):''}</span><span>${E(l.project||'')}${listCust(l)&&listCust(l)!==l.project?' · '+E(listCust(l)):''}</span>
       <span class="dl">${listOverdue(l)?'OVERDUE · ':''}${saw?'CUT':'PICK'} BY ${E(fmt(listDeadline(l)))} · DELIVERS ${E(fmt(listDueKey(l)))}</span></div>
       <div class="wos">${(l.wos||[]).map(E).join(' · ')}${relOnly?' · <b>MATERIAL ARRIVED — these rows only</b>':''}</div>
       <table><thead><tr><th class="tk">✓</th><th>Item</th><th class="n">Qty</th>${saw?'<th class="n">Length</th><th class="n">Width</th><th>Material</th><th>Edging / note</th>':'<th>Spec</th><th>Note</th>'}<th class="in">Initials</th></tr></thead><tbody>

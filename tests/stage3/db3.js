@@ -132,6 +132,8 @@ function listSetDone(d, id, mode, on, by, why, cid) {
   } else if (mode === 'no_cut' || mode === 'no_fit') {
     const f = mode;
     update(d, 'lists', r, { [f]: !!on, updated_by: by, log: logAdd(r, { at: now(), by, what: (f === 'no_cut' ? 'No cutting' : 'No fittings') + (on ? ' ticked' : ' unticked'), why }) });
+  } else if (mode === 'send') {
+    update(d, 'lists', r, { sent_at: r.sent_at || now(), locked: true, updated_by: by, log: logAdd(r, { at: now(), by, what: 'Sent to the saw', why }) });
   } else if (mode === 'archive') {
     update(d, 'lists', r, { archived: !!on, updated_by: by, log: logAdd(r, { at: now(), by, what: on ? 'Archived' : 'Brought back from the archive', why }) });
   } else throw new DbError('bad mode ' + mode);
@@ -159,7 +161,7 @@ function saveListRevision(d, pl, lines, expect, by, reason) {
     isnew = true; nrev = 1;
   } else {
     nrev = r.rev;
-    if (r.locked || r.is_template) {
+    if (r.locked || r.is_template || pl.lock) {
       insert(d, 'list_revisions', { list_id: r.id, rev: r.rev, lines: clone(d.t.list_lines.filter(x => x.list_id === r.id && x.removed_rev == null).sort((a, b) => a.seq - b.seq)), meta: clone(r), reason, made_by: by });
       nrev = r.rev + 1;
     }
@@ -181,7 +183,7 @@ function saveListRevision(d, pl, lines, expect, by, reason) {
   }
   d.t.list_lines.filter(x => x.list_id === r.id && x.removed_rev == null && !ids.includes(x.id)).forEach(x => update(d, 'list_lines', x, { removed_rev: nrev }));
   const live = d.t.list_lines.filter(x => x.list_id === r.id && x.removed_rev == null);
-  const patch = { rev: nrev, updated_by: by, n_saw: live.filter(x => x.kind === 'saw').length, n_fit: live.filter(x => x.kind === 'fit').length };
+  const patch = { rev: nrev, updated_by: by, locked: r.is_template ? r.locked : (r.locked || !!pl.lock), n_saw: live.filter(x => x.kind === 'saw').length, n_fit: live.filter(x => x.kind === 'fit').length };
   ['name', 'list_type', 'source'].forEach(k => { if (pl[k] != null) patch[k] = pl[k]; });
   ['project_id', 'type_name', 'sdate', 'deliver_by'].forEach(k => { if (k in pl) patch[k] = pl[k]; });
   ['no_cut', 'no_fit'].forEach(k => { if (pl[k] != null) patch[k] = !!pl[k]; });

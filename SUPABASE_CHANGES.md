@@ -182,7 +182,7 @@ end $$;
 grant execute on function list_attach(text,text,boolean,text,text) to anon, authenticated, service_role;
 
 -- Sign-offs and flags (build note g). p_mode: 'saw' | 'fit' (sign-off; off = send back / undo) | 'no_cut' | 'no_fit'
--- | 'archive' (Delete on the Lists tab — the list is hidden, never deleted). The database writes the history line, never the browser.
+-- | 'send' (Send to saw: locks the list) | 'archive' (Delete on the Lists tab — the list is hidden, never deleted). The database writes the history line, never the browser.
 -- p_cid: the device's id for this tap — the same tap sent again (reply lost) changes nothing and adds no history.
 create or replace function list_set_done(p_list text, p_mode text, p_on boolean, p_by text, p_why text default null, p_cid text default null) returns jsonb language plpgsql as $$
 declare r lists%rowtype; what text;
@@ -204,6 +204,9 @@ begin
  elsif p_mode='no_fit' then
   update lists set no_fit=p_on, updated_by=p_by,
     log=log||jsonb_build_array(jsonb_build_object('at',now(),'by',p_by,'what','No fittings'||case when p_on then ' ticked' else ' unticked' end,'why',p_why)) where id=p_list returning * into r;
+ elsif p_mode='send' then -- 'Send to saw': the list locks; later edits are revisions
+  update lists set sent_at=coalesce(sent_at,now()), locked=true, updated_by=p_by,
+    log=log||jsonb_build_array(jsonb_build_object('at',now(),'by',p_by,'what','Sent to the saw','why',p_why)) where id=p_list returning * into r;
  elsif p_mode='archive' then
   update lists set archived=p_on, updated_by=p_by,
     log=log||jsonb_build_array(jsonb_build_object('at',now(),'by',p_by,'what',case when p_on then 'Archived' else 'Brought back from the archive' end,'why',p_why)) where id=p_list returning * into r;
@@ -236,8 +239,9 @@ begin
   -- 1. someone changed the list since this editor opened it: stop — the app reloads and compares again
   if p_expect is null or r.version<>p_expect then raise exception 'stale: list % is at version %, editor had %', r.id, r.version, p_expect; end if;
   nrev:=r.rev;
-  -- 2. a locked list or a template keeps a copy of what it was, and goes up one revision
-  if r.locked or r.is_template then
+  -- 2. a locked list or a template keeps a copy of what it was, and goes up one revision. p_list.lock = the app's date rule
+  --    (cut-by today or the next working day) — the list counts as locked from this save on.
+  if r.locked or r.is_template or coalesce((p_list->>'lock')::boolean,false) then
    insert into list_revisions(list_id,rev,lines,meta,reason,made_by)
     values(r.id,r.rev,coalesce((select jsonb_agg(to_jsonb(x) order by x.seq) from list_lines x where x.list_id=r.id and x.removed_rev is null),'[]'),to_jsonb(r),p_reason,p_by);
    nrev:=r.rev+1;
@@ -268,6 +272,7 @@ begin
  -- 5. lines that have gone are marked removed, never deleted
  update list_lines set removed_rev=nrev where list_id=r.id and removed_rev is null and not (id = any(ids));
  update lists set rev=nrev, updated_by=p_by,
+   locked=case when is_template then locked else locked or coalesce((p_list->>'lock')::boolean,false) end,
    name=coalesce(p_list->>'name',name), project_id=case when p_list ? 'project_id' then p_list->>'project_id' else project_id end,
    list_type=coalesce(p_list->>'list_type',list_type), source=coalesce(p_list->>'source',source), type_name=case when p_list ? 'type_name' then p_list->>'type_name' else type_name end,
    no_cut=coalesce((p_list->>'no_cut')::boolean,no_cut), no_fit=coalesce((p_list->>'no_fit')::boolean,no_fit),

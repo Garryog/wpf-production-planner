@@ -47,7 +47,7 @@ function fixture(on) {
   await set('lh-q', ''); await set('lh-kind', 'all'); await set('lh-type', 'kitchen'); rec('filter: type kitchen', (await names()) === 'L2');
   await set('lh-type', ''); await set('lh-kind', 'live'); await set('lh-rev', 'revised'); rec('filter: revised', (await names()) === 'L3', await names());
   await set('lh-rev', ''); await set('lh-state', 'archived'); rec('filter: archived', (await names()) === 'L5', await names());
-  await set('lh-state', 'live'); rec('filter: live (with the saw)', (await names()) === 'L3', await names());
+  await set('lh-state', 'live'); rec('filter: live (with the saw: locked, or cut-by today / next working day — L1 is cut by today)', (await names()) === 'L1,L3', await names());
   await des.page.evaluate(() => document.getElementById('lh-x').click());
   rec('clear filters', (await names()) === 'L1,L3');
   const hdr = await des.page.evaluate(() => ['data-lhtpl', 'data-lhmat', 'data-lhnew', 'data-lhimp'].every(a => document.querySelector('[' + a + '="P1"]')));
