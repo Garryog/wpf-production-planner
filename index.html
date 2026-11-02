@@ -2816,6 +2816,7 @@ function lsMaterialsDlg(pid,after){
     ov.querySelectorAll('[data-mts]').forEach(b=>b.onclick=()=>{const id=b.dataset.mts,m=LST.m.get(id);if(!m||!lsEditOk())return;
       const name=ov.querySelector('[data-mtn="'+id+'"]').value.trim();if(!name)return msg('A material needs a name.');if(dup(name,id))return msg('"'+name+'" is already on this project.');
       const aliases=ov.querySelector('[data-mta="'+id+'"]').value.split(',').map(s=>s.trim()).filter(Boolean);
+      if(String(m.name).trim().toLowerCase()!==name.toLowerCase()&&!aliases.some(a=>a.toLowerCase()===String(m.name).trim().toLowerCase()))aliases.push(String(m.name).trim()); // renamed: the old name still matches
       lsWrite('project_materials',m,{name,kind:ov.querySelector('[data-mtk="'+id+'"]').value,aliases,active:ov.querySelector('[data-mtv="'+id+'"]').checked})
         .then(()=>{toast('Material saved');draw();}).catch(e=>{draw();msg('Not saved — '+e.message);});});
     ov.querySelector('#mt-add').onclick=()=>{if(!lsEditOk())return;const name=ov.querySelector('#mt-new-n').value.trim();if(!name)return msg('Type the material name first.');if(dup(name,''))return msg('"'+name+'" is already on this project.');
@@ -3088,7 +3089,9 @@ function lsMatchDlg(names,pid,done,opt){
     const map={};
     try{
       for(const[n,v]of pick){
-        if(v==='__add'){await lsWrite('project_materials',{id:uid('M'),project_id:pid,name:n,kind:'sheet',sort:lsMats(pid,'',true).length});}
+        if(v==='__add'){const ex=lsMats(pid,'',true).find(m=>String(m.name).trim().toLowerCase()===n.trim().toLowerCase());
+          if(ex){if(ex.active===false)await lsWrite('project_materials',ex,{active:true});map[n.toLowerCase()]=ex.name;} // already on the project (maybe as a fitting, or retired): use it
+          else await lsWrite('project_materials',{id:uid('M'),project_id:pid,name:n,kind:'sheet',sort:lsMats(pid,'',true).length});}
         else if(v){const m=LST.m.get(v);map[n.toLowerCase()]=m.name;const al=[...new Set([...(m.aliases||[]),n])];await lsWrite('project_materials',m,{aliases:al});}
       }
     }catch(e){toast('Materials not saved — '+e.message);return;}
@@ -3244,7 +3247,9 @@ function renderSnags(app){
   const tl=g('sn-tolist');
   if(tl)tl.onclick=()=>{
     const d=prompt('Deliver by (YYYY-MM-DD)? The saw and stores see it the working day before.',nextWorkDay(nextWorkDay(todayLocal())));
-    if(d===null)return;if(!/^\d{4}-\d{2}-\d{2}$/.test(d.trim())){toast('Type the date as YYYY-MM-DD');return;}
+    if(d===null)return;if(!/^\d{4}-\d{2}-\d{2}$/.test(d.trim())||isNaN(Date.parse(d.trim()))){toast('Type the date as YYYY-MM-DD');return;}
+    if(d.trim()<addDayISO(todayLocal(),-30)){toast(fmt(d.trim())+' is more than a month ago — check the year. Nothing made.');return;}
+    if(d.trim()<todayLocal()&&!confirm(fmt(d.trim())+' is in the past — the list would be overdue straight away. Make it anyway?'))return;
     const ids=[...SN.sel];tl.disabled=true;
     lsRpc('snags_to_list',{p_ids:ids,p_deliver_by:d.trim(),p_by:lqBy('')}).then(async out=>{SN.sel.clear();await lsPoll();render();toast((out||[]).length+' snag list'+((out||[]).length!==1?'s':'')+' made — on the saw and stores for '+fmt(d.trim()));})
       .catch(async e=>{tl.disabled=false;await lsPoll();SN.sel.clear();render();toast('Not made — '+(/not raised/.test(e.message)?'some of these snags were already moved by someone else. Nothing was made; tick again.':e.message));});

@@ -41,6 +41,11 @@ function typeCheck(t, r) {
 }
 
 function makeDb() { const d = { t: {}, seq: { list_revisions: 1, list_events: 1 } }; TABLES.forEach(t => { d.t[t] = []; }); return d; }
+function uniq(d, t, row) {
+  const lo = v => String(v == null ? '' : v).toLowerCase();
+  if (t === 'projects' && d.t[t].some(x => x !== row && x.id !== row.id && lo(x.name) === lo(row.name))) throw new DbError('duplicate key value violates unique constraint "projects_name_uq"', '23505');
+  if (t === 'project_materials' && d.t[t].some(x => x !== row && x.id !== row.id && x.project_id === row.project_id && lo(x.name) === lo(row.name))) throw new DbError('duplicate key value violates unique constraint "pm_uq"', '23505');
+}
 function find(d, t, id) { return d.t[t].find(r => r.id === id); }
 function insert(d, t, r) {
   const row = defaults(t, r);
@@ -49,7 +54,7 @@ function insert(d, t, r) {
   else if (row.id == null || row.id === '') throw new DbError('null value in column "id"', '23502');
   if (row.id != null && d.t[t].some(x => x.id === row.id)) throw new DbError('duplicate key value violates unique constraint "' + t + '_pkey"', '23505');
   if (t === 'list_events' && row.cid != null && d.t[t].some(x => x.cid === row.cid)) throw new DbError('duplicate key value violates unique constraint "le_cid"', '23505');
-  if (t === 'projects' && d.t[t].some(x => String(x.name).toLowerCase() === String(row.name).toLowerCase())) throw new DbError('duplicate key value violates unique constraint "projects_name_uq"', '23505');
+  uniq(d, t, row);
   if (CHECKS[t] && !CHECKS[t](row)) throw new DbError('new row violates check constraint', '23514');
   d.t[t].push(row); return row;
 }
@@ -59,6 +64,7 @@ function update(d, t, row, patch) {
   const old = clone(row);
   Object.assign(row, clone(patch));
   if (CHECKS[t] && !CHECKS[t](row)) { Object.keys(row).forEach(k => delete row[k]); Object.assign(row, old); throw new DbError('new row violates check constraint', '23514'); }
+  try { uniq(d, t, row); } catch (e) { Object.keys(row).forEach(k => delete row[k]); Object.assign(row, old); throw e; }
   if (TOUCHED[t]) { row.version = old.version + 1; row.updated_at = now(); }
   if (t === 'list_lines' && 'status' in patch) snagLineDone(d, old, row);
   return row;
@@ -67,6 +73,9 @@ function snagLineDone(d, old, nw) {
   if (nw.snag_id != null && ['cut', 'got-out'].includes(nw.status) && old.status !== nw.status) {
     const s = find(d, 'snags', nw.snag_id);
     if (s && s.status === 'on-list') update(d, 'snags', s, { status: 'cut', status_by: nw.status_by, status_at: now() });
+  } else if (nw.snag_id != null && ['cut', 'got-out'].includes(old.status) && !['cut', 'got-out'].includes(nw.status)) {
+    const s = find(d, 'snags', nw.snag_id);
+    if (s && s.status === 'cut') update(d, 'snags', s, { status: 'on-list', status_by: nw.status_by, status_at: now() });
   }
 }
 const logAdd = (r, e) => (r.log || []).concat([e]);

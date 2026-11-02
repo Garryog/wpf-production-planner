@@ -401,6 +401,9 @@ create or replace function snag_line_done() returns trigger language plpgsql as 
 begin
  if new.snag_id is not null and new.status in('cut','got-out') and old.status is distinct from new.status then
   update snags set status='cut', status_by=new.status_by, status_at=now() where id=new.snag_id and status='on-list';
+ elsif new.snag_id is not null and old.status in('cut','got-out') and new.status not in('cut','got-out') then
+  -- unticked (a mis-tap): the snag goes back to "on a list"
+  update snags set status='on-list', status_by=new.status_by, status_at=now() where id=new.snag_id and status='cut';
  end if;
  return new;
 end $$;
