@@ -52,6 +52,22 @@ create table if not exists project_materials(id text primary key, project_id tex
   active boolean not null default true, sort int not null default 0, version int not null default 1,
   updated_at timestamptz not null default now(), updated_by text);
 create unique index if not exists pm_uq on project_materials(project_id, lower(name));
+-- A name or other spelling (alias) can belong to only one material per project — ignoring case and extra spaces
+create or replace function pm_key(t text) returns text language sql immutable as
+$$ select lower(btrim(regexp_replace(normalize(coalesce(t,''),NFKC),'\s+',' ','g'))) $$;
+create or replace function pm_no_clash() returns trigger language plpgsql as $$
+declare mine text[];
+begin
+  perform pg_advisory_xact_lock(hashtext('pm:'||new.project_id)); -- two screens adding at once take turns
+  select array_agg(pm_key(x)) into mine from unnest(array[new.name]||coalesce(new.aliases,'{}')) x where pm_key(x)<>'';
+  if exists(select 1 from project_materials o, unnest(array[o.name]||coalesce(o.aliases,'{}')) y
+            where o.project_id=new.project_id and o.id<>new.id and pm_key(y)=any(mine)) then
+    raise exception 'that material name or other spelling is already used on this project' using errcode='23505';
+  end if;
+  return new;
+end $$;
+drop trigger if exists pm_no_clash on project_materials;
+create trigger pm_no_clash before insert or update on project_materials for each row execute function pm_no_clash();
 create index if not exists pm_upd on project_materials(updated_at);
 create index if not exists projects_upd on projects(updated_at);
 

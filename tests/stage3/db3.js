@@ -45,6 +45,12 @@ function uniq(d, t, row) {
   const lo = v => String(v == null ? '' : v).toLowerCase();
   if (t === 'projects' && d.t[t].some(x => x !== row && x.id !== row.id && lo(x.name) === lo(row.name))) throw new DbError('duplicate key value violates unique constraint "projects_name_uq"', '23505');
   if (t === 'project_materials' && d.t[t].some(x => x !== row && x.id !== row.id && x.project_id === row.project_id && lo(x.name) === lo(row.name))) throw new DbError('duplicate key value violates unique constraint "pm_uq"', '23505');
+  if (t === 'project_materials') { // pm_no_clash trigger: a name or other spelling belongs to one material per project
+    const k = v => String(v == null ? '' : v).normalize('NFKC').replace(/\s+/g, ' ').trim().toLowerCase();
+    const mine = new Set([row.name, ...(row.aliases || [])].map(k).filter(Boolean));
+    if (d.t[t].some(x => x !== row && x.id !== row.id && x.project_id === row.project_id && [x.name, ...(x.aliases || [])].some(y => mine.has(k(y)))))
+      throw new DbError('that material name or other spelling is already used on this project', '23505');
+  }
 }
 function find(d, t, id) { return d.t[t].find(r => r.id === id); }
 function insert(d, t, r) {

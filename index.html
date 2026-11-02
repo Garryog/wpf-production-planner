@@ -2844,6 +2844,10 @@ function lsProjectsDlg(){
   };
   draw();
 }
+// A project's materials straight from the database (another screen may have just changed them)
+async function lsMatFresh(pid){lsPut('project_materials',await lsGet('project_materials?select=*&project_id=eq.'+encodeURIComponent(pid)));}
+// The material (other than `id`) that already answers to `name` — by its name or one of its other spellings, ignoring case and spaces
+function lsMatClash(pid,name,id){const k=matKey(name);return k?lsMats(pid,'',true).find(m=>m.id!==id&&[m.name,...(m.aliases||[])].some(a=>matKey(a)===k)):null;}
 function lsMaterialsDlg(pid,after){
   const ov=lsDlg('<div id="mt-body"></div>',820);
   if(after)ov.addEventListener('click',e=>{if(e.target===ov||e.target.id==='pod-x')after();});
@@ -2859,17 +2863,21 @@ function lsMaterialsDlg(pid,after){
       <tr><td><input id="mt-new-n" placeholder="e.g. 18mm MFC White" style="${LS_INP};width:100%"></td><td><select id="mt-new-k" style="${LS_INP}"><option value="sheet">Sheet (saw)</option><option value="other">Fitting / other</option></select></td><td></td><td></td>
         <td><button class="btn btn-g" id="mt-add" style="font-size:12px;padding:4px 10px">＋ Add</button></td></tr></tbody></table><div id="mt-msg" style="font-size:12px;color:#b42318;font-weight:700;margin-top:6px"></div>`;
     const msg=t=>{const e=ov.querySelector('#mt-msg');if(e)e.textContent=t;};
-    const lo=v=>String(v||'').trim().toLowerCase();
-    const dup=(name,id)=>lsMats(pid,'',true).some(m=>m.id!==id&&(lo(m.name)===lo(name)||(m.aliases||[]).some(a=>lo(a)===lo(name)))); // a name or another material's other spelling
-    ov.querySelectorAll('[data-mts]').forEach(b=>b.onclick=()=>{const id=b.dataset.mts,m=LST.m.get(id);if(!m||!lsEditOk())return;
-      const name=ov.querySelector('[data-mtn="'+id+'"]').value.trim();if(!name)return msg('A material needs a name.');if(dup(name,id))return msg('"'+name+'" is already on this project.');
+    const fresh=async()=>{try{await lsMatFresh(pid);return true;}catch(e){msg('Could not check the materials list — '+e.message);return false;}}; // check against the database, not this screen's copy
+    ov.querySelectorAll('[data-mts]').forEach(b=>b.onclick=async()=>{const id=b.dataset.mts;if(!LST.m.get(id)||!lsEditOk())return;
+      const name=ov.querySelector('[data-mtn="'+id+'"]').value.trim();if(!name)return msg('A material needs a name.');
       const aliases=ov.querySelector('[data-mta="'+id+'"]').value.split(',').map(s=>s.trim()).filter(Boolean);
-      const clash=aliases.find(a=>dup(a,id));if(clash)return msg('"'+clash+'" is already the name or another spelling of a different material on this project.');
-      if(String(m.name).trim().toLowerCase()!==name.toLowerCase()&&!aliases.some(a=>a.toLowerCase()===String(m.name).trim().toLowerCase()))aliases.push(String(m.name).trim()); // renamed: the old name still matches
-      lsWrite('project_materials',m,{name,kind:ov.querySelector('[data-mtk="'+id+'"]').value,aliases,active:ov.querySelector('[data-mtv="'+id+'"]').checked})
+      const kind=ov.querySelector('[data-mtk="'+id+'"]').value,active=ov.querySelector('[data-mtv="'+id+'"]').checked;
+      if(!await fresh())return;const m=LST.m.get(id);
+      if(lsMatClash(pid,name,id))return msg('"'+name+'" is already on this project.');
+      const clash=aliases.find(a=>lsMatClash(pid,a,id));if(clash)return msg('"'+clash+'" is already the name or another spelling of a different material on this project.');
+      if(matKey(m.name)!==matKey(name)&&!aliases.some(a=>matKey(a)===matKey(m.name)))aliases.push(String(m.name).trim()); // renamed: the old name still matches
+      lsWrite('project_materials',m,{name,kind,aliases,active})
         .then(()=>{toast('Material saved');draw();}).catch(e=>{draw();msg('Not saved — '+e.message);});});
-    ov.querySelector('#mt-add').onclick=()=>{if(!lsEditOk())return;const name=ov.querySelector('#mt-new-n').value.trim();if(!name)return msg('Type the material name first.');if(dup(name,''))return msg('"'+name+'" is already on this project.');
-      lsWrite('project_materials',{id:uid('M'),project_id:pid,name,kind:ov.querySelector('#mt-new-k').value,sort:lsMats(pid,'',true).length}).then(()=>{toast(name+' added');draw();}).catch(e=>msg('Not added — '+e.message));};
+    ov.querySelector('#mt-add').onclick=async()=>{if(!lsEditOk())return;const name=ov.querySelector('#mt-new-n').value.trim();if(!name)return msg('Type the material name first.');
+      const kind=ov.querySelector('#mt-new-k').value;
+      if(!await fresh())return;if(lsMatClash(pid,name,''))return msg('"'+name+'" is already on this project.');
+      lsWrite('project_materials',{id:uid('M'),project_id:pid,name,kind,sort:lsMats(pid,'',true).length}).then(()=>{toast(name+' added');draw();}).catch(e=>msg('Not added — '+e.message));};
   };
   draw();
 }
@@ -3137,11 +3145,14 @@ function lsMatchDlg(names,pid,done,opt){
     if(pick.some(([,v])=>v)&&!lsEditOk())return;
     const map={};
     try{
+      if(pick.some(([,v])=>v))await lsMatFresh(pid); // check against the database, not this screen's copy
       for(const[n,v]of pick){
-        if(v==='__add'){const ex=lsMats(pid,'',true).find(m=>String(m.name).trim().toLowerCase()===n.trim().toLowerCase());
-          if(ex){if(ex.active===false)await lsWrite('project_materials',ex,{active:true});map[n.toLowerCase()]=ex.name;} // already on the project (maybe as a fitting, or retired): use it
+        if(v==='__add'){const ex=lsMatClash(pid,n,'');
+          if(ex){if(ex.active===false)await lsWrite('project_materials',ex,{active:true});map[n.toLowerCase()]=ex.name;} // already answers to that name (maybe a fitting, an other spelling, or retired): use it
           else await lsWrite('project_materials',{id:uid('M'),project_id:pid,name:n,kind:'sheet',sort:lsMats(pid,'',true).length});}
-        else if(v){const m=LST.m.get(v);map[n.toLowerCase()]=m.name;const al=[...new Set([...(m.aliases||[]),n])];await lsWrite('project_materials',m,{aliases:al});}
+        else if(v){const m=LST.m.get(v),cl=lsMatClash(pid,n,v);
+          if(cl){toast('"'+n+'" is already '+(matKey(cl.name)===matKey(n)?'':'another spelling of ')+'"'+cl.name+'" on this project — pick that one');return;}
+          map[n.toLowerCase()]=m.name;if(!(m.aliases||[]).some(a=>matKey(a)===matKey(n))&&matKey(m.name)!==matKey(n))await lsWrite('project_materials',m,{aliases:[...(m.aliases||[]),n]});}
       }
     }catch(e){toast('Materials not saved — '+e.message);return;}
     ov.remove();done(map);
