@@ -2445,7 +2445,7 @@ function combineLists(lsArr,mode){
     const hb=holdsOf(l.id),relOnly=!!listDone(l.id)[mode]&&relOpen(l,mode);
     listRows(l).filter(r=>r.k===mode).filter(r=>{const h=hb[rowKey(r)];if(heldRow(l,rowKey(r)))return false;return !relOnly||(h&&h.st==='rel');})
       .filter(r=>!rowTicked(l.id,rowKey(r))).forEach(r=>{ // already cut/picked — not added to the total again
-      const key=[String(r.item).trim(),r.L,r.W,String(r.mat).trim(),String(r.note).trim()].join('|').toLowerCase();
+      const key=[matKey(r.item),matKey(r.L),matKey(r.W),matKey(r.mat),matKey(r.note)].join('|'); // same normalising as the sheets panel: spaces/NBSP/accents/case don't split a row; first spelling shown
       if(!byKey[key]){byKey[key]={item:r.item,L:r.L,W:r.W,mat:r.mat,note:r.note,k:r.k,qty:0,bad:0,per:{}};order.push(key);}
       const g=byKey[key],h=hname(l),qs=String(r.qty==null?'':r.qty).trim(),q=+qs;
       if(/^\d+$/.test(qs)&&q>0){g.qty+=q;g.per[h]=typeof g.per[h]==='string'?g.per[h]+' + '+q:(g.per[h]||0)+q;}
