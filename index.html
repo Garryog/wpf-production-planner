@@ -603,7 +603,7 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden&&pendT)writ
 // Server settings → a full settings object. Missing/empty keys keep what we had (same rules the old loader used).
 function settingsFrom(s,prev){
   const r={...prev};s=s||{};
-  ['weekCaps','delx','delNotes','grps','pins','pod','lists','listWBs','listDone','delArchive','staff','listHold','holdLog','listRow'].forEach(k=>{if(s[k])r[k]=s[k];});
+  ['weekCaps','delx','delNotes','grps','pins','pod','lists','listWBs','listDone','delArchive','staff','listHold','holdLog','listRow','listStore','listStoreAt'].forEach(k=>{if(s[k])r[k]=s[k];});
   if(s.hourScale&&s.hourScale.length)r.hourScale=s.hourScale;
   ['wcap','vcap','listLead'].forEach(k=>{if(s[k]>0)r[k]=s[k];});
   if(s.exportBase&&typeof s.exportBase==='object')r.exportBase=s.exportBase;
@@ -623,7 +623,7 @@ function applyPlan(p){
   if(p.nid)DB.nid=p.nid;
   const s=p.settings||{};
   DB.weekCaps=s.weekCaps||{};if(s.hourScale&&s.hourScale.length)HOUR_SCALE=s.hourScale;if(s.wcap>0)WCAP=s.wcap;if(s.vcap>0)VCAP=s.vcap;
-  ['delx','delNotes','grps','pins','pod','lists','listWBs','listDone','delArchive','staff','listHold','holdLog','listRow'].forEach(k=>{if(s[k])DB[k]=s[k];});
+  ['delx','delNotes','grps','pins','pod','lists','listWBs','listDone','delArchive','staff','listHold','holdLog','listRow','listStore','listStoreAt'].forEach(k=>{if(s[k])DB[k]=s[k];});
   if(s.listLead>0)DB.listLead=s.listLead;
   // Export Changes baseline: saved with the plan, so a refresh never resets it — only "Mark as applied" does
   if(s.exportBase){orig={...(s.exportBase.wk||{})};origStep={...(s.exportBase.st||{})};}
@@ -966,7 +966,10 @@ async function saveDB(){
 }
 // Never let a tab close while an edit is unsaved or a retry is pending
 window.addEventListener('beforeunload',e=>{if(saveT||DB.saveFailed){e.preventDefault();e.returnValue='';}});
-function fullSettings(){return{weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP,delx:DB.delx||[],delNotes:DB.delNotes||{},grps:DB.grps||{},pins:DB.pins||{},pod:DB.pod||{},lists:DB.lists||[],listWBs:DB.listWBs||{},listDone:DB.listDone||{},listLead:DB.listLead||5,delArchive:DB.delArchive||{},staff:DB.staff||[],listHold:DB.listHold||{},holdLog:DB.holdLog||[],listRow:DB.listRow||{},exportBase:{wk:orig,st:origStep}};}
+function fullSettings(){return{weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP,delx:DB.delx||[],delNotes:DB.delNotes||{},grps:DB.grps||{},pins:DB.pins||{},pod:DB.pod||{},lists:DB.lists||[],listWBs:DB.listWBs||{},listDone:DB.listDone||{},listLead:DB.listLead||5,delArchive:DB.delArchive||{},staff:DB.staff||[],listHold:DB.listHold||{},holdLog:DB.holdLog||[],listRow:DB.listRow||{},exportBase:{wk:orig,st:origStep},...(DB.listStore?{listStore:DB.listStore,listStoreAt:DB.listStoreAt||''}:{})};}
+/* Stage 3 switch: settings.listStore==='v2' → cutting lists live in their own tables (lists, list_lines…).
+   Missing, blank or anything else (switch back writes 'v1') → today's lists in the planner record, untouched. */
+function V2(){return DB.listStore==='v2';}
 /* Staff roster: {id, n:name, r:[roles]} — one source of names for drivers, saw and stores,
    so every "loaded by / delivered by / cut by" record uses the same spelling of the same person. */
 function staff(){return DB.staff||[];}
