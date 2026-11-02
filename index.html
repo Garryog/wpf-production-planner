@@ -181,6 +181,8 @@ button,input,select{font-family:inherit;cursor:pointer}
 .wl-dday{font-size:13px;font-weight:800;color:#14335c;text-transform:uppercase;letter-spacing:.5px;margin:16px 0 6px;border-bottom:2px solid #14335c;padding-bottom:3px}
 .wl-drow{display:flex;gap:10px;align-items:center;background:#fff;border:1px solid var(--border);border-radius:8px;padding:9px 12px;margin-bottom:6px;font-size:14px}
 .wl-drow>b{font-size:16px;color:#14335c}
+.sn-row,.wait-row{flex-wrap:wrap}.sn-row>.dsh-x,.wait-row>.dsh-x,.sn-row>.dsh-t{white-space:normal;min-width:0;overflow-wrap:anywhere} /* new-lists rows (switch on only) wrap on a phone */
+@media(max-width:700px){#lh .lst-tbl,#lh .lst-tbl tbody,#lh .lst-tbl tr,#lh .lst-tbl td{display:block;width:auto}#lh .lst-tbl thead{display:none}#lh .lst-tbl tr{border-bottom:1px solid var(--border);padding:6px 4px}#lh .lst-tbl td{border:none;padding:2px 4px}#lh .lh-grp>div:first-child{flex-wrap:wrap}#sn-form input,#sn-form select{max-width:100%;min-width:0!important}}
 .hold-grp .wl-drow{flex-wrap:wrap}.hold-grp .wl-drow>.dsh-t{flex-basis:120px}.hold-grp .wl-drow>.wl-undo{margin-left:auto} /* phone: the Release button drops to its own line instead of pushing the page sideways */
 /* batch-cut selection + combined view + per-house splits */
 .wl-chk{width:44px;height:44px;border-radius:9px;border:2px solid rgba(255,255,255,.65);background:transparent;cursor:pointer;color:#14335c;font-weight:800;font-size:20px;line-height:1;flex-shrink:0}
@@ -2938,7 +2940,7 @@ function waitListHTML(){
   const od=rows.filter(r=>r.due&&r.due<today).length;
   return `<div class="exp-panel" id="wait-list" style="border:2px solid ${od?'#c0392b':'#d4880f'};background:${od?'#fdf3f2':'#fffaf0'};padding:10px 12px">
     <div style="font-size:15px;font-weight:800;color:${od?'#8a1c10':'#7a4a00'};margin-bottom:6px">📋 WAITING FOR A LIST — ${rows.length} job${rows.length!==1?'s':''}${od?` · <span style="color:#c0392b">${od} overdue</span>`:''}</div>
-    ${rows.map(({o,cut,due})=>{const late=due&&due<today;return `<div class="wl-drow" data-waitwo="${escA(o.wo)}" style="${late?'background:#c0392b;color:#fff;':''}border-radius:5px;padding:5px 8px"><b>${escA(o.wo)}</b><span class="dsh-c">${escA(o.customer||'')}</span><span class="dsh-t">${escA([o.floor,o.unit].filter(Boolean).join(' '))}</span><span class="dsh-x">${late?'⚠ OVERDUE · ':''}cut by ${cut?fmt(cut):'—'} · list due by ${due?fmt(due):'—'} · owner ${escA(lsOwnerFor(o))}</span></div>`;}).join('')}
+    ${rows.map(({o,cut,due})=>{const late=due&&due<today;return `<div class="wl-drow wait-row" data-waitwo="${escA(o.wo)}" style="${late?'background:#c0392b;color:#fff;':''}border-radius:5px;padding:5px 8px"><b>${escA(o.wo)}</b><span class="dsh-c">${escA(o.customer||'')}</span><span class="dsh-t">${escA([o.floor,o.unit].filter(Boolean).join(' '))}</span><span class="dsh-x">${late?'⚠ OVERDUE · ':''}cut by ${cut?fmt(cut):'—'} · list due by ${due?fmt(due):'—'} · owner ${escA(lsOwnerFor(o))}</span></div>`;}).join('')}
   </div>`;
 }
 /* ---------- S4 (V2 only): the list editor with project picker, type, edging, and materials picked from the project ----------
@@ -3211,7 +3213,7 @@ function renderSnags(app){
     ${SN.form?form:''}
     ${[...grp.keys()].sort((a,b)=>lsProjName(a).localeCompare(lsProjName(b))).map(p=>{const a=grp.get(p),r=a.filter(s=>s.status==='raised');return `<div class="exp-panel">
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px"><b style="font-size:15px;color:#14335c">${escA(lsProjName(p)||'?')}</b><span style="font-size:12px;color:var(--t3)">${r.length} raised · ${a.length-r.length} in progress</span><span style="flex:1"></span>${r.length&&ROLE==='prod'?`<button class="btn btn-s" data-snall="${escA(p)}">Tick all for project</button>`:''}</div>
-      ${a.map(s=>{const[st,col]=SN_ST[s.status]||[s.status,'#5b6b82'];return `<div class="wl-drow" data-snrow="${escA(s.id)}">${s.status==='raised'&&ROLE==='prod'?`<input type="checkbox" data-sn="${escA(s.id)}"${SN.sel.has(s.id)?' checked':''} style="width:22px;height:22px">`:'<span style="width:22px"></span>'}
+      ${a.map(s=>{const[st,col]=SN_ST[s.status]||[s.status,'#5b6b82'];return `<div class="wl-drow sn-row" data-snrow="${escA(s.id)}">${s.status==='raised'&&ROLE==='prod'?`<input type="checkbox" data-sn="${escA(s.id)}"${SN.sel.has(s.id)?' checked':''} style="width:22px;height:22px">`:'<span style="width:22px"></span>'}
         <b>${s.kind==='saw'?'🪚':'🧰'} ${escA(s.item)}</b><span class="dsh-t">×${escA(s.qty)}${s.length_mm||s.width_mm?' · '+escA(s.length_mm||'')+' × '+escA(s.width_mm||''):''}${snMat(s)?' · '+escA(snMat(s)):''}${s.material_id||!s.material_text?'':' ⚠'}${s.edging?' · '+escA(s.edging):''}</span>
         <span class="dsh-c">${escA(s.where_text||'')}</span><span class="dsh-x">${escA(s.raised_by||'')} ${s.raised_at?fmt(s.raised_at):''}${s.note?' · '+escA(s.note):''} · <b style="color:${col}">${st}</b>${s.list_id&&LST.l.has(s.list_id)?' · '+escA(LST.l.get(s.list_id).name):''}</span>
         ${s.status==='raised'?`<button class="wl-undo" data-sncan="${escA(s.id)}">Cancel</button>`:''}</div>`;}).join('')}</div>`;}).join('')||'<div class="exp-panel" style="color:var(--t3)">No open snags.</div>'}
