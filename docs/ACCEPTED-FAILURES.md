@@ -1,4 +1,6 @@
 # Accepted test failures (Garry to confirm each)
+2 Nov 2026 check: still the same 5 rows below — nothing new added. Saw/Stores folder: only the two saw/stores rows fail. 2,500-row timing tests can fail when many tests run at once; they pass when run alone.
+
 Updated 22 Oct 2026 after the zombie-untick save fixes (branch `feature/stage2-imports`). Full suite (every test file once) 832 pass / 4 fail (all listed here), plus Stage 1 t9 ×20 (0 unticks came back of ~8,390), t1 ×20 and t1-trace ×10 all clean. t4 "2,500 jobs under 10 s" and import.test "2,500-row import in reasonable time" failed once only while 10 soaks ran in parallel; both pass on an idle machine.
 
 | Test | Why it fails | Fixed in | Accepted? |
