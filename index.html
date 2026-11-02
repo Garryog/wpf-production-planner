@@ -2440,7 +2440,8 @@ function combineLists(lsArr,mode){
   const hname=l=>projs.size>1?((l.project?l.project+' — ':'')+l.name):l.name;
   lsArr.forEach(l=>{
     const hb=holdsOf(l.id),relOnly=!!listDone(l.id)[mode]&&listHoldRows(l,mode,'rel').length>0;
-    listRows(l).filter(r=>r.k===mode).filter(r=>{const h=hb[rowKey(r)];if(heldRow(l,rowKey(r)))return false;return !relOnly||(h&&h.st==='rel');}).forEach(r=>{
+    listRows(l).filter(r=>r.k===mode).filter(r=>{const h=hb[rowKey(r)];if(heldRow(l,rowKey(r)))return false;return !relOnly||(h&&h.st==='rel');})
+      .filter(r=>!rowTicked(l.id,rowKey(r))).forEach(r=>{ // already cut/picked — not added to the total again
       const key=[String(r.item).trim(),r.L,r.W,String(r.mat).trim(),String(r.note).trim()].join('|').toLowerCase();
       if(!byKey[key]){byKey[key]={item:r.item,L:r.L,W:r.W,mat:r.mat,note:r.note,k:r.k,qty:0,bad:0,per:{}};order.push(key);}
       const g=byKey[key],h=hname(l),qs=String(r.qty==null?'':r.qty).trim(),q=+qs;
@@ -2456,7 +2457,7 @@ function openCombined(lsArr,mode){
   const ov=document.createElement('div');ov.className='pod-ovl';
   ov.innerHTML=`<div class="pod-in" style="min-width:min(980px,94vw)">
     <div style="font-weight:800;color:#14335c;font-size:17px;margin-bottom:2px">${saw?'⚡ Combined cutting list':'⚡ Combined fittings list'} — ${lsArr.length} houses</div>
-    <div style="font-size:12px;color:var(--t3);margin-bottom:6px">Cut/pick the total, split per house as labelled — quantities per house stay beside every line.</div>
+    <div style="font-size:12px;color:var(--t3);margin-bottom:6px">Cut/pick the total, split per house as labelled — quantities per house stay beside every line. Lines already ticked ${saw?'cut':'picked'} are left out.</div>
     <div style="background:#f4f7fb;border:1px solid var(--border);border-radius:7px;padding:7px 10px;margin-bottom:10px">
       ${lsArr.map(l=>{let o=null;for(const w of (l.wos||[])){o=DB.orders.find(x=>x.wo===w);if(o)break;}return `<div style="font-size:12px;color:#14335c;padding:1px 0"><b>${escA(l.name)}</b>${o&&(o.floor||o.unit)?' · '+escA([o.floor,o.unit].filter(Boolean).join(' · ')):''}${o&&o.title?' · '+escA(o.title):''}${o&&o.customer?' · <b>'+escA(o.customer)+'</b>':''}</div>`;}).join('')}
     </div>
