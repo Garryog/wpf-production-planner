@@ -2427,7 +2427,7 @@ function lsEditMerge(id,rows,lines){
   rows.forEach((r,i)=>{
     if(!r.lid||!r.sig)return;
     const x=byId.get(r.lid),meChanged=lsLineSig(lines[i])!==r.sig;
-    if(!x){if(String(r.opened)&&lsLinesOf(id).some(y=>y.id===r.lid&&y.removed_rev!=null))over.push('they removed '+nm(lines[i])+' — your save puts it back');return;}
+    if(!x){if(lsLinesOf(id).some(y=>y.id===r.lid&&y.removed_rev!=null)){if(meChanged)over.push('they removed '+nm(lines[i])+', which you changed — your save puts it back');else{lines[i]._drop=true;kept++;}}return;} // removed by them, untouched here: stays removed
     if(lsLineSig(x)===r.sig)return;                                  // they didn't change it
     if(!meChanged){lines[i]=asLine(x);kept++;return;}               // only they changed it: keep theirs
     over.push(nm(x)+' was changed on the other screen — yours ('+nm(lines[i])+') replaces it');
@@ -2455,6 +2455,7 @@ async function lsSaveManual(d,by,ex){
   const lines=d.rows.map(r=>lsRowToLine(r,true));lsFlagMats(lines,pid);
   const mg=ex?lsEditMerge(id,d.rows,lines):{ok:true,kept:0};
   if(!mg.ok)throw new Error('another screen changed this list meanwhile — nothing saved; close and reopen it');
+  for(let i=lines.length-1;i>=0;i--)if(lines[i]._drop)lines.splice(i,1);
   if(mg.kept)setTimeout(()=>toast(mg.kept+' change'+(mg.kept!==1?'s':'')+' saved meanwhile on another screen kept'),2700);
   if(ex&&ex.templateId&&!ex.tpl){
     const tl=await lsTplLines(ex),miss=tl?lsMissing(tl,lines):[];
