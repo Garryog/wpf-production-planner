@@ -88,6 +88,12 @@ Rules: rank by the leading number. "Shipped" = step 9 only (left the factory →
 - Architect confirmed the cutting-list plan against the code; build notes and build order added to docs/PLAN-cutting-lists-stage3.md (fixed garbled characters in both plan files).
 - Saw/Stores re-test: Garry's three rules all pass (N/A → Waiting, sheets = m² ÷ 5.75 + 10%, never both got-out and missing). New file tests/sawstores/retest-nov.test.js found 5 smaller bugs (combined list qty "2x2" shown as 0; combined list counts already-cut lines; "MFC White" vs "mfc white " split in the waiting book; stale "Release all" brings back a finished list; per-line Release button off-screen at 360px).
 - Assumption: Office "Material to order" list is step 4 of the build order (after this release), not part of Saw/Stores — not built now.
+- Later the same day: Coder fixed all 5 (d3a8f00, 7f195fa, c5de45b, 5af0656, 652aa3b), then the Tester's follow-ups (Print today shows cut lines as done 54081f0; odd spacing/accents in board names count as one material 9472be7, a8b2fef; same-named houses keep their own quantities 122c3c0). Saw/Stores tests: all pass except the 2 already on ACCEPTED-FAILURES; 3 Low left in retest-nov3 (see below).
+- Test safety: some old soak tests were trying to reach the live Supabase address when pages closed mid-save (all blocked by the sandbox; nothing reached it). tests/harness.js now stops every such attempt (17c715e).
+- **Manager re-review, Saw/Stores (this branch = Stage 1 + Stage 2 + Saw/Stores): GO WITH CONDITIONS** — run the Stage 1 SQL first, close every tab and phone on go-live day, Garry signs off ACCEPTED-FAILURES, and decides whether "Material to order" (office list) can wait for build step 4.
+- Cutting-list system (Stage 3) is on its own branch `feature/cutting-lists` — see the Progress log there.
+- Low items left for Garry to decide: should "2440MM", "2440 mm" and "2,440" merge with "2440" in the combined list? (totals are already right).
+- Next: tidy the 3 Low combined-list items; Zebra labels still waiting on the label size.
 
 ### 2 Nov 2026, evening (second scheduled run, branch feature/cutting-lists)
 - Found the cutting-list system already built (Stage 3 core + screens) by the earlier run on `feature/cutting-lists`; this run continued from Tester round 5. Another run was pushing to the same branch at the same time, so this run's tests were renamed `attack5b-*` to avoid clashes.
@@ -98,3 +104,11 @@ Rules: rank by the leading number. "Shipped" = step 9 only (left the factory →
 - Zebra labels: skipped — label size still not recorded. Waiting on Garry.
 - Waiting on Garry: release order; a Supabase test project for the rehearsal; sign off ACCEPTED-FAILURES; dispatch-warning OK until Deliveries?; accept that anyone with the app key can change lists until Stage 4 logins; should office PCs re-enter the PM/Design PIN each time for templates; label size.
 - Next: Tester rewrites R1b; Coder tidies the 2 Low messages; then rehearsal on a Supabase test project once Garry sets one up.
+
+### 2 Nov 2026, evening (first run, continued — branch feature/cutting-lists)
+- Two scheduled runs worked on this branch at the same time today; both kept their tests apart (attack5b/attack6-r5b vs attack5/attack6-round5). Garry: please check this scheduled task isn't set to fire twice.
+- This run: Tester rounds 1–6 against the new lists; every Critical and High found was fixed by the Coder and re-tested (rounds 1–5: switch wiped by old tabs, 1,000-row cap, ticks lost around Migrate/Switch back, office edits overwriting each other, twins, working-day dates, material name clashes, backups carrying the switch). Runbook written: docs/RUNBOOK-lists-switch.md.
+- Round 6 (latest): no Critical/High open. 1 Medium left — after a Switch back, if a tablet's save of its held ticks lands but the reply is lost, and the office then unticks that line, the tablet can bring the tick back (tests/stage3/attack6-round5 Q2; only on the Switch-back path). 2 Low in diffLines for line ids no screen can produce today.
+- Full suite: 94 files, 1,665 pass / 8 fail — 4 accepted + P5 informational + the 3 above. Switch-OFF app behaves exactly like feature/stage2-imports (Manager checked).
+- Manager (final): GO WITH CONDITIONS — fine to carry this code with the switch off; do NOT press Migrate until stage2-imports is live and settled and the migration has been rehearsed on a copy of the real data (Garry supplies a downloaded JSON / Supabase test project). SQL ran clean on a throwaway Postgres (json and jsonb).
+- Next: Coder fixes the Q2 Medium; rehearsal once Garry provides data.
