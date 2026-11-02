@@ -110,7 +110,17 @@ const dev = async (browser, S, role, o) => { const t = await open(browser, S, Ob
       const la = { id: 'DA', wb: 'WD', sheet: 'A', name: 'House 1', project: 'Proj', wos: ['WO-1'], saw: 1 }, lb = { id: 'DB2', wb: 'WD', sheet: 'B', name: 'House 1', project: 'Proj', wos: ['WO-1'], saw: 1 };
       return combineLists([la, lb], 'saw').map(x => ({ qty: x.qty, per: x.per }));
     });
-    rec('C3 two selected houses with the same name keep separate per-house quantities', Object.keys(dup[0].per).length === 2, JSON.stringify(dup));
+    rec('C3 [Low: total right, per-house split shows "House 1 ×6" not ×4 + ×2; labels print per house so still correct] two selected houses with the same name keep separate per-house quantities', Object.keys(dup[0].per).length === 2, JSON.stringify(dup));
+    // C4: combined list key uses trim()+lowercase only, not matKey(): odd spacing / NBSP / NFD accent split one part into separate rows
+    const mk4 = await A.page.evaluate(() => {
+      const mats = ['MFC White', 'MFC  White', 'MFC\u00a0White', 'Lame\u0301 Oak', 'Lam\u00e9 Oak'];
+      const sh = {}; mats.forEach((m, i) => { sh['S' + i] = [{ k: 'saw', item: 'Side', L: 2400, W: 600, mat: m, qty: 2 }]; });
+      DB.listWBs.WM = { sheets: sh };
+      const ls = mats.map((m, i) => ({ id: 'M' + i, wb: 'WM', sheet: 'S' + i, name: 'H' + i, wos: ['WO-1'], saw: 1 }));
+      ls.forEach(l => { DB.listRow[l.id] = {}; DB.listHold[l.id] = {}; });
+      return combineLists(ls, 'saw').map(x => JSON.stringify(x.mat) + ':' + x.qty);
+    });
+    rec('C4 combined list merges "MFC  White"/NBSP with "MFC White" and NFD/NFC "Lamé Oak" (matKey) -> 2 rows', mk4.length === 2, JSON.stringify(mk4));
     errs.push(...(S.errors || []));
     await A.close();
   }

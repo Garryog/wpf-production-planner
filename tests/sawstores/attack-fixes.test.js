@@ -75,9 +75,10 @@ const onQueue = (p, name) => p.evaluate(n => { wlShowDone = false; wlShowHold = 
     rec('B Print today: H3 (finished) not printed', !blocks.some(b => /House 3/.test(b)), blocks.length + ' blocks');
     rec('B Print today: H2 prints only the released Top line', /MATERIAL ARRIVED — these rows only/.test(b2) && /Top/.test(b2) && !/>Side</.test(b2) && !/>Back</.test(b2), (b2.match(/<td>[^<]*<\/td>/g) || []).slice(0, 4).join(''));
     rec('B Print today: H1 Top printed as WAITING', /WAITING ON MATERIAL<\/b> — Top/.test(b1));
-    // H1 Side is already ticked cut. Combined list leaves it out ("don't cut twice"); does the paper sheet?
+    // H1 Side is already ticked cut. 54081f0: printed with a ✓ and struck through (class "done"), never an empty ☐
     const sideRow = (b1.match(/<tr[^>]*><td class="tk">[^<]*<\/td><td>Side<\/td>/) || [''])[0];
-    rec('B Print today: H1 Side (already ticked cut) is not printed as an empty ☐ to cut again', !/☐<\/td><td>Side/.test(sideRow), sideRow || 'Side row not printed');
+    rec('B Print today: H1 Side (already ticked cut) printed as ✓ done, struck through, not an empty ☐', /<tr class="done"><td class="tk">✓<\/td><td>Side/.test(sideRow) && /tr\.done td\{[^}]*line-through/.test(pr), sideRow || 'Side row not printed');
+    rec('B Print today: H1 Top (waiting) still shows ⏸, not ✓', /<tr class="held"><td class="tk">⏸<\/td><td><b>WAITING ON MATERIAL<\/b> — Top/.test(b1));
     // release on H2's row ticked -> list done again; relOpen false; readiness green
     await tapL(A.page, 'data-rt', 'L2', 1);
     const s2 = await st(A.page, 'L2', 1);
@@ -102,7 +103,7 @@ const onQueue = (p, name) => p.evaluate(n => { wlShowDone = false; wlShowHold = 
     const g = await P.page.evaluate(() => [...document.querySelectorAll('[data-relg]')].map(b => b.dataset.relg + ' (' + (b.closest('.hold-grp').querySelectorAll('.wl-drow').length) + ')'));
     console.log('     groups: ' + JSON.stringify(g));
     const white = g.filter(x => /mfc\s+white/i.test(x.replace(/ /g, ' ')));
-    rec('C case/trailing-space/tab/edge-NBSP variants all in one "MFC White" group', white.some(x => /\((5)\)$/.test(x)), JSON.stringify(white));
+    rec('C all 7 MFC White variants (case, edge/inner spaces, tab, NBSP) in one group (matKey, 9472be7)', white.some(x => /\((7)\)$/.test(x)), JSON.stringify(white));
     rec('C internal double space / NBSP inside the name ("MFC  White", "MFC\\u00a0White") also join the MFC White group', white.length === 1, white.length + ' MFC White groups: ' + JSON.stringify(white));
     rec('C "Lamé Oak" typed two ways (NFC vs NFD) is one group', g.filter(x => /Lam/.test(x)).length === 1, JSON.stringify(g.filter(x => /Lam/.test(x))));
     rec('C blank (spaces-only) material shows as "(material not named)"', g.some(x => /^\(material not named\)/.test(x)), JSON.stringify(g));
@@ -113,8 +114,7 @@ const onQueue = (p, name) => p.evaluate(n => { wlShowDone = false; wlShowHold = 
     await P.page.evaluate(() => { const b = [...document.querySelectorAll('[data-relg]')].find(b => /^mfc white$/i.test(b.dataset.relg.trim())); b.click(); });
     await P.page.waitForTimeout(100); await save(P.page); await reload(A.page);
     const rel = await A.page.evaluate(() => listRows(lists()[0]).map(r => (holdsOf('L1')[rowKey(r)] || {}).st || '-').join(','));
-    rec('C Release all "MFC White" releases rows 0-3 and 6 (tab)', /^rel,rel,rel,rel,[^,]+,[^,]+,rel/.test(rel), rel);
-    info('C rows 4/5 (internal double space / NBSP) after Release all', rel.split(',').slice(4, 6).join(','));
+    rec('C Release all "MFC White" releases all 7 variant rows 0-6, not Oak/blank', /^rel,rel,rel,rel,rel,rel,rel,(?!rel)[^,]+,(?!rel)[^,]+,(?!rel)[^,]+$/.test(rel), rel);
     await A.close(); await P.close();
   }
 
