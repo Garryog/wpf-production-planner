@@ -407,6 +407,7 @@ button,input,select{font-family:inherit;cursor:pointer}
 .wl-drow{padding:6px 10px;margin-bottom:4px;font-size:13px}.wl-drow>b{font-size:14px}
 .wl-dday{margin:10px 0 4px;font-size:12px}
 .tkh{width:34px}.tkc{text-align:center;padding:2px 4px!important}
+.lq-dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:#e0a43a;border:1px solid #8a5a00;margin-right:6px;vertical-align:middle}
 .rtk{width:28px;height:28px;border:2px solid #8e99ab;border-radius:6px;background:#fff;cursor:pointer;font-size:16px;font-weight:800;color:#fff;line-height:1}
 .rtk:hover{border-color:#0b7e44}
 .rtk.on{background:#0b7e44;border-color:#0b7e44}
@@ -965,7 +966,7 @@ async function saveDB(){
   }
 }
 // Never let a tab close while an edit is unsaved or a retry is pending
-window.addEventListener('beforeunload',e=>{if(saveT||DB.saveFailed){e.preventDefault();e.returnValue='';}});
+window.addEventListener('beforeunload',e=>{if(saveT||DB.saveFailed||(V2()&&lqPending())){e.preventDefault();e.returnValue='';}});
 function fullSettings(){return{weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP,delx:DB.delx||[],delNotes:DB.delNotes||{},grps:DB.grps||{},pins:DB.pins||{},pod:DB.pod||{},lists:DB.lists||[],listWBs:DB.listWBs||{},listDone:DB.listDone||{},listLead:DB.listLead||5,delArchive:DB.delArchive||{},staff:DB.staff||[],listHold:DB.listHold||{},holdLog:DB.holdLog||[],listRow:DB.listRow||{},exportBase:{wk:orig,st:origStep},...(DB.listStore?{listStore:DB.listStore,listStoreAt:DB.listStoreAt||''}:{})};}
 /* Stage 3 switch: settings.listStore==='v2' → cutting lists live in their own tables (lists, list_lines…).
    Missing, blank or anything else (switch back writes 'v1') → today's lists in the planner record, untouched. */
@@ -1115,7 +1116,7 @@ function dueBadge(due,pw,origDue){
 }
 function changes(){return DB.orders.filter(o=>(orig[o.wo]!==undefined&&orig[o.wo]!==(o.plannedWeek||''))||(origStep[o.wo]!==undefined&&origStep[o.wo]!==(o.step||'')));}
 
-function showTab(t){tab=t;['b','d','h','l','i','x','s'].forEach(id=>{const el=document.getElementById('t-'+id);if(el)el.className='tab'+(id===t?' on':'');});render();}
+function showTab(t){tab=t;if(V2())lsStart();['b','d','h','l','i','x','s'].forEach(id=>{const el=document.getElementById('t-'+id);if(el)el.className='tab'+(id===t?' on':'');});render();}
 
 /* ---------- Role views: Office / Factory Floor / Driver (same live plan, a screen per job) ---------- */
 const ls={get:k=>{try{return localStorage.getItem(k)||'';}catch(e){return'';}},set:(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}}};
@@ -1152,6 +1153,7 @@ async function checkNewVersion(){
 }
 function startAutoRefresh(){
   clearInterval(viewTimer);
+  lsStart(); // V2 lists poll on their own timer; does nothing with the switch off
   if(['floor','driver','saw','stores','office','dash','pm','prod'].includes(ROLE)){
     viewTimer=setInterval(()=>{
       checkNewVersion();
@@ -1159,7 +1161,7 @@ function startAutoRefresh(){
       if(typeof IMPPLAN!=='undefined'&&(IMPPLAN||PEND))return; // an import review in progress must never be wiped by a refresh
       const ae=document.activeElement;if(ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName))return; // someone is typing
       if(document.querySelector('.pod-ovl'))return; // a dialog is open (name, reason, list editor) — its answer must land on the live objects
-      loadDB().then(()=>{if(ROLE)render();});
+      loadDB().then(()=>{lsStart();if(ROLE)render();});
     },120000);
   }
 }
@@ -1809,7 +1811,7 @@ function renderBoard(app){
     if(typed!=='DELETE'){if(typed!==null)toast('Not deleted — you must type DELETE');return;}
     if(!await backupFirst('Clear all orders'))return;
     DB.orders=[];DB.grps={};grpSel.clear();
-    lists().forEach(l=>{l.wos=[];});
+    if(V2())lists().forEach(l=>(l.wos||[]).forEach(w=>listTag(l,w,false)));else lists().forEach(l=>{l.wos=[];});
     Object.keys(orig).forEach(k=>delete orig[k]);Object.keys(origStep).forEach(k=>delete origStep[k]);
     sched();render();toast('All orders cleared');
   };
@@ -1822,10 +1824,10 @@ function renderBoard(app){
   document.querySelectorAll('[data-del]').forEach(btn=>btn.onclick=()=>{
     if(!confirm('Delete '+btn.dataset.del+' from the planner?'))return;
     officeWho(by=>{
-    (DB.holdLog=DB.holdLog||[]).push({at:nowISO(),act:'wo-deleted',list:btn.dataset.del,proj:'',n:0,m:'',by});
+    if(!V2())(DB.holdLog=DB.holdLog||[]).push({at:nowISO(),act:'wo-deleted',list:btn.dataset.del,proj:'',n:0,m:'',by});
     DB.orders=DB.orders.filter(o=>o.wo!==btn.dataset.del);
     delete orig[btn.dataset.del];delete origStep[btn.dataset.del];
-    lists().forEach(l=>{if((l.wos||[]).includes(btn.dataset.del))l.wos=l.wos.filter(w=>w!==btn.dataset.del);}); // release cutting-list tags
+    lists().forEach(l=>{if((l.wos||[]).includes(btn.dataset.del))listTag(l,btn.dataset.del,false,by);}); // release cutting-list tags
     cleanGroups();
     sched();render();toast('Order removed');
     });
@@ -1984,13 +1986,286 @@ function confirmPartLoad(jobs){
    One workbook per project, one sheet per house. Rows with length/width = saw material;
    rows with qty but no dimensions = fittings for the stores. Both views are fed from the
    same upload, ordered by the earliest scheduled delivery of the tagged work orders. */
-function lists(){return DB.lists||[];}
-function listRows(l){const wb=(DB.listWBs||{})[l.wb];return wb&&wb.sheets&&wb.sheets[l.sheet]?wb.sheets[l.sheet]:[];}
-function listDone(id){return (DB.listDone||{})[id]||{};}
+/* ---------- Stage 3 lists store — ONLY when V2(); with the switch off none of this runs and nothing is fetched ----------
+   Lists, lines, projects and materials come from their own tables (SUPABASE_CHANGES.md, 2 Nov 2026) and are held here.
+   LST holds exactly what the database last said; this device's unsent changes (LQ, the line queue) are laid over it
+   when the screens read it, so a tick shows at once and the database still decides. */
+const LST={l:new Map(),ln:new Map(),full:new Set(),fetching:new Set(),p:new Map(),m:new Map(),since:{},loaded:false,loading:null,polling:false,gen:0,err:'',timer:null,ms:0,ck:'',c:null};
+const LS_T={lists:'l',list_lines:'ln',projects:'p',project_materials:'m'};
+async function lsGet(q){
+  const r=await fetch(SUPA_URL+'/'+q,{headers:SUPA_HDR});const d=await r.json().catch(()=>null);
+  if(!r.ok||!Array.isArray(d))throw new Error('lists load failed: '+r.status+' '+JSON.stringify(d).slice(0,120));
+  return d;
+}
+// Keep a database row unless we already hold that version or a newer one (the 30-second overlap re-sends rows we have)
+function lsPut(t,rows,part){
+  const M=LST[LS_T[t]];let n=0;
+  (rows||[]).forEach(r=>{
+    if(!r||r.id==null)return;
+    if(t==='list_lines'&&!LST.full.has(r.list_id))return; // lines of a list not loaded yet come with the whole list when it's opened
+    if(r.updated_at&&!part&&(!LST.since[t]||r.updated_at>LST.since[t]))LST.since[t]=r.updated_at; // the database's clock, never this device's
+    const o=M.get(r.id);
+    if(o&&((+o.version||0)>(+r.version||0)||((+o.version||0)===(+r.version||0)&&!o._part)))return;
+    M.set(r.id,part?{...(o||{}),...r,_part:true}:r);n++;
+  });
+  if(n)LST.gen++;
+  return n;
+}
+function lsFinishedRow(r){return !!(r.archived||r.is_template)||listFinished(lsAdapt(r));}
+async function lsLines(ids){
+  ids=[...new Set(ids)].filter(id=>!LST.full.has(id));
+  for(let i=0;i<ids.length;i+=60){
+    const ch=ids.slice(i,i+60);
+    const rows=await lsGet('list_lines?select=*&list_id=in.('+ch.map(id=>'"'+encodeURIComponent(id)+'"').join(',')+')');
+    ch.forEach(id=>LST.full.add(id));lsPut('list_lines',rows);LST.gen++;
+  }
+}
+async function lsLoad(){
+  if(!V2())return;
+  if(LST.loading)return LST.loading;
+  LST.loading=(async()=>{
+    try{
+      const[p,m,l]=await Promise.all([lsGet('projects?select=*'),lsGet('project_materials?select=*'),lsGet('lists?select=*')]);
+      lsPut('projects',p);lsPut('project_materials',m);lsPut('lists',l);
+      await lsLines(l.filter(x=>!lsFinishedRow(x)).map(x=>x.id)); // finished lists' lines load when someone opens them
+      LST.loaded=true;LST.err='';
+    }catch(e){LST.err=e.message;console.warn('Planner lists: '+e.message);}
+    finally{LST.loading=null;}
+  })();
+  return LST.loading;
+}
+function lsReset(){['l','ln','p','m'].forEach(k=>LST[k].clear());LST.full.clear();LST.since={};LST.loaded=false;LST.gen++;}
+// "Changed since": newest database updated_at seen minus 30 s (catches stragglers); rows already held are skipped by version
+async function lsPoll(){
+  if(!V2()||LST.polling)return;
+  if(!LST.loaded){await lsLoad();if(LST.loaded)lsRedraw();return;}
+  LST.polling=true;let n=0;
+  try{
+    for(const t of ['lists','list_lines','projects','project_materials']){
+      const s=LST.since[t]||LST.since.lists;
+      n+=lsPut(t,await lsGet(t+'?select=*'+(s?'&updated_at=gt.'+encodeURIComponent(new Date(Date.parse(s)-30000).toISOString()):'')+'&order=updated_at.asc'));
+    }
+    const need=[...LST.l.values()].filter(x=>!LST.full.has(x.id)&&!lsFinishedRow(x)).map(x=>x.id); // e.g. sent back for a re-cut
+    if(need.length){await lsLines(need);n++;}
+    LST.err='';
+  }catch(e){LST.err=e.message;}
+  finally{LST.polling=false;}
+  if(n)lsRedraw();
+}
+function lsRedraw(){mergedRender();} // the same rule as a merge: never redraw under someone's fingers or over an open dialog
+function lsWantMs(){return ROLE==='saw'||ROLE==='stores'||(ROLE==='office'&&tab==='l')?10000:60000;}
+function lsStart(){ // own timer, separate from the planner refresh; off (and silent) unless V2()
+  if(!V2()){if(LST.timer){clearInterval(LST.timer);LST.timer=null;}return;}
+  const ms=lsWantMs();
+  if(!LST.timer||LST.ms!==ms){clearInterval(LST.timer);LST.ms=ms;LST.timer=setInterval(()=>{if(!drvUploading)lsPoll();},ms);}
+  if(!LST.loaded&&!LST.loading)lsLoad().then(()=>{if(LST.loaded)lsRedraw();});
+  if(LQ.q.length)lqKick();
+}
+/* Read adapters: the new rows in the shapes today's screens already use, so the saw/stores/board code is unchanged. */
+function lsProjName(pid){const p=LST.p.get(pid);return p?p.name:'';}
+function lsLinesOf(id){return lsCache().byList.get(id)||[];}
+function lnPend(id){return lsCache().pend.get(id);}
+function lnSt(x){const e=lnPend(x.id);return e?(e.act==='release'?'todo':e.status):x.status;}
+function lsQty(q){const s=q==null?'':String(q);return /^\d+(\.\d+)?$/.test(s)?+s:s;}
+function lsAdapt(r){
+  const a={id:r.id,v2:true,name:r.name||'',sheet:r.name||'',project:lsProjName(r.project_id),pid:r.project_id||'',sdate:r.sdate||'',
+    wos:(r.wos||[]).slice(),noCut:!!r.no_cut,noFit:!!r.no_fit,log:r.log||[],up:r.updated_at,manual:r.source==='manual',
+    rev:r.rev||1,locked:!!r.locked,ltype:r.list_type||'',tpl:!!r.is_template,archived:!!r.archived,deliverBy:r.deliver_by||'',ver:r.version,done:{}};
+  if(r.saw_done_at)a.done.saw={at:r.saw_done_at,by:r.saw_done_by||''};
+  if(r.fit_done_at)a.done.fit={at:r.fit_done_at,by:r.fit_done_by||''};
+  LQ.q.forEach(e=>{if(e.list!==r.id)return; // this device's unsent list changes show straight away
+    if(e.t==='attach'){if(e.on){if(!a.wos.includes(e.wo))a.wos.push(e.wo);}else a.wos=a.wos.filter(w=>w!==e.wo);}
+    else if(e.t==='done'){if(e.mode==='no_cut')a.noCut=!!e.on;else if(e.mode==='no_fit')a.noFit=!!e.on;else if(e.on)a.done[e.mode]={at:e.at,by:e.by||''};else delete a.done[e.mode];}
+    else if(e.t==='archive')a.archived=true;});
+  const c=LST.c&&LST.c.byList;
+  if(LST.full.has(r.id)&&c){const ls2=(c.get(r.id)||[]).filter(x=>x.removed_rev==null&&x.status!=='na');a.saw=ls2.filter(x=>x.kind==='saw').length;a.fit=ls2.filter(x=>x.kind==='fit').length;}
+  else{a.saw=+r.n_saw||0;a.fit=+r.n_fit||0;}
+  return a;
+}
+// One cache per (database copy, queue) generation — rebuilt only when either changes
+function lsCache(){
+  const k=LST.gen+'|'+LQ.gen;if(LST.c&&LST.ck===k)return LST.c;
+  const c={byList:new Map(),pend:new Map(),view:new Map(),all:[],byId:new Map()};LST.ck=k;LST.c=c;
+  LST.ln.forEach(x=>{let a=c.byList.get(x.list_id);if(!a)c.byList.set(x.list_id,a=[]);a.push(x);});
+  c.byList.forEach(a=>a.sort((p,q)=>(p.seq||0)-(q.seq||0)));
+  LQ.q.forEach(e=>{if(e.t==='line')c.pend.set(e.id,e);});
+  c.all=[...LST.l.values()].sort((p,q)=>String(p.created_at||'').localeCompare(String(q.created_at||''))||String(p.id).localeCompare(String(q.id))).map(lsAdapt);
+  c.byId=new Map(c.all.map(a=>[a.id,a]));
+  return c;
+}
+function lsList(id){return lsCache().byId.get(id)||null;}
+function lsView(id,open){ // rows / ticks / holds of one list, in the old shapes (build notes c and e)
+  // a finished list's lines aren't loaded at start-up: they're fetched when its rows are asked for (opened), never just to check ticks
+  if(open&&!LST.full.has(id)&&V2()&&LST.l.has(id)&&!LST.fetching.has(id)){LST.fetching.add(id);lsLines([id]).then(lsRedraw).catch(()=>{}).finally(()=>LST.fetching.delete(id));}
+  const c=lsCache();let v=c.view.get(id);if(v)return v;
+  v={rows:[],ticks:{},holds:{}};c.view.set(id,v);
+  if(!LST.full.has(id))return v;
+  lsLinesOf(id).forEach(x=>{
+    if(x.removed_rev!=null||x.status==='na')return; // removed and not-needed lines never reach the bench
+    const L=x.length_mm==null||x.length_mm===''?'':+x.length_mm,W=x.width_mm==null||x.width_mm===''?'':+x.width_mm;
+    const r=x.kind==='hdr'?{id:x.id,k:'hdr',item:x.part||'',note:[x.material,x.note].filter(s=>String(s||'').trim()).join(' · ')}
+      :{id:x.id,k:x.kind,item:x.part||'',qty:lsQty(x.qty),L,W,mat:x.material||'',note:[x.edging,x.note].filter(s=>String(s||'').trim()).join(' · '),sec:x.section||''};
+    if(x.kind==='fit'){delete r.L;delete r.W;}
+    v.rows.push(r);
+    if(x.kind==='hdr')return;
+    const e=lnPend(x.id),st=lnSt(x),at=e?e.at:x.status_at,by=e?e.by:(x.status_by||'');
+    if(st==='cut'||st==='got-out')v.ticks[x.id]={m:st==='cut'?'saw':'fit',at,by};
+    const base={m:x.kind,item:r.item,mat:r.mat,qty:r.qty,L:x.kind==='saw'?L:'',W:x.kind==='saw'?W:''};
+    if(st==='waiting')v.holds[x.id]={...base,st:'hold',at,by};
+    else if(st==='todo'&&(e?e.act==='release':!!x.released_at))v.holds[x.id]={...base,st:'rel',at:x.status_at||'',by:x.status_by||'',relAt:e?e.at:x.released_at,relBy:e?e.by:(x.released_by||'')};
+  });
+  return v;
+}
+function lsMaterials(){const s=new Set();LST.m.forEach(m=>{if(m.active!==false&&m.kind==='sheet'&&String(m.name||'').trim())s.add(String(m.name).trim());});return[...s].sort();}
+
+/* ---------- Line queue (V2 only): every tick / N/A / release / sign-off / tag waits on THIS device until the database has it ----------
+   Kept in localStorage (wpfLineQ) so a closed tab or a dead battery loses nothing. Sent within 2 s, retried every 10 s and
+   again when the connection comes back. Each tap has its own id (cid): a resend after a lost reply only counts once. */
+const LQ={q:[],gen:0,fly:new Set(),busy:false,t:null,iv:null,err:'',msgs:[],memOnly:false};
+function lqRead(){try{const v=JSON.parse(localStorage.getItem('wpfLineQ')||'[]');return Array.isArray(v)?v:[];}catch(e){return LQ.q.slice();}}
+function lqMut(fn){
+  const q=LQ.memOnly?LQ.q.slice():lqRead();fn(q);
+  try{localStorage.setItem('wpfLineQ',JSON.stringify(q));LQ.memOnly=false;}catch(e){LQ.memOnly=true;console.warn('Planner: could NOT keep unsent ticks on this device',e&&e.message);}
+  LQ.q=q;LQ.gen++;
+}
+LQ.q=lqRead();
+function lqId(){return 'q'+Date.now().toString(36)+Math.random().toString(36).slice(2,8);}
+function lqBy(by){return String(by||'').trim()||String(whoNow()||'').trim()||ls.get('wpfOpName')||ROLE_LBL[ROLE]||'?';}
+function lqHas(lineId){return V2()&&!!lnPend(lineId);}
+function lqPending(){return LQ.q.length>0;}
+function lqLine(lineId,st,by){
+  const x=LST.ln.get(lineId);if(!x)return false;
+  const act=st==='release'?'release':'status';
+  const e={t:'line',cid:lqId(),id:lineId,list:x.list_id,act,v:+x.version,rev:+((LST.l.get(x.list_id)||{}).rev)||1,from:lnSt(x),at:nowISO(),by:lqBy(by)};
+  if(act==='status')e.status=st;
+  lqMut(q=>{
+    const i=q.findIndex(y=>y.t==='line'&&y.id===lineId&&!LQ.fly.has(y.cid));
+    if(i>=0)q.splice(i,1); // one unsent change per line: the newest replaces it
+    const fly=q.some(y=>y.t==='line'&&y.id===lineId);
+    if(!fly&&act==='status'&&st===x.status)return; // back to what the database already has — nothing to send
+    q.push(e);
+  });
+  lqKick();return true;
+}
+function lqList(e){
+  e.cid=lqId();e.at=nowISO();e.by=lqBy(e.by);
+  lqMut(q=>{
+    const i=q.findIndex(y=>y.t===e.t&&y.list===e.list&&y.wo===e.wo&&y.mode===e.mode&&!LQ.fly.has(y.cid));
+    if(i>=0)q.splice(i,1);
+    q.push(e);
+  });
+  lqKick();
+}
+function lqKick(ms){
+  if(!LQ.q.length)return;
+  clearTimeout(LQ.t);LQ.t=setTimeout(lqSend,ms==null?2000:ms);
+  if(!LQ.iv)LQ.iv=setInterval(()=>lqSend(),10000);
+}
+function lqWhy(x){
+  const ln=LST.ln.get(x.id),part=ln?(ln.part||ln.material||'line'):'line';
+  const now={cut:'already cut','got-out':'already got out',waiting:'waiting on material',todo:'not done',na:'marked not needed'}[x.status]||x.status||'';
+  const who=(x.by?' by '+x.by:'')+(x.at?' '+hhmm(x.at):'');
+  if(x.why==='stale')return'Not changed — "'+part+'" was changed on another screen ('+now+who+'). Showing it as it is now.';
+  if(x.why==='done')return'Not parked — "'+part+'" is '+now+who+'.';
+  if(x.why==='changed')return'Not ticked — "'+part+'" was changed in a new revision of the list. Check the new version first.';
+  if(x.why==='removed')return'Not ticked — "'+part+'" was taken off the list in a new revision.';
+  if(x.why==='not-needed')return'"'+part+'" is marked not needed — nothing to do.';
+  if(x.why==='not-waiting')return'"'+part+'" is no longer waiting ('+now+who+').';
+  if(x.why==='missing')return'That line is no longer on the list — reloaded.';
+  return'Not saved — "'+part+'" ('+(x.why||'refused')+').';
+}
+function lqSay(m){LQ.msgs.push(m);if(LQ.msgs.length>20)LQ.msgs.shift();toast(m);}
+function lqDrop(cids){lqMut(q=>q.splice(0,q.length,...q.filter(e=>!cids.has(e.cid))));}
+async function lqSend(){
+  if(LQ.busy||!V2())return;
+  if(!LQ.memOnly)LQ.q=lqRead();LQ.gen++;
+  if(!LQ.q.length){clearInterval(LQ.iv);LQ.iv=null;return;}
+  LQ.busy=true;clearTimeout(LQ.t);
+  try{
+    for(let guard=0;guard<200&&LQ.q.length;guard++){
+      const h=LQ.q[0];let batch,fn=null,args=null;
+      if(h.t==='line'){
+        batch=[];for(const e of LQ.q){if(e.t!=='line'||e.by!==h.by||batch.length>=50||batch.some(b=>b.id===e.id))break;batch.push(e);}
+        fn='apply_line_changes';args={p_changes:batch.map(e=>({id:e.id,cid:e.cid,act:e.act,status:e.status,v:e.v,rev:e.rev,from:e.from,at:e.at})),p_by:h.by};
+      }else{
+        batch=[h];
+        if(h.t==='attach'){fn='list_attach';args={p_list:h.list,p_wo:h.wo,p_on:!!h.on,p_by:h.by};}
+        else if(h.t==='done'){fn='list_set_done';args={p_list:h.list,p_mode:h.mode,p_on:!!h.on,p_by:h.by,p_why:h.why==null?null:h.why};}
+      }
+      const cids=new Set(batch.map(e=>e.cid));
+      let r=null,d=null;
+      batch.forEach(e=>LQ.fly.add(e.cid));
+      try{
+        if(h.t==='archive')r=await fetch(SUPA_URL+'/lists?id=eq.'+encodeURIComponent(h.list),{method:'PATCH',headers:{...SUPA_HDR,'Prefer':'return=representation'},body:JSON.stringify({archived:true,updated_by:h.by})});
+        else if(fn)r=await fetch(SUPA_URL+'/rpc/'+fn,{method:'POST',headers:SUPA_HDR,body:JSON.stringify(args)});
+        d=r?await r.json().catch(()=>null):null;
+      }finally{batch.forEach(e=>LQ.fly.delete(e.cid));}
+      if(!r){lqDrop(cids);continue;} // an entry this version doesn't know
+      if(!r.ok){
+        // the database refused the call itself (e.g. the list no longer exists): drop it and say so; anything else → retry later
+        if(r.status===400||r.status===409||r.status===422){lqDrop(cids);lqSay('Not saved — the database refused it ('+String((d&&d.message)||r.status).slice(0,80)+')');continue;}
+        throw new Error('HTTP '+r.status);
+      }
+      if(h.t==='line'){
+        if(!Array.isArray(d))throw new Error('unexpected reply');
+        const bump=[],bad=[];
+        d.forEach(x=>{
+          const e=batch.find(b=>b.cid===x.cid)||batch.find(b=>b.id===x.id);
+          if(x.v!=null&&LST.ln.has(x.id))lsPut('list_lines',[{id:x.id,list_id:LST.ln.get(x.id).list_id,status:x.status,version:x.v,status_by:x.by,status_at:x.at,released_at:x.rel}],true);
+          if(e&&x.ok&&x.v!=null&&+x.v!==+e.v)bump.push([x.id,+e.v,+x.v]); // our own change moved the line on: later taps here build on it
+          if(!x.ok)bad.push(x);
+        });
+        lqMut(q=>{q.splice(0,q.length,...q.filter(e=>!cids.has(e.cid)));q.forEach(e=>{const b=bump.find(z=>z[0]===e.id&&z[1]===e.v);if(b)e.v=b[2];});});
+        if(bad.length){lqSay(lqWhy(bad[0])+(bad.length>1?' (+'+(bad.length-1)+' more)':''));
+          lsGet('list_lines?select=*&id=in.('+bad.map(x=>'"'+encodeURIComponent(x.id)+'"').join(',')+')').then(rows=>{lsPut('list_lines',rows);lsRedraw();}).catch(()=>{});}
+      }else{
+        const row=Array.isArray(d)?d[0]:d;if(row&&row.id)lsPut('lists',[row]);
+        lqDrop(cids);
+      }
+    }
+    LQ.err='';
+  }catch(e){LQ.err=(e&&e.message)||'no signal';}
+  finally{
+    LQ.busy=false;
+    if(!LQ.q.length){clearInterval(LQ.iv);LQ.iv=null;}
+    lsRedraw();
+  }
+}
+window.addEventListener('online',()=>{if(V2()&&LQ.q.length)lqSend();});
+window.addEventListener('storage',e=>{if(e.key==='wpfLineQ'){LQ.q=lqRead();LQ.gen++;}});
+
+/* Write helpers (build note b). Old mode runs today's exact code; V2 sends the change through the line queue and
+   never writes the frozen copy in the planner record. */
+function listTag(l,wo,on,by){
+  if(V2()){lqList({t:'attach',list:l.id,wo,on:!!on,by});return;}
+  if(on){l.wos=l.wos||[];if(!l.wos.includes(wo))l.wos.push(wo);}
+  else if((l.wos||[]).includes(wo))l.wos=l.wos.filter(w=>w!==wo);
+}
+function listSetDone(l,mode,on,by,why){ // sign-off; off = "Undo" on the bench, or a reasoned send-back (why) from the office
+  if(V2()){lqList({t:'done',list:l.id,mode,on:!!on,by,why:why==null?null:why});return;}
+  if(on){markListDone([l.id],mode,by);return;}
+  const was=listDone(l.id)[mode];
+  if(DB.listDone&&DB.listDone[l.id])delete DB.listDone[l.id][mode];
+  if(why!=null){l.log=(l.log||[]);l.log.push({at:nowISO(),by,what:(mode==='saw'?'Sent back for re-cutting':'Sent back for re-picking')+(was?' (was done '+new Date(was.at).toLocaleDateString('en-IE')+(was.by?' by '+was.by:'')+')':''),why});}
+}
+function listSetFlag(l,f,on,by){ // f: 'noCut' | 'noFit'
+  if(V2()){lqList({t:'done',list:l.id,mode:f==='noCut'?'no_cut':'no_fit',on:!!on,by});return;}
+  l[f]=on;(l.log=l.log||[]).push({at:nowISO(),by,what:(f==='noCut'?'No cutting':'No fittings')+(on?' ticked':' unticked')});
+}
+function listArchive(l,by){ // V2: Delete becomes Archive — nothing is ever deleted (decision 5)
+  if(V2()){lqList({t:'archive',list:l.id,by});return;}
+  DB.lists=lists().filter(x=>x.id!==l.id);
+  if(DB.listDone)delete DB.listDone[l.id];
+  if(!lists().some(x=>x.wb===l.wb)&&DB.listWBs)delete DB.listWBs[l.wb]; // last list of this workbook — drop the stored rows too
+}
+function lists(){if(V2())return lsCache().all.filter(l=>!l.archived&&!l.tpl);return DB.lists||[];}
+function listRows(l){if(V2())return lsView(l.id,true).rows;const wb=(DB.listWBs||{})[l.wb];return wb&&wb.sheets&&wb.sheets[l.sheet]?wb.sheets[l.sheet]:[];}
+function listDone(id){if(V2()){const a=lsList(id);return a?a.done:{};}return (DB.listDone||{})[id]||{};}
 function listLead(){return DB.listLead>0?DB.listLead:5;}
 function listDueKey(l){ // earliest due date among tagged WOs — the ONLY thing that orders the queues
   let best='';
   (l.wos||[]).forEach(w=>{const o=DB.orders.find(x=>x.wo===w);if(o&&o.dueDate&&(!best||o.dueDate<best))best=o.dueDate;});
+  if(l.deliverBy&&(!best||l.deliverBy<best))best=l.deliverBy; // V2: a snag list has no WO — its deliver-by date puts it on the saw
   return best;
 }
 function listDueKey2(arr){let b='';arr.forEach(l=>{const k=listDueKey(l);if(k&&(!b||k<b))b=k;});return b;}
@@ -2184,6 +2459,7 @@ function renderLists(app){
   const fi=document.getElementById('lst-file');
   if(fi)fi.onchange=()=>{
     const f=fi.files[0];if(!f)return;
+    if(V2()){toast('Uploading lists into the new lists store comes with the next build step — not available yet');fi.value='';return;}
     const msg=document.getElementById('lst-upmsg');msg.textContent='Reading '+f.name+'…';
     const rd=new FileReader();
     rd.onload=()=>{
@@ -2248,7 +2524,7 @@ function renderLists(app){
   document.querySelectorAll('[data-attdo]').forEach(b=>b.onclick=e=>{
     e.stopPropagation();
     const[id,wo]=b.dataset.attdo.split('|');const l=lists().find(x=>x.id===id);if(!l)return;
-    l.wos=l.wos||[];if(!l.wos.includes(wo))l.wos.push(wo);
+    listTag(l,wo,true);
     lstAttachOpen=null;sched();render();toast(wo+' attached to "'+l.name+'" — it\'s now on the saw and stores queues');
   });
   document.querySelectorAll('[data-attsel]').forEach(b=>b.onclick=e=>{
@@ -2256,7 +2532,7 @@ function renderLists(app){
     const sel=document.getElementById('att-sel');if(!sel||!sel.value)return;
     const l=lists().find(x=>x.id===sel.value);if(!l)return;
     const wo=b.dataset.attsel;
-    l.wos=l.wos||[];if(!l.wos.includes(wo))l.wos.push(wo);
+    listTag(l,wo,true);
     lstAttachOpen=null;sched();render();toast(wo+' attached to "'+l.name+'"');
   });
   // library filter (keeps focus while typing) and project group collapse
@@ -2275,18 +2551,18 @@ function renderLists(app){
   document.querySelectorAll('[data-tag]').forEach(b=>b.onclick=()=>{lstTagOpen=lstTagOpen===b.dataset.tag?null:b.dataset.tag;render();});
   document.querySelectorAll('[data-tagadd]').forEach(b=>b.onclick=()=>{
     const[id,wo]=b.dataset.tagadd.split('|');const l=lists().find(x=>x.id===id);if(!l)return;
-    l.wos=l.wos||[];if(!l.wos.includes(wo))l.wos.push(wo);sched();render();
+    listTag(l,wo,true);sched();render();
   });
   document.querySelectorAll('[data-tagman]').forEach(b=>b.onclick=()=>{
     const l=lists().find(x=>x.id===b.dataset.tagman);if(!l)return;
     const inp=document.getElementById('tagin-'+l.id);const wo=(inp.value||'').trim();
     if(!wo)return;
     if(!DB.orders.find(o=>o.wo===wo)){toast(wo+' is not on the board — check the WO number');return;}
-    l.wos=l.wos||[];if(!l.wos.includes(wo))l.wos.push(wo);sched();render();
+    listTag(l,wo,true);sched();render();
   });
   document.querySelectorAll('[data-untag]').forEach(b=>b.onclick=()=>{
     const[id,wo]=b.dataset.untag.split('|');const l=lists().find(x=>x.id===id);if(!l)return;
-    l.wos=(l.wos||[]).filter(w=>w!==wo);sched();render();
+    listTag(l,wo,false);sched();render();
   });
   // Done is done: finished work only goes back to a bench through this deliberate, reasoned action
   document.querySelectorAll('[data-lreset]').forEach(b=>b.onclick=()=>{
@@ -2296,7 +2572,7 @@ function renderLists(app){
     const[id,f]=this.dataset.lflag.split('|');const l=lists().find(x=>x.id===id);if(!l)return;
     if(this.checked&&((f==='noCut'&&l.noFit&&!l.fit)||(f==='noFit'&&l.noCut&&!l.saw))){this.checked=false;toast('A list can\'t be both no cutting and no fittings');return;}
     const on=this.checked;
-    officeWho(by=>{l[f]=on;(l.log=l.log||[]).push({at:nowISO(),by,what:(f==='noCut'?'No cutting':'No fittings')+(on?' ticked':' unticked')});sched();render();toast(l.name+' — '+(f==='noCut'?'no cutting':'no fittings')+(on?' confirmed':' cleared'));},()=>render());
+    officeWho(by=>{listSetFlag(l,f,on,by);sched();render();toast(l.name+' — '+(f==='noCut'?'no cutting':'no fittings')+(on?' confirmed':' cleared'));},()=>render());
   });
   document.querySelectorAll('[data-ledit]').forEach(b=>b.onclick=()=>openListEditor(b.dataset.ledit));
   document.querySelectorAll('[data-mtype]').forEach(b=>b.onclick=e=>{e.stopPropagation();openListEditor(null,b.dataset.mtype);});
@@ -2304,11 +2580,9 @@ function renderLists(app){
   bindHoldBook(['saw','fit'],officeWhoFn);
   document.querySelectorAll('[data-ldel]').forEach(b=>b.onclick=()=>{
     const l=lists().find(x=>x.id===b.dataset.ldel);if(!l)return;
-    if(!confirm('Delete the list "'+l.name+'" ('+(l.project||'')+')? The saw and stores will no longer see it.'))return;
-    DB.lists=lists().filter(x=>x.id!==l.id);
-    if(DB.listDone)delete DB.listDone[l.id];
-    if(!lists().some(x=>x.wb===l.wb)&&DB.listWBs)delete DB.listWBs[l.wb]; // last list of this workbook — drop the stored rows too
-    sched();render();toast('List deleted');
+    if(!confirm((V2()?'Archive':'Delete')+' the list "'+l.name+'" ('+(l.project||'')+')? The saw and stores will no longer see it.'))return;
+    listArchive(l,whoNow());
+    sched();render();toast(V2()?'List archived':'List deleted');
   });
   document.querySelectorAll('[data-lview]').forEach(b=>b.onclick=()=>{
     const l=lists().find(x=>x.id===b.dataset.lview);if(!l)return;
@@ -2393,7 +2667,7 @@ function listTableHTML(l,mode,opt){ // mode 'saw' | 'fit' | 'all'; opt.relOnly =
   const saw=mode!=='fit';
   return `<table class="wl-tbl"><thead><tr>${opt.tick?'<th class="tkh">✓</th><th class="nah" title="Not available — park this line until it comes in">N/A</th>':''}<th style="width:34%">Item</th><th>Qty</th>${saw?'<th>Length</th><th>Width</th>':''}<th class="c-mt">${mode==='fit'?'Spec':'Material'}</th><th class="c-mt">${mode==='fit'?'Note':'Edging / Note'}</th></tr></thead><tbody>
   ${keep.map(r=>r.k==='hdr'?`<tr class="wl-sec"><td colspan="${(saw?6:4)+(opt.tick?2:0)}">${escA(r.item)}${r.note?' · '+escA(r.note):''}</td></tr>`
-    :`<tr class="${(h=>h&&h.st==='hold'?'wl-held':'')(hs(r))}${opt.tick&&tk[rowKey(r)]?' wl-rdone':''}">${opt.tick?`<td class="tkc">${(h=>h&&h.st==='hold'?'<span class="tk-na">⏸</span>':`<button class="rtk${tk[rowKey(r)]?' on':''}" data-rt="${escA(l.id)}|${escA(rowKey(r))}" title="${tk[rowKey(r)]?'Done '+hhmm(tk[rowKey(r)].at)+(tk[rowKey(r)].by?' by '+escA(tk[rowKey(r)].by):'')+' — click to untick':'Tick when '+(mode==='saw'?'cut':'picked')}">${tk[rowKey(r)]?'✓':''}</button>`)(hs(r))}</td>${(h=>{const on=!!(h&&h.st==='hold'),t=tk[rowKey(r)];return `<td class="nac"><button class="rna${on?' on':''}" data-rna="${escA(l.id)}|${escA(rowKey(r))}"${t?' disabled':''} title="${on?'Waiting since '+escA(new Date(h.at).toLocaleDateString('en-IE',{day:'numeric',month:'short'}))+(h.by?' · '+escA(h.by):'')+' — tap to undo':t?'Already '+(mode==='saw'?'cut':'picked'):'Not available — park this line until it comes in'}">N/A</button></td>`;})(hs(r))}`:''}<td>${(h=>!h?'':h.st==='hold'?'<span class="hold-b">⏸ WAITING ON MATERIAL</span> ':'<span class="rel-b">▶ MATERIAL IN — DO NOW</span> ')(hs(r))}${escA(r.item)||'—'}${r.mat||r.note?`<div class="wl-ph">${escA(r.mat)}${r.mat&&r.note?' · ':''}${escA(r.note)}</div>`:''}</td><td class="num">${escA(r.qty)}</td>${saw?`<td class="num">${r.k==='saw'?escA(r.L):''}</td><td class="num">${r.k==='saw'?escA(r.W):''}</td>`:''}<td class="c-mt">${escA(r.mat)}</td><td class="c-mt">${escA(r.note)}</td></tr>`).join('')}
+    :`<tr class="${(h=>h&&h.st==='hold'?'wl-held':'')(hs(r))}${opt.tick&&tk[rowKey(r)]?' wl-rdone':''}">${opt.tick?`<td class="tkc">${(h=>h&&h.st==='hold'?'<span class="tk-na">⏸</span>':`<button class="rtk${tk[rowKey(r)]?' on':''}" data-rt="${escA(l.id)}|${escA(rowKey(r))}" title="${tk[rowKey(r)]?'Done '+hhmm(tk[rowKey(r)].at)+(tk[rowKey(r)].by?' by '+escA(tk[rowKey(r)].by):'')+' — click to untick':'Tick when '+(mode==='saw'?'cut':'picked')}">${tk[rowKey(r)]?'✓':''}</button>`)(hs(r))}</td>${(h=>{const on=!!(h&&h.st==='hold'),t=tk[rowKey(r)];return `<td class="nac"><button class="rna${on?' on':''}" data-rna="${escA(l.id)}|${escA(rowKey(r))}"${t?' disabled':''} title="${on?'Waiting since '+escA(new Date(h.at).toLocaleDateString('en-IE',{day:'numeric',month:'short'}))+(h.by?' · '+escA(h.by):'')+' — tap to undo':t?'Already '+(mode==='saw'?'cut':'picked'):'Not available — park this line until it comes in'}">N/A</button></td>`;})(hs(r))}`:''}<td>${lqHas(rowKey(r))?'<span class="lq-dot" title="Not sent yet — it goes as soon as there is signal"></span>':''}${(h=>!h?'':h.st==='hold'?'<span class="hold-b">⏸ WAITING ON MATERIAL</span> ':'<span class="rel-b">▶ MATERIAL IN — DO NOW</span> ')(hs(r))}${escA(r.item)||'—'}${r.mat||r.note?`<div class="wl-ph">${escA(r.mat)}${r.mat&&r.note?' · ':''}${escA(r.note)}</div>`:''}</td><td class="num">${escA(r.qty)}</td>${saw?`<td class="num">${r.k==='saw'?escA(r.L):''}</td><td class="num">${r.k==='saw'?escA(r.W):''}</td>`:''}<td class="c-mt">${escA(r.mat)}</td><td class="c-mt">${escA(r.note)}</td></tr>`).join('')}
   </tbody></table>`;
 }
 /* Saw / Stores queue view: lists in delivery order, big type, tick-off with name + time.
@@ -2433,6 +2707,7 @@ function pickName(mode,what,cb){
   ov.querySelector('#pick-other').addEventListener('keydown',e=>{if(e.key==='Enter')done(e.target.value);});
 }
 function markListDone(ids,mode,by){
+  if(V2()){ids.forEach(id=>lqList({t:'done',list:id,mode,on:true,by:(by||'').trim()}));return;}
   const now=new Date().toISOString();
   DB.listDone=DB.listDone||{};
   ids.forEach(id=>{DB.listDone[id]=DB.listDone[id]||{};DB.listDone[id][mode]={at:now,by:(by||'').trim()};});
@@ -2658,8 +2933,9 @@ function renderWorkList(app,mode){
   document.querySelectorAll('[data-wlundo]').forEach(b=>b.onclick=()=>{
     if(!confirm('Put this list back in the queue?'))return;
     const id=b.dataset.wlundo;
-    if(DB.listDone&&DB.listDone[id])delete DB.listDone[id][mode];
-    const lu=lists().find(x=>x.id===id);if(lu)clearRowTicks(lu,mode,ls.get('wpfOpName')||'');
+    const lu=lists().find(x=>x.id===id);
+    listSetDone(lu||{id},mode,false,ls.get('wpfOpName')||'');
+    if(lu)clearRowTicks(lu,mode,ls.get('wpfOpName')||'');
     sched();render();
   });
 }
@@ -4655,12 +4931,13 @@ function missPanelHTML(){
 function bindMissWhy(){document.querySelectorAll('[data-misswhy]').forEach(b=>b.onclick=()=>setMissWhy([b.dataset.misswhy]));}
 
 /* ---------- Readiness: one colour per job, from its cutting/fittings lists ---------- */
-function rowKey(r){return[r.k,String(r.item||'').trim(),r.L,r.W,String(r.mat||'').trim(),String(r.note||'').trim()].join('|').toLowerCase();}
-function holdsOf(id){return (DB.listHold||{})[id]||{};}
+function rowKey(r){if(V2()&&r&&r.id)return r.id;return[r.k,String(r.item||'').trim(),r.L,r.W,String(r.mat||'').trim(),String(r.note||'').trim()].join('|').toLowerCase();}
+function holdsOf(id){if(V2())return lsView(id).holds;return (DB.listHold||{})[id]||{};}
 /* Per-row tick-off at the bench: each item is ticked as it's cut/picked and struck through; the house signs off when the last row goes. */
-function rowTicks(id){return (DB.listRow||{})[id]||{};}
+function rowTicks(id){if(V2())return lsView(id).ticks;return (DB.listRow||{})[id]||{};}
 function rowTicked(id,k){const t=rowTicks(id)[k];return !!t;}
 function setRowTick(l,k,mode,by,on){
+  if(V2()){lqLine(k,on?(mode==='saw'?'cut':'got-out'):'todo',by);return;} // the database applies "done wins" (a tick also ends a wait)
   DB.listRow=DB.listRow||{};const t=DB.listRow[l.id]=DB.listRow[l.id]||{};
   const had=!!t[k];
   if(on)t[k]={m:mode,at:nowISO(),by:by||''};else delete t[k];
@@ -4670,11 +4947,11 @@ function setRowTick(l,k,mode,by,on){
 }
 // Removes one line's hold. The per-list map is never deleted, even when empty — the two-screen merge then works line by
 // line (a removed line stays removed); a deleted map would be "removed here, changed there" and the stale copy would win.
-function dropHold(l,k){const h=holdsOf(l.id);if(!(h[k]&&h[k].st==='hold'))return false;delete h[k];return true;}
+function dropHold(l,k,by){if(V2()){const x=holdsOf(l.id)[k];if(!(x&&x.st==='hold'))return false;lqLine(k,'todo',by);return true;}const h=holdsOf(l.id);if(!(h[k]&&h[k].st==='hold'))return false;delete h[k];return true;}
 /* A row is waiting only while it is held AND not ticked. Two screens can leave a row both ticked (got out) and
    held (N/A) after a merge — got-out wins, so that row counts as done. Applied when reading; saved data untouched. */
 function heldRow(l,k){const h=holdsOf(l.id)[k];return !!(h&&h.st==='hold'&&!rowTicked(l.id,k));}
-function clearRowTicks(l,mode,by){const t=rowTicks(l.id);let n=0;Object.keys(t).forEach(k=>{if(t[k].m===mode){delete t[k];if(dropHold(l,k))n++;}});if(DB.listRow&&DB.listRow[l.id]&&!Object.keys(t).length)delete DB.listRow[l.id];
+function clearRowTicks(l,mode,by){if(V2()){Object.keys(rowTicks(l.id)).forEach(k=>{if(rowTicks(l.id)[k].m===mode)lqLine(k,'todo',by);});return;}const t=rowTicks(l.id);let n=0;Object.keys(t).forEach(k=>{if(t[k].m===mode){delete t[k];if(dropHold(l,k))n++;}});if(DB.listRow&&DB.listRow[l.id]&&!Object.keys(t).length)delete DB.listRow[l.id];
   if(n)holdLog('na-cleared',l,n,mode,by); // N/A left under a tick by another screen — superseded, not brought back
 }
 function tickableRows(l,mode){ // rows the bench can tick right now: not held; only released rows when the rest was already signed off
@@ -4719,12 +4996,14 @@ function allHolds(modes,st){
   return out;
 }
 function holdRows(l,keys,mode,by){
+  if(V2()){listRows(l).forEach(r=>{const k=rowKey(r);if(r.k===mode&&keys.includes(k))lqLine(k,'waiting',by);});return;}
   DB.listHold=DB.listHold||{};const h=DB.listHold[l.id]=DB.listHold[l.id]||{};
   const at=nowISO();
   listRows(l).forEach(r=>{const k=rowKey(r);if(r.k===mode&&keys.includes(k))h[k]={m:mode,st:'hold',at,by,item:r.item||'',mat:r.mat||'',qty:r.qty,L:r.L||'',W:r.W||''};});
   holdLog('hold',l,keys.length,mode,by);
 }
 function releaseHolds(items,by){
+  if(V2()){items.forEach(({l,k})=>{const h=holdsOf(l.id)[k];if(h&&h.st==='hold')lqLine(k,'release',by);});return;} // already cut: the database only clears the wait
   const at=nowISO();
   items.forEach(({l,k})=>{const h=holdsOf(l.id)[k];if(!(h&&h.st==='hold'))return;
     if(rowTicked(l.id,k)){dropHold(l,k);return;} // already cut/picked: releasing only clears the hold, never turns it back into work
@@ -4733,6 +5012,7 @@ function releaseHolds(items,by){
   Object.keys(byL).forEach(id=>{const l=lists().find(x=>x.id===id);if(l)holdLog('release',l,byL[id],'',by);});
 }
 function clearReleased(lsArr,mode,by){ // released rows that have now been cut/picked leave the hold book
+  if(V2())return; // V2: a cut/got-out line is no longer released work by itself
   lsArr.forEach(l=>{const h=holdsOf(l.id);let n=0;Object.keys(h).forEach(k=>{if(h[k].m===mode&&h[k].st==='rel'){delete h[k];n++;}});
     if(n)holdLog(mode==='saw'?'cut':'picked',l,n,mode,by);
     });
@@ -4740,10 +5020,11 @@ function clearReleased(lsArr,mode,by){ // released rows that have now been cut/p
 /* One-line park / un-park from the bench N/A box — thin wrappers over the same hold book and log */
 function holdOne(l,k,mode,by){if(rowTicked(l.id,k))return false;holdRows(l,[k],mode,by);return true;}
 function unholdOne(l,k,mode,by){
-  if(!dropHold(l,k))return false;
+  if(!dropHold(l,k,by))return false;
   holdLog('unhold',l,1,mode,by);return true;
 }
 function holdLog(act,l,n,mode,by){
+  if(V2())return; // V2: every change is in list_events, written by the database
   DB.holdLog=DB.holdLog||[];
   DB.holdLog.push({at:nowISO(),act,list:l.name,proj:l.project||'',n,m:mode,by:by||''});
   if(DB.holdLog.length>300)DB.holdLog=DB.holdLog.slice(-300);
@@ -4798,15 +5079,14 @@ function sendBack(l,mode){
     const why=prompt('Send "'+l.name+'" back to the '+(mode==='saw'?'saw for RE-CUTTING':'stores for RE-PICKING')+'.\n\nWhy? (e.g. drawing changed, damaged in transit)','');
     if(why===null)return;
     if(!why.trim()){toast('A reason is needed to send work back');return;}
-    const was=listDone(l.id)[mode];
-    if(DB.listDone&&DB.listDone[l.id])delete DB.listDone[l.id][mode];
-    l.log=(l.log||[]);l.log.push({at:nowISO(),by,what:(mode==='saw'?'Sent back for re-cutting':'Sent back for re-picking')+(was?' (was done '+new Date(was.at).toLocaleDateString('en-IE')+(was.by?' by '+was.by:'')+')':''),why:why.trim()});
+    listSetDone(l,mode,false,by,why.trim());
     sched();render();toast(l.name+' is back on the '+(mode==='saw'?'saw':'stores')+' queue');
   });
 }
 
 /* ---------- Manual cutting lists: typed in the planner, same rails as an uploaded workbook ---------- */
 function knownMaterials(){
+  if(V2())return lsMaterials(); // the projects' sheet materials
   const s=new Set();
   Object.values(DB.listWBs||{}).forEach(wb=>Object.values(wb.sheets||{}).forEach(rows=>rows.forEach(r=>{if(r.k==='saw'&&r.mat)s.add(String(r.mat).trim());})));
   return[...s].sort();
@@ -4926,6 +5206,7 @@ function openListEditor(listId,presetWo){
     g('me-save').onclick=()=>{
       keep();
       const err=t=>{g('me-err').textContent=t;};
+      if(V2())return err('Typed lists in the new lists store come with the next build step — not available yet.');
       let wo=st.wo;
       if(st.newWO){
         const title=(g('me-ptitle').value||'').trim(),due=g('me-pdue').value;
