@@ -2391,7 +2391,7 @@ async function lsProject(name,customer){ // the project with this name (any case
   if(r.status===409){lsPut('projects',await lsGet('projects?select=*'));p=lsProjFind(n);if(p)return p.id;} // made on another PC at the same moment
   throw new Error('could not set up the project "'+n+'" (HTTP '+r.status+')');
 }
-function lsMatSet(pid){const s=new Set();LST.m.forEach(m=>{if(m.project_id===pid&&m.active!==false&&m.kind==='sheet'){s.add(String(m.name||'').trim().toLowerCase());(m.aliases||[]).forEach(a=>s.add(String(a||'').trim().toLowerCase()));}});return s;}
+function lsMatSet(pid){const s=new Set();LST.m.forEach(m=>{if(m.project_id===pid&&m.active!==false&&m.kind==='sheet'){s.add(matKey(m.name));(m.aliases||[]).forEach(a=>s.add(matKey(a)));}});s.delete('');return s;} // matKey: case and extra spaces don't matter
 // An old-shape row → a line. Excel column F is Edging on a saw line (decision 4); typed rows carry edging and note separately.
 function lsRowToLine(r,typed){
   const s=v=>v==null?'':String(v).trim();
@@ -2404,7 +2404,7 @@ function lsRowToLine(r,typed){
 }
 function lsFlagMats(lines,pid){ // sheet material not on the project's list → saved, but flagged (decision 7); only once the project has a list
   const k=lsMatSet(pid);let n=0;
-  lines.forEach(ln=>{if(ln.kind!=='saw'){ln.material_other=!!ln.material_other;return;}ln.material_other=false;if(k.size&&ln.material&&!k.has(ln.material.toLowerCase())){ln.material_other=true;n++;}});
+  lines.forEach(ln=>{if(ln.kind!=='saw'){ln.material_other=!!ln.material_other;return;}ln.material_other=false;if(k.size&&ln.material&&!k.has(matKey(ln.material))){ln.material_other=true;n++;}});
   return n;
 }
 async function lsReloadList(id){
@@ -2511,7 +2511,7 @@ async function lsImportWB(wb,entries,fname,by,opt){
   for(const e of entries){
     let sec='';
     const mp=opt.map||{};
-    const lines=(wb.sheets[e.sheet]||[]).map(r=>{if(r.k==='hdr'){sec=String(r.item||'').trim();return lsRowToLine(r);}const ln=lsRowToLine({...r,sec});if(ln.kind==='saw'&&mp[String(ln.material||'').toLowerCase()])ln.material=mp[ln.material.toLowerCase()];return ln;});
+    const lines=(wb.sheets[e.sheet]||[]).map(r=>{if(r.k==='hdr'){sec=String(r.item||'').trim();return lsRowToLine(r);}const ln=lsRowToLine({...r,sec});if(ln.kind==='saw'&&mp[matKey(ln.material)])ln.material=mp[matKey(ln.material)];return ln;});
     out.flagged+=lsFlagMats(lines,pid);
     const live=lists();
     // re-uploading a corrected workbook revises the same list — tags and ticks carry across (diffLines)
@@ -3150,7 +3150,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
 function lsUnknownMats(wb,entries,pid){
   const k=lsMatSet(pid);if(!k.size)return[];
   const seen=new Map();
-  entries.forEach(e=>(wb.sheets[e.sheet]||[]).forEach(r=>{if(r.k!=='saw')return;const m=String(r.mat||'').trim();if(m&&!k.has(m.toLowerCase())&&!seen.has(m.toLowerCase()))seen.set(m.toLowerCase(),m);}));
+  entries.forEach(e=>(wb.sheets[e.sheet]||[]).forEach(r=>{if(r.k!=='saw')return;const m=String(r.mat||'').trim();if(m&&!k.has(matKey(m))&&!seen.has(matKey(m)))seen.set(matKey(m),m);}));
   return[...seen.values()];
 }
 function lsMatchDlg(names,pid,done,opt){
@@ -3172,11 +3172,11 @@ function lsMatchDlg(names,pid,done,opt){
       if(pick.some(([,v])=>v))await lsMatFresh(pid); // check against the database, not this screen's copy
       for(const[n,v]of pick){
         if(v==='__add'){const ex=lsMatClash(pid,n,'');
-          if(ex){if(ex.active===false)await lsWrite('project_materials',ex,{active:true});map[n.toLowerCase()]=ex.name;} // already answers to that name (maybe a fitting, an other spelling, or retired): use it
+          if(ex){if(ex.active===false)await lsWrite('project_materials',ex,{active:true});map[matKey(n)]=ex.name;} // already answers to that name (maybe a fitting, an other spelling, or retired): use it
           else await lsWrite('project_materials',{id:uid('M'),project_id:pid,name:n,kind:'sheet',sort:lsMats(pid,'',true).length});}
         else if(v){const m=LST.m.get(v),cl=lsMatClash(pid,n,v);
           if(cl){toast('"'+n+'" is already '+(matKey(cl.name)===matKey(n)?'':'another spelling of ')+'"'+cl.name+'" on this project — pick that one');return;}
-          map[n.toLowerCase()]=m.name;if(!(m.aliases||[]).some(a=>matKey(a)===matKey(n))&&matKey(m.name)!==matKey(n))await lsWrite('project_materials',m,{aliases:[...(m.aliases||[]),n]});}
+          map[matKey(n)]=m.name;if(!(m.aliases||[]).some(a=>matKey(a)===matKey(n))&&matKey(m.name)!==matKey(n))await lsWrite('project_materials',m,{aliases:[...(m.aliases||[]),n]});}
       }
     }catch(e){toast('Materials not saved — '+e.message);return;}
     ov.remove();done(map);
@@ -3190,7 +3190,7 @@ function lsTplInfo(l){ // "template is now rev 5 (this copy rev 3)" — informat
 async function lsCopyLines(srcId,map){
   if(!LST.full.has(srcId))await lsReloadList(srcId);
   map=map||{};
-  return lsLinesOf(srcId).filter(x=>x.removed_rev==null&&x.status!=='na').map(x=>{const m=x.kind==='saw'&&map[String(x.material||'').trim().toLowerCase()];
+  return lsLinesOf(srcId).filter(x=>x.removed_rev==null&&x.status!=='na').map(x=>{const m=x.kind==='saw'&&map[matKey(x.material)];
     return{kind:x.kind,section:x.section,part:x.part,length_mm:x.length_mm,width_mm:x.width_mm,qty:x.qty,material:m||x.material,material_other:m?false:!!x.material_other,edging:x.edging,note:x.note,src_line_id:x.id};});
 }
 async function lsCreateFromTpl(tid,wos,name,by){
@@ -3241,7 +3241,7 @@ function lsCopyDlg(pid){
       const s=lsList(b.dataset.cpl),err=t=>{const e=ov.querySelector('#cp-err');if(e)e.textContent=t;};
       try{
         if(!LST.full.has(s.id))await lsReloadList(s.id);
-        const k=lsMatSet(pid),unk=[...new Set(lsLinesOf(s.id).filter(x=>x.kind==='saw'&&x.removed_rev==null&&x.material&&!k.has(String(x.material).trim().toLowerCase())).map(x=>String(x.material).trim()))];
+        const k=lsMatSet(pid),unk=[...new Set(lsLinesOf(s.id).filter(x=>x.kind==='saw'&&x.removed_rev==null&&x.material&&!k.has(matKey(x.material))).map(x=>String(x.material).trim()))];
         const map=unk.length?await new Promise(r=>lsMatchDlg(unk,pid,r,{noKeep:true})):{};
         if(!map)return;
         const lines=await lsCopyLines(s.id,map);lsFlagMats(lines,pid);

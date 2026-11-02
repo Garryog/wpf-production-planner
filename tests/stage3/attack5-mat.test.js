@@ -65,7 +65,7 @@ async function matchDlg(t, names, picks) {
     rec('K4a names that only differ by spaces from a material or alias are NOT asked about in the Excel match screen (same rule as the clash check)', unk.length === 0, 'asked about: ' + JSON.stringify(unk) + ' (lsUnknownMats/lsMatSet compare trim+lowercase only; lsMatClash uses matKey)');
     // "Add" picked for "MFC  Oak" → must map to Oak Veneer, not add a clash
     const r = await matchDlg(a, ['MFC  Oak'], ['__add']);
-    rec('K4b Excel "Add" for a name that is another material\'s alias maps to that material, nothing added', r.res && r.res['mfc  oak'] === 'Oak Veneer' && S.db.t.project_materials.length === 3, JSON.stringify(r) + ' | ' + mats(S));
+    rec('K4b Excel "Add" for a name that is another material\'s alias maps to that material, nothing added', r.res && (r.res['mfc  oak'] || r.res['mfc oak']) === 'Oak Veneer' /* Coder r5: the match map is keyed by matKey */ && S.db.t.project_materials.length === 3, JSON.stringify(r) + ' | ' + mats(S));
     // matched to MFC White instead → refused (it is Oak Veneer's spelling); dialog stays open
     const r2 = await matchDlg(a, ['MFC  Oak'], ['M1']);
     rec('K4c Excel match of "MFC  Oak" to MFC White is refused (it is Oak Veneer\'s spelling), dialog stays open, no alias written', r2.res === 'not closed' && r2.open && /Oak Veneer/.test(r2.toasts.join()) && !(S.db.t.project_materials.find(m => m.id === 'M1').aliases || []).length,
