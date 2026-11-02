@@ -31,7 +31,7 @@ const SPECIAL = new Set(['select', 'order', 'limit', 'offset', 'on_conflict', 'c
 function select(rows, q) {
   q.forEach(([k, f]) => { if (!SPECIAL.has(k)) rows = rows.filter(r => match(r, k, f)); });
   const o = q.find(([k]) => k === 'order');
-  if (o) { const [c, dir] = o[1].split('.'); rows = rows.slice().sort((a, b) => (a[c] < b[c] ? -1 : a[c] > b[c] ? 1 : 0) * (dir === 'desc' ? -1 : 1)); }
+  if (o) { const ks = o[1].split(',').map(s => s.split('.')); rows = rows.slice().sort((a, b) => { for (const [c, dir] of ks) { const r = (a[c] < b[c] ? -1 : a[c] > b[c] ? 1 : 0) * (dir === 'desc' ? -1 : 1); if (r) return r; } return 0; }); } // several columns, asc by default
   const off = q.find(([k]) => k === 'offset'); if (off) rows = rows.slice(+off[1]);
   const lim = q.find(([k]) => k === 'limit'); if (lim) rows = rows.slice(0, +lim[1]);
   return rows.slice(0, MAX_ROWS); // Supabase's API "Max rows" (1,000 by default): a bigger answer is cut short

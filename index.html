@@ -2058,7 +2058,7 @@ async function lsPoll(){
   try{
     for(const t of ['lists','list_lines','projects','project_materials','snags']){
       const s=LST.since[t]||LST.since.lists;
-      n+=lsPut(t,await lsGet(t+'?select=*'+(s?'&updated_at=gt.'+encodeURIComponent(new Date(Date.parse(s)-30000).toISOString()):'')+'&order=updated_at.asc'));
+      n+=lsPut(t,await lsGet(t+'?select=*'+(s?'&updated_at=gt.'+encodeURIComponent(new Date(Date.parse(s)-30000).toISOString()):'')+'&order=updated_at,id')); // id breaks ties: rows changed in one transaction share updated_at, and paging must not skip or repeat them
     }
     const need=[...LST.l.values()].filter(x=>!LST.full.has(x.id)&&!lsFinishedRow(x)).map(x=>x.id); // e.g. sent back for a re-cut
     if(need.length){await lsLines(need);n++;}
