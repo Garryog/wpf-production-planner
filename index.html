@@ -1121,13 +1121,13 @@ function showTab(t){tab=t;if(V2())lsStart();['b','d','h','l','i','x','s'].forEac
 /* ---------- Role views: Office / Factory Floor / Driver (same live plan, a screen per job) ---------- */
 const ls={get:k=>{try{return localStorage.getItem(k)||'';}catch(e){return'';}},set:(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}}};
 // Every view has its own PIN; the ADMIN PIN opens any view and is the only one that can change PINs.
-const ROLE_LBL={office:'Office',floor:'Floor screen',saw:'Saw',stores:'Stores',driver:'Driver',dash:'Management',pm:'Project Managers',prod:'Production Manager'};
-function pins(){const p=DB.pins||{};return{admin:p.admin||'9000',office:p.office||'2468',driver:p.driver||'1111',floor:p.floor||'2222',saw:p.saw||'3333',stores:p.stores||'4444',dash:p.dash||'5555',pm:p.pm||'6666',prod:p.prod||'7777'};}
+const ROLE_LBL={office:'Office',floor:'Floor screen',saw:'Saw',stores:'Stores',driver:'Driver',dash:'Management',pm:'Project Managers',prod:'Production Manager',design:'Design office'};
+function pins(){const p=DB.pins||{};return{admin:p.admin||'9000',office:p.office||'2468',driver:p.driver||'1111',floor:p.floor||'2222',saw:p.saw||'3333',stores:p.stores||'4444',dash:p.dash||'5555',pm:p.pm||'6666',prod:p.prod||'7777',design:p.design||'8888'};}
 let ROLE='';
 (function(){
   const q=(new URLSearchParams(location.search).get('view')||'').toLowerCase();
-  if(['office','floor','driver','saw','stores','dash','pm','prod'].includes(q))ROLE=q;
-  else{const s=ls.get('wpfRole');if(['office','floor','driver','saw','stores','dash','pm','prod'].includes(s))ROLE=s;}
+  if(['office','floor','driver','saw','stores','dash','pm','prod','design'].includes(q))ROLE=q;
+  else{const s=ls.get('wpfRole');if(['office','floor','driver','saw','stores','dash','pm','prod','design'].includes(s))ROLE=s;}
 })();
 function roleOk(r){ // has this device already entered the right PIN (or the admin PIN) for this view?
   const p=pins();if(!p[r])return false;
@@ -1154,7 +1154,7 @@ async function checkNewVersion(){
 function startAutoRefresh(){
   clearInterval(viewTimer);
   lsStart(); // V2 lists poll on their own timer; does nothing with the switch off
-  if(['floor','driver','saw','stores','office','dash','pm','prod'].includes(ROLE)){
+  if(['floor','driver','saw','stores','office','dash','pm','prod','design'].includes(ROLE)){
     viewTimer=setInterval(()=>{
       checkNewVersion();
       if(drvUploading)return; // never interrupt a photo upload (unsaved edits are merged by loadDB, not skipped)
@@ -1176,6 +1176,7 @@ function rolePicker(pinFor){
     <button class="rbtn" data-role="floor"><span class="ri">🏭</span><span>Factory Floor Screen<small>Big read-only display — today &amp; tomorrow's loads, live status.</small></span></button>
     <button class="rbtn" data-role="dash"><span class="ri">📊</span><span>Management Dashboard<small>Live overview — cutting, stores, trucks out, delivered, missed. Read-only.</small></span></button>
     <button class="rbtn" data-role="prod"><span class="ri">🧭</span><span>Production Manager<small>What needs you today — loads at risk, material waiting, missed deliveries, the weekly scorecard.</small></span></button>
+    ${V2()?`<button class="rbtn" data-role="design"><span class="ri">📐</span><span>Design office<small>Cutting lists, templates and project materials.</small></span></button>`:''}
     <button class="rbtn" data-role="pm"><span class="ri">🏗</span><span>Project Managers<small>Deliveries per customer — delivered, on the road, scheduled, coming up.</small></span></button>
     <button class="rbtn" data-role="saw"><span class="ri">🪚</span><span>Saw / Cutting<small>Today's cutting lists — mark each list CUT COMPLETE.</small></span></button>
     <button class="rbtn" data-role="stores"><span class="ri">🧰</span><span>Stores / Fittings<small>Today's fittings lists — mark each list PICKED.</small></span></button>
@@ -1225,7 +1226,8 @@ function render(){
   if(ROLE==='floor'){renderFloor(app);return;}
   if(ROLE==='dash'){renderDash(app);return;}
   if(ROLE==='pm'){renderPM(app);return;}
-  if(ROLE==='prod'){renderProd(app);return;}
+  if(ROLE==='prod'){if(V2())renderProdV2(app);else renderProd(app);return;}
+  if(ROLE==='design'){renderDesign(app);return;}
   if(ROLE==='saw'){renderWorkList(app,'saw');return;}
   if(ROLE==='stores'){renderWorkList(app,'fit');return;}
   if(ROLE==='driver'){renderDriver(app);return;}
@@ -1298,7 +1300,7 @@ function renderSettings(app){
     +'<div style="font-size:14px;font-weight:600;margin-bottom:6px">View PINs</div>'
     +'<p style="font-size:12px;color:var(--t3);margin-bottom:12px">Every view is locked by its own PIN, entered once per device. The <b>Admin PIN opens any view</b> and is required to save changes here. Changing a PIN signs every device out of that view until the new one is entered.</p>'
     +'<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px">'
-    +[['admin','🔑 Admin'],['office','🗓 Office'],['floor','🏭 Floor'],['saw','🪚 Saw'],['stores','🧰 Stores'],['driver','🚚 Driver'],['dash','📊 Mgmt'],['pm','🏗 PM'],['prod','🧭 Production']].map(([k,lbl])=>'<div><label style="font-size:12px;color:var(--t2);display:block;margin-bottom:4px">'+lbl+'</label>'
+    +[['admin','🔑 Admin'],['office','🗓 Office'],['floor','🏭 Floor'],['saw','🪚 Saw'],['stores','🧰 Stores'],['driver','🚚 Driver'],['dash','📊 Mgmt'],['pm','🏗 PM'],['prod','🧭 Production']].concat(V2()?[['design','📐 Design']]:[]).map(([k,lbl])=>'<div><label style="font-size:12px;color:var(--t2);display:block;margin-bottom:4px">'+lbl+'</label>'
       +'<input id="s-pin-'+k+'" type="'+(pinShow?'text':'password')+'" value="'+escA(pins()[k])+'" maxlength="8" autocomplete="off" style="padding:6px 10px;border:1px solid '+(k==='admin'?'#c0392b':'var(--b2)')+';border-radius:6px;font-size:16px;width:95px;letter-spacing:3px"></div>').join('')
     +'</div>'
     +'<button class="btn btn-g" id="btn-save-pins">Save PINs (Admin PIN required)</button> '+'<button class="btn btn-s" id="btn-show-pins">'+(pinShow?'🙈 Hide PINs':'👁 Show PINs (Admin PIN required)')+'</button>'
@@ -1373,11 +1375,12 @@ function renderSettings(app){
     if(a===null)return;
     if(a.trim()!==pins().admin){toast('Wrong Admin PIN — PINs unchanged');return;}
     const np={};let bad=false;
-    ['admin','office','floor','saw','stores','driver','dash','pm','prod'].forEach(k=>{
+    ['admin','office','floor','saw','stores','driver','dash','pm','prod'].concat(V2()?['design']:[]).forEach(k=>{
       const v=(document.getElementById('s-pin-'+k)?.value||'').trim();
       if(v.length<4)bad=true;np[k]=v;
     });
     if(bad){toast('Every PIN needs at least 4 characters');return;}
+    if(!np.design&&DB.pins&&DB.pins.design)np.design=DB.pins.design;
     DB.pins=np;
     ls.set('wpfPin_office',np.office); // this device stays signed in to Office
     sched();toast('PINs saved ✓ — other devices must enter the new PINs');
@@ -2054,7 +2057,7 @@ async function lsPoll(){
   if(n)lsRedraw();
 }
 function lsRedraw(){mergedRender();} // the same rule as a merge: never redraw under someone's fingers or over an open dialog
-function lsWantMs(){return ROLE==='saw'||ROLE==='stores'||(ROLE==='office'&&tab==='l')?10000:60000;}
+function lsWantMs(){return ROLE==='saw'||ROLE==='stores'||ROLE==='design'||(ROLE==='office'&&tab==='l')||(ROLE==='prod'&&prodTab==='lists')?10000:60000;}
 function lsStart(){ // own timer, separate from the planner refresh; off (and silent) unless V2()
   if(!V2()){if(LST.timer){clearInterval(LST.timer);LST.timer=null;}return;}
   const ms=lsWantMs();
@@ -2071,7 +2074,7 @@ function lsQty(q){const s=q==null?'':String(q);return /^\d+(\.\d+)?$/.test(s)?+s
 function lsAdapt(r){
   const a={id:r.id,v2:true,name:r.name||'',sheet:r.name||'',project:lsProjName(r.project_id),pid:r.project_id||'',sdate:r.sdate||'',
     wos:(r.wos||[]).slice(),noCut:!!r.no_cut,noFit:!!r.no_fit,log:r.log||[],up:r.updated_at,manual:r.source==='manual',
-    rev:r.rev||1,locked:!!r.locked,ltype:r.list_type||'',tpl:!!r.is_template,archived:!!r.archived,deliverBy:r.deliver_by||'',ver:r.version,done:{}};
+    rev:r.rev||1,locked:!!r.locked,ltype:r.list_type||'',typeName:r.type_name||'',tpl:!!r.is_template,archived:!!r.archived,deliverBy:r.deliver_by||'',ver:r.version,done:{}};
   if(r.saw_done_at)a.done.saw={at:r.saw_done_at,by:r.saw_done_by||''};
   if(r.fit_done_at)a.done.fit={at:r.fit_done_at,by:r.fit_done_by||''};
   LQ.q.forEach(e=>{if(e.list!==r.id)return; // this device's unsent list changes show straight away
@@ -2336,9 +2339,10 @@ async function lsSaveManual(d,by,ex){
       if(n&&listDone(id)[m])listSetDone({id},m,false,by,n+' row'+(n!==1?'s':'')+' added after it was signed off');});}
   return lsList(id)||lsAdapt(res.list);
 }
-async function lsImportWB(wb,entries,fname,by){
-  const proj=wb.project||String(fname||'').replace(/\.(xlsx|xls)$/i,'');
-  const pid=await lsProject(proj);
+async function lsImportWB(wb,entries,fname,by,opt){
+  opt=opt||{};
+  const proj=opt.pid&&LST.p.has(opt.pid)?LST.p.get(opt.pid).name:wb.project||String(fname||'').replace(/\.(xlsx|xls)$/i,'');
+  const pid=opt.pid&&LST.p.has(opt.pid)?opt.pid:await lsProject(proj);
   const out={n:0,replaced:0,auto:0,flagged:0,revised:0};
   for(const e of entries){
     let sec='';
@@ -2367,16 +2371,16 @@ async function lsImportWB(wb,entries,fname,by){
   }
   return out;
 }
-function lsUpload(f){
-  const msg=document.getElementById('lst-upmsg');if(msg)msg.textContent='Reading '+f.name+'…';
-  const bad=t=>{const m=document.getElementById('lst-upmsg');if(m)m.innerHTML='<span style="color:var(--red)">'+escA(t)+'</span>';};
+function lsUpload(f,pid){
+  const msg=document.getElementById('lh-upmsg')||document.getElementById('lst-upmsg');if(msg)msg.textContent='Reading '+f.name+'…';
+  const bad=t=>{const m=document.getElementById('lh-upmsg')||document.getElementById('lst-upmsg');if(m)m.innerHTML='<span style="color:var(--red)">'+escA(t)+'</span>';};
   const rd=new FileReader();
   rd.onload=async()=>{
     try{
       const{wb,entries}=parseListWorkbook(rd.result);
       if(!entries.length)return bad('No usable sheets found — expected columns: Item | Qty | Length | Width | Material | Edging.');
       if(msg)msg.textContent='Saving '+entries.length+' list'+(entries.length!==1?'s':'')+'…';
-      const s=await lsImportWB(wb,entries,f.name,whoNow());
+      const s=await lsImportWB(wb,entries,f.name,whoNow(),{pid});
       render();
       toast(s.n+' lists imported from '+(wb.project||f.name)+(s.replaced?' — '+s.replaced+' replaced with this newer version'+(s.revised?' ('+s.revised+' new revision'+(s.revised!==1?'s':'')+' for the saw)':''):'')+(s.auto?' — '+s.auto+' work orders auto-tagged. Check the tags.':'')+(s.flagged?' — '+s.flagged+' line'+(s.flagged!==1?'s':'')+' use a material not on the project list (flagged)':''));
     }catch(e){bad('Could not save that file: '+e.message);}
@@ -2575,6 +2579,198 @@ function lsBindPanel(){
   if(bk)bk.onclick=()=>{if(!lsAdminOk())return;if(!confirm('Switch back to the old lists? The old format is rebuilt from the tables (lists made since included). Templates and revisions stay in the tables.'))return;
     bk.disabled=true;msg('Switching back…');
     lsSwitchBack(whoNow()).then(r=>{window.LSBACK=r;render();toast('Back on the old lists — '+r.lists+' lists rebuilt');}).catch(e=>{bk.disabled=false;window.LSBACK={err:e.message};msg('<b style="color:#c0392b">Not switched back: '+escA(e.message)+'</b>');});};
+}
+/* ---------- Stage 3 screens (V2 only): Design office, Production Manager Lists tab, Projects, Materials, Lists home ----------
+   With the switch off none of these are reachable and nothing here runs. */
+// Templates, projects and materials are edited by the Production Manager, Design office or Admin. From another view the
+// person enters one of those PINs once; this device remembers it (decision 11).
+function lsEditOk(){
+  if(['prod','design'].includes(ROLE))return true;
+  const p=pins(),ok=v=>!!v&&[p.prod,p.design,p.admin].includes(v);
+  if(ok(ls.get('wpfEditPin')))return true;
+  const v=prompt('Projects, materials and templates are edited by the Production Manager or Design office.\n\nEnter the Production Manager, Design office or Admin PIN:','');
+  if(v===null)return false;
+  if(!ok(v.trim())){toast('Wrong PIN — not changed');return false;}
+  ls.set('wpfEditPin',v.trim());return true;
+}
+async function lsWrite(t,row,patch){ // insert (row) or version-checked update (row + patch); the database's copy comes back
+  const u=patch?SUPA_URL+'/'+t+'?id=eq.'+encodeURIComponent(row.id)+'&version=eq.'+(+row.version||1):SUPA_URL+'/'+t;
+  const r=await fetch(u,{method:patch?'PATCH':'POST',headers:{...SUPA_HDR,'Prefer':'return=representation'},body:JSON.stringify(patch?{...patch,updated_by:lqBy('')}:{...row,updated_by:lqBy('')})});
+  const d=await r.json().catch(()=>null);
+  if(r.status===409||(d&&d.code==='23505'))throw new Error('that name is already used in this project');
+  if(!r.ok)throw new Error((d&&d.message)||('HTTP '+r.status));
+  if(patch&&Array.isArray(d)&&!d.length){lsPut(t,await lsGet(t+'?select=*&id=eq.'+encodeURIComponent(row.id)));throw new Error('changed on another screen meanwhile — showing it as it is now, try again');}
+  lsPut(t,d);return d[0];
+}
+const LS_KINDS={kitchen:'Kitchen',house:'House',room:'Room',other:'Other',snag:'Snag'};
+function lsProjects(all){return[...LST.p.values()].filter(p=>all||p.active!==false).sort((a,b)=>String(a.name).localeCompare(String(b.name)));}
+function lsMats(pid,kind,all){return[...LST.m.values()].filter(m=>m.project_id===pid&&(!kind||m.kind===kind)&&(all||m.active!==false)).sort((a,b)=>(a.sort||0)-(b.sort||0)||String(a.name).localeCompare(String(b.name)));}
+function lsDlg(html,w){const ov=document.createElement('div');ov.className='pod-ovl';ov.innerHTML=`<div class="pod-in" style="min-width:min(${w||760}px,96vw)">${html}<div style="margin-top:12px;text-align:right"><button class="btn btn-s" id="pod-x">Close</button></div></div>`;document.body.appendChild(ov);ov.onclick=e=>{if(e.target===ov||e.target.id==='pod-x'){ov.remove();render();}};return ov;}
+const LS_INP='padding:6px 8px;border:1px solid var(--b2);border-radius:6px;font-size:13px';
+function lsProjectsDlg(){
+  const ov=lsDlg('<div id="pj-body"></div>',860);
+  const draw=()=>{
+    const ps=lsProjects(true);
+    ov.querySelector('#pj-body').innerHTML=`<div style="font-weight:800;color:#14335c;font-size:17px;margin-bottom:2px">🏗 Projects</div>
+      <div style="font-size:12px;color:var(--t3);margin-bottom:10px">Rename, change the customer or who owns the lists, or set a project inactive. Projects are never deleted.</div>
+      <table class="lst-tbl"><thead><tr><th>Project</th><th>Customer (Cienapps)</th><th>Lists owned by</th><th>Active</th><th></th></tr></thead><tbody>
+      ${ps.map(p=>`<tr${p.active===false?' style="opacity:.6"':''}><td><input data-pjn="${escA(p.id)}" value="${escA(p.name)}" style="${LS_INP};width:100%"></td><td><input data-pjc="${escA(p.id)}" value="${escA(p.customer||'')}" style="${LS_INP};width:100%"></td>
+        <td><input data-pjo="${escA(p.id)}" value="${escA(p.list_owner||'')}" placeholder="Production Manager" style="${LS_INP};width:100%"></td><td><input type="checkbox" data-pja="${escA(p.id)}"${p.active!==false?' checked':''}></td>
+        <td style="white-space:nowrap"><button class="btn btn-g" data-pjs="${escA(p.id)}" style="font-size:12px;padding:4px 10px">Save</button> <button class="btn btn-s" data-pjm="${escA(p.id)}" style="font-size:12px;padding:4px 10px">Materials</button></td></tr>`).join('')}
+      <tr><td><input id="pj-new-n" placeholder="New project name" style="${LS_INP};width:100%"></td><td><input id="pj-new-c" placeholder="Customer" style="${LS_INP};width:100%"></td><td><input id="pj-new-o" placeholder="Production Manager" style="${LS_INP};width:100%"></td><td></td>
+        <td><button class="btn btn-g" id="pj-add" style="font-size:12px;padding:4px 10px">＋ Add</button></td></tr></tbody></table><div id="pj-msg" style="font-size:12px;color:#b42318;font-weight:700;margin-top:6px"></div>`;
+    const msg=t=>{const e=ov.querySelector('#pj-msg');if(e)e.textContent=t;};
+    const val=(a,id)=>(ov.querySelector('['+a+'="'+id+'"]')||{}).value||'';
+    ov.querySelectorAll('[data-pjs]').forEach(b=>b.onclick=()=>{const id=b.dataset.pjs,p=LST.p.get(id);if(!p||!lsEditOk())return;
+      const name=val('data-pjn',id).trim();if(!name)return msg('A project needs a name.');
+      const other=lsProjFind(name);if(other&&other.id!==id)return msg('Another project is already called "'+name+'".');
+      lsWrite('projects',p,{name,customer:val('data-pjc',id).trim()||null,list_owner:val('data-pjo',id).trim()||null,active:ov.querySelector('[data-pja="'+id+'"]').checked})
+        .then(()=>{toast('Project saved');draw();}).catch(e=>{draw();msg('Not saved — '+e.message);});});
+    ov.querySelectorAll('[data-pjm]').forEach(b=>b.onclick=()=>{ov.remove();lsMaterialsDlg(b.dataset.pjm);});
+    ov.querySelector('#pj-add').onclick=()=>{if(!lsEditOk())return;const name=ov.querySelector('#pj-new-n').value.trim();if(!name)return msg('Type the project name first.');
+      if(lsProjFind(name))return msg('There is already a project called "'+name+'".');
+      lsWrite('projects',{id:uid('P'),name,customer:ov.querySelector('#pj-new-c').value.trim()||null,list_owner:ov.querySelector('#pj-new-o').value.trim()||null}).then(()=>{toast(name+' added');draw();}).catch(e=>msg('Not added — '+e.message));};
+  };
+  draw();
+}
+function lsMaterialsDlg(pid,after){
+  const ov=lsDlg('<div id="mt-body"></div>',820);
+  if(after)ov.addEventListener('click',e=>{if(e.target===ov||e.target.id==='pod-x')after();});
+  const draw=()=>{
+    const p=LST.p.get(pid)||{name:'?'},ms=lsMats(pid,'',true);
+    const row=m=>`<tr${m.active===false?' style="opacity:.6"':''}><td><input data-mtn="${escA(m.id)}" value="${escA(m.name)}" style="${LS_INP};width:100%"></td>
+      <td><select data-mtk="${escA(m.id)}" style="${LS_INP}"><option value="sheet"${m.kind==='sheet'?' selected':''}>Sheet (saw)</option><option value="other"${m.kind==='other'?' selected':''}>Fitting / other</option></select></td>
+      <td><input data-mta="${escA(m.id)}" value="${escA((m.aliases||[]).join(', '))}" placeholder="other spellings, comma-separated" style="${LS_INP};width:100%"></td>
+      <td><input type="checkbox" data-mtv="${escA(m.id)}"${m.active!==false?' checked':''}></td><td><button class="btn btn-g" data-mts="${escA(m.id)}" style="font-size:12px;padding:4px 10px">Save</button></td></tr>`;
+    ov.querySelector('#mt-body').innerHTML=`<div style="font-weight:800;color:#14335c;font-size:17px;margin-bottom:2px">🧱 Materials — ${escA(p.name)}</div>
+      <div style="font-size:12px;color:var(--t3);margin-bottom:10px">Sheet materials are the only boards the office can pick on this project's lists. Other spellings from Excel files are remembered as aliases. Untick Active to retire a material — it is never deleted.</div>
+      <table class="lst-tbl"><thead><tr><th>Name</th><th>Kind</th><th>Also called</th><th>Active</th><th></th></tr></thead><tbody>${ms.map(row).join('')||'<tr><td colspan="5" style="color:var(--t3)">No materials yet.</td></tr>'}
+      <tr><td><input id="mt-new-n" placeholder="e.g. 18mm MFC White" style="${LS_INP};width:100%"></td><td><select id="mt-new-k" style="${LS_INP}"><option value="sheet">Sheet (saw)</option><option value="other">Fitting / other</option></select></td><td></td><td></td>
+        <td><button class="btn btn-g" id="mt-add" style="font-size:12px;padding:4px 10px">＋ Add</button></td></tr></tbody></table><div id="mt-msg" style="font-size:12px;color:#b42318;font-weight:700;margin-top:6px"></div>`;
+    const msg=t=>{const e=ov.querySelector('#mt-msg');if(e)e.textContent=t;};
+    const dup=(name,id)=>lsMats(pid,'',true).some(m=>m.id!==id&&String(m.name).trim().toLowerCase()===name.toLowerCase());
+    ov.querySelectorAll('[data-mts]').forEach(b=>b.onclick=()=>{const id=b.dataset.mts,m=LST.m.get(id);if(!m||!lsEditOk())return;
+      const name=ov.querySelector('[data-mtn="'+id+'"]').value.trim();if(!name)return msg('A material needs a name.');if(dup(name,id))return msg('"'+name+'" is already on this project.');
+      const aliases=ov.querySelector('[data-mta="'+id+'"]').value.split(',').map(s=>s.trim()).filter(Boolean);
+      lsWrite('project_materials',m,{name,kind:ov.querySelector('[data-mtk="'+id+'"]').value,aliases,active:ov.querySelector('[data-mtv="'+id+'"]').checked})
+        .then(()=>{toast('Material saved');draw();}).catch(e=>{draw();msg('Not saved — '+e.message);});});
+    ov.querySelector('#mt-add').onclick=()=>{if(!lsEditOk())return;const name=ov.querySelector('#mt-new-n').value.trim();if(!name)return msg('Type the material name first.');if(dup(name,''))return msg('"'+name+'" is already on this project.');
+      lsWrite('project_materials',{id:uid('M'),project_id:pid,name,kind:ov.querySelector('#mt-new-k').value,sort:lsMats(pid,'',true).length}).then(()=>{toast(name+' added');draw();}).catch(e=>msg('Not added — '+e.message));};
+  };
+  draw();
+}
+/* Lists home: search, filters, grouped by project. Shared by the office Lists tab, the Design office and the Production Manager. */
+const LH={q:'',proj:'',type:'',kind:'live',rev:'',state:''};
+function lsState(l){if(l.archived)return'archived';if(listFinished(l))return'done';return l.locked?'live':'draft';}
+const LS_STATE={draft:['Draft','#5b6b82'],live:['Live','#1a56db'],done:['Done','#0d6e46'],archived:['Archived','#8e99ab']};
+function lsHomeLists(){
+  const q=LH.q.trim().toLowerCase();
+  return lsCache().all.filter(l=>{
+    if(LH.kind==='live'&&l.tpl)return false;if(LH.kind==='tpl'&&!l.tpl)return false;
+    if(LH.proj&&l.pid!==LH.proj)return false;
+    if(LH.type&&l.ltype!==LH.type)return false;
+    if(LH.rev==='revised'&&!((+l.rev||1)>1))return false;
+    const st=lsState(l);if(LH.state?st!==LH.state:st==='archived')return false; // archived only when asked for
+    if(q){const hay=[l.name,l.project,LS_KINDS[l.ltype]||l.ltype,l.typeName,listCust(l),...(l.wos||[]).map(w=>{const o=DB.orders.find(x=>x.wo===w);return w+' '+(o?[o.floor,o.unit,o.title,o.customer].join(' '):'');})].join(' ').toLowerCase();if(!hay.includes(q))return false;}
+    return true;
+  });
+}
+function lsHomeHTML(){
+  const ls0=lsHomeLists(),grp=new Map();
+  ls0.forEach(l=>{const k=l.pid||'';if(!grp.has(k))grp.set(k,[]);grp.get(k).push(l);});
+  if(LH.proj&&!grp.has(LH.proj))grp.set(LH.proj,[]);
+  const keys=[...grp.keys()].sort((a,b)=>(a?lsProjName(a):'~').localeCompare(b?lsProjName(b):'~'));
+  const sel=(id,v,opts)=>`<select id="${id}" style="${LS_INP}">${opts.map(([k,t])=>`<option value="${escA(k)}"${k===v?' selected':''}>${escA(t)}</option>`).join('')}</select>`;
+  const prog=(l,m)=>{const n=m==='saw'?l.saw:l.fit;if(!n)return(m==='saw'?l.noCut:l.noFit)?'n/a':'—';if(listDone(l.id)[m])return'✓';const t=Object.values(rowTicks(l.id)).filter(x=>x.m===m).length;return t+'/'+n;};
+  const row=l=>{const[st,col]=LS_STATE[lsState(l)];return `<tr data-lhrow="${escA(l.id)}"><td><b>${escA(l.name)}</b>${l.tpl?' <span class="lst-chip" style="background:#efe7ff;color:#5b21b6">TEMPLATE'+(l.typeName?' · '+escA(l.typeName):'')+'</span>':''}</td>
+    <td>${escA(LS_KINDS[l.ltype]||l.ltype||'')}</td><td>${(l.wos||[]).map(w=>`<span class="lst-chip">${escA(w)}</span>`).join('')||'<span style="color:var(--t3)">—</span>'}</td>
+    <td>${(+l.rev||1)>1?`<span class="lst-chip" style="background:#fff4d6;color:#7a5200">Rev ${+l.rev}</span>`:'Rev 1'}</td><td><span style="color:${col};font-weight:700">${st}</span></td><td>🪚 ${prog(l,'saw')}</td><td>🧰 ${prog(l,'fit')}</td>
+    <td style="white-space:nowrap"><button class="btn btn-s" data-lhedit="${escA(l.id)}" style="padding:2px 8px;font-size:11px">✎ Edit</button> <button class="btn btn-s" data-lhview="${escA(l.id)}" style="padding:2px 8px;font-size:11px">View</button>${l.archived?'':` <button class="btn btn-s" data-lharc="${escA(l.id)}" style="padding:2px 8px;font-size:11px;color:var(--red);border-color:var(--red)">Archive</button>`}</td></tr>`;};
+  return `<div class="exp-panel" id="lh">
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+      <div style="font-size:15px;font-weight:700;color:#14335c">📋 Lists — ${ls0.length}</div>
+      <input id="lh-q" value="${escA(LH.q)}" placeholder="🔍 Search name, house, WO, customer, type" style="${LS_INP};width:250px">
+      ${sel('lh-proj',LH.proj,[['','All projects'],...lsProjects().map(p=>[p.id,p.name])])}
+      ${sel('lh-type',LH.type,[['','Any type'],...Object.entries(LS_KINDS)])}
+      ${sel('lh-kind',LH.kind,[['live','Live lists'],['tpl','Templates'],['all','Lists + templates']])}
+      ${sel('lh-rev',LH.rev,[['','Any revision'],['revised','Revised (rev 2+)']])}
+      ${sel('lh-state',LH.state,[['','Not archived'],['draft','Draft'],['live','Live (with the saw)'],['done','Done'],['archived','Archived']])}
+      ${LH.q||LH.proj||LH.type||LH.kind!=='live'||LH.rev||LH.state?'<button class="btn btn-s" id="lh-x" style="font-size:12px">✕ Clear</button>':''}
+      <span style="flex:1"></span><button class="btn btn-s" id="lh-projs">🏗 Projects</button><button class="btn btn-g" id="lh-new">＋ New list</button>
+    </div>
+    <input type="file" id="lh-file" accept=".xlsx,.xls" style="display:none"><div id="lh-upmsg" style="font-size:12px;margin-bottom:6px"></div>
+    ${keys.length?keys.map(k=>{const a=grp.get(k);return `<div class="lh-grp" style="margin-bottom:12px"><div style="background:#14335c;color:#fff;border-radius:6px 6px 0 0;padding:7px 10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <b>${escA(k?lsProjName(k):'No project')}</b><span style="font-size:12px;opacity:.85">${a.length} list${a.length!==1?'s':''}</span><span style="flex:1"></span>
+        ${k?`<button class="btn btn-s" data-lhtpl="${escA(k)}" style="font-size:11px;padding:3px 9px">Templates</button><button class="btn btn-s" data-lhmat="${escA(k)}" style="font-size:11px;padding:3px 9px">Materials</button><button class="btn btn-s" data-lhnew="${escA(k)}" style="font-size:11px;padding:3px 9px">＋ New list</button><button class="btn btn-s" data-lhimp="${escA(k)}" style="font-size:11px;padding:3px 9px">Import Excel</button>`:''}</div>
+      <table class="lst-tbl" style="margin:0"><thead><tr><th>List</th><th>Type</th><th>Work orders</th><th>Rev</th><th>State</th><th>Saw</th><th>Stores</th><th></th></tr></thead><tbody>${a.map(row).join('')||'<tr><td colspan="8" style="color:var(--t3)">No lists match.</td></tr>'}</tbody></table></div>`;}).join('')
+      :`<div style="font-size:13px;color:var(--t3);padding:10px">${LST.loaded?'No lists match.':'Loading the lists…'}</div>`}
+  </div>`;
+}
+let lhImpPid='';
+function lsHomeBind(){
+  const re=id=>{render();const n=document.getElementById(id);if(n&&n.focus){n.focus();if(n.setSelectionRange)n.setSelectionRange(n.value.length,n.value.length);}};
+  const q=document.getElementById('lh-q');if(q)q.oninput=()=>{LH.q=q.value;re('lh-q');};
+  [['lh-proj','proj'],['lh-type','type'],['lh-kind','kind'],['lh-rev','rev'],['lh-state','state']].forEach(([id,k])=>{const e=document.getElementById(id);if(e)e.onchange=()=>{LH[k]=e.value;render();};});
+  const x=document.getElementById('lh-x');if(x)x.onclick=()=>{Object.assign(LH,{q:'',proj:'',type:'',kind:'live',rev:'',state:''});render();};
+  const pj=document.getElementById('lh-projs');if(pj)pj.onclick=()=>lsProjectsDlg();
+  const nw=document.getElementById('lh-new');if(nw)nw.onclick=()=>openListEditor(null,'',LH.proj||'');
+  document.querySelectorAll('[data-lhtpl]').forEach(b=>b.onclick=()=>{LH.proj=b.dataset.lhtpl;LH.kind='tpl';render();});
+  document.querySelectorAll('[data-lhmat]').forEach(b=>b.onclick=()=>lsMaterialsDlg(b.dataset.lhmat));
+  document.querySelectorAll('[data-lhnew]').forEach(b=>b.onclick=()=>openListEditor(null,'',b.dataset.lhnew));
+  const fi=document.getElementById('lh-file');
+  document.querySelectorAll('[data-lhimp]').forEach(b=>b.onclick=()=>{lhImpPid=b.dataset.lhimp;if(fi)fi.click();});
+  if(fi)fi.onchange=()=>{const f=fi.files[0];if(f)lsUpload(f,lhImpPid);fi.value='';};
+  document.querySelectorAll('[data-lhedit]').forEach(b=>b.onclick=()=>openListEditor(b.dataset.lhedit));
+  document.querySelectorAll('[data-lhview]').forEach(b=>b.onclick=()=>{const l=lsList(b.dataset.lhview);if(!l)return;
+    lsDlg(`<div style="font-weight:700;color:#14335c;margin-bottom:8px">${escA(l.project||'')} — ${escA(l.name)} · Rev ${+l.rev||1}</div>${listTableHTML(l,'all')}`);});
+  document.querySelectorAll('[data-lharc]').forEach(b=>b.onclick=()=>{const l=lsList(b.dataset.lharc);if(!l)return;
+    if(!confirm('Archive the list "'+l.name+'" ('+(l.project||'')+')? The saw and stores will no longer see it. Nothing is deleted.'))return;
+    listArchive(l,whoNow());render();toast('List archived');});
+}
+function lsHomeMount(){ // office Lists tab with the switch on: the library becomes Lists home
+  const lib=document.getElementById('lst-filter');const p=lib&&lib.closest('.exp-panel');if(!p)return;
+  p.outerHTML=lsHomeHTML();
+  lsHomeBind();
+}
+function lsHomePage(app,title){
+  const need=listsNeeded().length;
+  app.innerHTML=`<div class="pg">${title||''}${need?`<div class="exp-panel" style="border:2px solid #c0392b;background:#fdf3f2;font-size:13px;color:#8a1c10;font-weight:700">⚠ ${need} work order${need!==1?'s':''} scheduled with no list yet — see the saw's "Waiting for a list" strip.</div>`:''}
+    ${allHolds(['saw','fit'],'hold').length?`<div class="exp-panel" style="border:2px solid #d4880f;background:#fffaf0"><div style="font-size:14px;font-weight:700;color:#7a4a00;margin-bottom:4px">⏸ Waiting on material</div>${holdBookHTML(['saw','fit'])}</div>`:''}
+    ${lsHomeHTML()}</div>`;
+  lsHomeBind();bindHoldBook(['saw','fit'],officeWhoFn);
+}
+function renderDesign(app){
+  if(!V2()){app.innerHTML='<div class="pg"><div class="exp-panel" style="font-size:14px">The Design office view opens when the new cutting lists are switched on (Settings → Cutting lists store).</div></div>';return;}
+  lsHomePage(app,'<h1 style="font-size:22px;color:#14335c;margin:0 0 10px">📐 Design office — lists, templates and materials</h1>');
+}
+let prodTab='today';
+function renderProdV2(app){
+  if(prodTab==='lists')lsHomePage(app);
+  else if(prodTab==='snags')renderSnags(app);
+  else renderProd(app);
+  const t=(k,l)=>`<button data-prodtab="${k}" style="padding:9px 18px;border:none;border-radius:6px;font-size:15px;font-weight:700;cursor:pointer;${prodTab===k?'background:#14335c;color:#fff':'background:#e6ebf2;color:#14335c'}">${l}</button>`;
+  app.insertAdjacentHTML('afterbegin',`<div id="prod-strip" style="max-width:1400px;margin:10px auto 0;padding:0 20px;display:flex;gap:8px">${t('today','🧭 Today')}${t('lists','📋 Lists')}${t('snags','🩹 Snags')}</div>`);
+  document.querySelectorAll('[data-prodtab]').forEach(b=>b.onclick=()=>{prodTab=b.dataset.prodtab;if(prodTab==='lists')lsStart();render();});
+}
+function renderSnags(app){app.innerHTML='<div class="pg"><div class="exp-panel" style="font-size:14px">🩹 Snags arrive with the next build step.</div></div>';}
+/* "Waiting for a list" on the saw (build note j): each planned job with no list, with its cut-by date, the list due by
+   (the working day before, so the saw sees it a day ahead) and who owns the list. Overdue is red. */
+function prevWorkDay(iso){let d=addDayISO(iso,-1);while(!isWorkDay(d))d=addDayISO(d,-1);return d;}
+function lsOwnerFor(o){
+  const c=String(o&&o.customer||'').trim().toLowerCase();if(!c)return'Production Manager';
+  const p=lsProjects().find(p=>[p.name,p.customer,...(p.cien_names||[])].some(n=>String(n||'').trim().toLowerCase()===c));
+  return(p&&String(p.list_owner||'').trim())||'Production Manager';
+}
+function waitListHTML(){
+  if(!V2())return'';
+  const today=todayLocal();
+  const rows=listsNeeded().map(o=>{const cut=listDeadline({wos:[o.wo]});return{o,cut,due:cut?prevWorkDay(cut):''};}).sort((a,b)=>(a.due||'9999').localeCompare(b.due||'9999'));
+  if(!rows.length)return'';
+  const od=rows.filter(r=>r.due&&r.due<today).length;
+  return `<div class="exp-panel" id="wait-list" style="border:2px solid ${od?'#c0392b':'#d4880f'};background:${od?'#fdf3f2':'#fffaf0'};padding:10px 12px">
+    <div style="font-size:15px;font-weight:800;color:${od?'#8a1c10':'#7a4a00'};margin-bottom:6px">📋 WAITING FOR A LIST — ${rows.length} job${rows.length!==1?'s':''}${od?` · <span style="color:#c0392b">${od} overdue</span>`:''}</div>
+    ${rows.map(({o,cut,due})=>{const late=due&&due<today;return `<div class="wl-drow" data-waitwo="${escA(o.wo)}" style="${late?'background:#c0392b;color:#fff;':''}border-radius:5px;padding:5px 8px"><b>${escA(o.wo)}</b><span class="dsh-c">${escA(o.customer||'')}</span><span class="dsh-t">${escA([o.floor,o.unit].filter(Boolean).join(' '))}</span><span class="dsh-x">${late?'⚠ OVERDUE · ':''}cut by ${cut?fmt(cut):'—'} · list due by ${due?fmt(due):'—'} · owner ${escA(lsOwnerFor(o))}</span></div>`;}).join('')}
+  </div>`;
 }
 /* diffLines:start */
 /* Revision comparison — pure (no screen, no database), so the tests can check it on its own.
@@ -2948,6 +3144,7 @@ function renderLists(app){
     listArchive(l,whoNow());
     lsSched();render();toast(V2()?'List archived':'List deleted');
   });
+  if(V2())lsHomeMount();
   document.querySelectorAll('[data-lview]').forEach(b=>b.onclick=()=>{
     const l=lists().find(x=>x.id===b.dataset.lview);if(!l)return;
     const ov=document.createElement('div');ov.className='pod-ovl';
@@ -3229,7 +3426,7 @@ function renderWorkList(app,mode){
       <span class="wl-print"><button id="wl-pr1" title="Paper fallback — today's work and anything overdue, with tick boxes and initials">🖨 Print today</button><button id="wl-pr3" title="Paper fallback for a longer outage — the next 3 days">🖨 Next 3 days</button></span>
     </div>
     ${wlShowHold?`<div class="wl-hint">Rows parked because ${mode==='saw'?'the material':'stock'} isn't in. When it arrives, tap <b>ARRIVED — RELEASE</b> and the rows go straight back on the ${mode==='saw'?'saw':'stores'} queue as due work.</div>`+holdBookHTML(holdModes):wlShowDone?doneScreen():`
-    ${mode==='saw'?sheetNeedHTML():''}
+    ${mode==='saw'?waitListHTML()+sheetNeedHTML():''}
     ${custs.length>1?`<div class="wl-cust"><span>Customer:</span><button class="${!wlCust?'on':''}" data-wlc="">All · ${visAll.length}</button>${custs.map(c=>`<button class="${wlCust===c?'on':''}" data-wlc="${escA(c)}">${escA(c)} · ${visAll.filter(l=>(listCust(l)||'(no customer)')===c).length}</button>`).join('')}</div>`:''}
     ${visible.length>1?`<div style="font-size:12px;color:var(--t3);margin:-4px 0 10px">Cutting several houses together? Tick the box on each list for a combined table with per-house quantities and location labels.</div>`:''}
     ${selLists.length?`<div class="wl-selbar"><b>${selLists.length} house${selLists.length!==1?'s':''} selected</b>
