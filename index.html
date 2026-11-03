@@ -3874,6 +3874,117 @@ function diffLines(old,nw,opt){
   return out;
 }
 /* diffLines:end */
+/* lsParseGrid:start */
+/* One reader for WPF's cutting-list sheets — used by the Excel import AND by paste into the list editor. Pure (no screen,
+   no database), so the tests can check it on its own.
+   aoa: the sheet's rows from A1 (cached values; null = empty). opt.formulas: the same grid with each cell's formula (or null).
+   opt.sheet: the sheet name (a sheet-wide "Nr of units" makes a unit block with this name). opt.paste: no project row.
+   Columns: Description | Qty | Length | Width | Colour | Edging (| Note).
+   Returns {meta:{project,title,date,carcass,door}, rows, warn}. Rows are the editor's rows:
+     {k:'hdr',item,note[,units]}  a heading; with units it is a unit heading ("900 Single Rail + 2 shelves", 3 units)
+     {k:'part',item,qty,L,W,mat,edging,note[,total]}  inside a unit block qty is PER UNIT and total = qty × units
+     {k:'hdr',info:true,item,note}  a line that isn't a part (e.g. a school's room breakdown "Science Lab 1 … 6")
+   Every row carries src = its row number in the sheet. */
+function lsParseGrid(aoa,opt){
+  opt=opt||{};aoa=aoa||[];const F=opt.formulas||[];
+  const meta={project:'',title:'',date:'',carcass:'',door:''},rows=[],warn=[];
+  const isErr=v=>typeof v==='string'&&/^#(VALUE|REF|N\/A|NAME|DIV\/0|NUM|NULL)[!?]?/i.test(v.trim());
+  const raw=(r,c)=>{const v=(aoa[r]||[])[c];return v==null||isErr(v)||(typeof v==='string'&&v.trim()==='')?null:v;};
+  const fm=(r,c)=>{const f=(F[r]||[])[c];return f==null||String(f).trim()===''?null:String(f).trim().replace(/^=/,'');};
+  const num=v=>{if(v==null||v instanceof Date)return NaN;if(typeof v==='number')return v;const s=String(v).trim().replace(/\s*mm$/i,'');return /^-?\d+(\.\d+)?$/.test(s)?+s:NaN;};
+  const col=s=>{let n=0;for(const ch of s.toUpperCase())n=n*26+ch.charCodeAt(0)-64;return n-1;};
+  // a tiny formula reader: numbers, cell references on this sheet ($ allowed), + - * / and brackets; anything else = unknown
+  const evalF=(src,depth)=>{
+    if(depth>20)return null;let i=0;const s=src.replace(/\s+/g,'');
+    const ref=()=>{const m=/^\$?([A-Z]{1,3})\$?(\d+)/i.exec(s.slice(i));if(!m||/^[!(]/.test(s.slice(i+m[0].length)))return undefined;i+=m[0].length;const x=val(+m[2]-1,col(m[1]),depth+1);return typeof x==='string'&&!isNaN(num(x))?num(x):x;};
+    const atom=()=>{if(s[i]==='('){i++;const v=expr();if(s[i]!==')')throw 0;i++;return v;}if(s[i]==='-'){i++;const v=atom();return typeof v==='number'?-v:null;}
+      const m=/^\d+(\.\d+)?/.exec(s.slice(i));if(m){i+=m[0].length;return+m[0];}const v=ref();if(v===undefined)throw 0;return v;};
+    const term=()=>{let v=atom();while(s[i]==='*'||s[i]==='/'){const op=s[i++],w=atom();v=typeof v==='number'&&typeof w==='number'?(op==='*'?v*w:v/w):null;}return v;};
+    const expr=()=>{let v=term();while(s[i]==='+'||s[i]==='-'){const op=s[i++],w=term();v=typeof v==='number'&&typeof w==='number'?(op==='+'?v+w:v-w):null;}return v;};
+    try{const v=expr();return i===s.length?v:null;}catch(e){return null;}
+  };
+  const val=(r,c,depth)=>{const v=raw(r,c);if(v!=null)return typeof v==='string'?v.trim():v;const f=fm(r,c);return f?evalF(f,depth||0):null;};
+  // "=$B$5*3" / "=2*B6": the per-unit quantity when the reference is the block's units cell
+  const perUnit=(r,c,u)=>{const f=fm(r,c);if(!f||!u)return null;const s=f.replace(/\s+/g,'');
+    let m=/^\$?([A-Z]{1,3})\$?(\d+)\*(\d+(?:\.\d+)?)$/i.exec(s),c0,r0,k;
+    if(m){c0=m[1];r0=m[2];k=m[3];}else{m=/^(\d+(?:\.\d+)?)\*\$?([A-Z]{1,3})\$?(\d+)$/i.exec(s);if(!m)return null;k=m[1];c0=m[2];r0=m[3];}
+    return col(c0)===u.c&&+r0-1===u.r?+k:null;};
+  const str=v=>v==null?'':v instanceof Date?v.toISOString().slice(0,10):String(v).trim();
+  const isoDate=v=>{if(v instanceof Date&&!isNaN(v))return v.toISOString().slice(0,10);const s=str(v);let m=/^(\d{4})-(\d{2})-(\d{2})/.exec(s);if(m)return m[0];
+    m=/^(\d{1,2})[\/.](\d{1,2})[\/.](\d{2,4})$/.exec(s);if(m){const y=m[3].length===2?'20'+m[3]:m[3];return y+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0');}return'';};
+  const LBL=/^(project( name)?|title|date|carcass colou?r|door colou?r|(nr|no\.?|number) of units)\s*:?$/i;
+  const UNITS=/total\s*(nr|no\.?|number)\s*(of)?\s*units?/i;
+  let cur=null; // the current heading row; cur.u = {r,c} of its units cell once it is a unit block
+  const startUnits=(n,r,c)=>{
+    if(!cur||cur.info||cur.units!=null){cur={k:'hdr',item:opt.sheet?String(opt.sheet).trim():'Units',note:'',src:r+1};rows.push(cur);}
+    cur.units=n;cur.u={r,c};
+  };
+  const nRows=aoa.length;
+  for(let r=0;r<nRows;r++){
+    const cells=[0,1,2,3,4,5,6].map(c=>val(r,c));
+    if(cells.every(v=>v==null||str(v)===''))continue;
+    const A=str(cells[0]),texts=cells.map(str);
+    // 1. header labels: Project / Title / Date / Carcass colour / Door colour / Nr of units — the value is the next filled cell
+    if(LBL.test(A)){
+      const k=A.toLowerCase(),vi=cells.findIndex((v,c)=>c>0&&v!=null&&str(v)!=='');const v=vi>0?cells[vi]:null;
+      if(/^project/.test(k))meta.project=str(v);else if(/^title/.test(k))meta.title=str(v);else if(/^date/.test(k))meta.date=isoDate(v);
+      else if(/^carcass/.test(k))meta.carcass=str(v);else if(/^door/.test(k))meta.door=str(v);
+      else if(!isNaN(num(v))&&num(v)>0)startUnits(num(v),r,vi);
+      continue;
+    }
+    // 2. the column-header row ("Description | Qty | Length …") is labels, not a part
+    if(/^(description|item|part( name)?)$/i.test(A)&&texts.slice(1).some(t=>/^(qty|nr|no\.?|quantity|length|width|dimension|colou?r|material)$/i.test(t)))continue;
+    // 3. "2 | total nr of units" sets the units of the block above
+    const ui=texts.findIndex(t=>UNITS.test(t));
+    if(ui>=0){
+      let c=texts.findIndex((t,j)=>j!==ui&&t!==''&&!isNaN(num(cells[j])));let n=c>=0?num(cells[c]):NaN;
+      if(isNaN(n)){const m=/^\s*(\d+)/.exec(texts[ui]);if(m){n=+m[1];c=ui;}}
+      if(n>0){startUnits(n,r,c);continue;}
+    }
+    // 4. the legacy project row: the very first row, one name in A (and maybe the date in F)
+    if(r===0&&!opt.paste&&A&&cells.slice(1).every((v,c)=>v==null||(c===4&&(v instanceof Date||isoDate(v))))){meta.project=A;if(cells[5]!=null)meta.date=isoDate(cells[5]);continue;}
+    const qv=cells[1]==null?NaN:typeof cells[1]==='number'?cells[1]:parseFloat(texts[1]);
+    const L=num(cells[2]),W=num(cells[3]),mat=texts[4],edging=texts[5],note=texts[6];
+    if(!isNaN(qv)||(!isNaN(L)&&!isNaN(W)&&(A||mat))){
+      const sized=!isNaN(L)||!isNaN(W);
+      const p={k:'part',item:sized?A:(A||mat),qty:'',L:isNaN(L)?'':L,W:isNaN(W)?'':W,mat,edging,note,src:r+1};
+      const qty=isNaN(qv)?'':typeof cells[1]==='number'||/^\d+(\.\d+)?(\s*(off|pcs?|no\.?))?$/i.test(texts[1])?qv:texts[1]; // "2x2" kept as typed, never guessed
+      if(cur&&cur.units!=null&&!cur.info){
+        const k=perUnit(r,1,cur.u);
+        if(k!=null){p.qty=k;p.total=typeof qty==='number'?qty:k*cur.units;}
+        else if(typeof qty==='number'){const per=Math.round(qty/cur.units*1e6)/1e6;p.qty=per;p.total=qty;
+          if(per!==Math.round(per))warn.push('Row '+(r+1)+' "'+(p.item||'part')+'": '+qty+' isn\'t a whole number for each of '+cur.units+' units — check it');}
+        else{p.qty=qty;p.total=qty;if(qty!=='')warn.push('Row '+(r+1)+' "'+(p.item||'part')+'": quantity "'+qty+'" can\'t be worked out per unit — check it');}
+      }else p.qty=qty;
+      rows.push(p);continue;
+    }
+    if(A||mat){
+      if(!isNaN(L)||!isNaN(W)){rows.push({k:'hdr',info:true,item:A||mat,note:texts.slice(1,7).filter(Boolean).join(' '),src:r+1});continue;} // e.g. "Science Lab 1 … 6"
+      cur={k:'hdr',item:A||mat,note:A?[mat,edging,note].filter(Boolean).join(' · '):'',src:r+1};rows.push(cur);
+    }
+  }
+  rows.forEach(x=>{delete x.u;});
+  if(meta.title&&/^#/.test(meta.title))meta.title='';
+  return{meta,rows,warn};
+}
+// A worksheet (SheetJS) → the grids lsParseGrid reads, anchored at A1: values (errors = null) and formulas.
+function lsSheetAoa(ws){
+  const v=[],f=[];if(!ws)return{v,f};
+  Object.keys(ws).forEach(a=>{if(a[0]==='!')return;const m=/^([A-Z]+)(\d+)$/.exec(a);if(!m)return;
+    let c=0;for(const ch of m[1])c=c*26+ch.charCodeAt(0)-64;c--;const r=+m[2]-1,x=ws[a];if(c>7)return;
+    (v[r]=v[r]||[])[c]=x.t==='e'||x.t==='z'||x.v===undefined?null:x.t==='s'?String(x.v):x.v;
+    if(x.f)(f[r]=f[r]||[])[c]=x.f;});
+  for(let r=0;r<v.length;r++){v[r]=v[r]||[];f[r]=f[r]||[];}
+  return{v,f};
+}
+// Text copied from Excel (tabs between cells, new lines between rows) → a grid for lsParseGrid
+function lsPasteAoa(text){
+  const lines=String(text||'').replace(/\r\n?/g,'\n').split('\n');if(lines.length&&lines[lines.length-1]==='')lines.pop();
+  return lines.map(l=>l.split('\t').map(c=>{c=c.trim();if(/^".*"$/s.test(c))c=c.slice(1,-1).replace(/""/g,'"');return c===''?null:c;}));
+}
+// Sheets that are never cutting lists (Garry, 3 Nov): the unit library, the index and the stock sheets
+function lsSkipSheet(name){return /^\s*(blank|index|stock|door stock)\s*$/i.test(String(name||''));}
+/* lsParseGrid:end */
 function lists(){if(V2())return lsCache().all.filter(l=>!l.archived&&!l.tpl);return DB.lists||[];}
 function listRows(l){if(V2())return lsView(l.id,true).rows;const wb=(DB.listWBs||{})[l.wb];return wb&&wb.sheets&&wb.sheets[l.sheet]?wb.sheets[l.sheet]:[];}
 function listDone(id){if(V2()){const a=lsList(id);return a?a.done:{};}return (DB.listDone||{})[id]||{};}
