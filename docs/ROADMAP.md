@@ -87,6 +87,8 @@ Rules: rank by the leading number. "Shipped" = step 9 only (left the factory →
 - Old-screen guard APPROVED (docs/PROPOSAL-old-tab-guard.md; SQL pending in SUPABASE_CHANGES.md, run on go-live day right after deploy; test once on a Supabase test project first).
 - The 6-hourly "holiday work list" scheduled task is turned off. Weekly health check stays on.
 - Cutting lists are the most important part of the roll-out and are not user friendly enough yet — Garry will go through them with Claude and decide changes before any more cutting-list build work.
+- Cutting-list flow (Garry, 3 Nov): (1) lists are made by the Drawing office AND the Production Manager; snag recording should use a similar template. (2) The cutting list must be processed AT THE SAME TIME as the work order is processed (Cienapps "5.WORK ORDER PROCESSED") — not happening today. (3) In a project the same kitchen/bedroom/room types have a standard cutting list: pick from a standard template list per project/customer and add it to the work order. (4) Saw keeps per-line ticking as now. (5) Each customer = a project; templates are found by customer. (6) On import, the planner SUGGESTS the template for each newly processed WO; Production Manager/office confirms with one tap (or all at once). Nothing reaches the saw unconfirmed.
+- Still to ask Garry: how revisions reach the saw today and what goes wrong; what frustrates people with the current lists.
 
 ## Progress log
 ### 2 Nov 2026 (scheduled run)
