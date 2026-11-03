@@ -64,12 +64,12 @@ const S_ = (k, v) => `(()=>{const e=document.querySelector('.pod-ovl [data-mr="$
   await pg.evaluate(S_('3|item', 'Kicker')); await pg.evaluate(S_('3|qty', '7')); await pg.evaluate(S_('3|L', '2440')); await pg.evaluate(S_('3|W', '125'));
   await pg.evaluate(() => document.getElementById('me-addsaw').click()); // an empty row at the end
   const err0 = await pg.evaluate(() => { const r = document.querySelector('[data-mr="3|mat"]'); const v = r.value; return v; });
-  rec('rows under a heading still take the colour of the last part above', err0 === 'Oak Mystery', err0);
+  rec('rows under a heading still take the colour of the last SAW row above (not the Stores row — Garry, 3 Nov)', err0 === 'UD96', err0);
   await pg.evaluate(() => { document.querySelector('#me-name').value = 'House 9'; document.getElementById('me-save').click(); });
   for (let i = 0; i < 30 && !S.db.t.lists.some(l => l.name === 'House 9'); i++) await F.sleep(100);
   const l = S.db.t.lists.find(x => x.name === 'House 9'), ln = l ? S.db.t.list_lines.filter(x => x.list_id === l.id).sort((x, y) => x.seq - y.seq) : [];
   const br = ln.map(x => [x.kind, x.part, x.qty, x.material, x.material_other ? 'FLAG' : '', x.section || ''].join('|'));
-  rec('saved: length/width → Saw, none → Stores, heading kept, empty row left out', br.join(';') === 'saw|Side panel|2|UD96||;fit|Hanging rail|1|Oak Mystery|FLAG|;hdr|Road 1 No 1 extras||||;saw|Kicker|7|Oak Mystery|FLAG|Road 1 No 1 extras', br.join(';'));
+  rec('saved: length/width → Saw, none → Stores, heading kept, empty row left out', br.join(';') === 'saw|Side panel|2|UD96||;fit|Hanging rail|1|Oak Mystery|FLAG|;hdr|Road 1 No 1 extras||||;saw|Kicker|7|UD96||Road 1 No 1 extras', br.join(';'));
   // validation messages, plain English
   const v = await pg.evaluate(() => { openListEditor(null, 'WO-2'); const ov = document.querySelector('.pod-ovl'); const set = (k, v) => { const e = ov.querySelector('[data-mr="' + k + '"]'); e.value = v; (e.tagName === 'SELECT' ? e.onchange : e.oninput)(); };
     set('0|item', 'Gable'); set('0|qty', '2'); set('0|L', '900'); ov.querySelector('[data-mr="0|mat"]').value = ''; ov.querySelector('[data-mr="0|mat"]').onchange();

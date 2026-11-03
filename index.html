@@ -3581,8 +3581,11 @@ function openListEditor2(listId,presetWo,presetPid,opt){
   // ---- the unit block each row is in: U[i] = number of units (or null), H[i] = the index of its heading (or -1)
   const blocks=()=>{const U=[],H=[];let u=null,h=-1;R().forEach((r,i)=>{if(r.k==='hdr'){h=i;u=r.units!==undefined&&r.units!==null?r.units:null;U.push(null);H.push(-1);return;}U.push(u);H.push(h);});return{U,H};};
   const totalOf=(r,u)=>u==null?String(r.qty==null?'':r.qty).trim():lsMul(r.qty,u);
-  const defMat=i=>{for(let j=i-1;j>=0;j--){const r=R()[j];if(r.k==='part'&&String(r.mat||'').trim())return r.mat;}return st.carcass||st.door||'';};
-  const blank=i=>({k:'part',item:'',qty:'',L:'',W:'',mat:defMat(i),edging:'',note:''});
+  // a new row starts with the colour of the SAW row above (or the carcass colour). It is only a default (matAuto): a row that
+  // is saved as Stores (no length or width) with that default still on it is saved with NO colour (Garry, 3 Nov).
+  const defMat=i=>{for(let j=i-1;j>=0;j--){const r=R()[j];if(r.k==='part'&&(lsNum(r.L)>0||lsNum(r.W)>0)&&String(r.mat||'').trim())return r.mat;}return st.carcass||st.door||'';};
+  const blank=i=>{const m=defMat(i),r={k:'part',item:'',qty:'',L:'',W:'',mat:m,edging:'',note:''};if(m)r.matAuto=m;return r;};
+  const noAutoStores=r=>r.k==='part'&&!(lsNum(r.L)>0||lsNum(r.W)>0)&&r.matAuto&&String(r.mat||'')===String(r.matAuto)?{...r,mat:''}:r;
   const snap=()=>{st.undo.push(JSON.stringify(R()));if(st.undo.length>100)st.undo.shift();};
   // a structural change (row deleted / heading added) never changes a part's TOTAL: per-unit quantities are re-worked
   const keepTotals=fn=>{
@@ -3665,7 +3668,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
         <div><label>Carcass colour</label>${matSel({mat:st.carcass},0,'me-carc')}</div>
         <div><label>Door colour</label>${matSel({mat:st.door},0,'me-door')}</div>
       </div>
-      <div style="font-size:11px;color:var(--t3);margin-top:3px">Carcass / door colour: optional — a new row starts with the colour of the row above (or the carcass colour). Every row's colour can be changed.</div>
+      <div style="font-size:11px;color:var(--t3);margin-top:3px">Carcass / door colour: optional — a new row starts with the colour of the saw row above (or the carcass colour). Every row's colour can be changed. Stores rows (no length or width) are saved with no colour unless you pick one.</div>
       ${st.newWO?`<div class="me-newwo">
         <input id="me-ptitle" placeholder="Title *" value="${escA(st.pw.title)}" style="${inp};flex:1;min-width:200px"><input id="me-pcust" placeholder="Customer" value="${escA(st.pw.cust||(LST.p.get(st.pid)||{}).customer||'')}" style="${inp};width:170px">
         <input id="me-pfloor" placeholder="Floor" value="${escA(st.pw.floor)}" style="${inp};width:70px"><input id="me-punit" placeholder="Unit" value="${escA(st.pw.unit)}" style="${inp};width:70px">
@@ -3698,9 +3701,9 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     if(!st.pid){draw();ov.querySelector('#me-err').textContent='Pick the project first — materials belong to a project.';return;}
     const n0=prompt('New material / colour for '+pname+' (e.g. W/W, UD96, WHB):','');
     const n=String(n0||'').trim();if(!n){st.focus=i+'|mat';draw();return;}
-    const flag=why=>{snap();r.mat=n;st.focus=i+'|mat';draw();toast('"'+n+'" is used on this row only and flagged for the Production Manager'+(why?' — '+why:'')+'. They can add it to the project\'s materials.');};
+    const flag=why=>{snap();r.mat=n;delete r.matAuto;st.focus=i+'|mat';draw();toast('"'+n+'" is used on this row only and flagged for the Production Manager'+(why?' — '+why:'')+'. They can add it to the project\'s materials.');};
     const ex0=lsMatClash(st.pid,n,'');
-    if(ex0&&ex0.active!==false){snap();r.mat=ex0.name;st.focus=i+'|mat';draw();toast('"'+ex0.name+'" is already on the project list — picked');return;}
+    if(ex0&&ex0.active!==false){snap();r.mat=ex0.name;delete r.matAuto;st.focus=i+'|mat';draw();toast('"'+ex0.name+'" is already on the project list — picked');return;}
     if(!lsHasEditPin()){
       const v=prompt('Adding "'+n+'" to the '+pname+' materials needs the Production Manager, Drawing office or Admin PIN.\n\nEnter the PIN — or press Cancel to use "'+n+'" on this row only (it will be flagged for the Production Manager):','');
       const p=pins();if(v===null)return flag('');
@@ -3711,6 +3714,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       try{await lsMatFresh(st.pid);const cl=lsMatClash(st.pid,n,'');
         if(cl){if(cl.active===false)await lsWrite('project_materials',cl,{active:true});snap();r.mat=cl.name;}
         else{await lsWrite('project_materials',{id:uid('M'),project_id:st.pid,name:n,kind,sort:lsMats(st.pid,'',true).length});snap();r.mat=n;}
+        delete r.matAuto;
         st.focus=i+'|mat';draw();toast('"'+n+'" added to the '+pname+' materials ✓');
       }catch(e){flag('not added to the list ('+e.message+')');}
     })();
@@ -3719,7 +3723,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     ov.querySelectorAll('[data-mr]').forEach(el=>{
       const[i0,f]=el.dataset.mr.split('|'),i=+i0;
       if(el.tagName==='SELECT'){el.onchange=el.oninput=()=>{const r=R()[i];if(!r||!ov.contains(el)||el.value===r.mat)return; // input + change both fire: act once
-        if(el.value==='__add'){addMat(i);return;}snap();r.mat=el.value;st.focus=i+'|mat';draw();};return;}
+        if(el.value==='__add'){addMat(i);return;}snap();r.mat=el.value;delete r.matAuto;st.focus=i+'|mat';draw();};return;}
       el.oninput=()=>{const r=R()[i];if(!r)return;if(st.snapKey!==el.dataset.mr){snap();st.snapKey=el.dataset.mr;}r[f]=el.value;
         if(f==='qty'||f==='units')updTotals();if(f==='L'||f==='W'||f==='item'||f==='qty')updTag(i);};
     });
@@ -3732,7 +3736,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     on('me-addhdr',()=>addHdr(false));
     on('me-addunit',()=>addHdr(true));
     on('me-undo',()=>undo());
-    on('me-astpl',()=>{keep();lsSaveAsTpl({pid:st.pid,name:st.name,ltype:st.ltype,tname:st.tname,lines:lsEdLines(R().filter(r=>!lsEmptyRow(r)).map(r=>{const x={...r};delete x.lid;return x;}))});});
+    on('me-astpl',()=>{keep();lsSaveAsTpl({pid:st.pid,name:st.name,ltype:st.ltype,tname:st.tname,lines:lsEdLines(R().filter(r=>!lsEmptyRow(r)).map(r=>{const x={...noAutoStores(r)};delete x.lid;return x;}))});});
     on('me-hist',()=>{if(ex)lsTplHistory(ex.id);});
     on('me-instpl',()=>{keep();insTpl();});
     ov.querySelectorAll('[data-mecopy]').forEach(b=>b.onclick=()=>copyToNew());
@@ -3820,6 +3824,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     const bad=rows.find(r=>r.k==='part'&&sized(r)&&sm.length&&!String(r.mat||'').trim());
     if(bad)return err('Pick the colour for every saw row ("'+(String(bad.item||'').trim()||'unnamed')+'"'+at(bad)+').');
     if(sawStarted){const ch=rows.find(r=>r.k==='hdr'&&r.lid&&r.units!=null&&String((LST.ln.get(r.lid)||{}).qty||'').trim()!==String(r.units).trim());if(ch)return err(LS_LOCK_MSG+'.');}
+    rows=rows.map(noAutoStores); // a Stores row keeps no colour unless someone picked one
     rows.forEach(r=>{if(r.k==='part')r.matOther=!sized(r)&&!!String(r.mat||'').trim()&&all.size>0&&!all.has(matKey(r.mat));});
     let wo=st.wo;
     if(st.newWO){const title=(g('me-ptitle').value||'').trim(),due=g('me-pdue').value;
@@ -3873,7 +3878,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       else if(e.key==='ArrowRight'&&(!txt||(b===len&&(a===len||all)))&&ci<cs.length-1){stop();go(i,cs[ci+1]);}
       return;}
     if(ctrl&&(e.key==='d'||e.key==='D')){stop();const r=R()[i];if(r.k==='hdr'||!(f in r))return;
-      let j=i-1;while(j>=0&&R()[j].k==='hdr')j--;if(j<0)return;snap();r[f]=R()[j][f];st.focus=m;st.focusAll=true;draw();return;}
+      let j=i-1;while(j>=0&&R()[j].k==='hdr')j--;if(j<0)return;snap();r[f]=R()[j][f];if(f==='mat')delete r.matAuto;st.focus=m;st.focusAll=true;draw();return;}
     if(e.key==='Insert'){stop();keep();snap();R().splice(i,0,blank(i));st.focus=i+'|item';draw();return;}
     if(ctrl&&e.key==='Delete'){stop();const r=R()[i];if(!r)return;keep();snap();keepTotals(()=>R().splice(i,1));
       st.focus=R().length?Math.min(i,R().length-1)+'|'+f:'';draw();return;}
@@ -3902,7 +3907,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       const b=blocks();let odd=0,firstH=add.findIndex(r=>r.k==='hdr');
       add.forEach((r,k)=>{if(r.k!=='part'||(firstH>=0&&k>firstH))return;const j=at+k,u=b.U[j];if(u==null)return;const t2=lsNum(r.qty),n=lsNum(u);
         if(t2>0&&n>0&&Number.isInteger(t2/n))r.qty=String(t2/n);else odd++;});
-      add.forEach((r,k)=>{if(r.k==='part'&&!String(r.mat||'').trim()&&(lsNum(r.L)>0||lsNum(r.W)>0))r.mat=defMat(at+k);});
+      add.forEach((r,k)=>{if(r.k==='part'&&!String(r.mat||'').trim()&&(lsNum(r.L)>0||lsNum(r.W)>0)){r.mat=defMat(at+k);if(r.mat)r.matAuto=r.mat;}});
       const np=add.filter(r=>r.k==='part').length,nu=add.filter(r=>r.k==='hdr'&&r.units!=null).length,nh=add.length-np-nu;
       st.focus=at+'|item';draw();
       toast('Pasted '+np+' row'+(np!==1?'s':'')+(nu?', '+nu+' unit block'+(nu!==1?'s':''):'')+(nh?', '+nh+' heading'+(nh!==1?'s':''):'')+(hdr?' (the column-header row was skipped)':'')+(info?' — '+info+' line'+(info!==1?'s':'')+' that aren\'t parts left out':'')+(odd?' — ⚠ '+odd+' quantit'+(odd!==1?'ies':'y')+' could not be split per unit: check them':'')+(p.warn.length?' — ⚠ '+p.warn.join('; '):'')+'. Ctrl+Z undoes it.');
@@ -3913,7 +3918,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     aoa.forEach((row,ri)=>{const j=i+ri;if(j>=R().length)R().push(blank(R().length));const r=R()[j];
       row.forEach((v,ci)=>{const fld=order[c0+ci];if(!fld)return;const val=v==null?'':String(v).trim();
         if(r.k==='hdr'){if(fld==='item'||fld==='note'){r[fld]=val;n++;}else if(fld==='qty'&&r.units!=null&&!(sawStarted&&r.lid)){r.units=val;n++;}return;}
-        r[fld]=val;n++;});});
+        r[fld]=val;if(fld==='mat')delete r.matAuto;n++;});});
     st.focus=m;draw();
     toast('Pasted '+n+' cell'+(n!==1?'s':'')+' from '+aoa.length+' row'+(aoa.length!==1?'s':'')+'. Ctrl+Z undoes it.');
   });
