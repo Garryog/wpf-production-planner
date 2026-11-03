@@ -72,7 +72,9 @@ const asSaw = async page => { await page.evaluate(async () => { localStorage.set
     const afterUntick = has(S, 'side');
     const page = await reopen(saw, S); await asSaw(page);
     const st = await devState(page);
-    rec('Q2a (setup) the lost-reply fold save did land both ticks; device still held them', landed && (st0.q > 0 || st0.pend), 'landed=' + landed + ' dev=' + JSON.stringify(st0));
+    // Updated 3 Nov (Tester round 8): since c584e01 the tablet checks the database straight after the lost reply and sees
+    // its save landed, so it may already have emptied its queue (confirmed). Either is right; what matters is Q2 below.
+    rec('Q2a (setup) the lost-reply fold save did land both ticks; device still held them or confirmed them by checking', landed && (st0.q > 0 || st0.pend || (st0.q === 0 && !st0.failed)), 'landed=' + landed + ' dev=' + JSON.stringify(st0));
     rec('Q2 office unticks Side after the fold landed; the tablet reopens and re-places its held queue: Side stays UNticked (no zombie tick)', un === 'ok' && !afterUntick && !has(S, 'side') && has(S, 'top'),
       'untick=' + un + ' side after untick=' + afterUntick + ' → after reopen old=' + oldKeys(S).map(k => k.split('|')[1]) + ' dev=' + JSON.stringify(st));
     await off.close(); await page.close();

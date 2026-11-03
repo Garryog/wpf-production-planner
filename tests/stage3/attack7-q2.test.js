@@ -80,7 +80,9 @@ const officeNote = (off, n) => off.page.evaluate(async n => { await loadDB(); DB
     rec('Y1 two tabs, tab A lost reply, office unticks Side, tab B folds then tab A: Side stays unticked, Top ticked, queue empty in both',
       !has(S, 'side') && has(S, 'top') && sa.q === 0 && sb.q === 0, old(S) + ' A=' + JSON.stringify(sa) + ' B=' + JSON.stringify(sb));
     const msgs = sa.msgs.concat(sb.msgs).join(' | ');
-    rec('Y1b one of the tabs tells the operator Side was changed on another screen', /Side.*changed on another screen/.test(msgs), msgs);
+    // Updated 3 Nov (round 8): since c584e01 tab A confirms its save landed straight away, so the office untick is simply a
+    // later change and nothing needs saying. If a tab does warn, it must be about Side (the line the office changed).
+    rec('Y1b no tab warns wrongly: any "changed on another screen" warning names Side only', !/another screen/.test(msgs) || (/Side.*changed on another screen/.test(msgs) && !/"Top"/.test(msgs)), msgs);
     // ...and a later office re-tick from tab B's screen-state is not undone by tab A saving its stale copy
     await saw.page.evaluate(async () => { DB.weekCaps = DB.weekCaps || {}; DB.weekCaps.__t = 1; clearTimeout(saveT); await saveDB(); }); await idle(saw.page);
     rec('Y1c tab A saves something unrelated afterwards: Side still unticked', !has(S, 'side') && has(S, 'top'), old(S));
@@ -132,7 +134,10 @@ const officeNote = (off, n) => off.page.evaluate(async n => { await loadDB(); DB
     await officeUntick(off, 'L1:3'); await officeNote(off, 'x'); await settle(off.page);
     await saw.page.evaluate(async () => { await lqSend(); }); await idle(saw.page);
     const st = await devState(saw.page);
-    rec('Y3b office unticks Top only: Side kept, Top unticked, message names Top not Side', has(S, 'side') && !has(S, 'top') && st.q === 0 && /"Top"/.test(st.msgs.join(' ')) && !/"Side"/.test(st.msgs.join(' ')), old(S) + ' ' + JSON.stringify(st));
+    // Updated 3 Nov (round 8): with the save check the tablet knows its save landed, so no warning is needed; if one is
+    // shown it must name Top (the line the office changed), never Side.
+    const w = st.msgs.filter(m => /another screen/.test(m)).join(' ');
+    rec('Y3b office unticks Top only: Side kept, Top unticked, any warning names Top not Side', has(S, 'side') && !has(S, 'top') && st.q === 0 && (!w || (/"Top"/.test(w) && !/"Side"/.test(w))), old(S) + ' ' + JSON.stringify(st));
     await off.close(); await saw.close(); }
 
   // ===== Y4 lost reply, office unticks then re-ticks =====

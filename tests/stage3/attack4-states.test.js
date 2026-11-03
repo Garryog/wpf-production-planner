@@ -207,8 +207,14 @@ async function strandSwitching(browser, S, off) {
     });
     const r = await off.page.evaluate(async () => { try { return await lsMigrate('Garry'); } catch (e) { return { err: e.message }; } });
     await off.page.evaluate(async () => { clearTimeout(saveT); await saveDB(); }); await idle(off.page);
-    rec('Z1 lost reply on the "migrating" save: told "nothing changed", record ends on v1/migrating (both harmless), new tables untouched',
-      !!r.err && ['v1', 'migrating'].includes(S.row.settings.listStore) && S.db.t.list_lines.length === 0, JSON.stringify(r) + ' record=' + S.row.settings.listStore + ' lines=' + S.db.t.list_lines.length);
+    // Updated 3 Nov (Tester round 8): since c584e01 the screen checks the database straight after a lost reply, sees the
+    // 'migrating' save landed, and carries on. Either outcome is right as long as it is all-or-nothing: told "nothing
+    // changed" with the record on v1/migrating and no lines, OR a finished migration (v2, every line copied, check clean).
+    const lines = S.db.t.list_lines.length, rs = S.row.settings.listStore;
+    const stopped = !!r.err && ['v1', 'migrating'].includes(rs) && lines === 0;
+    const finished = !r.err && r.ok && rs === 'v2' && lines === 4 && r.check && Array.isArray(r.check.bad) && !r.check.bad.length && (S.row.settings.lists || []).length === 1;
+    rec('Z1 lost reply on the "migrating" save: either stopped cleanly (told, v1/migrating, no lines) or finished cleanly (v2, all 4 lines, check clean)',
+      stopped || finished, (stopped ? 'stopped ' : finished ? 'finished ' : 'NEITHER ') + JSON.stringify({ err: r.err, ok: r.ok, bad: r.check && r.check.bad }) + ' record=' + rs + ' lines=' + lines);
     // the pre-migration backup: what switch value does it carry? (runbook: "restoring a backup will NOT turn the switch off")
     await off.close();
   }
