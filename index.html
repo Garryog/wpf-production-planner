@@ -3803,6 +3803,44 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       st.focus=R().length?Math.min(i,R().length-1)+'|'+f:'';draw();return;}
     if(ctrl&&(e.key==='z'||e.key==='Z')&&!e.shiftKey){stop();undo();return;}
   });
+  // ---- paste from Excel (not on phones). One cell → the browser pastes it as usual. Rows copied from a sheet with the
+  //      cursor in Description → read by lsParseGrid (header row skipped, text-only rows = headings, "N total nr of units"
+  //      = Units, per-unit = total ÷ Units) and put in at the cursor. A narrow block (e.g. a column of lengths) or a paste
+  //      into another column fills the cells from the cursor down / across. A summary is shown; Ctrl+Z undoes it.
+  ov.addEventListener('paste',e=>{
+    if(window.innerWidth<700)return;
+    const t=e.target,m=t&&t.dataset&&t.dataset.mr;if(!m)return;
+    const txt=(e.clipboardData||window.clipboardData).getData('text/plain')||'';
+    if(!/[\t\n]/.test(txt.replace(/\r?\n$/,'')))return; // a single value: the normal paste
+    e.preventDefault();keep();
+    const aoa=lsPasteAoa(txt),[i0,f]=m.split('|'),i=+i0,wide=aoa.some(r=>r.length>=2);
+    const hdr=aoa.some(r=>/^(description|item|part)$/i.test(String(r[0]||'').trim()));
+    snap();
+    if((f==='item'&&wide)||hdr){
+      const p=lsParseGrid(aoa,{paste:true}),info=p.rows.filter(r=>r.info).length;
+      const add=p.rows.filter(r=>!r.info).map(r=>{const x={...r};delete x.src;delete x.total;if(x.k==='part'){x.qty=x.qty===''||x.qty==null?'':String(x.qty);x.L=x.L===''?'':String(x.L);x.W=x.W===''?'':String(x.W);}return x;});
+      if(!add.length){st.undo.pop();toast('Nothing to paste — no parts or headings found in what you copied');return;}
+      const at=R()[i]&&lsEmptyRow(R()[i])?i:i+1,drop=R()[i]&&lsEmptyRow(R()[i])?1:0;
+      R().splice(at,drop,...add);
+      // pasted parts that land inside a unit block without their own unit heading: the copied quantity is the total
+      const b=blocks();let odd=0,firstH=add.findIndex(r=>r.k==='hdr');
+      add.forEach((r,k)=>{if(r.k!=='part'||(firstH>=0&&k>firstH))return;const j=at+k,u=b.U[j];if(u==null)return;const t2=lsNum(r.qty),n=lsNum(u);
+        if(t2>0&&n>0&&Number.isInteger(t2/n))r.qty=String(t2/n);else odd++;});
+      add.forEach((r,k)=>{if(r.k==='part'&&!String(r.mat||'').trim()&&(lsNum(r.L)>0||lsNum(r.W)>0))r.mat=defMat(at+k);});
+      const np=add.filter(r=>r.k==='part').length,nu=add.filter(r=>r.k==='hdr'&&r.units!=null).length,nh=add.length-np-nu;
+      st.focus=at+'|item';draw();
+      toast('Pasted '+np+' row'+(np!==1?'s':'')+(nu?', '+nu+' unit block'+(nu!==1?'s':''):'')+(nh?', '+nh+' heading'+(nh!==1?'s':''):'')+(hdr?' (the column-header row was skipped)':'')+(info?' — '+info+' line'+(info!==1?'s':'')+' that aren\'t parts left out':'')+(odd?' — ⚠ '+odd+' quantit'+(odd!==1?'ies':'y')+' could not be split per unit: check them':'')+(p.warn.length?' — ⚠ '+p.warn.join('; '):'')+'. Ctrl+Z undoes it.');
+      return;
+    }
+    // fill cells from the cursor: down the rows, across the columns (rows are added at the bottom when needed)
+    const order=['item','qty','L','W','mat','edging','note'],c0=Math.max(0,order.indexOf(f==='units'?'qty':f));let n=0;
+    aoa.forEach((row,ri)=>{const j=i+ri;if(j>=R().length)R().push(blank(R().length));const r=R()[j];
+      row.forEach((v,ci)=>{const fld=order[c0+ci];if(!fld)return;const val=v==null?'':String(v).trim();
+        if(r.k==='hdr'){if(fld==='item'||fld==='note'){r[fld]=val;n++;}else if(fld==='qty'&&r.units!=null&&!(sawStarted&&r.lid)){r.units=val;n++;}return;}
+        r[fld]=val;n++;});});
+    st.focus=m;draw();
+    toast('Pasted '+n+' cell'+(n!==1?'s':'')+' from '+aoa.length+' row'+(aoa.length!==1?'s':'')+'. Ctrl+Z undoes it.');
+  });
   ov.onclick=e=>{if(e.target===ov||e.target.id==='pod-x')ov.remove();};
   document.body.appendChild(ov);draw();
   return{st,draw};
