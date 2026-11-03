@@ -2686,9 +2686,8 @@ function lsEditRows(id){ // the typed-list editor's rows, with edging and note k
   return live.map(x=>{
     const base={lid:x.id,sig:lsLineSig(x),opened:at,ids};
     if(x.kind==='hdr'){const u=String(x.qty==null?'':x.qty).trim();units=u?+u:null;const h={k:'hdr',item:x.part||'',note:x.note||'',...base};if(u){h.units=u;h.u0=u;}return h;}
-    let q=lsQty(x.qty);
-    let fixed=false;
-    if(units){const uq=String(x.unit_qty==null?'':x.unit_qty).trim();if(uq)q=lsQty(uq);else{const pf=lsPerOrFixed(x.qty,units);q=pf.fixed?q:lsQty(pf.qty);fixed=pf.fixed;}} // no per-unit stored: ÷ units if clean, else a FIXED total
+    let q=lsQty(x.qty),fixed=false;
+    if(units){const pu=lsPerUnit(x,units);q=lsQty(pu.qty);fixed=pu.fixed;} // one rule for every place: lsPerUnit
     return{k:x.kind,item:x.part||'',qty:q,...(fixed?{fixed:true}:{}),L:x.length_mm==null?'':+x.length_mm,W:x.width_mm==null?'':+x.width_mm,mat:x.material||'',edging:x.edging||'',note:x.note||'',sec:x.section||'',...base};
   });
 }
@@ -2736,9 +2735,19 @@ function lsBlockTotals(lines){
     if(ln.kind==='hdr'){const q=String(ln.qty==null?'':ln.qty).trim();u=q?q:null;return;}
     const uq=String(ln.unit_qty==null?'':ln.unit_qty).trim();if(!uq)return;
     if(u==null){ln.unit_qty='';return;}
+    if(uq.toLowerCase()===LS_FIXED)return; // a fixed total: Units never change it
     const t=lsMul(uq,u);if(/^\d+(\.\d+)?$/.test(t))ln.qty=t;});
   return lines;
 }
+// Garry (3 Nov, answer 10): a half quantity per unit (1.5 × 2) is allowed only when the TOTAL to cut is a whole number.
+// A saw part in a unit block whose per unit × Units isn't whole (1.5 × 3 = 4.5) is refused, naming the row.
+function lsHalfTotal(lines){let u=null,n=0;
+  for(const ln of lines){if(!ln||ln._drop)continue;n++;
+    if(ln.kind==='hdr'){const q=String(ln.qty==null?'':ln.qty).trim();u=q||null;continue;}
+    const uq=String(ln.unit_qty==null?'':ln.unit_qty).trim(),t=String(ln.qty==null?'':ln.qty).trim();
+    if(ln.kind!=='saw'||u==null||!/^\d+(\.\d+)?$/.test(uq)||!/^\d+(\.\d+)?$/.test(t)||Number.isInteger(+t))continue;
+    return 'Row '+n+' "'+(String(ln.part||'').trim()||'part')+'": '+uq+' per unit × '+u+' units = '+t+' to cut — the total must be a whole number. Change the quantity per unit or the Units.';}
+  return '';}
 function lsUnitsChanged(r){ // a unit heading whose Units this person changed since the editor opened
   if(!r||r.k!=='hdr'||!r.lid||r.units==null)return false;
   const was=r.u0!==undefined?r.u0:(LST.ln.get(r.lid)||{}).kind==='hdr'?(LST.ln.get(r.lid)||{}).qty:null;
@@ -2780,6 +2789,7 @@ async function lsSaveManual(d,by,ex){
   if(!mg.ok)throw new Error('another screen changed this list meanwhile — nothing saved; close and reopen it');
   for(let i=lines.length-1;i>=0;i--)if(lines[i]._drop)lines.splice(i,1);
   lsBlockTotals(lines); // after the merge: every total = per unit × its block's Units (the other screen's parts too)
+  const half=lsHalfTotal(lines);if(half)throw new Error(half); // Garry (answer 10): 1.5 per unit is fine only when the total to cut is whole
   if(mg.kept)setTimeout(()=>toast(mg.kept+' change'+(mg.kept!==1?'s':'')+' saved meanwhile on another screen kept'),2700);
   if(ex&&ex.templateId&&!ex.tpl){
     const tl=await lsTplLines(ex),miss=tl?lsMissing(tl,lines):[];
@@ -3941,7 +3951,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       const t=lsList(tid),lines=lsLinesOf(tid).filter(x=>x.removed_rev==null&&x.status!=='na');
       const blocks0=[];let cur=null;
       lines.forEach(x=>{if(x.kind==='hdr'){cur=String(x.qty==null?'':x.qty).trim()?{name:x.part||'',units:+x.qty||1,parts:[]}:null;if(cur)blocks0.push(cur);return;}if(cur)cur.parts.push(x);});
-      const opts=[...blocks0.map((b,k)=>({k,label:b.name+' ('+b.parts.length+' part'+(b.parts.length!==1?'s':'')+')',name:b.name,parts:b.parts.map(x=>{if(x.unit_qty!=null&&x.unit_qty!=='')return{x,per:String(x.unit_qty)};const pf=lsPerOrFixed(x.qty,b.units);return{x,per:pf.qty,fixed:pf.fixed};})})), // no per-unit: ÷ units if clean, else a fixed total
+      const opts=[...blocks0.map((b,k)=>({k,label:b.name+' ('+b.parts.length+' part'+(b.parts.length!==1?'s':'')+')',name:b.name,parts:b.parts.map(x=>{const pu=lsPerUnit(x,b.units);return{x,per:String(pu.qty),fixed:pu.fixed};})})), // the same rule as a reload (lsPerUnit)
         {k:'all',label:'The whole template as one unit ('+lines.filter(x=>x.kind!=='hdr').length+' parts — quantities as one unit)',name:t.typeName||t.name,parts:lines.filter(x=>x.kind!=='hdr').map(x=>({x,per:String(x.qty==null?'':x.qty)}))}];
       body.innerHTML=`<div style="font-weight:800;color:#14335c;font-size:16px;margin-bottom:6px">📐 ${escA(t.typeName||t.name)} · Rev ${+t.rev||1}</div>
         <div style="font-size:12px;color:var(--t3);margin-bottom:8px">Pick the unit, then how many. The parts are added with the quantity for ONE unit; the total is worked out from the number of units.</div>
@@ -4685,17 +4695,21 @@ function lsPasteAoa(text){
 // Sheets that are never cutting lists (Garry, 3 Nov): the unit library, the index and the stock sheets
 function lsSkipSheet(name){return /^\s*(blank|index|stock|door stock)\s*$/i.test(String(name||''));}
 // per-unit × units = the total to cut ("2x2" or a blank stays as typed — the editor's check asks for a number)
-// A line in a unit block with no per-unit quantity stored (older lines, or a FIXED total): per unit = total ÷ Units when that
-// is a whole number or a clean one-decimal (4 ÷ 2 = 2); otherwise the line stays a FIXED total (2 in a 3-unit block) — never
-// 0.666667 per unit. Returns {qty, fixed}.
-function lsPerOrFixed(total,units){const t=String(total==null?'':total).trim(),u=+units;
-  if(/^\d+(\.\d+)?$/.test(t)&&u>0){const per=+t/u,p10=Math.round(per*10);if(Math.abs(per*10-p10)<1e-9)return{qty:String(p10/10),fixed:false};}
+/* A part in a unit block — ONE rule, used on reload (lsEditRows), template insert, save (lsEdLines / lsBlockTotals):
+   unit_qty = a number → per unit (total = per unit × Units); unit_qty = 'fixed' → a FIXED total (Units never change it);
+   unit_qty blank (saved before 3 Nov) → per unit only if the total divides by the units into a WHOLE number, else fixed.
+   Returns {qty: what the editor shows (per unit, or the fixed total), fixed}. */
+const LS_FIXED='fixed';
+function lsPerUnit(x,units){const uq=String(x.unit_qty==null?'':x.unit_qty).trim(),t=String(x.qty==null?'':x.qty).trim();
+  if(uq.toLowerCase()===LS_FIXED)return{qty:t,fixed:true};
+  if(uq)return{qty:uq,fixed:false};
+  const u=+units;if(/^\d+(\.\d+)?$/.test(t)&&u>0&&Number.isInteger(+t/u))return{qty:String(+t/u),fixed:false};
   return{qty:t,fixed:true};}
 function lsMul(q,u){const a=String(q==null?'':q).trim(),b=String(u==null?'':u).trim();if(!/^\d+(\.\d+)?$/.test(a)||!/^\d+(\.\d+)?$/.test(b))return a;return String(Math.round(+a*+b*1e6)/1e6);}
 /* Editor / import rows → lines for the tables. A row with a length or width goes to the Saw, one without to Stores.
    A part's section = the heading above it. Inside a unit block (a heading with units) the row's qty is PER UNIT: the line
    keeps it as unit_qty and its qty is the TOTAL to cut, so the saw, sheet calculator and labels read qty as before.
-   A FIXED row (r.fixed — a total that doesn't divide by the units) keeps qty as typed and a blank unit_qty: Units don't scale it.
+   A FIXED row (r.fixed — a total that doesn't divide by the units) keeps qty as typed and unit_qty = 'fixed': Units don't scale it.
    A unit heading is stored as kind 'hdr' with qty = the number of units. Old-shape rows (k 'saw'/'fit') still work. */
 function lsEdLines(rows){
   const s=v=>v==null?'':String(v).trim(),n=v=>{const x=parseFloat(String(v==null?'':v).replace(/\s*mm$/i,''));return isNaN(x)?0:x;};
@@ -4706,9 +4720,9 @@ function lsEdLines(rows){
       ln={kind:'hdr',section:'',part:s(r.item),note:s(r.note)};if(units!==null)ln.qty=units;}
     else{ // 'part': Saw if it has a length or width; old-shape rows (k 'saw' / 'fit') keep their kind
       const kind=r.k==='saw'||r.k==='fit'?r.k:n(r.L)>0||n(r.W)>0?'saw':'fit',inU=units!==null;
-      ln={kind,section:sec||s(r.sec),part:s(r.item),qty:inU&&!r.fixed?lsMul(r.qty,units):s(r.qty),unit_qty:inU&&!r.fixed?s(r.qty):'',material:s(r.mat),edging:s(r.edging),note:s(r.note)};
+      ln={kind,section:sec||s(r.sec),part:s(r.item),qty:inU&&!r.fixed?lsMul(r.qty,units):s(r.qty),unit_qty:inU?(r.fixed?LS_FIXED:s(r.qty)):'',material:s(r.mat),edging:s(r.edging),note:s(r.note)};
       // a per-unit quantity with more than 3 decimals (0.666667) would save rounding noise (2.000001): kept as a fixed total
-      if(inU&&!r.fixed&&/^\d+\.\d{4,}$/.test(s(r.qty))&&/^\d+(\.\d+)?$/.test(units)){ln.qty=String(Math.round(+s(r.qty)*+units*1000)/1000);ln.unit_qty='';}
+      if(inU&&!r.fixed&&/^\d+\.\d{4,}$/.test(s(r.qty))&&/^\d+(\.\d+)?$/.test(units)){ln.qty=String(Math.round(+s(r.qty)*+units*1000)/1000);ln.unit_qty=LS_FIXED;}
       if(kind==='saw'){ln.length_mm=r.L;ln.width_mm=r.W;}else{ln.length_mm='';ln.width_mm='';}
       if(r.matOther)ln.material_other=true;
     }
