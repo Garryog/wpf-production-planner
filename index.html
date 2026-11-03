@@ -101,8 +101,10 @@ button,input,select{font-family:inherit;cursor:pointer}
 @keyframes sp{to{transform:rotate(360deg)}}
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1a1d23;color:#fff;padding:9px 20px;border-radius:100px;font-size:13px;font-weight:500;z-index:9999;pointer-events:none;opacity:0;transition:opacity .2s;white-space:nowrap}
 .toast.show{opacity:1}
-.toast.stick{pointer-events:auto;cursor:pointer;white-space:pre-line;width:max-content;max-width:calc(100vw - 24px);box-sizing:border-box;border-radius:10px;text-align:left;background:#fff4d6;color:#7a5200;border:1px solid #e0a43a;font-weight:700;padding:10px 14px;line-height:1.35;max-height:60vh;overflow:auto}
-.toast.stick::after{content:'Tap to close ✕';display:block;margin-top:4px;font-size:12px;font-weight:500;text-align:right}
+.toast.stick{pointer-events:none;white-space:normal;width:max-content;max-width:calc(100vw - 24px);box-sizing:border-box;border-radius:10px;text-align:left;background:#fff4d6;color:#7a5200;border:1px solid #e0a43a;font-weight:700;padding:8px 34px 8px 12px;line-height:1.35;max-height:25vh;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end}
+.toast.stick .toast-i+.toast-i{border-top:1px solid #e0a43a;margin-top:5px;padding-top:5px}
+.toast .toast-x{pointer-events:auto;position:absolute;top:2px;right:2px;background:none;border:0;color:#7a5200;font-size:18px;line-height:1;padding:6px 8px;cursor:pointer}
+.toast .toast-x::before{content:'✕'}
 .savebar{position:sticky;top:0;z-index:9000;background:#c0392b;color:#fff;font-size:14px;font-weight:700;line-height:1.4;padding:10px 16px;text-align:center}
 .savebar[hidden]{display:none}
 .verbar{position:sticky;top:0;z-index:8999;width:100%;border:0;background:#14335c;color:#fff;font-size:14px;font-weight:700;padding:10px 16px;cursor:pointer}
@@ -1099,15 +1101,22 @@ function updSaveBar(){
     ?'⚠ NOT SAVING — the planner database came back empty or damaged ('+DB.remoteBroken+'). Nothing is being written over it. '+kept+(DB.pendFail?'':'. Tell the office.')
     :'⚠ NOT SAVED YET — '+(DB.pendFail?kept:'changes are kept on this device and will be sent automatically when the connection is back. Keep this page open.');
 }
-/* toast(m): a short note that fades after 2.5 s. toast(m,true): a warning that stays on screen (wrapping on a phone) until
-   tapped — used when something this screen did was NOT saved as asked. A short note shown meanwhile doesn't hide it. */
-function toastPaint(t,m,st){t.textContent=m;t.classList.toggle('stick',!!st);t.classList.add('show');}
+/* toast(m): a short note that fades after 2.5 s. toast(m,true): a warning that stays (up to 3, newest last, each its own
+   block; a line break inside one shows as a space) until its ✕ is tapped — used when something this screen did was NOT
+   saved as asked. Taps go through the box to the buttons under it (only the ✕ catches them), and it is never more than
+   a quarter of the screen high. A short note shown meanwhile doesn't wipe the warnings. */
+function toastPaint(t,m,st){
+  t.classList.toggle('stick',!!st);t.classList.add('show');
+  if(!st){t.textContent=m;return;}
+  t.textContent='';const x=document.createElement('button');x.type='button';x.className='toast-x';x.setAttribute('aria-label','Close');t.appendChild(x);
+  m.forEach(s=>{const d=document.createElement('div');d.className='toast-i';d.textContent=s;t.appendChild(d);});
+}
 function toast(m,stick){
   const t=document.getElementById('toast');clearTimeout(t._x);
-  if(!t._on){t._on=1;t.addEventListener('click',()=>{if(!t._stick)return;t._stick='';t.classList.remove('show','stick');});}
-  if(stick){t._stick=(t._stick?t._stick.split('\n').slice(-2).join('\n')+'\n':'')+m;toastPaint(t,t._stick,true);return;} // up to 3 warnings, newest last
+  if(!t._on){t._on=1;t.addEventListener('click',()=>{if(!(t._stick&&t._stick.length))return;t._stick=null;t.classList.remove('show','stick');});}
+  if(stick){t._stick=(t._stick||[]).concat(String(m)).slice(-3);toastPaint(t,t._stick,true);return;}
   toastPaint(t,m,false);
-  t._x=setTimeout(()=>{if(t._stick)toastPaint(t,t._stick,true);else t.classList.remove('show');},2500);
+  t._x=setTimeout(()=>{if(t._stick&&t._stick.length)toastPaint(t,t._stick,true);else t.classList.remove('show');},2500);
 }
 function fmt(s){if(!s)return'—';return new Date(s).toLocaleDateString('en-IE',{day:'numeric',month:'short',year:'2-digit'});}
 function getMonday(d){
