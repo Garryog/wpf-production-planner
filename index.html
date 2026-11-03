@@ -3596,6 +3596,7 @@ function lsProjEdges(pid){ // the standard edging codes plus any already used on
   LST.ln.forEach(x=>{const l=LST.l.get(x.list_id);if(!l||l.project_id!==pid)return;const e=String(x.edging||'').trim();if(e&&!seen.has(e.toLowerCase())){seen.add(e.toLowerCase());out.push(e);}});
   return out;
 }
+function lsAutoHidden(r){return !!r&&r.k==='part'&&!(lsNum(r.L)>0||lsNum(r.W)>0)&&!lsEmptyRow(r)&&!!r.matAuto&&String(r.mat||'')===String(r.matAuto);} // a typed Stores row with only the copied default colour (an empty new row still shows it)
 function lsTicked(id){return !!id&&Object.keys(lsView(id).ticks).length>0;} // the saw (or stores) has started: any line ticked
 function lsHasEditPin(){if(['prod','design'].includes(ROLE))return true;const p=pins(),v=ls.get('wpfEditPin');return !!v&&[p.prod,p.design,p.admin].includes(v);}
 const LS_LOCK_MSG='Saw has started — make a new list for a different number of units';
@@ -3631,7 +3632,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
   // is saved as Stores (no length or width) with that default still on it is saved with NO colour (Garry, 3 Nov).
   const defMat=i=>{for(let j=i-1;j>=0;j--){const r=R()[j];if(r.k==='part'&&(lsNum(r.L)>0||lsNum(r.W)>0)&&String(r.mat||'').trim())return r.mat;}return st.carcass||st.door||'';};
   const blank=i=>{const m=defMat(i),r={k:'part',item:'',qty:'',L:'',W:'',mat:m,edging:'',note:''};if(m)r.matAuto=m;return r;};
-  const noAutoStores=r=>r.k==='part'&&!(lsNum(r.L)>0||lsNum(r.W)>0)&&r.matAuto&&String(r.mat||'')===String(r.matAuto)?{...r,mat:''}:r;
+  const noAutoStores=r=>lsAutoHidden(r)?{...r,mat:''}:r;
   const snap=()=>{st.undo.push(JSON.stringify(R()));if(st.undo.length>100)st.undo.shift();};
   // a structural change (row deleted / heading added) never changes a part's TOTAL: per-unit quantities are re-worked
   const keepTotals=fn=>{
@@ -3647,8 +3648,11 @@ function openListEditor2(listId,presetWo,presetPid,opt){
   const curRow=()=>{const i=parseInt(String(st.cur).split('|')[0]);return isNaN(i)||i>=R().length?-1:i;};
   const endOfBlock=i=>{let j=i+1;while(j<R().length&&R()[j].k!=='hdr')j++;return j;};
   const matSel=(r,i,id)=>{
-    const sm=sheetMats(),fm=fitMats(),v=String(r.mat||'').trim(),all=[...sm,...fm],on=all.find(n=>n.toLowerCase()===v.toLowerCase());
-    const sized=lsNum(r.L)>0||lsNum(r.W)>0,o=n=>`<option value="${escA(n)}"${on===n?' selected':''}>${escA(n)}</option>`;
+    const sized=lsNum(r.L)>0||lsNum(r.W)>0;
+    // a Stores row still carrying only the copied default colour is saved with NO colour — so it shows none (pick one to keep it)
+    const v=!id&&lsAutoHidden(r)?'':String(r.mat||'').trim();
+    const sm=sheetMats(),fm=fitMats(),all=[...sm,...fm],on=all.find(n=>n.toLowerCase()===v.toLowerCase());
+    const o=n=>`<option value="${escA(n)}"${on===n?' selected':''}>${escA(n)}</option>`;
     return `<select ${id?'id="'+id+'"':'data-mr="'+i+'|mat"'} class="me-c"${id?` style="${inp};width:100%${v&&!on?';'+amber:''}"`:v&&!on?` style="${amber}"`:''}${v&&!on?' title="Not on the project\'s materials — flagged for the Production Manager"':''}><option value="">${id?'— none —':'— colour —'}</option>
       ${sm.length?`<optgroup label="Boards / colours">${sm.map(o).join('')}</optgroup>`:''}${fm.length&&!sized&&!id?`<optgroup label="Fittings &amp; hardware">${fm.map(o).join('')}</optgroup>`:''}
       ${v&&!on?`<option value="${escA(v)}" selected>⚠ ${escA(v)} (not on the project list)</option>`:''}${id?'':'<option value="__add">＋ Add new material…</option>'}</select>`;};
@@ -3691,7 +3695,8 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     if(window.innerWidth<700)return `<div class="me-cards">${R().map((r,i)=>cardHTML(r,i,b)).join('')||'<div style="color:var(--t3);padding:10px">No rows yet — press ＋ Row.</div>'}</div>`;
     return `<table class="me-tbl me-grid"><colgroup><col style="width:76px"><col><col style="width:104px"><col style="width:76px"><col style="width:76px"><col style="width:150px"><col style="width:108px"><col style="width:17%"><col style="width:40px"></colgroup><thead><tr><th></th><th>Description</th><th>Qty</th><th>Length</th><th>Width</th><th>Colour</th><th>Edging</th><th>Note</th><th></th></tr></thead><tbody>${R().map((r,i)=>rowHTML(r,i,b)).join('')||'<tr><td colspan="9" style="color:var(--t3);padding:10px">No rows yet — press ＋ Row.</td></tr>'}</tbody></table>`;};
   const updTotals=()=>{const b=blocks();ov.querySelectorAll('[data-tot]').forEach(e=>{const i=+e.dataset.tot,r=R()[i];if(r&&b.U[i]!=null)e.textContent='= '+totalOf(r,b.U[i]);});};
-  const updTag=i=>{const t=ov.querySelector('[data-tag="'+i+'"]'),r=R()[i];if(t&&r)t.hidden=lsNum(r.L)>0||lsNum(r.W)>0||lsEmptyRow(r);};
+  const updTag=i=>{const t=ov.querySelector('[data-tag="'+i+'"]'),r=R()[i];if(t&&r)t.hidden=lsNum(r.L)>0||lsNum(r.W)>0||lsEmptyRow(r);
+    const s=ov.querySelector('[data-mr="'+i+'|mat"]');if(s&&r&&r.matAuto&&String(r.mat||'')===String(r.matAuto)){const w=lsAutoHidden(r)?'':String(r.mat);if(s.value!==w&&(w===''||[...s.options].some(x=>x.value===w)))s.value=w;}};
   const draw=()=>{
     const a=document.activeElement,fk=st.focus||(a&&ov.contains(a)&&a.dataset&&a.dataset.mr)||'',ss=a&&a.selectionStart!=null?[a.selectionStart,a.selectionEnd]:null,sc=(ov.querySelector('#me-grid')||{}).scrollTop||0;
     st.focus='';
@@ -3771,7 +3776,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       if(el.tagName==='SELECT'){el.onchange=el.oninput=()=>{const r=R()[i];if(!r||!ov.contains(el)||el.value===r.mat)return; // input + change both fire: act once
         if(el.value==='__add'){addMat(i);return;}snap();r.mat=el.value;delete r.matAuto;st.focus=i+'|mat';draw();};return;}
       el.oninput=()=>{const r=R()[i];if(!r)return;if(st.snapKey!==el.dataset.mr){snap();st.snapKey=el.dataset.mr;}r[f]=el.value;
-        if(f==='qty'||f==='units')updTotals();if(f==='L'||f==='W'||f==='item'||f==='qty')updTag(i);};
+        if(f==='qty'||f==='units')updTotals();if(f==='L'||f==='W'||f==='item'||f==='qty'||f==='edging'||f==='note')updTag(i);};
     });
     ov.querySelectorAll('[data-mrx]').forEach(b=>b.onclick=()=>delRow(+b.dataset.mrx));
     const g=id=>ov.querySelector('#'+id);
