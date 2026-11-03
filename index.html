@@ -3664,10 +3664,29 @@ function sgFeat(s){
 }
 // Words a WO title may carry beyond the house / type / room / number without making it a different job (house-type words
 // and where the unit is). Anything else ("EXTRA UNITS", "REMEDIAL", "SHOWHOUSE", "NO APPLIANCES") = amber (Garry, answer 5).
-const SG_OK=new Set(['semi','detached','det','terrace','terraced','mid','end','duplex','bungalow','townhouse','storey','ground','floor','first','second','third','fourth','fifth','top','number','house','houses','apts','apartments','plots','units','sites','blocks']);
+// (Tester round 3) Plural words (HOUSES, UNITS, PLOTS) are NOT allowed: they mean more than one. "First / second / ground"
+// are allowed only as a floor ("FIRST FLOOR") — "SECOND KITCHEN" is a second kitchen.
+const SG_OK=new Set(['semi','detached','det','terrace','terraced','mid','end','duplex','bungalow','townhouse','storey','floor','flr','number','house']);
+const SG_FLOOR=['ground','first','second','third','fourth','fifth','top','1st','2nd','3rd','4th','5th'];
 function sgExtra(f,g,p){
   const own=new Set([p&&p.name,p&&p.customer,...((p&&p.cien_names)||[])].flatMap(n=>sgPh(sgNorm(n)).split(' ')));
-  return[...f.words].filter(w=>!g.words.has(w)&&!SG_OK.has(w)&&!SG_CO.has(w)&&!own.has(w)&&!/^\d+[a-z]?$|^\d+(bed|beds|b)$/.test(w)&&!SG_KIND.some(([,re])=>re.test(w)));
+  const fl=new Set(SG_FLOOR.filter(w=>new RegExp('\\b'+w+' (floor|flr)\\b').test(f.n)));
+  return[...f.words].filter(w=>!g.words.has(w)&&!SG_OK.has(w)&&!fl.has(w)&&!SG_CO.has(w)&&!own.has(w)&&!/^\d+[a-z]?$|^\d+(bed|beds|b)$|^ph\d+$/.test(w)&&!SG_KIND.some(([,re])=>re.test(w)));
+}
+// A title that changes HOW MANY are made is never green (Tester round 3): more than one house ("HOUSES 14-16", "14 & 15"),
+// a count ("X2", "2 UNITS", "2 KITCHENS"), or a phase that isn't the heading's phase ("PHASE 3" under a Phase 2 heading).
+// Returns the reason, or ''.
+function sgQtyWhy(title,cust,p){
+  const raw=String(title==null?'':title).toLowerCase(),n=sgPh(sgNorm(raw));
+  // type codes ("TYPE B-1", "TYPE 2") and phases ("PH 2") are not house numbers or counts
+  const r2=raw.replace(/\b([a-z]{1,2}) ?- ?(\d{1,2})\b/g,'$1$2').replace(/\b(?:type|phase|ph)\s*[a-z0-9]{0,4}\b/g,' ');
+  if(/\b(houses|hses|units|plots|apts|apartments|nos)\b/.test(n))return'title names more than one house or unit';
+  if(/\b\d+[a-z]?\s*(?:-|–|&|\/|\+|,|\band\b|\bto\b)\s*\d+[a-z]?\b(?!\s*-?\s*(?:bed|b\b))/.test(r2))return'title names more than one house';
+  if(/(^|[^a-z0-9])x\s?\d+\b|\b\d+\s?x($|[^a-z0-9])/.test(r2))return'title says how many ("x2")';
+  for(const cm of sgNorm(r2).matchAll(/(?:^|\s)(?:(\S+) )?\d+ (?:units?|kitchens?|sets?|off|no)\b/g)) // "2 UNITS" — not "HOUSE 14 KITCHEN"
+    if(!/^(house|hse|no|number|apt|apartment|unit|plot|block|site|flat|nr)$/.test(cm[1]||''))return'title says how many';
+  const tp=sgPhN(n);if(tp){const hp=sgPhN(sgPh(sgNorm(cust)))||sgPhN(sgPh(sgNorm(p&&p.name)));if(tp!==hp)return'title says phase '+tp+(hp?', the heading is phase '+hp:'');}
+  return'';
 }
 function suggestTpl(o,templates,projects){
   const none=(why,pid)=>({level:'none',pid:pid||'',tid:'',alts:[],why});
@@ -3675,7 +3694,7 @@ function suggestTpl(o,templates,projects){
   if(!p)return none(String(o.customer||'').trim()?'No project is linked to this customer yet':'No customer on this work order');
   const ts=(templates||[]).filter(t=>t&&t.pid===p.id&&!t.archived);
   if(!ts.length)return none('This project has no templates yet',p.id);
-  const f=sgFeat(o.title);
+  const f=sgFeat(o.title),qx=sgQtyWhy(o.title,o.customer,p);
   const sc=ts.map(t=>{
     const g=sgFeat([t.name,t.typeName].filter(Boolean).join(' '));
     if(t.ltype==='kitchen'&&!g.kinds.size)g.kinds.add('kitchen');
@@ -3691,9 +3710,10 @@ function suggestTpl(o,templates,projects){
     // goes with a kitchen ("Kitchen + Utility" is one kitchen list).
     const oRoom=[...f.kinds].some(k=>!g.kinds.has(k)&&!(k==='utility'&&g.kinds.has('kitchen')));
     const ext=sgExtra(f,g,p);
-    const strong=!f.multi&&!oRoom&&!ext.length&&(!f.kinds.size||kHit)&&/* the title names a room → the template must name the same room */((cHit&&(kHit||!g.kinds.size||!f.kinds.size))||(ph&&(!f.code||cHit)));
+    const strong=!f.multi&&!qx&&!oRoom&&!ext.length&&(!f.kinds.size||kHit)&&/* the title names a room → the template must name the same room */((cHit&&(kHit||!g.kinds.size||!f.kinds.size))||(ph&&(!f.code||cHit)));
     const why=[cHit?'type '+f.code.toUpperCase():'',kHit?[...g.kinds].filter(k=>f.kinds.has(k)).join(' + '):'',bHit?f.beds+' bed':'',ph&&!cHit?'name':''].filter(Boolean);
-    if(ext.length)why.push('title also says "'+ext.slice(0,3).join(' ').toUpperCase()+'" — check it');
+    if(qx)why.push(qx+' — check it');
+    else if(ext.length)why.push('title also says "'+ext.slice(0,3).join(' ').toUpperCase()+'" — check it');
     else if(oRoom)why.push('title names another room too — check it');
     return{t,score,strong,why,cHit};
   }).filter(x=>x&&x.score>0).sort((a,b)=>b.score-a.score||String(a.t.typeName||a.t.name).localeCompare(String(b.t.typeName||b.t.name)));
