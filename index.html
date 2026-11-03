@@ -517,6 +517,7 @@ let saveT=null,dragSrc=null;
 let BASE=null;   // the plan exactly as last agreed with the database (load or successful save)
 let VER=null;    // database version of BASE; null = version column missing → old save behaviour
 let SAVING=false,SAVE_AGAIN=false;
+let SAVE_OVERS=0,LAST_OVER=null; // count of saves found landed but already saved over by another screen (the last such plan)
 let UNSURE=[]; // plans sent by saves whose reply never arrived (each may or may not have landed)
 const USV=new WeakMap(); // unconfirmed save → the version it would have written
 // No cap by count: a record is kept until a save is confirmed or a load shows a version at/after the one it sent.
@@ -929,8 +930,10 @@ async function pushPlan(){
       body:JSON.stringify({...mine,version:VER+1,updated_by:whoTag()})});}
     catch(e){ // no reply: it may have landed. Look at the database straight away, before other screens move it on.
       const c=await saveCheck(mine,VER+1,tok);
-      if(c>0){VER=c;BASE=mine;UNSURE=[];return;} // it did land — same as a normal reply (if someone saved over it since, c is our
-      // version, not theirs: the next save or refresh merges their change against what we sent, so e.g. their untick stays)
+      if(c>0){VER=c;BASE=mine;UNSURE=[];return;} // it did land (the database holds exactly what we sent) — same as a normal reply
+      // It landed, but another screen has saved over it since: VER is our version, not theirs, so the next save or refresh
+      // merges their change against what we sent (e.g. their untick stays). Counted, so callers can re-check (cutting-list folds).
+      if(c&&c.over){VER=c.over;BASE=mine;UNSURE=[];USV.set(mine,c.over);SAVE_OVERS++;LAST_OVER=mine;return;}
       if(c==='lost'){unsureDel(mine);continue;} // it did not (and now never can): merge and go again
       throw e; // can't tell — it stays in UNSURE so it isn't mistaken for someone else's change
     }
@@ -960,7 +963,7 @@ async function pushPlan(){
 /* A save got no reply. Every save says "only if the database is still at version v-1", so the database tells us:
    holding exactly what we sent (at v, or later if nothing has changed since) → it landed: returns that version; at v
    holding something else → 'lost' (another screen took v); still below v at the 0.25 s look → 'lost' (it never got there).
-   Past v with other content: if the row still lists this save's tag (tok) in saveIds → it landed at v: returns v;
+   Past v with other content: if the row still lists this save's tag (tok) in saveIds → it landed at v: returns {over:v};
    otherwise can't tell (''). A read that fails (signal still out) is tried
    again — at about 0.05, 0.25, 0.6, 1.2, 2, 3 and 4 s, giving up after ~5 s — and only then "can't tell" (''). The screen
    keeps working meanwhile: taps are kept and saved straight after (saveDB's "go again"). */
@@ -975,7 +978,7 @@ async function saveCheck(p,v,tok){
     const rv=+row.version||1;
     const mine=same(row.orders||[],p.orders||[])&&same(row.settings||{},p.settings||{})&&(+row.nid||0)===(+p.nid||0);
     if(rv>=v&&mine)return rv;
-    if(rv>=v&&tok&&row.settings&&Array.isArray(row.settings.saveIds)&&row.settings.saveIds.includes(tok))return v; // ours landed; someone saved since
+    if(rv>=v&&tok&&row.settings&&Array.isArray(row.settings.saveIds)&&row.settings.saveIds.includes(tok))return{over:v}; // ours landed at v; someone saved since
     if(rv===v)return'lost';
     if(rv>v)return'';
     if(ms>=250)return'lost'; // still not there at the second look: it never got there (if it turns up later it is refused — the re-send has moved the version on)
