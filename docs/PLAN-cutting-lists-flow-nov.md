@@ -77,3 +77,5 @@
 2. Always one customer per project. The project title is always part of the WO customer heading in Cienapps, even when a builder has several jobs with us. So the customer heading identifies the project, and there is no per-WO project pick.
 3. The saw's red "ON DELIVERY – NO CUTTING LIST" warning covers work orders that have been DRAGGED ONTO THE DELIVERY SCHEDULE, meaning given a van and day (delVeh + delDay). The undated delivery pool and the automatic step 7/8 tag do NOT count for the red warning. They still show in the amber "waiting for a list" count.
 4. On go-live day, show every processed WO with no list. Old ones are cleared with "No list needed" or "Paper list issued".
+5. (3 Nov, later) A WO title with extra words beyond house/type/room (e.g. "- EXTRA UNITS", "- REMEDIAL", "& WARDROBES", "- SHOWHOUSE") is AMBER, never green, so someone checks it first.
+6. (3 Nov, later) A customer heading with only the builder's name (e.g. "CAIRN HOMES") links AUTOMATICALLY when that builder has exactly one project in the planner.
