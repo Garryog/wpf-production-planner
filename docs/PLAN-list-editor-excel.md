@@ -80,3 +80,8 @@ Paste and import both go through one pure function, `lsParseGrid(aoa, {formulas}
 1. Row with no colour: A) Carcass colour, except "door"/"drawer front" rows get the Door colour (recommended); B) always Carcass.
 2. Changing number of units after the saw has started: A) that block resets and is flagged CHANGED (recommended); B) only allowed before the saw starts, after that a new list.
 3. The "Blank" sheet on import: A) becomes the project's "Standard units" template (recommended); B) skipped.
+
+## Garry's answers (3 Nov 2026) — APPROVED for build with these changes
+1. **Colour:** every row's Colour is a DROPDOWN of the project's preloaded materials, with an **"+ Add new material…"** option that adds it to the project's material list (and selects it). No automatic carcass/door fill rule: the header colours become an optional default for new rows (a new row starts with the previous row's colour), and they can always be changed.
+2. **Changing the number of units after the saw has started → a NEW LIST**, not a Rev 2 reissue. Before the saw starts, Units can change freely. After any line is ticked, the Units box is locked and shows "Saw has started — make a new list for a different number of units". A **"Make new list from this"** button copies it (no ticks) for editing. Other edits keep the existing Rev 2 rule.
+3. **"Blank" sheet on import: ignore it** (and the Index, Stock and Door Stock sheets). No "Standard units" template from it. "Insert unit from template…" (step 10) still works from templates made with Save as template.

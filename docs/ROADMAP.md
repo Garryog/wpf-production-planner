@@ -91,6 +91,7 @@ Rules: rank by the leading number. "Shipped" = step 9 only (left the factory →
 - Cutting-list flow plan (docs/PLAN-cutting-lists-flow-nov.md) APPROVED by Garry 3 Nov with answers: reissue as Rev 2 keeping unchanged ticks; one customer per project (project title is in the Cienapps customer heading); saw's red warning = WOs dragged onto the delivery schedule (van + day); day one shows all processed WOs with no list.
 - List creation (Garry, 3 Nov): today lists are typed in Excel by hand and/or written on paper. Making a list in the planner must feel LIKE EXCEL: a grid you type across with Tab/Enter, paste rows straight from Excel, copy a row down, change quantities quickly. Waiting on a sample of WPF's Excel cutting-list sheet to match columns.
 - List creation (Garry, 3 Nov, after the format review docs/CUTTING-LIST-FORMAT-REVIEW.md): create a cutting list, with the option to make that list a TEMPLATE that can be picked again; templates must be editable. Saw lists only — CNC 'Crystal Report' PDFs stay out of the planner.
+- List editor plan (docs/PLAN-list-editor-excel.md) APPROVED 3 Nov with Garry's answers: colour = dropdown of project materials + 'Add new material'; changing number of units after the saw started = a NEW list; ignore the 'Blank' sheet on Excel import.
 - (7) Revisions: when a list changes, a NEW cutting list needs to be created (Garry, 3 Nov). (8) Main problem today: cutting lists are issued too late. The saw must also be told when a job that is SCHEDULED FOR DELIVERY has no cutting list.
 
 ## Progress log
