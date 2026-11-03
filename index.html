@@ -4034,6 +4034,7 @@ function lsSaveAsTpl(src,done){
     const ov=lsDlg('<div id="at-body"></div>',620);
     const draw=()=>{
       const ex=lsTplByName(src.pid,st.name);if(!ex)st.mode='new';else if(!st.mode)st.mode='upd'; // same name as a template: Update is offered first
+      if(ex&&(st.seen||{}).id!==ex.id)st.seen={id:ex.id,rev:+ex.rev||1,parts:!LST.full.has(ex.id)?null:lsLinesOf(ex.id).filter(x=>x.removed_rev==null&&x.kind!=='hdr').map(x=>x.part)}; // the Rev this person is updating from
       const nP=lines.filter(x=>x.kind!=='hdr').length,nU=lines.filter(x=>x.kind==='hdr'&&String(x.qty||'').trim()).length;
       ov.querySelector('#at-body').innerHTML=`<div style="font-weight:800;color:#14335c;font-size:17px;margin-bottom:4px">📐 Save as template</div>
         <div style="font-size:12px;color:var(--t3);margin-bottom:10px">From <b>${escA(src.name||'this list')}</b> (${nP} part${nP!==1?'s':''}${nU?', '+nU+' unit block'+(nU!==1?'s':''):''}) into <b>${escA(lsProjName(src.pid))}</b>. Headings and per-unit quantities are copied; ticks never are. This list is not changed and is not linked to the template.</div>
@@ -4055,11 +4056,26 @@ function lsSaveAsTpl(src,done){
         const b=q('at-ok');b.disabled=true;err('Saving…');
         const ls2=lines.map(x=>({...x}));lsFlagMats(ls2,src.pid);
         const why=st.why.trim();
-        const p=ex&&st.mode==='upd'
+        // Update template by two people at once: check the template is still the Rev this dialog showed. If someone else
+        // updated it meanwhile, say who and what changed and offer to reload — never a silent overwrite of their Rev.
+        const clash=async()=>{if(!(ex&&st.mode==='upd'))return;await lsReloadList(ex.id);const t=lsList(ex.id);
+          if(!t||t.archived)throw new Error('that template is no longer there (archived on another screen)');
+          if((+t.rev||1)===st.seen.rev)return;
+          const now=lsLinesOf(ex.id).filter(x=>x.removed_rev==null&&x.kind!=='hdr').map(x=>x.part),was=st.seen.parts;
+          const add=was?now.filter(x=>!was.includes(x)):[],gone=was?was.filter(x=>!now.includes(x)):[],lg=(t.log||[]).slice(-1)[0]||{};
+          const e=new Error('');e.clash={t,add,gone,by:lg.by||'',why:lg.why||''};throw e;};
+        const p=(ex&&st.mode==='upd'?clash():Promise.resolve()).then(()=>ex&&st.mode==='upd'
           ?lsSaveList({id:ex.id,list_type:st.type,type_name:name},ls2,whoNow(),why||'Template updated from "'+(src.name||'a list')+'"')
-          :lsSaveList({id:uid('L'),name,project_id:src.pid,is_template:true,list_type:st.type,type_name:name,source:'template',wos:[]},ls2,whoNow(),'Saved as a template from "'+(src.name||'a list')+'"');
+          :lsSaveList({id:uid('L'),name,project_id:src.pid,is_template:true,list_type:st.type,type_name:name,source:'template',wos:[]},ls2,whoNow(),'Saved as a template from "'+(src.name||'a list')+'"'));
         p.then(r=>{ov.remove();render();toast(r.same?'Template "'+name+'" already has exactly these rows — nothing changed':ex&&st.mode==='upd'?'Template "'+name+'" updated — now Rev '+(+r.list.rev||1)+' ✓':'Template "'+name+'" saved in '+lsProjName(src.pid)+' ✓');if(done)done(r.list);})
-          .catch(e=>{b.disabled=false;err('Not saved — '+e.message);});
+          .catch(e=>{b.disabled=false;
+            if(!e.clash)return err('Not saved — '+e.message);
+            const k=e.clash,li=a=>a.slice(0,8).map(escA).join(', ')+(a.length>8?' …':'');
+            q('at-err').innerHTML=`Not saved — <b>${escA(k.by||'Someone')}</b> updated this template on another screen while you had this open: it is now <b>Rev ${+k.t.rev||1}</b>${k.why?' ("'+escA(k.why)+'")':''}.
+              ${k.add.length?'<br>Added: '+li(k.add):''}${k.gone.length?'<br>Removed: '+li(k.gone):''}${!k.add.length&&!k.gone.length?'<br>(open its History to see what changed)':''}
+              <br>Your rows would replace theirs. <button class="btn btn-s" id="at-reload" style="font-size:12px;padding:3px 9px">↻ Reload — show Rev ${+k.t.rev||1}, then decide</button>`;
+            toast('Not saved — '+(k.by||'someone')+' updated template "'+name+'" meanwhile (now Rev '+(+k.t.rev||1)+')',true);
+            const rl=q('at-reload');if(rl)rl.onclick=()=>{st.seen=null;draw();};});
       };
     };
     draw();
