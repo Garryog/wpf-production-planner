@@ -3340,8 +3340,39 @@ function ltiBind(){
   q('#lti-dx',b=>b.onclick=()=>{LTI.done=[];ltiAfter();});
   ltiLinkBind();
 }
-function ltiLinkHTML(o){return'';} // step 4
-function ltiLinkBind(){}
+/* Customer = project: a WO whose Cienapps customer heading isn't linked to a project yet. "Link to project ▾" adds the
+   heading to that project's Cienapps names (cien_names); "+ New project" makes a project for it. Either way every WO with
+   the same heading follows. Needs the Production Manager / Drawing office / Admin PIN once on an office PC. */
+function ltiLinkHTML(o){
+  const c=String(o.customer||'').trim(),w=o.wo,btn='font-size:12px;padding:6px 10px;margin:2px 4px 2px 0';
+  if(!c)return `<div class="lti-act"><span class="lti-why">No customer on this work order in Cienapps — </span><button class="btn btn-s" data-ltitype="${escA(w)}" style="${btn}">✍ Type a list</button></div>`;
+  return `<div class="lti-act"><span style="font-size:12px;color:#7a4a00;font-weight:700;margin-right:6px">Customer not linked to a project:</span>
+    <select data-ltilink="${escA(w)}" style="${LS_INP};max-width:100%;margin:2px 4px 2px 0"><option value="">Link to project ▾</option>${lsProjects().map(p=>`<option value="${escA(p.id)}">${escA(p.name)}</option>`).join('')}</select>
+    <button class="btn btn-s" data-ltinewp="${escA(w)}" style="${btn};overflow-wrap:anywhere;text-align:left">＋ New project "${escA(c)}"</button></div>`;
+}
+async function ltiLink(o,pid){ // add the customer heading to the project's Cienapps names
+  const c=String(o.customer||'').trim();
+  lsPut('projects',await lsGet('projects?select=*&id=eq.'+encodeURIComponent(pid))); // the project as it is now
+  const p=LST.p.get(pid);if(!p)throw new Error('that project is no longer there');
+  const has=(p.cien_names||[]).some(n=>sgNorm(n)===sgNorm(c));if(has&&p.active!==false)return p;
+  return lsWrite('projects',p,{...(has?{}:{cien_names:[...(p.cien_names||[]),c]}),...(p.active===false?{active:true}:{})}); // an inactive project picked here is made active again
+}
+function ltiLinkBind(){
+  const fail=(w,e)=>{LTI.res[w]={err:e.message};ltiAfter();};
+  document.querySelectorAll('[data-ltitype]').forEach(b=>b.onclick=()=>openListEditor(null,b.dataset.ltitype));
+  document.querySelectorAll('[data-ltilink]').forEach(e=>e.onchange=()=>{const w=e.dataset.ltilink,o=DB.orders.find(x=>x.wo===w),pid=e.value;if(!o||!pid)return;
+    if(!lsEditOk()){e.value='';return;}
+    delete LTI.res[w];ltiLink(o,pid).then(p=>{toast('"'+String(o.customer).trim()+'" is now linked to '+p.name+' ✓');ltiAfter();}).catch(x=>fail(w,x));});
+  document.querySelectorAll('[data-ltinewp]').forEach(b=>b.onclick=()=>{const w=b.dataset.ltinewp,o=DB.orders.find(x=>x.wo===w);if(!o)return;
+    const c=String(o.customer||'').trim();if(!c||!lsEditOk())return;
+    delete LTI.res[w];b.disabled=true;
+    (async()=>{lsPut('projects',await lsGet('projects?select=*'));
+      const ex=lsProjFind(c); // already a project of that name (maybe made on another PC a moment ago): link to it
+      if(ex)return ltiLink(o,ex.id);
+      try{return await lsWrite('projects',{id:uid('P'),name:c,customer:c,cien_names:[c]});}
+      catch(x){lsPut('projects',await lsGet('projects?select=*'));const p=lsProjFind(c);if(p)return ltiLink(o,p.id);throw x;}})()
+      .then(p=>{toast('Project "'+p.name+'" added — add its templates under Lists → Templates');ltiAfter();}).catch(x=>fail(w,x));});
+}
 /* ---------- S4 (V2 only): the list editor with project picker, type, edging, and materials picked from the project ----------
    Saw material: only the project's sheet materials (no free typing). Fittings spec: the project's fittings, or "Other…"
    typed — that line gets an amber flag. A material already on a line but not on the project list stays, flagged. */
