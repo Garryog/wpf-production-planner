@@ -2676,7 +2676,7 @@ function lsEditRows(id){ // the typed-list editor's rows, with edging and note k
   let units=null;
   return live.map(x=>{
     const base={lid:x.id,sig:lsLineSig(x),opened:at,ids};
-    if(x.kind==='hdr'){const u=String(x.qty==null?'':x.qty).trim();units=u?+u:null;const h={k:'hdr',item:x.part||'',note:x.note||'',...base};if(u)h.units=u;return h;}
+    if(x.kind==='hdr'){const u=String(x.qty==null?'':x.qty).trim();units=u?+u:null;const h={k:'hdr',item:x.part||'',note:x.note||'',...base};if(u){h.units=u;h.u0=u;}return h;}
     let q=lsQty(x.qty);
     if(units){const uq=String(x.unit_qty==null?'':x.unit_qty).trim();q=uq?lsQty(uq):typeof q==='number'?Math.round(q/units*1e9)/1e9:q;} // no per-unit stored (shouldn't happen): × units gives the same total back
     return{k:x.kind,item:x.part||'',qty:q,L:x.length_mm==null?'':+x.length_mm,W:x.width_mm==null?'':+x.width_mm,mat:x.material||'',edging:x.edging||'',note:x.note||'',sec:x.section||'',...base};
@@ -2703,13 +2703,24 @@ function lsEditMerge(id,rows,lines){
     if(!meChanged){lines[i]=asLine(x);kept++;return;}               // only they changed it: keep theirs
     over.push(nm(x)+' was changed on the other screen — yours ('+nm(lines[i])+') replaces it');
   });
-  now.forEach(x=>{
+  // a line they added goes back in at ITS place — after the line it followed on their screen (else before the one after it),
+  // so a part added inside a unit block stays in that block (its section and per-unit qty kept: the total never changes)
+  const at=lid=>lines.findIndex(l=>l&&l.id===lid);
+  now.forEach((x,k)=>{
     if(mine.has(x.id))return;
-    if(!openIds.has(x.id)){lines.push(asLine(x));kept++;return;}      // they added it: keep it
+    if(!openIds.has(x.id)){
+      let p=-1;for(let j=k-1;j>=0&&p<0;j--){const q=at(now[j].id);if(q>=0)p=q+1;}
+      for(let j=k+1;j<now.length&&p<0;j++){const q=at(now[j].id);if(q>=0)p=q;}
+      lines.splice(p<0?lines.length:p,0,asLine(x));kept++;return;}      // they added it: keep it
     if(String(x.updated_at||'')>opened)over.push('you removed '+nm(x)+', which was changed or ticked on the other screen since — it will be removed');
   });
   if(over.length&&!confirm('⚠ Another screen saved this list after you opened it. Their other changes are kept, but saving yours will overwrite:\n\n'+over.map(t=>'  • '+t).join('\n')+'\n\nOK = save anyway (overwrite these). Cancel = don\'t save.'))return{ok:false,kept};
   return{ok:true,kept};
+}
+function lsUnitsChanged(r){ // a unit heading whose Units this person changed since the editor opened
+  if(!r||r.k!=='hdr'||!r.lid||r.units==null)return false;
+  const was=r.u0!==undefined?r.u0:(LST.ln.get(r.lid)||{}).kind==='hdr'?(LST.ln.get(r.lid)||{}).qty:null;
+  return was!=null&&String(was).trim()!==String(r.units).trim();
 }
 function lsAskReason(l){ // a list the saw already has: saving makes revision n+1, so say why
   if(!l||!lsLocked(l))return'';
@@ -2724,7 +2735,9 @@ async function lsSaveManual(d,by,ex){
   let reason='';
   if(ex){await lsReloadList(id);
     // the saw has started (a line is ticked): the number of units can't change on this list — a new list is made instead
-    if(!ex.tpl&&lsTicked(id)&&(d.rows||[]).some(r=>r.k==='hdr'&&r.lid&&r.units!=null&&(LST.ln.get(r.lid)||{}).kind==='hdr'&&String((LST.ln.get(r.lid)||{}).qty||'').trim()!==String(r.units).trim()))throw new Error(LS_LOCK_MSG);
+    // (only a Units change made by THIS person — compared with the value when the editor opened; a change made on another
+    //  screen is not theirs to be refused for, and the edit merge keeps it)
+    if(!ex.tpl&&lsTicked(id)&&(d.rows||[]).some(lsUnitsChanged))throw new Error(LS_LOCK_MSG);
     reason=lsAskReason(lsList(id));if(reason===null)throw new Error('not saved — a reason is needed for a new revision');}
   const lines=lsEdLines(d.rows);lsFlagMats(lines,pid); // headings, unit blocks (qty = total, unit_qty = per unit) and parts
   const mg=ex?lsEditMerge(id,d.rows,lines):{ok:true,kept:0};
@@ -3593,12 +3606,12 @@ function openListEditor2(listId,presetWo,presetPid,opt){
   const ex=listId?lsList(listId):null;
   const o0=!ex&&presetWo?DB.orders.find(x=>x.wo===presetWo):null;
   const toRow=r=>{const x={...r};if(x.k!=='hdr')x.k='part';return x;};
-  const fresh=r=>{const x=toRow(r);['lid','sig','opened','ids','src','keep','info','total'].forEach(k=>delete x[k]);return x;};
+  const fresh=r=>{const x=toRow(r);['lid','sig','opened','ids','src','keep','info','total','u0','qtyErr'].forEach(k=>delete x[k]);return x;};
   const st={rows:ex?lsEditRows(ex.id).map(toRow):opt.rows?opt.rows.map(fresh):[{k:'part',item:'',qty:'',L:'',W:'',mat:'',edging:'',note:''}],
     wo:ex?((ex.wos||[])[0]||''):(presetWo||''),name:ex?ex.name:(opt.name||''),pid:ex?ex.pid:(presetPid||((lsProjForCust(o0&&o0.customer)||{}).id)||''),
     ltype:ex?(ex.ltype||'house'):(opt.ltype||(opt.tpl?'kitchen':'house')),tname:ex?ex.typeName:(opt.tname||''),tpl:ex?ex.tpl:!!opt.tpl,noCut:ex?!!ex.noCut:false,noFit:ex?!!ex.noFit:false,newWO:false,pw:{title:'',cust:'',floor:'',unit:'',due:'',val:'',hrs:''},
     carcass:'',door:'',undo:[],cur:'',focus:'',snapKey:'',note:opt.note||'',from:!ex&&opt.from&&opt.from.id?opt.from:null};
-  const sawStarted=!!ex&&!ex.tpl&&lsTicked(ex.id);
+  let sawStarted=!!ex&&!ex.tpl&&lsTicked(ex.id); // set on a refused save too (a tick landed while the editor was open)
   const prevId=ex?(ex.tpl?'':lsReplOf(ex.id)):st.from?st.from.id:''; // the list this one replaces: "already cut on old list (n)"
   const prevCut=r=>prevId&&(lsNum(r.L)>0||lsNum(r.W)>0)?lsPrevCutHTML(prevId,r.item,r.L,r.W,r.mat):'';
   const live=()=>DB.orders.filter(o=>!o.delDone&&!o.delDelivAt).slice().sort(woCmp);
@@ -3856,7 +3869,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     const sized=r=>lsNum(r.L)>0||lsNum(r.W)>0;
     const bad=rows.find(r=>r.k==='part'&&sized(r)&&sm.length&&!String(r.mat||'').trim());
     if(bad)return err('Pick the colour for every saw row ("'+(String(bad.item||'').trim()||'unnamed')+'"'+at(bad)+').');
-    if(sawStarted){const ch=rows.find(r=>r.k==='hdr'&&r.lid&&r.units!=null&&String((LST.ln.get(r.lid)||{}).qty||'').trim()!==String(r.units).trim());if(ch)return err(LS_LOCK_MSG+'.');}
+    if(sawStarted&&rows.some(lsUnitsChanged))return err(LS_LOCK_MSG+'.');
     rows=rows.map(noAutoStores); // a Stores row keeps no colour unless someone picked one
     rows.forEach(r=>{if(r.k==='part')r.matOther=!sized(r)&&!!String(r.mat||'').trim()&&all.size>0&&!all.has(matKey(r.mat));});
     let wo=st.wo;
@@ -3881,7 +3894,9 @@ function openListEditor2(listId,presetWo,presetPid,opt){
         let t=(ex?'List updated':'List saved')+' — '+l.name+' → '+(l.saw?l.saw+' saw row'+(l.saw!==1?'s':''):'no cutting')+' · '+(l.fit?l.fit+' Stores':'no Stores')+(d.wo&&!st.tpl?' · tagged '+d.wo:'');
         if(d.replaces){t+='.'+await lsRetireOld(d.replaces,by);render();} // only once the new list is saved — a failed save archives nothing
         toast(t);})
-        .catch(x=>{if(sb)sb.disabled=false;err('Not saved — '+x.message);});
+        .catch(x=>{if(sb)sb.disabled=false;
+          if(x.message===LS_LOCK_MSG&&ex&&!ex.tpl&&!sawStarted){sawStarted=true;draw();} // lock the Units box now and offer "Make new list from this"
+          err('Not saved — '+x.message);});
     });
   };
   ov.addEventListener('focusin',e=>{const m=e.target&&e.target.dataset&&e.target.dataset.mr;if(m){st.cur=m;if(st.snapKey!==m)st.snapKey='';}});
@@ -3914,7 +3929,8 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       let j=i-1;while(j>=0&&R()[j].k==='hdr')j--;if(j<0)return;snap();r[f]=R()[j][f];if(f==='mat')delete r.matAuto;st.focus=m;st.focusAll=true;draw();return;}
     if(e.key==='Insert'){stop();keep();snap();R().splice(i,0,blank(i));st.focus=i+'|item';draw();return;}
     if(ctrl&&e.key==='Delete'){stop();const r=R()[i];if(!r)return;keep();snap();keepTotals(()=>R().splice(i,1));
-      st.focus=R().length?Math.min(i,R().length-1)+'|'+f:'';draw();return;}
+      if(!R().length)R().push(blank(0)); // the grid never goes empty: one empty row, the cursor in it
+      st.focus=Math.min(i,R().length-1)+'|'+f;draw();return;}
     if(ctrl&&(e.key==='z'||e.key==='Z')&&!e.shiftKey){stop();undo();return;}
   });
   // ---- paste from Excel (not on phones). One cell → the browser pastes it as usual. Rows copied from a sheet with the
