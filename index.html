@@ -2660,16 +2660,19 @@ function lsSame(cur,pl,df){
   const nz=v=>v==null||v===''?null:String(v);
   return['name','project_id','list_type','type_name','no_cut','no_fit','sdate','source','deliver_by','is_template'].every(k=>!(k in pl)||nz(pl[k])===nz(cur[k]));
 }
-async function lsSaveList(pl,lines,by,reason){
+// opt.expect: save only if the list is still at this version (the database checks) — a "stale" refusal is NOT retried
+// (Update template: the Rev the dialog showed; someone else's update meanwhile = the clash dialog, never an overwrite)
+async function lsSaveList(pl,lines,by,reason,opt){
+  opt=opt||{};
   for(let i=0;;i++){
     if(LST.l.has(pl.id)&&!LST.full.has(pl.id))await lsReloadList(pl.id);
     const cur=LST.l.get(pl.id),df=diffLines(cur?lsLinesOf(pl.id):[],lines,{listId:pl.id});
     if(cur&&lsSame(cur,pl,df))return{list:cur,diff:df,same:true}; // nothing changed: no save, no new revision for the saw
     try{
-      const out=await lsRpc('save_list_revision',{p_list:pl,p_lines:df.lines,p_expect:cur?cur.version:null,p_by:lqBy(by),p_reason:reason||null});
+      const out=await lsRpc('save_list_revision',{p_list:pl,p_lines:df.lines,p_expect:opt.expect!=null?opt.expect:cur?cur.version:null,p_by:lqBy(by),p_reason:reason||null});
       LST.full.add(out.list.id);lsPut('lists',[out.list]);lsPut('list_lines',out.lines);
       return{list:out.list,diff:df};
-    }catch(e){if(!/stale/.test(e.message)||i>=2)throw e;await lsReloadList(pl.id);} // changed on another PC meanwhile: compare again
+    }catch(e){if(!/stale/.test(e.message)||i>=2||opt.expect!=null)throw e;await lsReloadList(pl.id);} // changed on another PC meanwhile: compare again
   }
 }
 function lsLineSig(x){const n=v=>v==null||v===''?'':+v,t=v=>v==null?'':String(v).trim();return JSON.stringify([x.kind,t(x.section),t(x.part),n(x.length_mm),n(x.width_mm),t(x.qty),t(x.material),t(x.edging),t(x.note),t(x.unit_qty)]);}
@@ -3457,7 +3460,7 @@ function ltiInner(){
         <button class="btn btn-s" data-ltina="${escA(w)}|none" style="${btn}">No list needed</button>
         <button class="btn btn-s" data-ltina="${escA(w)}|paper" style="${btn}">Paper list issued</button></div>`}
       ${!busy&&pid&&LTI.open===w?`<div class="lti-act"><select data-ltisel="${escA(w)}" style="${LS_INP};max-width:100%"><option value="">— pick a template (${escA(lsProjName(pid))}) —</option>${alts.map(id=>`<option value="${escA(id)}"${id===r.tid?' selected':''}>${escA(ltiTplName(id))}</option>`).join('')}<option value="__type">✍ Type a list instead…</option></select></div>`:''}
-      ${!busy&&r.xl.length?`<div class="lti-act"><span style="font-size:12px;color:#14335c;font-weight:700;margin-right:6px">📥 From an Excel upload:</span>${r.xl.map(l=>`<button class="btn btn-s" data-ltixl="${escA(w)}|${escA(l.id)}" style="${btn};overflow-wrap:anywhere;text-align:left">✓ Use "${escA(l.name)}"${l.project?' ('+escA(l.project)+')':''}</button>`).join('')}</div>`:''}
+      ${!busy&&r.xl.length?`<div class="lti-act"><span style="font-size:12px;color:#14335c;font-weight:700;margin-right:6px">📥 From an Excel upload:</span>${r.xl.map(l=>`<button class="btn btn-s" data-ltixl="${escA(w)}|${escA(l.id)}" style="${btn};overflow-wrap:anywhere;text-align:left;min-height:36px">✓ Use "${escA(l.name)}"${l.project?' ('+escA(l.project)+')':''}</button>`).join('')}</div>`:''}
       ${!busy&&!pid?ltiLinkHTML(o):''}
       ${err&&!busy?`<div class="lti-msg" style="color:#b42318">✗ Not saved — ${escA(err)} <button class="btn btn-s" data-ltiretry="${escA(w)}" style="${btn};color:#b42318;border-color:#b42318">↻ Retry</button></div>`:''}
     </div>`;};
@@ -4092,12 +4095,13 @@ function lsSaveAsTpl(src,done){
     const ov=lsDlg('<div id="at-body"></div>',620);
     const draw=()=>{
       const ex=lsTplByName(src.pid,st.name);if(!ex)st.mode='new';else if(!st.mode)st.mode='upd'; // same name as a template: Update is offered first
-      if(ex&&(st.seen||{}).id!==ex.id)st.seen={id:ex.id,rev:+ex.rev||1,parts:!LST.full.has(ex.id)?null:lsLinesOf(ex.id).filter(x=>x.removed_rev==null&&x.kind!=='hdr').map(x=>x.part)}; // the Rev this person is updating from
+      if(ex&&(st.seen||{}).id!==ex.id)st.seen={id:ex.id,rev:+ex.rev||1,ver:+((LST.l.get(ex.id)||{}).version)||null,parts:!LST.full.has(ex.id)?null:lsLinesOf(ex.id).filter(x=>x.removed_rev==null&&x.kind!=='hdr').map(x=>x.part)}; // the Rev (and database version) this person is updating from
       const nP=lines.filter(x=>x.kind!=='hdr').length,nU=lines.filter(x=>x.kind==='hdr'&&String(x.qty||'').trim()).length;
       ov.querySelector('#at-body').innerHTML=`<div style="font-weight:800;color:#14335c;font-size:17px;margin-bottom:4px">📐 Save as template</div>
         <div style="font-size:12px;color:var(--t3);margin-bottom:10px">From <b>${escA(src.name||'this list')}</b> (${nP} part${nP!==1?'s':''}${nU?', '+nU+' unit block'+(nU!==1?'s':''):''}) into <b>${escA(lsProjName(src.pid))}</b>. Headings and per-unit quantities are copied; ticks never are. This list is not changed and is not linked to the template.</div>
         <div class="me-top"><div><label>Type</label><select id="at-type" style="${LS_INP}">${['kitchen','house','room','other'].map(k=>`<option value="${k}"${st.type===k?' selected':''}>${LS_KINDS[k]}</option>`).join('')}</select></div>
           <div style="flex:1"><label>Template name (type)</label><input id="at-name" value="${escA(st.name)}" placeholder="e.g. Type B 3-bed / 900 Single Rail" style="${LS_INP};width:100%"></div></div>
+        ${st.chg&&ex&&st.chg.id===ex.id?`<div id="at-chg" style="margin-top:10px;background:#fff8e6;border:1px solid #e0a43a;border-radius:8px;padding:8px 10px;font-size:13px">↻ Reloaded — <b>Rev ${+st.chg.rev||1}</b> was saved by <b>${escA(st.chg.by||'someone')}</b> on another screen${st.chg.why?' ("'+escA(st.chg.why)+'")':''}.${st.chg.add.length?'<br>They added: '+st.chg.li(st.chg.add):''}${st.chg.gone.length?'<br>They removed: '+st.chg.li(st.chg.gone):''}${!st.chg.add.length&&!st.chg.gone.length?'<br>(open its History to see what changed)':''}<br>Update template now replaces Rev ${+st.chg.rev||1} with your rows.</div>`:''}
         ${ex?`<div style="margin-top:10px;background:#f6f2ff;border:1px solid #d9ccff;border-radius:8px;padding:8px 10px;font-size:13px">A template called <b>${escA(ex.typeName||ex.name)}</b> already exists (Rev ${+ex.rev||1}).
           <label class="hold-row"><input type="radio" name="at-mode" value="upd"${st.mode==='upd'?' checked':''}><span><b>Update template</b> — it becomes Rev ${(+ex.rev||1)+1}. Lists already made from it don't change.</span></label>
           <label class="hold-row"><input type="radio" name="at-mode" value="new"${st.mode==='new'?' checked':''}><span><b>New template</b> — a separate template with this name</span></label>
@@ -4116,14 +4120,19 @@ function lsSaveAsTpl(src,done){
         const why=st.why.trim();
         // Update template by two people at once: check the template is still the Rev this dialog showed. If someone else
         // updated it meanwhile, say who and what changed and offer to reload — never a silent overwrite of their Rev.
-        const clash=async()=>{if(!(ex&&st.mode==='upd'))return;await lsReloadList(ex.id);const t=lsList(ex.id);
+        const clash=async force=>{if(!(ex&&st.mode==='upd'))return;await lsReloadList(ex.id);const t=lsList(ex.id);
           if(!t||t.archived)throw new Error('that template is no longer there (archived on another screen)');
-          if((+t.rev||1)===st.seen.rev)return;
-          const now=lsLinesOf(ex.id).filter(x=>x.removed_rev==null&&x.kind!=='hdr').map(x=>x.part),was=st.seen.parts;
+          if((+t.rev||1)===st.seen.rev&&!force)return;
+          const now=lsLinesOf(ex.id).filter(x=>x.removed_rev==null&&x.kind!=='hdr').map(x=>x.part);let was=st.seen.parts;
+          if(!was&&(+t.rev||1)!==st.seen.rev)try{const rv=await lsGet('list_revisions?select=lines&list_id=eq.'+encodeURIComponent(ex.id)+'&rev=eq.'+st.seen.rev); // the Rev this dialog showed, as kept by the database
+            if(rv[0]&&Array.isArray(rv[0].lines))was=rv[0].lines.filter(x=>x.removed_rev==null&&x.kind!=='hdr').map(x=>x.part);}catch(e2){}
           const add=was?now.filter(x=>!was.includes(x)):[],gone=was?was.filter(x=>!now.includes(x)):[],lg=(t.log||[]).slice(-1)[0]||{};
           const e=new Error('');e.clash={t,add,gone,by:lg.by||'',why:lg.why||''};throw e;};
+        // the save itself is conditional on the version this dialog showed (the database checks): two people pressing Update
+        // at the same moment — the second is refused and gets the clash message below
         const p=(ex&&st.mode==='upd'?clash():Promise.resolve()).then(()=>ex&&st.mode==='upd'
-          ?lsSaveList({id:ex.id,list_type:st.type,type_name:name},ls2,whoNow(),why||'Template updated from "'+(src.name||'a list')+'"')
+          ?lsSaveList({id:ex.id,list_type:st.type,type_name:name},ls2,whoNow(),why||'Template updated from "'+(src.name||'a list')+'"',{expect:st.seen.ver!=null?st.seen.ver:undefined})
+            .catch(e=>{if(/stale/.test(e.message))return clash(true).then(()=>{throw e;});throw e;})
           :lsSaveList({id:uid('L'),name,project_id:src.pid,is_template:true,list_type:st.type,type_name:name,source:'template',wos:[]},ls2,whoNow(),'Saved as a template from "'+(src.name||'a list')+'"'));
         p.then(r=>{ov.remove();render();toast(r.same?'Template "'+name+'" already has exactly these rows — nothing changed':ex&&st.mode==='upd'?'Template "'+name+'" updated — now Rev '+(+r.list.rev||1)+' ✓':'Template "'+name+'" saved in '+lsProjName(src.pid)+' ✓');if(done)done(r.list);})
           .catch(e=>{b.disabled=false;
@@ -4133,7 +4142,8 @@ function lsSaveAsTpl(src,done){
               ${k.add.length?'<br>Added: '+li(k.add):''}${k.gone.length?'<br>Removed: '+li(k.gone):''}${!k.add.length&&!k.gone.length?'<br>(open its History to see what changed)':''}
               <br>Your rows would replace theirs. <button class="btn btn-s" id="at-reload" style="font-size:12px;padding:3px 9px">↻ Reload — show Rev ${+k.t.rev||1}, then decide</button>`;
             toast('Not saved — '+(k.by||'someone')+' updated template "'+name+'" meanwhile (now Rev '+(+k.t.rev||1)+')',true);
-            const rl=q('at-reload');if(rl)rl.onclick=()=>{st.seen=null;draw();};});
+            // ↻ Reload: the dialog takes the newer Rev — and keeps showing what changed in it, so the person can decide
+            const rl=q('at-reload');if(rl)rl.onclick=()=>{st.seen=null;st.chg={id:k.t.id,rev:k.t.rev,by:k.by,why:k.why,add:k.add,gone:k.gone,li};draw();};});
       };
     };
     draw();
@@ -4255,7 +4265,7 @@ async function lsCopyLines(srcId,map){
 // The live lists (not archived, not templates) tagged to a WO — asked of the DATABASE, not this screen's copy (another PC may
 // have given the WO a list since this screen last refreshed)
 async function lsLiveFor(wo){
-  const v=/[,{}"\\\s]/.test(wo)?'"'+String(wo).replace(/["\\]/g,'\\$&')+'"':wo;
+  const v=/[,{}"\\\s]/.test(wo)||/^null$/i.test(wo)?'"'+String(wo).replace(/["\\]/g,'\\$&')+'"':wo;
   const r=await lsGet('lists?select=*&wos=cs.'+encodeURIComponent('{'+v+'}'));lsPut('lists',r);
   return r.filter(l=>!l.archived&&!l.is_template&&(l.wos||[]).includes(wo)).map(l=>lsList(l.id)||lsAdapt(l));
 }
