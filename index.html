@@ -524,6 +524,21 @@ const USV=new WeakMap(); // unconfirmed save → the version it would have writt
 function unsureAdd(p,v){const l=UNSURE[UNSURE.length-1];if(l&&USV.get(l)===v&&same(l,p))return;UNSURE.push(p);if(v!=null)USV.set(p,v);}
 function unsureKeep(row){const v=row&&row.version!==undefined?(+row.version||1):null;UNSURE=v===null?[]:UNSURE.filter(p=>(USV.get(p)||0)>v);}
 function unsureDel(p){const i=UNSURE.indexOf(p);if(i>=0)UNSURE.splice(i,1);} // a definite reply: that save did not land
+/* Every versioned save carries a short random tag, kept in settings.saveIds (the last SAVEID_N tags from all screens).
+   If a save's reply is lost and someone else saves over it before we can look, the database content no longer
+   matches what we sent — but our tag is still in the list, so we know it landed and can use it as the merge base
+   (otherwise a tick we sent would come back over the office's untick). Old-code tabs (before this change) drop
+   saveIds when they save; then this falls back to the earlier "can't tell" behaviour, which is safe. */
+const USID=new WeakMap(); // unconfirmed save → its tag
+const SAVEID_N=40;
+function newSaveId(){const t=Date.now().toString(36).slice(-5)+Math.random().toString(36).slice(2,7);DB.saveIds=(Array.isArray(DB.saveIds)?DB.saveIds:[]).concat(t).slice(-SAVEID_N);return t;}
+// The newest unconfirmed save whose tag the database row holds: it landed. It and every older one leave UNSURE.
+function unsureLanded(row){
+  const ids=row&&row.settings&&Array.isArray(row.settings.saveIds)?new Set(row.settings.saveIds):null;
+  if(!ids||!ids.size)return null;
+  for(let i=UNSURE.length-1;i>=0;i--){const t=USID.get(UNSURE[i]);if(t&&ids.has(t)){const p=UNSURE[i];UNSURE=UNSURE.slice(i+1);return p;}}
+  return null;
+}
 function clone(x){return x===undefined?undefined:JSON.parse(JSON.stringify(x));}
 function same(a,b){
   if(a===b)return true;
@@ -610,7 +625,7 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden&&pendT)writ
 // Server settings → a full settings object. Missing/empty keys keep what we had (same rules the old loader used).
 function settingsFrom(s,prev){
   const r={...prev};s=s||{};
-  ['weekCaps','delx','delNotes','grps','pins','pod','lists','listWBs','listDone','delArchive','staff','listHold','holdLog','listRow','listStore','listStoreAt'].forEach(k=>{if(s[k])r[k]=s[k];});
+  ['weekCaps','delx','delNotes','grps','pins','pod','lists','listWBs','listDone','delArchive','staff','listHold','holdLog','listRow','listStore','listStoreAt','saveIds'].forEach(k=>{if(s[k])r[k]=s[k];});
   if(s.hourScale&&s.hourScale.length)r.hourScale=s.hourScale;
   ['wcap','vcap','listLead'].forEach(k=>{if(s[k]>0)r[k]=s[k];});
   if(s.exportBase&&typeof s.exportBase==='object')r.exportBase=s.exportBase;
@@ -630,7 +645,7 @@ function applyPlan(p){
   if(p.nid)DB.nid=p.nid;
   const s=p.settings||{};
   DB.weekCaps=s.weekCaps||{};if(s.hourScale&&s.hourScale.length)HOUR_SCALE=s.hourScale;if(s.wcap>0)WCAP=s.wcap;if(s.vcap>0)VCAP=s.vcap;
-  ['delx','delNotes','grps','pins','pod','lists','listWBs','listDone','delArchive','staff','listHold','holdLog','listRow','listStore','listStoreAt'].forEach(k=>{if(s[k])DB[k]=s[k];});
+  ['delx','delNotes','grps','pins','pod','lists','listWBs','listDone','delArchive','staff','listHold','holdLog','listRow','listStore','listStoreAt','saveIds'].forEach(k=>{if(s[k])DB[k]=s[k];});
   if(s.listLead>0)DB.listLead=s.listLead;
   // Export Changes baseline: saved with the plan, so a refresh never resets it — only "Mark as applied" does
   if(s.exportBase){orig={...(s.exportBase.wk||{})};origStep={...(s.exportBase.st||{})};}
@@ -820,8 +835,8 @@ async function loadDB(){
     // A save that may have landed without a reply also counts: e.g. a tick sent, then unticked — the screen now
     // matches BASE again, but the database may hold the tick, so it must be merged (our untick wins), not applied.
     if(row&&DB.loaded&&BASE&&(UNSURE.length||!same(snap(),BASE))){
-      const theirs=planOf(row,BASE.settings);
-      const m=mergePlan(BASE,snap(),theirs,{unsure:UNSURE});
+      const theirs=planOf(row,BASE.settings),lb=unsureLanded(row); // an unconfirmed save the database shows landed is the base
+      const m=mergePlan(lb||BASE,snap(),theirs,{unsure:UNSURE});
       lqOwn(m.plan.settings,theirs.settings);
       applyPlan(m.plan);noteMerge(m.notes,m.ren,row.updated_by);
       BASE=clone(theirs);unsureKeep(row);VER=row.version===undefined?null:(+row.version||1);
@@ -852,7 +867,9 @@ async function loadDB(){
         us.forEach((x,i)=>ku.push([x,Array.isArray(s.uv)?+s.uv[i]||0:0]));
         const m=mergePlan(b,pbuild(cur,s.d,'m'),cur,{theirsWins:true,unsure:us});cur=m.plan;Object.assign(ren,m.ren);});
       // a save sent just before the tab closed may land after this load — this screen still counts it as its own
-      if(row.version!==undefined)ku.forEach(([x,v])=>{if(v>(+row.version||1)){UNSURE.push(x);USV.set(x,v);}});
+      if(row.version!==undefined){const rid=new Set((row.settings&&row.settings.saveIds)||[]);
+        ku.forEach(([x,v])=>{if(v>(+row.version||1)){UNSURE.push(x);USV.set(x,v);
+          const t=((x.settings||{}).saveIds||[]).slice(-1)[0];if(t&&!rid.has(t))USID.set(x,t);}});} // its tag: lets a later merge see it landed
       if(Object.keys(ren).length)setTimeout(()=>noteMerge([],ren),0);
       cur.settings.listWBs=BASE.settings.listWBs;
       lqOwn(cur.settings,BASE.settings);
@@ -883,7 +900,12 @@ function whoTag(){return((whoNow()||'').trim()||'?')+' ['+(ROLE||'?')+']';}
 // One save round: PATCH only if the database is still at our version; otherwise merge and go again.
 async function pushPlan(){
   for(let i=0;i<6;i++){
-    const mine=snap();
+    // A fresh tag for this attempt — except an identical resend of the last unconfirmed attempt keeps its tag
+    // (so 30-s retries while offline don't pile up copies in UNSURE). The tag goes in before snap(), so the plan
+    // sent (and BASE once confirmed) already holds it.
+    const lu=UNSURE[UNSURE.length-1],reuse=VER!==null&&lu&&USV.get(lu)===VER+1&&USID.get(lu);
+    let tok=VER!==null&&!reuse?newSaveId():null,mine=snap();
+    if(reuse){if(same(lu,mine))tok=USID.get(lu);else{tok=newSaveId();mine=snap();}}
     if(VER===null){
       if(DB.saveFailed&&BASE){ // old-style save retrying after a failure: merge in what others saved meanwhile first
         const row=checkRow(await fetchMain());
@@ -900,13 +922,15 @@ async function pushPlan(){
     // Only saves if the database is still at the version we loaded. We ask for VER+1; the database trigger
     // (SUPABASE_CHANGES.md) also sets old+1 on every update — same number, so never a double bump — and
     // bumps it for old-code tabs too. The reply carries just the new version number.
+    USID.set(mine,tok);
     let resp;
     unsureAdd(mine,VER+1); // counts as "may have landed" from the moment it's sent — a tab closed mid-save keeps the record
     try{resp=await fetch(SUPA_URL+'/production_planner?id=eq.main&version=eq.'+VER+'&select=version',{method:'PATCH',headers:{...SUPA_WHDR,'Prefer':'return=representation'},
       body:JSON.stringify({...mine,version:VER+1,updated_by:whoTag()})});}
     catch(e){ // no reply: it may have landed. Look at the database straight away, before other screens move it on.
-      const c=await saveCheck(mine,VER+1);
-      if(c>0){VER=c;BASE=mine;UNSURE=[];return;} // it did land (the database holds exactly what we sent) — same as a normal reply
+      const c=await saveCheck(mine,VER+1,tok);
+      if(c>0){VER=c;BASE=mine;UNSURE=[];return;} // it did land — same as a normal reply (if someone saved over it since, c is our
+      // version, not theirs: the next save or refresh merges their change against what we sent, so e.g. their untick stays)
       if(c==='lost'){unsureDel(mine);continue;} // it did not (and now never can): merge and go again
       throw e; // can't tell — it stays in UNSURE so it isn't mistaken for someone else's change
     }
@@ -924,8 +948,8 @@ async function pushPlan(){
     unsureDel(mine); // "nothing updated" — it didn't land
     // Nothing updated: another screen saved first. Fetch theirs, merge, try again.
     const row=checkRow(await fetchMain());
-    const theirs=planOf(row,BASE.settings);
-    const m=mergePlan(BASE,snap(),theirs,{unsure:UNSURE});
+    const theirs=planOf(row,BASE.settings),lb=unsureLanded(row); // an earlier unconfirmed save that did land is the base
+    const m=mergePlan(lb||BASE,snap(),theirs,{unsure:UNSURE});
     lqOwn(m.plan.settings,theirs.settings);
     applyPlan(m.plan);noteMerge(m.notes,m.ren,row.updated_by);
     BASE=clone(theirs);unsureKeep(row);VER=row.version===undefined?null:(+row.version||1);
@@ -936,10 +960,11 @@ async function pushPlan(){
 /* A save got no reply. Every save says "only if the database is still at version v-1", so the database tells us:
    holding exactly what we sent (at v, or later if nothing has changed since) → it landed: returns that version; at v
    holding something else → 'lost' (another screen took v); still below v at the 0.25 s look → 'lost' (it never got there).
-   Past v with other content → can't tell (''). A read that fails (signal still out) is tried
+   Past v with other content: if the row still lists this save's tag (tok) in saveIds → it landed at v: returns v;
+   otherwise can't tell (''). A read that fails (signal still out) is tried
    again — at about 0.05, 0.25, 0.6, 1.2, 2, 3 and 4 s, giving up after ~5 s — and only then "can't tell" (''). The screen
    keeps working meanwhile: taps are kept and saved straight after (saveDB's "go again"). */
-async function saveCheck(p,v){
+async function saveCheck(p,v,tok){
   const t0=Date.now(),at=[50,250,600,1200,2000,3000,4000];let seen=false; // seen: the database answered at least once
   for(const ms of at){
     const w=ms-(Date.now()-t0);if(w>0)await new Promise(r=>setTimeout(r,w));
@@ -950,6 +975,7 @@ async function saveCheck(p,v){
     const rv=+row.version||1;
     const mine=same(row.orders||[],p.orders||[])&&same(row.settings||{},p.settings||{})&&(+row.nid||0)===(+p.nid||0);
     if(rv>=v&&mine)return rv;
+    if(rv>=v&&tok&&row.settings&&Array.isArray(row.settings.saveIds)&&row.settings.saveIds.includes(tok))return v; // ours landed; someone saved since
     if(rv===v)return'lost';
     if(rv>v)return'';
     if(ms>=250)return'lost'; // still not there at the second look: it never got there (if it turns up later it is refused — the re-send has moved the version on)
@@ -1002,9 +1028,9 @@ async function saveDB(){
     if(SAVE_AGAIN){SAVE_AGAIN=false;if(!DB.saveFailed)saveDB();}
   }
 }
-// Never let a tab close while an edit is unsaved or a retry is pending
-window.addEventListener('beforeunload',e=>{if(saveT||DB.saveFailed||lqPending()){e.preventDefault();e.returnValue='';}});
-function fullSettings(){return{weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP,delx:DB.delx||[],delNotes:DB.delNotes||{},grps:DB.grps||{},pins:DB.pins||{},pod:DB.pod||{},lists:DB.lists||[],listWBs:DB.listWBs||{},listDone:DB.listDone||{},listLead:DB.listLead||5,delArchive:DB.delArchive||{},staff:DB.staff||[],listHold:DB.listHold||{},holdLog:DB.holdLog||[],listRow:DB.listRow||{},exportBase:{wk:orig,st:origStep},...(DB.listStore?{listStore:DB.listStore,listStoreAt:DB.listStoreAt||''}:{})};}
+// Never let a tab close while an edit is unsaved, a save is in flight / being checked, or a retry is pending
+window.addEventListener('beforeunload',e=>{if(saveT||SAVING||DB.saveFailed||lqPending()){e.preventDefault();e.returnValue='';}});
+function fullSettings(){return{weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP,delx:DB.delx||[],delNotes:DB.delNotes||{},grps:DB.grps||{},pins:DB.pins||{},pod:DB.pod||{},lists:DB.lists||[],listWBs:DB.listWBs||{},listDone:DB.listDone||{},listLead:DB.listLead||5,delArchive:DB.delArchive||{},staff:DB.staff||[],listHold:DB.listHold||{},holdLog:DB.holdLog||[],listRow:DB.listRow||{},saveIds:DB.saveIds||[],exportBase:{wk:orig,st:origStep},...(DB.listStore?{listStore:DB.listStore,listStoreAt:DB.listStoreAt||''}:{})};}
 /* Stage 3 switch: settings.listStore==='v2' → cutting lists live in their own tables (lists, list_lines…).
    Missing, blank or anything else (switch back writes 'v1') → today's lists in the planner record, untouched. */
 function V2(){return DB.listStore==='v2'||DB.listStore==='switching';} // 'switching' = a Switch back is rebuilding the old lists: screens still read the tables, the database takes no changes
