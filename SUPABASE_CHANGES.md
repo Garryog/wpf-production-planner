@@ -39,7 +39,7 @@ Newest at the top. Each block must be run in Supabase BEFORE the matching code g
 6. **Straight away, check the planner still saves.** This SQL adds a trigger to the planner record itself, so: make one normal save on the live site (e.g. type a note on a job), refresh the page, and check the note stuck. If saving fails, the new trigger is at fault: stop and send a screenshot.
 7. Check: **Table Editor** shows the new tables `projects`, `project_materials`, `lists`, `list_lines`, `list_revisions`, `list_events`, `snags` (all empty).
 8. Check: **Database → Functions** shows these 14: the five the app calls — `apply_line_changes`, `list_attach`, `list_set_done`, `save_list_revision`, `snags_to_list` — and nine helpers — `lists_switch_on`, `lists_writable`, `lists_touch`, `lists_one_per_wo`, `lists_one_replacement`, `pm_key`, `pm_no_clash`, `production_planner_keep_switch`, `snag_line_done`. There must be only ONE `list_attach` (if you see two, the `drop function` line didn't run — send a screenshot). And **Database → Triggers** shows these 8: `projects_touch`, `project_materials_touch`, `lists_touch`, `list_lines_touch`, `snags_touch` (each on the table of the same name), `pm_no_clash` (on `project_materials`), `list_lines_snag` (on `list_lines`) and `production_planner_keep_switch` (on `production_planner`).
-9. If the line `alter publication supabase_realtime ...` gives an error saying the table is already in the publication, that's fine — delete that one line and Run again.
+9. The whole grey box is safe to run twice (e.g. if the first Run was interrupted, or it was already run on a test project): nothing is duplicated and no data is touched. You should not need to delete or change any line.
 
 ```sql
 -- ===================== PLAN A — lists data foundation =====================
@@ -147,7 +147,17 @@ foreach t in array array['projects','project_materials','lists','list_lines'] lo
   execute format('drop policy if exists "%1$s edit" on %1$s; create policy "%1$s edit" on %1$s for update to anon, authenticated using (lists_writable()) with check (lists_writable());',t);
 end loop; end $$;
 
-alter publication supabase_realtime add table lists, list_lines; -- ready for later; the app polls for now
+-- Realtime: ready for later; the app polls for now. Adds each table only if it isn't in the publication already,
+-- and skips quietly if this project has no supabase_realtime publication — so the whole block is safe to run twice.
+do $$ declare t text; begin
+ if exists(select 1 from pg_publication where pubname='supabase_realtime') then
+  foreach t in array array['lists','list_lines'] loop
+   if not exists(select 1 from pg_publication_tables where pubname='supabase_realtime' and schemaname='public' and tablename=t) then
+    execute format('alter publication supabase_realtime add table public.%I',t);
+   end if;
+  end loop;
+ end if;
+end $$;
 
 -- Every list function refuses while the lists are switched back to the old store: a device that missed the switch
 -- (offline at the time) then puts its change into the old lists instead of into tables nobody is reading.
