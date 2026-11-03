@@ -101,6 +101,8 @@ button,input,select{font-family:inherit;cursor:pointer}
 @keyframes sp{to{transform:rotate(360deg)}}
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1a1d23;color:#fff;padding:9px 20px;border-radius:100px;font-size:13px;font-weight:500;z-index:9999;pointer-events:none;opacity:0;transition:opacity .2s;white-space:nowrap}
 .toast.show{opacity:1}
+.toast.stick{pointer-events:auto;cursor:pointer;white-space:pre-line;width:max-content;max-width:calc(100vw - 24px);box-sizing:border-box;border-radius:10px;text-align:left;background:#fff4d6;color:#7a5200;border:1px solid #e0a43a;font-weight:700;padding:10px 14px;line-height:1.35;max-height:60vh;overflow:auto}
+.toast.stick::after{content:'Tap to close ✕';display:block;margin-top:4px;font-size:12px;font-weight:500;text-align:right}
 .savebar{position:sticky;top:0;z-index:9000;background:#c0392b;color:#fff;font-size:14px;font-weight:700;line-height:1.4;padding:10px 16px;text-align:center}
 .savebar[hidden]{display:none}
 .verbar{position:sticky;top:0;z-index:8999;width:100%;border:0;background:#14335c;color:#fff;font-size:14px;font-weight:700;padding:10px 16px;cursor:pointer}
@@ -1093,7 +1095,16 @@ function updSaveBar(){
     ?'⚠ NOT SAVING — the planner database came back empty or damaged ('+DB.remoteBroken+'). Nothing is being written over it. '+kept+(DB.pendFail?'':'. Tell the office.')
     :'⚠ NOT SAVED YET — '+(DB.pendFail?kept:'changes are kept on this device and will be sent automatically when the connection is back. Keep this page open.');
 }
-function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._x);t._x=setTimeout(()=>t.classList.remove('show'),2500);}
+/* toast(m): a short note that fades after 2.5 s. toast(m,true): a warning that stays on screen (wrapping on a phone) until
+   tapped — used when something this screen did was NOT saved as asked. A short note shown meanwhile doesn't hide it. */
+function toastPaint(t,m,st){t.textContent=m;t.classList.toggle('stick',!!st);t.classList.add('show');}
+function toast(m,stick){
+  const t=document.getElementById('toast');clearTimeout(t._x);
+  if(!t._on){t._on=1;t.addEventListener('click',()=>{if(!t._stick)return;t._stick='';t.classList.remove('show','stick');});}
+  if(stick){t._stick=(t._stick?t._stick.split('\n').slice(-2).join('\n')+'\n':'')+m;toastPaint(t,t._stick,true);return;} // up to 3 warnings, newest last
+  toastPaint(t,m,false);
+  t._x=setTimeout(()=>{if(t._stick)toastPaint(t,t._stick,true);else t.classList.remove('show');},2500);
+}
 function fmt(s){if(!s)return'—';return new Date(s).toLocaleDateString('en-IE',{day:'numeric',month:'short',year:'2-digit'});}
 function getMonday(d){
   const dt=new Date(d);
@@ -2291,7 +2302,7 @@ async function lqFoldV1x(){
     const left=LQ.q.length;
     LQ.err=left?left+' change'+(left!==1?'s':'')+' could not be placed in the old lists':'';
     updSaveBar();if(ROLE)render();
-    if(n)lqSay(n+' change'+(n!==1?'s':'')+' made on this device before the lists were switched back '+(n!==1?'were':'was')+' added to the lists'+(left?' — '+left+' could not be placed and '+(left!==1?'are':'is')+' kept on this device: tell the office':''));
+    if(n)lqSay(n+' change'+(n!==1?'s':'')+' made on this device before the lists were switched back '+(n!==1?'were':'was')+' added to the lists'+(left?' — '+left+' could not be placed and '+(left!==1?'are':'is')+' kept on this device: tell the office':''),!left); // all placed: a short note
     else if(left)lqSay(left+' change'+(left!==1?'s':'')+' could not be placed in the old lists — kept on this device: tell the office');
     if(stale.length)lqSay('Not changed — '+lqNames(stale)+' '+(stale.length!==1?'were':'was')+' changed on another screen after this device sent '+(stale.length!==1?'them':'it')+'. Left as the other screen has '+(stale.length!==1?'them':'it')+' — check '+(stale.length!==1?'them':'it')+'.');
   }finally{LQ.folding=false;}
@@ -2333,7 +2344,7 @@ function lqWhyAll(bad){
   const rest=bad.slice(1);
   return lqWhy(bad[0])+' (+'+rest.length+' more: '+rest.slice(0,5).map(x=>'"'+lqPart(x)+'" '+why(x)).join('; ')+(rest.length>5?'; and '+(rest.length-5)+' other line'+(rest.length-5!==1?'s':''):'')+')';
 }
-function lqSay(m){LQ.msgs.push(m);if(LQ.msgs.length>20)LQ.msgs.shift();toast(m);}
+function lqSay(m,ok){LQ.msgs.push(m);if(LQ.msgs.length>20)LQ.msgs.shift();toast(m,!ok);} // a warning stays until tapped; ok=true: a short note
 function lqDrop(cids){lqMut(q=>q.splice(0,q.length,...q.filter(e=>!cids.has(e.cid))));}
 // The switch as the database has it now (not this screen's copy): a device that was offline during a switch back
 // must not send into tables nobody reads. Only the switch is fetched, not the whole plan.
