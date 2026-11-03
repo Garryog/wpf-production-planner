@@ -3651,6 +3651,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
         <button class="btn btn-s" id="me-addsaw" title="Adds a row under the one you are on">＋ Row</button>
         <button class="btn btn-s" id="me-addhdr" title="A heading, e.g. per-house extras">＋ Heading</button>
         <button class="btn btn-s" id="me-addunit" title="A unit heading with the number of units, then the parts for ONE unit">＋ Unit block</button>
+        <button class="btn btn-s" id="me-instpl" title="Adds a standard unit from one of the project's templates and asks how many">📐 Insert unit from template…</button>
         ${st.undo.length?'<button class="btn btn-s" id="me-undo" title="Ctrl+Z">↶ Undo</button>':''}
         <span style="flex:1"></span>
         <label class="me-flag"><input type="checkbox" id="me-nocut"${st.noCut?' checked':''}> No cutting on this job</label>
@@ -3706,6 +3707,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     on('me-undo',()=>undo());
     on('me-astpl',()=>{keep();lsSaveAsTpl({pid:st.pid,name:st.name,ltype:st.ltype,tname:st.tname,lines:lsEdLines(R().filter(r=>!lsEmptyRow(r)).map(r=>{const x={...r};delete x.lid;return x;}))});});
     on('me-hist',()=>{if(ex)lsTplHistory(ex.id);});
+    on('me-instpl',()=>{keep();insTpl();});
     ov.querySelectorAll('[data-mecopy]').forEach(b=>b.onclick=()=>copyToNew());
     g('me-nocut').onchange=e=>{keep();st.noCut=e.target.checked;draw();};
     g('me-nofit').onchange=e=>{keep();st.noFit=e.target.checked;draw();};
@@ -3728,6 +3730,44 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     keepTotals(()=>R().splice(i,1));
     if(r.k==='hdr'&&r.units!=null)toast('Unit heading deleted — its parts keep their totals');
     st.focus=R().length?Math.min(i,R().length-1)+'|item':'';draw();};
+  // "Insert unit from template…": pick a template of this project, then one of its unit blocks (or the whole template as
+  // one unit), then how many units. The block goes in after the row you were on (after its block). Nothing is linked.
+  const insTpl=()=>{
+    if(!st.pid){ov.querySelector('#me-err').textContent='Pick the project first — templates belong to a project.';return;}
+    const tps=lsTemplatesFor(st.pid).filter(t=>!ex||t.id!==ex.id);
+    const dl=lsDlg('<div id="it-body"></div>',640);const body=dl.querySelector('#it-body');
+    dl.onclick=e=>{if(e.target===dl||e.target.id==='pod-x')dl.remove();}; // closing it leaves the editor as it was
+    if(!tps.length){body.innerHTML=`<div style="font-weight:800;color:#14335c;font-size:16px;margin-bottom:6px">📐 Insert unit from template</div><div style="font-size:13px;color:var(--t2)">${escA(lsProjName(st.pid))} has no templates yet. Make one with <b>📐 Save as template</b> on any list (needs the Production Manager, Drawing office or Admin PIN).</div>`;return;}
+    const pick=async tid=>{
+      body.innerHTML='Loading…';
+      try{if(!LST.full.has(tid))await lsReloadList(tid);}catch(e){body.innerHTML='<span style="color:var(--red)">Could not load the template — '+escA(e.message)+'</span>';return;}
+      const t=lsList(tid),lines=lsLinesOf(tid).filter(x=>x.removed_rev==null&&x.status!=='na');
+      const blocks0=[];let cur=null;
+      lines.forEach(x=>{if(x.kind==='hdr'){cur=String(x.qty==null?'':x.qty).trim()?{name:x.part||'',units:+x.qty||1,parts:[]}:null;if(cur)blocks0.push(cur);return;}if(cur)cur.parts.push(x);});
+      const opts=[...blocks0.map((b,k)=>({k,label:b.name+' ('+b.parts.length+' part'+(b.parts.length!==1?'s':'')+')',name:b.name,parts:b.parts.map(x=>({x,per:String(x.unit_qty==null||x.unit_qty===''?(isNaN(+x.qty)?x.qty:Math.round(+x.qty/b.units*1e6)/1e6):x.unit_qty)}))})),
+        {k:'all',label:'The whole template as one unit ('+lines.filter(x=>x.kind!=='hdr').length+' parts — quantities as one unit)',name:t.typeName||t.name,parts:lines.filter(x=>x.kind!=='hdr').map(x=>({x,per:String(x.qty==null?'':x.qty)}))}];
+      body.innerHTML=`<div style="font-weight:800;color:#14335c;font-size:16px;margin-bottom:6px">📐 ${escA(t.typeName||t.name)} · Rev ${+t.rev||1}</div>
+        <div style="font-size:12px;color:var(--t3);margin-bottom:8px">Pick the unit, then how many. The parts are added with the quantity for ONE unit; the total is worked out from the number of units.</div>
+        ${opts.map((o,k)=>`<label class="hold-row"><input type="radio" name="it-u" value="${k}"${k===0?' checked':''}><span>${escA(o.label)}</span></label>`).join('')}
+        <div style="margin-top:8px;display:flex;gap:8px;align-items:center"><label style="font-size:13px;font-weight:700">How many units?</label><input id="it-n" value="1" inputmode="numeric" style="${LS_INP};width:70px"></div>
+        <div id="it-err" style="color:#b42318;font-weight:700;font-size:13px;min-height:18px"></div>
+        <div style="text-align:right"><button class="btn btn-g" id="it-ok">Insert</button></div>`;
+      const n0=body.querySelector('#it-n');n0.focus();n0.select();
+      body.querySelector('#it-ok').onclick=()=>{
+        const n=String(body.querySelector('#it-n').value||'').trim();if(!/^\d+$/.test(n)||+n<1){body.querySelector('#it-err').textContent='How many units? A whole number, 1 or more.';return;}
+        const o=opts[+(body.querySelector('[name="it-u"]:checked')||{}).value||0];
+        snap();const c=curRow(),at=c<0?R().length:endOfBlock(c);
+        const add=[{k:'hdr',item:o.name,units:n,note:''},...o.parts.map(({x,per})=>({k:'part',item:x.part||'',qty:per,L:x.length_mm==null?'':String(+x.length_mm),W:x.width_mm==null?'':String(+x.width_mm),mat:x.material||'',edging:x.edging||'',note:x.note||''}))];
+        const drop=R().length===1&&lsEmptyRow(R()[0])?1:0,at2=drop?0:at; // a brand-new list's one empty row is replaced
+        R().splice(at2,drop,...add);
+        dl.remove();st.focus=at2+'|units';st.focusAll=true;draw();
+        toast('Added "'+o.name+'" × '+n+' unit'+(n!=='1'?'s':'')+' from template '+(t.typeName||t.name)+' — change Units any time before the saw starts');
+      };
+    };
+    body.innerHTML=`<div style="font-weight:800;color:#14335c;font-size:16px;margin-bottom:6px">📐 Insert unit from template — ${escA(lsProjName(st.pid))}</div>
+      ${tps.map(t=>`<div class="wl-drow"><b>${escA(t.typeName||t.name)}</b><span class="dsh-t">${escA(LS_KINDS[t.ltype]||t.ltype||'')} · Rev ${+t.rev||1}</span><button class="btn btn-g" data-itt="${escA(t.id)}" style="font-size:12px">Use</button></div>`).join('')}`;
+    body.querySelectorAll('[data-itt]').forEach(b=>b.onclick=()=>pick(b.dataset.itt));
+  };
   const undo=()=>{if(!st.undo.length)return;st.rows=JSON.parse(st.undo.pop());st.snapKey='';if(st.cur&&!ov.querySelector('[data-mr="'+st.cur+'"]'))st.cur='';st.focus=st.cur&&+st.cur.split('|')[0]<R().length?st.cur:'';draw();};
   const copyToNew=()=>{ // the saw has started: a different number of units is a NEW list (Garry, 3 Nov) — copied without ticks
     keep();if(!confirm('Make a new list from "'+st.name+'"?\n\nThe rows are copied (no ticks) into a new list you can change. This list stays as it is with the saw — archive it from Lists if the new one replaces it.'))return;
