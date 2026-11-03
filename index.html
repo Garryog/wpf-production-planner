@@ -897,7 +897,7 @@ async function pushPlan(){
       body:JSON.stringify({...mine,version:VER+1,updated_by:whoTag()})});}
     catch(e){ // no reply: it may have landed. Look at the database straight away, before other screens move it on.
       const c=await saveCheck(mine,VER+1);
-      if(c==='landed'){VER=VER+1;BASE=mine;UNSURE=[];return;} // it did land — same as a normal reply
+      if(c>0){VER=c;BASE=mine;UNSURE=[];return;} // it did land (the database holds exactly what we sent) — same as a normal reply
       if(c==='lost'){unsureDel(mine);continue;} // it did not (and now never can): merge and go again
       throw e; // can't tell — it stays in UNSURE so it isn't mistaken for someone else's change
     }
@@ -924,17 +924,20 @@ async function pushPlan(){
   throw new Error('kept clashing with other screens');
 }
 /* A save got no reply. Every save says "only if the database is still at version v-1", so the database tells us:
-   at version v holding exactly what we sent → it landed; at v holding something else, or still below v after a second
-   look → it did not land (another screen took v, or it never got there). Past v already, or no answer → can't tell ('').
+   holding exactly what we sent (at v, or later if nothing has changed since) → it landed: returns that version; at v
+   holding something else, or still below v after a second look → 'lost' (another screen took v, or it never got there).
+   Past v with other content, or no answer → can't tell ('').
    Deciding straight away means a later change by another screen (e.g. the office unticking) is never mistaken for
    our own unconfirmed change, and our own unsent change is never mistaken for one that landed. */
 async function saveCheck(p,v){
   for(let i=0;i<2;i++){
-    await new Promise(r=>setTimeout(r,i?1000:300));
+    await new Promise(r=>setTimeout(r,i?250:50));
     let row;try{row=await fetchMain();}catch(e){return'';}
     if(!row||row.version===undefined)return'';
     const rv=+row.version||1;
-    if(rv===v)return same(row.orders||[],p.orders||[])&&same(row.settings||{},p.settings||{})&&(+row.nid||0)===(+p.nid||0)?'landed':'lost';
+    const mine=same(row.orders||[],p.orders||[])&&same(row.settings||{},p.settings||{})&&(+row.nid||0)===(+p.nid||0);
+    if(rv>=v&&mine)return rv;
+    if(rv===v)return'lost';
     if(rv>v)return'';
   }
   return'lost';
