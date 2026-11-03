@@ -5,7 +5,8 @@ const fs = require('fs'), path = require('path');
 const A = require('./atk.js');
 const { F, H, rec, done, gitShow } = A;
 const ROOT = path.join(__dirname, '../..');
-const OLD = gitShow('feature/stage2-imports') || gitShow('origin/feature/stage2-imports');
+// Always the pushed branch (origin/...), never the local copy, which can be behind (run `git fetch` first)
+const OLD = gitShow('origin/feature/stage2-imports');
 const NEW = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
 function row() {
   const o = (wo, step, x) => H.order(Object.assign({ wo, step, title: 'HOUSE ' + wo + ' TYPE B KITCHEN', customer: 'CAIRN HOMES - CHERRYWOOD PHASE 2', dueDate: '2026-10-28', origDueDate: '2026-10-28', plannedWeek: '2026-10-26' }, x || {}));
@@ -15,7 +16,7 @@ function row() {
 }
 const norm = s => String(s).replace(/\d{1,2}:\d{2}(:\d{2})?/g, 'HH:MM').replace(/\s+/g, ' ').trim();
 (async () => {
-  if (!OLD) { rec('feature/stage2-imports index.html readable from git', false); done(); process.exit(1); }
+  if (!OLD) { rec('origin/feature/stage2-imports index.html readable from git (run git fetch)', false); done(); process.exit(1); }
   const browser = await H.chromium.launch();
   const views = [['office', 'b'], ['office', 'l'], ['office', 'i'], ['saw', null], ['prod', null], ['dash', null]];
   const shot = async html => {

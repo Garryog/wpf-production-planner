@@ -3,7 +3,7 @@
 const fs = require('fs'), path = require('path');
 const H = require('../harness.js');
 const HTML = fs.readFileSync(path.join(__dirname, '../../index.html'), 'utf8');
-const OLD_HTML = (() => { try { return require('child_process').execSync('git -C ' + path.join(__dirname, '../..') + ' show main:index.html', { maxBuffer: 1 << 26 }).toString(); } catch (e) { return null; } })();
+const OLD_HTML = (() => { try { return require('child_process').execSync('git -C ' + path.join(__dirname, '../..') + ' show origin/main:index.html', { maxBuffer: 1 << 26 }).toString(); } catch (e) { return null; } })();
 const XLSXJS = fs.readFileSync(path.join(__dirname, '../../xlsx.full.min.js'), 'utf8');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 function makeServer(row, o = {}) {
