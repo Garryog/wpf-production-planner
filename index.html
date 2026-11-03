@@ -101,8 +101,15 @@ button,input,select{font-family:inherit;cursor:pointer}
 @keyframes sp{to{transform:rotate(360deg)}}
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1a1d23;color:#fff;padding:9px 20px;border-radius:100px;font-size:13px;font-weight:500;z-index:9999;pointer-events:none;opacity:0;transition:opacity .2s;white-space:nowrap}
 .toast.show{opacity:1}
-.toast.stick{pointer-events:none;white-space:normal;width:max-content;max-width:calc(100vw - 24px);box-sizing:border-box;border-radius:10px;text-align:left;background:#fff4d6;color:#7a5200;border:1px solid #e0a43a;font-weight:700;padding:8px 34px 8px 12px;line-height:1.35;max-height:25vh;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end}
-.toast.stick .toast-i+.toast-i{border-top:1px solid #e0a43a;margin-top:5px;padding-top:5px}
+.toast.stick{pointer-events:none;white-space:normal;width:max-content;max-width:calc(100vw - 24px);box-sizing:border-box;border-radius:10px;text-align:left;background:#fff4d6;color:#7a5200;border:1px solid #e0a43a;font-weight:700;padding:8px 34px 8px 12px;line-height:1.35;max-height:25vh;overflow:hidden;display:flex;flex-direction:column}
+.toast .toast-l{position:relative;overflow-y:auto;min-height:0;flex:1 1 auto;overscroll-behavior:contain}
+.toast .toast-up,.toast .toast-dn{pointer-events:auto;position:absolute;right:2px;width:30px;height:28px;background:none;border:0;color:#7a5200;font-size:14px;line-height:1;padding:0;cursor:pointer}
+.toast .toast-up{top:32px}.toast .toast-dn{bottom:2px}
+.toast .toast-up::before{content:'▲'}.toast .toast-dn::before{content:'▼'}
+.toast.stick:not(.scr) .toast-up,.toast.stick:not(.scr) .toast-dn{display:none}
+.toast.stick .toast-i{position:relative}
+.toast.stick .toast-i+.toast-i{margin-top:11px}
+.toast.stick .toast-i+.toast-i::before{content:'';position:absolute;left:0;right:0;top:-6px;border-top:1px solid #e0a43a}
 .toast .toast-x{pointer-events:auto;position:absolute;top:2px;right:2px;background:none;border:0;color:#7a5200;font-size:18px;line-height:1;padding:6px 8px;cursor:pointer}
 .toast .toast-x::before{content:'✕'}
 .savebar{position:sticky;top:0;z-index:9000;background:#c0392b;color:#fff;font-size:14px;font-weight:700;line-height:1.4;padding:10px 16px;text-align:center}
@@ -1130,20 +1137,35 @@ function updSaveBar(){
     ?'⚠ NOT SAVING — the planner database came back empty or damaged ('+DB.remoteBroken+'). Nothing is being written over it. '+kept+(DB.pendFail?'':'. Tell the office.')
     :'⚠ NOT SAVED YET — '+(DB.pendFail?kept:'changes are kept on this device and will be sent automatically when the connection is back. Keep this page open.');
 }
-/* toast(m): a short note that fades after 2.5 s. toast(m,true): a warning that stays (up to 3, newest last, each its own
+/* toast(m): a short note that fades after 2.5 s. toast(m,true): a warning that stays (up to 6, newest last, each its own
    block; a line break inside one shows as a space) until its ✕ is tapped — used when something this screen did was NOT
-   saved as asked. Taps go through the box to the buttons under it (only the ✕ catches them), and it is never more than
-   a quarter of the screen high. A short note shown meanwhile doesn't wipe the warnings. */
+   saved as asked. Taps go through the box to the buttons under it (only the ✕ and the ▲/▼ catch them), and it is never
+   more than a quarter of the screen high: when the warnings don't fit, the newest shows and ▲/▼ scroll to the older ones
+   (a finger can't scroll the box itself — that would block the tick buttons under it). A short note meanwhile doesn't
+   wipe the warnings. */
+const TOAST_N=6;
+// ▲/▼: to the start of the previous / next warning (a warning taller than the box goes a box at a time)
+function toastStep(l,dir){
+  const cur=l.scrollTop,pg=Math.max(20,l.clientHeight-20),tops=[...l.children].map(d=>d.offsetTop);
+  const to=dir<0?Math.max(cur-pg,...tops.filter(y=>y<cur-1)):Math.min(cur+pg,...tops.filter(y=>y>cur+1));
+  l.scrollTop=Math.max(0,to);
+}
 function toastPaint(t,m,st){
   t.classList.toggle('stick',!!st);t.classList.add('show');
-  if(!st){t.textContent=m;return;}
+  if(!st){t.classList.remove('scr');t.textContent=m;return;}
   t.textContent='';const x=document.createElement('button');x.type='button';x.className='toast-x';x.setAttribute('aria-label','Close');t.appendChild(x);
-  m.forEach(s=>{const d=document.createElement('div');d.className='toast-i';d.textContent=s;t.appendChild(d);});
+  const l=document.createElement('div');l.className='toast-l';
+  m.forEach(s=>{const d=document.createElement('div');d.className='toast-i';d.textContent=s;l.appendChild(d);});
+  t.appendChild(l);
+  [['toast-up','Older warnings',-1],['toast-dn','Newer warnings',1]].forEach(([c,a,dir])=>{const b=document.createElement('button');b.type='button';b.className=c;b.setAttribute('aria-label',a);
+    b.addEventListener('click',e=>{e.stopPropagation();toastStep(l,dir);});t.appendChild(b);});
+  l.scrollTop=l.lastChild?l.lastChild.offsetTop:0; // newest in view (from its start, if it is taller than the box)
+  t.classList.toggle('scr',l.scrollHeight>l.clientHeight+1);
 }
 function toast(m,stick){
   const t=document.getElementById('toast');clearTimeout(t._x);
   if(!t._on){t._on=1;t.addEventListener('click',()=>{if(!(t._stick&&t._stick.length))return;t._stick=null;t.classList.remove('show','stick');});}
-  if(stick){t._stick=(t._stick||[]).concat(String(m)).slice(-3);toastPaint(t,t._stick,true);return;}
+  if(stick){t._stick=(t._stick||[]).concat(String(m)).slice(-TOAST_N);toastPaint(t,t._stick,true);return;}
   toastPaint(t,m,false);
   t._x=setTimeout(()=>{if(t._stick&&t._stick.length)toastPaint(t,t._stick,true);else t.classList.remove('show');},2500);
 }
