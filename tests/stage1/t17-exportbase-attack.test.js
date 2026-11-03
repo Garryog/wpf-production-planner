@@ -5,7 +5,7 @@
 //  C  two new PCs restore at the same time → no endless save loop, version settles
 //  D  baseline survives ordinary new-code saves and many refreshes (Garry's meeting-room PC)
 //  E  a new-code PC OPENS (or is reloaded) while the row has no baseline (old tab dropped it, nobody restored yet)
-// Fake Supabase only. Run: node tests/stage1/t16-exportbase-attack.test.js
+// Fake Supabase only. Run: node tests/stage1/t17-exportbase-attack.test.js
 const { H, makeServer, open } = require('./srv');
 const NOW = '2026-10-19T10:00:00Z';
 let pass = 0, fail = 0; const rec = (n, ok, d) => { ok ? pass++ : fail++; console.log((ok ? 'PASS ' : 'FAIL ') + n + (d ? '  -> ' + String(d).slice(0, 400) : '')); };
