@@ -229,7 +229,9 @@ async function reopen(d, S, who) { const t = await newTab(d, S, who); await slee
     const S = makeServer(base());
     const d = await device(browser, S, { name: 'box' }, { role: 'saw', viewport: vp }); const p = d.page; const tag = vp.width + 'x' + vp.height;
     await p.evaluate(() => { for (let i = 1; i <= 3; i++) toast('Warning ' + i + ': "Carcass side panel left hand ' + i + '" was changed on another screen (already cut by Dee 10:00). Showing it as it is now.', true); });
-    const g = await p.evaluate(() => {
+    // the scrolling warning box (▲/▼) is cutting-lists code; on a branch without it (stage2-imports) skip (F)
+    if (!(await p.evaluate(() => !!document.querySelector('#toast .toast-up')))) { info('(F/' + tag + ') skipped', 'no scrolling warning box on this branch'); await d.close(); continue; }
+    const g =await p.evaluate(() => {
       const t = document.getElementById('toast'), R = e => { const r = e.getBoundingClientRect(); return { t: Math.round(r.top), b: Math.round(r.bottom), l: Math.round(r.left), r: Math.round(r.right), vis: getComputedStyle(e).display !== 'none' }; };
       const x = t.querySelector('.toast-x'), up = t.querySelector('.toast-up'), dn = t.querySelector('.toast-dn');
       const hit = e => { const r = e.getBoundingClientRect(); return document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2) === e; };
