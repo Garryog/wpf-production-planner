@@ -2168,13 +2168,12 @@ function lqLine(lineId,st,by){
   lqMut(q=>{
     // one unsent change per line: the newest replaces it. A change already sent once may have landed (reply lost, or
     // another tab on this device is sending it) — it stays, and this tap goes after it.
-    const i=q.findIndex(y=>y.t==='line'&&y.id===lineId&&!y.sent&&!LQ.fly.has(y.cid));
-    const was=i>=0?q.splice(i,1)[0]:null;
+    // A release keeps an unsent park in front of it (parked, then the material came, before any signal): the park goes
+    // first and the release follows, so the line ends released — sending the release alone was refused ("not waiting").
+    const i=q.findIndex(y=>y.t==='line'&&y.id===lineId&&!y.sent&&!LQ.fly.has(y.cid)&&!(act==='release'&&y.act==='status'&&y.status==='waiting'));
+    if(i>=0)q.splice(i,1);
     const fly=q.some(y=>y.t==='line'&&y.id===lineId);
     if(!fly&&act==='status'&&st===x.status)return; // back to what the database already has — nothing to send
-    // parked and released again on this device before the park was sent: the two cancel out — nothing to send (sending
-    // the release alone would only bring back a puzzling "not waiting" note)
-    if(!fly&&act==='release'&&was&&was.status==='waiting'&&x.status!=='waiting')return;
     q.push(e);
   });
   lqKick();return true;
