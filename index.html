@@ -2332,11 +2332,15 @@ async function lqFoldV1x(){
     // The changes are now in this screen's plan. Keep a device copy straight away (a tab that dies mid-save gets them back
     // on reopen), and only take them off the queue once the planner save is confirmed.
     writePend();
-    if(!await lqSaveSure()){
+    const sv=await lqSaveSure();
+    if(!sv||sv==='over'){
       const u=LQ.sentU,uv=u?USV.get(u):null;
       lqMut(qq=>qq.forEach(e=>{if(!old.has(e.cid))return;
         if(u&&uv!=null){e.fv=uv;e.fs=lqLnSt(u.settings,e.list,e.fk);} // no reply: it may have landed with exactly this
         else{const o=old.get(e.cid);['fk','fs','fv'].forEach(f=>{if(o[f]===undefined)delete e[f];else e[f]=o[f];});}})); // a definite "no": it did not land
+      // Landed (lost reply), but another screen saved over it before this screen could look: the lines stay queued with
+      // what was sent, and the next send reloads and checks each one — a line changed there since is left as it is, and said.
+      if(sv==='over'){LQ.err='';updSaveBar();lqKick(0);return 0;}
       LQ.err='the old lists could not be saved yet — '+q.length+' change'+(q.length!==1?'s are':' is')+' kept on this device and will be tried again';
       updSaveBar();if(ROLE)render();lqKick(10000);return 0;
     }
@@ -2350,16 +2354,18 @@ async function lqFoldV1x(){
   }finally{LQ.folding=false;}
   return n;
 }
-// Save the planner and say whether THIS save reached the database (a save already in flight is waited for first,
-// because saveDB only queues another one behind it and returns straight away)
+// Save the planner and say whether THIS save reached the database: true / false / 'over' (landed, but another screen
+// saved over it before this screen heard back). A save already in flight is waited for first,
+// because saveDB only queues another one behind it and returns straight away.
 async function lqSaveSure(){
   LQ.sentU=null;
   for(let i=0;i<600&&SAVING;i++)await new Promise(r=>setTimeout(r,100));
   if(SAVING)return false;
-  const pre=new Set(UNSURE);
+  const pre=new Set(UNSURE),ov=SAVE_OVERS;
   clearTimeout(saveT);await saveDB();
   const ok=!DB.saveFailed&&!DB.remoteBroken&&!DB.loadFailed;
   if(!ok){const nu=UNSURE.filter(p=>!pre.has(p));LQ.sentU=nu[nu.length-1]||null;} // sent with no reply: may have landed
+  else if(SAVE_OVERS!==ov){LQ.sentU=LAST_OVER;return'over';} // landed, but saved over since (reply was lost)
   return ok;
 }
 // One old-list row's tick and wait in a plan's settings (missing → null), and setting them back
