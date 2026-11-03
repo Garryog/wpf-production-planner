@@ -405,11 +405,11 @@ details.lti-other{margin-bottom:14px}details.lti-other>summary{cursor:pointer;fo
 .me-k{font-size:11px;font-weight:800;white-space:nowrap;padding:2px 6px;border-radius:4px}
 .me-saw .me-k{background:#ece7fb;color:#4c2fa8}.me-fit .me-k{background:#e3f4f8;color:#0b5566}
 .me-flag{font-size:13px;font-weight:600;color:#14335c;display:flex;gap:6px;align-items:center;cursor:pointer}
-.me-grid td{padding:2px 3px}.me-grid input,.me-grid select{min-height:30px}.me-n{font-size:11px;color:var(--t3);white-space:nowrap;text-align:right;vertical-align:middle}
+.me-grid{table-layout:fixed;min-width:860px}.me-grid input,.me-grid select{padding:6px 7px;border:1px solid var(--b2);border-radius:6px;font-size:13px;width:100%}.me-grid .me-b{font-weight:700}.me-grid .me-w52{width:52px}.me-grid td{padding:2px 3px;overflow:hidden}.me-grid input,.me-grid select{max-width:100%;box-sizing:border-box}.me-grid input,.me-grid select{min-height:30px}.me-n{font-size:11px;color:var(--t3);white-space:nowrap;text-align:right;vertical-align:middle}
 .me-st,.me-ht{display:inline-block;margin-left:4px;font-size:10px;font-weight:800;border-radius:4px;padding:1px 5px;background:#eef0f3;color:#5b6b82}.me-st[hidden]{display:none}
 .me-h td{background:#f5f6f8}.me-u td{background:#eef3fb}.me-u .me-ht{background:#14335c;color:#fff}.me-inu td:nth-child(2){padding-left:14px}
 .me-q{white-space:nowrap}.me-tot{font-size:12px;font-weight:800;color:#14335c;margin-left:4px}.me-ul{font-size:12px;font-weight:700;color:#14335c}.me-hint{font-size:11px;color:var(--t3)}.me-lock{font-size:12px;font-weight:700;color:#8a5a00}
-.me-x{color:var(--red);border-color:var(--red);padding:3px 8px}.me-grid tr:focus-within td{background:#fffbe6}
+.me-x{color:var(--red);border-color:var(--red);padding:3px 8px}.me-keys{font-size:11px;color:var(--t3);margin:2px 0 4px}@media(max-width:699px){.me-keys{display:none}}.me-grid tr:focus-within td{background:#fffbe6}
 .me-flag input{width:18px;height:18px}
 .sc-tbl td,.sc-tbl th{white-space:nowrap}
 /* Bench PCs (saw / stores): condensed so more houses fit on one screen */
@@ -3587,31 +3587,31 @@ function openListEditor2(listId,presetWo,presetPid,opt){
   const matSel=(r,i,id)=>{
     const sm=sheetMats(),fm=fitMats(),v=String(r.mat||'').trim(),all=[...sm,...fm],on=all.find(n=>n.toLowerCase()===v.toLowerCase());
     const sized=lsNum(r.L)>0||lsNum(r.W)>0,o=n=>`<option value="${escA(n)}"${on===n?' selected':''}>${escA(n)}</option>`;
-    return `<select ${id?'id="'+id+'"':'data-mr="'+i+'|mat"'} class="me-c" style="${inp};width:100%${v&&!on?';'+amber:''}"${v&&!on?' title="Not on the project\'s materials — flagged for the Production Manager"':''}><option value="">${id?'— none —':'— colour —'}</option>
+    return `<select ${id?'id="'+id+'"':'data-mr="'+i+'|mat"'} class="me-c"${id?` style="${inp};width:100%${v&&!on?';'+amber:''}"`:v&&!on?` style="${amber}"`:''}${v&&!on?' title="Not on the project\'s materials — flagged for the Production Manager"':''}><option value="">${id?'— none —':'— colour —'}</option>
       ${sm.length?`<optgroup label="Boards / colours">${sm.map(o).join('')}</optgroup>`:''}${fm.length&&!sized&&!id?`<optgroup label="Fittings &amp; hardware">${fm.map(o).join('')}</optgroup>`:''}
       ${v&&!on?`<option value="${escA(v)}" selected>⚠ ${escA(v)} (not on the project list)</option>`:''}${id?'':'<option value="__add">＋ Add new material…</option>'}</select>`;};
   const rowHTML=(r,i,b)=>{
     if(r.k==='hdr'){const unit=r.units!==undefined&&r.units!==null;
       return `<tr data-row="${i}" class="me-h${unit?' me-u':''}"><td class="me-n">${i+1}<span class="me-ht">${unit?'Unit':'Heading'}</span></td>
-        <td><input data-mr="${i}|item" value="${escA(r.item)}" placeholder="${unit?'Unit — e.g. 900 Single Rail + 2 shelves':'Heading — e.g. Road 1 No 1 extras'}" style="${inp};width:100%;font-weight:700"></td>
-        ${unit?`<td class="me-q"><input data-mr="${i}|units" value="${escA(r.units)}" inputmode="numeric" style="${inp};width:52px;font-weight:700"${sawStarted&&r.lid?' disabled':''} title="Number of units"> <span class="me-ul">units</span></td>
+        <td><input data-mr="${i}|item" value="${escA(r.item)}" placeholder="${unit?'Unit — e.g. 900 Single Rail + 2 shelves':'Heading — e.g. Road 1 No 1 extras'}" class="me-b"></td>
+        ${unit?`<td class="me-q"><input data-mr="${i}|units" value="${escA(r.units)}" inputmode="numeric" class="me-b me-w52"${sawStarted&&r.lid?' disabled':''} title="Number of units"> <span class="me-ul">units</span></td>
           <td colspan="4">${sawStarted&&r.lid?`<span class="me-lock">🔒 ${escA(LS_LOCK_MSG)}</span> <button class="btn btn-s" data-mecopy="1" style="font-size:12px;padding:3px 9px">Make new list from this</button>`:'<span class="me-hint">Qty below is for ONE unit — the total to cut is shown beside it</span>'}</td>`
           :'<td colspan="5"></td>'}
-        <td><input data-mr="${i}|note" value="${escA(r.note||'')}" placeholder="Note" style="${inp};width:100%"></td>
+        <td><input data-mr="${i}|note" value="${escA(r.note||'')}" placeholder="Note" ></td>
         <td><button class="btn btn-s me-x" data-mrx="${i}" title="Delete row">✕</button></td></tr>`;}
     const u=b.U[i],stores=!(lsNum(r.L)>0||lsNum(r.W)>0)&&!lsEmptyRow(r);
     return `<tr data-row="${i}" class="me-p${u!=null?' me-inu':''}"><td class="me-n">${i+1}<span class="me-st" data-tag="${i}"${stores?'':' hidden'}>Stores</span></td>
-      <td><input data-mr="${i}|item" value="${escA(r.item)}" placeholder="Description" style="${inp};width:100%"></td>
-      <td class="me-q"><input data-mr="${i}|qty" value="${escA(r.qty)}" inputmode="decimal" style="${inp};width:52px">${u!=null?`<span class="me-tot" data-tot="${i}">= ${escA(totalOf(r,u))}</span>`:''}</td>
-      <td><input data-mr="${i}|L" value="${escA(r.L)}" inputmode="decimal" placeholder="L" style="${inp};width:66px"></td>
-      <td><input data-mr="${i}|W" value="${escA(r.W)}" inputmode="decimal" placeholder="W" style="${inp};width:66px"></td>
-      <td style="min-width:130px">${matSel(r,i)}</td>
-      <td><input data-mr="${i}|edging" value="${escA(r.edging||'')}" list="me-edg" placeholder="Edging" style="${inp};width:96px"></td>
-      <td><input data-mr="${i}|note" value="${escA(r.note||'')}" placeholder="Note" style="${inp};width:100%"></td>
+      <td><input data-mr="${i}|item" value="${escA(r.item)}" placeholder="Description" ></td>
+      <td class="me-q"><input data-mr="${i}|qty" value="${escA(r.qty)}" inputmode="decimal" class="me-w52">${u!=null?`<span class="me-tot" data-tot="${i}">= ${escA(totalOf(r,u))}</span>`:''}</td>
+      <td><input data-mr="${i}|L" value="${escA(r.L)}" inputmode="decimal" placeholder="L" ></td>
+      <td><input data-mr="${i}|W" value="${escA(r.W)}" inputmode="decimal" placeholder="W" ></td>
+      <td>${matSel(r,i)}</td>
+      <td><input data-mr="${i}|edging" value="${escA(r.edging||'')}" list="me-edg" placeholder="Edging" ></td>
+      <td><input data-mr="${i}|note" value="${escA(r.note||'')}" placeholder="Note" ></td>
       <td><button class="btn btn-s me-x" data-mrx="${i}" title="Delete row">✕</button></td></tr>`;
   };
   const gridHTML=()=>{const b=blocks();
-    return `<table class="me-tbl me-grid"><thead><tr><th></th><th>Description</th><th>Qty</th><th>Length</th><th>Width</th><th>Colour</th><th>Edging</th><th>Note</th><th></th></tr></thead><tbody>${R().map((r,i)=>rowHTML(r,i,b)).join('')||'<tr><td colspan="9" style="color:var(--t3);padding:10px">No rows yet — press ＋ Row.</td></tr>'}</tbody></table>`;};
+    return `<table class="me-tbl me-grid"><colgroup><col style="width:58px"><col><col style="width:104px"><col style="width:76px"><col style="width:76px"><col style="width:150px"><col style="width:108px"><col style="width:17%"><col style="width:40px"></colgroup><thead><tr><th></th><th>Description</th><th>Qty</th><th>Length</th><th>Width</th><th>Colour</th><th>Edging</th><th>Note</th><th></th></tr></thead><tbody>${R().map((r,i)=>rowHTML(r,i,b)).join('')||'<tr><td colspan="9" style="color:var(--t3);padding:10px">No rows yet — press ＋ Row.</td></tr>'}</tbody></table>`;};
   const updTotals=()=>{const b=blocks();ov.querySelectorAll('[data-tot]').forEach(e=>{const i=+e.dataset.tot,r=R()[i];if(r&&b.U[i]!=null)e.textContent='= '+totalOf(r,b.U[i]);});};
   const updTag=i=>{const t=ov.querySelector('[data-tag="'+i+'"]'),r=R()[i];if(t&&r)t.hidden=lsNum(r.L)>0||lsNum(r.W)>0||lsEmptyRow(r);};
   const draw=()=>{
@@ -3654,11 +3654,12 @@ function openListEditor2(listId,presetWo,presetPid,opt){
         <label class="me-flag"><input type="checkbox" id="me-nocut"${st.noCut?' checked':''}> No cutting on this job</label>
         <label class="me-flag"><input type="checkbox" id="me-nofit"${st.noFit?' checked':''}> No fittings on this job</label>
       </div>
+      <div class="me-keys">Works like Excel: <b>Tab</b> / <b>Shift+Tab</b> across · <b>Enter</b> down (a new row at the bottom) · arrow keys · <b>Ctrl+D</b> copies the cell above · <b>Insert</b> adds a row · <b>Ctrl+Delete</b> deletes the row · <b>Ctrl+Z</b> undo · paste rows straight from Excel</div>
       <div id="me-err" style="color:#b42318;font-weight:700;font-size:13px;min-height:18px"></div>
       <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap"><button class="btn btn-s" id="pod-x">Cancel</button><button class="btn btn-g" id="me-save" style="font-size:14px;padding:9px 20px">${ex?'Save changes':st.tpl?'Save template':'Save list → Saw & Stores'}</button></div>
     </div>`;
     bind();
-    const g=ov.querySelector('#me-grid');if(g)g.scrollTop=sc;
+    const g=ov.querySelector('#me-grid');if(g&&sc)g.scrollTop=sc;
     if(fk){const e=ov.querySelector('[data-mr="'+fk+'"]');if(e&&!e.disabled){e.focus();if(ss&&e.setSelectionRange&&!st.focusAll)try{e.setSelectionRange(ss[0],ss[1]);}catch(x){}else if(e.select&&st.focusAll)e.select();}}
     st.focusAll=false;
   };
@@ -3723,7 +3724,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     keepTotals(()=>R().splice(i,1));
     if(r.k==='hdr'&&r.units!=null)toast('Unit heading deleted — its parts keep their totals');
     st.focus=R().length?Math.min(i,R().length-1)+'|item':'';draw();};
-  const undo=()=>{if(!st.undo.length)return;st.rows=JSON.parse(st.undo.pop());st.snapKey='';draw();};
+  const undo=()=>{if(!st.undo.length)return;st.rows=JSON.parse(st.undo.pop());st.snapKey='';if(st.cur&&!ov.querySelector('[data-mr="'+st.cur+'"]'))st.cur='';st.focus=st.cur&&+st.cur.split('|')[0]<R().length?st.cur:'';draw();};
   const copyToNew=()=>{ // the saw has started: a different number of units is a NEW list (Garry, 3 Nov) — copied without ticks
     keep();if(!confirm('Make a new list from "'+st.name+'"?\n\nThe rows are copied (no ticks) into a new list you can change. This list stays as it is with the saw — archive it from Lists if the new one replaces it.'))return;
     ov.remove();openListEditor2(null,st.wo,st.pid,{rows:R(),name:st.name+' (new)',ltype:st.ltype,tname:st.tname,note:'Copied from "'+st.name+'" — nothing is saved until you press Save. The old list is not changed.'});
@@ -3770,6 +3771,38 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     });
   };
   ov.addEventListener('focusin',e=>{const m=e.target&&e.target.dataset&&e.target.dataset.mr;if(m){st.cur=m;if(st.snapKey!==m)st.snapKey='';}});
+  // ---- keyboard, like Excel (not on phones): Tab / Shift+Tab, Enter down (a new row at the bottom), arrows, Ctrl+D fill
+  //      down, Insert adds a row, Ctrl+Delete deletes the row, Ctrl+Z undoes. The cursor stays where it was after a redraw.
+  const COL={item:0,qty:1,units:1,L:2,W:3,mat:4,edging:5,note:6};
+  const cellsOf=i=>{const r=R()[i];if(!r)return[];if(r.k!=='hdr')return['item','qty','L','W','mat','edging','note'];
+    return r.units!==undefined&&r.units!==null&&!(sawStarted&&r.lid)?['item','units','note']:['item','note'];};
+  const go=(i,f,all)=>{if(i<0||i>=R().length)return false;const cs=cellsOf(i);if(!cs.includes(f)){const c=COL[f];f=cs.reduce((b,x)=>Math.abs(COL[x]-c)<Math.abs(COL[b]-c)?x:b,cs[0]);}
+    const e=ov.querySelector('[data-mr="'+i+'|'+f+'"]');if(!e)return false;e.focus();if(e.select&&all!==false)e.select();return true;};
+  ov.addEventListener('keydown',e=>{
+    if(window.innerWidth<700)return;
+    const t=e.target,m=t&&t.dataset&&t.dataset.mr;if(!m)return;
+    const[i0,f]=m.split('|'),i=+i0,cs=cellsOf(i),ci=cs.indexOf(f),ctrl=e.ctrlKey||e.metaKey,txt=t.tagName==='INPUT';
+    const stop=()=>{e.preventDefault();e.stopPropagation();};
+    if(e.key==='Tab'){stop();
+      if(!e.shiftKey){if(ci<cs.length-1)go(i,cs[ci+1]);else if(i<R().length-1)go(i+1,cellsOf(i+1)[0]);else{st.cur=m;addRow(R().length);}}
+      else{if(ci>0)go(i,cs[ci-1]);else if(i>0){const p=cellsOf(i-1);go(i-1,p[p.length-1]);}}
+      return;}
+    if(e.key==='Enter'&&!ctrl){stop();if(e.shiftKey){go(i-1,f);return;}
+      if(i<R().length-1)go(i+1,f);else{keep();snap();R().push(blank(R().length));st.focus=(R().length-1)+'|'+(f==='units'?'qty':f);st.focusAll=true;draw();}
+      return;}
+    if((e.key==='ArrowDown'||e.key==='ArrowUp')&&!e.altKey&&!ctrl){stop();go(i+(e.key==='ArrowDown'?1:-1),f);return;}
+    if((e.key==='ArrowLeft'||e.key==='ArrowRight')&&!ctrl&&!e.shiftKey){
+      const len=txt?t.value.length:0,a=txt?t.selectionStart:0,b=txt?t.selectionEnd:0,all=txt&&a===0&&b===len;
+      if(e.key==='ArrowLeft'&&(!txt||(a===0&&(b===0||all)))&&ci>0){stop();go(i,cs[ci-1]);}
+      else if(e.key==='ArrowRight'&&(!txt||(b===len&&(a===len||all)))&&ci<cs.length-1){stop();go(i,cs[ci+1]);}
+      return;}
+    if(ctrl&&(e.key==='d'||e.key==='D')){stop();const r=R()[i];if(r.k==='hdr'||!(f in r))return;
+      let j=i-1;while(j>=0&&R()[j].k==='hdr')j--;if(j<0)return;snap();r[f]=R()[j][f];st.focus=m;st.focusAll=true;draw();return;}
+    if(e.key==='Insert'){stop();keep();snap();R().splice(i,0,blank(i));st.focus=i+'|item';draw();return;}
+    if(ctrl&&e.key==='Delete'){stop();const r=R()[i];if(!r)return;keep();snap();keepTotals(()=>R().splice(i,1));
+      st.focus=R().length?Math.min(i,R().length-1)+'|'+f:'';draw();return;}
+    if(ctrl&&(e.key==='z'||e.key==='Z')&&!e.shiftKey){stop();undo();return;}
+  });
   ov.onclick=e=>{if(e.target===ov||e.target.id==='pod-x')ov.remove();};
   document.body.appendChild(ov);draw();
   return{st,draw};
