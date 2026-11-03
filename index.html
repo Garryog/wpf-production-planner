@@ -2718,6 +2718,18 @@ function lsEditMerge(id,rows,lines){
   if(over.length&&!confirm('⚠ Another screen saved this list after you opened it. Their other changes are kept, but saving yours will overwrite:\n\n'+over.map(t=>'  • '+t).join('\n')+'\n\nOK = save anyway (overwrite these). Cancel = don\'t save.'))return{ok:false,kept};
   return{ok:true,kept};
 }
+// Every part in a unit block: total = per unit × the block's Units as the list is about to be saved — so a part kept from
+// another screen (added there with that screen's Units) follows a Units change made here. A FIXED total (no per-unit) and a
+// quantity like "2x2" are left as they are; a part no longer under a unit heading keeps its total and loses its per-unit.
+function lsBlockTotals(lines){
+  let u=null;
+  lines.forEach(ln=>{if(!ln||ln._drop)return;
+    if(ln.kind==='hdr'){const q=String(ln.qty==null?'':ln.qty).trim();u=q?q:null;return;}
+    const uq=String(ln.unit_qty==null?'':ln.unit_qty).trim();if(!uq)return;
+    if(u==null){ln.unit_qty='';return;}
+    const t=lsMul(uq,u);if(/^\d+(\.\d+)?$/.test(t))ln.qty=t;});
+  return lines;
+}
 function lsUnitsChanged(r){ // a unit heading whose Units this person changed since the editor opened
   if(!r||r.k!=='hdr'||!r.lid||r.units==null)return false;
   const was=r.u0!==undefined?r.u0:(LST.ln.get(r.lid)||{}).kind==='hdr'?(LST.ln.get(r.lid)||{}).qty:null;
@@ -2753,6 +2765,7 @@ async function lsSaveManual(d,by,ex){
   const mg=ex?lsEditMerge(id,d.rows,lines):{ok:true,kept:0};
   if(!mg.ok)throw new Error('another screen changed this list meanwhile — nothing saved; close and reopen it');
   for(let i=lines.length-1;i>=0;i--)if(lines[i]._drop)lines.splice(i,1);
+  lsBlockTotals(lines); // after the merge: every total = per unit × its block's Units (the other screen's parts too)
   if(mg.kept)setTimeout(()=>toast(mg.kept+' change'+(mg.kept!==1?'s':'')+' saved meanwhile on another screen kept'),2700);
   if(ex&&ex.templateId&&!ex.tpl){
     const tl=await lsTplLines(ex),miss=tl?lsMissing(tl,lines):[];
