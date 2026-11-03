@@ -2736,7 +2736,7 @@ async function lsSaveManual(d,by,ex){
   if(ex&&!ex.tpl&&!ex.locked&&lsLocked(lsList(id)))pl.lock=true; // cut-by today / next working day: this save is a revision
   if(d.ltype)pl.list_type=d.ltype;if(d.tname!==undefined)pl.type_name=String(d.tname||'').trim()||null;
   if(!ex)Object.assign(pl,d.tpl?{wos:[],source:'manual',is_template:true}:{wos:[d.wo],source:'manual'},{list_type:d.ltype||'house'});
-  const res=await lsSaveList(pl,lines,by,reason||(ex?'List edited':null));
+  const res=await lsSaveList(pl,lines,by,reason||(ex?(d.why||'List edited'):null)); // a template's "what changed" goes in its History
   if(ex&&!ex.tpl){const was=(ex.wos||[])[0];if(d.wo&&d.wo!==was){if(was)listTag(ex,was,false,by);listTag(ex,d.wo,true,by);}
     // rows added to a side that was already signed off put that side back on the bench — and say so
     ['saw','fit'].forEach(m=>{const n=res.diff.lines.filter(x=>x.kind===m&&res.diff.added.includes(x.id)).length;
@@ -3232,7 +3232,7 @@ function lsHomeHTML(){
   const row=l=>{const[st,col]=LS_STATE[lsState(l)];return `<tr data-lhrow="${escA(l.id)}"><td><b>${escA(l.name)}</b>${l.tpl?' <span class="lst-chip" style="background:#efe7ff;color:#5b21b6">TEMPLATE'+(l.typeName?' · '+escA(l.typeName):'')+'</span>':''}</td>
     <td>${escA(LS_KINDS[l.ltype]||l.ltype||'')}${l.templateId?`<div style="font-size:11px;color:#5b21b6">${escA(lsTplInfo(l))}</div>`:''}</td><td>${(l.wos||[]).map(w=>`<span class="lst-chip">${escA(w)}</span>`).join('')||'<span style="color:var(--t3)">—</span>'}</td>
     <td>${(+l.rev||1)>1?`<span class="lst-chip" style="background:#fff4d6;color:#7a5200">Rev ${+l.rev}</span>`:'Rev 1'}</td><td><span style="color:${col};font-weight:700">${st}</span></td><td>🪚 ${prog(l,'saw')}</td><td>🧰 ${prog(l,'fit')}</td>
-    <td style="white-space:nowrap"><button class="btn btn-s" data-lhedit="${escA(l.id)}" style="padding:2px 8px;font-size:11px">✎ Edit</button> <button class="btn btn-s" data-lhview="${escA(l.id)}" style="padding:2px 8px;font-size:11px">View</button>${!l.tpl&&!l.archived&&lsState(l)==='draft'?` <button class="btn btn-s" data-lhsend="${escA(l.id)}" style="padding:2px 8px;font-size:11px">➜ Send to saw</button>`:''}${l.archived?'':` <button class="btn btn-s" data-lharc="${escA(l.id)}" style="padding:2px 8px;font-size:11px;color:var(--red);border-color:var(--red)">Archive</button>`}</td></tr>`;};
+    <td style="white-space:nowrap"><button class="btn btn-s" data-lhedit="${escA(l.id)}" style="padding:2px 8px;font-size:11px">✎ Edit</button> <button class="btn btn-s" data-lhview="${escA(l.id)}" style="padding:2px 8px;font-size:11px">View</button>${l.archived?'':` <button class="btn btn-s" data-lhastpl="${escA(l.id)}" style="padding:2px 8px;font-size:11px" title="Save this list as a template of the project (ticks are not copied)">📐 Save as template</button>`}${l.tpl?` <button class="btn btn-s" data-lhhist="${escA(l.id)}" style="padding:2px 8px;font-size:11px">🕘 History</button>`:''}${!l.tpl&&!l.archived&&lsState(l)==='draft'?` <button class="btn btn-s" data-lhsend="${escA(l.id)}" style="padding:2px 8px;font-size:11px">➜ Send to saw</button>`:''}${l.archived?'':` <button class="btn btn-s" data-lharc="${escA(l.id)}" style="padding:2px 8px;font-size:11px;color:var(--red);border-color:var(--red)">Archive</button>`}</td></tr>`;};
   return `<div class="exp-panel" id="lh">
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
       <div style="font-size:15px;font-weight:700;color:#14335c">📋 Lists — ${ls0.length}</div>
@@ -3270,6 +3270,8 @@ function lsHomeBind(){
   document.querySelectorAll('[data-lhimp]').forEach(b=>b.onclick=()=>{lhImpPid=b.dataset.lhimp;if(fi)fi.click();});
   if(fi)fi.onchange=()=>{const f=fi.files[0];if(f)lsUpload(f,lhImpPid);fi.value='';};
   document.querySelectorAll('[data-lhedit]').forEach(b=>b.onclick=()=>openListEditor(b.dataset.lhedit));
+  document.querySelectorAll('[data-lhastpl]').forEach(b=>b.onclick=()=>lsSaveAsTpl({id:b.dataset.lhastpl}));
+  document.querySelectorAll('[data-lhhist]').forEach(b=>b.onclick=()=>lsTplHistory(b.dataset.lhhist));
   document.querySelectorAll('[data-lhview]').forEach(b=>b.onclick=()=>{const l=lsList(b.dataset.lhview);if(!l)return;
     lsDlg(`<div style="font-weight:700;color:#14335c;margin-bottom:8px">${escA(l.project||'')} — ${escA(l.name)} · Rev ${+l.rev||1}</div>${listTableHTML(l,'all')}`);});
   document.querySelectorAll('[data-lhsend]').forEach(b=>b.onclick=()=>{const l=lsList(b.dataset.lhsend);if(!l)return;lqList({t:'done',list:l.id,mode:'send',on:true,by:whoNow()});render();toast('"'+l.name+'" sent to the saw — later changes make a new revision');});
@@ -3656,7 +3658,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       </div>
       <div class="me-keys">Works like Excel: <b>Tab</b> / <b>Shift+Tab</b> across · <b>Enter</b> down (a new row at the bottom) · arrow keys · <b>Ctrl+D</b> copies the cell above · <b>Insert</b> adds a row · <b>Ctrl+Delete</b> deletes the row · <b>Ctrl+Z</b> undo · paste rows straight from Excel</div>
       <div id="me-err" style="color:#b42318;font-weight:700;font-size:13px;min-height:18px"></div>
-      <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap"><button class="btn btn-s" id="pod-x">Cancel</button><button class="btn btn-g" id="me-save" style="font-size:14px;padding:9px 20px">${ex?'Save changes':st.tpl?'Save template':'Save list → Saw & Stores'}</button></div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">${ex&&st.tpl?'<button class="btn btn-s" id="me-hist">🕘 History</button>':''}${st.tpl?'':'<button class="btn btn-s" id="me-astpl" title="Save these rows as a template of the project (unsaved changes included)">📐 Save as template</button>'}<span style="flex:1"></span><button class="btn btn-s" id="pod-x">Cancel</button><button class="btn btn-g" id="me-save" style="font-size:14px;padding:9px 20px">${ex?'Save changes':st.tpl?'Save template':'Save list → Saw & Stores'}</button></div>
     </div>`;
     bind();
     const g=ov.querySelector('#me-grid');if(g&&sc)g.scrollTop=sc;
@@ -3702,6 +3704,8 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     on('me-addhdr',()=>addHdr(false));
     on('me-addunit',()=>addHdr(true));
     on('me-undo',()=>undo());
+    on('me-astpl',()=>{keep();lsSaveAsTpl({pid:st.pid,name:st.name,ltype:st.ltype,tname:st.tname,lines:lsEdLines(R().filter(r=>!lsEmptyRow(r)).map(r=>{const x={...r};delete x.lid;return x;}))});});
+    on('me-hist',()=>{if(ex)lsTplHistory(ex.id);});
     ov.querySelectorAll('[data-mecopy]').forEach(b=>b.onclick=()=>copyToNew());
     g('me-nocut').onchange=e=>{keep();st.noCut=e.target.checked;draw();};
     g('me-nofit').onchange=e=>{keep();st.noFit=e.target.checked;draw();};
@@ -3754,6 +3758,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     const d={...st,rows,wo,project:(LST.p.get(st.pid)||{}).name||''};
     const chk=rows.filter(r=>r.k==='part').map((r,j)=>({k:sized(r)?'saw':'fit',item:r.item,qty:totalOf(r,b[rows.indexOf(r)]),L:r.L,W:r.W}));
     const e=manualListValidate({...d,rows:chk,wo:st.tpl?'(template)':d.wo});if(e)return err(e.replace(/saw row/g,'saw row (with a length or width)').replace(/fittings row/g,'Stores row (no length or width)'));
+    if(ex&&ex.tpl){const w=prompt('What changed in this template? (optional — shown in its History; it becomes Rev '+((+ex.rev||1)+1)+')','');if(w===null)return;d.why=w.trim()?w.trim():'Template edited';}
     officeWho(by=>{
       if(st.newWO){
         const pwo=nextPNumber(),val=parseFloat(g('me-pval').value)||0;
@@ -3844,6 +3849,85 @@ function openListEditor2(listId,presetWo,presetPid,opt){
   ov.onclick=e=>{if(e.target===ov||e.target.id==='pod-x')ov.remove();};
   document.body.appendChild(ov);draw();
   return{st,draw};
+}
+/* ---------- Save as template / Update template / History (V2; Production Manager, Drawing office or Admin PIN) ----------
+   Any list — a library row, the editor (unsaved changes included) or a live list — can be saved as a template of its
+   project. Headings and per-unit quantities are copied; ticks never are, and the source list is not linked. If a template
+   with that type name exists the person chooses "Update template (Rev n+1)" or "New template". Every template change is a
+   new revision with an optional "what changed" note, listed in History; lists already made from it never change. */
+function lsTplCopy(lines){ // lines → clean template lines: no ids, no ticks, no links
+  return (lines||[]).filter(x=>x.removed_rev==null&&x.status!=='na').map(x=>({kind:x.kind,section:x.section||'',part:x.part||'',length_mm:x.length_mm,width_mm:x.width_mm,qty:x.qty==null?'':String(x.qty),
+    unit_qty:x.unit_qty==null?'':String(x.unit_qty),material:x.material||'',material_other:!!x.material_other,edging:x.edging||'',note:x.note||''}));
+}
+function lsTplByName(pid,name){const k=matKey(name);return k?lsTemplatesFor(pid).find(t=>matKey(t.typeName||t.name)===k||matKey(t.name)===k):null;}
+function lsSaveAsTpl(src,done){
+  // src: {pid, name, ltype, tname, lines} or {id} (a saved list)
+  if(!lsEditOk())return;
+  const go=async()=>{
+    if(src.id){if(!LST.full.has(src.id))await lsReloadList(src.id);const l=lsList(src.id);if(!l)throw new Error('that list is no longer there');
+      src={pid:l.pid,name:l.name,ltype:l.ltype,tname:l.typeName,lines:lsLinesOf(l.id),fromId:l.id};}
+    if(!src.pid)throw new Error('pick the project first — a template belongs to a project');
+    const lines=lsTplCopy(src.lines);
+    if(!lines.some(x=>x.kind!=='hdr'))throw new Error('there are no parts to save');
+    const st={type:src.ltype&&src.ltype!=='snag'?src.ltype:'house',name:String(src.tname||src.name||'').trim(),mode:'',why:''};
+    const ov=lsDlg('<div id="at-body"></div>',620);
+    const draw=()=>{
+      const ex=lsTplByName(src.pid,st.name);if(!ex)st.mode='new';else if(!st.mode)st.mode='upd'; // same name as a template: Update is offered first
+      const nP=lines.filter(x=>x.kind!=='hdr').length,nU=lines.filter(x=>x.kind==='hdr'&&String(x.qty||'').trim()).length;
+      ov.querySelector('#at-body').innerHTML=`<div style="font-weight:800;color:#14335c;font-size:17px;margin-bottom:4px">📐 Save as template</div>
+        <div style="font-size:12px;color:var(--t3);margin-bottom:10px">From <b>${escA(src.name||'this list')}</b> (${nP} part${nP!==1?'s':''}${nU?', '+nU+' unit block'+(nU!==1?'s':''):''}) into <b>${escA(lsProjName(src.pid))}</b>. Headings and per-unit quantities are copied; ticks never are. This list is not changed and is not linked to the template.</div>
+        <div class="me-top"><div><label>Type</label><select id="at-type" style="${LS_INP}">${['kitchen','house','room','other'].map(k=>`<option value="${k}"${st.type===k?' selected':''}>${LS_KINDS[k]}</option>`).join('')}</select></div>
+          <div style="flex:1"><label>Template name (type)</label><input id="at-name" value="${escA(st.name)}" placeholder="e.g. Type B 3-bed / 900 Single Rail" style="${LS_INP};width:100%"></div></div>
+        ${ex?`<div style="margin-top:10px;background:#f6f2ff;border:1px solid #d9ccff;border-radius:8px;padding:8px 10px;font-size:13px">A template called <b>${escA(ex.typeName||ex.name)}</b> already exists (Rev ${+ex.rev||1}).
+          <label class="hold-row"><input type="radio" name="at-mode" value="upd"${st.mode==='upd'?' checked':''}><span><b>Update template</b> — it becomes Rev ${(+ex.rev||1)+1}. Lists already made from it don't change.</span></label>
+          <label class="hold-row"><input type="radio" name="at-mode" value="new"${st.mode==='new'?' checked':''}><span><b>New template</b> — a separate template with this name</span></label>
+          ${st.mode==='upd'?`<div style="margin-top:6px"><label style="font-size:12px;color:var(--t2)">What changed? (optional — shown in its History)</label><input id="at-why" value="${escA(st.why)}" placeholder="e.g. shelves now 864 wide" style="${LS_INP};width:100%"></div>`:''}</div>`:''}
+        <div id="at-err" style="color:#b42318;font-weight:700;font-size:13px;min-height:18px;margin-top:6px"></div>
+        <div style="text-align:right"><button class="btn btn-g" id="at-ok" style="font-size:14px;padding:9px 20px">${ex&&st.mode==='upd'?'Update template → Rev '+((+ex.rev||1)+1):'Save template'}</button></div>`;
+      const q=id=>ov.querySelector('#'+id);
+      q('at-type').onchange=e=>{st.type=e.target.value;};
+      q('at-name').oninput=e=>{const had=!!lsTplByName(src.pid,st.name);st.name=e.target.value;if(had!==!!lsTplByName(src.pid,st.name)){st.mode='';draw();const n=q('at-name');n.focus();n.setSelectionRange(n.value.length,n.value.length);}};
+      ov.querySelectorAll('[name="at-mode"]').forEach(r=>r.onchange=()=>{st.mode=r.value;draw();});
+      const w=q('at-why');if(w)w.oninput=e=>{st.why=e.target.value;};
+      q('at-ok').onclick=()=>{
+        const name=st.name.trim(),err=t=>{q('at-err').textContent=t;};if(!name)return err('Give the template a name.');
+        const b=q('at-ok');b.disabled=true;err('Saving…');
+        const ls2=lines.map(x=>({...x}));lsFlagMats(ls2,src.pid);
+        const why=st.why.trim();
+        const p=ex&&st.mode==='upd'
+          ?lsSaveList({id:ex.id,list_type:st.type,type_name:name},ls2,whoNow(),why||'Template updated from "'+(src.name||'a list')+'"')
+          :lsSaveList({id:uid('L'),name,project_id:src.pid,is_template:true,list_type:st.type,type_name:name,source:'template',wos:[]},ls2,whoNow(),'Saved as a template from "'+(src.name||'a list')+'"');
+        p.then(r=>{ov.remove();render();toast(r.same?'Template "'+name+'" already has exactly these rows — nothing changed':ex&&st.mode==='upd'?'Template "'+name+'" updated — now Rev '+(+r.list.rev||1)+' ✓':'Template "'+name+'" saved in '+lsProjName(src.pid)+' ✓');if(done)done(r.list);})
+          .catch(e=>{b.disabled=false;err('Not saved — '+e.message);});
+      };
+    };
+    draw();
+  };
+  go().catch(e=>toast('Not saved as a template — '+e.message));
+}
+// A read-only table of lines (a template revision, or a list as it was)
+function lsLinesTable(lines){
+  const ls0=(lines||[]).filter(x=>x.removed_rev==null).sort((a,b)=>(a.seq||0)-(b.seq||0));
+  return `<table class="lst-tbl"><thead><tr><th>Description</th><th>Qty</th><th>Per unit</th><th>Length</th><th>Width</th><th>Colour</th><th>Edging</th><th>Note</th></tr></thead><tbody>${ls0.map(x=>x.kind==='hdr'
+    ?`<tr style="background:#eef3fb"><td colspan="8"><b>${escA(lsHdrName(x))}</b>${x.note?' <span style="color:var(--t3)">'+escA(x.note)+'</span>':''}</td></tr>`
+    :`<tr><td>${escA(x.part||'')}${x.kind==='fit'?' <span class="lst-chip" style="background:#eef0f3;color:#5b6b82">Stores</span>':''}</td><td><b>${escA(x.qty==null?'':x.qty)}</b></td><td>${escA(x.unit_qty||'')}</td><td>${escA(x.length_mm==null?'':+x.length_mm)}</td><td>${escA(x.width_mm==null?'':+x.width_mm)}</td><td>${escA(x.material||'')}</td><td>${escA(x.edging||'')}</td><td>${escA(x.note||'')}</td></tr>`).join('')||'<tr><td colspan="8" style="color:var(--t3)">No lines.</td></tr>'}</tbody></table>`;
+}
+function lsTplHistory(id){
+  const l=lsList(id);if(!l)return;
+  const ov=lsDlg('<div id="th-body">Loading the history…</div>',900);
+  const body=h=>{const b=ov.querySelector('#th-body');if(b)b.innerHTML=h;};
+  (async()=>{
+    if(!LST.full.has(id))await lsReloadList(id);
+    const revs=(await lsGet('list_revisions?select=*&list_id=eq.'+encodeURIComponent(id))).sort((a,b)=>(+b.rev||0)-(+a.rev||0));
+    const log=(LST.l.get(id)||{}).log||[],made=r=>log.find(e=>r===1?e.what==='List created':e.what==='Revision '+r);
+    const cur=+l.rev||1,rows=[{rev:cur,lines:lsLinesOf(id),cur:true},...revs.filter(r=>+r.rev<cur).map(r=>({rev:+r.rev,lines:Array.isArray(r.lines)?r.lines:[]}))];
+    const who=r=>{const e=made(r.rev);return e?(e.by?escA(e.by)+' · ':'')+escA(e.at?new Date(e.at).toLocaleString('en-IE',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}):'')+(e.why?' — '+escA(e.why):''):'';};
+    body(`<div style="font-weight:800;color:#14335c;font-size:17px;margin-bottom:4px">🕘 History — ${escA(l.typeName||l.name)}</div>
+      <div style="font-size:12px;color:var(--t3);margin-bottom:8px">${escA(l.project)} · every change to this ${l.tpl?'template':'list'} is a new revision. Lists already made from a template keep the revision they were made from.</div>
+      <table class="lst-tbl"><thead><tr><th>Revision</th><th>Saved by · when — what changed</th><th>Parts</th><th></th></tr></thead><tbody>${rows.map((r,k)=>`<tr><td><b>Rev ${r.rev}</b>${r.cur?' <span class="lst-chip" style="background:#e7f6ec;color:#0d6e46">current</span>':''}</td><td>${who(r)}</td><td>${r.lines.filter(x=>x.kind!=='hdr'&&x.removed_rev==null).length}</td><td><button class="btn btn-s" data-threv="${k}" style="font-size:11px;padding:2px 8px">View</button></td></tr>`).join('')}</tbody></table>
+      <div id="th-view" style="margin-top:10px;max-height:46vh;overflow:auto"></div>`);
+    ov.querySelectorAll('[data-threv]').forEach(b=>b.onclick=()=>{const r=rows[+b.dataset.threv];ov.querySelector('#th-view').innerHTML=`<div style="font-weight:700;color:#14335c;margin-bottom:4px">Rev ${r.rev}${r.cur?' (current)':''} — read only</div>`+lsLinesTable(r.lines);});
+  })().catch(e=>body('<span style="color:var(--red)">Could not load the history — '+escA(e.message)+'</span>'));
 }
 /* Excel material matching: board names in a workbook that aren't on the project list are shown for matching before the
    lists are saved. A match is remembered as an alias; "keep as typed" saves the line flagged; "add" puts it on the list. */
