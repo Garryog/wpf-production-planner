@@ -24,12 +24,10 @@ const rows = p => p.evaluate(() => [...document.querySelectorAll('[data-ltirow]'
   let r = await rows(t.page);
   rec('unlinked customers: grey with "Link to project ▾" and "+ New project"; no customer: "Type a list"', ['WO-5:none:link', 'WO-6:none:link', 'WO-8:none:link', 'WO-9:none:type'].every(x => r.includes(x)), JSON.stringify(r));
   rec('the New project button names the customer heading', await t.page.evaluate(h => (document.querySelector('[data-ltinewp="WO-8"]') || {}).textContent.includes('New project "' + h + '"'), BAL));
-  // a wrong PIN changes nothing
-  await t.page.evaluate(() => { window.__pin = '0000'; const s = document.querySelector('[data-ltilink="WO-5"]'); s.value = 'P1'; s.onchange(); });
-  await F.sleep(300);
-  rec('wrong PIN: nothing linked', !(D.find(S.db, 'projects', 'P1').cien_names || []).length);
-  await t.page.evaluate(() => { window.__pin = '7777'; const s = document.querySelector('[data-ltilink="WO-5"]'); s.value = 'P1'; s.onchange(); });
+  // Garry (3 Nov, answer 9): anyone in the office links a customer to a project — NO PIN is asked
+  await t.page.evaluate(() => { window.__asked = []; window.__pin = '0000'; window.prompt = m => { window.__asked.push(m); return /PIN/.test(m) ? window.__pin : 'x'; }; const s = document.querySelector('[data-ltilink="WO-5"]'); s.value = 'P1'; s.onchange(); });
   await F.sleep(600);
+  rec('Link to project asks for NO PIN (Garry, answer 9)', await t.page.evaluate(() => !window.__asked.some(m => /PIN/.test(m))), await t.page.evaluate(() => JSON.stringify(window.__asked)));
   r = await rows(t.page);
   rec('Link WO-5 to Cherrywood: the heading is added to the project\'s Cienapps names', (D.find(S.db, 'projects', 'P1').cien_names || []).join() === RIV, JSON.stringify(D.find(S.db, 'projects', 'P1').cien_names));
   rec('…WO-5 and WO-6 (same heading, trailing space) now get the Type B kitchen suggestion (green)', r.includes('WO-5:strong') && r.includes('WO-6:strong'), JSON.stringify(r));

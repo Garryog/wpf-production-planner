@@ -3501,12 +3501,9 @@ function ltiConfirm(wos){
     toast(bad?ok+' list'+(ok!==1?'s':'')+' made, '+bad+' NOT saved — tap ↻ Retry on '+(bad!==1?'those rows':'that row'):ok+' list'+(ok!==1?'s':'')+' made ✓'+(al?' ('+al+' already made on another screen)':''),!!bad);
   });
 }
-function ltiBind(){
-  const q=(sel,f)=>document.querySelectorAll(sel).forEach(f);
-  q('[data-lticonf]',b=>b.onclick=()=>ltiConfirm([b.dataset.lticonf]));
-  q('[data-ltiretry]',b=>b.onclick=()=>ltiConfirm([b.dataset.ltiretry]));
-  q('#lti-all',b=>b.onclick=()=>ltiConfirm(ltiRows().filter(r=>r.lvl==='strong'&&r.tid).map(r=>r.o.wo)));
-  q('[data-ltixl]',b=>b.onclick=()=>{const i=b.dataset.ltixl.indexOf('|'),w=b.dataset.ltixl.slice(0,i),lid=b.dataset.ltixl.slice(i+1);if(LTI.busy.has(w))return;
+// "✓ Use <Excel list>": attach that uploaded list to the WO. A failure keeps WHICH list was chosen, so ↻ Retry attaches
+// the same list again (never a list from the template instead)
+function ltiUse(w,lid){if(LTI.busy.has(w))return;
     officeWho(async by=>{LTI.busy.add(w);delete LTI.res[w];ltiAfter();
       try{const h=await lsLiveFor(w);
         if(h.length){LTI.done.unshift({wo:w,name:h[0].name,already:true});toast(lsHasListMsg(w,h[0]),true);}
@@ -3515,8 +3512,15 @@ function ltiBind(){
           try{const row=await lsRpc('list_attach',{p_list:lid,p_wo:w,p_on:true,p_by:lqBy(by),p_cid:lqId(),p_one:true});if(row&&row.id)lsPut('lists',[row]);
             LTI.done.unshift({wo:w,name:l.name,tpl:'Excel upload'});toast('"'+l.name+'" attached to '+w+' ✓');}
           catch(e){const k=lsOneErr(e);if(!k)throw e;const o2=await lsOneList(k);LTI.done.unshift({wo:w,name:o2.name,already:true});toast(lsGotMsg(w,o2),true);}}}
-      catch(e){LTI.res[w]={err:e.message};}
-      LTI.busy.delete(w);ltiAfter();});});
+      catch(e){LTI.res[w]={err:e.message,xl:lid,again:()=>ltiUse(w,lid)};}
+      LTI.busy.delete(w);ltiAfter();});
+}
+function ltiBind(){
+  const q=(sel,f)=>document.querySelectorAll(sel).forEach(f);
+  q('[data-lticonf]',b=>b.onclick=()=>ltiConfirm([b.dataset.lticonf]));
+  q('[data-ltiretry]',b=>b.onclick=()=>{const w=b.dataset.ltiretry,r=LTI.res[w]||{};if(r.again)r.again();else ltiConfirm([w]);}); // ↻ Retry does the SAME thing again: an Excel list stays that Excel list, a link stays that link
+  q('#lti-all',b=>b.onclick=()=>ltiConfirm(ltiRows().filter(r=>r.lvl==='strong'&&r.tid).map(r=>r.o.wo)));
+  q('[data-ltixl]',b=>b.onclick=()=>{const i=b.dataset.ltixl.indexOf('|');ltiUse(b.dataset.ltixl.slice(0,i),b.dataset.ltixl.slice(i+1));});
   q('[data-ltichg]',b=>b.onclick=()=>{LTI.open=LTI.open===b.dataset.ltichg?'':b.dataset.ltichg;ltiAfter();});
   q('[data-ltisel]',e=>e.onchange=()=>{const w=e.dataset.ltisel;
     if(e.value==='__type'){const o=DB.orders.find(x=>x.wo===w);LTI.open='';openListEditor(null,w,(lsProjForCust(o&&o.customer)||{}).id||'');return;}
@@ -3533,7 +3537,7 @@ function ltiBind(){
 }
 /* Customer = project: a WO whose Cienapps customer heading isn't linked to a project yet. "Link to project ▾" adds the
    heading to that project's Cienapps names (cien_names); "+ New project" makes a project for it. Either way every WO with
-   the same heading follows. Needs the Production Manager / Drawing office / Admin PIN once on an office PC. */
+   the same heading follows. No PIN (Garry, 3 Nov): anyone in the office can link. */
 function ltiLinkHTML(o){
   const c=String(o.customer||'').trim(),w=o.wo,btn='font-size:12px;padding:6px 10px;margin:2px 4px 2px 0';
   if(!c)return `<div class="lti-act"><span class="lti-why">No customer on this work order in Cienapps — </span><button class="btn btn-s" data-ltitype="${escA(w)}" style="${btn}">✍ Type a list</button></div>`;
@@ -3549,20 +3553,22 @@ async function ltiLink(o,pid){ // add the customer heading to the project's Cien
   return lsWrite('projects',p,{...(has?{}:{cien_names:[...(p.cien_names||[]),c]}),...(p.active===false?{active:true}:{})}); // an inactive project picked here is made active again
 }
 function ltiLinkBind(){
-  const fail=(w,e)=>{LTI.res[w]={err:e.message};ltiAfter();};
-  document.querySelectorAll('[data-ltitype]').forEach(b=>b.onclick=()=>openListEditor(null,b.dataset.ltitype));
-  document.querySelectorAll('[data-ltilink]').forEach(e=>e.onchange=()=>{const w=e.dataset.ltilink,o=DB.orders.find(x=>x.wo===w),pid=e.value;if(!o||!pid)return;
-    if(!lsEditOk()){e.value='';return;}
-    delete LTI.res[w];ltiLink(o,pid).then(p=>{toast('"'+String(o.customer).trim()+'" is now linked to '+p.name+' ✓');ltiAfter();}).catch(x=>fail(w,x));});
-  document.querySelectorAll('[data-ltinewp]').forEach(b=>b.onclick=()=>{const w=b.dataset.ltinewp,o=DB.orders.find(x=>x.wo===w);if(!o)return;
-    const c=String(o.customer||'').trim();if(!c||!lsEditOk())return;
-    delete LTI.res[w];b.disabled=true;
+  // Garry (3 Nov, answer 9): anyone in the office links a customer to a project — no PIN. A failure's ↻ Retry does the same link again.
+  const fail=(w,e,again)=>{LTI.res[w]={err:e.message,again};ltiAfter();};
+  const link=(w,pid)=>{const o=DB.orders.find(x=>x.wo===w);if(!o||!pid)return;
+    delete LTI.res[w];ltiLink(o,pid).then(p=>{toast('"'+String(o.customer).trim()+'" is now linked to '+p.name+' ✓');ltiAfter();}).catch(x=>fail(w,x,()=>link(w,pid)));};
+  const newp=(w,b)=>{const o=DB.orders.find(x=>x.wo===w);if(!o)return;
+    const c=String(o.customer||'').trim();if(!c)return;
+    delete LTI.res[w];if(b)b.disabled=true;
     (async()=>{lsPut('projects',await lsGet('projects?select=*'));
       const ex=lsProjFind(c); // already a project of that name (maybe made on another PC a moment ago): link to it
       if(ex)return ltiLink(o,ex.id);
       try{return await lsWrite('projects',{id:uid('P'),name:c,customer:c,cien_names:[c]});}
       catch(x){lsPut('projects',await lsGet('projects?select=*'));const p=lsProjFind(c);if(p)return ltiLink(o,p.id);throw x;}})()
-      .then(p=>{toast('Project "'+p.name+'" added — add its templates under Lists → Templates');ltiAfter();}).catch(x=>fail(w,x));});
+      .then(p=>{toast('Project "'+p.name+'" added — add its templates under Lists → Templates');ltiAfter();}).catch(x=>fail(w,x,()=>newp(w)));};
+  document.querySelectorAll('[data-ltitype]').forEach(b=>b.onclick=()=>openListEditor(null,b.dataset.ltitype));
+  document.querySelectorAll('[data-ltilink]').forEach(e=>e.onchange=()=>link(e.dataset.ltilink,e.value));
+  document.querySelectorAll('[data-ltinewp]').forEach(b=>b.onclick=()=>newp(b.dataset.ltinewp,b));
 }
 /* ---------- S4 (V2 only): the list editor with project picker, type, edging, and materials picked from the project ----------
    Saw material: only the project's sheet materials (no free typing). Fittings spec: the project's fittings, or "Other…"
