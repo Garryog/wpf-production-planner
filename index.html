@@ -2190,8 +2190,9 @@ function lqKick(ms){
   clearTimeout(LQ.t);LQ.t=setTimeout(lqSend,ms==null?2000:ms);
   if(!LQ.iv)LQ.iv=setInterval(()=>lqSend(),10000);
 }
+function lqPart(x){const ln=LST.ln.get(x.id);return ln?(ln.part||ln.material||'line'):'line';}
 function lqWhy(x){
-  const ln=LST.ln.get(x.id),part=ln?(ln.part||ln.material||'line'):'line';
+  const part=lqPart(x);
   const now={cut:'already cut','got-out':'already got out',waiting:'waiting on material',todo:'not done',na:'marked not needed'}[x.status]||x.status||'';
   const who=(x.by?' by '+x.by:'')+(x.at?' '+hhmm(x.at):'');
   if(x.why==='stale')return'Not changed — "'+part+'" was changed on another screen ('+now+who+'). Showing it as it is now.';
@@ -2299,6 +2300,13 @@ function lqOwn(s,ref){
   }catch(e){console.warn('Planner: queue check skipped',e&&e.message);}
 }
 function lqNames(a){const u=[...new Set(a)];return u.slice(0,5).map(x=>'"'+x+'"').join(', ')+(u.length>5?' and '+(u.length-5)+' more':'');}
+// Several refused at once (e.g. "Release all"): the first in full, then every other line by name and why (up to 5 named)
+function lqWhyAll(bad){
+  if(bad.length<2)return lqWhy(bad[0]);
+  const why=x=>({stale:'changed on another screen',done:'already done',changed:'changed in a new revision',removed:'taken off the list','not-needed':'marked not needed','not-waiting':'not waiting any more',missing:'no longer on the list','wrong-kind':'is the wrong kind of line for that'})[x.why]||(x.why||'refused');
+  const rest=bad.slice(1);
+  return lqWhy(bad[0])+' (+'+rest.length+' more: '+rest.slice(0,5).map(x=>'"'+lqPart(x)+'" '+why(x)).join('; ')+(rest.length>5?'; and '+(rest.length-5)+' other line'+(rest.length-5!==1?'s':''):'')+')';
+}
 function lqSay(m){LQ.msgs.push(m);if(LQ.msgs.length>20)LQ.msgs.shift();toast(m);}
 function lqDrop(cids){lqMut(q=>q.splice(0,q.length,...q.filter(e=>!cids.has(e.cid))));}
 // The switch as the database has it now (not this screen's copy): a device that was offline during a switch back
@@ -2376,7 +2384,7 @@ async function lqSend(){
           if(!x.ok&&!(e&&e.quiet))bad.push(x); // a rescued old-tab tick that the database turns down is expected — no message
         });
         lqMut(q=>{q.splice(0,q.length,...q.filter(e=>!cids.has(e.cid)));q.forEach(e=>{const b=bump.find(z=>z[0]===e.id&&z[1]===e.v);if(b){e.v=b[2];if('sa' in e){e.sa=b[3]==null?null:b[3];e.ra=b[4]==null?null:b[4];}}});});
-        if(bad.length){lqSay(lqWhy(bad[0])+(bad.length>1?' (+'+(bad.length-1)+' more)':''));
+        if(bad.length){lqSay(lqWhyAll(bad));
           lsGet('list_lines?select=*&id=in.('+bad.map(x=>'"'+encodeURIComponent(x.id)+'"').join(',')+')').then(rows=>{lsPut('list_lines',rows);lsRedraw();}).catch(()=>{});}
       }else{
         const row=Array.isArray(d)?d[0]:d;if(row&&row.id)lsPut('lists',[row]);
