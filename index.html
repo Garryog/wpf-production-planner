@@ -112,6 +112,8 @@ button,input,select{font-family:inherit;cursor:pointer}
 .toast.stick .toast-i+.toast-i::before{content:'';position:absolute;left:0;right:0;top:-6px;border-top:1px solid #e0a43a}
 .toast .toast-x{pointer-events:auto;position:absolute;top:2px;right:2px;background:none;border:0;color:#7a5200;font-size:18px;line-height:1;width:36px;height:36px;padding:0;cursor:pointer}
 .toast .toast-x::before{content:'✕'}
+/* short landscape phones (a quarter of the screen is under 3 buttons high): ▲ sits beside ✕, ▼ at the bottom */
+@media (max-height:520px){.toast.stick.scr{padding-right:78px;min-height:80px}.toast.stick.scr .toast-up{top:2px;right:40px}}
 .savebar{position:sticky;top:0;z-index:9000;background:#c0392b;color:#fff;font-size:14px;font-weight:700;line-height:1.4;padding:10px 16px;text-align:center}
 .savebar[hidden]{display:none}
 .verbar{position:sticky;top:0;z-index:8999;width:100%;border:0;background:#14335c;color:#fff;font-size:14px;font-weight:700;padding:10px 16px;cursor:pointer}
@@ -1194,6 +1196,7 @@ function toastPaint(t,m,st){
     b.addEventListener('click',e=>{e.stopPropagation();toastStep(l,dir);});t.appendChild(b);});
   l.scrollTop=l.lastChild?l.lastChild.offsetTop:0; // newest in view (from its start, if it is taller than the box)
   t.classList.toggle('scr',l.scrollHeight>l.clientHeight+1);
+  l.scrollTop=l.lastChild?l.lastChild.offsetTop:0; // again: on short screens the ▲/▼ layout narrows the text
 }
 function toast(m,stick){
   const t=document.getElementById('toast');clearTimeout(t._x);
