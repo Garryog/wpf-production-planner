@@ -29,15 +29,16 @@ const res = []; const rec = (n, ok, d) => { res.push(ok); console.log((ok ? 'PAS
   rec('a plain heading ends the unit block: Kicker is 7, no unit_qty', b[5] === 'saw|Kicker|7||Fillers & Kickers', b[5]);
   const v = await o.page.evaluate(id => { const r = listRows(lsList(id)); return r.map(x => x.k === 'hdr' ? 'h:' + x.item : x.item + ':' + x.qty).join(';'); }, r1);
   rec('the saw sees "… – 3 units" and the total on each line', v.startsWith('h:900 Single Rail + 2 shelves – 3 units;Side panel:6;Shelves:9') && v.includes('h:Fillers & Kickers;Kicker:7'), v);
-  // tick Side panel, then 2 per unit × 3 → … same total via a different split must NOT reset the tick
-  const side = ln()[1].id; D.update(S.db, 'list_lines', ln()[1], { status: 'cut', status_by: 'Saw', status_at: '2026-10-21T09:00:00Z' });
+  // the list is with the saw (sent) but nothing ticked yet — Units may still change (Garry, 3 Nov). 2 per unit × 3 → 1 × 6:
+  // same total, so the line is NOT flagged CHANGED in the new revision; its unit_qty is updated.
+  const side = ln()[1].id; D.update(S.db, 'lists', D.find(S.db, 'lists', r1), { locked: true });
   await o.page.evaluate(async () => { lsReset(); await lsLoad(); });
   const rows2 = rows.map(r => ({ ...r })); rows2[0].units = '6'; rows2[1].qty = '1'; rows2[2].qty = '3'; // Side: 1×6 = 6 (same total); Shelves 3×6 = 18
   const ids = ln().map(x => x.id); rows2.forEach((r, i) => { r.lid = ids[i]; });
   const r2 = await o.page.evaluate(async ({ id, rows }) => { try { await lsSaveManual({ wo: 'WO-2', name: 'House 2', pid: 'P1', rows }, 'Tester', lsList(id)); return 'ok'; } catch (e) { return 'ERR ' + e.message; } }, { id: r1, rows: rows2 });
-  const s2 = D.find(S.db, 'list_lines', side), sh = ln()[2];
-  rec('2 per unit × 3 → 1 per unit × 6: same total, the tick stays and unit_qty is updated', r2 === 'ok' && s2.status === 'cut' && s2.qty === '6' && s2.unit_qty === '1' && !s2.changed_rev, JSON.stringify([r2, s2.status, s2.qty, s2.unit_qty, s2.changed_rev]));
-  rec('a total that changes (9 → 18) is a changed line', sh.qty === '18' && sh.unit_qty === '3', JSON.stringify([sh.qty, sh.unit_qty]));
+  const s2 = D.find(S.db, 'list_lines', side), sh = ln()[2], rv = D.find(S.db, 'lists', r1).rev;
+  rec('2 per unit × 3 → 1 per unit × 6 on a sent list: new revision, Side NOT changed (same total), unit_qty updated', r2 === 'ok' && rv === 2 && s2.qty === '6' && s2.unit_qty === '1' && !s2.changed_rev, JSON.stringify([r2, rv, s2.qty, s2.unit_qty, s2.changed_rev]));
+  rec('a total that changes (9 → 18) is a CHANGED line', sh.qty === '18' && sh.unit_qty === '3' && sh.changed_rev === 2, JSON.stringify([sh.qty, sh.unit_qty, sh.changed_rev]));
   // only unit_qty differs → still saved (not "nothing changed")
   await o.page.evaluate(async () => { lsReset(); await lsLoad(); });
   const rows3 = rows2.map(r => ({ ...r })); rows3[0].units = '6';
