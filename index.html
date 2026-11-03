@@ -644,6 +644,10 @@ function settingsFrom(s,prev){
   if(s.exportBase&&typeof s.exportBase==='object')r.exportBase=s.exportBase;
   return r;
 }
+// The database row has no Export Changes baseline but this screen holds one: an old-version tab saved the whole
+// settings block without it. Never reset or drop it — keep this screen's copy and write it back on the next save.
+// (Row without one and this screen without one = the one-off migration in loadDB instead.)
+function ebDropped(row){return!!(row&&VER!==null&&!(row.settings&&row.settings.exportBase)&&(Object.keys(orig).length||Object.keys(origStep).length));}
 function planOf(row,prev){return{orders:Array.isArray(row.orders)?row.orders:[],nid:row.nid||1,settings:settingsFrom(row.settings,prev)};}
 // Put a plan into the live app. Jobs are updated in place so open screens keep pointing at the same job.
 function applyPlan(p){
@@ -852,6 +856,7 @@ async function loadDB(){
       const m=mergePlan(lb||BASE,snap(),theirs,{unsure:UNSURE});
       applyPlan(m.plan);noteMerge(m.notes,m.ren,row.updated_by);
       BASE=clone(theirs);unsureKeep(row);VER=row.version===undefined?null:(+row.version||1);
+      if(ebDropped(row))delete BASE.settings.exportBase; // an old tab dropped the baseline: this save puts ours back
       DB.loadFailed=false;
       sched();setSS('s');
       return;
@@ -863,12 +868,13 @@ async function loadDB(){
     }
     // One-off migration: plans saved before the baseline was stored get it built once from the jobs as they
     // stand (what every load used to do); the office saves it so all screens share one baseline.
-    let migr=false;
+    let migr=false;const drop=ebDropped(row);
     if(row&&!(row.settings&&row.settings.exportBase)&&!Object.keys(orig).length&&!Object.keys(origStep).length&&DB.orders.length){
       DB.orders.forEach(o=>{orig[o.wo]=o.plannedWeek||'';origStep[o.wo]=o.step||'';});
       migr=VER!==null&&ROLE==='office';
     }
     BASE=snap();
+    if(drop)delete BASE.settings.exportBase; // counts as unsaved, so the next save writes this screen's baseline back
     // First open on this device: changes that never reached the database last time are merged in and sent now.
     // They're older than what's in the database, so on a true clash the database copy wins (ticks still win).
     // Every tab's slot on this device is merged in (oldest first); this tab then holds them all in its own slot.
@@ -902,7 +908,7 @@ async function loadDB(){
     DB.loadFailed=false;
     DB.loaded=true; // this page has held a good copy of the plan at least once
     setSS('ok');
-    if(migr)sched(); // store the migrated baseline
+    if(migr||drop)sched(); // store the migrated baseline / put back one an old tab dropped
     if(DB.orders.length)ls.set('wpfSawJobs','1');
   }catch(e){
     DB.lastLoadOk=false;
