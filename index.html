@@ -2815,6 +2815,9 @@ function lsKeptRows(sh){
 function lsImpPreview(bk,fname,projName,done){
   const ov=document.createElement('div');ov.className='pod-ovl';
   const nOn=()=>bk.sheets.filter(s=>s.on).length;
+  // a part whose quantity couldn't be read (formula with no saved value, negative) can't be saved blank: type a number or untick it
+  const blank=()=>{let n=0;bk.sheets.forEach(sh=>{if(!sh.on)return;let drop=false;sh.rows.forEach(r=>{if(r.k==='hdr'&&!r.info){drop=r.units!=null&&!r.keep;return;}
+    if(!drop&&r.k==='part'&&r.qtyErr&&r.keep&&String(r.qty==null?'':r.qty).trim()==='')n++;});});return n;};
   const tick=(si,ri,r)=>`<input type="checkbox" data-ipr="${si}|${ri}"${r.keep?' checked':''} title="Untick to leave this out">`;
   const draw=()=>{
     ov.innerHTML=`<div class="pod-in" style="min-width:min(1000px,97vw)"><div style="font-weight:800;color:#14335c;font-size:17px;margin-bottom:2px">📥 Import preview — ${escA(fname)}</div>
@@ -2823,15 +2826,21 @@ function lsImpPreview(bk,fname,projName,done){
         return `<details class="imp-sh" style="border:1px solid var(--b2);border-radius:6px;margin-bottom:8px;${sh.on?'':'opacity:.55'}"${si===0?' open':''}><summary style="padding:7px 10px;cursor:pointer;font-size:13px"><label onclick="event.stopPropagation()"><input type="checkbox" data-ips="${si}"${sh.on?' checked':''}> <b>${escA(sh.name)}</b></label> — ${saw} saw part${saw!==1?'s':''} · ${parts.length-saw} Stores · ${units} unit block${units!==1?'s':''}${sh.warn.length?` · <span style="color:#8a5a00;font-weight:700">⚠ ${sh.warn.length} to check</span>`:''}</summary>
         ${sh.warn.length?`<div style="color:#8a5a00;font-size:12px;padding:0 10px 6px">${sh.warn.map(w=>'⚠ '+escA(w)).join('<br>')}</div>`:''}
         <table class="me-tbl"><thead><tr><th></th><th>Description</th><th>Qty</th><th>Total</th><th>Length</th><th>Width</th><th>Colour</th><th>Edging</th></tr></thead><tbody>${sh.rows.map((r,ri)=>{
-          if(r.k==='hdr'&&r.info)return `<tr style="color:var(--t3)"><td>${tick(si,ri,r)}</td><td colspan="7"><i>${escA(r.item)} ${escA(r.note)}</i> — not a part (left out unless ticked)</td></tr>`;
+          if(r.k==='hdr'&&r.info)return `<tr style="color:var(--t3)"><td>${tick(si,ri,r)}</td><td colspan="7"><i>${escA(r.item)} ${escA(r.note)}</i> — ${r.total?'a totals row, not a part — left out':'not a part (left out unless ticked)'}</td></tr>`;
           if(r.k==='hdr')return `<tr style="background:${r.units!=null?'#eef3fb':'#f5f6f8'}"><td>${r.units!=null?tick(si,ri,r):''}</td><td colspan="7"><b>${escA(r.item)}</b>${r.units!=null?' — <b>'+escA(r.units)+'</b> unit'+(+r.units!==1?'s':''):''}${r.note?' <span style="color:var(--t3)">'+escA(r.note)+'</span>':''}</td></tr>`;
           const st=!(+r.L>0||+r.W>0);
-          return `<tr><td>${st?tick(si,ri,r):''}</td><td>${escA(r.item)}${st?' <span class="lst-chip" style="background:#eef0f3;color:#5b6b82">Stores</span>':''}</td><td>${escA(r.qty)}</td><td>${r.total!=null?'<b>'+escA(r.total)+'</b>':''}</td><td>${escA(r.L)}</td><td>${escA(r.W)}</td><td>${escA(r.mat)}</td><td>${escA(r.edging)}</td></tr>`;}).join('')}</tbody></table></details>`;}).join('')}</div>
-      <div style="margin-top:12px;display:flex;gap:10px;justify-content:flex-end"><button class="btn btn-s" id="ip-x">Cancel — save nothing</button><button class="btn btn-g" id="ip-ok"${nOn()?'':' disabled'}>Save ${nOn()} list${nOn()!==1?'s':''}</button></div></div>`;
+          const qc=r.qtyErr?`<input data-ipq="${si}|${ri}" value="${escA(r.qty)}" inputmode="decimal" placeholder="⚠ qty" title="The quantity could not be read — type the number to cut, or untick the row" style="width:62px;${String(r.qty==null?'':r.qty).trim()===''?'border:2px solid #d48a00;background:#fff6e0':''}">`:escA(r.qty);
+          return `<tr${r.qtyErr?' style="background:#fff8ea"':''}><td>${st||r.qtyErr?tick(si,ri,r):''}</td><td>${escA(r.item)}${st?' <span class="lst-chip" style="background:#eef0f3;color:#5b6b82">Stores</span>':''}${r.qtyErr?' <span style="color:#8a5a00;font-weight:700">⚠ quantity could not be read</span>':''}</td><td>${qc}</td><td>${r.total!=null?'<b>'+escA(r.total)+'</b>':''}</td><td>${escA(r.L)}</td><td>${escA(r.W)}</td><td>${escA(r.mat)}</td><td>${escA(r.edging)}</td></tr>`;}).join('')}</tbody></table></details>`;}).join('')}</div>
+      <div id="ip-blank" style="margin-top:8px;color:#8a5a00;font-size:12px;font-weight:700;text-align:right">${blank()?'⚠ '+blank()+' part'+(blank()!==1?'s have':' has')+' no quantity (it could not be read) — type the number or untick '+(blank()!==1?'them':'it')+' before saving':''}</div>
+      <div style="margin-top:12px;display:flex;gap:10px;justify-content:flex-end"><button class="btn btn-s" id="ip-x">Cancel — save nothing</button><button class="btn btn-g" id="ip-ok"${nOn()&&!blank()?'':' disabled'}>Save ${nOn()} list${nOn()!==1?'s':''}</button></div></div>`;
     ov.querySelectorAll('[data-ips]').forEach(c=>c.onchange=()=>{bk.sheets[+c.dataset.ips].on=c.checked;draw();});
-    ov.querySelectorAll('[data-ipr]').forEach(c=>c.onchange=()=>{const[a,b]=c.dataset.ipr.split('|');bk.sheets[+a].rows[+b].keep=c.checked;});
+    const gate=()=>{const n=blank(),b=ov.querySelector('#ip-ok'),m=ov.querySelector('#ip-blank');b.disabled=!nOn()||!!n;
+      m.textContent=n?'⚠ '+n+' part'+(n!==1?'s have':' has')+' no quantity (it could not be read) — type the number or untick '+(n!==1?'them':'it')+' before saving':'';};
+    ov.querySelectorAll('[data-ipr]').forEach(c=>c.onchange=()=>{const[a,b]=c.dataset.ipr.split('|');bk.sheets[+a].rows[+b].keep=c.checked;gate();});
+    ov.querySelectorAll('[data-ipq]').forEach(c=>c.oninput=()=>{const[a,b]=c.dataset.ipq.split('|'),r=bk.sheets[+a].rows[+b],v=c.value.trim();
+      if(v!==''&&!(/^\d+(\.\d+)?$/.test(v)&&+v>0)){c.style.border='2px solid var(--red)';r.qty='';}else{c.style.border='';c.style.background='';r.qty=v===''?'':+v;}gate();});
     ov.querySelector('#ip-x').onclick=()=>{ov.remove();done(null);};
-    ov.querySelector('#ip-ok').onclick=()=>{ov.remove();done(bk.sheets.filter(s=>s.on));};
+    ov.querySelector('#ip-ok').onclick=()=>{if(blank()){gate();return;}ov.remove();done(bk.sheets.filter(s=>s.on));};
   };
   document.body.appendChild(ov);draw();
 }
@@ -4430,14 +4439,18 @@ function lsParseGrid(aoa,opt){
       continue;
     }
     // 2. the column-header row ("Description | Qty | Length …") is labels, not a part
-    if(/^(description|item|part( name)?)$/i.test(A)&&texts.slice(1).some(t=>/^(qty|nr|no\.?|quantity|length|width|dimension|colou?r|material)$/i.test(t)))continue;
+    // ("Description:", "Item Description", " DESCRIPTION " too)
+    if(/^(item\s+)?(description|item|part( name)?)\s*:?$/i.test(A)&&texts.slice(1).some(t=>/^(qty|nr|no\.?|quantity|length|width|dimension|colou?r|material)\s*:?$/i.test(t)))continue;
     // 3. "2 | total nr of units" sets the units of the block above
     const ui=texts.findIndex(t=>UNITS.test(t));
     if(ui>=0){
       let c=texts.findIndex((t,j)=>j!==ui&&t!==''&&!isNaN(num(cells[j])));let n=c>=0?num(cells[c]):NaN;
       if(isNaN(n)){const m=/^\s*(\d+)/.exec(texts[ui]);if(m){n=+m[1];c=ui;}}
       if(n>0){startUnits(n,r,c);continue;}
+      if([0,1,2,3,4,5,6].some(j=>fm(r,j))){warn.push('Row '+(r+1)+': the number of units is a formula with no saved value — it could not be read (check the quantities below)');continue;}
     }
+    // 3b. a totals row ("Total 3", "TOTAL PARTS:") is not a part — left out, shown in the preview as left out
+    if(/^totals?\b/i.test(A)&&isNaN(num(cells[2]))&&isNaN(num(cells[3]))){rows.push({k:'hdr',info:true,total:true,item:A,note:texts.slice(1,7).filter(Boolean).join(' '),src:r+1});continue;}
     // 4. the legacy project row: the very first row, one name in A (and maybe the date in F)
     if(r===0&&!opt.paste&&A&&cells.slice(1).every((v,c)=>v==null||(c===4&&(v instanceof Date||isoDate(v))))){meta.project=A;if(cells[5]!=null)meta.date=isoDate(cells[5]);continue;}
     const qv=cells[1]==null?NaN:typeof cells[1]==='number'?cells[1]:parseFloat(texts[1]);
@@ -4445,13 +4458,16 @@ function lsParseGrid(aoa,opt){
     if(!isNaN(qv)||(!isNaN(L)&&!isNaN(W)&&(A||mat))){
       const sized=!isNaN(L)||!isNaN(W);
       const p={k:'part',item:sized?A:(A||mat),qty:'',L:isNaN(L)?'':L,W:isNaN(W)?'':W,mat,edging:sized?edging:'',note:sized?note:[edging,note].filter(Boolean).join(' · '),src:r+1}; // decision 4: column F is Edging on a saw part, a note on a Stores part
-      const qty=isNaN(qv)?'':typeof cells[1]==='number'||/^\d+(\.\d+)?(\s*(off|pcs?|no\.?))?$/i.test(texts[1])?qv:texts[1]; // "2x2" kept as typed, never guessed
+      let qty=isNaN(qv)?'':typeof cells[1]==='number'||/^\d+(\.\d+)?(\s*(off|pcs?|no\.?))?$/i.test(texts[1])?qv:texts[1]; // "2x2" kept as typed, never guessed
+      // a quantity that can't be used: a formula with no saved value, or a negative number → blank + ⚠ (the preview asks for a number)
+      if(cells[1]==null&&fm(r,1)){p.qtyErr=true;warn.push('Row '+(r+1)+' "'+(p.item||'part')+'": the quantity is a formula with no saved value ("='+fm(r,1)+'") — it could not be read; type the number to cut');}
+      else if(typeof qty==='number'&&qty<0){p.qtyErr=true;warn.push('Row '+(r+1)+' "'+(p.item||'part')+'": quantity '+qty+' can\'t be negative — type the number to cut');qty='';}
       if(cur&&cur.units!=null&&!cur.info){
         const k=perUnit(r,1,cur.u);
-        if(k!=null){p.qty=k;p.total=typeof qty==='number'?qty:k*cur.units;}
+        if(k!=null&&!p.qtyErr){p.qty=k;p.total=typeof qty==='number'?qty:k*cur.units;}
         else if(typeof qty==='number'){const per=Math.round(qty/cur.units*1e6)/1e6;p.qty=per;p.total=qty;
           if(per!==Math.round(per))warn.push('Row '+(r+1)+' "'+(p.item||'part')+'": '+qty+' isn\'t a whole number for each of '+cur.units+' units — check it');}
-        else{p.qty=qty;p.total=qty;if(qty!=='')warn.push('Row '+(r+1)+' "'+(p.item||'part')+'": quantity "'+qty+'" can\'t be worked out per unit — check it');}
+        else{p.qty=qty;p.total=qty;if(qty!==''&&!p.qtyErr)warn.push('Row '+(r+1)+' "'+(p.item||'part')+'": quantity "'+qty+'" can\'t be worked out per unit — check it');}
       }else p.qty=qty;
       rows.push(p);continue;
     }
@@ -4475,9 +4491,22 @@ function lsSheetAoa(ws){
   return{v,f};
 }
 // Text copied from Excel (tabs between cells, new lines between rows) → a grid for lsParseGrid
+// Excel's clipboard format: a cell that starts with " is quoted — inside it "" is one ", and tabs / new lines belong to the
+// cell (a line break typed in a cell becomes a space). A " anywhere else (Shelf "A") is just text.
 function lsPasteAoa(text){
-  const lines=String(text||'').replace(/\r\n?/g,'\n').split('\n');if(lines.length&&lines[lines.length-1]==='')lines.pop();
-  return lines.map(l=>l.split('\t').map(c=>{c=c.trim();if(/^".*"$/s.test(c))c=c.slice(1,-1).replace(/""/g,'"');return c===''?null:c;}));
+  const s=String(text||'').replace(/\r\n?/g,'\n'),out=[];let row=[],cell='',i=0,q=false,start=true;
+  const endCell=()=>{let v=q?cell.replace(/\s*[\n\t]\s*/g,' '):cell;v=v.trim();row.push(v===''?null:v);cell='';q=false;start=true;};
+  while(i<s.length){const ch=s[i];
+    if(start&&ch==='"'){ // quoted only if the closing quote ends the cell
+      let j=i+1,v='';for(;j<s.length;j++){if(s[j]==='"'){if(s[j+1]==='"'){v+='"';j++;continue;}break;}v+=s[j];}
+      if(j<s.length&&(j+1===s.length||s[j+1]==='\t'||s[j+1]==='\n')){cell=v;q=true;i=j+1;start=false;continue;}
+    }
+    start=false;
+    if(ch==='\t'){endCell();i++;continue;}
+    if(ch==='\n'){endCell();out.push(row);row=[];i++;continue;}
+    cell+=ch;i++;}
+  if(cell!==''||!start||row.length){endCell();out.push(row);}
+  return out;
 }
 // Sheets that are never cutting lists (Garry, 3 Nov): the unit library, the index and the stock sheets
 function lsSkipSheet(name){return /^\s*(blank|index|stock|door stock)\s*$/i.test(String(name||''));}
