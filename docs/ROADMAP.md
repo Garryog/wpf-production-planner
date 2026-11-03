@@ -137,3 +137,10 @@ Rules: rank by the leading number. "Shipped" = step 9 only (left the factory →
 - Zebra labels: skipped — label size still not in the repo.
 - Waiting on Garry: approve the old-tab guard; a Supabase test project; go-live date for stage2-imports; sign off ACCEPTED-FAILURES; switch off the duplicate scheduled task; "2440MM" = "2440"?; ZD420 label size; earlier open questions (dispatch warning, app-key access until logins, PIN for templates); what "the capacity board is back" meant.
 - Next: Tester runs t17 with the guard on (not yet verified); Architect adds the rollback order to RUNBOOK-lists-switch.md; then nothing more until Garry decides.
+
+### 3 Nov 2026, midday (second scheduled run at the same time, session …xff9/D2QE)
+- **Two copies of this scheduled task ran side by side again** (this one and …xiu7cMgHZKcEhisJ2m). This run stopped changing things as soon as it saw the other one; the daytime entry above is the main record.
+- This run's own work: checked the live `main` code and found that it saves without a version check. Added test t16 (an old tab left open wipes newer saves) and the old-tab guard proposal (docs/PROPOSAL-old-tab-guard.md, commit 234717e).
+- Full suite on stage2-imports (at 7556b83, run one file at a time): 1,073 pass / 14 fail. All 14 failures are on ACCEPTED-FAILURES (t13 old-tab ×5, t14 ×3, t3, G4b, the two saw/stores rows, weeks summer-time), plus the 2,500-job timing check, which passes when run alone. t9: no unticks came back.
+- An independent Manager review (separate from the other run's) reached the same verdicts: stage2-imports GO WITH CONDITIONS (old-tab guard should be a go-live condition; save check must be tried on a Supabase test project); cutting lists not yet (migration rehearsal first). Amber box B3/B8 now passes (attack9-box 41/41, coder-r9-box 10/10). One Low for the Tester: Chrome "Duplicate tab" copies the per-tab backup slot, which isn't tested yet.
+- Waiting on Garry: same list as the daytime entry. **Most urgent: turn off one of the two scheduled tasks.**
