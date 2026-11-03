@@ -2285,7 +2285,7 @@ function lsView(id,open){ // rows / ticks / holds of one list, in the old shapes
   lsLinesOf(id).forEach(x=>{
     if(x.removed_rev!=null||x.status==='na')return; // removed and not-needed lines never reach the bench
     const L=x.length_mm==null||x.length_mm===''?'':+x.length_mm,W=x.width_mm==null||x.width_mm===''?'':+x.width_mm;
-    const r=x.kind==='hdr'?{id:x.id,k:'hdr',item:x.part||'',note:[x.material,x.note].filter(s=>String(s||'').trim()).join(' · ')}
+    const r=x.kind==='hdr'?{id:x.id,k:'hdr',item:lsHdrName(x),note:[x.material,x.note].filter(s=>String(s||'').trim()).join(' · ')}
       :{id:x.id,k:x.kind,item:x.part||'',qty:lsQty(x.qty),L,W,mat:x.material||'',note:[x.edging,x.note].filter(s=>String(s||'').trim()).join(' · '),sec:x.section||''};
     if(x.kind==='fit'){delete r.L;delete r.W;}
     v.rows.push(r);
@@ -2298,6 +2298,8 @@ function lsView(id,open){ // rows / ticks / holds of one list, in the old shapes
   });
   return v;
 }
+// A unit heading (a heading line whose qty is the number of units) as the saw sees it: "900 Single Rail + 2 shelves – 3 units"
+function lsHdrName(x){const n=String(x.qty==null?'':x.qty).trim();return (x.part||'')+(n?' – '+n+' unit'+(n==='1'?'':'s'):'');}
 function lsMaterials(){const s=new Set();LST.m.forEach(m=>{if(m.active!==false&&m.kind==='sheet'&&String(m.name||'').trim())s.add(String(m.name).trim());});return[...s].sort();}
 
 /* ---------- Line queue (V2 only): every tick / N/A / release / sign-off / tag waits on THIS device until the database has it ----------
@@ -2635,7 +2637,7 @@ async function lsReloadList(id){
 function lsSame(cur,pl,df){
   if(df.changed.length||df.added.length||df.removed.length||df.noteOnly.length)return false;
   const old=new Map(lsLinesOf(cur.id).map(x=>[x.id,x]));
-  if(!df.lines.every(ln=>{const o=old.get(ln.id);return o&&(+o.seq||0)===ln.seq&&(o.section||null)===(ln.section||null)&&!!o.material_other===!!ln.material_other;}))return false;
+  if(!df.lines.every(ln=>{const o=old.get(ln.id);return o&&(+o.seq||0)===ln.seq&&(o.section||null)===(ln.section||null)&&(o.unit_qty||null)===(ln.unit_qty||null)&&!!o.material_other===!!ln.material_other;}))return false; // 2 per unit × 2 → 1 × 4: same total, still saved
   const nz=v=>v==null||v===''?null:String(v);
   return['name','project_id','list_type','type_name','no_cut','no_fit','sdate','source','deliver_by','is_template'].every(k=>!(k in pl)||nz(pl[k])===nz(cur[k]));
 }
@@ -2651,7 +2653,7 @@ async function lsSaveList(pl,lines,by,reason){
     }catch(e){if(!/stale/.test(e.message)||i>=2)throw e;await lsReloadList(pl.id);} // changed on another PC meanwhile: compare again
   }
 }
-function lsLineSig(x){const n=v=>v==null||v===''?'':+v,t=v=>v==null?'':String(v).trim();return JSON.stringify([x.kind,t(x.section),t(x.part),n(x.length_mm),n(x.width_mm),t(x.qty),t(x.material),t(x.edging),t(x.note)]);}
+function lsLineSig(x){const n=v=>v==null||v===''?'':+v,t=v=>v==null?'':String(v).trim();return JSON.stringify([x.kind,t(x.section),t(x.part),n(x.length_mm),n(x.width_mm),t(x.qty),t(x.material),t(x.edging),t(x.note),t(x.unit_qty)]);}
 function lsEditRows(id){ // the typed-list editor's rows, with edging and note kept apart; each remembers its line and when the editor opened
   // 'opened' = the newest database time on the list or any of its lines (a tick can land on a line after the list's own time)
   const all=lsLinesOf(id),at=all.reduce((m,x)=>String(x.updated_at||'')>m?String(x.updated_at):m,String((LST.l.get(id)||{}).updated_at||''));
@@ -2669,7 +2671,7 @@ function lsEditMerge(id,rows,lines){
   const now=lsLinesOf(id).filter(x=>x.removed_rev==null&&x.kind!=='hdr'),byId=new Map(now.map(x=>[x.id,x]));
   const mine=new Set(rows.filter(r=>r.lid).map(r=>r.lid));
   const nm=x=>(x.part||x.material||'line')+' ×'+(x.qty==null?'':x.qty);
-  const asLine=x=>({id:x.id,kind:x.kind,section:x.section,part:x.part,length_mm:x.length_mm,width_mm:x.width_mm,qty:x.qty,material:x.material,material_other:!!x.material_other,edging:x.edging,note:x.note});
+  const asLine=x=>({id:x.id,kind:x.kind,section:x.section,part:x.part,length_mm:x.length_mm,width_mm:x.width_mm,qty:x.qty,unit_qty:x.unit_qty,material:x.material,material_other:!!x.material_other,edging:x.edging,note:x.note});
   const over=[];let kept=0;
   rows.forEach((r,i)=>{
     if(!r.lid||!r.sig)return;
@@ -2699,7 +2701,7 @@ async function lsSaveManual(d,by,ex){
   const id=ex?ex.id:uid('L');
   let reason='';
   if(ex){await lsReloadList(id);reason=lsAskReason(lsList(id));if(reason===null)throw new Error('not saved — a reason is needed for a new revision');}
-  const lines=d.rows.map(r=>lsRowToLine(r,true));lsFlagMats(lines,pid);
+  const lines=lsEdLines(d.rows);lsFlagMats(lines,pid); // headings, unit blocks (qty = total, unit_qty = per unit) and parts
   const mg=ex?lsEditMerge(id,d.rows,lines):{ok:true,kept:0};
   if(!mg.ok)throw new Error('another screen changed this list meanwhile — nothing saved; close and reopen it');
   for(let i=lines.length-1;i>=0;i--)if(lines[i]._drop)lines.splice(i,1);
@@ -2962,7 +2964,7 @@ function lsOldFrom(listRows0,lines){
   const rows=[],ticks={},holds={};
   lines.filter(x=>x.removed_rev==null&&x.status!=='na').sort((a,b)=>(a.seq||0)-(b.seq||0)).forEach(x=>{
     const n=v=>v==null||v===''?'':+v;
-    const r=x.kind==='hdr'?{k:'hdr',item:x.part||'',note:x.note||''}
+    const r=x.kind==='hdr'?{k:'hdr',item:lsHdrName(x),note:x.note||''}
       :x.kind==='saw'?{k:'saw',item:x.part||'',qty:lsQty(x.qty),L:n(x.length_mm),W:n(x.width_mm),mat:x.material||'',note:[x.edging,x.note].filter(s=>String(s||'').trim()).join(' · ')}
       :{k:'fit',item:x.part||'',qty:lsQty(x.qty),mat:x.material||'',note:x.note||''};
     r.lid=x.id;rows.push(r);
@@ -3674,7 +3676,7 @@ async function lsCopyLines(srcId,map){
   if(!LST.full.has(srcId))await lsReloadList(srcId);
   map=map||{};
   return lsLinesOf(srcId).filter(x=>x.removed_rev==null&&x.status!=='na').map(x=>{const m=x.kind==='saw'&&map[matKey(x.material)];
-    return{kind:x.kind,section:x.section,part:x.part,length_mm:x.length_mm,width_mm:x.width_mm,qty:x.qty,material:m||x.material,material_other:m?false:!!x.material_other,edging:x.edging,note:x.note,src_line_id:x.id};});
+    return{kind:x.kind,section:x.section,part:x.part,length_mm:x.length_mm,width_mm:x.width_mm,qty:x.qty,unit_qty:x.unit_qty,material:m||x.material,material_other:m?false:!!x.material_other,edging:x.edging,note:x.note,src_line_id:x.id};});
 }
 async function lsCreateFromTpl(tid,wos,name,by,opt){
   opt=opt||{};
@@ -3916,7 +3918,7 @@ function diffLines(old,nw,opt){
   const out={lines:[],changed:[],added:[],removed:[],keepAside:[],noteOnly:[]};
   nw.forEach((x,i)=>{
     const o=match[i],id=o?o.id:mk();
-    const ln={id,seq:i+1,kind:x.kind,section:txt(x.section),part:txt(x.part),length_mm:num(x.length_mm),width_mm:num(x.width_mm),qty:txt(x.qty),
+    const ln={id,seq:i+1,kind:x.kind,section:txt(x.section),part:txt(x.part),length_mm:num(x.length_mm),width_mm:num(x.width_mm),qty:txt(x.qty),unit_qty:txt(x.unit_qty),
       material:txt(x.material),material_other:!!x.material_other,edging:txt(x.edging),note:txt(x.note)};
     if(x.snag_id)ln.snag_id=x.snag_id;
     if(x.src_line_id)ln.src_line_id=x.src_line_id;

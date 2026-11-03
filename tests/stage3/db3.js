@@ -14,7 +14,7 @@ function defaults(t, r) {
     lists: { project_id: null, list_type: 'house', type_name: null, is_template: false, template_id: null, template_rev: null, rev: 1, locked: false, sent_at: null,
       wos: [], no_cut: false, no_fit: false, saw_done_at: null, saw_done_by: null, fit_done_at: null, fit_done_by: null, source: 'manual', sdate: null,
       deliver_by: null, archived: false, log: [], n_saw: 0, n_fit: 0, version: 1, created_at: n, created_by: null, updated_at: n, updated_by: null },
-    list_lines: { section: null, part: null, length_mm: null, width_mm: null, qty: null, material: null, material_other: false, edging: null, note: null,
+    list_lines: { section: null, part: null, length_mm: null, width_mm: null, qty: null, unit_qty: null, material: null, material_other: false, edging: null, note: null,
       status: 'todo', status_by: null, status_at: null, released_at: null, released_by: null, added_rev: null, changed_rev: null, removed_rev: null,
       src_line_id: null, snag_id: null, mig_sig: null, version: 1, updated_at: n },
     list_revisions: { meta: null, reason: null, made_by: null, made_at: n },
@@ -172,7 +172,7 @@ function listSetDone(d, id, mode, on, by, why, cid) {
 }
 
 // ---- save_list_revision(p_list jsonb, p_lines jsonb, p_expect int, p_by, p_reason)
-const LINE_F = ['section', 'part', 'length_mm', 'width_mm', 'qty', 'material', 'edging', 'note'];
+const LINE_F = ['section', 'part', 'length_mm', 'width_mm', 'qty', 'unit_qty', 'material', 'edging', 'note'];
 function saveListRevision(d, pl, lines, expect, by, reason) {
   let r = find(d, 'lists', pl.id), isnew = false, nrev;
   // validate everything first — the SQL runs in one transaction, so an error leaves nothing half-written

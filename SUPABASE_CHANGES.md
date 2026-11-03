@@ -18,6 +18,7 @@ Newest at the top. Each block must be run in Supabase BEFORE the matching code g
 - A trigger moves a snag to "cut" when its line is cut or got out.
 - A trigger on the planner record keeps the lists switch: a planner tab left open on old code can't switch the floor back to the old lists by saving.
 - Nothing is deleted. The app gets NO delete permission on any new table. The existing planner record is untouched.
+- **Added 3 Nov 2026 (list editor):** `list_lines` has a `unit_qty` column — the quantity for ONE unit when a line sits in a unit block ("Side panel 2 per unit × 3 units"). The line's `qty` is still the TOTAL to cut, so the saw, sheet calculator and labels read it exactly as before. A unit heading is a heading line whose `qty` is the number of units. If this block was already run on a test project, the `alter table list_lines add column if not exists unit_qty text;` line below adds the column (safe to run twice). No new table, so no new GRANT lines — the existing `list_lines` grants cover it. Include it in the migration rehearsal.
 - **The app does not use any of this until Garry presses "Migrate lists" (Admin PIN, Settings).** Until then it runs exactly as today, and makes no calls to these tables. So running this early is harmless.
 
 **If you deploy the code without running this first:** nothing changes on the floor (the switch is off). But "Migrate lists" would fail — so run this first anyway.
@@ -90,7 +91,7 @@ create index if not exists lists_wos on lists using gin(wos);
 
 create table if not exists list_lines(id text primary key, list_id text not null references lists(id), seq int not null,
   kind text not null check(kind in('saw','fit','hdr')), section text, part text,
-  length_mm numeric, width_mm numeric, qty text, material text, material_other boolean not null default false,
+  length_mm numeric, width_mm numeric, qty text, unit_qty text, material text, material_other boolean not null default false,
   edging text, note text,
   status text not null default 'todo' check(status in('todo','cut','got-out','waiting','na')),
   status_by text, status_at timestamptz, released_at timestamptz, released_by text,
@@ -98,6 +99,7 @@ create table if not exists list_lines(id text primary key, list_id text not null
   mig_sig text,                                                         -- fingerprint of the old-format tick / N/A copied at migration
   version int not null default 1, updated_at timestamptz not null default now());
 alter table list_lines add column if not exists mig_sig text;
+alter table list_lines add column if not exists unit_qty text;    -- list editor (3 Nov): per-unit quantity in a unit block; qty stays the total
 create index if not exists ll_list on list_lines(list_id);
 create index if not exists ll_upd on list_lines(updated_at);
 
@@ -283,7 +285,7 @@ grant execute on function list_set_done(text,text,boolean,text,text,text) to ano
 
 -- Save an edit or a new revision in one go.
 -- p_list: the list's fields ({id, name, project_id, ...}; missing keys are left as they are).
--- p_lines: every line the list should now have ({id, seq, kind, section, part, length_mm, width_mm, qty, material,
+-- p_lines: every line the list should now have ({id, seq, kind, section, part, length_mm, width_mm, qty, unit_qty, material,
 --          material_other, edging, note, snag_id, src_line_id, reset}); reset:true = content changed, so the tick resets.
 -- p_expect: the list version the editor started from (null = a brand-new list).
 create or replace function save_list_revision(p_list jsonb, p_lines jsonb, p_expect int, p_by text, p_reason text) returns jsonb language plpgsql as $$
@@ -319,7 +321,7 @@ begin
   if found then
    -- 4. content only; status is NEVER written here unless the line really changed (reset) — a tick landing mid-edit survives
    update list_lines set seq=coalesce((e->>'seq')::int,seq), kind=coalesce(e->>'kind',kind), section=e->>'section', part=e->>'part',
-     length_mm=(e->>'length_mm')::numeric, width_mm=(e->>'width_mm')::numeric, qty=e->>'qty', material=e->>'material',
+     length_mm=(e->>'length_mm')::numeric, width_mm=(e->>'width_mm')::numeric, qty=e->>'qty', unit_qty=e->>'unit_qty', material=e->>'material',
      material_other=coalesce((e->>'material_other')::boolean,false), edging=e->>'edging', note=e->>'note',
      snag_id=coalesce(e->>'snag_id',snag_id), removed_rev=null,
      status=case when (e->>'reset')::boolean then 'todo' else status end,
@@ -329,15 +331,15 @@ begin
      changed_rev=case when (e->>'reset')::boolean then nrev else changed_rev end
     where id=ex.id   -- an unchanged line is left alone (its version and time don't move — other editors can tell what changed)
       and (coalesce((e->>'reset')::boolean,false) or ex.removed_rev is not null
-        or row(ex.seq,ex.kind,ex.section,ex.part,ex.length_mm,ex.width_mm,ex.qty,ex.material,ex.material_other,ex.edging,ex.note)
+        or row(ex.seq,ex.kind,ex.section,ex.part,ex.length_mm,ex.width_mm,ex.qty,ex.unit_qty,ex.material,ex.material_other,ex.edging,ex.note)
            is distinct from row(coalesce((e->>'seq')::int,ex.seq),coalesce(e->>'kind',ex.kind),e->>'section',e->>'part',(e->>'length_mm')::numeric,
-             (e->>'width_mm')::numeric,e->>'qty',e->>'material',coalesce((e->>'material_other')::boolean,false),e->>'edging',e->>'note')
+             (e->>'width_mm')::numeric,e->>'qty',e->>'unit_qty',e->>'material',coalesce((e->>'material_other')::boolean,false),e->>'edging',e->>'note')
         or (e->>'snag_id' is not null and e->>'snag_id' is distinct from ex.snag_id));
   else
    -- 3. new lines
-   insert into list_lines(id,list_id,seq,kind,section,part,length_mm,width_mm,qty,material,material_other,edging,note,snag_id,src_line_id,added_rev)
+   insert into list_lines(id,list_id,seq,kind,section,part,length_mm,width_mm,qty,unit_qty,material,material_other,edging,note,snag_id,src_line_id,added_rev)
     values(e->>'id',r.id,coalesce((e->>'seq')::int,0),e->>'kind',e->>'section',e->>'part',(e->>'length_mm')::numeric,(e->>'width_mm')::numeric,
-     e->>'qty',e->>'material',coalesce((e->>'material_other')::boolean,false),e->>'edging',e->>'note',e->>'snag_id',e->>'src_line_id',nrev);
+     e->>'qty',e->>'unit_qty',e->>'material',coalesce((e->>'material_other')::boolean,false),e->>'edging',e->>'note',e->>'snag_id',e->>'src_line_id',nrev);
   end if;
  end loop;
  -- 5. lines that have gone are marked removed, never deleted
