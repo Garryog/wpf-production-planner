@@ -10,6 +10,7 @@ Updated 22 Oct 2026 after the zombie-untick save fixes (branch `feature/stage2-i
 | sawstores attack-devices identical lines share one record | ticks keyed by line content | line IDs (before snags) | pending |
 | sawstores attack-regress A4 label for waiting line | pre-existing | labels step | pending |
 | baseline weeks.test.js "Monday 00:30 (summer time) is in the new week" | "this week" is worked out in UTC, so 00:00–01:00 on an Irish summer Monday still counts as last week. Not in the Stage 2 plan | weeks fix TBD | pending |
+| stage1 t16 "new-tab note survives an old-tab save" (SQL as written today) | an old-code tab (today's live version) left open after go-live overwrites the whole plan, wiping newer saves. The test shows this risk on purpose | close every screen on go-live day, plus the old-tab guard (docs/PROPOSAL-old-tab-guard.md) if Garry agrees | pending |
 
 Fixed by Stage 2 and removed from this list: import.test.js (17 of 19), datasafety 3/5/6 (all 11 now pass), weeks 2 and 8 (and the year-end autoSchedule check), stage1 t5 "shipped job returns if edited elsewhere" (rewritten as acceptance check 27 — imports never remove a job, so it can't happen; stage1 t8 rewritten the same way).
 
