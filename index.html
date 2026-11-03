@@ -4713,7 +4713,8 @@ function lsPasteAoa(text){
   return out;
 }
 // Sheets that are never cutting lists (Garry, 3 Nov): the unit library, the index and the stock sheets
-function lsSkipSheet(name){return /^\s*(blank|index|stock|door stock)\s*$/i.test(String(name||''));}
+// sheets that are never a cutting list — also Excel's copies of them: "Blank (2)", "Index 2", "Stock (3)", "Door Stock - Copy"
+function lsSkipSheet(name){return /^\s*(blank|index|stock|door\s*stock)(\s*(\(\s*\d+\s*\)|\d+|-?\s*copy(\s*\(?\d+\)?)?))?\s*$/i.test(String(name||''));}
 // per-unit × units = the total to cut ("2x2" or a blank stays as typed — the editor's check asks for a number)
 /* A part in a unit block — ONE rule, used on reload (lsEditRows), template insert, save (lsEdLines / lsBlockTotals):
    unit_qty = a number → per unit (total = per unit × Units); unit_qty = 'fixed' → a FIXED total (Units never change it);
