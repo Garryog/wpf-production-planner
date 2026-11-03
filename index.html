@@ -656,7 +656,7 @@ function settingsFrom(s,prev){
   const r={...prev};s=s||{};
   ['weekCaps','delx','delNotes','grps','pins','pod','lists','listWBs','listDone','delArchive','staff','listHold','holdLog','listRow','listStore','listStoreAt','saveIds'].forEach(k=>{if(s[k])r[k]=s[k];});
   if(s.hourScale&&s.hourScale.length)r.hourScale=s.hourScale;
-  ['wcap','vcap','listLead'].forEach(k=>{if(s[k]>0)r[k]=s[k];});
+  ['wcap','vcap','listLead','listDue'].forEach(k=>{if(s[k]>0)r[k]=s[k];});
   if(s.exportBase&&typeof s.exportBase==='object')r.exportBase=s.exportBase;
   return r;
 }
@@ -680,6 +680,7 @@ function applyPlan(p){
   DB.weekCaps=s.weekCaps||{};if(s.hourScale&&s.hourScale.length)HOUR_SCALE=s.hourScale;if(s.wcap>0)WCAP=s.wcap;if(s.vcap>0)VCAP=s.vcap;
   ['delx','delNotes','grps','pins','pod','lists','listWBs','listDone','delArchive','staff','listHold','holdLog','listRow','listStore','listStoreAt','saveIds'].forEach(k=>{if(s[k])DB[k]=s[k];});
   if(s.listLead>0)DB.listLead=s.listLead;
+  if(s.listDue>0)DB.listDue=s.listDue;
   // Export Changes baseline: saved with the plan, so a refresh never resets it — only "Mark as applied" does
   if(s.exportBase){orig={...(s.exportBase.wk||{})};origStep={...(s.exportBase.st||{})};}
 }
@@ -1081,7 +1082,7 @@ async function saveDB(){
 }
 // Never let a tab close while an edit is unsaved, a save is in flight / being checked, or a retry is pending
 window.addEventListener('beforeunload',e=>{if(saveT||SAVING||DB.saveFailed||lqPending()){e.preventDefault();e.returnValue='';}});
-function fullSettings(){return{weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP,delx:DB.delx||[],delNotes:DB.delNotes||{},grps:DB.grps||{},pins:DB.pins||{},pod:DB.pod||{},lists:DB.lists||[],listWBs:DB.listWBs||{},listDone:DB.listDone||{},listLead:DB.listLead||5,delArchive:DB.delArchive||{},staff:DB.staff||[],listHold:DB.listHold||{},holdLog:DB.holdLog||[],listRow:DB.listRow||{},saveIds:DB.saveIds||[],exportBase:{wk:orig,st:origStep},...(DB.listStore?{listStore:DB.listStore,listStoreAt:DB.listStoreAt||''}:{})};}
+function fullSettings(){return{weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP,delx:DB.delx||[],delNotes:DB.delNotes||{},grps:DB.grps||{},pins:DB.pins||{},pod:DB.pod||{},lists:DB.lists||[],listWBs:DB.listWBs||{},listDone:DB.listDone||{},listLead:DB.listLead||5,delArchive:DB.delArchive||{},staff:DB.staff||[],listHold:DB.listHold||{},holdLog:DB.holdLog||[],listRow:DB.listRow||{},saveIds:DB.saveIds||[],exportBase:{wk:orig,st:origStep},...(DB.listDue>0?{listDue:DB.listDue}:{}),...(DB.listStore?{listStore:DB.listStore,listStoreAt:DB.listStoreAt||''}:{})};}
 /* Stage 3 switch: settings.listStore==='v2' → cutting lists live in their own tables (lists, list_lines…).
    Missing, blank or anything else (switch back writes 'v1') → today's lists in the planner record, untouched. */
 function V2(){return DB.listStore==='v2'||DB.listStore==='switching';} // 'switching' = a Switch back is rebuilding the old lists: screens still read the tables, the database takes no changes
@@ -3756,13 +3757,26 @@ function workLists(){return lists().filter(l=>!listParked(l));}
 let lstShowFin=false; // library: completed lists hidden unless asked for
 function listsNeeded(){ // WOs scheduled to deliver inside the lead time with NO cutting list tagged
   const tagged=new Set();lists().forEach(l=>(l.wos||[]).forEach(w=>tagged.add(w)));
-  const lim=V2()?lsAddWorkDays(todayLocal(),listLead()):new Date(Date.now()+listLead()*86400000).toISOString().slice(0,10); // V2: lead in working days (Christmas, bank holidays)
+  const v2=V2();
+  const lim=v2?lsAddWorkDays(todayLocal(),listLead()):new Date(Date.now()+listLead()*86400000).toISOString().slice(0,10); // V2: lead in working days (Christmas, bank holidays)
   return DB.orders.filter(o=>{
     if(tagged.has(o.wo)||o.delDelivAt||o.delDone||woFinished(o)||isOnHold(o))return false;
+    if(v2&&o.listNA)return false;                   // V2: marked "No list needed" / "Paper list issued"
     const planned=o.delv&&o.delDay;                 // already on the delivery board
     const dueSoon=o.dueDate&&o.dueDate<=lim;        // due date inside the lead window
-    return planned||dueSoon;
+    return planned||dueSoon||(v2&&lsProcessed(o));  // V2: also every live job at steps 5-8 (Garry, 3 Nov)
   }).sort((a,b)=>(a.dueDate||'9999').localeCompare(b.dueDate||'9999'));
+}
+// Cienapps 5. WORK ORDER PROCESSED to 8. PALLETED: the cutting list should exist (it is issued with the work order).
+// Shipped (9-11) and on hold are left out by listsNeeded.
+function lsProcessed(o){const n=stepNo(o&&o.step);return n!==null&&n>=5&&n<=8;}
+// A job with no list: when its list is due and whether that has passed. Due = N working days after the WO was processed
+// (Settings, default 2) or the working day before the saw cuts it, whichever comes first.
+function listDueDays(){return DB.listDue>0?DB.listDue:2;}
+function lsNeedInfo(o,today){
+  const cut=listDeadline({wos:[o.wo]}),saw=cut?prevWorkDay(lsSawDay(cut)):'',proc=o.procAt?lsAddWorkDays(o.procAt,listDueDays()):'';
+  const due=[saw,proc].filter(Boolean).sort()[0]||'';
+  return{o,cut,due,late:!!due&&due<(today||todayLocal()),onDel:!!(o.delVeh&&o.delDay)};
 }
 function suggestWOs(l){ // match house/unit numbers in the sheet name against live WOs; customer-matches first
   const nums=(String(l.sheet).match(/\d+/g)||[]).map(Number);
@@ -6201,6 +6215,9 @@ function applyImport(plan){
       DB.orders.push(o);board.set(woKey(o.wo),o);
       orig[o.wo]=o.plannedWeek||'';origStep[o.wo]=o.step||''; // baseline AFTER auto-schedule so auto-assignments don't show as changes
     });
+    // o.procAt: the day the planner first saw the job at 5. WORK ORDER PROCESSED or later — its cutting list is due a set
+    // number of working days after it. Jobs already past step 5 the first time this runs get today's date.
+    const td=todayLocal();DB.orders.forEach(o=>{if(!o.procAt&&stepNo(o.step)>=5)o.procAt=td;});
     cleanGroups();
     sched();
     const c=plan.counts||{},el=document.getElementById('iprev');
