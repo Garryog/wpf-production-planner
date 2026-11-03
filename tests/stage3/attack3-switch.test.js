@@ -50,8 +50,16 @@ const sw = p => p.evaluate(async () => { try { return await lsSwitchBack('Garry'
     const inOld = oldNames(S).includes('top');
     rec('R1a within 15 s the saw\'s own retry puts the held Top tick into the old lists and empties its queue', drained && inOld, 'queue empty=' + drained + ' Top in old lists=' + inOld);
     // and what a re-migration later does to it
-    const re = await off.page.evaluate(async () => { await loadDB(); try { const r = await lsMigrate('Garry'); return { ok: r.ok }; } catch (e) { return { err: e.message }; } });
-    rec('R1b after a later re-migration the tick is still there (re-migration copies the old lists over the tables)', L(S, 'L1:3').status === 'cut', 're-migrate=' + JSON.stringify(re) + ' Top=' + L(S, 'L1:3').status);
+    // R1b (rewritten 3 Nov, Tester): no fixed waits — wait until the saw's save has really finished (nothing saving, no
+    // save timer, no fold running, nothing unconfirmed) and the database has Top, then until the office has no save of
+    // its own in flight, then re-migrate and wait for the migration to finish.
+    let sawDone = false;
+    for (let i = 0; i < 300 && !sawDone; i++) { sawDone = await saw.page.evaluate(() => !SAVING && !saveT && !LQ.folding && !UNSURE.length && !DB.saveFailed) && oldNames(S).includes('top'); if (!sawDone) await F.sleep(100); }
+    await idle(off.page);
+    const re = await off.page.evaluate(async () => { for (let i = 0; i < 300 && (SAVING || saveT); i++) await new Promise(r => setTimeout(r, 100)); await loadDB(); try { const r = await lsMigrate('Garry'); return { ok: r.ok }; } catch (e) { return { err: e.message }; } });
+    await idle(off.page);
+    for (let i = 0; i < 100 && L(S, 'L1:3').status !== 'cut'; i++) await F.sleep(100);
+    rec('R1b after a later re-migration the tick is still there (re-migration copies the old lists over the tables)', L(S, 'L1:3').status === 'cut', 'saw save finished=' + sawDone + ' re-migrate=' + JSON.stringify(re) + ' Top=' + L(S, 'L1:3').status);
     await saw.close(); await off.close();
   }
   // ---------- R2: device reconnects after a switch back; the switch read works but the planner refresh straight after fails
