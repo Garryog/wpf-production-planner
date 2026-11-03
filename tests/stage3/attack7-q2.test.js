@@ -10,7 +10,7 @@ const oldKeys = S => Object.keys((S.row.settings.listRow || {}).L1 || {});
 const has = (S, part) => oldKeys(S).some(k => k.split('|')[1] === part);
 const tickBy = (S, part) => { const t = (S.row.settings.listRow || {}).L1 || {}; const k = Object.keys(t).find(k => k.split('|')[1] === part); return k ? t[k].by : null; };
 const idle = p => p.evaluate(async () => { for (let i = 0; i < 120 && (SAVING || saveT || LQ.folding); i++) { if (saveT && !SAVING) { clearTimeout(saveT); saveT = null; await saveDB(); } await new Promise(r => setTimeout(r, 100)); } });
-const devState = p => p.evaluate(() => ({ v2: V2(), q: lqRead().length, pend: !!localStorage.getItem('wpfPending'), saving: !!SAVING, failed: !!DB.saveFailed, ok: DB.lastLoadOk, err: LQ.err, msgs: LQ.msgs.slice() }));
+const devState = p => p.evaluate(() => ({ v2: V2(), q: lqRead().length, pend: !!(Object.keys(localStorage).filter(k => k.indexOf('wpfPending') === 0).map(k => localStorage.getItem(k)).join('') || null), saving: !!SAVING, failed: !!DB.saveFailed, ok: DB.lastLoadOk, err: LQ.err, msgs: LQ.msgs.slice() }));
 const pin = p => p.evaluate(() => { window.prompt = () => '9000'; window.confirm = () => true; });
 async function settle(p) { for (let i = 0; i < 50 && await p.evaluate(() => !!(SAVING || saveT)); i++) await idle(p); }
 const old = S => 'old=' + oldKeys(S).map(k => k.split('|')[1]);

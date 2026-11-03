@@ -30,8 +30,8 @@ const base = () => ({ id: 'main', version: 1, orders: [H.order({ wo: 'WO-1' }), 
     const S = makeServer(base());
     const A = await device(browser, S, { name: 'A' }, { role: 'saw' });
     A.dev.offline = true;
-    await A.page.evaluate(async () => { const si = Storage.prototype.setItem; Storage.prototype.setItem = function (k, v) { if (k === 'wpfPending') throw new DOMException('QuotaExceededError', 'QuotaExceededError'); return si.call(this, k, v); }; for (let i = 0; i < 20; i++) DB.listRow.L['t' + i] = { m: 'saw' }; sched(); await saveDB(); });
-    const st = await A.page.evaluate(() => ({ bar: document.getElementById('savebar').hidden ? '' : document.getElementById('savebar').textContent, pend: localStorage.getItem('wpfPending') }));
+    await A.page.evaluate(async () => { const si = Storage.prototype.setItem; Storage.prototype.setItem = function (k, v) { if (String(k).indexOf('wpfPending') === 0) throw new DOMException('QuotaExceededError', 'QuotaExceededError'); return si.call(this, k, v); }; for (let i = 0; i < 20; i++) DB.listRow.L['t' + i] = { m: 'saw' }; sched(); await saveDB(); });
+    const st = await A.page.evaluate(() => ({ bar: document.getElementById('savebar').hidden ? '' : document.getElementById('savebar').textContent, pend: (Object.keys(localStorage).filter(k => k.indexOf('wpfPending') === 0).map(k => localStorage.getItem(k)).join('') || null) }));
     rec('storage full: user is NOT told "kept on this device" when it is not', !(st.bar && /kept on this device/.test(st.bar) && !st.pend), 'bar="' + st.bar.slice(0, 70) + '" pend=' + (st.pend ? 'yes' : 'null'));
     await A.close();
   }
@@ -48,7 +48,7 @@ const base = () => ({ id: 'main', version: 1, orders: [H.order({ wo: 'WO-1' }), 
     const L = Object.keys(S.row.settings.listRow.L);
     rec('reopen: 20 offline ticks + office changes all present', L.length === 22 && S.row.orders.length === 3 && S.row.orders[1].plannedWeek === '2026-12-07', L.length + ' ticks, ' + S.row.orders.length + ' jobs');
     rec('reopen: older offline note loses to newer office note (by design)', S.row.orders[0].notes === 'office note', S.row.orders[0].notes);
-    const pend = await p.evaluate(() => localStorage.getItem('wpfPending'));
+    const pend = await p.evaluate(() => (Object.keys(localStorage).filter(k => k.indexOf('wpfPending') === 0).map(k => localStorage.getItem(k)).join('') || null));
     rec('reopen: device copy cleared after send', pend === null, pend ? 'still there' : 'cleared');
     await O.close(); await A.close();
   }
@@ -58,9 +58,9 @@ const base = () => ({ id: 'main', version: 1, orders: [H.order({ wo: 'WO-1' }), 
     const dev2 = { name: 'T2' }; const p2 = await T1.ctx.newPage(); await attach(p2, S, dev2); await p2.goto('https://wpf.test/?view=office'); await p2.waitForFunction(() => typeof loadDB === 'function' && DB.loaded);
     T1.dev.offline = true;
     await T1.page.evaluate(async () => { DB.orders[0].notes = 'tab one unsaved'; sched(); await saveDB(); });
-    const had = await T1.page.evaluate(() => !!localStorage.getItem('wpfPending'));
+    const had = await T1.page.evaluate(() => !!(Object.keys(localStorage).filter(k => k.indexOf('wpfPending') === 0).map(k => localStorage.getItem(k)).join('') || null));
     await p2.evaluate(async () => { DB.orders[1].notes = 'tab two'; await saveDB(); });
-    const still = await p2.evaluate(() => localStorage.getItem('wpfPending'));
+    const still = await p2.evaluate(() => (Object.keys(localStorage).filter(k => k.indexOf('wpfPending') === 0).map(k => localStorage.getItem(k)).join('') || null));
     rec('two tabs, one device: tab 2 does not wipe tab 1\'s kept changes', !had || (!!still && /tab one unsaved/.test(still)), 'tab1 kept=' + had + ' after tab2 save=' + (still ? 'present' : 'GONE'));
     await T1.close();
   }

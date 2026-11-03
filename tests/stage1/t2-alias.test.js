@@ -34,7 +34,7 @@ const row = () => ({ id: 'main', version: 1, orders: [H.order({ wo: 'WO-1' }), H
     await A.page.evaluate(async () => { await loadDB(); });                                          // refresh merges WO-NEW in
     A.dev.offline = true;                                                                           // driver/office loses signal
     await A.page.evaluate(async () => { const o = DB.orders.find(x => x.wo === 'WO-NEW'); o.delDone = true; o.delivBy = 'Driver'; sched(); await saveDB(); });
-    const st = await A.page.evaluate(() => ({ bar: !document.getElementById('savebar').hidden, pend: localStorage.getItem('wpfPending') }));
+    const st = await A.page.evaluate(() => ({ bar: !document.getElementById('savebar').hidden, pend: (Object.keys(localStorage).filter(k => k.indexOf('wpfPending') === 0).map(k => localStorage.getItem(k)).join('') || null) }));
     rec('offline: red NOT SAVED bar shown', st.bar, JSON.stringify({ bar: st.bar }));
     rec('offline: the delivered tick is kept on the device (wpfPending)', !!st.pend && /delDone/.test(st.pend), 'wpfPending=' + (st.pend ? st.pend.length + ' chars' : 'null'));
     A.dev.offline = false;

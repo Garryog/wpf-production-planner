@@ -18,7 +18,7 @@ const old = S => Object.keys((S.row.settings.listRow || {}).L1 || {}).length;
   // the saw's own tap path
   const tap = await saw.page.evaluate(() => { const b = [...document.querySelectorAll('[data-rt]')]; b.slice(0, 2).forEach(x => x.click()); return b.length; });
   await F.sleep(3000); // the 1.2 s save starts and hangs
-  const st = await saw.page.evaluate(() => ({ saving: !!SAVING, pend: !!localStorage.getItem('wpfPending') }));
+  const st = await saw.page.evaluate(() => ({ saving: !!SAVING, pend: !!(Object.keys(localStorage).filter(k => k.indexOf('wpfPending') === 0).map(k => localStorage.getItem(k)).join('') || null) }));
   const page = await saw.ctx.newPage(); await saw.page.close({ runBeforeUnload: false });
   const n = { ...saw, page }; await S3.attach(n, S);
   await page.goto('https://wpf.test/?view=office'); await page.waitForFunction(() => typeof analyzeImport === 'function'); await F.sleep(1500);

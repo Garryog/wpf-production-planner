@@ -9,7 +9,7 @@ const REPS = +(process.argv[2] || 5);
 const old = S => Object.keys((S.row.settings.listRow || {}).L1 || {}).length;
 const PP = u => /production_planner/.test(String(u)) && !/select=ls/.test(String(u));
 const idle = p => p.evaluate(async () => { for (let i = 0; i < 100 && (SAVING || saveT || LQ.folding); i++) { if (saveT && !SAVING) { clearTimeout(saveT); saveT = null; await saveDB(); } await new Promise(r => setTimeout(r, 100)); } });
-const devState = p => p.evaluate(() => ({ v2: V2(), q: lqRead().length, pend: !!localStorage.getItem('wpfPending'), saving: !!SAVING, saveT: !!saveT, folding: !!LQ.folding, failed: !!DB.saveFailed, err: LQ.err }));
+const devState = p => p.evaluate(() => ({ v2: V2(), q: lqRead().length, pend: !!(Object.keys(localStorage).filter(k => k.indexOf('wpfPending') === 0).map(k => localStorage.getItem(k)).join('') || null), saving: !!SAVING, saveT: !!saveT, folding: !!LQ.folding, failed: !!DB.saveFailed, err: LQ.err }));
 async function q7(browser, opt = {}) {
   const S = F.makeServer(F.v2Row()); F.seedList(S, 'L1');
   const off = await F.dev(browser, S, 'office'), saw = await F.dev(browser, S, 'saw');

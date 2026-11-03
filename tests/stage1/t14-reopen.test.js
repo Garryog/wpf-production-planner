@@ -76,7 +76,7 @@ async function reopen(d, S, who) { const t = await newTab(d, S, who); await slee
     S.trace = []; saw.m.plan = p1.slice(); t2.m.plan = p2.slice();
     await saw.page.evaluate(TICK('side')); await t2.p.evaluate(TICK('top'));
     kick(saw.page); kick(t2.p); await sleep(120);
-    const slots = await saw.page.evaluate(() => Object.keys((JSON.parse(localStorage.getItem('wpfPending') || '{}').tabs) || {}).length).catch(() => -1);
+    const slots = await saw.page.evaluate(() => Object.keys(localStorage).filter(k => k.indexOf('wpfPending:') === 0).length + Object.keys((JSON.parse(localStorage.getItem('wpfPending') || '{}').tabs) || {}).length).catch(() => -1);
     rec('(A) ' + name + ': both tabs\' unsaved changes are in the device copy (2 slots) while both saves are out', slots === 2, 'slots=' + slots);
     await saw.page.close({ runBeforeUnload: false }); await t2.p.close({ runBeforeUnload: false });
     await waitFor(() => !saw.m.pending && !t2.m.pending, 4000);
@@ -147,7 +147,7 @@ async function reopen(d, S, who) { const t = await newTab(d, S, who); await slee
   }
 
   // (D) device storage full / blocked during a save
-  const FULL = all => `(()=>{const si=Storage.prototype.setItem;window.__si=si;Storage.prototype.setItem=function(k,v){if(${all ? 'true' : "k==='wpfPending'"})throw new DOMException('full','QuotaExceededError');return si.call(this,k,v);};})()`;
+  const FULL = all => `(()=>{const si=Storage.prototype.setItem;window.__si=si;Storage.prototype.setItem=function(k,v){if(${all ? 'true' : "String(k).indexOf('wpfPending')===0"})throw new DOMException('full','QuotaExceededError');return si.call(this,k,v);};})()`;
   {
     const { S, saw, off } = await pair(browser);
     await saw.page.evaluate(FULL(false)); await saw.page.evaluate(TICK('side')); await flush(saw.page);
@@ -180,7 +180,7 @@ async function reopen(d, S, who) { const t = await newTab(d, S, who); await slee
     await t2.p.evaluate(() => { DB.weekCaps.t2 = 7; }); await t2.p.evaluate(() => writePend()); // tab2 has an unsent change in its slot
     await saw.page.evaluate(TICK('side')); await saw.page.evaluate(() => writePend()); // saw's slot: Side (before any send)
     await saw.page.evaluate(FULL(false)); await flush(saw.page); // save lands; clearing the slot fails (full)
-    const slot = await saw.page.evaluate(() => { const t = JSON.parse(localStorage.getItem('wpfPending') || '{}').tabs || {}; return Object.keys(t).length; });
+    const slot = await saw.page.evaluate(() => { return Object.keys(localStorage).filter(k => k.indexOf('wpfPending:') === 0).length + Object.keys((JSON.parse(localStorage.getItem('wpfPending') || '{}').tabs) || {}).length; });
     await officeUntick(off, 'side'); await idle(off.page);
     await saw.page.close({ runBeforeUnload: false }); await t2.p.close({ runBeforeUnload: false });
     const r = await reopen(saw, S, 'saw-reopen'); const s = await st(r.p);
@@ -191,7 +191,7 @@ async function reopen(d, S, who) { const t = await newTab(d, S, who); await slee
     const S = makeServer(base());
     const ctx = await browser.newContext({ viewport: { width: 400, height: 800 } });
     await ctx.addInitScript(() => { window.alert = () => {}; window.confirm = () => true; window.prompt = () => 'T'; try { localStorage.setItem('wpfRole', 'saw'); localStorage.setItem('wpfPin_saw', '9000'); sessionStorage.setItem('wpfWho', 'T'); } catch (e) {}
-      const gi = Storage.prototype.getItem, si = Storage.prototype.setItem; Storage.prototype.getItem = function (k) { if (k === 'wpfPending') throw new DOMException('blocked', 'SecurityError'); return gi.call(this, k); }; Storage.prototype.setItem = function (k, v) { if (k === 'wpfPending') throw new DOMException('blocked', 'SecurityError'); return si.call(this, k, v); }; });
+      const gi = Storage.prototype.getItem, si = Storage.prototype.setItem; Storage.prototype.getItem = function (k) { if (String(k).indexOf('wpfPending') === 0) throw new DOMException('blocked', 'SecurityError'); return gi.call(this, k); }; Storage.prototype.setItem = function (k, v) { if (String(k).indexOf('wpfPending') === 0) throw new DOMException('blocked', 'SecurityError'); return si.call(this, k, v); }; });
     const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(String(e))); await attach(p, S, { name: 'blk' });
     await p.goto('https://wpf.test/?view=saw').catch(() => {});
     const ok = await p.waitForFunction(() => typeof DB !== 'undefined' && DB.loaded, null, { timeout: 15000 }).then(() => true).catch(() => false);

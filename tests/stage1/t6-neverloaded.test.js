@@ -53,7 +53,7 @@ const controls = p => p.evaluate(() => { const a = document.getElementById('app'
     }, role);
     const ctx = A.ctx; await A.page.close({ runBeforeUnload: false });
     const R = await openOffline(browser, S, role, ctx);
-    const kept = await R.page.evaluate(() => localStorage.getItem('wpfPending'));
+    const kept = await R.page.evaluate(() => (Object.keys(localStorage).filter(k => k.indexOf('wpfPending') === 0).map(k => localStorage.getItem(k)).join('') || null));
     rec(role + ': reopened offline (never loaded) keeps last session\'s unsaved ticks on the device', !!kept && /off0|delDone/.test(kept), kept ? kept.length + ' bytes' : 'GONE');
     const txt = await R.page.evaluate(() => document.body.innerText);
     info(role + ': [Low] blocked screen mentions the unsent ticks are held on this phone', /kept|unsaved|not saved/i.test(txt) ? 'yes' : 'no mention — only "can\'t reach the database"');
