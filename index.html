@@ -900,7 +900,12 @@ async function pushPlan(){
     unsureAdd(mine,VER+1); // counts as "may have landed" from the moment it's sent — a tab closed mid-save keeps the record
     try{resp=await fetch(SUPA_URL+'/production_planner?id=eq.main&version=eq.'+VER+'&select=version',{method:'PATCH',headers:{...SUPA_WHDR,'Prefer':'return=representation'},
       body:JSON.stringify({...mine,version:VER+1,updated_by:whoTag()})});}
-    catch(e){throw e;} // no reply: it may have landed — it stays in UNSURE so it isn't mistaken for someone else's change
+    catch(e){ // no reply: it may have landed. Look at the database straight away, before other screens move it on.
+      const c=await saveCheck(mine,VER+1);
+      if(c==='landed'){VER=VER+1;BASE=mine;UNSURE=[];return;} // it did land — same as a normal reply
+      if(c==='lost'){unsureDel(mine);continue;} // it did not (and now never can): merge and go again
+      throw e; // can't tell — it stays in UNSURE so it isn't mistaken for someone else's change
+    }
     if(!resp||resp.ok===false){unsureDel(mine);
       const tx=resp?await resp.text().catch(()=>''):'';
       if(/version|updated_by/.test(tx)&&/column/i.test(tx)){VER=null;legacyWarn('save');continue;} // SQL not run — old way
@@ -923,6 +928,22 @@ async function pushPlan(){
     mergedRender();
   }
   throw new Error('kept clashing with other screens');
+}
+/* A save got no reply. Every save says "only if the database is still at version v-1", so the database tells us:
+   at version v holding exactly what we sent → it landed; at v holding something else, or still below v after a second
+   look → it did not land (another screen took v, or it never got there). Past v already, or no answer → can't tell ('').
+   Deciding straight away means a later change by another screen (e.g. the office unticking) is never mistaken for
+   our own unconfirmed change, and our own unsent change is never mistaken for one that landed. */
+async function saveCheck(p,v){
+  for(let i=0;i<2;i++){
+    await new Promise(r=>setTimeout(r,i?1000:300));
+    let row;try{row=await fetchMain();}catch(e){return'';}
+    if(!row||row.version===undefined)return'';
+    const rv=+row.version||1;
+    if(rv===v)return same(row.orders||[],p.orders||[])&&same(row.settings||{},p.settings||{})&&(+row.nid||0)===(+p.nid||0)?'landed':'lost';
+    if(rv>v)return'';
+  }
+  return'lost';
 }
 // Re-draw after a merge brought in other people's changes — but never under someone's fingers.
 function mergedRender(){
@@ -3962,11 +3983,14 @@ function markListDone(ids,mode,by){
 function houseLabels(lsArr){
   // per-house split is by list, not by name: two selected houses both called "House 1" become "House 1" and "House 1 (2)".
   // Every list's real name is reserved first, so a list really called "House 1 (2)" keeps that name and the repeat becomes "House 1 (3)".
-  const projs=new Set(lsArr.map(l=>l.project||''));
-  const hbase=l=>String(projs.size>1?((l.project?l.project+' — ':'')+l.name):l.name);
-  const lbl=new Map(),real=new Set(lsArr.map(hbase)),taken=new Set();
-  lsArr.forEach(l=>{if(lbl.has(l.id))return;const b=hbase(l);if(!taken.has(b)){taken.add(b);lbl.set(l.id,b);}});
-  lsArr.forEach(l=>{if(lbl.has(l.id))return;const b=hbase(l);let n=1,t;do{n++;t=b+' ('+n+')';}while(taken.has(t)||real.has(t));taken.add(t);lbl.set(l.id,t);});
+  // Names that only differ by spaces or capitals ("House 1", "House 1 ", "house 1") look the same on a chip, so they count
+  // as repeats too; a list with no name shows "(no name)".
+  const tx=v=>String(v==null?'':v).replace(/\s+/g,' ').trim();
+  const projs=new Set(lsArr.map(l=>matKey(tx(l.project))));
+  const hbase=l=>{const n=tx(l.name)||'(no name)',p=tx(l.project);return projs.size>1&&p?p+' — '+n:n;};
+  const lbl=new Map(),real=new Set(lsArr.map(l=>matKey(hbase(l)))),taken=new Set();
+  lsArr.forEach(l=>{if(lbl.has(l.id))return;const b=hbase(l);if(!taken.has(matKey(b))){taken.add(matKey(b));lbl.set(l.id,b);}});
+  lsArr.forEach(l=>{if(lbl.has(l.id))return;const b=hbase(l);let n=1,t;do{n++;t=b+' ('+n+')';}while(taken.has(matKey(t))||real.has(matKey(t)));taken.add(matKey(t));lbl.set(l.id,t);});
   return lbl;
 }
 function combineLists(lsArr,mode){
