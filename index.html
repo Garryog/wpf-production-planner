@@ -408,6 +408,7 @@ details.lti-other{margin-bottom:14px}details.lti-other>summary{cursor:pointer;fo
 .me-grid{table-layout:fixed;min-width:860px}.me-grid input,.me-grid select{padding:6px 7px;border:1px solid var(--b2);border-radius:6px;font-size:13px;width:100%}.me-grid .me-b{font-weight:700}.me-grid .me-w52{width:52px}.me-grid td{padding:2px 3px;overflow:hidden}.me-grid input,.me-grid select{max-width:100%;box-sizing:border-box}.me-grid input,.me-grid select{min-height:30px}.me-n{font-size:11px;color:var(--t3);white-space:nowrap;text-align:right;vertical-align:middle}
 .me-st,.me-ht{display:inline-block;margin-left:4px;font-size:10px;font-weight:800;border-radius:4px;padding:1px 5px;background:#eef0f3;color:#5b6b82}.me-st[hidden]{display:none}
 .me-h td{background:#f5f6f8}.me-u td{background:#eef3fb}.me-u .me-ht{background:#14335c;color:#fff}.me-inu td:nth-child(2){padding-left:14px}
+.pc-b{display:inline-block;margin-top:2px;font-size:11px;font-weight:700;color:#8a5a00;background:#fff4d6;border:1px solid #e0a43a;border-radius:4px;padding:0 5px}
 .me-q{white-space:nowrap}.me-tot{font-size:12px;font-weight:800;color:#14335c;margin-left:4px}.me-ul{font-size:12px;font-weight:700;color:#14335c}.me-hint{font-size:11px;color:var(--t3)}.me-lock{font-size:12px;font-weight:700;color:#8a5a00}
 .me-x{color:var(--red);border-color:var(--red);padding:3px 8px}.lh-act{white-space:normal;min-width:120px}.lh-act .btn{margin:1px 0}
 .me-keys{font-size:11px;color:var(--t3);margin:2px 0 4px}@media(max-width:699px){.me-keys{display:none}}
@@ -2743,6 +2744,7 @@ async function lsSaveManual(d,by,ex){
   if(ex&&!ex.tpl&&!ex.locked&&lsLocked(lsList(id)))pl.lock=true; // cut-by today / next working day: this save is a revision
   if(d.ltype)pl.list_type=d.ltype;if(d.tname!==undefined)pl.type_name=String(d.tname||'').trim()||null;
   if(!ex)Object.assign(pl,d.tpl?{wos:[],source:'manual',is_template:true}:{wos:[d.wo],source:'manual'},{list_type:d.ltype||'house'});
+  if(!ex&&d.replaces&&d.replaces.id)reason='Made with "Make new list from this" from "'+String(d.replaces.name||'').trim()+'" — replaces list '+d.replaces.id; // lsReplOf reads the id back
   const res=await lsSaveList(pl,lines,by,reason||(ex?(d.why||'List edited'):null)); // a template's "what changed" goes in its History
   if(ex&&!ex.tpl){const was=(ex.wos||[])[0];if(d.wo&&d.wo!==was){if(was)listTag(ex,was,false,by);listTag(ex,d.wo,true,by);}
     // rows added to a side that was already signed off put that side back on the bench — and say so
@@ -3562,8 +3564,10 @@ function openListEditor2(listId,presetWo,presetPid,opt){
   const st={rows:ex?lsEditRows(ex.id).map(toRow):opt.rows?opt.rows.map(fresh):[{k:'part',item:'',qty:'',L:'',W:'',mat:'',edging:'',note:''}],
     wo:ex?((ex.wos||[])[0]||''):(presetWo||''),name:ex?ex.name:(opt.name||''),pid:ex?ex.pid:(presetPid||((lsProjForCust(o0&&o0.customer)||{}).id)||''),
     ltype:ex?(ex.ltype||'house'):(opt.ltype||(opt.tpl?'kitchen':'house')),tname:ex?ex.typeName:(opt.tname||''),tpl:ex?ex.tpl:!!opt.tpl,noCut:ex?!!ex.noCut:false,noFit:ex?!!ex.noFit:false,newWO:false,pw:{title:'',cust:'',floor:'',unit:'',due:'',val:'',hrs:''},
-    carcass:'',door:'',undo:[],cur:'',focus:'',snapKey:'',note:opt.note||''};
+    carcass:'',door:'',undo:[],cur:'',focus:'',snapKey:'',note:opt.note||'',from:!ex&&opt.from&&opt.from.id?opt.from:null};
   const sawStarted=!!ex&&!ex.tpl&&lsTicked(ex.id);
+  const prevId=ex?(ex.tpl?'':lsReplOf(ex.id)):st.from?st.from.id:''; // the list this one replaces: "already cut on old list (n)"
+  const prevCut=r=>prevId&&(lsNum(r.L)>0||lsNum(r.W)>0)?lsPrevCutHTML(prevId,r.item,r.L,r.W,r.mat):'';
   const live=()=>DB.orders.filter(o=>!o.delDone&&!o.delDelivAt).slice().sort(woCmp);
   const defName=wo=>{const o=DB.orders.find(x=>x.wo===wo);return o?([o.floor,o.unit].filter(Boolean).join(' ')||o.title||wo):'';};
   if(!ex&&st.wo&&!st.name)st.name=defName(st.wo);
@@ -3610,7 +3614,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
         <td><button class="btn btn-s me-x" data-mrx="${i}" title="Delete row">✕</button></td></tr>`;}
     const u=b.U[i],stores=!(lsNum(r.L)>0||lsNum(r.W)>0)&&!lsEmptyRow(r);
     return `<tr data-row="${i}" class="me-p${u!=null?' me-inu':''}"><td class="me-n">${i+1}<span class="me-st" data-tag="${i}"${stores?'':' hidden'}>Stores</span></td>
-      <td><input data-mr="${i}|item" value="${escA(r.item)}" placeholder="Description" ></td>
+      <td><input data-mr="${i}|item" value="${escA(r.item)}" placeholder="Description" >${prevCut(r)}</td>
       <td class="me-q"><input data-mr="${i}|qty" value="${escA(r.qty)}" inputmode="decimal" class="me-w52">${u!=null?`<span class="me-tot" data-tot="${i}">= ${escA(totalOf(r,u))}</span>`:''}</td>
       <td><input data-mr="${i}|L" value="${escA(r.L)}" inputmode="decimal" placeholder="L" ></td>
       <td><input data-mr="${i}|W" value="${escA(r.W)}" inputmode="decimal" placeholder="W" ></td>
@@ -3629,7 +3633,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
         ${lab('Note',`<input data-mr="${i}|note" value="${escA(r.note||'')}">`)}</div>`;}
     const u=b.U[i],stores=!(lsNum(r.L)>0||lsNum(r.W)>0)&&!lsEmptyRow(r);
     return `<div class="me-card${u!=null?' me-cinu':''}" data-row="${i}"><div class="me-chd"><b>${i+1}</b><span class="me-st" data-tag="${i}"${stores?'':' hidden'}>Stores</span><span style="flex:1"></span>${x}</div>
-      ${lab('Description',`<input data-mr="${i}|item" value="${escA(r.item)}">`)}
+      ${lab('Description',`<input data-mr="${i}|item" value="${escA(r.item)}">`)}${prevCut(r)}
       <div class="me-c3">${lab(u!=null?'Qty (1 unit)':'Qty',`<input data-mr="${i}|qty" value="${escA(r.qty)}" inputmode="decimal">`+(u!=null?`<span class="me-tot" data-tot="${i}">= ${escA(totalOf(r,u))}</span>`:''))}${lab('Length',`<input data-mr="${i}|L" value="${escA(r.L)}" inputmode="decimal">`)}${lab('Width',`<input data-mr="${i}|W" value="${escA(r.W)}" inputmode="decimal">`)}</div>
       ${lab('Colour',matSel(r,i))}
       <div class="me-c2">${lab('Edging',`<input data-mr="${i}|edging" value="${escA(r.edging||'')}" list="me-edg">`)}${lab('Note',`<input data-mr="${i}|note" value="${escA(r.note||'')}">`)}</div></div>`;
@@ -3793,8 +3797,9 @@ function openListEditor2(listId,presetWo,presetPid,opt){
   };
   const undo=()=>{if(!st.undo.length)return;st.rows=JSON.parse(st.undo.pop());st.snapKey='';if(st.cur&&!ov.querySelector('[data-mr="'+st.cur+'"]'))st.cur='';st.focus=st.cur&&+st.cur.split('|')[0]<R().length?st.cur:'';draw();};
   const copyToNew=()=>{ // the saw has started: a different number of units is a NEW list (Garry, 3 Nov) — copied without ticks
-    keep();if(!confirm('Make a new list from "'+st.name+'"?\n\nThe rows are copied (no ticks) into a new list you can change. This list stays as it is with the saw — archive it from Lists if the new one replaces it.'))return;
-    ov.remove();openListEditor2(null,st.wo,st.pid,{rows:R(),name:st.name+' (new)',ltype:st.ltype,tname:st.tname,note:'Copied from "'+st.name+'" — nothing is saved until you press Save. The old list is not changed.'});
+    keep();if(!confirm('Make a new list from "'+st.name+'"?\n\nThe rows are copied (no ticks) into a new list you can change. When you SAVE the new list, this one is archived (taken off the saw). Parts already cut on this list show on the new one as "already cut on old list" so the saw can check before cutting again.'))return;
+    ov.remove();openListEditor2(null,st.wo,st.pid,{rows:R(),name:st.name+' (new)',ltype:st.ltype,tname:st.tname,from:{id:ex.id,name:ex.name,sig:lsOldSig(ex.id)},
+      note:'Copied from "'+st.name+'" — nothing is saved until you press Save. Saving archives "'+ex.name+'" (takes it off the saw); until then it is not changed.'});
   };
   const keep=()=>{const g=id=>ov.querySelector('#'+id);const n=g('me-name');if(n)st.name=n.value;const w=g('me-wo');if(w)st.wo=w.value;
     const t=g('me-type');if(t)st.ltype=t.value;const tn=g('me-tname');if(tn)st.tname=tn.value;
@@ -3802,7 +3807,8 @@ function openListEditor2(listId,presetWo,presetPid,opt){
   const save=()=>{
     keep();const g=id=>ov.querySelector('#'+id),err=t=>{g('me-err').textContent=t;};
     if(!st.pid)return err('Pick the project.');
-    const rows=R().filter(r=>!lsEmptyRow(r)), // empty rows (nothing typed) are left out, as in Excel
+    let rows=R().filter(r=>!lsEmptyRow(r)); // empty rows (nothing typed) are left out, as in Excel
+    const
       b=(()=>{const U=[];let u=null;rows.forEach(r=>{if(r.k==='hdr'){u=r.units!==undefined&&r.units!==null?r.units:null;U.push(null);}else U.push(u);});return U;})();
     const at=r=>' (row '+(R().indexOf(r)+1)+')';
     for(const r of rows){if(r.k!=='hdr')continue;
@@ -3818,7 +3824,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     let wo=st.wo;
     if(st.newWO){const title=(g('me-ptitle').value||'').trim(),due=g('me-pdue').value;
       if(!title)return err('The new work order needs a title.');if(!due)return err('The new work order needs a due date — it drives the cutting deadline.');wo='__NEW__';}
-    const d={...st,rows,wo,project:(LST.p.get(st.pid)||{}).name||''};
+    const d={...st,rows,wo,project:(LST.p.get(st.pid)||{}).name||'',replaces:!ex&&!st.tpl&&st.from?st.from:null};
     const chk=rows.filter(r=>r.k==='part').map((r,j)=>({k:sized(r)?'saw':'fit',item:r.item,qty:totalOf(r,b[rows.indexOf(r)]),L:r.L,W:r.W}));
     const e=manualListValidate({...d,rows:chk,wo:st.tpl?'(template)':d.wo});if(e)return err(e.replace(/saw row/g,'saw row (with a length or width)').replace(/fittings row/g,'Stores row (no length or width)'));
     if(ex&&ex.tpl){const w=prompt('What changed in this template? (optional — shown in its History; it becomes Rev '+((+ex.rev||1)+1)+')','');if(w===null)return;d.why=w.trim()?w.trim():'Template edited';}
@@ -3833,8 +3839,10 @@ function openListEditor2(listId,presetWo,presetPid,opt){
         orig[pwo]='';origStep[pwo]='Planner WO';d.wo=pwo;st.newWO=false;st.wo=pwo; // a failed save tried again reuses this P-number
       }
       const sb=g('me-save');if(sb)sb.disabled=true;err('Saving…');
-      lsSaveManual(d,by,ex).then(l=>{ov.remove();sched();render();
-        toast((ex?'List updated':'List saved')+' — '+l.name+' → '+(l.saw?l.saw+' saw row'+(l.saw!==1?'s':''):'no cutting')+' · '+(l.fit?l.fit+' Stores':'no Stores')+(d.wo&&!st.tpl?' · tagged '+d.wo:''));})
+      lsSaveManual(d,by,ex).then(async l=>{ov.remove();sched();render();
+        let t=(ex?'List updated':'List saved')+' — '+l.name+' → '+(l.saw?l.saw+' saw row'+(l.saw!==1?'s':''):'no cutting')+' · '+(l.fit?l.fit+' Stores':'no Stores')+(d.wo&&!st.tpl?' · tagged '+d.wo:'');
+        if(d.replaces){t+='.'+await lsRetireOld(d.replaces,by);render();} // only once the new list is saved — a failed save archives nothing
+        toast(t);})
         .catch(x=>{if(sb)sb.disabled=false;err('Not saved — '+x.message);});
     });
   };
@@ -4036,6 +4044,43 @@ function lsMatchDlg(names,pid,done,opt){
 function lsTplInfo(l){ // "template is now rev 5 (this copy rev 3)" — information only; template changes never touch live copies
   if(!l||!l.templateId)return'';const t=LST.l.get(l.templateId);if(!t)return'';
   return (+t.rev||1)!==(+l.templateRev||1)?'template "'+t.name+'" is now rev '+(+t.rev||1)+' (this copy rev '+(+l.templateRev||1)+')':'from template "'+t.name+'" rev '+(+l.templateRev||1);
+}
+/* "Make new list from this" (Garry, 3 Nov): the new list REPLACES the old one. Its first history line ("List created")
+   ends "replaces list <old id>"; once it is saved the old list is archived (lsRetireOld). Lines already ticked cut on the
+   old list show on the new one as "already cut on old list (n)" — matched by description + length + width + colour.
+   Information only: no tick is carried across. */
+const LS_REPL_RE=/replaces list (\S+)$/;
+function lsReplOf(id){const r=LST.l.get(id),c=r&&Array.isArray(r.log)?r.log.find(x=>x&&x.what==='List created'):null,m=c&&LS_REPL_RE.exec(String(c.why||'').trim());return m?m[1]:'';}
+function lsCutKey(part,L,W,mat){const n=v=>{const s=String(v==null?'':v).trim().replace(/\s*mm$/i,'');return s===''||isNaN(+s)?matKey(s):String(+s);};return[matKey(part),n(L),n(W),matKey(mat)].join('|');}
+function lsPrevCutMap(oldId){ // key → quantity already cut on the old list (null while its lines are still loading)
+  if(!oldId||!V2()||!LST.l.has(oldId))return null;
+  if(!LST.full.has(oldId)){if(!LST.fetching.has(oldId)){LST.fetching.add(oldId);lsLines([oldId]).then(lsRedraw).catch(()=>{}).finally(()=>LST.fetching.delete(oldId));}return null;}
+  const c=lsCache();c.prev=c.prev||new Map();if(c.prev.has(oldId))return c.prev.get(oldId);
+  const m=new Map();
+  lsLinesOf(oldId).forEach(x=>{if(x.kind!=='saw'||x.removed_rev!=null||lnSt(x)!=='cut')return;
+    const k=lsCutKey(x.part,x.length_mm,x.width_mm,x.material),q=String(x.qty==null?'':x.qty).trim()||'?',p=m.get(k);
+    m.set(k,p==null?q:/^\d+(\.\d+)?$/.test(p)&&/^\d+(\.\d+)?$/.test(q)?String(+p+ +q):p+' + '+q);});
+  c.prev.set(oldId,m);return m;
+}
+function lsPrevCutHTML(oldId,part,L,W,mat){
+  const m=lsPrevCutMap(oldId),n=m&&m.get(lsCutKey(part,L,W,mat));
+  return n?`<div class="pc-b" title="This part was already ticked cut on the list this one replaces — check before cutting it again">already cut on old list (${escA(n)})</div>`:'';
+}
+function lsPrevCutBadge(lineId){ // the saw view: a line of a list that replaced another
+  if(!V2())return'';const x=LST.ln.get(lineId);if(!x||x.kind!=='saw')return'';const old=lsReplOf(x.list_id);
+  return old?lsPrevCutHTML(old,x.part,x.length_mm,x.width_mm,x.material):'';
+}
+function lsOldSig(id){const l=LST.l.get(id);return (+(l&&l.rev)||1)+'#'+lsLinesOf(id).filter(x=>x.removed_rev==null).map(lsLineSig).join(';');} // content, not ticks
+async function lsRetireOld(f,by){ // the new list is saved: archive the old one — unless another screen already did, or changed it since
+  const nm='"'+(f.name||'the old list')+'"';
+  try{await lsReloadList(f.id);}catch(e){return' ⚠ The old list '+nm+' could not be checked ('+e.message+') — it is still with the saw: archive it from Lists.';}
+  const o=lsList(f.id);
+  if(!o)return' The old list '+nm+' is no longer there — nothing archived.';
+  if(o.archived)return' The old list '+nm+' was already archived on another screen — left as it is.';
+  if(lsOldSig(f.id)!==f.sig&&!confirm('The old list '+nm+' was changed on another screen after you copied it.\n\nArchive it anyway (take it off the saw)?\n\nOK = archive it. Cancel = leave it with the saw — check it, then archive it from Lists.'))
+    return' The old list '+nm+' was changed on another screen meanwhile — left with the saw: check it and archive it from Lists.';
+  listArchive(o,by);
+  return' The old list '+nm+' is archived (off the saw).';
 }
 async function lsCopyLines(srcId,map){
   if(!LST.full.has(srcId))await lsReloadList(srcId);
@@ -4865,7 +4910,7 @@ function listTableHTML(l,mode,opt){ // mode 'saw' | 'fit' | 'all'; opt.relOnly =
   const saw=mode!=='fit';
   return `<table class="wl-tbl"><thead><tr>${opt.tick?'<th class="tkh">✓</th><th class="nah" title="Not available — park this line until it comes in">N/A</th>':''}<th style="width:34%">Item</th><th>Qty</th>${saw?'<th>Length</th><th>Width</th>':''}<th class="c-mt">${mode==='fit'?'Spec':'Material'}</th><th class="c-mt">${mode==='fit'?'Note':'Edging / Note'}</th></tr></thead><tbody>
   ${keep.map(r=>r.k==='hdr'?`<tr class="wl-sec"><td colspan="${(saw?6:4)+(opt.tick?2:0)}">${escA(r.item)}${r.note?' · '+escA(r.note):''}</td></tr>`
-    :`<tr class="${(h=>h&&h.st==='hold'?'wl-held':'')(hs(r))}${opt.tick&&tk[rowKey(r)]?' wl-rdone':''}">${opt.tick?`<td class="tkc">${(h=>h&&h.st==='hold'?'<span class="tk-na">⏸</span>':`<button class="rtk${tk[rowKey(r)]?' on':''}" data-rt="${escA(l.id)}|${escA(rowKey(r))}" title="${tk[rowKey(r)]?'Done '+hhmm(tk[rowKey(r)].at)+(tk[rowKey(r)].by?' by '+escA(tk[rowKey(r)].by):'')+' — click to untick':'Tick when '+(mode==='saw'?'cut':'picked')}">${tk[rowKey(r)]?'✓':''}</button>`)(hs(r))}</td>${(h=>{const on=!!(h&&h.st==='hold'),t=tk[rowKey(r)];return `<td class="nac"><button class="rna${on?' on':''}" data-rna="${escA(l.id)}|${escA(rowKey(r))}"${t?' disabled':''} title="${on?'Waiting since '+escA(new Date(h.at).toLocaleDateString('en-IE',{day:'numeric',month:'short'}))+(h.by?' · '+escA(h.by):'')+' — tap to undo':t?'Already '+(mode==='saw'?'cut':'picked'):'Not available — park this line until it comes in'}">N/A</button></td>`;})(hs(r))}`:''}<td>${lsLineBadge(rowKey(r))}${lqHas(rowKey(r))?'<span class="lq-dot" title="Not sent yet — it goes as soon as there is signal"></span>':''}${(h=>!h?'':h.st==='hold'?'<span class="hold-b">⏸ WAITING ON MATERIAL</span> ':'<span class="rel-b">▶ MATERIAL IN — DO NOW</span> ')(hs(r))}${escA(r.item)||'—'}${r.mat||r.note?`<div class="wl-ph">${escA(r.mat)}${r.mat&&r.note?' · ':''}${escA(r.note)}</div>`:''}</td><td class="num">${escA(r.qty)}</td>${saw?`<td class="num">${r.k==='saw'?escA(r.L):''}</td><td class="num">${r.k==='saw'?escA(r.W):''}</td>`:''}<td class="c-mt">${escA(r.mat)}</td><td class="c-mt">${escA(r.note)}</td></tr>`).join('')}
+    :`<tr class="${(h=>h&&h.st==='hold'?'wl-held':'')(hs(r))}${opt.tick&&tk[rowKey(r)]?' wl-rdone':''}">${opt.tick?`<td class="tkc">${(h=>h&&h.st==='hold'?'<span class="tk-na">⏸</span>':`<button class="rtk${tk[rowKey(r)]?' on':''}" data-rt="${escA(l.id)}|${escA(rowKey(r))}" title="${tk[rowKey(r)]?'Done '+hhmm(tk[rowKey(r)].at)+(tk[rowKey(r)].by?' by '+escA(tk[rowKey(r)].by):'')+' — click to untick':'Tick when '+(mode==='saw'?'cut':'picked')}">${tk[rowKey(r)]?'✓':''}</button>`)(hs(r))}</td>${(h=>{const on=!!(h&&h.st==='hold'),t=tk[rowKey(r)];return `<td class="nac"><button class="rna${on?' on':''}" data-rna="${escA(l.id)}|${escA(rowKey(r))}"${t?' disabled':''} title="${on?'Waiting since '+escA(new Date(h.at).toLocaleDateString('en-IE',{day:'numeric',month:'short'}))+(h.by?' · '+escA(h.by):'')+' — tap to undo':t?'Already '+(mode==='saw'?'cut':'picked'):'Not available — park this line until it comes in'}">N/A</button></td>`;})(hs(r))}`:''}<td>${lsLineBadge(rowKey(r))}${lqHas(rowKey(r))?'<span class="lq-dot" title="Not sent yet — it goes as soon as there is signal"></span>':''}${(h=>!h?'':h.st==='hold'?'<span class="hold-b">⏸ WAITING ON MATERIAL</span> ':'<span class="rel-b">▶ MATERIAL IN — DO NOW</span> ')(hs(r))}${escA(r.item)||'—'}${r.k==='saw'?lsPrevCutBadge(rowKey(r)):''}${r.mat||r.note?`<div class="wl-ph">${escA(r.mat)}${r.mat&&r.note?' · ':''}${escA(r.note)}</div>`:''}</td><td class="num">${escA(r.qty)}</td>${saw?`<td class="num">${r.k==='saw'?escA(r.L):''}</td><td class="num">${r.k==='saw'?escA(r.W):''}</td>`:''}<td class="c-mt">${escA(r.mat)}</td><td class="c-mt">${escA(r.note)}</td></tr>`).join('')}
   </tbody></table>`;
 }
 /* Saw / Stores queue view: lists in delivery order, big type, tick-off with name + time.
