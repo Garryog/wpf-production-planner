@@ -409,7 +409,7 @@ details.lti-other{margin-bottom:14px}details.lti-other>summary{cursor:pointer;fo
 .me-st,.me-ht{display:inline-block;margin-left:4px;font-size:10px;font-weight:800;border-radius:4px;padding:1px 5px;background:#eef0f3;color:#5b6b82}.me-st[hidden]{display:none}
 .me-h td{background:#f5f6f8}.me-u td{background:#eef3fb}.me-u .me-ht{background:#14335c;color:#fff}.me-inu td:nth-child(2){padding-left:14px}
 .pc-b{display:inline-block;margin-top:2px;font-size:11px;font-weight:700;color:#8a5a00;background:#fff4d6;border:1px solid #e0a43a;border-radius:4px;padding:0 5px}
-.me-q{white-space:nowrap}.me-tot{font-size:12px;font-weight:800;color:#14335c;margin-left:4px}.me-ul{font-size:12px;font-weight:700;color:#14335c}.me-hint{font-size:11px;color:var(--t3)}.me-lock{font-size:12px;font-weight:700;color:#8a5a00}
+.me-q{white-space:nowrap}.me-tot{font-size:12px;font-weight:800;color:#14335c;margin-left:4px}.me-fx{font-size:11px;font-weight:600;color:var(--t3)}.me-ul{font-size:12px;font-weight:700;color:#14335c}.me-hint{font-size:11px;color:var(--t3)}.me-lock{font-size:12px;font-weight:700;color:#8a5a00}
 .me-x{color:var(--red);border-color:var(--red);padding:3px 8px}.lh-act{white-space:normal;min-width:120px}.lh-act .btn{margin:1px 0}
 .me-keys{font-size:11px;color:var(--t3);margin:2px 0 4px}@media(max-width:699px){.me-keys{display:none}}
 .me-cards{display:flex;flex-direction:column;gap:8px}.me-card{border:1px solid var(--b2);border-radius:8px;padding:8px;background:#fff}.me-card.me-ch{background:#f5f6f8}.me-card.me-cu{background:#eef3fb;border-color:#9db5d8}.me-card.me-cinu{margin-left:10px;border-left:3px solid #9db5d8}
@@ -2678,8 +2678,9 @@ function lsEditRows(id){ // the typed-list editor's rows, with edging and note k
     const base={lid:x.id,sig:lsLineSig(x),opened:at,ids};
     if(x.kind==='hdr'){const u=String(x.qty==null?'':x.qty).trim();units=u?+u:null;const h={k:'hdr',item:x.part||'',note:x.note||'',...base};if(u){h.units=u;h.u0=u;}return h;}
     let q=lsQty(x.qty);
-    if(units){const uq=String(x.unit_qty==null?'':x.unit_qty).trim();q=uq?lsQty(uq):typeof q==='number'?Math.round(q/units*1e9)/1e9:q;} // no per-unit stored (shouldn't happen): × units gives the same total back
-    return{k:x.kind,item:x.part||'',qty:q,L:x.length_mm==null?'':+x.length_mm,W:x.width_mm==null?'':+x.width_mm,mat:x.material||'',edging:x.edging||'',note:x.note||'',sec:x.section||'',...base};
+    let fixed=false;
+    if(units){const uq=String(x.unit_qty==null?'':x.unit_qty).trim();if(uq)q=lsQty(uq);else{const pf=lsPerOrFixed(x.qty,units);q=pf.fixed?q:lsQty(pf.qty);fixed=pf.fixed;}} // no per-unit stored: ÷ units if clean, else a FIXED total
+    return{k:x.kind,item:x.part||'',qty:q,...(fixed?{fixed:true}:{}),L:x.length_mm==null?'':+x.length_mm,W:x.width_mm==null?'':+x.width_mm,mat:x.material||'',edging:x.edging||'',note:x.note||'',sec:x.section||'',...base};
   });
 }
 /* Another office saved this list after this editor opened it. Merge, never overwrite silently:
@@ -2855,8 +2856,11 @@ function lsImpPreview(bk,fname,projName,done){
           if(r.k==='hdr'&&r.info)return `<tr style="color:var(--t3)"><td>${tick(si,ri,r)}</td><td colspan="7"><i>${escA(r.item)} ${escA(r.note)}</i> — ${r.total?'a totals row, not a part — left out':'not a part (left out unless ticked)'}</td></tr>`;
           if(r.k==='hdr')return `<tr style="background:${r.units!=null?'#eef3fb':'#f5f6f8'}"><td>${r.units!=null?tick(si,ri,r):''}</td><td colspan="7"><b>${escA(r.item)}</b>${r.units!=null?' — <b>'+escA(r.units)+'</b> unit'+(+r.units!==1?'s':''):''}${r.note?' <span style="color:var(--t3)">'+escA(r.note)+'</span>':''}</td></tr>`;
           const st=!(+r.L>0||+r.W>0);
-          const qc=r.qtyErr?`<input data-ipq="${si}|${ri}" value="${escA(r.qty)}" inputmode="decimal" placeholder="⚠ qty" title="The quantity could not be read — type the number to cut, or untick the row" style="width:62px;${String(r.qty==null?'':r.qty).trim()===''?'border:2px solid #d48a00;background:#fff6e0':''}">`:escA(r.qty);
-          return `<tr${r.qtyErr?' style="background:#fff8ea"':''}><td>${st||r.qtyErr?tick(si,ri,r):''}</td><td>${escA(r.item)}${st?' <span class="lst-chip" style="background:#eef0f3;color:#5b6b82">Stores</span>':''}${r.qtyErr?' <span style="color:#8a5a00;font-weight:700">⚠ quantity could not be read</span>':''}</td><td>${qc}</td><td>${r.total!=null?'<b>'+escA(r.total)+'</b>':''}</td><td>${escA(r.L)}</td><td>${escA(r.W)}</td><td>${escA(r.mat)}</td><td>${escA(r.edging)}</td></tr>`;}).join('')}</tbody></table></details>`;}).join('')}</div>
+          // a ⚠ box inside a unit block takes the quantity for ONE unit — the total to cut (× units) shows beside it as you type
+          const pu=r.bu!=null,qc=r.qtyErr?`${pu?'<span style="font-size:11px;font-weight:700;color:#14335c">per unit</span> ':''}<input data-ipq="${si}|${ri}" value="${escA(r.qty)}" inputmode="decimal" placeholder="${pu?'⚠ per unit':'⚠ qty'}" title="${pu?'The quantity could not be read — type the number for ONE unit (it is multiplied by the '+escA(r.bu)+' units; the total to cut shows beside it), or untick the row':'The quantity could not be read — type the number to cut, or untick the row'}" style="width:62px;${String(r.qty==null?'':r.qty).trim()===''?'border:2px solid #d48a00;background:#fff6e0':''}">`
+            :escA(r.qty)+(r.fixed?' <span style="font-size:11px;color:var(--t3)" title="Doesn\'t divide by the units — kept as a fixed total">fixed</span>':'');
+          const tot=r.qtyErr&&pu?(String(r.qty==null?'':r.qty).trim()===''?'':lsMul(r.qty,r.bu)):r.total;
+          return `<tr${r.qtyErr?' style="background:#fff8ea"':''}><td>${st||r.qtyErr?tick(si,ri,r):''}</td><td>${escA(r.item)}${st?' <span class="lst-chip" style="background:#eef0f3;color:#5b6b82">Stores</span>':''}${r.qtyErr?' <span style="color:#8a5a00;font-weight:700">⚠ quantity could not be read</span>':''}</td><td>${qc}</td><td><b data-ipt="${si}|${ri}">${tot!=null?escA(tot):''}</b></td><td>${escA(r.L)}</td><td>${escA(r.W)}</td><td>${escA(r.mat)}</td><td>${escA(r.edging)}</td></tr>`;}).join('')}</tbody></table></details>`;}).join('')}</div>
       <div id="ip-blank" style="margin-top:8px;color:#8a5a00;font-size:12px;font-weight:700;text-align:right">${blank()?'⚠ '+blank()+' part'+(blank()!==1?'s have':' has')+' no quantity (it could not be read) — type the number or untick '+(blank()!==1?'them':'it')+' before saving':''}</div>
       <div style="margin-top:12px;display:flex;gap:10px;justify-content:flex-end"><button class="btn btn-s" id="ip-x">Cancel — save nothing</button><button class="btn btn-g" id="ip-ok"${nOn()&&!blank()?'':' disabled'}>Save ${nOn()} list${nOn()!==1?'s':''}</button></div></div>`;
     ov.querySelectorAll('[data-ips]').forEach(c=>c.onchange=()=>{bk.sheets[+c.dataset.ips].on=c.checked;draw();});
@@ -2864,7 +2868,9 @@ function lsImpPreview(bk,fname,projName,done){
       m.textContent=n?'⚠ '+n+' part'+(n!==1?'s have':' has')+' no quantity (it could not be read) — type the number or untick '+(n!==1?'them':'it')+' before saving':'';};
     ov.querySelectorAll('[data-ipr]').forEach(c=>c.onchange=()=>{const[a,b]=c.dataset.ipr.split('|');bk.sheets[+a].rows[+b].keep=c.checked;gate();});
     ov.querySelectorAll('[data-ipq]').forEach(c=>c.oninput=()=>{const[a,b]=c.dataset.ipq.split('|'),r=bk.sheets[+a].rows[+b],v=c.value.trim();
-      if(v!==''&&!(/^\d+(\.\d+)?$/.test(v)&&+v>0)){c.style.border='2px solid var(--red)';r.qty='';}else{c.style.border='';c.style.background='';r.qty=v===''?'':+v;}gate();});
+      if(v!==''&&!(/^\d+(\.\d+)?$/.test(v)&&+v>0)){c.style.border='2px solid var(--red)';r.qty='';}else{c.style.border='';c.style.background='';r.qty=v===''?'':+v;}
+      if(r.bu!=null){r.total=r.qty===''?'':lsMul(r.qty,r.bu);const t=ov.querySelector('[data-ipt="'+a+'|'+b+'"]');if(t)t.textContent=r.total;} // the live total to cut
+      gate();});
     ov.querySelector('#ip-x').onclick=()=>{ov.remove();done(null);};
     ov.querySelector('#ip-ok').onclick=()=>{if(blank()){gate();return;}ov.remove();done(bk.sheets.filter(s=>s.on));};
   };
@@ -3657,7 +3663,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
   const ex=listId?lsList(listId):null;
   const o0=!ex&&presetWo?DB.orders.find(x=>x.wo===presetWo):null;
   const toRow=r=>{const x={...r};if(x.k!=='hdr')x.k='part';return x;};
-  const fresh=r=>{const x=toRow(r);['lid','sig','opened','ids','src','keep','info','total','u0','qtyErr'].forEach(k=>delete x[k]);return x;};
+  const fresh=r=>{const x=toRow(r);['lid','sig','opened','ids','src','keep','info','total','u0','qtyErr','bu'].forEach(k=>delete x[k]);return x;};
   const st={rows:ex?lsEditRows(ex.id).map(toRow):opt.rows?opt.rows.map(fresh):[{k:'part',item:'',qty:'',L:'',W:'',mat:'',edging:'',note:''}],
     wo:ex?((ex.wos||[])[0]||''):(presetWo||''),name:ex?ex.name:(opt.name||''),pid:ex?ex.pid:(presetPid||((lsProjForCust(o0&&o0.customer)||{}).id)||''),
     ltype:ex?(ex.ltype||'house'):(opt.ltype||(opt.tpl?'kitchen':'house')),tname:ex?ex.typeName:(opt.tname||''),tpl:ex?ex.tpl:!!opt.tpl,noCut:ex?!!ex.noCut:false,noFit:ex?!!ex.noFit:false,newWO:false,pw:{title:'',cust:'',floor:'',unit:'',due:'',val:'',hrs:''},
@@ -3677,7 +3683,10 @@ function openListEditor2(listId,presetWo,presetPid,opt){
   const R=()=>st.rows;
   // ---- the unit block each row is in: U[i] = number of units (or null), H[i] = the index of its heading (or -1)
   const blocks=()=>{const U=[],H=[];let u=null,h=-1;R().forEach((r,i)=>{if(r.k==='hdr'){h=i;u=r.units!==undefined&&r.units!==null?r.units:null;U.push(null);H.push(-1);return;}U.push(u);H.push(h);});return{U,H};};
-  const totalOf=(r,u)=>u==null?String(r.qty==null?'':r.qty).trim():lsMul(r.qty,u);
+  const totalOf=(r,u)=>u==null||r.fixed?String(r.qty==null?'':r.qty).trim():lsMul(r.qty,u);
+  // a FIXED row in a unit block: its quantity is the total (it doesn't divide by the units) — shown "fixed" in grey; typing a
+  // new quantity makes it per unit again
+  const totHTML=(r,u)=>'= '+escA(totalOf(r,u))+(r.fixed?' <span class="me-fx" title="A fixed total — it doesn\'t divide by the units, so changing Units doesn\'t change it. Type a quantity to make it per unit.">fixed</span>':'');
   // a new row starts with the colour of the SAW row above (or the carcass colour). It is only a default (matAuto): a row that
   // is saved as Stores (no length or width) with that default still on it is saved with NO colour (Garry, 3 Nov).
   const defMat=i=>{for(let j=i-1;j>=0;j--){const r=R()[j];if(r.k==='part'&&(lsNum(r.L)>0||lsNum(r.W)>0)&&String(r.mat||'').trim())return r.mat;}return st.carcass||st.door||'';};
@@ -3690,9 +3699,9 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     fn();
     const b1=blocks();let odd=0;
     R().forEach((r,i)=>{const o=T.get(r);if(!o||String(o.u)===String(b1.U[i]))return;
-      if(b1.U[i]==null){r.qty=o.t;return;}
-      const t=lsNum(o.t),u=lsNum(b1.U[i]);if(t>0&&u>0&&Number.isInteger(t/u))r.qty=String(t/u);else odd++;});
-    if(odd)toast('⚠ '+odd+' row'+(odd!==1?'s':'')+' moved into a unit block — check the quantities (Qty is for ONE unit there)');
+      if(b1.U[i]==null){r.qty=o.t;delete r.fixed;return;}
+      const t=lsNum(o.t),u=lsNum(b1.U[i]);if(t>0&&u>0&&Number.isInteger(t/u)){r.qty=String(t/u);delete r.fixed;}else{r.qty=o.t;r.fixed=true;odd++;}});
+    if(odd)toast('⚠ '+odd+' row'+(odd!==1?'s':'')+' moved into a unit block don\'t divide by its units — kept as fixed totals (shown "fixed"): check them');
   };
   // where "+ Row / + Heading / + Unit block" go: after the row you were on (a heading or unit block: at the end of that block)
   const curRow=()=>{const i=parseInt(String(st.cur).split('|')[0]);return isNaN(i)||i>=R().length?-1:i;};
@@ -3718,7 +3727,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     const u=b.U[i],stores=!(lsNum(r.L)>0||lsNum(r.W)>0)&&!lsEmptyRow(r);
     return `<tr data-row="${i}" class="me-p${u!=null?' me-inu':''}"><td class="me-n">${i+1}<span class="me-st" data-tag="${i}"${stores?'':' hidden'}>Stores</span></td>
       <td><input data-mr="${i}|item" value="${escA(r.item)}" placeholder="Description" >${prevCut(r)}</td>
-      <td class="me-q"><input data-mr="${i}|qty" value="${escA(r.qty)}" inputmode="decimal" class="me-w52">${u!=null?`<span class="me-tot" data-tot="${i}">= ${escA(totalOf(r,u))}</span>`:''}</td>
+      <td class="me-q"><input data-mr="${i}|qty" value="${escA(r.qty)}" inputmode="decimal" class="me-w52">${u!=null?`<span class="me-tot" data-tot="${i}">${totHTML(r,u)}</span>`:''}</td>
       <td><input data-mr="${i}|L" value="${escA(r.L)}" inputmode="decimal" placeholder="L" ></td>
       <td><input data-mr="${i}|W" value="${escA(r.W)}" inputmode="decimal" placeholder="W" ></td>
       <td>${matSel(r,i)}</td>
@@ -3737,14 +3746,14 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     const u=b.U[i],stores=!(lsNum(r.L)>0||lsNum(r.W)>0)&&!lsEmptyRow(r);
     return `<div class="me-card${u!=null?' me-cinu':''}" data-row="${i}"><div class="me-chd"><b>${i+1}</b><span class="me-st" data-tag="${i}"${stores?'':' hidden'}>Stores</span><span style="flex:1"></span>${x}</div>
       ${lab('Description',`<input data-mr="${i}|item" value="${escA(r.item)}">`)}${prevCut(r)}
-      <div class="me-c3">${lab(u!=null?'Qty (1 unit)':'Qty',`<input data-mr="${i}|qty" value="${escA(r.qty)}" inputmode="decimal">`+(u!=null?`<span class="me-tot" data-tot="${i}">= ${escA(totalOf(r,u))}</span>`:''))}${lab('Length',`<input data-mr="${i}|L" value="${escA(r.L)}" inputmode="decimal">`)}${lab('Width',`<input data-mr="${i}|W" value="${escA(r.W)}" inputmode="decimal">`)}</div>
+      <div class="me-c3">${lab(u!=null?(r.fixed?'Qty (fixed total)':'Qty (1 unit)'):'Qty',`<input data-mr="${i}|qty" value="${escA(r.qty)}" inputmode="decimal">`+(u!=null?`<span class="me-tot" data-tot="${i}">${totHTML(r,u)}</span>`:''))}${lab('Length',`<input data-mr="${i}|L" value="${escA(r.L)}" inputmode="decimal">`)}${lab('Width',`<input data-mr="${i}|W" value="${escA(r.W)}" inputmode="decimal">`)}</div>
       ${lab('Colour',matSel(r,i))}
       <div class="me-c2">${lab('Edging',`<input data-mr="${i}|edging" value="${escA(r.edging||'')}" list="me-edg">`)}${lab('Note',`<input data-mr="${i}|note" value="${escA(r.note||'')}">`)}</div></div>`;
   };
   const gridHTML=()=>{const b=blocks();
     if(window.innerWidth<700)return `<div class="me-cards">${R().map((r,i)=>cardHTML(r,i,b)).join('')||'<div style="color:var(--t3);padding:10px">No rows yet — press ＋ Row.</div>'}</div>`;
     return `<table class="me-tbl me-grid"><colgroup><col style="width:76px"><col><col style="width:104px"><col style="width:76px"><col style="width:76px"><col style="width:150px"><col style="width:108px"><col style="width:17%"><col style="width:40px"></colgroup><thead><tr><th></th><th>Description</th><th>Qty</th><th>Length</th><th>Width</th><th>Colour</th><th>Edging</th><th>Note</th><th></th></tr></thead><tbody>${R().map((r,i)=>rowHTML(r,i,b)).join('')||'<tr><td colspan="9" style="color:var(--t3);padding:10px">No rows yet — press ＋ Row.</td></tr>'}</tbody></table>`;};
-  const updTotals=()=>{const b=blocks();ov.querySelectorAll('[data-tot]').forEach(e=>{const i=+e.dataset.tot,r=R()[i];if(r&&b.U[i]!=null)e.textContent='= '+totalOf(r,b.U[i]);});};
+  const updTotals=()=>{const b=blocks();ov.querySelectorAll('[data-tot]').forEach(e=>{const i=+e.dataset.tot,r=R()[i];if(r&&b.U[i]!=null)e.innerHTML=totHTML(r,b.U[i]);});};
   const updTag=i=>{const t=ov.querySelector('[data-tag="'+i+'"]'),r=R()[i];if(t&&r)t.hidden=lsNum(r.L)>0||lsNum(r.W)>0||lsEmptyRow(r);
     const s=ov.querySelector('[data-mr="'+i+'|mat"]');if(s&&r&&r.matAuto&&String(r.mat||'')===String(r.matAuto)){const w=lsAutoHidden(r)?'':String(r.mat);if(s.value!==w&&(w===''||[...s.options].some(x=>x.value===w)))s.value=w;}};
   const draw=()=>{
@@ -3825,7 +3834,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       const[i0,f]=el.dataset.mr.split('|'),i=+i0;
       if(el.tagName==='SELECT'){el.onchange=el.oninput=()=>{const r=R()[i];if(!r||!ov.contains(el)||el.value===r.mat)return; // input + change both fire: act once
         if(el.value==='__add'){addMat(i);return;}snap();r.mat=el.value;delete r.matAuto;st.focus=i+'|mat';draw();};return;}
-      el.oninput=()=>{const r=R()[i];if(!r)return;if(st.snapKey!==el.dataset.mr){snap();st.snapKey=el.dataset.mr;}r[f]=el.value;
+      el.oninput=()=>{const r=R()[i];if(!r)return;if(st.snapKey!==el.dataset.mr){snap();st.snapKey=el.dataset.mr;}r[f]=el.value;if(f==='qty')delete r.fixed;
         if(f==='qty'||f==='units')updTotals();if(f==='L'||f==='W'||f==='item'||f==='qty'||f==='edging'||f==='note')updTag(i);};
     });
     ov.querySelectorAll('[data-mrx]').forEach(b=>b.onclick=()=>delRow(+b.dataset.mrx));
@@ -3876,7 +3885,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       const t=lsList(tid),lines=lsLinesOf(tid).filter(x=>x.removed_rev==null&&x.status!=='na');
       const blocks0=[];let cur=null;
       lines.forEach(x=>{if(x.kind==='hdr'){cur=String(x.qty==null?'':x.qty).trim()?{name:x.part||'',units:+x.qty||1,parts:[]}:null;if(cur)blocks0.push(cur);return;}if(cur)cur.parts.push(x);});
-      const opts=[...blocks0.map((b,k)=>({k,label:b.name+' ('+b.parts.length+' part'+(b.parts.length!==1?'s':'')+')',name:b.name,parts:b.parts.map(x=>({x,per:String(x.unit_qty==null||x.unit_qty===''?(isNaN(+x.qty)?x.qty:Math.round(+x.qty/b.units*1e6)/1e6):x.unit_qty)}))})),
+      const opts=[...blocks0.map((b,k)=>({k,label:b.name+' ('+b.parts.length+' part'+(b.parts.length!==1?'s':'')+')',name:b.name,parts:b.parts.map(x=>{if(x.unit_qty!=null&&x.unit_qty!=='')return{x,per:String(x.unit_qty)};const pf=lsPerOrFixed(x.qty,b.units);return{x,per:pf.qty,fixed:pf.fixed};})})), // no per-unit: ÷ units if clean, else a fixed total
         {k:'all',label:'The whole template as one unit ('+lines.filter(x=>x.kind!=='hdr').length+' parts — quantities as one unit)',name:t.typeName||t.name,parts:lines.filter(x=>x.kind!=='hdr').map(x=>({x,per:String(x.qty==null?'':x.qty)}))}];
       body.innerHTML=`<div style="font-weight:800;color:#14335c;font-size:16px;margin-bottom:6px">📐 ${escA(t.typeName||t.name)} · Rev ${+t.rev||1}</div>
         <div style="font-size:12px;color:var(--t3);margin-bottom:8px">Pick the unit, then how many. The parts are added with the quantity for ONE unit; the total is worked out from the number of units.</div>
@@ -3889,7 +3898,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
         const n=String(body.querySelector('#it-n').value||'').trim();if(!/^\d+$/.test(n)||+n<1){body.querySelector('#it-err').textContent='How many units? A whole number, 1 or more.';return;}
         const o=opts[+(body.querySelector('[name="it-u"]:checked')||{}).value||0];
         snap();const c=curRow(),at=c<0?R().length:endOfBlock(c);
-        const add=[{k:'hdr',item:o.name,units:n,note:''},...o.parts.map(({x,per})=>({k:'part',item:x.part||'',qty:per,L:x.length_mm==null?'':String(+x.length_mm),W:x.width_mm==null?'':String(+x.width_mm),mat:x.material||'',edging:x.edging||'',note:x.note||''}))];
+        const add=[{k:'hdr',item:o.name,units:n,note:''},...o.parts.map(({x,per,fixed})=>({k:'part',item:x.part||'',qty:per,...(fixed?{fixed:true}:{}),L:x.length_mm==null?'':String(+x.length_mm),W:x.width_mm==null?'':String(+x.width_mm),mat:x.material||'',edging:x.edging||'',note:x.note||''}))];
         const drop=R().length===1&&lsEmptyRow(R()[0])?1:0,at2=drop?0:at; // a brand-new list's one empty row is replaced
         R().splice(at2,drop,...add);
         dl.remove();st.focus=at2+'|units';st.focusAll=true;draw();
@@ -4005,18 +4014,18 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     snap();
     if((f==='item'&&wide)||hdr){
       const p=lsParseGrid(aoa,{paste:true}),info=p.rows.filter(r=>r.info).length;
-      const add=p.rows.filter(r=>!r.info).map(r=>{const x={...r};delete x.src;delete x.total;if(x.k==='part'){x.qty=x.qty===''||x.qty==null?'':String(x.qty);x.L=x.L===''?'':String(x.L);x.W=x.W===''?'':String(x.W);}return x;});
+      const add=p.rows.filter(r=>!r.info).map(r=>{const x={...r};delete x.src;delete x.total;delete x.bu;if(x.k==='part'){x.qty=x.qty===''||x.qty==null?'':String(x.qty);x.L=x.L===''?'':String(x.L);x.W=x.W===''?'':String(x.W);}return x;});
       if(!add.length){st.undo.pop();toast('Nothing to paste — no parts or headings found in what you copied');return;}
       const at=R()[i]&&lsEmptyRow(R()[i])?i:i+1,drop=R()[i]&&lsEmptyRow(R()[i])?1:0;
       R().splice(at,drop,...add);
       // pasted parts that land inside a unit block without their own unit heading: the copied quantity is the total
       const b=blocks();let odd=0,firstH=add.findIndex(r=>r.k==='hdr');
       add.forEach((r,k)=>{if(r.k!=='part'||(firstH>=0&&k>firstH))return;const j=at+k,u=b.U[j];if(u==null)return;const t2=lsNum(r.qty),n=lsNum(u);
-        if(t2>0&&n>0&&Number.isInteger(t2/n))r.qty=String(t2/n);else odd++;});
+        if(t2>0&&n>0&&Number.isInteger(t2/n))r.qty=String(t2/n);else{r.fixed=true;odd++;}});
       add.forEach((r,k)=>{if(r.k==='part'&&!String(r.mat||'').trim()&&(lsNum(r.L)>0||lsNum(r.W)>0)){r.mat=defMat(at+k);if(r.mat)r.matAuto=r.mat;}});
       const np=add.filter(r=>r.k==='part').length,nu=add.filter(r=>r.k==='hdr'&&r.units!=null).length,nh=add.length-np-nu;
       st.focus=at+'|item';draw();
-      toast('Pasted '+np+' row'+(np!==1?'s':'')+(nu?', '+nu+' unit block'+(nu!==1?'s':''):'')+(nh?', '+nh+' heading'+(nh!==1?'s':''):'')+(hdr?' (the column-header row was skipped)':'')+(info?' — '+info+' line'+(info!==1?'s':'')+' that aren\'t parts left out':'')+(odd?' — ⚠ '+odd+' quantit'+(odd!==1?'ies':'y')+' could not be split per unit: check them':'')+(p.warn.length?' — ⚠ '+p.warn.join('; '):'')+'. Ctrl+Z undoes it.');
+      toast('Pasted '+np+' row'+(np!==1?'s':'')+(nu?', '+nu+' unit block'+(nu!==1?'s':''):'')+(nh?', '+nh+' heading'+(nh!==1?'s':''):'')+(hdr?' (the column-header row was skipped)':'')+(info?' — '+info+' line'+(info!==1?'s':'')+' that aren\'t parts left out':'')+(odd?' — ⚠ '+odd+' quantit'+(odd!==1?'ies':'y')+' could not be split per unit — kept as fixed totals: check them':'')+(p.warn.length?' — ⚠ '+p.warn.join('; '):'')+'. Ctrl+Z undoes it.');
       return;
     }
     // fill cells from the cursor: down the rows, across the columns (rows are added at the bottom when needed)
@@ -4024,7 +4033,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     aoa.forEach((row,ri)=>{const j=i+ri;if(j>=R().length)R().push(blank(R().length));const r=R()[j];
       row.forEach((v,ci)=>{const fld=order[c0+ci];if(!fld)return;const val=v==null?'':String(v).trim();
         if(r.k==='hdr'){if(fld==='item'||fld==='note'){r[fld]=val;n++;}else if(fld==='qty'&&r.units!=null&&!(sawStarted&&r.lid)){r.units=val;n++;}return;}
-        r[fld]=val;if(fld==='mat')delete r.matAuto;n++;});});
+        r[fld]=val;if(fld==='mat')delete r.matAuto;if(fld==='qty')delete r.fixed;n++;});});
     st.focus=m;draw();
     toast('Pasted '+n+' cell'+(n!==1?'s':'')+' from '+aoa.length+' row'+(aoa.length!==1?'s':'')+'. Ctrl+Z undoes it.');
   });
@@ -4564,10 +4573,15 @@ function lsParseGrid(aoa,opt){
       if(cells[1]==null&&fm(r,1)){p.qtyErr=true;warn.push('Row '+(r+1)+' "'+(p.item||'part')+'": the quantity is a formula with no saved value ("='+fm(r,1)+'") — it could not be read; type the number to cut');}
       else if(typeof qty==='number'&&qty<0){p.qtyErr=true;warn.push('Row '+(r+1)+' "'+(p.item||'part')+'": quantity '+qty+' can\'t be negative — type the number to cut');qty='';}
       if(cur&&cur.units!=null&&!cur.info){
+        p.bu=cur.units; // the block's units (the preview shows the total beside a typed per-unit quantity)
         const k=perUnit(r,1,cur.u);
         if(k!=null&&!p.qtyErr){p.qty=k;p.total=typeof qty==='number'?qty:k*cur.units;}
-        else if(typeof qty==='number'){const per=Math.round(qty/cur.units*1e6)/1e6;p.qty=per;p.total=qty;
-          if(per!==Math.round(per))warn.push('Row '+(r+1)+' "'+(p.item||'part')+'": '+qty+' isn\'t a whole number for each of '+cur.units+' units — check it');}
+        else if(typeof qty==='number'){const per=qty/cur.units,p10=Math.round(per*10);
+          // a whole number or a clean one-decimal per unit (3 ÷ 2 = 1.5) is per unit; anything else (2 ÷ 3) is kept as a FIXED
+          // total — never 0.666667 per unit, which comes back as 2.000001 to cut. A fixed total doesn't change with Units.
+          if(Math.abs(per*10-p10)<1e-9){p.qty=p10/10;p.total=qty;
+            if(!Number.isInteger(p.qty))warn.push('Row '+(r+1)+' "'+(p.item||'part')+'": '+qty+' isn\'t a whole number for each of '+cur.units+' units — check it');}
+          else{p.qty=qty;p.total=qty;p.fixed=true;warn.push('Row '+(r+1)+' "'+(p.item||'part')+'": '+qty+' doesn\'t divide by '+cur.units+' units — kept as a fixed total of '+qty+' (it won\'t change with Units) — check it');}}
         else{p.qty=qty;p.total=qty;if(qty!==''&&!p.qtyErr)warn.push('Row '+(r+1)+' "'+(p.item||'part')+'": quantity "'+qty+'" can\'t be worked out per unit — check it');}
       }else p.qty=qty;
       rows.push(p);continue;
@@ -4612,10 +4626,17 @@ function lsPasteAoa(text){
 // Sheets that are never cutting lists (Garry, 3 Nov): the unit library, the index and the stock sheets
 function lsSkipSheet(name){return /^\s*(blank|index|stock|door stock)\s*$/i.test(String(name||''));}
 // per-unit × units = the total to cut ("2x2" or a blank stays as typed — the editor's check asks for a number)
+// A line in a unit block with no per-unit quantity stored (older lines, or a FIXED total): per unit = total ÷ Units when that
+// is a whole number or a clean one-decimal (4 ÷ 2 = 2); otherwise the line stays a FIXED total (2 in a 3-unit block) — never
+// 0.666667 per unit. Returns {qty, fixed}.
+function lsPerOrFixed(total,units){const t=String(total==null?'':total).trim(),u=+units;
+  if(/^\d+(\.\d+)?$/.test(t)&&u>0){const per=+t/u,p10=Math.round(per*10);if(Math.abs(per*10-p10)<1e-9)return{qty:String(p10/10),fixed:false};}
+  return{qty:t,fixed:true};}
 function lsMul(q,u){const a=String(q==null?'':q).trim(),b=String(u==null?'':u).trim();if(!/^\d+(\.\d+)?$/.test(a)||!/^\d+(\.\d+)?$/.test(b))return a;return String(Math.round(+a*+b*1e6)/1e6);}
 /* Editor / import rows → lines for the tables. A row with a length or width goes to the Saw, one without to Stores.
    A part's section = the heading above it. Inside a unit block (a heading with units) the row's qty is PER UNIT: the line
    keeps it as unit_qty and its qty is the TOTAL to cut, so the saw, sheet calculator and labels read qty as before.
+   A FIXED row (r.fixed — a total that doesn't divide by the units) keeps qty as typed and a blank unit_qty: Units don't scale it.
    A unit heading is stored as kind 'hdr' with qty = the number of units. Old-shape rows (k 'saw'/'fit') still work. */
 function lsEdLines(rows){
   const s=v=>v==null?'':String(v).trim(),n=v=>{const x=parseFloat(String(v==null?'':v).replace(/\s*mm$/i,''));return isNaN(x)?0:x;};
@@ -4626,7 +4647,9 @@ function lsEdLines(rows){
       ln={kind:'hdr',section:'',part:s(r.item),note:s(r.note)};if(units!==null)ln.qty=units;}
     else{ // 'part': Saw if it has a length or width; old-shape rows (k 'saw' / 'fit') keep their kind
       const kind=r.k==='saw'||r.k==='fit'?r.k:n(r.L)>0||n(r.W)>0?'saw':'fit',inU=units!==null;
-      ln={kind,section:sec||s(r.sec),part:s(r.item),qty:inU?lsMul(r.qty,units):s(r.qty),unit_qty:inU?s(r.qty):'',material:s(r.mat),edging:s(r.edging),note:s(r.note)};
+      ln={kind,section:sec||s(r.sec),part:s(r.item),qty:inU&&!r.fixed?lsMul(r.qty,units):s(r.qty),unit_qty:inU&&!r.fixed?s(r.qty):'',material:s(r.mat),edging:s(r.edging),note:s(r.note)};
+      // a per-unit quantity with more than 3 decimals (0.666667) would save rounding noise (2.000001): kept as a fixed total
+      if(inU&&!r.fixed&&/^\d+\.\d{4,}$/.test(s(r.qty))&&/^\d+(\.\d+)?$/.test(units)){ln.qty=String(Math.round(+s(r.qty)*+units*1000)/1000);ln.unit_qty='';}
       if(kind==='saw'){ln.length_mm=r.L;ln.width_mm=r.W;}else{ln.length_mm='';ln.width_mm='';}
       if(r.matOther)ln.material_other=true;
     }
