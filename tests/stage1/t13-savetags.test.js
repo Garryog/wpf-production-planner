@@ -134,6 +134,22 @@ async function settle(S, sides) { await waitFor(() => sides.every(d => !d.m.pend
     await saw.close(); await off.close();
   }
 
+  // (c3) same as a1 but the office is a REAL old-code tab (today's live main, served from git) — not a simulated write
+  {
+    const S = makeServer(base());
+    const saw = await device(browser, S, { name: 'saw' }, { role: 'saw' }); saw.m = {}; await rig(saw.page, S, saw.m, 'saw');
+    const old = await device(browser, S, { name: 'oldoffice', old: true }, { role: 'office' }); old.m = {}; await rig(old.page, S, old.m, 'OLDTAB');
+    await flush(saw.page);
+    S.trace = []; saw.m.plan = [{ lost: true, at: 300 }, { at: 1500 }];
+    await saw.page.evaluate(TICK('side')); kick(saw.page);
+    const seen = await waitFor(() => ticks(S).includes('side'), 9000);
+    const r = await old.page.evaluate(async () => { await loadDB(); const L = (DB.listRow || {}).L || {}; const had = !!L.side; delete L.side; await saveDB(); return had; }).catch(e => 'ERR ' + e.message);
+    await settle(S, [saw]); await idle(saw.page); await flush(saw.page); await saw.page.evaluate(async () => { await loadDB(); }); await flush(saw.page);
+    const s = await st(saw.page);
+    rec('(c3) REAL old-code office tab unticks while the slow save is unresolved: tick does not come back', seen && r === true && ticks(S) === 'keep', 'oldTabSawTick=' + r + ' db=' + ticks(S) + ' saw=' + s.L + ' oldTabKeptIds=' + JSON.stringify((S.row.settings || {}).saveIds || null) + ' trace=' + S.trace.join(' > '));
+    await saw.close(); await old.close();
+  }
+
   // (d) 3 screens, 60 rounds of overlapping saves with merges: saveIds stays bounded (a little over 40 allowed)
   {
     maxIds = 0;
