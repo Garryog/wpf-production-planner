@@ -2656,9 +2656,18 @@ async function lsSaveList(pl,lines,by,reason){
 function lsLineSig(x){const n=v=>v==null||v===''?'':+v,t=v=>v==null?'':String(v).trim();return JSON.stringify([x.kind,t(x.section),t(x.part),n(x.length_mm),n(x.width_mm),t(x.qty),t(x.material),t(x.edging),t(x.note),t(x.unit_qty)]);}
 function lsEditRows(id){ // the typed-list editor's rows, with edging and note kept apart; each remembers its line and when the editor opened
   // 'opened' = the newest database time on the list or any of its lines (a tick can land on a line after the list's own time)
+  // Headings stay in the editor (they used to be dropped, so editing an imported list lost them on the saw). Inside a unit
+  // block (a heading whose qty is the number of units) a part's qty is the PER-UNIT quantity.
   const all=lsLinesOf(id),at=all.reduce((m,x)=>String(x.updated_at||'')>m?String(x.updated_at):m,String((LST.l.get(id)||{}).updated_at||''));
-  const ids=all.filter(x=>x.removed_rev==null&&x.kind!=='hdr').map(x=>x.id).join(','); // which lines were on the list when it opened
-  return all.filter(x=>x.removed_rev==null&&x.kind!=='hdr').map(x=>({k:x.kind,item:x.part||'',qty:lsQty(x.qty),L:x.length_mm==null?'':+x.length_mm,W:x.width_mm==null?'':+x.width_mm,mat:x.material||'',edging:x.edging||'',note:x.note||'',sec:x.section||'',lid:x.id,sig:lsLineSig(x),opened:at,ids}));
+  const live=all.filter(x=>x.removed_rev==null),ids=live.map(x=>x.id).join(','); // which lines were on the list when it opened
+  let units=null;
+  return live.map(x=>{
+    const base={lid:x.id,sig:lsLineSig(x),opened:at,ids};
+    if(x.kind==='hdr'){const u=String(x.qty==null?'':x.qty).trim();units=u?+u:null;const h={k:'hdr',item:x.part||'',note:x.note||'',...base};if(u)h.units=u;return h;}
+    let q=lsQty(x.qty);
+    if(units){const uq=String(x.unit_qty==null?'':x.unit_qty).trim();q=uq?lsQty(uq):typeof q==='number'?Math.round(q/units*1e6)/1e6:q;}
+    return{k:x.kind,item:x.part||'',qty:q,L:x.length_mm==null?'':+x.length_mm,W:x.width_mm==null?'':+x.width_mm,mat:x.material||'',edging:x.edging||'',note:x.note||'',sec:x.section||'',...base};
+  });
 }
 /* Another office saved this list after this editor opened it. Merge, never overwrite silently:
    - a line only THEY changed keeps their version; a line only they added is kept;
@@ -2668,7 +2677,7 @@ function lsEditRows(id){ // the typed-list editor's rows, with edging and note k
 function lsEditMerge(id,rows,lines){
   const r0=rows.find(r=>r.opened);if(!r0)return{ok:true,kept:0};
   const opened=r0.opened,openIds=new Set(String(r0.ids||'').split(',').filter(Boolean));
-  const now=lsLinesOf(id).filter(x=>x.removed_rev==null&&x.kind!=='hdr'),byId=new Map(now.map(x=>[x.id,x]));
+  const now=lsLinesOf(id).filter(x=>x.removed_rev==null),byId=new Map(now.map(x=>[x.id,x])); // headings too — they are kept in the editor now
   const mine=new Set(rows.filter(r=>r.lid).map(r=>r.lid));
   const nm=x=>(x.part||x.material||'line')+' ×'+(x.qty==null?'':x.qty);
   const asLine=x=>({id:x.id,kind:x.kind,section:x.section,part:x.part,length_mm:x.length_mm,width_mm:x.width_mm,qty:x.qty,unit_qty:x.unit_qty,material:x.material,material_other:!!x.material_other,edging:x.edging,note:x.note});
@@ -3533,7 +3542,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       return `<select data-mr="${i}|mat" style="${inp};width:100%${v&&!on?';'+amber:''}"><option value="">— material —</option>${sm.map(n=>`<option value="${escA(n)}"${on===n?' selected':''}>${escA(n)}</option>`).join('')}${v&&!on?`<option value="${escA(v)}" selected>⚠ ${escA(v)} (not on the project list)</option>`:''}</select>`;};
     const fitSel=(r,i)=>{const v=String(r.mat||'').trim(),on=!r.matOther&&fm.find(n=>n.toLowerCase()===v.toLowerCase());
       return `<select data-mr="${i}|fsel" style="${inp};width:100%${r.matOther?';'+amber:''}"><option value="">— spec —</option>${fm.map(n=>`<option value="${escA(n)}"${on===n?' selected':''}>${escA(n)}</option>`).join('')}<option value="__other"${r.matOther?' selected':''}>Other…</option></select>${r.matOther?`<input data-mr="${i}|mat" value="${escA(v)}" placeholder="Type the spec" style="${inp};width:100%;margin-top:3px;${amber}" title="Not on the project list — flagged for the Production Manager">`:''}`;};
-    const rowsH=st.rows.map((r,i)=>`<tr class="${r.k==='saw'?'me-saw':'me-fit'}"${r.k==='fit'&&r.matOther?' data-flag="1"':''}>
+    const rowsH=st.rows.map((r,i)=>r.k==='hdr'?`<tr class="me-hdr"><td><span class="me-k">HEADING</span></td><td colspan="6"><input data-mr="${i}|item" value="${escA(r.item)}" style="${inp};width:100%;font-weight:700">${r.units!=null?` <span style="font-size:12px">× ${escA(r.units)} units</span>`:''}</td><td><input data-mr="${i}|note" value="${escA(r.note)}" placeholder="Note" style="${inp};width:100%"></td><td><button class="btn btn-s" data-mrx="${i}" title="Delete row" style="color:var(--red);border-color:var(--red);padding:3px 8px">✕</button></td></tr>`:`<tr class="${r.k==='saw'?'me-saw':'me-fit'}"${r.k==='fit'&&r.matOther?' data-flag="1"':''}>
       <td><span class="me-k">${r.k==='saw'?'🪚 SAW':'🧰 FIT'}</span></td>
       <td><input data-mr="${i}|item" value="${escA(r.item)}" placeholder="${r.k==='saw'?'Part — e.g. Base end':'Item — e.g. Gola rail'}" style="${inp};width:100%"></td>
       <td><input data-mr="${i}|qty" type="number" min="0" value="${escA(r.qty)}" style="${inp};width:62px"></td>
@@ -4055,13 +4064,10 @@ function lsEdLines(rows){
     let ln;
     if(r.k==='hdr'){sec=s(r.item);units=r.units!==undefined&&r.units!==null?s(r.units):null;
       ln={kind:'hdr',section:'',part:s(r.item),note:s(r.note)};if(units!==null)ln.qty=units;}
-    else if(r.k==='saw'||r.k==='fit'){ // old shape (k = saw / fit) — as lsRowToLine always did
-      ln={kind:r.k,section:s(r.sec!=null&&s(r.sec)!==''?r.sec:sec),part:s(r.item),qty:s(r.qty),material:s(r.mat)};
-      if(r.k==='saw'){ln.length_mm=r.L;ln.width_mm=r.W;ln.edging=s(r.edging);ln.note=s(r.note);}else{ln.edging=s(r.edging);ln.note=s(r.note);if(r.matOther)ln.material_other=true;}
-    }else{
-      const kind=n(r.L)>0||n(r.W)>0?'saw':'fit',inU=units!==null;
-      ln={kind,section:sec,part:s(r.item),qty:inU?lsMul(r.qty,units):s(r.qty),unit_qty:inU?s(r.qty):'',length_mm:kind==='saw'?r.L:'',width_mm:kind==='saw'?r.W:'',
-        material:s(r.mat),edging:s(r.edging),note:s(r.note)};
+    else{ // 'part': Saw if it has a length or width; old-shape rows (k 'saw' / 'fit') keep their kind
+      const kind=r.k==='saw'||r.k==='fit'?r.k:n(r.L)>0||n(r.W)>0?'saw':'fit',inU=units!==null;
+      ln={kind,section:sec||s(r.sec),part:s(r.item),qty:inU?lsMul(r.qty,units):s(r.qty),unit_qty:inU?s(r.qty):'',material:s(r.mat),edging:s(r.edging),note:s(r.note)};
+      if(kind==='saw'){ln.length_mm=r.L;ln.width_mm=r.W;}else{ln.length_mm='';ln.width_mm='';}
       if(r.matOther)ln.material_other=true;
     }
     if(r.lid)ln.id=r.lid;
