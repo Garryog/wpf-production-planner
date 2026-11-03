@@ -2780,7 +2780,10 @@ const lsPendKey=(wo,name)=>String(wo||'')+'|'+String(name||'').trim().toLowerCas
 function lsPendSet(e){const m=lsPends();Object.keys(m).forEach(k=>{if(m[k].id===e.id)delete m[k];});m[lsPendKey(e.wo,e.name)]=Object.assign({at:Date.now()},e);lsPendStore();}
 function lsPendDrop(id){const m=lsPends();Object.keys(m).forEach(k=>{if(m[k].id===id)delete m[k];});lsPendStore();}
 function lsPendFor(wo){return Object.values(lsPends()).filter(e=>e.wo===wo).sort((a,b)=>(+b.at||0)-(+a.at||0))[0]||null;}
-const LS_LOST_RE=/failed to fetch|networkerror|network error|load failed|timed? ?out|timeout|aborted|connection/i;
+// the request went out but no answer came back (Chrome "Failed to fetch", Safari "Load failed", Firefox "NetworkError…", a
+// timeout, or a 504 from the gateway). A database that ANSWERED (a refusal, a 503 "down") is a plain "Not saved".
+const LS_LOST_RE=/^(failed to fetch|load failed|networkerror\b.*|network error\b.*)$|timed? ?out|timeout|aborted/i;
+const lsLost=x=>!!x&&((!x.status&&LS_LOST_RE.test(String(x.message||'').trim()))||x.status===504);
 // → 'saved' (the list is in the database), 'not' (it isn't), or 'unknown' (the database could not be asked)
 async function lsSavedYet(id){try{const r=await lsGet1('lists?select=id,archived&id=eq.'+encodeURIComponent(id));if(!r.length)return'not';await lsReloadList(id);return'saved';}catch(e){return'unknown';}}
 async function lsSaveManual(d,by,ex){
@@ -4134,7 +4137,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
         toast(t);})
         .catch(x=>{if(sb)sb.disabled=false;if(/already been replaced/.test(x.message))toast(x.message,true);
           if(x.message===LS_LOCK_MSG&&ex&&!ex.tpl&&!sawStarted){sawStarted=true;draw();} // lock the Units box now and offer "Make new list from this"
-          if(ex||st.tpl||!d.newId||!LS_LOST_RE.test(x.message))return err('Not saved — '+x.message);
+          if(ex||st.tpl||!d.newId||!lsLost(x))return err('Not saved — '+x.message);
           // a new list and the reply was lost: it may have reached the database. Keep its id on this device, then ask.
           const was=st.landed,nm='"'+(String(d.name||'').trim()||'the list')+'"';
           const pend=st2=>lsPendSet({id:d.newId,wo:d.wo,name:String(d.name||'').trim(),pid:st.pid,ltype:st.ltype,tname:st.tname,rows:JSON.parse(JSON.stringify(R())),from:st.from,note:st.note,state:st2});
@@ -4146,7 +4149,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
               if(was)return err('May have saved — the reply was lost. '+nm+' is in the database, but it can\'t tell whether these latest changes reached it. Press Save again: it saves to the same list (never a second one).');
               err('✓ Saved — the reply was lost, but '+nm+' is in the database.'+old+' Close this, or change rows and press Save again (it updates the same list — never a second one).');}
             else if(s==='not')err('Not saved — the connection failed ('+x.message+') and '+nm+' is not in the database. Press Save again.');
-            else err('May have saved — the reply was lost and the database could not be checked (no connection). Press Save again when the connection is back: it saves to the same list, never a second one.');});});
+            else err('May have saved — the reply was lost ('+x.message+') and the database could not be checked. Press Save again when the connection is back: it saves to the same list, never a second one.');});});
     });
   };
   ov.addEventListener('focusin',e=>{const m=e.target&&e.target.dataset&&e.target.dataset.mr;if(m){st.cur=m;if(st.snapKey!==m)st.snapKey='';}});
