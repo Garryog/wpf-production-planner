@@ -925,22 +925,26 @@ async function pushPlan(){
 }
 /* A save got no reply. Every save says "only if the database is still at version v-1", so the database tells us:
    holding exactly what we sent (at v, or later if nothing has changed since) → it landed: returns that version; at v
-   holding something else, or still below v after a second look → 'lost' (another screen took v, or it never got there).
-   Past v with other content, or no answer → can't tell ('').
-   Deciding straight away means a later change by another screen (e.g. the office unticking) is never mistaken for
-   our own unconfirmed change, and our own unsent change is never mistaken for one that landed. */
+   holding something else → 'lost' (another screen took v); still below v at the 0.25 s look → 'lost' (it never got there).
+   Past v with other content → can't tell (''). A read that fails (signal still out) is tried
+   again — at about 0.05, 0.25, 0.6, 1.2, 2, 3 and 4 s, giving up after ~5 s — and only then "can't tell" (''). The screen
+   keeps working meanwhile: taps are kept and saved straight after (saveDB's "go again"). */
 async function saveCheck(p,v){
-  for(let i=0;i<2;i++){
-    await new Promise(r=>setTimeout(r,i?250:50));
-    let row;try{row=await fetchMain();}catch(e){return'';}
+  const t0=Date.now(),at=[50,250,600,1200,2000,3000,4000];let seen=false; // seen: the database answered at least once
+  for(const ms of at){
+    const w=ms-(Date.now()-t0);if(w>0)await new Promise(r=>setTimeout(r,w));
+    if(Date.now()-t0>5000)break; // slow reads: stop here
+    let row;try{row=await fetchMain();}catch(e){continue;} // no signal yet — look again
     if(!row||row.version===undefined)return'';
+    seen=true;
     const rv=+row.version||1;
     const mine=same(row.orders||[],p.orders||[])&&same(row.settings||{},p.settings||{})&&(+row.nid||0)===(+p.nid||0);
     if(rv>=v&&mine)return rv;
     if(rv===v)return'lost';
     if(rv>v)return'';
+    if(ms>=250)return'lost'; // still not there at the second look: it never got there (if it turns up later it is refused — the re-send has moved the version on)
   }
-  return'lost';
+  return seen?'lost':'';
 }
 // Re-draw after a merge brought in other people's changes — but never under someone's fingers.
 function mergedRender(){
