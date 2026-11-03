@@ -548,9 +548,11 @@ function snap(){return clone({orders:DB.orders,nid:DB.nid,settings:fullSettings(
    no signal can't lose them: on next open they're merged into the latest plan and sent.
    Cutting-list workbooks (listWBs) are too big for the device copy and are left out. */
 const PEND_KEY='wpfPending';let pendT=null;
-// Each tab keeps its own slot inside the device copy, so two tabs on one PC never wipe each other's changes.
+// Each tab keeps its own device copy under its own key (wpfPending:<tab>), so two tabs on one PC saving at the same
+// moment never overwrite each other's copy. The old single shared key (wpfPending) is still read, then tidied away once recovered.
 const TAB_ID=(()=>{try{let t=sessionStorage.getItem('wpfTab');if(!t){t='T'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);sessionStorage.setItem('wpfTab',t);}return t;}catch(e){return'T'+Math.random().toString(36).slice(2,8);}})();
-function pendAll(){
+const PEND_PRE=PEND_KEY+':',PEND_MY=PEND_PRE+TAB_ID;
+function pendOld(){ // the old shared key, in any of its earlier formats
   const p=JSON.parse(localStorage.getItem(PEND_KEY)||'null');
   if(!p)return{};
   if(p.tabs)return p.tabs;
@@ -558,7 +560,23 @@ function pendAll(){
   if(Array.isArray(p.d))return{old:p};
   return{};
 }
-function pendPut(tabs){if(Object.keys(tabs).length)localStorage.setItem(PEND_KEY,JSON.stringify({tabs}));else localStorage.removeItem(PEND_KEY);}
+function pendKeys(){const r=[];for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k&&k.indexOf(PEND_PRE)===0)r.push(k);}return r;}
+function pendAll(){
+  let tabs={};try{tabs=pendOld();}catch(e){}
+  pendKeys().forEach(k=>{try{const s=JSON.parse(localStorage.getItem(k)||'null');if(s)tabs[k.slice(PEND_PRE.length)]=s;}catch(e){}}); // a tab's own key beats its old shared slot
+  return tabs;
+}
+// After a recovery: drop the copies of OTHER tabs that were recovered — only if they haven't been rewritten since
+// (that tab may still be open) — and this tab's / recovered (or older) slots in the old shared key.
+function pendDrop(pend){
+  const at=new Map(pend.map(s=>[s.id,s.at]));
+  pend.forEach(s=>{if(s.id===TAB_ID)return;const k=PEND_PRE+s.id;try{const v=JSON.parse(localStorage.getItem(k)||'null');if(v&&v.at===s.at)localStorage.removeItem(k);}catch(e){}});
+  try{const raw=JSON.parse(localStorage.getItem(PEND_KEY)||'null');if(!raw)return;
+    if(!raw.tabs){localStorage.removeItem(PEND_KEY);return;} // earlier single-slot format: always recovered as 'old'
+    const t=raw.tabs;Object.keys(t).forEach(id=>{if(id===TAB_ID||(at.has(id)&&((t[id]||{}).at||0)<=(at.get(id)||0))||!(t[id]&&Array.isArray(t[id].d)&&t[id].d.length))delete t[id];});
+    if(Object.keys(t).length)localStorage.setItem(PEND_KEY,JSON.stringify({tabs:t}));else localStorage.removeItem(PEND_KEY);
+  }catch(e){}
+}
 function noWB(p){if(!p)return p;const s={...(p.settings||{})};delete s.listWBs;return{...p,settings:s};}
 function snapLite(){const s=fullSettings();delete s.listWBs;return clone({orders:DB.orders,nid:DB.nid,settings:s});}
 /* The device copy holds only what changed (each changed job / setting, before and after), not the whole plan:
@@ -605,11 +623,12 @@ function writePend(){
     // also keep "mine" for anything an unconfirmed save touched — e.g. a tick sent then removed again here
     const has=new Set(d.map(e=>JSON.stringify(e.p)));
     us.forEach(ud=>ud.forEach(e=>{const k=JSON.stringify(e.p),pre=JSON.stringify(e.p.slice(0,2));if(has.has(k)||has.has(pre))return;has.add(k);d.push({p:e.p,b:e.b,m:valAt(mine,e.p)});}));
-    let tabs={};try{tabs=pendAll();}catch(e){}
-    if(d.length)tabs[TAB_ID]={at:Date.now(),d,us,uv:UNSURE.map(x=>USV.get(x)||0)};else delete tabs[TAB_ID];
-    pendPut(tabs);
+    if(d.length)localStorage.setItem(PEND_MY,JSON.stringify({at:Date.now(),d,us,uv:UNSURE.map(x=>USV.get(x)||0)}));
+    else localStorage.removeItem(PEND_MY);
     DB.pendFail=false;
-  }catch(e){DB.pendFail=true;console.warn('Planner: could NOT keep unsaved changes on this device',e&&e.message);}
+  }catch(e){DB.pendFail=true;console.warn('Planner: could NOT keep unsaved changes on this device',e&&e.message);
+    // say it once, in plain words: a crash or closed tab now would lose what hasn't reached the database
+    if(!DB.pendWarned){DB.pendWarned=true;toast("This device can't keep a backup copy of your changes (storage full or blocked) — keep this page open until it says Saved",8000);}}
   updSaveBar();
 }
 function pendSoon(){clearTimeout(pendT);pendT=setTimeout(writePend,300);}
@@ -875,7 +894,7 @@ async function loadDB(){
       applyPlan(cur);
       DB.loaded=true;DB.loadFailed=false;
       writePend();
-      if(!DB.pendFail)try{const tabs=pendAll();pend.forEach(s=>{if(s.id!==TAB_ID)delete tabs[s.id];});pendPut(tabs);}catch(e){}
+      if(!DB.pendFail)pendDrop(pend);
       toast('Unsaved changes from last time were recovered — saving them now');
       sched();
       return;
@@ -1123,7 +1142,7 @@ function updSaveBar(){
     ?'⚠ NOT SAVING — the planner database came back empty or damaged ('+DB.remoteBroken+'). Nothing is being written over it. '+kept+(DB.pendFail?'':'. Tell the office.')
     :'⚠ NOT SAVED YET — '+(DB.pendFail?kept:'changes are kept on this device and will be sent automatically when the connection is back. Keep this page open.');
 }
-function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._x);t._x=setTimeout(()=>t.classList.remove('show'),2500);}
+function toast(m,ms){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._x);t._x=setTimeout(()=>t.classList.remove('show'),ms||2500);}
 function fmt(s){if(!s)return'—';return new Date(s).toLocaleDateString('en-IE',{day:'numeric',month:'short',year:'2-digit'});}
 function getMonday(d){
   const dt=new Date(d);

@@ -9,7 +9,7 @@ const row = () => ({ id: 'main', version: 1, orders: [H.order({ wo: 'WO-1-1' }),
     const A = await open(browser, S, { now: NOW });
     S.offline = true;
     await A.page.evaluate(async () => { DB.orders[0].notes = 'offline note'; await saveDB(); });
-    const p = await A.page.evaluate(() => localStorage.getItem('wpfPending'));
+    const p = await A.page.evaluate(() => (Object.keys(localStorage).filter(k => k.indexOf('wpfPending') === 0).map(k => localStorage.getItem(k)).join('') || null));
     rec('pending kept on device, no workbooks', p && /offline note/.test(p) && !/BIGWORKBOOK/.test(p), (p || '').length + ' chars');
     // meanwhile another PC changes WO-1-2
     S.row.orders[1].notes = 'other PC'; S.row.version = 2;
@@ -20,7 +20,7 @@ const row = () => ({ id: 'main', version: 1, orders: [H.order({ wo: 'WO-1-1' }),
     const n = S.row.orders.map(o => o.notes).join('|');
     rec('recovered on reopen + merged', n === 'offline note|other PC', n + ' errors:' + (S.errors || []).join());
     rec('workbooks untouched', S.row.settings.listWBs && S.row.settings.listWBs.L1 === 'BIGWORKBOOK', JSON.stringify(S.row.settings.listWBs));
-    const p2 = await B.page.evaluate(() => localStorage.getItem('wpfPending'));
+    const p2 = await B.page.evaluate(() => (Object.keys(localStorage).filter(k => k.indexOf('wpfPending') === 0).map(k => localStorage.getItem(k)).join('') || null));
     rec('pending cleared after save', !p2, String(p2).slice(0, 50));
     await A.close();
   }

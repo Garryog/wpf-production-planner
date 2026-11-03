@@ -8,7 +8,7 @@ const res = []; const rec = (n, ok, d) => { res.push(ok); console.log((ok ? 'PAS
   const A = await open(browser, S, {});
   S.offline = true;
   await A.page.evaluate(async () => { for (let i = 0; i < 40; i++) DB.listRow['L' + i] = Object.assign(DB.listRow['L' + i] || {}, { ['r' + i]: { m: 'saw', by: 'x' } }); DB.orders[100].notes = 'off'; DB.orders.splice(7, 1); await saveDB(); });
-  const p = await A.page.evaluate(() => localStorage.getItem('wpfPending') || '');
+  const p = await A.page.evaluate(() => (Object.keys(localStorage).filter(k => k.indexOf('wpfPending') === 0).map(k => localStorage.getItem(k)).join('') || null) || '');
   rec('2,500-job plan: device copy well under 2 MB', p.length > 0 && p.length < 2e6, Math.round(p.length / 1024) + ' KB (plan ' + Math.round(JSON.stringify(S.row).length / 1024) + ' KB)');
   S.row.orders[200].notes = 'other PC'; S.row.version = 2;
   await A.page.close(); S.offline = false;
@@ -20,7 +20,7 @@ const res = []; const rec = (n, ok, d) => { res.push(ok); console.log((ok ? 'PAS
   const S2 = makeServer({ id: 'main', version: 1, orders: [H.order({ wo: 'WO-1' })], nid: 3, settings: {} });
   const C = await open(browser, S2, {});
   S2.offline = true;
-  const bar = await C.page.evaluate(async () => { const si = Storage.prototype.setItem; Storage.prototype.setItem = function (k, v) { if (k === 'wpfPending') throw new DOMException('full', 'QuotaExceededError'); return si.call(this, k, v); }; DB.orders[0].notes = 'x'; await saveDB(); return document.getElementById('savebar').textContent; });
+  const bar = await C.page.evaluate(async () => { const si = Storage.prototype.setItem; Storage.prototype.setItem = function (k, v) { if (String(k).indexOf('wpfPending') === 0) throw new DOMException('full', 'QuotaExceededError'); return si.call(this, k, v); }; DB.orders[0].notes = 'x'; await saveDB(); return document.getElementById('savebar').textContent; });
   rec('storage full: bar says NOT kept on device', /could NOT keep/.test(bar), bar);
   await C.close();
   await browser.close();
