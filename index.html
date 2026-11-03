@@ -2740,13 +2740,16 @@ function lsBlockTotals(lines){
   return lines;
 }
 // Garry (3 Nov, answer 10): a half quantity per unit (1.5 × 2) is allowed only when the TOTAL to cut is a whole number.
-// A saw part in a unit block whose per unit × Units isn't whole (1.5 × 3 = 4.5) is refused, naming the row.
+// Tester round 4: EVERY saw row's total to cut must be whole — in a unit block, outside one, and a FIXED total too. The saw
+// can't cut half a part. Stores rows may be decimal (half a litre of glue). Refused at save, naming the row.
 function lsHalfTotal(lines){let u=null,n=0;
   for(const ln of lines){if(!ln||ln._drop)continue;n++;
     if(ln.kind==='hdr'){const q=String(ln.qty==null?'':ln.qty).trim();u=q||null;continue;}
     const uq=String(ln.unit_qty==null?'':ln.unit_qty).trim(),t=String(ln.qty==null?'':ln.qty).trim();
-    if(ln.kind!=='saw'||u==null||!/^\d+(\.\d+)?$/.test(uq)||!/^\d+(\.\d+)?$/.test(t)||Number.isInteger(+t))continue;
-    return 'Row '+n+' "'+(String(ln.part||'').trim()||'part')+'": '+uq+' per unit × '+u+' units = '+t+' to cut — the total must be a whole number. Change the quantity per unit or the Units.';}
+    if(ln.kind!=='saw'||!/^\d*\.?\d+$/.test(t)||Number.isInteger(+t))continue;
+    const nm='Row '+n+' "'+(String(ln.part||'').trim()||'part')+'": ';
+    if(u!=null&&/^\d+(\.\d+)?$/.test(uq))return nm+uq+' per unit × '+u+' units = '+t+' to cut — the total must be a whole number (the saw can\'t cut part of a part). Change the quantity per unit or the Units.';
+    return nm+t+' to cut'+(uq.toLowerCase()===LS_FIXED?' (fixed total)':'')+' — a saw part must be a whole number (the saw can\'t cut part of a part). Only Stores items can be part quantities.';}
   return '';}
 function lsUnitsChanged(r){ // a unit heading whose Units this person changed since the editor opened
   if(!r||r.k!=='hdr'||!r.lid||r.units==null)return false;
@@ -4816,7 +4819,9 @@ function lsEdLines(rows){
       const kind=r.k==='saw'||r.k==='fit'?r.k:n(r.L)>0||n(r.W)>0?'saw':'fit',inU=units!==null;
       ln={kind,section:sec||s(r.sec),part:s(r.item),qty:inU&&!r.fixed?lsMul(r.qty,units):s(r.qty),unit_qty:inU?(r.fixed?LS_FIXED:s(r.qty)):'',material:s(r.mat),edging:s(r.edging),note:s(r.note)};
       // a per-unit quantity with more than 3 decimals (0.666667) would save rounding noise (2.000001): kept as a fixed total
-      if(inU&&!r.fixed&&/^\d+\.\d{4,}$/.test(s(r.qty))&&/^\d+(\.\d+)?$/.test(units)){ln.qty=String(Math.round(+s(r.qty)*+units*1000)/1000);ln.unit_qty=LS_FIXED;}
+      // — but only when that total is WHOLE (0.666667 × 3 = 2). 0.3333 × 4 = 1.333 is never turned into a fixed 1.333: it stays
+      // per unit and the save is refused for a saw part (lsHalfTotal).
+      if(inU&&!r.fixed&&/^\d+\.\d{4,}$/.test(s(r.qty))&&/^\d+(\.\d+)?$/.test(units)){const t3=Math.round(+s(r.qty)*+units*1000)/1000;if(Number.isInteger(t3)){ln.qty=String(t3);ln.unit_qty=LS_FIXED;}}
       if(kind==='saw'){ln.length_mm=r.L;ln.width_mm=r.W;}else{ln.length_mm='';ln.width_mm='';}
       if(r.matOther)ln.material_other=true;
     }
