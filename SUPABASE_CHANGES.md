@@ -20,6 +20,7 @@ Newest at the top. Each block must be run in Supabase BEFORE the matching code g
 - Nothing is deleted. The app gets NO delete permission on any new table. The existing planner record is untouched.
 - **Added 3 Nov 2026 (list editor):** `list_lines` has a `unit_qty` column — the quantity for ONE unit when a line sits in a unit block ("Side panel 2 per unit × 3 units"). The line's `qty` is still the TOTAL to cut, so the saw, sheet calculator and labels read it exactly as before. A unit heading is a heading line whose `qty` is the number of units. If this block was already run on a test project, the `alter table list_lines add column if not exists unit_qty text;` line below adds the column (safe to run twice). No new table, so no new GRANT lines — the existing `list_lines` grants cover it. Include it in the migration rehearsal.
 - **Added 3 Nov 2026 (Tester round 2 — one live list per work order):** two PCs issuing a list for the same work order at the same moment could each make one, and the saw would cut it twice. The database now refuses the second one. A new helper `lists_one_per_wo` makes the two take turns (a lock per work order) and refuses a second live list (not archived, not a template) for that work order. It is used only by the cutting-list flow — ✓ Confirm, "✓ Use" an Excel upload, and "Create & attach" from a template — so an office can still deliberately put two lists of different kinds (kitchen + wardrobes) on one work order from the editor or "+ WO". A second helper, `lists_one_replacement`, stops "Make new list from this" on two PCs making two replacements of the same old list. `list_attach` gains one optional setting (`p_one`), so the old version is dropped first (only the function, never any data). The new helpers have their own GRANT lines.
+- **Added 3 Nov 2026 (Manager review — "Make new list from this"):** `save_list_revision` now archives the OLD list in the same step that saves the new one, so a lost reply or a closed browser can never leave both lists on the saw. If the old list was changed on another screen after it was copied, the save stops and the person is asked first ("archive it anyway" or "leave it with the saw"). Only the function changes — no table, no data. Safe to run twice. A part in a unit block that is a FIXED total (it doesn't divide by the units) is saved with `unit_qty` = `fixed` (the column is text already — no change needed).
 - **The app does not use any of this until Garry presses "Migrate lists" (Admin PIN, Settings).** Until then it runs exactly as today, and makes no calls to these tables. So running this early is harmless.
 
 **If you deploy the code without running this first:** nothing changes on the floor (the switch is off). But "Migrate lists" would fail — so run this first anyway.
@@ -331,8 +332,14 @@ grant execute on function list_set_done(text,text,boolean,text,text,text) to ano
 -- p_expect: the list version the editor started from (null = a brand-new list).
 -- A brand-new list (3 Nov): p_list.one_per_wo = true → refused if any of its WOs already has a live list (lists_one_per_wo);
 -- p_list.replaces = <old list id> ("Make new list from this") → refused if that old list already has a live replacement.
+-- (3 Nov, Manager review) …and the OLD list is archived in this same step, so the saw never has both, even if the reply is
+-- lost. p_list.replaces_lines = the old list's lines as they were when it was copied ({line id: [kind, section, part,
+-- length_mm, width_mm, qty, unit_qty, material, edging, note]} — content only, ticks don't count): if the old list's lines
+-- differ now (changed on another screen), the save is refused with 'replaced list changed' unless
+-- p_list.replaces_force = true (the person said "archive it anyway") or p_list.replaces_keep = true (leave it with the saw).
+-- The answer says what happened to the old list: retired = 'archived' | 'already' (archived before) | 'missing' | 'kept'.
 create or replace function save_list_revision(p_list jsonb, p_lines jsonb, p_expect int, p_by text, p_reason text) returns jsonb language plpgsql as $$
-declare r lists%rowtype; e jsonb; nrev int; ids text[]:='{}'; ex list_lines%rowtype; isnew boolean:=false;
+declare r lists%rowtype; e jsonb; nrev int; ids text[]:='{}'; ex list_lines%rowtype; isnew boolean:=false; o lists%rowtype; retired text; now_lines jsonb;
 begin
  perform lists_switch_on();
  select * into r from lists where id=p_list->>'id' for update;
@@ -340,7 +347,24 @@ begin
   if p_expect is not null then raise exception 'stale: list % is missing', p_list->>'id'; end if;
   if coalesce((p_list->>'one_per_wo')::boolean,false) then
    perform lists_one_per_wo(array(select jsonb_array_elements_text(coalesce(p_list->'wos','[]'))), array[p_list->>'id']); end if;
-  if coalesce(p_list->>'replaces','')<>'' then perform lists_one_replacement(p_list->>'replaces',p_list->'wos'->>0); end if;
+  if coalesce(p_list->>'replaces','')<>'' then
+   perform lists_one_replacement(p_list->>'replaces',p_list->'wos'->>0);
+   select * into o from lists where id=p_list->>'replaces' for update;
+   if not found then retired:='missing';
+   elsif o.archived then retired:='already';
+   elsif coalesce((p_list->>'replaces_keep')::boolean,false) then retired:='kept';
+   else
+    select coalesce(jsonb_object_agg(x.id,jsonb_build_array(x.kind,x.section,x.part,x.length_mm,x.width_mm,x.qty,x.unit_qty,x.material,x.edging,x.note)),'{}'::jsonb)
+      into now_lines from list_lines x where x.list_id=o.id and x.removed_rev is null;
+    if jsonb_typeof(p_list->'replaces_lines')='object' and not coalesce((p_list->>'replaces_force')::boolean,false) and now_lines<>p_list->'replaces_lines' then
+     raise exception 'replaced list changed: "%" was changed on another screen after it was copied', o.name using errcode='P0001', detail=o.id, hint='replaced-changed';
+    end if;
+    update lists set archived=true, updated_by=p_by,
+      log=log||jsonb_build_array(jsonb_build_object('at',now(),'by',p_by,'what','Archived','why','Replaced by "'||coalesce(p_list->>'name','(no name)')||'"')) where id=o.id;
+    insert into list_events(list_id,act,by,note) values(o.id,'archive-on',p_by,'Replaced by "'||coalesce(p_list->>'name','(no name)')||'"');
+    retired:='archived';
+   end if;
+  end if;
   insert into lists(id,project_id,name,list_type,type_name,is_template,template_id,template_rev,wos,no_cut,no_fit,source,sdate,created_by,updated_by,log)
    values(p_list->>'id',p_list->>'project_id',coalesce(p_list->>'name','(no name)'),coalesce(p_list->>'list_type','house'),p_list->>'type_name',
      coalesce((p_list->>'is_template')::boolean,false),p_list->>'template_id',(p_list->>'template_rev')::int,
@@ -403,7 +427,7 @@ begin
    log=case when isnew then log else log||jsonb_build_array(jsonb_build_object('at',now(),'by',p_by,
      'what',case when nrev>r.rev then 'Revision '||nrev else 'List edited' end,'why',p_reason)) end
   where id=r.id returning * into r;
- return jsonb_build_object('list',to_jsonb(r),'lines',(select coalesce(jsonb_agg(to_jsonb(x) order by x.seq),'[]') from list_lines x where x.list_id=r.id));
+ return jsonb_build_object('list',to_jsonb(r),'lines',(select coalesce(jsonb_agg(to_jsonb(x) order by x.seq),'[]') from list_lines x where x.list_id=r.id),'retired',retired);
 end $$;
 grant execute on function save_list_revision(jsonb,jsonb,int,text,text) to anon, authenticated, service_role;
 

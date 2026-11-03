@@ -2671,7 +2671,7 @@ async function lsSaveList(pl,lines,by,reason,opt){
     try{
       const out=await lsRpc('save_list_revision',{p_list:pl,p_lines:df.lines,p_expect:opt.expect!=null?opt.expect:cur?cur.version:null,p_by:lqBy(by),p_reason:reason||null});
       LST.full.add(out.list.id);lsPut('lists',[out.list]);lsPut('list_lines',out.lines);
-      return{list:out.list,diff:df};
+      return{list:out.list,diff:df,retired:out.retired||null};
     }catch(e){if(!/stale/.test(e.message)||i>=2||opt.expect!=null)throw e;await lsReloadList(pl.id);} // changed on another PC meanwhile: compare again
   }
 }
@@ -2750,10 +2750,15 @@ function lsAskReason(l){ // a list the saw already has: saving makes revision n+
   if(r===null)return null;
   return r.trim()||null;
 }
+// A NEW list keeps one id until it is saved: the editor gives it one when it opens (d.newId); a caller without an editor
+// trying the same content again (after a lost reply) gets the same id back from here. So a save that landed but whose
+// reply was lost, saved again, is recognised as this screen's own list — never a second list for the saw.
+const LS_PEND=new Map();
 async function lsSaveManual(d,by,ex){
+  const pk=!ex&&!d.newId?JSON.stringify([d.wo,d.name,!!d.tpl,d.pid||'',d.project||'',d.rows]):'';
   const o=DB.orders.find(x=>x.wo===d.wo);
   const pid=d.pid&&LST.p.has(d.pid)?d.pid:await lsProject(String(d.project||'').trim()||(o&&o.customer)||'Unassigned',o&&o.customer);
-  const id=ex?ex.id:uid('L');
+  const id=ex?ex.id:d.newId?d.newId:(LS_PEND.get(pk)||LS_PEND.set(pk,uid('L')).get(pk));
   let reason='';
   if(ex){await lsReloadList(id);
     // the saw has started (a line is ticked): the number of units can't change on this list — a new list is made instead
@@ -2767,7 +2772,7 @@ async function lsSaveManual(d,by,ex){
     const oid=d.replaces.id,on='"'+String(d.replaces.name||'the old list').trim()+'"';
     const wos=[...new Set([d.wo,...((lsList(oid)||{}).wos||[])])].filter(w=>w&&w!=='__NEW__');
     for(const w of wos)await lsLiveFor(w); // fresh from the database (a WO can have several lists: only a REPLACEMENT of this one stops the save)
-    const repl=lsCache().all.find(x=>x.id!==oid&&!x.archived&&!x.tpl&&lsReplOf(x.id)===oid);
+    const repl=lsCache().all.find(x=>x.id!==oid&&x.id!==id&&!x.archived&&!x.tpl&&lsReplOf(x.id)===oid); // our own earlier save (reply lost) is not "another screen"
     if(repl)throw new Error(on+' has already been replaced by "'+repl.name+'" on another screen — nothing saved (no second list for '+(d.wo||'this job')+'). Open "'+repl.name+'" from Lists instead.');
   }
   const lines=lsEdLines(d.rows);lsFlagMats(lines,pid); // headings, unit blocks (qty = total, unit_qty = per unit) and parts
@@ -2789,12 +2794,25 @@ async function lsSaveManual(d,by,ex){
   if(ex&&!ex.tpl&&!ex.locked&&lsLocked(lsList(id)))pl.lock=true; // cut-by today / next working day: this save is a revision
   if(d.ltype)pl.list_type=d.ltype;if(d.tname!==undefined)pl.type_name=String(d.tname||'').trim()||null;
   if(!ex)Object.assign(pl,d.tpl?{wos:[],source:'manual',is_template:true}:{wos:[d.wo],source:'manual'},{list_type:d.ltype||'house'});
-  if(!ex&&!d.tpl&&d.replaces&&d.replaces.id)pl.replaces=d.replaces.id; // the database allows ONE live replacement of the old list (lists_one_replacement)
+  // the database allows ONE live replacement of the old list (lists_one_replacement) and archives the old list in the SAME
+  // step (save_list_revision) — refused if the old list was edited since it was copied (replaces_lines) until the person says
+  if(!ex&&!d.tpl&&d.replaces&&d.replaces.id){pl.replaces=d.replaces.id;if(d.replaces.lines)pl.replaces_lines=d.replaces.lines;}
   if(!ex&&d.replaces&&d.replaces.id)reason='Made with "Make new list from this" from "'+String(d.replaces.name||'').trim()+'" — replaces list '+d.replaces.id; // lsReplOf reads the id back
-  let res;
-  try{res=await lsSaveList(pl,lines,by,reason||(ex?(d.why||'List edited'):null));} // a template's "what changed" goes in its History
+  let res;const on='"'+String((d.replaces||{}).name||'the old list').trim()+'"';
+  const save=()=>lsSaveList(pl,lines,by,reason||(ex?(d.why||'List edited'):null)); // a template's "what changed" goes in its History
+  try{try{res=await save();}
+    catch(e){if(!pl.replaces||!/replaced list changed/.test(e.message))throw e; // nothing saved: ask, then save again (same id)
+      if(confirm('The old list '+on+' was changed on another screen after you copied it.\n\nArchive it anyway (take it off the saw)?\n\nOK = archive it. Cancel = leave it with the saw — check it, then archive it from Lists.'))pl.replaces_force=true;else pl.replaces_keep=true;
+      res=await save();}}
   catch(e){const k=lsOneErr(e);if(k&&pl.replaces){const l=await lsOneList(k);throw new Error('"'+String(d.replaces.name||'the old list').trim()+'" has already been replaced by "'+l.name+'" on another PC — nothing saved (no second list for '+(d.wo||'this job')+'). Open "'+l.name+'" from Lists instead.');}
     if(k)throw new Error(lsGotMsg(k.wo,await lsOneList(k)));throw e;}
+  if(pk)LS_PEND.delete(pk);
+  if(pl.replaces){let r=res.retired; // what the database did with the old list in the same step
+    if(r){try{await lsReloadList(pl.replaces);}catch(e){}} // this screen sees the old list archived at once
+    else{try{await lsReloadList(pl.replaces);const ol=lsList(pl.replaces);r=!ol?'missing':ol.archived?'archived':'live';}catch(e){r='unknown';}} // our own earlier save (its reply was lost)
+    d.retiredMsg={archived:' The old list '+on+' is archived (off the saw).',already:' The old list '+on+' was already archived on another screen — left as it is.',
+      missing:' The old list '+on+' is no longer there — nothing archived.',kept:' The old list '+on+' was changed on another screen meanwhile — left with the saw: check it and archive it from Lists.',
+      live:' ⚠ The old list '+on+' is still with the saw — check it and archive it from Lists.',unknown:' ⚠ The old list '+on+' could not be checked — if it is still with the saw, archive it from Lists.'}[r]||'';}
   if(ex&&!ex.tpl){const was=(ex.wos||[])[0];if(d.wo&&d.wo!==was){if(was)listTag(ex,was,false,by);listTag(ex,d.wo,true,by);}
     // rows added to a side that was already signed off put that side back on the bench — and say so
     ['saw','fit'].forEach(m=>{const n=res.diff.lines.filter(x=>x.kind===m&&res.diff.added.includes(x.id)).length;
@@ -3704,7 +3722,8 @@ function openListEditor2(listId,presetWo,presetPid,opt){
   const st={rows:ex?lsEditRows(ex.id).map(toRow):opt.rows?opt.rows.map(fresh):[{k:'part',item:'',qty:'',L:'',W:'',mat:'',edging:'',note:''}],
     wo:ex?((ex.wos||[])[0]||''):(presetWo||''),name:ex?ex.name:(opt.name||''),pid:ex?ex.pid:(presetPid||((lsProjForCust(o0&&o0.customer)||{}).id)||''),
     ltype:ex?(ex.ltype||'house'):(opt.ltype||(opt.tpl?'kitchen':'house')),tname:ex?ex.typeName:(opt.tname||''),tpl:ex?ex.tpl:!!opt.tpl,noCut:ex?!!ex.noCut:false,noFit:ex?!!ex.noFit:false,newWO:false,pw:{title:'',cust:'',floor:'',unit:'',due:'',val:'',hrs:''},
-    carcass:'',door:'',undo:[],cur:'',focus:'',snapKey:'',note:opt.note||'',from:!ex&&opt.from&&opt.from.id?opt.from:null};
+    carcass:'',door:'',undo:[],cur:'',focus:'',snapKey:'',note:opt.note||'',from:!ex&&opt.from&&opt.from.id?opt.from:null,
+    newId:ex?'':uid('L')}; // a new list keeps ONE id for this editor: Save pressed again after a lost reply is the same list, never a second one
   let sawStarted=!!ex&&!ex.tpl&&lsTicked(ex.id); // set on a refused save too (a tick landed while the editor was open)
   const prevId=ex?(ex.tpl?'':lsReplOf(ex.id)):st.from?st.from.id:''; // the list this one replaces: "already cut on old list (n)"
   const prevCut=r=>prevId&&(lsNum(r.L)>0||lsNum(r.W)>0)?lsPrevCutHTML(prevId,r.item,r.L,r.W,r.mat):'';
@@ -3949,7 +3968,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
   const undo=()=>{if(!st.undo.length)return;st.rows=JSON.parse(st.undo.pop());st.snapKey='';if(st.cur&&!ov.querySelector('[data-mr="'+st.cur+'"]'))st.cur='';st.focus=st.cur&&+st.cur.split('|')[0]<R().length?st.cur:'';draw();};
   const copyToNew=()=>{ // the saw has started: a different number of units is a NEW list (Garry, 3 Nov) — copied without ticks
     keep();if(!confirm('Make a new list from "'+st.name+'"?\n\nThe rows are copied (no ticks) into a new list you can change. When you SAVE the new list, this one is archived (taken off the saw). Parts already cut on this list show on the new one as "already cut on old list" so the saw can check before cutting again.'))return;
-    ov.remove();openListEditor2(null,st.wo,st.pid,{rows:R(),name:st.name+' (new)',ltype:st.ltype,tname:st.tname,from:{id:ex.id,name:ex.name,sig:lsOldSig(ex.id)},
+    ov.remove();openListEditor2(null,st.wo,st.pid,{rows:R(),name:st.name+' (new)',ltype:st.ltype,tname:st.tname,from:{id:ex.id,name:ex.name,sig:lsOldSig(ex.id),lines:lsOldLines(ex.id)},
       note:'Copied from "'+st.name+'" — nothing is saved until you press Save. Saving archives "'+ex.name+'" (takes it off the saw); until then it is not changed.'});
   };
   const keep=()=>{const g=id=>ov.querySelector('#'+id);const n=g('me-name');if(n)st.name=n.value;const w=g('me-wo');if(w)st.wo=w.value;
@@ -3995,7 +4014,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       const sb=g('me-save');if(sb)sb.disabled=true;err('Saving…');
       lsSaveManual(d,by,ex).then(async l=>{ov.remove();sched();render();
         let t=(ex?'List updated':'List saved')+' — '+l.name+' → '+(l.saw?l.saw+' saw row'+(l.saw!==1?'s':''):'no cutting')+' · '+(l.fit?l.fit+' Stores':'no Stores')+(d.wo&&!st.tpl?' · tagged '+d.wo:'');
-        if(d.replaces){t+='.'+await lsRetireOld(d.replaces,by);render();} // only once the new list is saved — a failed save archives nothing
+        if(d.retiredMsg)t+='.'+d.retiredMsg; // the database archived the old list in the same step as the save
         toast(t);})
         .catch(x=>{if(sb)sb.disabled=false;if(/already been replaced/.test(x.message))toast(x.message,true);
           if(x.message===LS_LOCK_MSG&&ex&&!ex.tpl&&!sawStarted){sawStarted=true;draw();} // lock the Units box now and offer "Make new list from this"
@@ -4226,7 +4245,7 @@ function lsTplInfo(l){ // "template is now rev 5 (this copy rev 3)" — informat
   return (+t.rev||1)!==(+l.templateRev||1)?'template "'+t.name+'" is now rev '+(+t.rev||1)+' (this copy rev '+(+l.templateRev||1)+')':'from template "'+t.name+'" rev '+(+l.templateRev||1);
 }
 /* "Make new list from this" (Garry, 3 Nov): the new list REPLACES the old one. Its first history line ("List created")
-   ends "replaces list <old id>"; once it is saved the old list is archived (lsRetireOld). Lines already ticked cut on the
+   ends "replaces list <old id>"; the database archives the old list in the same step as the save (save_list_revision). Lines already ticked cut on the
    old list show on the new one as "already cut on old list (n)" — matched by description + length + width + colour.
    Information only: no tick is carried across. */
 const LS_REPL_RE=/replaces list (\S+)$/;
@@ -4250,18 +4269,11 @@ function lsPrevCutBadge(lineId){ // the saw view: a line of a list that replaced
   if(!V2())return'';const x=LST.ln.get(lineId);if(!x||x.kind!=='saw')return'';const old=lsReplOf(x.list_id);
   return old?lsPrevCutHTML(old,x.part,x.length_mm,x.width_mm,x.material):'';
 }
+// the old list's lines as copied (content only, never ticks) — "Make new list from this" sends them with the save and the
+// database compares them before it archives the old list (save_list_revision, replaces_lines): a change since is asked about
+function lsOldLines(id){const o={},v=x=>x===undefined?null:x,n=x=>x==null||x===''?v(x):+x;
+  lsLinesOf(id).filter(x=>x.removed_rev==null).forEach(x=>{o[x.id]=[x.kind,x.section,x.part,n(x.length_mm),n(x.width_mm),x.qty,x.unit_qty,x.material,x.edging,x.note].map(v);});return o;}
 function lsOldSig(id){const l=LST.l.get(id);return (+(l&&l.rev)||1)+'#'+lsLinesOf(id).filter(x=>x.removed_rev==null).map(lsLineSig).join(';');} // content, not ticks
-async function lsRetireOld(f,by){ // the new list is saved: archive the old one — unless another screen already did, or changed it since
-  const nm='"'+(f.name||'the old list')+'"';
-  try{await lsReloadList(f.id);}catch(e){return' ⚠ The old list '+nm+' could not be checked ('+e.message+') — it is still with the saw: archive it from Lists.';}
-  const o=lsList(f.id);
-  if(!o)return' The old list '+nm+' is no longer there — nothing archived.';
-  if(o.archived)return' The old list '+nm+' was already archived on another screen — left as it is.';
-  if(lsOldSig(f.id)!==f.sig&&!confirm('The old list '+nm+' was changed on another screen after you copied it.\n\nArchive it anyway (take it off the saw)?\n\nOK = archive it. Cancel = leave it with the saw — check it, then archive it from Lists.'))
-    return' The old list '+nm+' was changed on another screen meanwhile — left with the saw: check it and archive it from Lists.';
-  listArchive(o,by);
-  return' The old list '+nm+' is archived (off the saw).';
-}
 async function lsCopyLines(srcId,map){
   if(!LST.full.has(srcId))await lsReloadList(srcId);
   map=map||{};

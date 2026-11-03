@@ -200,7 +200,27 @@ function saveListRevision(d, pl, lines, expect, by, reason) {
     if (!ex && !['saw', 'fit', 'hdr'].includes(e.kind)) throw new DbError('new row violates check constraint', '23514');
   }
   if (!r && pl.one_per_wo) onePerWo(d, pl.wos || [], [pl.id]);
-  if (!r && pl.replaces) oneReplacement(d, pl.replaces, (pl.wos || [])[0]);
+  let retired = null;
+  if (!r && pl.replaces) {
+    oneReplacement(d, pl.replaces, (pl.wos || [])[0]);
+    // (3 Nov, Manager review) the old list is archived in this same step — refused if it was edited since it was copied
+    const o = find(d, 'lists', pl.replaces);
+    if (!o) retired = 'missing';
+    else if (o.archived) retired = 'already';
+    else if (pl.replaces_keep) retired = 'kept';
+    else {
+      // the old list's live lines now vs as copied (content only; numbers compared as numbers, like jsonb)
+      const nv = v => v === undefined ? null : v, nn = v => v == null || v === '' ? nv(v) : +v;
+      const nowL = {}; d.t.list_lines.filter(x => x.list_id === o.id && x.removed_rev == null).forEach(x => { nowL[x.id] = [x.kind, x.section, x.part, nn(x.length_mm), nn(x.width_mm), x.qty, x.unit_qty, x.material, x.edging, x.note].map(nv); });
+      const was = pl.replaces_lines, same = () => { const a = Object.keys(nowL), b = Object.keys(was); return a.length === b.length && a.every(k => Array.isArray(was[k]) && JSON.stringify(nowL[k]) === JSON.stringify(was[k].map((v, i) => i === 3 || i === 4 ? nn(nv(v)) : nv(v)))); };
+      if (was && typeof was === 'object' && !Array.isArray(was) && !pl.replaces_force && !same())
+        throw new DbError('replaced list changed: "' + o.name + '" was changed on another screen after it was copied', 'P0001', o.id, 'replaced-changed');
+      const why = 'Replaced by "' + (pl.name || '(no name)') + '"';
+      update(d, 'lists', o, { archived: true, updated_by: by, log: logAdd(o, { at: now(), by, what: 'Archived', why }) });
+      insert(d, 'list_events', { list_id: o.id, act: 'archive-on', by, note: why });
+      retired = 'archived';
+    }
+  }
   if (!r) {
     r = insert(d, 'lists', { id: pl.id, project_id: pl.project_id || null, name: pl.name || '(no name)', list_type: pl.list_type || 'house', type_name: pl.type_name || null,
       is_template: !!pl.is_template, template_id: pl.template_id || null, template_rev: pl.template_rev == null ? null : +pl.template_rev, wos: pl.wos || [],
@@ -239,7 +259,7 @@ function saveListRevision(d, pl, lines, expect, by, reason) {
   ['no_cut', 'no_fit'].forEach(k => { if (pl[k] != null) patch[k] = !!pl[k]; });
   if (!isnew) patch.log = logAdd(r, { at: now(), by, what: nrev > r.rev ? 'Revision ' + nrev : 'List edited', why: reason == null ? null : reason });
   update(d, 'lists', r, patch);
-  return { list: clone(r), lines: clone(d.t.list_lines.filter(x => x.list_id === r.id).sort((a, b) => a.seq - b.seq)) };
+  return { list: clone(r), lines: clone(d.t.list_lines.filter(x => x.list_id === r.id).sort((a, b) => a.seq - b.seq)), retired };
 }
 
 // ---- snags_to_list(p_ids text[], p_deliver_by date, p_by)
