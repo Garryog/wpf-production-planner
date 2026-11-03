@@ -2766,6 +2766,23 @@ function lsAskReason(l){ // a list the saw already has: saving makes revision n+
 // trying the same content again (after a lost reply) gets the same id back from here. So a save that landed but whose
 // reply was lost, saved again, is recognised as this screen's own list — never a second list for the saw.
 const LS_PEND=new Map();
+/* Tester round 4: a NEW list whose save reached the database but whose reply was lost. The editor's id is kept on this
+   device for the session (sessionStorage + memory, keyed by WO + list name) with what was typed, so that:
+   - the editor checks the database for that id before saying anything: "Saved" / "May have saved" / "Not saved";
+   - opening the editor again for the same WO offers "You were saving 'House 14 wardrobes' a moment ago — open that list?"
+     instead of starting a fresh id (which would make a second list for the saw).
+   The entry goes when a save of that list gets its reply, or when the person chooses to start a new list. */
+const LS_PEND_KEY='wpfListPend';let LS_PENDS=null;
+function lsPends(){if(!LS_PENDS){try{LS_PENDS=JSON.parse(sessionStorage.getItem(LS_PEND_KEY)||'{}')||{};}catch(e){LS_PENDS={};}}
+  const t=Date.now();Object.keys(LS_PENDS).forEach(k=>{const e=LS_PENDS[k];if(!e||!e.id||t-(+e.at||0)>12*3600e3)delete LS_PENDS[k];});return LS_PENDS;}
+function lsPendStore(){try{sessionStorage.setItem(LS_PEND_KEY,JSON.stringify(LS_PENDS||{}));}catch(e){}}
+const lsPendKey=(wo,name)=>String(wo||'')+'|'+String(name||'').trim().toLowerCase();
+function lsPendSet(e){const m=lsPends();Object.keys(m).forEach(k=>{if(m[k].id===e.id)delete m[k];});m[lsPendKey(e.wo,e.name)]=Object.assign({at:Date.now()},e);lsPendStore();}
+function lsPendDrop(id){const m=lsPends();Object.keys(m).forEach(k=>{if(m[k].id===id)delete m[k];});lsPendStore();}
+function lsPendFor(wo){return Object.values(lsPends()).filter(e=>e.wo===wo).sort((a,b)=>(+b.at||0)-(+a.at||0))[0]||null;}
+const LS_LOST_RE=/failed to fetch|networkerror|network error|load failed|timed? ?out|timeout|aborted|connection/i;
+// → 'saved' (the list is in the database), 'not' (it isn't), or 'unknown' (the database could not be asked)
+async function lsSavedYet(id){try{const r=await lsGet1('lists?select=id,archived&id=eq.'+encodeURIComponent(id));if(!r.length)return'not';await lsReloadList(id);return'saved';}catch(e){return'unknown';}}
 async function lsSaveManual(d,by,ex){
   const pk=!ex&&!d.newId?JSON.stringify([d.wo,d.name,!!d.tpl,d.pid||'',d.project||'',d.rows]):'';
   const o=DB.orders.find(x=>x.wo===d.wo);
@@ -3807,6 +3824,14 @@ function lsEmptyRow(r){return r.k==='part'&&['item','qty','L','W','edging','note
 function openListEditor2(listId,presetWo,presetPid,opt){
   opt=opt||{};
   const ex=listId?lsList(listId):null;
+  if(!ex&&!opt.tpl&&!opt.pendId&&presetWo){const pe=lsPendFor(presetWo);
+    if(pe){const nm='"'+pe.name+'"';
+      if(pe.state==='saved'&&lsList(pe.id)){
+        if(confirm('You were saving '+nm+' for '+presetWo+' a moment ago — it reached the database (the reply was lost).\n\nOpen that list?\n\nOK = open '+nm+'\nCancel = start another new list'))return openListEditor2(pe.id);}
+      else if(confirm('You were saving '+nm+' for '+presetWo+' a moment ago — '+(pe.state==='not'?'it did not reach the database':'it may have saved (the reply was lost)')+'.\n\nOpen that list again, as you typed it?\nSaving it goes to the same list — never a second one for the saw.\n\nOK = open '+nm+'\nCancel = start another new list'))
+        return openListEditor2(null,pe.wo,pe.pid,{rows:pe.rows,name:pe.name,ltype:pe.ltype,tname:pe.tname,from:pe.from,note:pe.note,pendId:pe.id,landed:pe.state==='saved'});
+      lsPendDrop(pe.id);}
+  }
   const o0=!ex&&presetWo?DB.orders.find(x=>x.wo===presetWo):null;
   const toRow=r=>{const x={...r};if(x.k!=='hdr')x.k='part';return x;};
   const fresh=r=>{const x=toRow(r);['lid','sig','opened','ids','src','keep','info','total','u0','qtyErr','bu'].forEach(k=>delete x[k]);return x;};
@@ -3814,7 +3839,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     wo:ex?((ex.wos||[])[0]||''):(presetWo||''),name:ex?ex.name:(opt.name||''),pid:ex?ex.pid:(presetPid||((lsProjForCust(o0&&o0.customer)||{}).id)||''),
     ltype:ex?(ex.ltype||'house'):(opt.ltype||(opt.tpl?'kitchen':'house')),tname:ex?ex.typeName:(opt.tname||''),tpl:ex?ex.tpl:!!opt.tpl,noCut:ex?!!ex.noCut:false,noFit:ex?!!ex.noFit:false,newWO:false,pw:{title:'',cust:'',floor:'',unit:'',due:'',val:'',hrs:''},
     carcass:'',door:'',undo:[],cur:'',focus:'',snapKey:'',note:opt.note||'',from:!ex&&opt.from&&opt.from.id?opt.from:null,
-    newId:ex?'':uid('L')}; // a new list keeps ONE id for this editor: Save pressed again after a lost reply is the same list, never a second one
+    newId:ex?'':opt.pendId||uid('L'),landed:!!opt.landed}; // a new list keeps ONE id for this editor: Save pressed again after a lost reply is the same list, never a second one
   let sawStarted=!!ex&&!ex.tpl&&lsTicked(ex.id); // set on a refused save too (a tick landed while the editor was open)
   const prevId=ex?(ex.tpl?'':lsReplOf(ex.id)):st.from?st.from.id:''; // the list this one replaces: "already cut on old list (n)"
   const prevCut=r=>prevId&&(lsNum(r.L)>0||lsNum(r.W)>0)?lsPrevCutHTML(prevId,r.item,r.L,r.W,r.mat):'';
@@ -4103,13 +4128,25 @@ function openListEditor2(listId,presetWo,presetPid,opt){
         orig[pwo]='';origStep[pwo]='Planner WO';d.wo=pwo;st.newWO=false;st.wo=pwo; // a failed save tried again reuses this P-number
       }
       const sb=g('me-save');if(sb)sb.disabled=true;err('Saving…');
-      lsSaveManual(d,by,ex).then(async l=>{ov.remove();sched();render();
+      lsSaveManual(d,by,ex).then(async l=>{ov.remove();sched();render();if(d.newId)lsPendDrop(d.newId);
         let t=(ex?'List updated':'List saved')+' — '+l.name+' → '+(l.saw?l.saw+' saw row'+(l.saw!==1?'s':''):'no cutting')+' · '+(l.fit?l.fit+' Stores':'no Stores')+(d.wo&&!st.tpl?' · tagged '+d.wo:'');
         if(d.retiredMsg)t+='.'+d.retiredMsg; // the database archived the old list in the same step as the save
         toast(t);})
         .catch(x=>{if(sb)sb.disabled=false;if(/already been replaced/.test(x.message))toast(x.message,true);
           if(x.message===LS_LOCK_MSG&&ex&&!ex.tpl&&!sawStarted){sawStarted=true;draw();} // lock the Units box now and offer "Make new list from this"
-          err('Not saved — '+x.message);});
+          if(ex||st.tpl||!d.newId||!LS_LOST_RE.test(x.message))return err('Not saved — '+x.message);
+          // a new list and the reply was lost: it may have reached the database. Keep its id on this device, then ask.
+          const was=st.landed,nm='"'+(String(d.name||'').trim()||'the list')+'"';
+          const pend=st2=>lsPendSet({id:d.newId,wo:d.wo,name:String(d.name||'').trim(),pid:st.pid,ltype:st.ltype,tname:st.tname,rows:JSON.parse(JSON.stringify(R())),from:st.from,note:st.note,state:st2});
+          pend('unknown');err('May have saved — the reply was lost ('+x.message+'). Checking the database…');
+          if(sb)sb.disabled=true;
+          lsSavedYet(d.newId).then(async s=>{if(sb)sb.disabled=false;pend(s);
+            if(s==='saved'){st.landed=true;
+              let old='';if(d.replaces&&d.replaces.id){try{await lsReloadList(d.replaces.id);const o=LST.l.get(d.replaces.id),on=' "'+(d.replaces.name||'The old list')+'"';old=!o?'':o.archived?on+' is archived (off the saw).':on+' is still with the saw.';}catch(e){}}
+              if(was)return err('May have saved — the reply was lost. '+nm+' is in the database, but it can\'t tell whether these latest changes reached it. Press Save again: it saves to the same list (never a second one).');
+              err('✓ Saved — the reply was lost, but '+nm+' is in the database.'+old+' Close this, or change rows and press Save again (it updates the same list — never a second one).');}
+            else if(s==='not')err('Not saved — the connection failed ('+x.message+') and '+nm+' is not in the database. Press Save again.');
+            else err('May have saved — the reply was lost and the database could not be checked (no connection). Press Save again when the connection is back: it saves to the same list, never a second one.');});});
     });
   };
   ov.addEventListener('focusin',e=>{const m=e.target&&e.target.dataset&&e.target.dataset.mr;if(m){st.cur=m;if(st.snapKey!==m)st.snapKey='';}});
