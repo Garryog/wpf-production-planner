@@ -45,6 +45,7 @@ async function attach(page, S, dev) {
           S._who = dev.name + '(reply lost)'; applyPatch(S, url, body); await sleep(lat / 2); return route.abort('connectionreset');
         }
         S._who = dev.name; const r = applyPatch(S, url, body); await sleep(lat / 2);
+        if (r === 'guard') return route.fulfill({ status: 400, contentType: 'application/json', body: '{"code":"P0001","message":"old planner screen - refresh the page"}' });
         if (r === 'nocol') return route.fulfill({ status: 400, contentType: 'application/json', body: '{"code":"42703","message":"column production_planner.version does not exist"}' });
         if (r === 'conflict') return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
         if (/return=representation/.test(req.headers()['prefer'] || '')) return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([S.row]) });
@@ -58,6 +59,8 @@ function applyPatch(S, url, body) {
   if (!S.versioned) { if ('version' in body || /version=eq/.test(url)) return 'nocol'; Object.assign(S.row, body); S.okSaves++; return 'ok'; }
   const v = url.match(/version=eq\.(\d+)/);
   if (v && +v[1] !== S.row.version) { S.conflicts++; return 'conflict'; }
+  // S.guardOld: PROPOSED old-tab guard trigger (docs/PROPOSAL-old-tab-guard.md) - an update that doesn't ask for exactly version+1 is refused
+  if (S.guardOld && !('version' in body && +body.version === S.row.version + 1)) { S.guarded = (S.guarded || 0) + 1; return 'guard'; }
   const before = S.row.version;
   Object.assign(S.row, JSON.parse(JSON.stringify(body)));
   if (S.bumpOnAnyUpdate) { S.row.version = before + 1; S.row.updated_at = new Date().toISOString(); } // exactly what production_planner_bump() does
