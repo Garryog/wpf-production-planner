@@ -2460,11 +2460,14 @@ function markListDone(ids,mode,by){
 function houseLabels(lsArr){
   // per-house split is by list, not by name: two selected houses both called "House 1" become "House 1" and "House 1 (2)".
   // Every list's real name is reserved first, so a list really called "House 1 (2)" keeps that name and the repeat becomes "House 1 (3)".
-  const projs=new Set(lsArr.map(l=>l.project||''));
-  const hbase=l=>String(projs.size>1?((l.project?l.project+' — ':'')+l.name):l.name);
-  const lbl=new Map(),real=new Set(lsArr.map(hbase)),taken=new Set();
-  lsArr.forEach(l=>{if(lbl.has(l.id))return;const b=hbase(l);if(!taken.has(b)){taken.add(b);lbl.set(l.id,b);}});
-  lsArr.forEach(l=>{if(lbl.has(l.id))return;const b=hbase(l);let n=1,t;do{n++;t=b+' ('+n+')';}while(taken.has(t)||real.has(t));taken.add(t);lbl.set(l.id,t);});
+  // Names that only differ by spaces or capitals ("House 1", "House 1 ", "house 1") look the same on a chip, so they count
+  // as repeats too; a list with no name shows "(no name)".
+  const tx=v=>String(v==null?'':v).replace(/\s+/g,' ').trim();
+  const projs=new Set(lsArr.map(l=>matKey(tx(l.project))));
+  const hbase=l=>{const n=tx(l.name)||'(no name)',p=tx(l.project);return projs.size>1&&p?p+' — '+n:n;};
+  const lbl=new Map(),real=new Set(lsArr.map(l=>matKey(hbase(l)))),taken=new Set();
+  lsArr.forEach(l=>{if(lbl.has(l.id))return;const b=hbase(l);if(!taken.has(matKey(b))){taken.add(matKey(b));lbl.set(l.id,b);}});
+  lsArr.forEach(l=>{if(lbl.has(l.id))return;const b=hbase(l);let n=1,t;do{n++;t=b+' ('+n+')';}while(taken.has(matKey(t))||real.has(matKey(t)));taken.add(matKey(t));lbl.set(l.id,t);});
   return lbl;
 }
 function combineLists(lsArr,mode){
