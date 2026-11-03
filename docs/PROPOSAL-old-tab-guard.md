@@ -41,6 +41,8 @@ end $$;
 ```
 **To undo it:** run the original Stage 1 `production_planner_bump` function from SUPABASE_CHANGES.md again.
 
+**Rollback trap (Manager, 3 Nov):** if the website is ever put back to the old code while this guard is on, EVERY screen gets "Save failed" and nothing can be saved. Rollback order is always: (1) undo this guard (SQL above), THEN (2) put main back to the previous commit. The same applies to step 2 of docs/RUNBOOK-lists-switch.md.
+
 ## Why it is safe for new code (checked against index.html on both branches)
 - Every new-code save of the planner record sends `version = VER+1`, with the filter `version=eq.VER`. If another screen saved first, the filter matches nothing, so the trigger never runs and the normal merge happens.
 - The new code's "version column missing" fallback, a plain save, only runs when the Stage 1 SQL hasn't been run. In that case this function doesn't exist either.
