@@ -3898,21 +3898,27 @@ function markListDone(ids,mode,by){
   DB.listDone=DB.listDone||{};
   ids.forEach(id=>{DB.listDone[id]=DB.listDone[id]||{};DB.listDone[id][mode]={at:now,by:(by||'').trim()};});
 }
+function houseLabels(lsArr){
+  // per-house split is by list, not by name: two selected houses both called "House 1" become "House 1" and "House 1 (2)".
+  // Every list's real name is reserved first, so a list really called "House 1 (2)" keeps that name and the repeat becomes "House 1 (3)".
+  const projs=new Set(lsArr.map(l=>l.project||''));
+  const hbase=l=>String(projs.size>1?((l.project?l.project+' — ':'')+l.name):l.name);
+  const lbl=new Map(),real=new Set(lsArr.map(hbase)),taken=new Set();
+  lsArr.forEach(l=>{if(lbl.has(l.id))return;const b=hbase(l);if(!taken.has(b)){taken.add(b);lbl.set(l.id,b);}});
+  lsArr.forEach(l=>{if(lbl.has(l.id))return;const b=hbase(l);let n=1,t;do{n++;t=b+' ('+n+')';}while(taken.has(t)||real.has(t));taken.add(t);lbl.set(l.id,t);});
+  return lbl;
+}
 function combineLists(lsArr,mode){
   // aggregate identical items (same item + dims + material + edging) across houses, keeping the per-house split
-  const byKey={},order=[];
-  const projs=new Set(lsArr.map(l=>l.project||''));
-  const hbase=l=>projs.size>1?((l.project?l.project+' — ':'')+l.name):l.name;
-  // per-house split is by list, not by name: two selected houses both called "House 1" become "House 1" and "House 1 (2)"
-  const lbl={},seen={};
-  lsArr.forEach(l=>{if(lbl[l.id]!==undefined)return;const b=hbase(l);let n=seen[b]||0,t;do{n++;t=n>1?b+' ('+n+')':b;}while(Object.values(lbl).includes(t));seen[b]=n;lbl[l.id]=t;});
-  const hname=l=>lbl[l.id];
+  const byKey=Object.create(null),order=[]; // no prototype: a house or item called "constructor"/"__proto__" is just a name
+  const lbl=houseLabels(lsArr);
+  const hname=l=>lbl.get(l.id);
   lsArr.forEach(l=>{
     const hb=holdsOf(l.id),relOnly=!!listDone(l.id)[mode]&&relOpen(l,mode);
     listRows(l).filter(r=>r.k===mode).filter(r=>{const h=hb[rowKey(r)];if(heldRow(l,rowKey(r)))return false;return !relOnly||(h&&h.st==='rel');})
       .filter(r=>!rowTicked(l.id,rowKey(r))).forEach(r=>{ // already cut/picked — not added to the total again
       const key=[matKey(r.item),matKey(r.L),matKey(r.W),matKey(r.mat),matKey(r.note)].join('|'); // same normalising as the sheets panel: spaces/NBSP/accents/case don't split a row; first spelling shown
-      if(!byKey[key]){byKey[key]={item:r.item,L:r.L,W:r.W,mat:r.mat,note:r.note,k:r.k,qty:0,bad:0,per:{}};order.push(key);}
+      if(!byKey[key]){byKey[key]={item:r.item,L:r.L,W:r.W,mat:r.mat,note:r.note,k:r.k,qty:0,bad:0,per:Object.create(null)};order.push(key);}
       const g=byKey[key],h=hname(l),qs=String(r.qty==null?'':r.qty).trim(),q=+qs;
       if(/^\d+$/.test(qs)&&q>0){g.qty+=q;g.per[h]=typeof g.per[h]==='string'?g.per[h]+' + '+q:(g.per[h]||0)+q;}
       else{g.bad++;const t=qs||'no qty';g.per[h]=g.per[h]===undefined?t:g.per[h]+' + '+t;} // "2x2", blank — shown as typed, never guessed
@@ -3921,14 +3927,14 @@ function combineLists(lsArr,mode){
   return order.map(k=>byKey[k]);
 }
 function openCombined(lsArr,mode){
-  const rows=combineLists(lsArr,mode);
+  const rows=combineLists(lsArr,mode),hl=houseLabels(lsArr);
   const saw=mode==='saw';
   const ov=document.createElement('div');ov.className='pod-ovl';
   ov.innerHTML=`<div class="pod-in" style="min-width:min(980px,94vw)">
     <div style="font-weight:800;color:#14335c;font-size:17px;margin-bottom:2px">${saw?'⚡ Combined cutting list':'⚡ Combined fittings list'} — ${lsArr.length} houses</div>
     <div style="font-size:12px;color:var(--t3);margin-bottom:6px">Cut/pick the total, split per house as labelled — quantities per house stay beside every line. Lines already ticked ${saw?'cut':'picked'} are left out.</div>
     <div style="background:#f4f7fb;border:1px solid var(--border);border-radius:7px;padding:7px 10px;margin-bottom:10px">
-      ${lsArr.map(l=>{let o=null;for(const w of (l.wos||[])){o=DB.orders.find(x=>x.wo===w);if(o)break;}return `<div style="font-size:12px;color:#14335c;padding:1px 0"><b>${escA(l.name)}</b>${o&&(o.floor||o.unit)?' · '+escA([o.floor,o.unit].filter(Boolean).join(' · ')):''}${o&&o.title?' · '+escA(o.title):''}${o&&o.customer?' · <b>'+escA(o.customer)+'</b>':''}</div>`;}).join('')}
+      ${lsArr.map(l=>{let o=null;for(const w of (l.wos||[])){o=DB.orders.find(x=>x.wo===w);if(o)break;}return `<div style="font-size:12px;color:#14335c;padding:1px 0"><b>${escA(hl.get(l.id))}</b>${o&&(o.floor||o.unit)?' · '+escA([o.floor,o.unit].filter(Boolean).join(' · ')):''}${o&&o.title?' · '+escA(o.title):''}${o&&o.customer?' · <b>'+escA(o.customer)+'</b>':''}</div>`;}).join('')}
     </div>
     <table class="wl-tbl"><thead><tr><th style="width:24%">Item</th><th>Total</th>${saw?'<th>Length</th><th>Width</th>':''}<th>${saw?'Material':'Spec'}</th><th>${saw?'Edging / Note':'Note'}</th><th style="width:26%">Per house</th></tr></thead><tbody>
     ${rows.map(r=>`<tr><td>${escA(r.item)||'—'}</td><td class="num" style="font-size:17px">${r.qty}${r.bad?`<div style="font-size:12px;color:#c0392b;font-weight:700;white-space:nowrap">+ ${r.bad} not added — check quantity</div>`:''}</td>${saw?`<td class="num">${escA(r.L)}</td><td class="num">${escA(r.W)}</td>`:''}<td>${escA(r.mat)}</td><td>${escA(r.note)}</td>
