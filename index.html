@@ -3564,7 +3564,13 @@ function projForCust(c,projects){
       if(hp&&kp&&hp!==kp)return;
       if(k.length>best){best=k.length;hit=[p];}else if(k.length===best)hit.push(p);});
   });
-  return hit.length?one(hit):null;
+  if(hit.length)return one(hit);
+  // Garry (3 Nov, answer 6): a heading with ONLY the builder's name ("CAIRN HOMES LTD") links automatically when exactly one
+  // project has that builder as its customer. Every distinctive word of the heading must be in that customer's name (a phase,
+  // site or any other word = no link); two projects for the builder = none (never guessed).
+  const hd=h.split(' ').filter(w=>w&&!SG_CO.has(w));
+  if(!hd.length)return null;
+  return one(ps.filter(p=>{const cw=new Set(sgNorm(p.customer).split(' ').filter(Boolean));return cw.size&&hd.every(w=>cw.has(w));}));
 }
 /* suggestTpl(order, templates, projects) → {level:'strong'|'weak'|'none', pid, tid, alts:[template ids, best first], why}
    Only the project's own live templates. From the WO title and the template's name + type name it reads:
@@ -3585,6 +3591,13 @@ function sgFeat(s){
   return{n,code,multi,beds:bm?bm[1]:'',kinds:new Set(SG_KIND.filter(([,re])=>re.test(n)).map(([k])=>k)),
     words:new Set(n.split(' ').filter(w=>w.length>=3&&!/^\d+$/.test(w)&&!SG_STOP.has(w)))};
 }
+// Words a WO title may carry beyond the house / type / room / number without making it a different job (house-type words
+// and where the unit is). Anything else ("EXTRA UNITS", "REMEDIAL", "SHOWHOUSE", "NO APPLIANCES") = amber (Garry, answer 5).
+const SG_OK=new Set(['semi','detached','det','terrace','terraced','mid','end','duplex','bungalow','townhouse','storey','ground','floor','first','second','third','fourth','fifth','top','number','house','houses','apts','apartments','plots','units','sites','blocks']);
+function sgExtra(f,g,p){
+  const own=new Set([p&&p.name,p&&p.customer,...((p&&p.cien_names)||[])].flatMap(n=>sgPh(sgNorm(n)).split(' ')));
+  return[...f.words].filter(w=>!g.words.has(w)&&!SG_OK.has(w)&&!SG_CO.has(w)&&!own.has(w)&&!/^\d+[a-z]?$|^\d+(bed|beds|b)$/.test(w)&&!SG_KIND.some(([,re])=>re.test(w)));
+}
 function suggestTpl(o,templates,projects){
   const none=(why,pid)=>({level:'none',pid:pid||'',tid:'',alts:[],why});
   o=o||{};const p=projForCust(o.customer,projects);
@@ -3603,8 +3616,14 @@ function suggestTpl(o,templates,projects){
     const ph=[t.name,t.typeName].map(sgNorm).some(x=>x.length>=4&&(' '+f.n+' ').includes(' '+x+' '));
     const more=[...g.words].filter(w=>f.words.has(w)).length,miss=[...g.words].filter(w=>!f.words.has(w)).length;
     const score=(cHit?4:0)+(kHit?2:0)+(bHit?1:0)+(ph?3:0)+more-miss*0.5;
-    const strong=!f.multi&&(!f.kinds.size||kHit)&&/* the title names a room → the template must name the same room */((cHit&&(kHit||!g.kinds.size||!f.kinds.size))||(ph&&(!f.code||cHit)));
+    // the title names a room this template doesn't cover ("KITCHEN & WARDROBES" for a kitchen template) → amber. A utility
+    // goes with a kitchen ("Kitchen + Utility" is one kitchen list).
+    const oRoom=[...f.kinds].some(k=>!g.kinds.has(k)&&!(k==='utility'&&g.kinds.has('kitchen')));
+    const ext=sgExtra(f,g,p);
+    const strong=!f.multi&&!oRoom&&!ext.length&&(!f.kinds.size||kHit)&&/* the title names a room → the template must name the same room */((cHit&&(kHit||!g.kinds.size||!f.kinds.size))||(ph&&(!f.code||cHit)));
     const why=[cHit?'type '+f.code.toUpperCase():'',kHit?[...g.kinds].filter(k=>f.kinds.has(k)).join(' + '):'',bHit?f.beds+' bed':'',ph&&!cHit?'name':''].filter(Boolean);
+    if(ext.length)why.push('title also says "'+ext.slice(0,3).join(' ').toUpperCase()+'" — check it');
+    else if(oRoom)why.push('title names another room too — check it');
     return{t,score,strong,why,cHit};
   }).filter(x=>x&&x.score>0).sort((a,b)=>b.score-a.score||String(a.t.typeName||a.t.name).localeCompare(String(b.t.typeName||b.t.name)));
   if(!sc.length)return none(f.code?'No "Type '+f.code.toUpperCase()+'" template for this project':'No template matches the title',p.id);

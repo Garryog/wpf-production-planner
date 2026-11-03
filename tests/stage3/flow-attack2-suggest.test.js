@@ -22,7 +22,7 @@ const T = [
   { id: 'G2', pid: 'P2', name: 'Type B kitchen', typeName: '', ltype: 'kitchen' },
 ];
 const CH = 'CAIRN HOMES - CHERRYWOOD PHASE 2 ', GV = 'GLENVEAGH - SEVEN MILLS';
-const s = (title, cust) => suggestTpl({ wo: 'WO-1', title, customer: cust || CH }, T, P);
+const s = (title, cust, t, p) => suggestTpl({ wo: 'WO-1', title, customer: cust || CH }, t || T, p || P);
 const green = (r, tid) => r && r.level === 'strong' && r.tid === tid;
 const notGreen = r => !r || r.level !== 'strong';
 const notWrongGreen = (r, ok) => notGreen(r) || r.tid === ok;
@@ -44,7 +44,11 @@ r = s('BLOCK B APT 3 KITCHEN'); rec('N6 "BLOCK B APT 3 KITCHEN" (B is the block,
 r = s('BLOCK A - APT 4 TYPE C KITCHEN'); rec('N7 "BLOCK A - APT 4 TYPE C KITCHEN" is never green for a Type A template', !r || r.level !== 'strong' || r.tid === 'T4', J(r));
 r = s('UNIT B4 KITCHEN'); rec('N8 "UNIT B4 KITCHEN" (unit number B4) is not green for Type B kitchen', notGreen(r), J(r));
 r = s('HOUSE 14 TYPE B KITCHEN - SHOWHOUSE'); rec('N9 "… KITCHEN - SHOWHOUSE" (show house: different spec) is not green', notGreen(r), J(r));
-r = s('HOUSE 14 TYPE B KITCHEN', 'CAIRN HOMES'); rec('N10 customer heading only "CAIRN HOMES" (no development): not green', notGreen(r), J(r));
+// N10 changed 3 Nov (Coder, Garry's answer 6): a builder-only heading links AUTOMATICALLY when that builder has exactly one
+// project in the planner (here Cairn Homes has only Cherrywood Phase 2) — so the normal Type B kitchen match applies.
+r = s('HOUSE 14 TYPE B KITCHEN', 'CAIRN HOMES'); rec('N10 customer heading only "CAIRN HOMES", builder has ONE project → linked automatically to it (Garry, answer 6)', r && r.pid === 'P1' && notWrongGreen(r, 'T2'), J(r));
+r = s('HOUSE 14 TYPE B KITCHEN', 'CAIRN HOMES', T, P.concat([{ id: 'P3', name: 'Adamstown', customer: 'Cairn Homes', cien_names: [] }]));
+rec('N10b …but when the builder has TWO projects: no link, not green (never guessed)', notGreen(r) && !(r && r.pid), J(r));
 r = s('HOUSE 14 TYPE B KITCHEN', 'CAIRN HOMES - CHERRYWOOD PHASE 3'); rec('N11 heading says PHASE 3 (project is Phase 2): not green', notGreen(r), J(r));
 r = s('HOUSE 14 TYPE B KITCHEN (NO APPLIANCES)'); rec('N12 "(NO APPLIANCES)" — information only: amber or green both acceptable, but never another template', !r || r.level !== 'strong' || r.tid === 'T2', J(r));
 r = s('HOUSE 14 TYPE D KITCHEN'); rec('N13 "TYPE D KITCHEN" (no Type D template) is not green', notGreen(r), J(r));
