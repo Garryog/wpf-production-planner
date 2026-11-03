@@ -4576,18 +4576,37 @@ function lsRevInfo(id,mode){
 /* Flow step 7 (Garry, answer 1): when a list on the saw is reissued, the saw sees a full-width
    "NEW LIST ISSUED – Rev 2 replaces Rev 1 (2 changed / 1 added / 1 removed)" until someone taps ✓ Seen on that saw PC; a list
    made with "Make new list from this" shows "replaces <old list>". Remembered per device (localStorage), per list and Rev. */
-function sawSeen(){try{return JSON.parse(ls.get('wpfSawSeen')||'{}')||{};}catch(e){return{};}}
-function sawSeenSet(id){const m=sawSeen(),l=LST.l.get(id);m[id]=+((l||{}).rev)||1;ls.set('wpfSawSeen',JSON.stringify(m));}
+// (Tester round 4) ✓ Seen is also kept in memory, so it clears for this session even when the browser blocks storage.
+const SAW_SEEN_MEM={};let sawNlOpen=false;
+function sawSeen(){let m={};try{m=JSON.parse(ls.get('wpfSawSeen')||'{}')||{};}catch(e){m={};}
+  Object.keys(SAW_SEEN_MEM).forEach(k=>{if(!(+m[k]>=SAW_SEEN_MEM[k]))m[k]=SAW_SEEN_MEM[k];});return m;}
+function sawSeenSet(ids){const m=sawSeen();[].concat(ids).forEach(id=>{const l=LST.l.get(id);m[id]=SAW_SEEN_MEM[id]=+((l||{}).rev)||1;});ls.set('wpfSawSeen',JSON.stringify(m));}
+// After "Make new list from this" the person may choose to leave the old list with the saw (Cancel on "changed on another
+// screen"). While BOTH are live the saw is told in red, on the new list and on the old one — no ✓ Seen: it goes when the
+// office archives one of them.
+function lsBothLive(id){ // → {nw, old} when this list or its replacement is live alongside the other, else null
+  const live=x=>x&&!x.archived&&!x.tpl;
+  const o=lsReplOf(id);if(o&&live(LST.l.get(o))&&live(LST.l.get(id)))return{nw:LST.l.get(id),old:LST.l.get(o)};
+  const n=lsCache().all.find(x=>x.id!==id&&live(x)&&lsReplOf(x.id)===id);if(n&&live(LST.l.get(id)))return{nw:n,old:LST.l.get(id)};
+  return null;}
+function lsBothLiveMsg(b){return 'Old list "'+String(b.old.name||'')+'" is STILL with the saw — check with the office before cutting. "'+String(b.nw.name||'')+'" was made to replace it.';}
 function sawNewListHTML(lists){
-  if(!V2())return'';const seen=sawSeen();
-  const items=(lists||[]).map(l=>{const r=LST.l.get(l.id);if(!r)return null;const rev=+r.rev||1,s=+seen[l.id]||0,old=lsReplOf(l.id);
+  if(!V2())return'';const seen=sawSeen(),warn=[];
+  const items=(lists||[]).map(l=>{const r=LST.l.get(l.id);if(!r)return null;const rev=+r.rev||1,s=+seen[l.id]||0,old=lsReplOf(l.id),both=lsBothLive(l.id);
+    if(both){warn.push({l,t:lsBothLiveMsg(both)});return null;}
     if(rev>=2&&s<rev){const i=lsRevInfo(l.id,'saw');return{l,rev,t:'Rev '+rev+' replaces Rev '+(rev-1)+' ('+i.changed+' changed / '+i.added+' added / '+i.removed+' removed)'};}
     if(old&&!s){const o=LST.l.get(old);return{l,rev,t:'replaces "'+((o&&o.name)||'the old list')+'" — parts already cut on it are marked "already cut on old list"'};}
     return null;}).filter(Boolean);
-  if(!items.length)return'';
-  return `<div id="saw-newlist" style="border:3px solid #1a56db;background:#eaf2ff;border-radius:10px;padding:10px 12px;margin:0 0 10px">${items.map(x=>
-    `<div class="snl-row" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:4px 0"><div style="flex:1;min-width:220px;font-size:17px;font-weight:900;color:#0b2f6b">🆕 NEW LIST ISSUED – ${escA(x.l.name)}: ${escA(x.t)}</div><button class="btn btn-s" data-sawseen="${escA(x.l.id)}" style="font-size:14px;padding:8px 14px;min-height:40px">✓ Seen</button></div>`).join('')}</div>`;
+  if(!items.length&&!warn.length)return'';
+  const row=x=>`<div class="snl-row" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:4px 0"><div style="flex:1;min-width:220px;font-size:17px;font-weight:900;color:#0b2f6b">🆕 NEW LIST ISSUED – ${escA(x.l.name)}: ${escA(x.t)}</div><button class="btn btn-s" data-sawseen="${escA(x.l.id)}" style="font-size:14px;padding:8px 14px;min-height:40px">✓ Seen</button></div>`;
+  // more than 3 at once: one line "12 lists re-issued — show" with ✓ Seen all; the rows (each with its own ✓ Seen) open below
+  const many=items.length>3;
+  return `<div id="saw-newlist" style="border:3px solid ${warn.length?'#c0392b':'#1a56db'};background:#eaf2ff;border-radius:10px;padding:10px 12px;margin:0 0 10px">`
+    +warn.map(x=>`<div class="snl-warn" style="background:#fdecea;color:#a31515;border-radius:6px;padding:8px 10px;margin:2px 0 6px;font-size:17px;font-weight:900">⚠ ${escA(x.l.name)}: ${escA(x.t)}</div>`).join('')
+    +(!items.length?'':many?`<details id="snl-many"${sawNlOpen?' open':''}><summary style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;cursor:pointer;list-style:none"><span style="flex:1;min-width:200px;font-size:17px;font-weight:900;color:#0b2f6b">🆕 ${items.length} lists re-issued — <u>${sawNlOpen?'hide':'show'}</u></span><button class="btn btn-s" data-sawseenall="${escA(items.map(x=>x.l.id).join(','))}" style="font-size:14px;padding:8px 14px;min-height:40px">✓ Seen all</button></summary>${items.map(row).join('')}</details>`
+      :items.map(row).join(''))+`</div>`;
 }
+function lsRevBannerBoth(l){const b=V2()&&lsBothLive(l.id);return b?`<div class="rev-both" style="background:#fdecea;border:2px solid #c0392b;color:#a31515;border-radius:6px;padding:8px 10px;font-weight:900;margin:6px 0">⚠ ${escA(lsBothLiveMsg(b))}</div>`:'';}
 function lsRevBanner(l,mode){
   if(!V2())return'';const i=lsRevInfo(l.id,mode);if(i.rev<2)return'';
   return `<div class="rev-note" style="background:#fff4d6;border:1px solid #e0a43a;color:#7a5200;border-radius:6px;padding:6px 10px;font-weight:800;margin:6px 0">REV ${i.rev} — ${i.changed} changed, ${i.added} added, ${i.removed} removed</div>`
@@ -5448,7 +5467,7 @@ function renderWorkList(app,mode){
     <div class="wl-h"><div style="display:flex;gap:10px;align-items:flex-start">${!isDone?`<button class="wl-chk${wlSel.has(l.id)?' on':''}" data-wlsel="${escA(l.id)}" title="Select for batch cutting across houses">${wlSel.has(l.id)?'✓':''}</button>`:''}<div><span class="wn">${escA(l.name)}</span> <span class="wd">${escA(l.project||'')}${(c=>c&&c!==l.project?' · '+escA(c):'')(listCust(l))}</span><div style="margin-top:3px">${woChips(l)}</div></div></div>
     ${due?(od=>`<span class="wl-due"${od?' style="background:#c0392b;color:#fff"':''}>${od?'⚠ OVERDUE — ':''}${mode==='saw'?'CUT':'PICK'} BY ${fmt(listDeadline(l))} · DELIVERS ${fmt(due)}</span>`)(!isDone&&listOverdue(l)):'<span class="wd">no delivery date yet</span>'}</div>
     ${relOnly?`<div class="rel-note">▶ MATERIAL HAS ARRIVED — ${relRows(l)} row${relRows(l)!==1?'s':''} released from the waiting list. The rest of this house was done ${new Date(dn.at).toLocaleDateString('en-IE')}${dn.by?' by '+escA(dn.by):''}.</div>`:''}
-    ${lsRevBanner(l,mode)}
+    ${lsRevBannerBoth(l)}${lsRevBanner(l,mode)}
     ${nh?`<div class="hold-note">⏸ ${nh} row${nh!==1?'s':''} waiting on ${mode==='saw'?'material':'stock'} — ${mode==='saw'?'cut':'pick'} the rest and tap ${cfg.done}; the waiting rows come back when released.</div>`:''}
     ${listTableHTML(l,mode,{relOnly,tick:!isDone})}
     <div class="wl-act">${isDone?`<span class="wl-donelbl">${cfg.done} — ${new Date(dn.at).toLocaleDateString('en-IE')} ${hhmm(dn.at)}${dn.by?' by '+escA(dn.by):''}</span><button class="wl-undo" data-wlundo="${escA(l.id)}">Undo</button>`
@@ -5487,6 +5506,8 @@ function renderWorkList(app,mode){
     <div class="flr-ft">Last update ${hhmm(new Date().toISOString())}</div></div>`;
   const wtg=document.getElementById('wait-tog');if(wtg)wtg.onclick=()=>{sawWaitOpen=!sawWaitOpen;render();};
   document.querySelectorAll('[data-sawseen]').forEach(b=>b.onclick=()=>{sawSeenSet(b.dataset.sawseen);render();});
+  document.querySelectorAll('[data-sawseenall]').forEach(b=>b.onclick=e=>{e.preventDefault();e.stopPropagation();sawSeenSet(b.dataset.sawseenall.split(','));render();});
+  const snl=document.getElementById('snl-many');if(snl)snl.ontoggle=()=>{sawNlOpen=snl.open;const u=snl.querySelector('summary u');if(u)u.textContent=snl.open?'hide':'show';};
   const tb1=document.getElementById('wl-tab-todo');if(tb1)tb1.onclick=()=>{wlShowDone=false;wlShowHold=false;render();};
   const tb2=document.getElementById('wl-tab-done');if(tb2)tb2.onclick=()=>{wlShowDone=true;wlShowHold=false;render();};
   const tb3=document.getElementById('wl-tab-hold');if(tb3)tb3.onclick=()=>{wlShowHold=true;wlShowDone=false;render();};
