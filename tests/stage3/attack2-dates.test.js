@@ -9,6 +9,7 @@ async function at(browser, now, dues) {
   const S = F.makeServer(row);
   dues.forEach(([wo, due, withList]) => { if (withList) F.seedList(S, 'L' + wo, { wos: [wo] }); });
   const t = await F.dev(browser, S, 'saw', { now });
+  await t.page.evaluate(() => { sawWaitOpen = true; render(); }); // 3 Nov flow: the amber "waiting for a list" line opens on a tap
   return { S, t };
 }
 const info = (p, wos) => p.evaluate(wos => wos.map(w => {

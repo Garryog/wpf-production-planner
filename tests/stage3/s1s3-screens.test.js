@@ -111,6 +111,7 @@ function fixture(on) {
   rec('Production Manager: Today is today\'s screen', /what needs you today/.test(await txt(pr.page)));
   // ---- Waiting for a list on the saw
   const saw = await F.dev(browser, S, 'saw');
+  await saw.page.evaluate(() => { sawWaitOpen = true; render(); }); // 3 Nov flow: the amber "waiting for a list" line opens on a tap
   const w = await saw.page.evaluate(() => { const e = document.getElementById('wait-list'); return e ? { t: e.innerText, rows: [...e.querySelectorAll('[data-waitwo]')].map(r => r.dataset.waitwo + ':' + (r.style.background ? 'red' : '')) } : null; });
   rec('saw strip: jobs with no list, above the sheets panel', w && w.rows.join() === 'WO-2:red,WO-4:' && (await saw.page.evaluate(() => { const a = document.getElementById('wait-list'), b = document.body.innerText.indexOf('Sheets need'); return document.body.innerText.indexOf('WAITING FOR A LIST') < b; })), JSON.stringify(w && w.rows));
   rec('saw strip: WO-2 cut by today (21 Oct), list due by Tue 20 Oct — overdue red; owner from the project', /WO-2[\s\S]*OVERDUE · cut by 21 Oct[\s\S]*list due by 20 Oct[\s\S]*owner Ciara \(design\)/.test(w.t), w.t);

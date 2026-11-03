@@ -192,6 +192,8 @@ button,input,select{font-family:inherit;cursor:pointer}
 .wl-tabs button{flex:1;padding:14px;font-size:17px;font-weight:800;border-radius:10px;border:2px solid var(--b2);background:#fff;color:var(--t3);cursor:pointer}
 .wl-tabs button.on{background:#14335c;border-color:#14335c;color:#fff}
 .wl-dday{font-size:13px;font-weight:800;color:#14335c;text-transform:uppercase;letter-spacing:.5px;margin:16px 0 6px;border-bottom:2px solid #14335c;padding-bottom:3px}
+.ls-nochip{display:inline-block;margin-left:4px;font-size:10px;font-weight:700;border-radius:4px;padding:0 5px;background:#fff4d6;color:#7a4a00;border:1px solid #e0a43a;white-space:nowrap;vertical-align:middle}
+.ls-nochip.late{background:#c0392b;color:#fff;border-color:#c0392b}
 .lti-row{background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:6px;font-size:13px}
 .lti-top{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline}
 .lti-wo{font-family:monospace;font-size:14px;color:#14335c}.lti-t{flex:1;min-width:140px;overflow-wrap:anywhere}.lti-c{color:var(--t2);font-size:12px;overflow-wrap:anywhere}
@@ -1680,13 +1682,16 @@ function renderBoard(app){
       ${!mixed&&cur&&!weeks.includes(cur)?`<option value="${cur}" selected>${wkLbl(cur)} (past)</option>`:''}
       ${weeks.map(w=>`<option value="${w}"${!mixed&&cur===w?' selected':''}>${wkLbl(w)}</option>`).join('')}`;
 
+  // lists switch on: "📋 no list" on jobs at step 5-8 with no cutting list — red once the list is late
+  const lnTd=todayLocal(),lnMap=V2()?new Map(listsNeeded().filter(lsProcessed).map(o=>[o.wo,lsNeedInfo(o,lnTd)])):null;
+  const lnChip=o=>{const n=lnMap&&lnMap.get(o.wo);return n?`<span class="ls-nochip${n.late?' late':''}" title="No cutting list yet — ${n.late?'LATE, was due':'due by'} ${n.due?fmt(n.due):'—'}">📋 no list</span>`:'';};
   const rowHTML=(o,member,sep)=>`<tr class="${o.colour?'c-'+o.colour:''}${o.hl?' hl-row':''}${sep?' grp-start':''}${member?' grp-member':''}" draggable="true" data-wo="${escA(o.wo)}">
           <td style="text-align:center">${member
             ?`<button class="grm-btn" data-grm="${escA(o.wo)}" title="Take this WO out of the group">×</button>`
             :`<input type="checkbox" class="gsel" data-gsel="${escA(o.wo)}"${grpSel.has(o.wo)?' checked':''} title="Select to group">`}</td>
           <td><span class="drag-handle">⠿</span></td>
           <td style="text-align:center"><button class="dvbtn${o.delv?' on':''}" data-dv="${escA(o.wo)}" title="${o.delv?'On the delivery board — click to untag':'Put on the delivery board'}">🚚</button></td>
-          <td><span class="wo-num" data-hl="${escA(o.wo)}" style="cursor:pointer${member?';padding-left:10px':''}${/^P-\d+$/.test(o.wo)?';color:#7c5cd6;font-weight:800':''}" title="${/^P-\d+$/.test(o.wo)?'Created in the planner — not from Cienapps. ':''}Tap to mark as discussed">${o.hl?'✓ ':''}${escA(o.wo)}</span>${addBadge(o)}${isShipped(o)?`<span class="fu-badge" style="background:#eef3fb;border-color:#b9cdec;color:#14418f;margin-left:4px" title="Shipped in Cienapps — on the board because it still has waiting lines">📦 ${AM.get(o.wo)||0} waiting</span>`:''}</td>
+          <td><span class="wo-num" data-hl="${escA(o.wo)}" style="cursor:pointer${member?';padding-left:10px':''}${/^P-\d+$/.test(o.wo)?';color:#7c5cd6;font-weight:800':''}" title="${/^P-\d+$/.test(o.wo)?'Created in the planner — not from Cienapps. ':''}Tap to mark as discussed">${o.hl?'✓ ':''}${escA(o.wo)}</span>${addBadge(o)}${lnChip(o)}${isShipped(o)?`<span class="fu-badge" style="background:#eef3fb;border-color:#b9cdec;color:#14418f;margin-left:4px" title="Shipped in Cienapps — on the board because it still has waiting lines">📦 ${AM.get(o.wo)||0} waiting</span>`:''}</td>
           <td>${o.floor?`<span class="fu-badge">${escA(o.floor)}</span>`:'<span style="color:var(--t3)">—</span>'}</td>
           <td>${o.unit?`<span class="fu-badge">${escA(o.unit)}</span>`:'<span style="color:var(--t3)">—</span>'}</td>
           <td><span class="wo-title" title="${escA(o.title)}">${escA(o.title)}</span></td>
@@ -3234,15 +3239,25 @@ function lsOwnerFor(o){
   const p=lsProjForCust(o&&o.customer);
   return(p&&String(p.list_owner||'').trim())||'Production Manager';
 }
+// Saw (Garry, 3 Nov): RED, always open — "ON DELIVERY – NO CUTTING LIST": jobs dragged onto the delivery schedule (a van
+// AND a day) with no list. The undated delivery pool and the automatic step 7/8 tag don't count for red. AMBER, one line —
+// every other job waiting for a list; tap to open. Rows: cut-by, list due by (lsNeedInfo) and who owns the list.
+let sawWaitOpen=false;
 function waitListHTML(){
   if(!V2())return'';
   const today=todayLocal();
-  const rows=listsNeeded().map(o=>{const cut=listDeadline({wos:[o.wo]});return{o,cut,due:cut?prevWorkDay(lsSawDay(cut)):''};}).sort((a,b)=>(a.due||'9999').localeCompare(b.due||'9999')); // due = the working day before the saw cuts it; earliest first
+  const rows=listsNeeded().map(o=>lsNeedInfo(o,today)).sort((a,b)=>(a.due||'9999').localeCompare(b.due||'9999')); // earliest "list due by" first
   if(!rows.length)return'';
-  const od=rows.filter(r=>r.due&&r.due<today).length;
-  return `<div class="exp-panel" id="wait-list" style="border:2px solid ${od?'#c0392b':'#d4880f'};background:${od?'#fdf3f2':'#fffaf0'};padding:10px 12px">
-    <div style="font-size:15px;font-weight:800;color:${od?'#8a1c10':'#7a4a00'};margin-bottom:6px">📋 WAITING FOR A LIST — ${rows.length} job${rows.length!==1?'s':''}${od?` · <span style="color:#c0392b">${od} overdue</span>`:''}</div>
-    ${rows.map(({o,cut,due})=>{const late=due&&due<today;return `<div class="wl-drow wait-row" data-waitwo="${escA(o.wo)}" style="${late?'background:#c0392b;color:#fff;':''}border-radius:5px;padding:5px 8px"><b>${escA(o.wo)}</b><span class="dsh-c">${escA(o.customer||'')}</span><span class="dsh-t">${escA([o.floor,o.unit].filter(Boolean).join(' '))}</span><span class="dsh-x">${late?'⚠ OVERDUE · ':''}cut by ${cut?fmt(cut):'—'} · list due by ${due?fmt(due):'—'} · owner ${escA(lsOwnerFor(o))}</span></div>`;}).join('')}
+  const red=rows.filter(r=>r.onDel),amb=rows.filter(r=>!r.onDel),late=amb.filter(r=>r.late).length;
+  const line=({o,cut,due,late,onDel})=>`<div class="wl-drow wait-row" data-waitwo="${escA(o.wo)}" style="${late?'background:#c0392b;color:#fff;':''}border-radius:5px;padding:5px 8px;flex-wrap:wrap"><b>${escA(o.wo)}</b><span class="dsh-c">${escA(o.customer||'')}</span><span class="dsh-t">${escA([o.floor,o.unit].filter(Boolean).join(' '))}</span><span class="dsh-x">${onDel?'<b>🚚 '+escA(slotLbl(o.delVeh,o.delDay))+'</b> · ':''}${late?'⚠ OVERDUE · ':''}cut by ${cut?fmt(cut):'—'} · list due by ${due?fmt(due):'—'} · owner ${escA(lsOwnerFor(o))}</span></div>`;
+  return `<div id="wait-list">
+    ${red.length?`<div class="exp-panel" id="wait-red" style="border:3px solid #c0392b;background:#fdf3f2;padding:10px 12px">
+      <div style="font-size:17px;font-weight:900;color:#8a1c10;margin-bottom:6px">🚨 ON DELIVERY – NO CUTTING LIST — ${red.length} job${red.length!==1?'s':''}</div>
+      <div style="font-size:12px;color:#8a1c10;margin-bottom:6px">These are on a van and day on the delivery schedule and the saw has nothing to cut. Tell the Production Manager.</div>
+      ${red.map(line).join('')}</div>`:''}
+    ${amb.length?`<div class="exp-panel" id="wait-amber" style="border:2px solid #d4880f;background:#fffaf0;padding:8px 12px">
+      <button id="wait-tog" style="all:unset;cursor:pointer;display:block;width:100%;font-size:15px;font-weight:800;color:#7a4a00;padding:4px 0">📋 ${amb.length} job${amb.length!==1?'s':''} waiting for a cutting list${late?` · <span style="color:#c0392b">${late} late</span>`:''} <span style="float:right">${sawWaitOpen?'▲ hide':'▼ show'}</span></button>
+      ${sawWaitOpen?`<div style="margin-top:6px">${amb.map(line).join('')}</div>`:''}</div>`:''}
   </div>`;
 }
 /* ---------- Cutting-list flow (Garry, 3 Nov — docs/PLAN-cutting-lists-flow-nov.md), V2 only ----------
@@ -4019,6 +4034,7 @@ function renderLists(app){
         <span style="font-size:12px;color:var(--t3)">Flag jobs with no list</span>
         <input type="number" id="lst-lead" value="${listLead()}" min="1" max="60" style="width:60px;padding:5px 8px;border:1px solid var(--b2);border-radius:5px"> days
         <button class="btn btn-s" id="lst-lead-save">Save</button>
+        ${V2()?`<span style="font-size:12px;color:var(--t3)">List due</span><input type="number" id="lst-due" value="${listDueDays()}" min="1" max="30" style="width:60px;padding:5px 8px;border:1px solid var(--b2);border-radius:5px"><span style="font-size:12px;color:var(--t3)">working days after the WO is processed</span><button class="btn btn-s" id="lst-due-save">Save</button>`:''}
       </div>
       <div id="lst-upmsg" style="margin-top:8px;font-size:12px"></div>
     </div>
@@ -4136,6 +4152,8 @@ function renderLists(app){
   };
   const lse=document.getElementById('lst-lead-save');
   if(lse)lse.onclick=()=>{const v=parseInt(document.getElementById('lst-lead').value);if(v>0){DB.listLead=v;sched();render();toast('Lead time set to '+v+' days');}};
+  const lde=document.getElementById('lst-due-save');
+  if(lde)lde.onclick=()=>{const v=parseInt(document.getElementById('lst-due').value);if(v>0&&v<=30){DB.listDue=v;sched();render();toast('A cutting list is now due '+v+' working day'+(v!==1?'s':'')+' after the WO is processed');}else toast('Enter 1 to 30 working days');};
   // click a flagged WO line to attach a list to it right there
   document.querySelectorAll('[data-nrow]').forEach(tr=>tr.onclick=()=>{
     lstAttachOpen=lstAttachOpen===tr.dataset.nrow?null:tr.dataset.nrow;render();
@@ -4510,6 +4528,7 @@ function renderWorkList(app,mode){
     ${visible.length?visible.map(l=>card(l,false)).join(''):`<div class="flr-none">Nothing to ${mode==='saw'?'cut':'pick'} for today — all clear ✓${upcoming.length?`<div style="font-size:13px;margin-top:6px;color:var(--t3)">${upcoming.length} list${upcoming.length!==1?'s':''} due on later days</div>`:''}</div>`}
     ${(upcoming.length||undated.length)?`<div style="text-align:center;margin:12px 0"><button class="btn btn-s" id="wl-upc">${wlShowUpcoming?'▴ Hide later days':'▾ Work ahead — show '+(upcoming.length+undated.length)+' list'+(upcoming.length+undated.length!==1?'s':'')+' due on later days'}</button></div>`:''}`}
     <div class="flr-ft">Last update ${hhmm(new Date().toISOString())}</div></div>`;
+  const wtg=document.getElementById('wait-tog');if(wtg)wtg.onclick=()=>{sawWaitOpen=!sawWaitOpen;render();};
   const tb1=document.getElementById('wl-tab-todo');if(tb1)tb1.onclick=()=>{wlShowDone=false;wlShowHold=false;render();};
   const tb2=document.getElementById('wl-tab-done');if(tb2)tb2.onclick=()=>{wlShowDone=true;wlShowHold=false;render();};
   const tb3=document.getElementById('wl-tab-hold');if(tb3)tb3.onclick=()=>{wlShowHold=true;wlShowDone=false;render();};
@@ -4615,7 +4634,8 @@ function renderDash(app){
       ${tile(planned.length,'ON DELIVERY BOARD','planned this week · €'+Math.round(val(planned)).toLocaleString(),'#14335c')}
       ${tile(sawOpen.length,'CUTTING LISTS OPEN',(n=>n?`<b style="color:#c0392b">${n} OVERDUE</b> · `:'')(sawOpen.filter(listOverdue).length)+sawDone.length+' cut complete','#7c5cd6')}
       ${tile(fitOpen.length,'FITTINGS TO PICK',(n=>n?`<b style="color:#c0392b">${n} OVERDUE</b> · `:'')(fitOpen.filter(listOverdue).length)+fitDone.length+' picked','#0e7490')}
-      ${tile(needed.length,'LISTS MISSING','jobs scheduled with no cutting list',needed.length?'#c0392b':'#5b6b82')}
+      ${V2()?(n=>tile(n,'LISTS LATE','past the list due date',n?'#c0392b':'#5b6b82'))(needed.filter(o=>lsNeedInfo(o).late).length)+(n=>tile(n,'LISTS TO ISSUE','processed or due soon, no cutting list',n?'#d4880f':'#5b6b82'))(needed.filter(o=>!lsNeedInfo(o).late).length)
+        :tile(needed.length,'LISTS MISSING','jobs scheduled with no cutting list',needed.length?'#c0392b':'#5b6b82')}
     </div>
     <div class="dsh-cols">
       ${panel('⚠ MISSED — planned earlier this week, not delivered','#c0392b',missed.sort((a,b)=>DEL_DAYS.indexOf(a.delDay)-DEL_DAYS.indexOf(b.delDay)).map(o=>`<div class="dsh-row"><b>${escA(o.wo)}</b><span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-c">${escA(o.customer||'')}</span><span class="dsh-x" style="color:#c0392b;font-weight:800">${escA(o.delDay)} · ${st(o)?dStageLbl[st(o)]:'NEVER LOADED'}</span></div>`),'None — every planned delivery is on time ✓')}
@@ -6987,6 +7007,8 @@ function renderProd(app){
   const holds=allHolds(['saw','fit'],'hold');
   const missNo=missedJobs().filter(o=>!o.missWhy);
   const moved=all.filter(o=>(o.delMoves||[]).length);
+  const lnRows=V2()?listsNeeded().map(o=>lsNeedInfo(o)).sort((a,b)=>(b.late-a.late)||(b.onDel-a.onDel)||(a.due||'9999').localeCompare(b.due||'9999')):null; // lists switch on
+  const lnLate=(lnRows||[]).filter(r=>r.late),lnIssue=(lnRows||[]).filter(r=>!r.late);
   const dot=l=>`<span class="rdy-dot rdy-${l}"></span>`;
   const rRow=o=>{const r=rdy(o);return `<div class="dsh-row">${dot(r.lvl)}<b>${escA(o.wo)}</b>${(o.floor||o.unit)?`<span class="flr-fu" style="font-size:12px">${escA([o.floor,o.unit].filter(Boolean).join(' · '))}</span>`:''}<span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-c">${escA(o.customer||'')}</span><span class="dsh-x">${escA(slotLbl(o.delVeh,o.delDay))} · <b class="rdy-t-${r.lvl}">${escA(r.why.join(' · '))}</b></span></div>`;};
   const panel=(title,color,inner)=>`<div class="dsh-p"><div class="dsh-ph" style="background:${color}">${title}</div>${inner}</div>`;
@@ -7000,7 +7022,10 @@ function renderProd(app){
       ${tile(unplaced.length,'DUE IN 7 DAYS, NOT ON A VAN','',unplaced.length>0)}
       ${tile(missNo.length,'MISSED — REASON NEEDED','',missNo.length>0)}
       ${tile(perf.pct===null?'—':perf.pct+'%','ON TIME THIS WEEK',perf.due?perf.onTime+' of '+perf.due+' due so far':'nothing due yet',perf.pct!==null&&perf.pct<90)}
+      ${lnRows?`<div class="dsh-tile" data-pmlists="late" style="cursor:pointer;border-top:4px solid ${lnLate.length?'#c0392b':'#5b6b82'}"><div class="dsh-n" style="color:${lnLate.length?'#c0392b':'#14335c'}">${lnLate.length}</div><div class="dsh-l">LISTS LATE</div><div class="dsh-s">past the list due date</div></div>
+      <div class="dsh-tile" data-pmlists="issue" style="cursor:pointer;border-top:4px solid ${lnIssue.length?'#d4880f':'#5b6b82'}"><div class="dsh-n" style="color:${lnIssue.length?'#8a5a00':'#14335c'}">${lnIssue.length}</div><div class="dsh-l">LISTS TO ISSUE</div><div class="dsh-s">not late yet</div></div>`:''}
     </div>
+    ${lnRows&&lnRows.length?panel('📋 CUTTING LISTS — late and to issue (tap to issue them)','#8a5a00',lnRows.slice(0,25).map(r=>`<div class="dsh-row" data-pmlists="row" style="cursor:pointer${r.late?';background:#fdf3f2':''}"><b>${escA(r.o.wo)}</b><span class="dsh-t">${escA(r.o.title||'')}</span><span class="dsh-c">${escA(r.o.customer||'')}</span><span class="dsh-x">${r.onDel?'🚚 '+escA(slotLbl(r.o.delVeh,r.o.delDay))+' · ':''}${r.late?'<b style="color:#c0392b">LATE</b> · was due ':'due by '}${r.due?fmt(r.due):'—'} · owner ${escA(lsOwnerFor(r.o))}</span></div>`).join('')+(lnRows.length>25?`<div class="dsh-row" style="color:var(--t3)">…and ${lnRows.length-25} more on the Lists tab</div>`:'')):''}
     ${missNo.length?panel('⚠ MISSED — tap to give the reason','#c0392b',missNo.map(o=>`<div class="dsh-row"><b>${escA(o.wo)}</b><span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-c">${escA(o.customer||'')}</span><span class="dsh-x">${escA(slotLbl(o.delVeh,o.delDay))} · ${dStage(o)?dStageLbl[dStage(o)]:'NEVER LOADED'}</span><button class="btn btn-s" data-misswhy="${escA(o.wo)}">Give reason</button></div>`).join('')):''}
     <div class="dsh-cols">
       ${panel('🔴 AT RISK — '+td+' & '+tm+' loads not ready','#c0392b',atRisk.length?atRisk.sort((a,b)=>DEL_DAYS.indexOf(a.delDay)-DEL_DAYS.indexOf(b.delDay)).map(rRow).join(''):none('Every job on '+td+' and '+tm+' is ready ✓'))}
@@ -7014,6 +7039,7 @@ function renderProd(app){
   </div>`;
   bindMissWhy();
   bindHoldBook(['saw','fit'],officeWhoFn);
+  document.querySelectorAll('[data-pmlists]').forEach(e=>e.onclick=()=>{prodTab='lists';lsStart();render();});
 }
 
 loadDB().then(()=>{render();startAutoRefresh();});
