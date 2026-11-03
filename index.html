@@ -2614,9 +2614,15 @@ function listArchive(l,by){ // V2: Delete becomes Archive — nothing is ever de
 async function lsRpc(fn,args){
   const r=await fetch(SUPA_URL+'/rpc/'+fn,{method:'POST',headers:SUPA_HDR,body:JSON.stringify(args)});
   const d=await r.json().catch(()=>null);
-  if(!r.ok){const e=new Error((d&&d.message)||('HTTP '+r.status));e.status=r.status;throw e;}
+  if(!r.ok){const e=new Error((d&&d.message)||('HTTP '+r.status));e.status=r.status;if(d){e.code=d.code;e.details=d.details;e.hint=d.hint;}throw e;}
   return d;
 }
+/* One live list per WO (3 Nov, SUPABASE_CHANGES.md lists_one_per_wo): the database refuses a second live list for a WO from
+   the cutting-list flow (✓ Confirm, ✓ Use an Excel upload, template Create & attach, Make new list from this) when another
+   PC made one a moment earlier. lsOneErr reads the refusal: {wo, id of the list that WO already has} — or null. */
+function lsOneErr(e){return e&&/one list per WO/.test(String(e.message||''))?{wo:String(e.hint||''),id:String(e.details||'')}:null;}
+async function lsOneList(k){try{if(k.id)await lsReloadList(k.id);}catch(e){}return(k.id&&lsList(k.id))||{id:k.id,name:k.id||'another list'};} // that list, fresh — so it shows here too
+function lsGotMsg(wo,l){return(wo||'This work order')+' already got a list on another PC: "'+(l&&l.name||'another list')+'" — no second list was made (the saw would cut it twice). Open it from Lists.';}
 function lsProjFind(name){const k=String(name||'').trim().toLowerCase();return[...LST.p.values()].find(p=>String(p.name||'').trim().toLowerCase()===k)||null;}
 async function lsProject(name,customer){ // the project with this name (any case / spacing), made if it's new
   const n=String(name||'').trim()||'Unassigned';
@@ -2780,8 +2786,12 @@ async function lsSaveManual(d,by,ex){
   if(ex&&!ex.tpl&&!ex.locked&&lsLocked(lsList(id)))pl.lock=true; // cut-by today / next working day: this save is a revision
   if(d.ltype)pl.list_type=d.ltype;if(d.tname!==undefined)pl.type_name=String(d.tname||'').trim()||null;
   if(!ex)Object.assign(pl,d.tpl?{wos:[],source:'manual',is_template:true}:{wos:[d.wo],source:'manual'},{list_type:d.ltype||'house'});
+  if(!ex&&!d.tpl&&d.replaces&&d.replaces.id)pl.replaces=d.replaces.id; // the database allows ONE live replacement of the old list (lists_one_replacement)
   if(!ex&&d.replaces&&d.replaces.id)reason='Made with "Make new list from this" from "'+String(d.replaces.name||'').trim()+'" — replaces list '+d.replaces.id; // lsReplOf reads the id back
-  const res=await lsSaveList(pl,lines,by,reason||(ex?(d.why||'List edited'):null)); // a template's "what changed" goes in its History
+  let res;
+  try{res=await lsSaveList(pl,lines,by,reason||(ex?(d.why||'List edited'):null));} // a template's "what changed" goes in its History
+  catch(e){const k=lsOneErr(e);if(k&&pl.replaces){const l=await lsOneList(k);throw new Error('"'+String(d.replaces.name||'the old list').trim()+'" has already been replaced by "'+l.name+'" on another PC — nothing saved (no second list for '+(d.wo||'this job')+'). Open "'+l.name+'" from Lists instead.');}
+    if(k)throw new Error(lsGotMsg(k.wo,await lsOneList(k)));throw e;}
   if(ex&&!ex.tpl){const was=(ex.wos||[])[0];if(d.wo&&d.wo!==was){if(was)listTag(ex,was,false,by);listTag(ex,d.wo,true,by);}
     // rows added to a side that was already signed off put that side back on the bench — and say so
     ['saw','fit'].forEach(m=>{const n=res.diff.lines.filter(x=>x.kind===m&&res.diff.added.includes(x.id)).length;
@@ -3479,10 +3489,12 @@ function ltiConfirm(wos){
     go.forEach(w=>{LTI.busy.add(w);delete LTI.res[w];});ltiAfter();
     let ok=0,bad=0,al=0;
     for(const w of go){const tid=rs.get(w).tid;
-      try{const l=await confirmList(w,tid,by);ok++;if(l.already)al++;LTI.done.unshift({wo:w,name:l.name,tpl:ltiTplName(tid),already:!!l.already});delete LTI.pick[w];}
+      try{const l=await confirmList(w,tid,by);ok++;if(l.already)al++;LTI.done.unshift({wo:w,name:l.name,tpl:ltiTplName(tid),already:!!l.already,gotMsg:l.gotMsg||''});delete LTI.pick[w];}
       catch(e){bad++;LTI.res[w]={err:e.message};}
       LTI.busy.delete(w);ltiAfter();
     }
+    const g1=go.length===1&&LTI.done[0]&&LTI.done[0].gotMsg;
+    if(g1&&!bad){toast(g1,true);return;}
     toast(bad?ok+' list'+(ok!==1?'s':'')+' made, '+bad+' NOT saved — tap ↻ Retry on '+(bad!==1?'those rows':'that row'):ok+' list'+(ok!==1?'s':'')+' made ✓'+(al?' ('+al+' already made on another screen)':''),!!bad);
   });
 }
@@ -3496,7 +3508,10 @@ function ltiBind(){
       try{const h=await lsLiveFor(w);
         if(h.length){LTI.done.unshift({wo:w,name:h[0].name,already:true});toast(lsHasListMsg(w,h[0]),true);}
         else{await lsReloadList(lid);const l=lsList(lid);if(!l||l.archived)throw new Error('that Excel list is no longer there');
-          listTag(l,w,true,by);LTI.done.unshift({wo:w,name:l.name,tpl:'Excel upload'});toast('"'+l.name+'" attached to '+w+' ✓');}}
+          // straight to the database (not the queue), with p_one: refused if another PC gave the WO a list a moment ago
+          try{const row=await lsRpc('list_attach',{p_list:lid,p_wo:w,p_on:true,p_by:lqBy(by),p_cid:lqId(),p_one:true});if(row&&row.id)lsPut('lists',[row]);
+            LTI.done.unshift({wo:w,name:l.name,tpl:'Excel upload'});toast('"'+l.name+'" attached to '+w+' ✓');}
+          catch(e){const k=lsOneErr(e);if(!k)throw e;const o2=await lsOneList(k);LTI.done.unshift({wo:w,name:o2.name,already:true});toast(lsGotMsg(w,o2),true);}}}
       catch(e){LTI.res[w]={err:e.message};}
       LTI.busy.delete(w);ltiAfter();});});
   q('[data-ltichg]',b=>b.onclick=()=>{LTI.open=LTI.open===b.dataset.ltichg?'':b.dataset.ltichg;ltiAfter();});
@@ -4261,14 +4276,17 @@ async function lsCreateFromTpl(tid,wos,name,by,opt){
     const oth=(await lsLiveFor(opt.fixedFor)).filter(x=>x.id!==id);
     if(oth.length)return already(oth[0]);
   }
-  const pl={id,name,project_id:t.project_id,list_type:t.list_type==='snag'?'house':t.list_type,type_name:t.type_name||null,template_id:tid,template_rev:+t.rev||1,wos,source:'template'};
+  // one_per_wo: the database refuses it if another PC gave one of these WOs a live list a moment ago (lsOneErr)
+  const pl={id,name,project_id:t.project_id,list_type:t.list_type==='snag'?'house':t.list_type,type_name:t.type_name||null,template_id:tid,template_rev:+t.rev||1,wos,source:'template',one_per_wo:true};
   const why='Made from template "'+t.name+'" rev '+(+t.rev||1),lines=await lsCopyLines(tid);
-  if(!opt.fixedFor){const res=await lsSaveList(pl,lines,by,why);return res.list;}
+  if(!opt.fixedFor){try{const res=await lsSaveList(pl,lines,by,why);return res.list;}
+    catch(e){const k=lsOneErr(e);if(k)throw new Error(lsGotMsg(k.wo,await lsOneList(k)));throw e;}}
   try{
     const out=await lsRpc('save_list_revision',{p_list:pl,p_lines:diffLines([],lines,{listId:id}).lines,p_expect:null,p_by:lqBy(by),p_reason:why});
     LST.full.add(out.list.id);lsPut('lists',[out.list]);lsPut('list_lines',out.lines);return out.list;
   }catch(e){
     if(e.status===409||/stale|duplicate key|23505/i.test(e.message)){await lsReloadList(id);if(mine())return already(mine());} // made on another screen a moment ago
+    const k=lsOneErr(e);if(k){const l=await lsOneList(k);return Object.assign(already(l),{gotMsg:lsGotMsg(k.wo||opt.fixedFor,l)});} // another PC gave the WO a list meanwhile
     throw e;
   }
 }

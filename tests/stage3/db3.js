@@ -31,7 +31,7 @@ const CHECKS = {
   list_lines: r => ['saw', 'fit', 'hdr'].includes(r.kind) && ['todo', 'cut', 'got-out', 'waiting', 'na'].includes(r.status),
   snags: r => ['saw', 'fit'].includes(r.kind) && ['raised', 'on-list', 'cut', 'on-van', 'delivered', 'placed', 'couldnt-place', 'closed', 'cancelled'].includes(r.status),
 };
-class DbError extends Error { constructor(m, code) { super(m); this.code = code || 'P0001'; } }
+class DbError extends Error { constructor(m, code, detail, hint) { super(m); this.code = code || 'P0001'; this.detail = detail == null ? null : detail; this.hint = hint == null ? null : hint; } }
 // Postgres column types: '' or rubbish in a date / number column is an error, not a blank (the SQL casts with ::date / ::numeric)
 const DATES = ['sdate', 'deliver_by', 'sent_at', 'saw_done_at', 'fit_done_at', 'status_at', 'released_at', 'raised_at'], NUMS = ['length_mm', 'width_mm', 'seq', 'template_rev', 'rev', 'added_rev', 'changed_rev', 'removed_rev', 'n_saw', 'n_fit', 'sort'];
 function typeCheck(t, r) {
@@ -137,11 +137,26 @@ function applyLineChanges(d, changes, by) {
   return res;
 }
 
-// ---- list_attach(p_list, p_wo, p_on, p_by)
-function listAttach(d, id, wo, on, by, cid) {
+// ---- lists_one_per_wo(p_wos, p_skip) (3 Nov): one live list per WO for the cutting-list flow. The SQL takes a lock per WO
+// first; here every function runs to the end before the next starts, so the check alone is the same rule.
+function onePerWo(d, wos, skip) {
+  [...new Set((wos || []).filter(w => w != null && w !== ''))].sort().forEach(w => {
+    const x = d.t.lists.filter(l => (l.wos || []).includes(w) && !l.archived && !l.is_template && !(skip || []).includes(l.id))
+      .sort((a, b) => a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : a.id < b.id ? -1 : 1)[0];
+    if (x) throw new DbError('one list per WO: ' + w + ' already has the live list "' + x.name + '"', 'P0001', x.id, w);
+  });
+}
+// ---- lists_one_replacement(p_old, p_wo): only one live replacement of an old list ("Make new list from this")
+function oneReplacement(d, old, wo) {
+  const x = d.t.lists.find(l => !l.archived && !l.is_template && (l.log || []).some(e => e && e.replaces === old));
+  if (x) throw new DbError('one list per WO: the old list ' + old + ' has already been replaced by "' + x.name + '"', 'P0001', x.id, wo == null ? '' : wo);
+}
+// ---- list_attach(p_list, p_wo, p_on, p_by, p_cid, p_one)
+function listAttach(d, id, wo, on, by, cid, one) {
   const r = find(d, 'lists', id); if (!r) throw new DbError('missing list ' + id);
   if (cid != null && d.t.list_events.some(e => e.cid === cid)) return clone(r); // the same tap resent
   const had = r.wos.includes(wo);
+  if (on && !had && one) onePerWo(d, [wo], [id]);
   if (on && !had) update(d, 'lists', r, { wos: r.wos.concat([wo]), updated_by: by, log: logAdd(r, { at: now(), by, what: 'Work order ' + wo + ' attached' }) });
   else if (!on && had) update(d, 'lists', r, { wos: r.wos.filter(w => w !== wo), updated_by: by, log: logAdd(r, { at: now(), by, what: 'Work order ' + wo + ' taken off' }) });
   if (!!on !== had) insert(d, 'list_events', { list_id: id, act: on ? 'attach' : 'detach', by, note: wo, cid: cid == null ? null : cid });
@@ -184,11 +199,13 @@ function saveListRevision(d, pl, lines, expect, by, reason) {
     if (ex && r && ex.list_id !== r.id) throw new DbError('duplicate key value violates unique constraint "list_lines_pkey"', '23505');
     if (!ex && !['saw', 'fit', 'hdr'].includes(e.kind)) throw new DbError('new row violates check constraint', '23514');
   }
+  if (!r && pl.one_per_wo) onePerWo(d, pl.wos || [], [pl.id]);
+  if (!r && pl.replaces) oneReplacement(d, pl.replaces, (pl.wos || [])[0]);
   if (!r) {
     r = insert(d, 'lists', { id: pl.id, project_id: pl.project_id || null, name: pl.name || '(no name)', list_type: pl.list_type || 'house', type_name: pl.type_name || null,
       is_template: !!pl.is_template, template_id: pl.template_id || null, template_rev: pl.template_rev == null ? null : +pl.template_rev, wos: pl.wos || [],
       no_cut: !!pl.no_cut, no_fit: !!pl.no_fit, source: pl.source || 'manual', sdate: pl.sdate || null, created_by: by, updated_by: by,
-      log: [{ at: now(), by, what: 'List created', why: reason == null ? null : reason }] });
+      log: [Object.assign({ at: now(), by, what: 'List created', why: reason == null ? null : reason }, pl.replaces ? { replaces: pl.replaces } : {})] });
     isnew = true; nrev = 1;
   } else {
     nrev = r.rev;
@@ -259,7 +276,7 @@ function snagsToList(d, ids, deliverBy, by) {
 const txn = f => (d, a) => { const snap = clone(d.t), seq = clone(d.seq); try { return f(d, a); } catch (e) { d.t = snap; d.seq = seq; throw e; } };
 const RPC0 = {
   apply_line_changes: (d, a) => applyLineChanges(d, a.p_changes, a.p_by),
-  list_attach: (d, a) => listAttach(d, a.p_list, a.p_wo, a.p_on, a.p_by, a.p_cid),
+  list_attach: (d, a) => listAttach(d, a.p_list, a.p_wo, a.p_on, a.p_by, a.p_cid, a.p_one),
   list_set_done: (d, a) => listSetDone(d, a.p_list, a.p_mode, a.p_on, a.p_by, a.p_why, a.p_cid),
   save_list_revision: (d, a) => saveListRevision(d, a.p_list, a.p_lines, a.p_expect, a.p_by, a.p_reason),
   snags_to_list: (d, a) => snagsToList(d, a.p_ids, a.p_deliver_by, a.p_by),

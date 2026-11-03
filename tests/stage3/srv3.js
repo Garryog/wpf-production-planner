@@ -37,7 +37,7 @@ function select(rows, q) {
   return rows.slice(0, MAX_ROWS); // Supabase's API "Max rows" (1,000 by default): a bigger answer is cut short
 }
 const J = (route, status, body) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
-const ERR = (route, e) => J(route, e.code === '23505' ? 409 : 400, { code: e.code || 'P0001', message: e.message, details: null, hint: null });
+const ERR = (route, e) => J(route, e.code === '23505' ? 409 : 400, { code: e.code || 'P0001', message: e.message, details: e.detail == null ? null : e.detail, hint: e.hint == null ? null : e.hint });
 
 async function handle(S, route) {
   const req = route.request(), url = req.url(), m = req.method();

@@ -19,6 +19,7 @@ Newest at the top. Each block must be run in Supabase BEFORE the matching code g
 - A trigger on the planner record keeps the lists switch: a planner tab left open on old code can't switch the floor back to the old lists by saving.
 - Nothing is deleted. The app gets NO delete permission on any new table. The existing planner record is untouched.
 - **Added 3 Nov 2026 (list editor):** `list_lines` has a `unit_qty` column — the quantity for ONE unit when a line sits in a unit block ("Side panel 2 per unit × 3 units"). The line's `qty` is still the TOTAL to cut, so the saw, sheet calculator and labels read it exactly as before. A unit heading is a heading line whose `qty` is the number of units. If this block was already run on a test project, the `alter table list_lines add column if not exists unit_qty text;` line below adds the column (safe to run twice). No new table, so no new GRANT lines — the existing `list_lines` grants cover it. Include it in the migration rehearsal.
+- **Added 3 Nov 2026 (Tester round 2 — one live list per work order):** two PCs issuing a list for the same work order at the same moment could each make one, and the saw would cut it twice. The database now refuses the second one. A new helper `lists_one_per_wo` makes the two take turns (a lock per work order) and refuses a second live list (not archived, not a template) for that work order. It is used only by the cutting-list flow — ✓ Confirm, "✓ Use" an Excel upload, and "Create & attach" from a template — so an office can still deliberately put two lists of different kinds (kitchen + wardrobes) on one work order from the editor or "+ WO". A second helper, `lists_one_replacement`, stops "Make new list from this" on two PCs making two replacements of the same old list. `list_attach` gains one optional setting (`p_one`), so the old version is dropped first (only the function, never any data). The new helpers have their own GRANT lines.
 - **The app does not use any of this until Garry presses "Migrate lists" (Admin PIN, Settings).** Until then it runs exactly as today, and makes no calls to these tables. So running this early is harmless.
 
 **If you deploy the code without running this first:** nothing changes on the floor (the switch is off). But "Migrate lists" would fail — so run this first anyway.
@@ -36,7 +37,7 @@ Newest at the top. Each block must be run in Supabase BEFORE the matching code g
 5. Expected result: **"Success. No rows returned"**. If you see a red error, stop and send a screenshot — do not merge.
 6. **Straight away, check the planner still saves.** This SQL adds a trigger to the planner record itself, so: make one normal save on the live site (e.g. type a note on a job), refresh the page, and check the note stuck. If saving fails, the new trigger is at fault: stop and send a screenshot.
 7. Check: **Table Editor** shows the new tables `projects`, `project_materials`, `lists`, `list_lines`, `list_revisions`, `list_events`, `snags` (all empty).
-8. Check: **Database → Functions** shows these 12: the five the app calls — `apply_line_changes`, `list_attach`, `list_set_done`, `save_list_revision`, `snags_to_list` — and seven helpers — `lists_switch_on`, `lists_writable`, `lists_touch`, `pm_key`, `pm_no_clash`, `production_planner_keep_switch`, `snag_line_done`. And **Database → Triggers** shows these 8: `projects_touch`, `project_materials_touch`, `lists_touch`, `list_lines_touch`, `snags_touch` (each on the table of the same name), `pm_no_clash` (on `project_materials`), `list_lines_snag` (on `list_lines`) and `production_planner_keep_switch` (on `production_planner`).
+8. Check: **Database → Functions** shows these 14: the five the app calls — `apply_line_changes`, `list_attach`, `list_set_done`, `save_list_revision`, `snags_to_list` — and nine helpers — `lists_switch_on`, `lists_writable`, `lists_touch`, `lists_one_per_wo`, `lists_one_replacement`, `pm_key`, `pm_no_clash`, `production_planner_keep_switch`, `snag_line_done`. There must be only ONE `list_attach` (if you see two, the `drop function` line didn't run — send a screenshot). And **Database → Triggers** shows these 8: `projects_touch`, `project_materials_touch`, `lists_touch`, `list_lines_touch`, `snags_touch` (each on the table of the same name), `pm_no_clash` (on `project_materials`), `list_lines_snag` (on `list_lines`) and `production_planner_keep_switch` (on `production_planner`).
 9. If the line `alter publication supabase_realtime ...` gives an error saying the table is already in the publication, that's fine — delete that one line and Run again.
 
 ```sql
@@ -225,9 +226,48 @@ begin
  end loop; return res; end $$;
 grant execute on function apply_line_changes(jsonb,text) to anon, authenticated, service_role;
 
+-- One live list per work order (added 3 Nov 2026, Tester round 2). Two PCs issuing a list for the same WO at the same
+-- moment: each takes a lock per WO (in WO order, so two never wait on each other), then looks for another live list (not
+-- archived, not a template) tagged to it. The second one waits for the first to finish, sees its list, and is refused:
+--   'one list per WO: <wo> already has the live list "<name>"'  (detail = that list's id, hint = the WO)
+-- p_skip: list ids that don't count (the list being attached). Used ONLY by the cutting-list flow (✓ Confirm, "✓ Use" an
+-- Excel upload, template "Create & attach"); the editor and "+ WO" can still put two lists of different kinds on one WO.
+create or replace function lists_one_per_wo(p_wos text[], p_skip text[]) returns void language plpgsql as $$
+declare w text; x lists%rowtype;
+begin
+ for w in select distinct u from unnest(coalesce(p_wos,'{}')) u where coalesce(u,'')<>'' order by 1 loop
+  perform pg_advisory_xact_lock(hashtext('wo:'||w));
+ end loop;
+ for w in select distinct u from unnest(coalesce(p_wos,'{}')) u where coalesce(u,'')<>'' order by 1 loop
+  select * into x from lists where wos @> array[w] and not archived and not is_template
+    and not (id = any(coalesce(p_skip,'{}'))) order by created_at, id limit 1;
+  if found then
+   raise exception 'one list per WO: % already has the live list "%"', w, x.name using errcode='P0001', detail=x.id, hint=w;
+  end if;
+ end loop;
+end $$;
+grant execute on function lists_one_per_wo(text[],text[]) to anon, authenticated, service_role;
+
+-- "Make new list from this" on two PCs at once: only ONE live replacement of an old list. The replacement's "List created"
+-- history line carries {"replaces": <old list id>} (save_list_revision writes it); a second one is refused.
+create or replace function lists_one_replacement(p_old text, p_wo text) returns void language plpgsql as $$
+declare x lists%rowtype;
+begin
+ perform pg_advisory_xact_lock(hashtext('repl:'||p_old));
+ select * into x from lists where not archived and not is_template
+   and log @> jsonb_build_array(jsonb_build_object('replaces',p_old)) order by created_at, id limit 1;
+ if found then
+  raise exception 'one list per WO: the old list % has already been replaced by "%"', p_old, x.name using errcode='P0001', detail=x.id, hint=coalesce(p_wo,'');
+ end if;
+end $$;
+grant execute on function lists_one_replacement(text,text) to anon, authenticated, service_role;
+
 -- Add or remove ONE work order on a list in one step (race-safe), with a history line and an event.
 -- p_cid: the device's id for this tap — the same tap sent again (reply lost) changes nothing and adds no history.
-create or replace function list_attach(p_list text, p_wo text, p_on boolean, p_by text, p_cid text default null) returns jsonb language plpgsql as $$
+-- p_one (3 Nov): the cutting-list flow's "✓ Use" — refused if the WO already has another live list (lists_one_per_wo).
+-- The 5-setting version is dropped first so there is only one list_attach (dropping a function never touches data).
+drop function if exists list_attach(text,text,boolean,text,text);
+create or replace function list_attach(p_list text, p_wo text, p_on boolean, p_by text, p_cid text default null, p_one boolean default false) returns jsonb language plpgsql as $$
 declare r lists%rowtype; had boolean;
 begin
  perform lists_switch_on();
@@ -235,6 +275,7 @@ begin
  if not found then raise exception 'missing list %', p_list; end if;
  if p_cid is not null and exists(select 1 from list_events e where e.cid=p_cid) then return to_jsonb(r); end if;
  had:= p_wo = any(r.wos);
+ if p_on and not had and coalesce(p_one,false) then perform lists_one_per_wo(array[p_wo], array[p_list]); end if;
  if p_on and not had then
   update lists set wos=array_append(wos,p_wo), updated_by=p_by,
     log=log||jsonb_build_array(jsonb_build_object('at',now(),'by',p_by,'what','Work order '||p_wo||' attached')) where id=p_list returning * into r;
@@ -245,7 +286,7 @@ begin
  if p_on<>had then insert into list_events(list_id,act,by,note,cid) values(p_list,case when p_on then 'attach' else 'detach' end,p_by,p_wo,p_cid); end if;
  return to_jsonb(r);
 end $$;
-grant execute on function list_attach(text,text,boolean,text,text) to anon, authenticated, service_role;
+grant execute on function list_attach(text,text,boolean,text,text,boolean) to anon, authenticated, service_role;
 
 -- Sign-offs and flags (build note g). p_mode: 'saw' | 'fit' (sign-off; off = send back / undo) | 'no_cut' | 'no_fit'
 -- | 'send' (Send to saw: locks the list) | 'archive' (Delete on the Lists tab — the list is hidden, never deleted). The database writes the history line, never the browser.
@@ -288,6 +329,8 @@ grant execute on function list_set_done(text,text,boolean,text,text,text) to ano
 -- p_lines: every line the list should now have ({id, seq, kind, section, part, length_mm, width_mm, qty, unit_qty, material,
 --          material_other, edging, note, snag_id, src_line_id, reset}); reset:true = content changed, so the tick resets.
 -- p_expect: the list version the editor started from (null = a brand-new list).
+-- A brand-new list (3 Nov): p_list.one_per_wo = true → refused if any of its WOs already has a live list (lists_one_per_wo);
+-- p_list.replaces = <old list id> ("Make new list from this") → refused if that old list already has a live replacement.
 create or replace function save_list_revision(p_list jsonb, p_lines jsonb, p_expect int, p_by text, p_reason text) returns jsonb language plpgsql as $$
 declare r lists%rowtype; e jsonb; nrev int; ids text[]:='{}'; ex list_lines%rowtype; isnew boolean:=false;
 begin
@@ -295,12 +338,16 @@ begin
  select * into r from lists where id=p_list->>'id' for update;
  if not found then
   if p_expect is not null then raise exception 'stale: list % is missing', p_list->>'id'; end if;
+  if coalesce((p_list->>'one_per_wo')::boolean,false) then
+   perform lists_one_per_wo(array(select jsonb_array_elements_text(coalesce(p_list->'wos','[]'))), array[p_list->>'id']); end if;
+  if coalesce(p_list->>'replaces','')<>'' then perform lists_one_replacement(p_list->>'replaces',p_list->'wos'->>0); end if;
   insert into lists(id,project_id,name,list_type,type_name,is_template,template_id,template_rev,wos,no_cut,no_fit,source,sdate,created_by,updated_by,log)
    values(p_list->>'id',p_list->>'project_id',coalesce(p_list->>'name','(no name)'),coalesce(p_list->>'list_type','house'),p_list->>'type_name',
      coalesce((p_list->>'is_template')::boolean,false),p_list->>'template_id',(p_list->>'template_rev')::int,
      coalesce(array(select jsonb_array_elements_text(p_list->'wos')),'{}'),coalesce((p_list->>'no_cut')::boolean,false),coalesce((p_list->>'no_fit')::boolean,false),
      coalesce(p_list->>'source','manual'),(p_list->>'sdate')::date,p_by,p_by,
-     jsonb_build_array(jsonb_build_object('at',now(),'by',p_by,'what','List created','why',p_reason)))
+     jsonb_build_array(jsonb_build_object('at',now(),'by',p_by,'what','List created','why',p_reason)
+       || case when coalesce(p_list->>'replaces','')<>'' then jsonb_build_object('replaces',p_list->>'replaces') else '{}'::jsonb end))
    returning * into r;
   isnew:=true; nrev:=1;
  else
