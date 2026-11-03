@@ -927,6 +927,10 @@ async function pushPlan(){
       // merges their change against what we sent (e.g. their untick stays). Counted, so callers can re-check (cutting-list folds).
       if(c&&c.over){VER=c.over;BASE=mine;UNSURE=[];USV.set(mine,c.over);SAVE_OVERS++;LAST_OVER=mine;return;}
       if(c==='lost'){unsureDel(mine);continue;} // it did not (and now never can): merge and go again
+      // Not there yet at the 0.25 s look: it probably never got there, but a slow request could still land. It stays on
+      // the "may have landed" list (with its version and tag) and we send again at the same version — only one of the two
+      // can land; whichever does, the tag lets a later merge recognise it, and unsureKeep drops it once the version moves past.
+      if(c==='slow')continue;
       throw e; // can't tell — it stays in UNSURE so it isn't mistaken for someone else's change
     }
     if(!resp||resp.ok===false){unsureDel(mine);
@@ -953,7 +957,8 @@ async function pushPlan(){
 }
 /* A save got no reply. Every save says "only if the database is still at version v-1", so the database tells us:
    holding exactly what we sent (at v, or later if nothing has changed since) → it landed: returns that version; at v
-   holding something else → 'lost' (another screen took v); still below v at the 0.25 s look → 'lost' (it never got there).
+   holding something else → 'lost' (another screen took v); still below v at the 0.25 s look → 'slow' (probably never got
+   there, but a slow request could still land — so it is not treated as definitely lost).
    Past v with other content: if the row still lists this save's tag (tok) in saveIds → it landed at v: returns {over:v};
    otherwise can't tell (''). A read that fails (signal still out) is tried
    again — at about 0.05, 0.25, 0.6, 1.2, 2, 3 and 4 s, giving up after ~5 s — and only then "can't tell" (''). The screen
@@ -972,9 +977,9 @@ async function saveCheck(p,v,tok){
     if(rv>=v&&tok&&row.settings&&Array.isArray(row.settings.saveIds)&&row.settings.saveIds.includes(tok))return{over:v}; // ours landed at v; someone saved since
     if(rv===v)return'lost';
     if(rv>v)return'';
-    if(ms>=250)return'lost'; // still not there at the second look: it never got there (if it turns up later it is refused — the re-send has moved the version on)
+    if(ms>=250)return'slow'; // still not there at the second look: probably never got there, but not certain (see pushPlan)
   }
-  return seen?'lost':'';
+  return seen?'slow':'';
 }
 // Re-draw after a merge brought in other people's changes — but never under someone's fingers.
 function mergedRender(){
