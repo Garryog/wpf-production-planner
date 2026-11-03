@@ -83,4 +83,4 @@
 8. Two lists on one WO ON PURPOSE (e.g. kitchen + wardrobes) is allowed from the editor / "+ WO"; the quick Confirm / Use / Create & attach buttons still refuse a second list.
 9. Linking a Cienapps customer to a project: anyone in the office, NO PIN.
 10. Half quantities per unit (e.g. 1.5 × 2) are allowed only when the total to cut is a whole number; otherwise refused with a message.
-Status: flow steps 7 (saw banner "NEW LIST ISSUED – Rev 2 replaces Rev 1", old version "Superseded") and 8 (snag grid) are NOT built yet. Step 7 is to be built before lists are switched on.
+Status (3 Nov, Coder round 3): flow step 7 is BUILT — the saw shows a full-width "NEW LIST ISSUED – Rev 2 replaces Rev 1 (x changed / y added / z removed)" (or "replaces <old list>") until "✓ Seen" is tapped on that saw PC; an archived replaced list shows "Superseded (view only)" in Lists; prints and labels already say "Rev N". Step 8 (snag grid) is NOT built yet.

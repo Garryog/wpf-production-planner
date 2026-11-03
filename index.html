@@ -3313,6 +3313,8 @@ function lsMaterialsDlg(pid,after){
 }
 /* Lists home: search, filters, grouped by project. Shared by the office Lists tab, the Drawing office and the Production Manager. */
 const LH={q:'',proj:'',type:'',kind:'live',rev:'',state:''};
+// An archived list that another list replaced ("Make new list from this"): shown "Superseded (view only)" — no Edit
+function lsSupersededBy(l){if(!V2()||!l||!l.archived||l.tpl)return null;return lsCache().all.find(x=>x.id!==l.id&&!x.tpl&&lsReplOf(x.id)===l.id)||null;}
 function lsState(l){if(l.archived)return'archived';if(listFinished(l))return'done';return lsLocked(l)?'live':'draft';}
 const LS_STATE={draft:['Draft','#5b6b82'],live:['Live','#1a56db'],done:['Done','#0d6e46'],archived:['Archived','#8e99ab']};
 function lsHomeLists(){
@@ -3334,10 +3336,10 @@ function lsHomeHTML(){
   const keys=[...grp.keys()].sort((a,b)=>(a?lsProjName(a):'~').localeCompare(b?lsProjName(b):'~'));
   const sel=(id,v,opts)=>`<select id="${id}" style="${LS_INP};max-width:100%;min-width:0">${opts.map(([k,t])=>`<option value="${escA(k)}"${k===v?' selected':''}>${escA(t)}</option>`).join('')}</select>`;
   const prog=(l,m)=>{const n=m==='saw'?l.saw:l.fit;if(!n)return(m==='saw'?l.noCut:l.noFit)?'n/a':'—';if(listDone(l.id)[m])return'✓';const t=Object.values(rowTicks(l.id)).filter(x=>x.m===m).length;return t+'/'+n;};
-  const row=l=>{const[st,col]=LS_STATE[lsState(l)];return `<tr data-lhrow="${escA(l.id)}"><td><b>${escA(l.name)}</b>${l.tpl?' <span class="lst-chip" style="background:#efe7ff;color:#5b21b6">TEMPLATE'+(l.typeName?' · '+escA(l.typeName):'')+'</span>':''}</td>
+  const row=l=>{const sup=lsSupersededBy(l);const[st,col]=sup?['Superseded (view only)','#8e99ab']:LS_STATE[lsState(l)];return `<tr data-lhrow="${escA(l.id)}"><td><b>${escA(l.name)}</b>${sup?`<div class="lh-sup" style="font-size:11px;color:#5b6b82">replaced by "${escA(sup.name)}"</div>`:''}${l.tpl?' <span class="lst-chip" style="background:#efe7ff;color:#5b21b6">TEMPLATE'+(l.typeName?' · '+escA(l.typeName):'')+'</span>':''}</td>
     <td>${escA(LS_KINDS[l.ltype]||l.ltype||'')}${l.templateId?`<div style="font-size:11px;color:#5b21b6">${escA(lsTplInfo(l))}</div>`:''}</td><td>${(l.wos||[]).map(w=>`<span class="lst-chip">${escA(w)}</span>`).join('')||'<span style="color:var(--t3)">—</span>'}</td>
     <td>${(+l.rev||1)>1?`<span class="lst-chip" style="background:#fff4d6;color:#7a5200">Rev ${+l.rev}</span>`:'Rev 1'}</td><td><span style="color:${col};font-weight:700">${st}</span></td><td>🪚 ${prog(l,'saw')}</td><td>🧰 ${prog(l,'fit')}</td>
-    <td class="lh-act"><button class="btn btn-s" data-lhedit="${escA(l.id)}" style="padding:2px 8px;font-size:11px">✎ Edit</button> <button class="btn btn-s" data-lhview="${escA(l.id)}" style="padding:2px 8px;font-size:11px">View</button>${l.archived?'':` <button class="btn btn-s" data-lhastpl="${escA(l.id)}" style="padding:2px 8px;font-size:11px" title="Save this list as a template of the project (ticks are not copied)">📐 Save as template</button>`}${l.tpl?` <button class="btn btn-s" data-lhhist="${escA(l.id)}" style="padding:2px 8px;font-size:11px">🕘 History</button>`:''}${!l.tpl&&!l.archived&&lsState(l)==='draft'?` <button class="btn btn-s" data-lhsend="${escA(l.id)}" style="padding:2px 8px;font-size:11px">➜ Send to saw</button>`:''}${l.archived?'':` <button class="btn btn-s" data-lharc="${escA(l.id)}" style="padding:2px 8px;font-size:11px;color:var(--red);border-color:var(--red)">Archive</button>`}</td></tr>`;};
+    <td class="lh-act">${sup?'':`<button class="btn btn-s" data-lhedit="${escA(l.id)}" style="padding:2px 8px;font-size:11px">✎ Edit</button> `}<button class="btn btn-s" data-lhview="${escA(l.id)}" style="padding:2px 8px;font-size:11px">View</button>${l.archived?'':` <button class="btn btn-s" data-lhastpl="${escA(l.id)}" style="padding:2px 8px;font-size:11px" title="Save this list as a template of the project (ticks are not copied)">📐 Save as template</button>`}${l.tpl?` <button class="btn btn-s" data-lhhist="${escA(l.id)}" style="padding:2px 8px;font-size:11px">🕘 History</button>`:''}${!l.tpl&&!l.archived&&lsState(l)==='draft'?` <button class="btn btn-s" data-lhsend="${escA(l.id)}" style="padding:2px 8px;font-size:11px">➜ Send to saw</button>`:''}${l.archived?'':` <button class="btn btn-s" data-lharc="${escA(l.id)}" style="padding:2px 8px;font-size:11px;color:var(--red);border-color:var(--red)">Archive</button>`}</td></tr>`;};
   return `<div class="exp-panel" id="lh">
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
       <div style="font-size:15px;font-weight:700;color:#14335c">📋 Lists — ${ls0.length}</div>
@@ -4512,6 +4514,21 @@ function lsRevInfo(id,mode){
   });
   return out;
 }
+/* Flow step 7 (Garry, answer 1): when a list on the saw is reissued, the saw sees a full-width
+   "NEW LIST ISSUED – Rev 2 replaces Rev 1 (2 changed / 1 added / 1 removed)" until someone taps ✓ Seen on that saw PC; a list
+   made with "Make new list from this" shows "replaces <old list>". Remembered per device (localStorage), per list and Rev. */
+function sawSeen(){try{return JSON.parse(ls.get('wpfSawSeen')||'{}')||{};}catch(e){return{};}}
+function sawSeenSet(id){const m=sawSeen(),l=LST.l.get(id);m[id]=+((l||{}).rev)||1;ls.set('wpfSawSeen',JSON.stringify(m));}
+function sawNewListHTML(lists){
+  if(!V2())return'';const seen=sawSeen();
+  const items=(lists||[]).map(l=>{const r=LST.l.get(l.id);if(!r)return null;const rev=+r.rev||1,s=+seen[l.id]||0,old=lsReplOf(l.id);
+    if(rev>=2&&s<rev){const i=lsRevInfo(l.id,'saw');return{l,rev,t:'Rev '+rev+' replaces Rev '+(rev-1)+' ('+i.changed+' changed / '+i.added+' added / '+i.removed+' removed)'};}
+    if(old&&!s){const o=LST.l.get(old);return{l,rev,t:'replaces "'+((o&&o.name)||'the old list')+'" — parts already cut on it are marked "already cut on old list"'};}
+    return null;}).filter(Boolean);
+  if(!items.length)return'';
+  return `<div id="saw-newlist" style="border:3px solid #1a56db;background:#eaf2ff;border-radius:10px;padding:10px 12px;margin:0 0 10px">${items.map(x=>
+    `<div class="snl-row" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:4px 0"><div style="flex:1;min-width:220px;font-size:17px;font-weight:900;color:#0b2f6b">🆕 NEW LIST ISSUED – ${escA(x.l.name)}: ${escA(x.t)}</div><button class="btn btn-s" data-sawseen="${escA(x.l.id)}" style="font-size:14px;padding:8px 14px;min-height:40px">✓ Seen</button></div>`).join('')}</div>`;
+}
 function lsRevBanner(l,mode){
   if(!V2())return'';const i=lsRevInfo(l.id,mode);if(i.rev<2)return'';
   return `<div class="rev-note" style="background:#fff4d6;border:1px solid #e0a43a;color:#7a5200;border-radius:6px;padding:6px 10px;font-weight:800;margin:6px 0">REV ${i.rev} — ${i.changed} changed, ${i.added} added, ${i.removed} removed</div>`
@@ -5397,7 +5414,7 @@ function renderWorkList(app,mode){
       <span class="wl-print"><button id="wl-pr1" title="Paper fallback — today's work and anything overdue, with tick boxes and initials">🖨 Print today</button><button id="wl-pr3" title="Paper fallback for a longer outage — the next 3 days">🖨 Next 3 days</button></span>
     </div>
     ${wlShowHold?`<div class="wl-hint">Rows parked because ${mode==='saw'?'the material':'stock'} isn't in. When it arrives, tap <b>ARRIVED — RELEASE</b> and the rows go straight back on the ${mode==='saw'?'saw':'stores'} queue as due work.</div>`+holdBookHTML(holdModes):wlShowDone?doneScreen():`
-    ${mode==='saw'?waitListHTML()+sheetNeedHTML():''}
+    ${mode==='saw'?sawNewListHTML(open)+waitListHTML()+sheetNeedHTML():''}
     ${custs.length>1?`<div class="wl-cust"><span>Customer:</span><button class="${!wlCust?'on':''}" data-wlc="">All · ${visAll.length}</button>${custs.map(c=>`<button class="${wlCust===c?'on':''}" data-wlc="${escA(c)}">${escA(c)} · ${visAll.filter(l=>(listCust(l)||'(no customer)')===c).length}</button>`).join('')}</div>`:''}
     ${visible.length>1?`<div style="font-size:12px;color:var(--t3);margin:-4px 0 10px">Cutting several houses together? Tick the box on each list for a combined table with per-house quantities and location labels.</div>`:''}
     ${selLists.length?`<div class="wl-selbar"><b>${selLists.length} house${selLists.length!==1?'s':''} selected</b>
@@ -5408,6 +5425,7 @@ function renderWorkList(app,mode){
     ${(upcoming.length||undated.length)?`<div style="text-align:center;margin:12px 0"><button class="btn btn-s" id="wl-upc">${wlShowUpcoming?'▴ Hide later days':'▾ Work ahead — show '+(upcoming.length+undated.length)+' list'+(upcoming.length+undated.length!==1?'s':'')+' due on later days'}</button></div>`:''}`}
     <div class="flr-ft">Last update ${hhmm(new Date().toISOString())}</div></div>`;
   const wtg=document.getElementById('wait-tog');if(wtg)wtg.onclick=()=>{sawWaitOpen=!sawWaitOpen;render();};
+  document.querySelectorAll('[data-sawseen]').forEach(b=>b.onclick=()=>{sawSeenSet(b.dataset.sawseen);render();});
   const tb1=document.getElementById('wl-tab-todo');if(tb1)tb1.onclick=()=>{wlShowDone=false;wlShowHold=false;render();};
   const tb2=document.getElementById('wl-tab-done');if(tb2)tb2.onclick=()=>{wlShowDone=true;wlShowHold=false;render();};
   const tb3=document.getElementById('wl-tab-hold');if(tb3)tb3.onclick=()=>{wlShowHold=true;wlShowDone=false;render();};
