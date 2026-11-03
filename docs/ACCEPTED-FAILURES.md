@@ -1,15 +1,24 @@
 # Accepted test failures (Garry to confirm each)
-2 Nov 2026 check: still the same 5 rows below — nothing new added. Saw/Stores folder: only the two saw/stores rows fail. 2,500-row timing tests can fail when many tests run at once; they pass when run alone.
+**3 Nov 2026 check (Tester round 12).** This is every check that currently fails, on `feature/stage2-imports` (the go-live branch) and `feature/cutting-lists`. Each one needs Garry's yes/no in the last column. Rows marked **NOT acceptable as-is** are real problems the Tester recommends fixing (or working around) before go-live.
 
-Updated 22 Oct 2026 after the zombie-untick save fixes (branch `feature/stage2-imports`). Full suite (every test file once) 832 pass / 4 fail (all listed here), plus Stage 1 t9 ×20 (0 unticks came back of ~8,390), t1 ×20 and t1-trace ×10 all clean. t4 "2,500 jobs under 10 s" and import.test "2,500-row import in reasonable time" failed once only while 10 soaks ran in parallel; both pass on an idle machine.
+Removed this round: stage3 attack3-switch R1b "re-migration keeps the tick" — passes now (round 10 and again 3 Nov).
 
-| Test | Why it fails | Fixed in | Accepted? |
+Timing note: the 2,500-row timing tests can fail when many tests run at once; they pass when run alone.
+
+| Test | Why it fails (plain English) | Fixed in | Accepted? |
 |---|---|---|---|
 | stage1 t3 duplicate-WO delete-vs-edit | the merge can't tell two lines with the same WO apart. Stage 2 stops imports creating them (stage1 t8 now passes: a WO twice in one file = one job); existing duplicate lines still hit this | line IDs (Stage 3 per-row tables) | pending |
 | stage1 t4 2,500-job merge >10 s | single-record size (passing on this run; may still be slow on a real PC) | Stage 3 | pending |
 | sawstores attack-devices identical lines share one record | ticks keyed by line content | line IDs (before snags) | pending |
 | sawstores attack-regress A4 label for waiting line | pre-existing | labels step | pending |
+| sawstores retest-nov3 G4b "2440MM" and 2440 shown as one row | the saw sheet treats "2440MM" and "2440" as two different board sizes, so the saw sees two lines for the same part. Garry's question: should these be treated as the same size? | waiting for Garry's answer | pending |
 | baseline weeks.test.js "Monday 00:30 (summer time) is in the new week" | "this week" is worked out in UTC, so 00:00–01:00 on an Irish summer Monday still counts as last week. Not in the Stage 2 plan | weeks fix TBD | pending |
+| stage1 t13 a1, a2, b1, c3, f2 (old-code office tab) | a tab still running the OLD version (today's live site) saves the whole plan without the new save tags, so an untick it makes can be undone by a new-code screen whose earlier save had no reply ("zombie tick"). Only happens while old tabs are open — every PC, tablet and phone must be closed and reopened on go-live day | go-live day: reopen every device | pending |
+| stage1 t14 C7 | if a tab crashes mid-save and is only reopened after more than 40 other saves, it can no longer tell its save landed, so an untick made meanwhile can come back | — (rare: 40+ saves before a crashed tab is reopened) | pending |
+| stage1 t14 D4a / D4b | device storage full (or blocked) at the moment of a save: the device can't keep its backup copy, so after a crash an untick made elsewhere can come back. The user is now warned on screen ("keep this page open until it says Saved") | — (user warned) | pending |
+| stage3 attack-poll P5 (cutting-lists only) | marked "information only" inside the test itself: a change committed more than 30 s after its database transaction started isn't picked up by polling until reload. Only matters if a transaction runs > 30 s | — | pending |
+| stage1 t16 A2–A5, A'1–A'2 (old-code tab) **NOT acceptable as-is** | "Mark as applied" on one PC is undone if an old-version tab saves before another new-version PC refreshes: that PC puts back its older Export Changes baseline, so the already-applied changes reappear in the Export Changes list on every PC | needs the baseline stored where old tabs can't overwrite it, or every device reopened on go-live day | pending |
+| stage1 t16 E1–E2, E'1–E'2 (old-code tab) **NOT acceptable as-is** | if an old-version tab saves and the next new-version screen to open is a fresh one (a reloaded page, a PC switched on in the morning), it doesn't know the old baseline, so it rebuilds it from today's plan: **the Export Changes list goes empty for everyone and those week changes are never sent to Cienapps** | needs the baseline stored where old tabs can't overwrite it, or every device reopened on go-live day | pending |
 
 Fixed by Stage 2 and removed from this list: import.test.js (17 of 19), datasafety 3/5/6 (all 11 now pass), weeks 2 and 8 (and the year-end autoSchedule check), stage1 t5 "shipped job returns if edited elsewhere" (rewritten as acceptance check 27 — imports never remove a job, so it can't happen; stage1 t8 rewritten the same way).
 
