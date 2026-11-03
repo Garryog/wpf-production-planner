@@ -2169,9 +2169,12 @@ function lqLine(lineId,st,by){
     // one unsent change per line: the newest replaces it. A change already sent once may have landed (reply lost, or
     // another tab on this device is sending it) — it stays, and this tap goes after it.
     const i=q.findIndex(y=>y.t==='line'&&y.id===lineId&&!y.sent&&!LQ.fly.has(y.cid));
-    if(i>=0)q.splice(i,1);
+    const was=i>=0?q.splice(i,1)[0]:null;
     const fly=q.some(y=>y.t==='line'&&y.id===lineId);
     if(!fly&&act==='status'&&st===x.status)return; // back to what the database already has — nothing to send
+    // parked and released again on this device before the park was sent: the two cancel out — nothing to send (sending
+    // the release alone would only bring back a puzzling "not waiting" note)
+    if(!fly&&act==='release'&&was&&was.status==='waiting'&&x.status!=='waiting')return;
     q.push(e);
   });
   lqKick();return true;
@@ -2200,7 +2203,7 @@ function lqWhy(x){
   if(x.why==='changed')return'Not ticked — "'+part+'" was changed in a new revision of the list. Check the new version first.';
   if(x.why==='removed')return'Not ticked — "'+part+'" was taken off the list in a new revision.';
   if(x.why==='not-needed')return'"'+part+'" is marked not needed — nothing to do.';
-  if(x.why==='not-waiting')return'"'+part+'" is no longer waiting ('+now+who+').';
+  if(x.why==='not-waiting')return'"'+part+'" is no longer waiting on material'+(x.status==='todo'||!x.status?' — nothing to release':' — it is '+now+who)+'.';
   if(x.why==='missing')return'That line is no longer on the list — reloaded.';
   return'Not saved — "'+part+'" ('+(x.why||'refused')+').';
 }
