@@ -3664,16 +3664,73 @@ function sgFeat(s){
   return{n,code,multi,beds:bm?bm[1]:'',kinds:new Set(SG_KIND.filter(([,re])=>re.test(n)).map(([k])=>k)),
     words:new Set(n.split(' ').filter(w=>w.length>=3&&!/^\d+$/.test(w)&&!SG_STOP.has(w)))};
 }
-// Words a WO title may carry beyond the house / type / room / number without making it a different job (house-type words
-// and where the unit is). Anything else ("EXTRA UNITS", "REMEDIAL", "SHOWHOUSE", "NO APPLIANCES") = amber (Garry, answer 5).
-// (Tester round 3) Plural words (HOUSES, UNITS, PLOTS) are NOT allowed: they mean more than one. "First / second / ground"
-// are allowed only as a floor ("FIRST FLOOR") — "SECOND KITCHEN" is a second kitchen.
-const SG_OK=new Set(['semi','detached','det','terrace','terraced','mid','end','duplex','bungalow','townhouse','storey','floor','flr','number','house']);
-const SG_FLOOR=['ground','first','second','third','fourth','fifth','top','1st','2nd','3rd','4th','5th'];
-function sgExtra(f,g,p){
-  const own=new Set([p&&p.name,p&&p.customer,...((p&&p.cien_names)||[])].flatMap(n=>sgPh(sgNorm(n)).split(' ')));
-  const fl=new Set(SG_FLOOR.filter(w=>new RegExp('\\b'+w+' (floor|flr)\\b').test(f.n)));
-  return[...f.words].filter(w=>!g.words.has(w)&&!SG_OK.has(w)&&!fl.has(w)&&!SG_CO.has(w)&&!own.has(w)&&!/^\d+[a-z]?$|^\d+(bed|beds|b)$|^ph\d+$/.test(w)&&!SG_KIND.some(([,re])=>re.test(w)));
+/* Tester round 4 (4 Nov): green is an ALLOW-LIST. Every word of the WO title (after the project's / customer's own words) must
+   be one of these, or the suggestion is amber:
+   - ONE house marker + ONE number: HOUSE / HSE / UNIT / APT / NO / NUMBER / PLOT / SITE / FLAT + 14, 14A or 2.14
+   - TYPE + one code (TYPE B, TYPE C1, TYPE B-1) — only once
+   - a room word the template covers (a utility goes with a kitchen); singular, except wardrobes / robes
+   - "+" / "&" / "AND" / "/" only between two room words ("KITCHEN + UTILITY")
+   - a bed count (3 BED, 3-BED, 3BED) that matches the template's, if the template has one
+   - where the unit is: GROUND/FIRST/SECOND… FLOOR, 2 STOREY, SEMI, DETACHED, END (OF) TERRACE, MID, TERRACE, DUPLEX, BUNGALOW
+   - a phase (PH2, PH.2, PHASE 2, (PHASE 2), PHASE TWO) exactly equal to the heading's phase ("2B" is not 2, "P3" is unknown)
+   - a word of the template's own name ("ISLAND" for "Type B island kitchen"), or a company word (LTD, HOMES)
+   Anything else — a second house in any form, "1 OF 2", plural rooms, LH/RH, unknown words — returns the reason. */
+const SG_MARK=new Set(['house','hse','unit','apt','apartment','no','number','nr','plot','site','flat']);
+const SG_POS=new Set(['semi','detached','det','terrace','terraced','mid','end','duplex','bungalow','townhouse','storey']);
+const SG_FLOOR=new Set(['ground','first','second','third','fourth','fifth','top','1st','2nd','3rd','4th','5th']);
+const SG_ROOM={kitchen:'kitchen',kit:'kitchen',utility:'utility',util:'utility',wardrobe:'wardrobe',wardrobes:'wardrobe',robe:'wardrobe',robes:'wardrobe',bathroom:'bathroom',bath:'bathroom',vanity:'bathroom',ensuite:'bathroom'};
+const SG_PLURAL=new Set(['kitchens','kits','utilities','utils','bathrooms','baths','vanities','ensuites']);
+const SG_NUMW=['one','two','three','four','five','six','seven','eight','nine'];
+function sgAllow(title,cust,p,g){
+  let s=String(title==null?'':title).toLowerCase().replace(/\b([a-z]{1,2}) ?- ?(\d{1,2})\b/g,'$1$2');
+  s=s.replace(/(\d)\.(?=\d)/g,'$1\u0001').replace(/[&+\/]/g,' & ').replace(/[^a-z0-9\u0001&]+/g,' ').replace(/\band\b/g,'&').replace(/\ben suites?\b/g,'ensuite');
+  s=s.replace(/\b(ph|phase) (one|two|three|four|five|six|seven|eight|nine)\b/g,(m,x,w)=>'phase '+(SG_NUMW.indexOf(w)+1));
+  const t=sgPh(s).split(' ').filter(Boolean).map(w=>w.replace(/\u0001/g,'.'));
+  const hp=sgPhN(sgPh(sgNorm(cust)))||sgPhN(sgPh(sgNorm(p&&p.name)));
+  const own=new Set([p&&p.name,p&&p.customer,...((p&&p.cien_names)||[])].flatMap(n=>sgNorm(n).split(' ')).filter(w=>w.length>=3&&/^[a-z]+$/.test(w)&&w!=='phase'&&!SG_ROOM[w]&&!SG_MARK.has(w)));
+  const co=w=>SG_CO.has(w)&&!['and','of','the','a','t'].includes(w);
+  const roomOk=k=>g.kinds.has(k)||(k==='utility'&&g.kinds.has('kitchen'));
+  const num=w=>/^\d+[a-z]?$|^\d+\.\d+$/.test(w),U=w=>'"'+String(w).toUpperCase()+'"';
+  let houses=0,types=0;
+  for(let i=0;i<t.length;i++){
+    const w=t[i],nx=t[i+1]||'';
+    if(SG_MARK.has(w)){
+      if(nx==='type')continue; // "HOUSE TYPE B"
+      let j=i+1;while(SG_MARK.has(t[j]))j++;
+      if(!num(t[j]||''))return'title also says '+U(w+(t[j]?' '+t[j]:''));
+      if(++houses>1)return'title names more than one house';
+      i=j;continue;
+    }
+    if(w==='type'){
+      if(!/^([a-z]{1,2}\d{0,2}[a-z]?|\d{1,2}[a-z]?)$/.test(nx)||SG_STOP.has(nx))return'title also says "TYPE"';
+      if(++types>1)return'title names more than one type';
+      i++;continue;
+    }
+    const bm=/^(\d)(bed|beds|bedroom|bedrooms|b)?$/.exec(w);
+    if(bm&&(bm[2]||/^(bed|beds|bedroom|bedrooms)$/.test(nx))){
+      if(g.beds&&g.beds!==bm[1])return'title says '+bm[1]+' bed, the template is '+g.beds+' bed';
+      if(!bm[2])i++;continue;
+    }
+    if(/^(\d|single|double|two|three)$/.test(w)&&/^(storey|storeys|story)$/.test(nx)){i++;continue;}
+    if(SG_FLOOR.has(w)&&/^(floor|flr)$/.test(nx)){i++;continue;}
+    if(w==='phase'){
+      if(!/^\d+$/.test(nx))return'title also says '+U('phase '+nx);
+      if(String(+nx)!==hp)return'title says phase '+(+nx)+(hp?', the heading is phase '+hp:'');
+      i++;continue;
+    }
+    if(w==='end'&&nx==='of'&&/^terrace/.test(t[i+2]||'')){i+=2;continue;}
+    if(SG_POS.has(w))continue;
+    if(SG_PLURAL.has(w))return'title says '+U(w)+' (more than one)';
+    if(SG_ROOM[w]){if(!roomOk(SG_ROOM[w]))return'title names another room too';continue;}
+    if(w==='&'){
+      if(SG_ROOM[t[i-1]]&&SG_ROOM[nx])continue;
+      return'title names more than one house or room ('+U(t.slice(Math.max(0,i-1),i+3).join(' ').replace(/&/g,'+'))+')';
+    }
+    if(g.words.has(w)||own.has(w)||co(w))continue;
+    if(/^\d/.test(w))return'title has another number ('+U(w)+')';
+    return'title also says '+U(w);
+  }
+  return'';
 }
 // A title that changes HOW MANY are made is never green (Tester round 3): more than one house ("HOUSES 14-16", "14 & 15"),
 // a count ("X2", "2 UNITS", "2 KITCHENS"), or a phase that isn't the heading's phase ("PHASE 3" under a Phase 2 heading).
@@ -3711,11 +3768,10 @@ function suggestTpl(o,templates,projects){
     // the title names a room this template doesn't cover ("KITCHEN & WARDROBES" for a kitchen template) → amber. A utility
     // goes with a kitchen ("Kitchen + Utility" is one kitchen list).
     const oRoom=[...f.kinds].some(k=>!g.kinds.has(k)&&!(k==='utility'&&g.kinds.has('kitchen')));
-    const ext=sgExtra(f,g,p);
-    const strong=!f.multi&&!qx&&!oRoom&&!ext.length&&(!f.kinds.size||kHit)&&/* the title names a room → the template must name the same room */((cHit&&(kHit||!g.kinds.size||!f.kinds.size))||(ph&&(!f.code||cHit)));
+    const aw=sgAllow(o.title,o.customer,p,g);
+    const strong=!f.multi&&!aw&&!oRoom&&(!f.kinds.size||kHit)&&/* the title names a room → the template must name the same room */((cHit&&(kHit||!g.kinds.size||!f.kinds.size))||(ph&&(!f.code||cHit)));
     const why=[cHit?'type '+f.code.toUpperCase():'',kHit?[...g.kinds].filter(k=>f.kinds.has(k)).join(' + '):'',bHit?f.beds+' bed':'',ph&&!cHit?'name':''].filter(Boolean);
-    if(qx)why.push(qx+' — check it');
-    else if(ext.length)why.push('title also says "'+ext.slice(0,3).join(' ').toUpperCase()+'" — check it');
+    if(aw)why.push((qx||aw)+' — check it');
     else if(oRoom)why.push('title names another room too — check it');
     return{t,score,strong,why,cHit};
   }).filter(x=>x&&x.score>0).sort((a,b)=>b.score-a.score||String(a.t.typeName||a.t.name).localeCompare(String(b.t.typeName||b.t.name)));
