@@ -32,7 +32,7 @@ const res = []; const rec = (n, ok, d) => { res.push(ok); console.log((ok ? 'PAS
   await pg.evaluate(() => { const e = document.querySelector('.pod-ovl [data-mr="1|qty"]'); e.value = '3'; e.oninput(); document.querySelector('.pod-ovl [data-mr="2|item"]').focus(); document.getElementById('me-addsaw').click(); });
   await pg.evaluate(() => { const s = (k, v) => { const e = document.querySelector('.pod-ovl [data-mr="' + k + '"]'); e.value = v; e.oninput(); }; s('3|item', 'Kicker'); s('3|qty', '2'); s('3|L', '2440'); s('3|W', '125'); });
   const add = await pg.evaluate(() => ({ n: document.querySelectorAll('.pod-ovl .me-card').length, mat: document.querySelector('.pod-ovl [data-mr="3|mat"]').value }));
-  rec('phone: ＋ Row adds a card under the one you were on (colour from the row above)', add.n === 4 && add.mat === 'Blum hinge', JSON.stringify(add));
+  rec('phone: ＋ Row adds a card under the one you were on (colour from the SAW row above, not the Stores row — Garry, 3 Nov)', add.n === 4 && add.mat === 'MFC White', JSON.stringify(add));
   await pg.evaluate(() => { const s = document.querySelector('.pod-ovl [data-mr="3|mat"]'); s.value = 'MFC White'; s.onchange(); document.getElementById('me-save').click(); });
   for (let i = 0; i < 30 && S.db.t.list_lines.filter(x => x.list_id === 'L1').length < 4; i++) await F.sleep(100);
   const ln = S.db.t.list_lines.filter(x => x.list_id === 'L1' && x.removed_rev == null).sort((x, y) => x.seq - y.seq);
