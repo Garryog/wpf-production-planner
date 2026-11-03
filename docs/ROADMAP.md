@@ -83,6 +83,11 @@ Rules: rank by the leading number. "Shipped" = step 9 only (left the factory →
 - PM view: own projects only — spec status, sequence, snags, deliveries + proof.
 - Spec checklist source (Garry's "Project Details" table, 22 Oct): Carcass Material · Carcass Edgeing · Exposed Material · Plinth on/Built in · Door and Drawer Detail · Door and Drawer Material · Door and Drawer Edging · Wall unit door material · Hinges · Handles · Drawer Construction · Worktop Style · Worktop Colour · Sink Type · Tap Type · Kicker type · Kicker Height · Appliance Details · Oven Details · Cornice · Kitchen Accessories · Other Information (free text). Example values: "18mm MFC EG H1146 Grey Bardolino Oak", "1mm To Match Carcase", "Hettich Dowel Fix 105 (Made Doors)", "Gola Profile", "Hettich Stock", "Hafele Calder", "TBC" (= not signed off), "None", "Built in". A value of "TBC" or blank = not signed off → red flag. Items whose value is a material should be selectable from the project material list.
 
+### Decisions 3 Nov 2026 (Garry back from holiday)
+- Old-screen guard APPROVED (docs/PROPOSAL-old-tab-guard.md; SQL pending in SUPABASE_CHANGES.md, run on go-live day right after deploy; test once on a Supabase test project first).
+- The 6-hourly "holiday work list" scheduled task is turned off. Weekly health check stays on.
+- Cutting lists are the most important part of the roll-out and are not user friendly enough yet — Garry will go through them with Claude and decide changes before any more cutting-list build work.
+
 ## Progress log
 ### 2 Nov 2026 (scheduled run)
 - Architect confirmed the cutting-list plan against the code; build notes and build order added to docs/PLAN-cutting-lists-stage3.md (fixed garbled characters in both plan files).

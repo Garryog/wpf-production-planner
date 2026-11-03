@@ -540,6 +540,24 @@ create policy "planner_backups anon delete" on planner_backups for delete to ano
 Planner tabs opened BEFORE the update keep running the old code until they're reloaded. Old tabs still save the old way (whole plan, no clash check). The trigger means new tabs will notice and merge those saves, but an old tab can still overwrite a new tab's work. So on deploy day:
 1. Run the SQL above.
 2. Deploy.
-3. **Close and reopen every planner tab and phone** (office PCs, saw, stores, drivers, PMs, floor screen). After that, everything is on the new code.
+3. Check one screen saves (incognito window).
+4. **Within minutes, run the old-screen guard below** (approved by Garry 3 Nov 2026).
+5. **Close and reopen every planner tab and phone** (office PCs, saw, stores, drivers, PMs, floor screen). After that, everything is on the new code.
+Before step 1: key every planned week move into Cienapps, so the Export Changes list can start empty. Nobody moves weeks or presses "Mark as applied" between steps 2 and 4.
+
+## 2026-11-03 — Old-screen guard — APPROVED by Garry, run on go-live day AFTER the new code is live (step 4 above)
+PENDING. Never run it before the new code is deployed — every screen on today's code would get "Save failed". Try it once on a Supabase TEST project first. Full explanation: docs/PROPOSAL-old-tab-guard.md.
+```sql
+create or replace function production_planner_bump() returns trigger language plpgsql as $$
+begin
+  if old.id = 'main' and new.version is distinct from old.version + 1 then
+    raise exception 'This planner screen is out of date - refresh the page' using errcode = 'P0001';
+  end if;
+  new.version := old.version + 1;
+  new.updated_at := now();
+  return new;
+end $$;
+```
+**Rollback order (important):** if the website ever has to go back to the old version, FIRST undo this guard (run the original Stage 1 `production_planner_bump` function above again), THEN put main back. The other way round, no screen can save.
 
 Note: Stage 4 tightens the anon grants and policies above (the app will stop having open delete access).
