@@ -90,7 +90,7 @@ const officeNote = (off, n) => off.page.evaluate(async n => { await loadDB(); DB
       t.click(); out.closed = !t.classList.contains('show');
       lqSay('W5 newline in a part "Side\nleft" was changed'); lqSay('W6 x'); lqSay('W7 y'); out.nl = t.textContent;
       return out; }, long);
-    rec('W1 4 warnings: last 3 kept newest last, box fits a 380-px phone', r.n === 'W2,W3,W4' && r.left >= 0 && r.right <= r.vw && r.top >= 0, JSON.stringify(r));
+    rec('W1 4 warnings: all 4 kept (up to 6 since 91753d3) newest last, box fits a 380-px phone', r.n === 'W1,W2,W3,W4' && r.left >= 0 && r.right <= r.vw && r.top >= 0, JSON.stringify(r));
     rec('W2 a short toast meanwhile does not wipe the warnings', r.afterShort, JSON.stringify(r));
     rec('W3 tapping the box closes it', r.closed, JSON.stringify(r));
     rec('W4 (Low) the box does not cover tick buttons (operator can keep ticking without closing it)', !r.hitIsBox, 'buttons under box=' + r.underBox + ' box height=' + r.h + '/' + r.vh + ' hitIsBox=' + r.hitIsBox);
