@@ -1018,8 +1018,8 @@ async function saveDB(){
     if(SAVE_AGAIN){SAVE_AGAIN=false;if(!DB.saveFailed)saveDB();}
   }
 }
-// Never let a tab close while an edit is unsaved or a retry is pending
-window.addEventListener('beforeunload',e=>{if(saveT||DB.saveFailed){e.preventDefault();e.returnValue='';}});
+// Never let a tab close while an edit is unsaved, a save is in flight / being checked, or a retry is pending
+window.addEventListener('beforeunload',e=>{if(saveT||SAVING||DB.saveFailed){e.preventDefault();e.returnValue='';}});
 function fullSettings(){return{weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP,delx:DB.delx||[],delNotes:DB.delNotes||{},grps:DB.grps||{},pins:DB.pins||{},pod:DB.pod||{},lists:DB.lists||[],listWBs:DB.listWBs||{},listDone:DB.listDone||{},listLead:DB.listLead||5,delArchive:DB.delArchive||{},staff:DB.staff||[],listHold:DB.listHold||{},holdLog:DB.holdLog||[],listRow:DB.listRow||{},saveIds:DB.saveIds||[],exportBase:{wk:orig,st:origStep}};}
 /* Staff roster: {id, n:name, r:[roles]} — one source of names for drivers, saw and stores,
    so every "loaded by / delivered by / cut by" record uses the same spelling of the same person. */
