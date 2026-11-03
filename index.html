@@ -3457,9 +3457,12 @@ function diffLines(old,nw,opt){
   //    ... but only while it is still the same kind of part: a cut "Side" overtyped into "Shelf" is a removed Side + a new Shelf (so the saw is told to keep the Side aside)
   const kp=x=>T(x.kind)+'|'+T(x.part);
   nw.forEach((x,i)=>{if(x.id==null)return;const o=live.find(y=>y.id===x.id&&!used.has(y.id));if(!o||kp(o)!==kp(x))return;match[i]=o;used.add(o.id);how[i]=key(o)!==key(x)?'changed':T(o.note)!==T(x.note)?'note':'same';});
-  // ... and a row naming a line that has since been removed is put back as a NEW line — it never takes another line's id
-  const gone=new Set(old.filter(x=>x.removed_rev!=null).map(x=>x.id));
-  const free=i=>!match[i]&&!(nw[i].id!=null&&gone.has(nw[i].id));
+  // ... and a row naming a line that has since been removed, an id this list never had (pasted from another list), or an
+  //     id an earlier row already names (a copied row) is a NEW line — it never takes another line's id. (A part overtyped
+  //     into a different part still pairs by content below, so swapped rows keep their ticks.)
+  const ids=new Set(old.map(x=>x.id)),gone=new Set(old.filter(x=>x.removed_rev!=null).map(x=>x.id)),first=new Map();
+  nw.forEach((x,i)=>{if(x.id!=null&&!first.has(x.id))first.set(x.id,i);});
+  const free=i=>{const id=nw[i].id;return !match[i]&&!(id!=null&&(gone.has(id)||!ids.has(id)||first.get(id)!==i));};
   nw.forEach((x,i)=>{if(!free(i))return;const k=key(x);if(pick(i,o=>key(o)===k&&T(o.note)===T(x.note),true))how[i]='same';});
   nw.forEach((x,i)=>{if(!free(i))return;const k=key(x);if(pick(i,o=>key(o)===k,true))how[i]='note';});
   nw.forEach((x,i)=>{if(!free(i))return;const k=pk(x);if(pick(i,o=>pk(o)===k,false))how[i]='changed';});
