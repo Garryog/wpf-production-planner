@@ -192,6 +192,15 @@ button,input,select{font-family:inherit;cursor:pointer}
 .wl-tabs button{flex:1;padding:14px;font-size:17px;font-weight:800;border-radius:10px;border:2px solid var(--b2);background:#fff;color:var(--t3);cursor:pointer}
 .wl-tabs button.on{background:#14335c;border-color:#14335c;color:#fff}
 .wl-dday{font-size:13px;font-weight:800;color:#14335c;text-transform:uppercase;letter-spacing:.5px;margin:16px 0 6px;border-bottom:2px solid #14335c;padding-bottom:3px}
+.lti-row{background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:6px;font-size:13px}
+.lti-top{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline}
+.lti-wo{font-family:monospace;font-size:14px;color:#14335c}.lti-t{flex:1;min-width:140px;overflow-wrap:anywhere}.lti-c{color:var(--t2);font-size:12px;overflow-wrap:anywhere}
+.lti-b{display:inline-block;border-radius:5px;padding:1px 7px;font-size:11px;font-weight:700;white-space:nowrap}
+.lti-sug{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center;margin:5px 0 2px}.lti-chip{border:1px solid;border-radius:6px;padding:3px 8px;font-size:12px;overflow-wrap:anywhere}
+.lti-why{font-size:11px;color:var(--t3)}.lti-act{display:flex;flex-wrap:wrap;align-items:center;margin-top:4px}.lti-msg{font-size:12px;font-weight:700;margin-top:4px}
+.lti-done{background:#e7f6ec;border:1px solid #9fd8b4;border-radius:8px;padding:6px 10px;margin-bottom:8px;font-size:12px;color:#0d6e46}
+.lti-nar{padding:3px 0;border-bottom:1px solid var(--border)}
+details.lti-other{margin-bottom:14px}details.lti-other>summary{cursor:pointer;font-size:13px;font-weight:700;color:#14335c;padding:8px 4px}
 .wl-drow{display:flex;gap:10px;align-items:center;background:#fff;border:1px solid var(--border);border-radius:8px;padding:9px 12px;margin-bottom:6px;font-size:14px}
 .wl-drow>b{font-size:16px;color:#14335c}
 .sn-row,.wait-row{flex-wrap:wrap}.sn-row>.dsh-x,.wait-row>.dsh-x,.sn-row>.dsh-t{white-space:normal;min-width:0;overflow-wrap:anywhere} /* new-lists rows (switch on only) wrap on a phone */
@@ -1390,7 +1399,7 @@ function render(){
   else if(tab==='l')renderLists(app);
   else if(tab==='d')renderDeliveries(app);
   else if(tab==='h')renderShipped(app);
-  else if(tab==='i')renderImport(app);
+  else if(tab==='i'){renderImport(app);ltiImpKeep();}
   else if(tab==='x')renderExport(app);
   else renderSettings(app);
   // Stage 1 SQL not run yet: the office must see that saves have no clash protection (floor views don't need to)
@@ -3196,11 +3205,10 @@ function lsHomeMount(){ // office Lists tab with the switch on: the library beco
   lsHomeBind();
 }
 function lsHomePage(app,title){
-  const need=listsNeeded().length;
-  app.innerHTML=`<div class="pg">${title||''}${need?`<div class="exp-panel" style="border:2px solid #c0392b;background:#fdf3f2;font-size:13px;color:#8a1c10;font-weight:700">⚠ ${need} work order${need!==1?'s':''} scheduled with no list yet — see the saw's "Waiting for a list" strip.</div>`:''}
+  app.innerHTML=`<div class="pg">${title||''}${listsToIssueHTML()}
     ${allHolds(['saw','fit'],'hold').length?`<div class="exp-panel" style="border:2px solid #d4880f;background:#fffaf0"><div style="font-size:14px;font-weight:700;color:#7a4a00;margin-bottom:4px">⏸ Waiting on material</div>${holdBookHTML(['saw','fit'])}</div>`:''}
     ${lsHomeHTML()}</div>`;
-  lsHomeBind();bindHoldBook(['saw','fit'],officeWhoFn);
+  lsHomeBind();ltiBind();bindHoldBook(['saw','fit'],officeWhoFn);
 }
 function renderDesign(app){
   if(!V2()){app.innerHTML='<div class="pg"><div class="exp-panel" style="font-size:14px">The Design office view opens when the new cutting lists are switched on (Settings → Cutting lists store).</div></div>';return;}
@@ -3237,6 +3245,103 @@ function waitListHTML(){
     ${rows.map(({o,cut,due})=>{const late=due&&due<today;return `<div class="wl-drow wait-row" data-waitwo="${escA(o.wo)}" style="${late?'background:#c0392b;color:#fff;':''}border-radius:5px;padding:5px 8px"><b>${escA(o.wo)}</b><span class="dsh-c">${escA(o.customer||'')}</span><span class="dsh-t">${escA([o.floor,o.unit].filter(Boolean).join(' '))}</span><span class="dsh-x">${late?'⚠ OVERDUE · ':''}cut by ${cut?fmt(cut):'—'} · list due by ${due?fmt(due):'—'} · owner ${escA(lsOwnerFor(o))}</span></div>`;}).join('')}
   </div>`;
 }
+/* ---------- Cutting-list flow (Garry, 3 Nov — docs/PLAN-cutting-lists-flow-nov.md), V2 only ----------
+   "Cutting lists to issue": every WO that needs a list (listsNeeded) with a suggested template (suggestTpl).
+   ✓ Confirm makes that WO's list from the template (confirmList → fixed id WO:<wo>); "Confirm all green" does every
+   strong suggestion, one row at a time, each with its own result (a failed row keeps a Retry). Nothing is made — and
+   nothing reaches the saw — until someone confirms. Shown after an import's Apply, on the office Lists tab, the
+   Production Manager's Lists tab and the Design office home. */
+const LTI={pick:{},open:'',res:{},busy:new Set(),done:[],all:false,showNA:false};
+function lsSuggest(o){return suggestTpl(o,lsCache().all.filter(l=>l.tpl&&!l.archived),lsProjects());}
+function lsListName(o){return o?([o.floor,o.unit].filter(Boolean).join(' ')||o.title||o.wo):'';}
+async function confirmList(wo,tid,by){
+  const o=DB.orders.find(x=>x.wo===wo);if(!o)throw new Error(wo+' is no longer on the planner');
+  return lsCreateFromTpl(tid,[wo],lsListName(o)||wo,by,{fixedFor:wo});
+}
+function ltiRows(){
+  const today=todayLocal();
+  return listsNeeded().map(o=>{const n=lsNeedInfo(o,today),s=lsSuggest(o),pk=LTI.pick[o.wo]&&lsList(LTI.pick[o.wo])?LTI.pick[o.wo]:'';
+    return Object.assign(n,{s,tid:pk||s.tid,lvl:pk&&pk!==s.tid?'pick':s.level});})
+    .sort((a,b)=>(b.onDel-a.onDel)||(b.late-a.late)||(a.due||'9999').localeCompare(b.due||'9999')||woCmp(a.o,b.o));
+}
+const LTI_COL={strong:['#0d6e46','#e7f6ec','#9fd8b4','✓ Suggested'],weak:['#7a4a00','#fff4d6','#e0a43a','? Best guess'],none:['#5b6b82','#eef1f5','#c9d1dc','No suggestion'],pick:['#1a56db','#eaf2ff','#9cbce8','Chosen']};
+function ltiTplName(id){const t=lsList(id);return t?(t.typeName||t.name)+' · Rev '+(+t.rev||1):'';}
+function ltiInner(){
+  const rows=ltiRows(),green=rows.filter(r=>r.lvl==='strong'&&r.tid&&!LTI.busy.has(r.o.wo));
+  const na=DB.orders.filter(o=>o.listNA&&!woFinished(o)),show=LTI.all?rows:rows.slice(0,40);
+  const btn='font-size:12px;padding:6px 10px;margin:2px 4px 2px 0';
+  const row=r=>{const o=r.o,w=o.wo,[c,bg,bd,lbl]=LTI_COL[r.lvl],busy=LTI.busy.has(w),err=(LTI.res[w]||{}).err;
+    const pid=r.s.pid,alts=pid?(r.s.alts.length?r.s.alts:lsTemplatesFor(pid).map(t=>t.id)):[];
+    const when=r.onDel?`<span class="lti-b" style="background:#c0392b;color:#fff">🚚 ${escA(slotLbl(o.delVeh,o.delDay))}</span>`:'';
+    const due=r.due?`<span class="lti-b" style="${r.late?'background:#c0392b;color:#fff':'background:#eef1f5;color:#14335c'}">${r.late?'LATE · was due '+fmt(r.due):'list due by '+fmt(r.due)}</span>`:'';
+    return `<div class="lti-row" data-ltirow="${escA(w)}" style="border-left:5px solid ${bd}">
+      <div class="lti-top"><b class="lti-wo">${escA(w)}</b><span class="lti-t">${escA([o.floor,o.unit].filter(Boolean).join(' · '))}${o.floor||o.unit?' — ':''}${escA(o.title||'')}</span><span class="lti-c">${escA(o.customer||'(no customer)')}</span>${when}${due}</div>
+      <div class="lti-sug"><span class="lti-chip" data-ltilvl="${r.lvl}" style="background:${bg};color:${c};border-color:${bd}">${lbl}${r.tid?': <b>'+escA(ltiTplName(r.tid))+'</b>':''}</span><span class="lti-why">${escA(r.lvl==='pick'?'picked by hand':r.s.why)}</span></div>
+      ${busy?'<div class="lti-msg" style="color:#14335c">Saving…</div>':`<div class="lti-act">
+        <button class="btn btn-g" data-lticonf="${escA(w)}" style="${btn}"${r.tid?'':' disabled title="Pick a template first"'}>✓ Confirm</button>
+        ${pid?`<button class="btn btn-s" data-ltichg="${escA(w)}" style="${btn}">${LTI.open===w?'✕ Close':'Change template ▾'}</button>`:''}
+        <button class="btn btn-s" data-ltina="${escA(w)}|none" style="${btn}">No list needed</button>
+        <button class="btn btn-s" data-ltina="${escA(w)}|paper" style="${btn}">Paper list issued</button></div>`}
+      ${!busy&&pid&&LTI.open===w?`<div class="lti-act"><select data-ltisel="${escA(w)}" style="${LS_INP};max-width:100%"><option value="">— pick a template (${escA(lsProjName(pid))}) —</option>${alts.map(id=>`<option value="${escA(id)}"${id===r.tid?' selected':''}>${escA(ltiTplName(id))}</option>`).join('')}<option value="__type">✍ Type a list instead…</option></select></div>`:''}
+      ${!busy&&!pid?ltiLinkHTML(o):''}
+      ${err&&!busy?`<div class="lti-msg" style="color:#b42318">✗ Not saved — ${escA(err)} <button class="btn btn-s" data-ltiretry="${escA(w)}" style="${btn};color:#b42318;border-color:#b42318">↻ Retry</button></div>`:''}
+    </div>`;};
+  return `<div class="exp-panel lti" id="lti" style="border:2px solid ${rows.some(r=>r.late||r.onDel)?'#c0392b':rows.length?'#d4880f':'#9fd8b4'};background:${rows.length?'#fffdf7':'#f4fbf6'}">
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
+      <div style="font-size:16px;font-weight:800;color:#14335c">📋 Cutting lists to issue — ${rows.length}</div>
+      ${rows.filter(r=>r.late).length?`<span class="lti-b" style="background:#c0392b;color:#fff">${rows.filter(r=>r.late).length} late</span>`:''}
+      <span style="flex:1"></span>
+      ${green.length?`<button class="btn btn-g" id="lti-all" style="font-size:13px;padding:8px 14px">✓ Confirm all green (${green.length})</button>`:''}
+    </div>
+    <div style="font-size:12px;color:var(--t3);margin-bottom:8px">${rows.length?'Each processed work order needs its cutting list. Check the suggested template and tap ✓ Confirm. <b>Nothing reaches the saw until it is confirmed.</b> Green = strong match · amber = a guess · grey = no suggestion.':'✓ Every processed work order has a cutting list.'}</div>
+    ${LTI.done.length?`<div class="lti-done">${LTI.done.slice(0,12).map(d=>`<div>✓ <b>${escA(d.wo)}</b> — "${escA(d.name)}"${d.tpl?' from '+escA(d.tpl):''}${d.already?' <i>(already made on another screen — no second list)</i>':''}</div>`).join('')}${LTI.done.length>12?`<div>…and ${LTI.done.length-12} more</div>`:''}<button class="btn btn-s" id="lti-dx" style="font-size:11px;padding:2px 8px;margin-top:4px">Clear</button></div>`:''}
+    ${show.map(row).join('')}
+    ${rows.length>show.length?`<button class="btn btn-s" id="lti-more" style="font-size:12px;margin-top:6px">Show all ${rows.length}</button>`:''}
+    ${na.length?`<div style="margin-top:8px;font-size:12px"><button class="btn btn-s" id="lti-na" style="font-size:11px;padding:3px 9px">${LTI.showNA?'▲':'▼'} Cleared without a planner list (${na.length})</button>
+      ${LTI.showNA?na.map(o=>`<div class="lti-nar"><b>${escA(o.wo)}</b> ${escA(o.title||'')} — ${o.listNA.k==='paper'?'paper list issued':'no list needed'} · ${escA(o.listNA.by||'')} ${o.listNA.at?fmt(o.listNA.at):''} <button class="btn btn-s" data-ltiundo="${escA(o.wo)}" style="font-size:11px;padding:2px 8px">Undo</button></div>`).join(''):''}</div>`:''}
+  </div>`;
+}
+// After an Apply, the import tab keeps the panel when it is redrawn (a refresh), until the page is reloaded
+function ltiImpKeep(){const el=document.getElementById('iprev');if(!V2()||!LTI.afterImp||!el||el.innerHTML.trim())return;el.innerHTML='<div style="margin-top:14px">'+listsToIssueHTML()+'</div>';ltiBind();}
+function listsToIssueHTML(){return V2()?`<div class="lti-host">${ltiInner()}</div>`:'';}
+// Redraw: inside the import result only the panel is redrawn (a full render would clear the "Import applied" summary)
+function ltiAfter(){if(document.querySelector('#iprev .lti-host')){document.querySelectorAll('.lti-host').forEach(h=>{h.innerHTML=ltiInner();});ltiBind();updDelBadge();}else render();}
+function ltiConfirm(wos){
+  wos=wos.filter(w=>!LTI.busy.has(w));if(!wos.length)return;
+  officeWho(async by=>{
+    const rs=new Map(ltiRows().map(r=>[r.o.wo,r]));
+    const go=wos.filter(w=>rs.get(w)&&rs.get(w).tid);
+    go.forEach(w=>{LTI.busy.add(w);delete LTI.res[w];});ltiAfter();
+    let ok=0,bad=0,al=0;
+    for(const w of go){const tid=rs.get(w).tid;
+      try{const l=await confirmList(w,tid,by);ok++;if(l.already)al++;LTI.done.unshift({wo:w,name:l.name,tpl:ltiTplName(tid),already:!!l.already});delete LTI.pick[w];}
+      catch(e){bad++;LTI.res[w]={err:e.message};}
+      LTI.busy.delete(w);ltiAfter();
+    }
+    toast(bad?ok+' list'+(ok!==1?'s':'')+' made, '+bad+' NOT saved — tap ↻ Retry on '+(bad!==1?'those rows':'that row'):ok+' list'+(ok!==1?'s':'')+' made ✓'+(al?' ('+al+' already made on another screen)':''),!!bad);
+  });
+}
+function ltiBind(){
+  const q=(sel,f)=>document.querySelectorAll(sel).forEach(f);
+  q('[data-lticonf]',b=>b.onclick=()=>ltiConfirm([b.dataset.lticonf]));
+  q('[data-ltiretry]',b=>b.onclick=()=>ltiConfirm([b.dataset.ltiretry]));
+  q('#lti-all',b=>b.onclick=()=>ltiConfirm(ltiRows().filter(r=>r.lvl==='strong'&&r.tid).map(r=>r.o.wo)));
+  q('[data-ltichg]',b=>b.onclick=()=>{LTI.open=LTI.open===b.dataset.ltichg?'':b.dataset.ltichg;ltiAfter();});
+  q('[data-ltisel]',e=>e.onchange=()=>{const w=e.dataset.ltisel;
+    if(e.value==='__type'){const o=DB.orders.find(x=>x.wo===w);LTI.open='';openListEditor(null,w,(lsProjForCust(o&&o.customer)||{}).id||'');return;}
+    if(e.value)LTI.pick[w]=e.value;else delete LTI.pick[w];LTI.open='';ltiAfter();});
+  q('[data-ltina]',b=>b.onclick=()=>{const[w,k]=b.dataset.ltina.split('|'),o=DB.orders.find(x=>x.wo===w);if(!o)return;
+    officeWho(by=>{o.listNA={k,by,at:nowISO()};logEdit(o,k==='paper'?'Cutting list: paper list issued (no list in the planner)':'Cutting list: no list needed',by);sched();ltiAfter();
+      toast(w+' — '+(k==='paper'?'paper list issued':'no list needed')+' ✓');});});
+  q('[data-ltiundo]',b=>b.onclick=()=>{const o=DB.orders.find(x=>x.wo===b.dataset.ltiundo);if(!o)return;
+    officeWho(by=>{const k=o.listNA&&o.listNA.k;delete o.listNA;logEdit(o,'Cutting list: "'+(k==='paper'?'paper list issued':'no list needed')+'" undone',by);sched();ltiAfter();});});
+  q('#lti-more',b=>b.onclick=()=>{LTI.all=true;ltiAfter();});
+  q('#lti-na',b=>b.onclick=()=>{LTI.showNA=!LTI.showNA;ltiAfter();});
+  q('#lti-dx',b=>b.onclick=()=>{LTI.done=[];ltiAfter();});
+  ltiLinkBind();
+}
+function ltiLinkHTML(o){return'';} // step 4
+function ltiLinkBind(){}
 /* ---------- S4 (V2 only): the list editor with project picker, type, edging, and materials picked from the project ----------
    Saw material: only the project's sheet materials (no free typing). Fittings spec: the project's fittings, or "Other…"
    typed — that line gets an amber flag. A material already on a line but not on the project list stays, flagged. */
@@ -3469,12 +3574,28 @@ async function lsCopyLines(srcId,map){
   return lsLinesOf(srcId).filter(x=>x.removed_rev==null&&x.status!=='na').map(x=>{const m=x.kind==='saw'&&map[matKey(x.material)];
     return{kind:x.kind,section:x.section,part:x.part,length_mm:x.length_mm,width_mm:x.width_mm,qty:x.qty,material:m||x.material,material_other:m?false:!!x.material_other,edging:x.edging,note:x.note,src_line_id:x.id};});
 }
-async function lsCreateFromTpl(tid,wos,name,by){
+async function lsCreateFromTpl(tid,wos,name,by,opt){
+  opt=opt||{};
   if(!LST.full.has(tid))await lsReloadList(tid);
   const t=LST.l.get(tid);if(!t)throw new Error('the template is no longer there');
-  const pl={id:uid('L'),name,project_id:t.project_id,list_type:t.list_type==='snag'?'house':t.list_type,type_name:t.type_name||null,template_id:tid,template_rev:+t.rev||1,wos,source:'template'};
-  const res=await lsSaveList(pl,await lsCopyLines(tid),by,'Made from template "'+t.name+'" rev '+(+t.rev||1));
-  return res.list;
+  // opt.fixedFor = a WO: the list gets the fixed id WO:<wo> (WO:<wo>#2… once an earlier one was archived), so two screens
+  // confirming the same WO at once make ONE list — the database refuses the second (same id), and that screen is shown
+  // the list the first one made (marked .already). Never a second list, never a revision of the other screen's list.
+  let id=uid('L');
+  const mine=()=>LST.l.get(id),already=x=>Object.assign({},x,{already:true});
+  if(opt.fixedFor){
+    for(let n=1;;n++){id='WO:'+opt.fixedFor+(n>1?'#'+n:'');await lsReloadList(id);const ex=mine();if(!ex)break;if(!ex.archived)return already(ex);if(n>=30)throw new Error('too many archived lists for '+opt.fixedFor);}
+  }
+  const pl={id,name,project_id:t.project_id,list_type:t.list_type==='snag'?'house':t.list_type,type_name:t.type_name||null,template_id:tid,template_rev:+t.rev||1,wos,source:'template'};
+  const why='Made from template "'+t.name+'" rev '+(+t.rev||1),lines=await lsCopyLines(tid);
+  if(!opt.fixedFor){const res=await lsSaveList(pl,lines,by,why);return res.list;}
+  try{
+    const out=await lsRpc('save_list_revision',{p_list:pl,p_lines:diffLines([],lines,{listId:id}).lines,p_expect:null,p_by:lqBy(by),p_reason:why});
+    LST.full.add(out.list.id);lsPut('lists',[out.list]);lsPut('list_lines',out.lines);return out.list;
+  }catch(e){
+    if(e.status===409||/stale|duplicate key|23505/i.test(e.message)){await lsReloadList(id);if(mine())return already(mine());} // made on another screen a moment ago
+    throw e;
+  }
 }
 function lsTemplatesFor(pid){return lsCache().all.filter(l=>l.tpl&&!l.archived&&l.pid===pid).sort((a,b)=>String(a.typeName||a.name).localeCompare(String(b.typeName||b.name)));}
 // From a work order with no list: tap a template → preview with the WO ticked (+ other jobs of the project that need a list) → name → Create & attach
@@ -3839,8 +3960,10 @@ function renderLists(app){
   const all=[...lists()].sort((a,b)=>(listDueKey(a)||'9999').localeCompare(listDueKey(b)||'9999')||String(a.name).localeCompare(String(b.name)));
   const woLbl=w=>{const o=DB.orders.find(x=>x.wo===w);return o?`${w} (${[o.floor,o.unit].filter(Boolean).join(' ')})`:w;};
   const candFor=o=>{const u=parseInt(o.unit);if(isNaN(u))return[];return all.filter(l=>{const ns=(String(l.sheet).match(/\d+/g)||[]).map(Number);return ns.includes(u)&&!(l.wos||[]).includes(o.wo);});};
-  app.innerHTML=`<div class="pg">
-    ${need.length?`<div class="exp-panel" style="border:2px solid #c0392b;background:#fdf3f2">
+  const v2=V2();
+  app.innerHTML=`<div class="pg">${listsToIssueHTML()}
+    ${v2&&need.length?`<details class="lti-other"${lstAttachOpen?' open':''}><summary>More ways to attach a list (type one, or pick an uploaded list) — Cutting lists needed: ${need.length}</summary>`:''}
+    ${v2&&!need.length?'':need.length?`<div class="exp-panel" style="border:2px solid #c0392b;background:#fdf3f2">
       <div style="font-size:14px;font-weight:700;color:#8a1c10;margin-bottom:6px">⚠ Cutting lists needed — ${need.length} work order${need.length!==1?'s':''} scheduled with no list tagged</div>
       <p style="font-size:12px;color:#8a1c10;margin-bottom:10px">These are on the delivery board or due within ${listLead()} days. Upload the cutting list below and tag it, so the saw and stores see it in good time.</p>
       <table class="lst-tbl"><thead><tr><th>WO #</th><th>Floor/Unit</th><th>Title</th><th>Customer</th><th>Due</th><th>Why flagged</th><th></th></tr></thead><tbody>
@@ -3856,7 +3979,7 @@ function renderLists(app){
       </td></tr>`:''}`;}).join('')}
       ${need.length>30?`<tr><td colspan="7" style="color:var(--t3)">…and ${need.length-30} more</td></tr>`:''}
       </tbody></table></div>`:
-      `<div class="exp-panel" style="border-color:#b3e0c4;background:#f4fbf6"><div style="font-size:13px;color:#0d6e46;font-weight:600">✓ Every work order scheduled inside the next ${listLead()} days has a cutting list tagged.</div></div>`}
+      `<div class="exp-panel" style="border-color:#b3e0c4;background:#f4fbf6"><div style="font-size:13px;color:#0d6e46;font-weight:600">✓ Every work order scheduled inside the next ${listLead()} days has a cutting list tagged.</div></div>`}${v2&&need.length?'</details>':''}
     <div class="exp-panel">
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px"><div style="font-size:14px;font-weight:600">Upload a cutting-list workbook</div><span style="font-size:12px;color:var(--t3)">— or no workbook to hand?</span><button class="btn btn-g" id="lst-type" style="font-size:13px">✍ Type a list in the planner</button></div>
       <p style="font-size:12px;color:var(--t3);margin-bottom:10px">One Excel file per project, one sheet per house — exactly like the lists you use today. Rows with length &times; width go to the <b>Saw</b> view; rows with a quantity but no dimensions (sinks, taps, gola rail, handles…) go to the <b>Stores</b> view. Each sheet becomes a list, auto-tagged to matching work orders by house number — check the tags after upload.</p>
@@ -4049,7 +4172,7 @@ function renderLists(app){
     listArchive(l,whoNow());
     lsSched();render();toast(V2()?'List archived':'List deleted');
   });
-  if(V2())lsHomeMount();
+  if(V2()){lsHomeMount();ltiBind();}
   document.querySelectorAll('[data-tplatt]').forEach(b=>b.onclick=e=>{e.stopPropagation();const v=b.dataset.tplatt,i=v.indexOf('|'),tid=v.slice(0,i),go=()=>lsTplDlg(tid,v.slice(i+1));if(LST.full.has(tid))go();else lsReloadList(tid).then(go).catch(x=>toast('Could not open the template — '+x.message));});
   document.querySelectorAll('[data-lview]').forEach(b=>b.onclick=()=>{
     const l=lists().find(x=>x.id===b.dataset.lview);if(!l)return;
@@ -6008,11 +6131,15 @@ function renderImportPreview(plan){
   if(c.noWo)skips.push(c.noWo+' rows with no WO number');
   if((plan.gone||[]).length)skips.push(plan.gone.length+' deleted on another PC while this preview was open — skipped, not re-added ('+escA(plan.gone.slice(0,10).join(', '))+(plan.gone.length>10?' …':'')+')');
   const nChg=c.added+c.updated+plan.shipped.length;
+  // switch on: work orders this import moves to 5. WORK ORDER PROCESSED - 8. PALLETED that have no cutting list yet
+  const nProc=V2()?(()=>{const tg=new Set();lists().forEach(l=>(l.wos||[]).forEach(w=>tg.add(woKey(w))));
+    return plan.newOrders.filter(o=>lsProcessed(o)&&!o.cienHold).length+plan.updates.filter(u=>u.set&&u.set.step&&lsProcessed({step:u.set.step})&&!lsProcessed({step:(DB.orders.find(x=>woKey(x.wo)===u.key)||{}).step})&&!tg.has(u.key)).length;})():0;
   el.innerHTML=`<div style="margin-top:14px">
     <div style="background:#eaf2ff;border:2px solid #1a56db;border-radius:8px;padding:12px 15px;margin-bottom:12px">
       <div style="font-size:14px;font-weight:800;color:#14335c;margin-bottom:4px">Import preview — nothing has changed yet</div>
       <div style="font-size:13px;color:#14335c">${c.added} new · ${c.updated} updated · ${c.skipped} unchanged · ${plan.shipped.length} to 📦 Shipped${c.folded?` · ${c.folded} addition${c.folded!==1?'s':''} folded in`:''}${(plan.autoTag||[]).length?` · <b>${plan.autoTag.length} auto-tagged for delivery</b>`:''}${(plan.marks||[]).length?` · ${plan.marks.length} marked installed/complete (Cienapps 10/11)`:''}${plan.flagged.length?` · <b>${plan.flagged.length} flagged</b>`:''} · <b>nothing is removed</b></div>
       ${skips.length?`<div style="font-size:12px;color:#14335c;opacity:.8;margin-top:3px">${skips.join(' · ')}</div>`:''}
+      ${nProc?`<div id="imp-proc" style="font-size:13px;color:#7a4a00;font-weight:700;margin-top:4px">📋 ${nProc} work order${nProc!==1?'s':''} newly processed with no cutting list — after Apply you'll be asked to issue ${nProc!==1?'them':'it'}</div>`:''}
     </div>
     ${plan.changedNote?`<div id="imp-changed" style="background:#fdecea;border:2px solid #e57368;border-radius:8px;padding:12px 15px;margin-bottom:12px">
       <div style="font-size:13px;font-weight:800;color:#8a1c10;margin-bottom:4px">⚠ The plan changed while you were reviewing — ${plan.changedNote.added.length} difference${plan.changedNote.added.length!==1?'s':''}. Nothing was applied.</div>
@@ -6228,7 +6355,9 @@ function applyImport(plan){
       ${plan.gone&&plan.gone.length?`<div style="font-size:12px;color:#8a6d00;margin-bottom:10px">Skipped — deleted on another PC while the preview was open (not re-added): ${escA(plan.gone.slice(0,20).join(', '))}${plan.gone.length>20?' …':''}</div>`:''}
       <button class="btn btn-g" onclick="showTab('b')">Go to Capacity Board →</button>
       ${nShip?`<button class="btn btn-s" style="margin-left:8px" onclick="showTab('h')">Open Shipped →</button>`:''}
+      ${V2()?'<div style="margin-top:14px">'+listsToIssueHTML()+'</div>':''}
     </div>`;
+    if(el&&V2()){LTI.afterImp=true;ltiBind();}
     toast(`Import applied — ${fresh.length} added, ${(plan.updates||[]).length} updated${nShip?', '+nShip+' to Shipped':''}`);
 }
 
