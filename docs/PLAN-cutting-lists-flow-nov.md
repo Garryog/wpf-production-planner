@@ -71,3 +71,9 @@
 2. Can one customer have several sites? A) one customer = one project, always; B) usually one, but a customer can be linked to several and the office picks per WO.
 3. What counts as "scheduled for delivery" for the saw's red warning? A) only jobs with a van and day; B) any delivery tag, including the automatic tag at step 7/8 (recommended).
 4. Jobs already past step 5 with no list on go-live day? A) show them all; old ones are cleared with "No list needed" or "Paper list issued" (recommended); B) flag only WOs that reach step 5 after go-live.
+
+## Garry's answers (3 Nov 2026) — plan APPROVED for build
+1. Reissue as Rev 2: "NEW LIST ISSUED – Rev 2 replaces Rev 1". Unchanged parts stay ticked, and the old version is kept as superseded.
+2. Always one customer per project. The project title is always part of the WO customer heading in Cienapps, even when a builder has several jobs with us. So the customer heading identifies the project, and there is no per-WO project pick.
+3. The saw's red "ON DELIVERY – NO CUTTING LIST" warning covers work orders that have been DRAGGED ONTO THE DELIVERY SCHEDULE, meaning given a van and day (delVeh + delDay). The undated delivery pool and the automatic step 7/8 tag do NOT count for the red warning. They still show in the amber "waiting for a list" count.
+4. On go-live day, show every processed WO with no list. Old ones are cleared with "No list needed" or "Paper list issued".
