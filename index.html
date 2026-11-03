@@ -3905,6 +3905,8 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     const sized=r=>lsNum(r.L)>0||lsNum(r.W)>0;
     const bad=rows.find(r=>r.k==='part'&&sized(r)&&sm.length&&!String(r.mat||'').trim());
     if(bad)return err('Pick the colour for every saw row ("'+(String(bad.item||'').trim()||'unnamed')+'"'+at(bad)+').');
+    const neg=rows.find(r=>r.k==='part'&&/^\s*-/.test(String(r.qty==null?'':r.qty)));
+    if(neg)return err('A quantity can\'t be negative ("'+(String(neg.item||'').trim()||'unnamed')+'"'+at(neg)+') — type the number to cut.');
     if(sawStarted&&rows.some(lsUnitsChanged))return err(LS_LOCK_MSG+'.');
     rows=rows.map(noAutoStores); // a Stores row keeps no colour unless someone picked one
     rows.forEach(r=>{if(r.k==='part')r.matOther=!sized(r)&&!!String(r.mat||'').trim()&&all.size>0&&!all.has(matKey(r.mat));});
