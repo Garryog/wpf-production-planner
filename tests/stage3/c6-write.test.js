@@ -67,7 +67,7 @@ const HOUSE7 = [['Aderrig', null, null, null, null, null], ['Item', 'Qty', 'Leng
     await F.sleep(600);
     rec('typed list edited before the saw started: rev stays 1, same line id, qty 3', D.find(S.db, 'lists', tl.id).rev === 1 && L(S, tl.id + ':1').qty === '3');
     // edit after a tick: asks why, makes rev 2, the tick on an unchanged line is kept
-    await off.page.evaluate(async () => { const l = lists().find(x => x.name === 'House 1 typed'); openListEditor(l.id); const ov = document.querySelector('.pod-ovl'); ov.querySelector('#me-addfit').click(); });
+    await off.page.evaluate(async () => { const l = lists().find(x => x.name === 'House 1 typed'); openListEditor(l.id); const ov = document.querySelector('.pod-ovl'); ov.querySelector('#me-addsaw').click(); }); // editor step 5: one '+ Row' — a row with no length/width goes to Stores
     D.applyLineChanges(S.db, [{ id: tl.id + ':1', status: 'cut', cid: 'c', rev: 1 }], 'Sean');
     await off.page.evaluate(async () => { await lsPoll(); const ov = document.querySelector('.pod-ovl'); const s = (k, v) => { const e = ov.querySelector('[data-mr="' + k + '"]'); e.value = v; e.oninput(); }; s('1|item', 'Handle'); s('1|qty', '4'); ov.querySelector('#me-save').click(); });
     await F.sleep(600);
