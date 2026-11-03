@@ -2975,6 +2975,7 @@ async function lsMigrate(by){
   }catch(e){await undo();throw e;}
   // 6. switch on. listStoreAt = when this migration started: old-format ticks after that are rescued by every screen.
   DB.listStore='v2';DB.listStoreAt=t0;
+  lsStampProc(); // jobs already processed on switch-on day: their lists are due counted from today
   clearTimeout(saveT);await saveDB();
   if(DB.saveFailed){DB.listStore='v1';throw new Error('the lists were copied and checked, but the switch could not be saved — try again');}
   lsReset();await lsLoad();lsStart();
@@ -4566,6 +4567,7 @@ function listsNeeded(){ // WOs scheduled to deliver inside the lead time with NO
 }
 // Cienapps 5. WORK ORDER PROCESSED to 8. PALLETED: the cutting list should exist (it is issued with the work order).
 // Shipped (9-11) and on hold are left out by listsNeeded.
+function lsStampProc(){const td=todayLocal();DB.orders.forEach(o=>{if(!o.procAt&&stepNo(o.step)>=5)o.procAt=td;});}
 function lsProcessed(o){const n=stepNo(o&&o.step);return n!==null&&n>=5&&n<=8;}
 // A job with no list: when its list is due and whether that has passed. Due = N working days after the WO was processed
 // (Settings, default 2) or the working day before the saw cuts it, whichever comes first.
@@ -7025,7 +7027,8 @@ function applyImport(plan){
     });
     // o.procAt: the day the planner first saw the job at 5. WORK ORDER PROCESSED or later — its cutting list is due a set
     // number of working days after it. Jobs already past step 5 the first time this runs get today's date.
-    const td=todayLocal();DB.orders.forEach(o=>{if(!o.procAt&&stepNo(o.step)>=5)o.procAt=td;});
+    // Lists switch OFF: never stamped (the saved jobs stay exactly as the go-live version writes them).
+    if(V2())lsStampProc();
     cleanGroups();
     sched();
     const c=plan.counts||{},el=document.getElementById('iprev');
