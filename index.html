@@ -2264,7 +2264,7 @@ function lsQty(q){const s=q==null?'':String(q);return /^\d+(\.\d+)?$/.test(s)?+s
 function lsAdapt(r){
   const a={id:r.id,v2:true,name:r.name||'',sheet:r.name||'',project:lsProjName(r.project_id),pid:r.project_id||'',sdate:r.sdate||'',
     wos:(r.wos||[]).slice(),noCut:!!r.no_cut,noFit:!!r.no_fit,log:r.log||[],up:r.updated_at,manual:r.source==='manual',
-    rev:r.rev||1,locked:!!r.locked,ltype:r.list_type||'',typeName:r.type_name||'',tpl:!!r.is_template,templateId:r.template_id||'',templateRev:r.template_rev||null,sentAt:r.sent_at||'',archived:!!r.archived,deliverBy:r.deliver_by||'',ver:r.version,done:{}};
+    rev:r.rev||1,locked:!!r.locked,ltype:r.list_type||'',typeName:r.type_name||'',tpl:!!r.is_template,excel:r.source==='excel',templateId:r.template_id||'',templateRev:r.template_rev||null,sentAt:r.sent_at||'',archived:!!r.archived,deliverBy:r.deliver_by||'',ver:r.version,done:{}};
   if(r.saw_done_at)a.done.saw={at:r.saw_done_at,by:r.saw_done_by||''};
   if(r.fit_done_at)a.done.fit={at:r.fit_done_at,by:r.fit_done_by||''};
   LQ.q.forEach(e=>{if(e.list!==r.id)return; // this device's unsent list changes show straight away
@@ -2769,7 +2769,7 @@ async function lsImportWB(wb,entries,fname,by,opt){
   opt=opt||{};
   const proj=opt.pid&&LST.p.has(opt.pid)?LST.p.get(opt.pid).name:wb.project||String(fname||'').replace(/\.(xlsx|xls)$/i,'');
   const pid=opt.pid&&LST.p.has(opt.pid)?opt.pid:await lsProject(proj);
-  const out={n:0,replaced:0,auto:0,flagged:0,revised:0,same:0};
+  const out={n:0,replaced:0,auto:0,sugg:0,flagged:0,revised:0,same:0};
   for(const e of entries){
     let sec='';
     const mp=opt.map||{};
@@ -2780,19 +2780,23 @@ async function lsImportWB(wb,entries,fname,by,opt){
     // re-uploading a corrected workbook revises the same list — tags and ticks carry across (diffLines)
     let old=live.find(x=>x.pid===pid&&x.name===e.sheet)||null;
     const l={name:e.sheet,sheet:e.sheet,project:proj,wos:old?old.wos.slice():[]};
+    // the work orders the sheet name points at (house numbers) — only SUGGESTED: a new list is never tagged here. The
+    // suggestions show in "Cutting lists to issue" for a person to confirm (plan step 6), and a WO that already has a live
+    // list is never offered one (no second list for the saw to cut).
+    let cand=[];
     if(!l.wos.length){
       const sugg=suggestWOs(l),pw=proj.toLowerCase().split(/\s+/).filter(x=>x.length>2);
       const strong=sugg.filter(o=>pw.some(w=>(o.customer||'').toLowerCase().includes(w)));
-      l.wos=(strong.length?strong:sugg).slice(0,6).map(o=>o.wo);
+      cand=(strong.length?strong:sugg).slice(0,6).map(o=>o.wo);
     }
     // a typed list for these same jobs and project is superseded by the workbook — same list, its ticks kept
-    if(!old&&l.wos.length){
+    if(!old&&cand.length){
       const pl0=proj.toLowerCase();
-      const sameProj=x=>x.pid===pid||l.wos.some(w=>{const o=DB.orders.find(y=>y.wo===w);return o&&o.customer&&pl0.includes(o.customer.toLowerCase().split(/\s+/)[0]);});
-      old=live.find(x=>x.manual&&(x.wos||[]).length&&x.wos.every(w=>l.wos.includes(w))&&sameProj(x))||null;
+      const sameProj=x=>x.pid===pid||cand.some(w=>{const o=DB.orders.find(y=>y.wo===w);return o&&o.customer&&pl0.includes(o.customer.toLowerCase().split(/\s+/)[0]);});
+      old=live.find(x=>x.manual&&(x.wos||[]).length&&x.wos.every(w=>cand.includes(w))&&sameProj(x))||null;
     }
     const pl={id:old?old.id:uid('L'),name:e.sheet,project_id:pid,sdate:e.sdate||null,source:'excel'};
-    if(!old){pl.wos=l.wos;pl.list_type='house';out.auto+=l.wos.length;}else out.replaced++;
+    if(!old){pl.wos=[];pl.list_type='house';out.sugg+=cand.filter(w=>!live.some(x=>(x.wos||[]).includes(w))).length;}else out.replaced++;
     if(old&&lsLocked(old))pl.lock=true;
     const res=await lsSaveList(pl,lines,by,old?'Workbook re-uploaded'+(fname?' ('+fname+')':''):null);
     if(res.same){out.same++;if(old)out.replaced--;}else if(old&&pl.lock)out.revised++;
@@ -2879,7 +2883,7 @@ function lsUpload(f,pid){
       const s=await lsImportWB(wb,entries,f.name,whoNow(),{pid:pid2,map});
       if(msg)msg.textContent='';
       render();
-      toast(s.n+' lists imported from '+(bk.project||f.name)+(s.same?' — '+s.same+' unchanged':'')+(s.replaced?' — '+s.replaced+' replaced with this newer version'+(s.revised?' ('+s.revised+' new revision'+(s.revised!==1?'s':'')+' for the saw)':''):'')+(s.auto?' — '+s.auto+' work orders auto-tagged. Check the tags.':'')+(s.flagged?' — '+s.flagged+' line'+(s.flagged!==1?'s':'')+' use a material not on the project list (flagged)':''));
+      toast(s.n+' lists imported from '+(bk.project||f.name)+(s.same?' — '+s.same+' unchanged':'')+(s.replaced?' — '+s.replaced+' replaced with this newer version'+(s.revised?' ('+s.revised+' new revision'+(s.revised!==1?'s':'')+' for the saw)':''):'')+(s.auto?' — '+s.auto+' work orders auto-tagged. Check the tags.':'')+(s.sugg?' — '+s.sugg+' work order'+(s.sugg!==1?'s':'')+' matched: confirm '+(s.sugg!==1?'them':'it')+' in "Cutting lists to issue" (not on the saw until confirmed)':'')+(s.flagged?' — '+s.flagged+' line'+(s.flagged!==1?'s':'')+' use a material not on the project list (flagged)':''));
     }catch(e){bad('Could not save that file: '+e.message);}
   };
   rd.readAsArrayBuffer(f);
@@ -3259,7 +3263,7 @@ function lsHomeHTML(){
   ls0.forEach(l=>{const k=l.pid||'';if(!grp.has(k))grp.set(k,[]);grp.get(k).push(l);});
   if(LH.proj&&!grp.has(LH.proj))grp.set(LH.proj,[]);
   const keys=[...grp.keys()].sort((a,b)=>(a?lsProjName(a):'~').localeCompare(b?lsProjName(b):'~'));
-  const sel=(id,v,opts)=>`<select id="${id}" style="${LS_INP}">${opts.map(([k,t])=>`<option value="${escA(k)}"${k===v?' selected':''}>${escA(t)}</option>`).join('')}</select>`;
+  const sel=(id,v,opts)=>`<select id="${id}" style="${LS_INP};max-width:100%;min-width:0">${opts.map(([k,t])=>`<option value="${escA(k)}"${k===v?' selected':''}>${escA(t)}</option>`).join('')}</select>`;
   const prog=(l,m)=>{const n=m==='saw'?l.saw:l.fit;if(!n)return(m==='saw'?l.noCut:l.noFit)?'n/a':'—';if(listDone(l.id)[m])return'✓';const t=Object.values(rowTicks(l.id)).filter(x=>x.m===m).length;return t+'/'+n;};
   const row=l=>{const[st,col]=LS_STATE[lsState(l)];return `<tr data-lhrow="${escA(l.id)}"><td><b>${escA(l.name)}</b>${l.tpl?' <span class="lst-chip" style="background:#efe7ff;color:#5b21b6">TEMPLATE'+(l.typeName?' · '+escA(l.typeName):'')+'</span>':''}</td>
     <td>${escA(LS_KINDS[l.ltype]||l.ltype||'')}${l.templateId?`<div style="font-size:11px;color:#5b21b6">${escA(lsTplInfo(l))}</div>`:''}</td><td>${(l.wos||[]).map(w=>`<span class="lst-chip">${escA(w)}</span>`).join('')||'<span style="color:var(--t3)">—</span>'}</td>
@@ -3268,7 +3272,7 @@ function lsHomeHTML(){
   return `<div class="exp-panel" id="lh">
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
       <div style="font-size:15px;font-weight:700;color:#14335c">📋 Lists — ${ls0.length}</div>
-      <input id="lh-q" value="${escA(LH.q)}" placeholder="🔍 Search name, house, WO, customer, type" style="${LS_INP};width:250px">
+      <input id="lh-q" value="${escA(LH.q)}" placeholder="🔍 Search name, house, WO, customer, type" style="${LS_INP};width:250px;max-width:100%">
       ${sel('lh-proj',LH.proj,[['','All projects'],...lsProjects().map(p=>[p.id,p.name])])}
       ${sel('lh-type',LH.type,[['','Any type'],...Object.entries(LS_KINDS)])}
       ${sel('lh-kind',LH.kind,[['live','Live lists'],['tpl','Templates'],['all','Lists + templates']])}
@@ -3381,10 +3385,19 @@ async function confirmList(wo,tid,by){
   const o=DB.orders.find(x=>x.wo===wo);if(!o)throw new Error(wo+' is no longer on the planner');
   return lsCreateFromTpl(tid,[wo],lsListName(o)||wo,by,{fixedFor:wo});
 }
+// Excel uploads are never tagged automatically (plan step 6): an untagged Excel list whose sheet name points at a WO
+// (house number, suggestWOs) is offered on that WO's row here, for a person to confirm.
+function ltiExcelSugg(){
+  const m=new Map();
+  lsCache().all.forEach(l=>{if(l.archived||l.tpl||!l.excel||(l.wos||[]).length)return;
+    suggestWOs(l).slice(0,6).forEach(o=>{const p=lsProjForCust(o.customer);if(p&&l.pid&&p.id!==l.pid)return;(m.get(o.wo)||m.set(o.wo,[]).get(o.wo)).push(l);});});
+  return m;
+}
 function ltiRows(){
-  const today=todayLocal();
-  return listsNeeded().map(o=>{const n=lsNeedInfo(o,today),s=lsSuggest(o),pk=LTI.pick[o.wo]&&lsList(LTI.pick[o.wo])?LTI.pick[o.wo]:'';
-    return Object.assign(n,{s,tid:pk||s.tid,lvl:pk&&pk!==s.tid?'pick':s.level});})
+  const today=todayLocal(),xl=V2()?ltiExcelSugg():new Map();
+  return listsNeeded().map(o=>{const n=lsNeedInfo(o,today),s=lsSuggest(o),pk=LTI.pick[o.wo]&&lsList(LTI.pick[o.wo])?LTI.pick[o.wo]:'',x=xl.get(o.wo)||[];
+    let lvl=pk&&pk!==s.tid?'pick':s.level;if(x.length&&lvl==='strong')lvl='weak'; // an Excel list fits too: a person picks — never "Confirm all"
+    return Object.assign(n,{s,xl:x,tid:pk||s.tid,lvl});})
     .sort((a,b)=>(b.onDel-a.onDel)||(b.late-a.late)||(a.due||'9999').localeCompare(b.due||'9999')||woCmp(a.o,b.o));
 }
 const LTI_COL={strong:['#0d6e46','#e7f6ec','#9fd8b4','✓ Suggested'],weak:['#7a4a00','#fff4d6','#e0a43a','? Best guess'],none:['#5b6b82','#eef1f5','#c9d1dc','No suggestion'],pick:['#1a56db','#eaf2ff','#9cbce8','Chosen']};
@@ -3406,6 +3419,7 @@ function ltiInner(){
         <button class="btn btn-s" data-ltina="${escA(w)}|none" style="${btn}">No list needed</button>
         <button class="btn btn-s" data-ltina="${escA(w)}|paper" style="${btn}">Paper list issued</button></div>`}
       ${!busy&&pid&&LTI.open===w?`<div class="lti-act"><select data-ltisel="${escA(w)}" style="${LS_INP};max-width:100%"><option value="">— pick a template (${escA(lsProjName(pid))}) —</option>${alts.map(id=>`<option value="${escA(id)}"${id===r.tid?' selected':''}>${escA(ltiTplName(id))}</option>`).join('')}<option value="__type">✍ Type a list instead…</option></select></div>`:''}
+      ${!busy&&r.xl.length?`<div class="lti-act"><span style="font-size:12px;color:#14335c;font-weight:700;margin-right:6px">📥 From an Excel upload:</span>${r.xl.map(l=>`<button class="btn btn-s" data-ltixl="${escA(w)}|${escA(l.id)}" style="${btn};overflow-wrap:anywhere;text-align:left">✓ Use "${escA(l.name)}"${l.project?' ('+escA(l.project)+')':''}</button>`).join('')}</div>`:''}
       ${!busy&&!pid?ltiLinkHTML(o):''}
       ${err&&!busy?`<div class="lti-msg" style="color:#b42318">✗ Not saved — ${escA(err)} <button class="btn btn-s" data-ltiretry="${escA(w)}" style="${btn};color:#b42318;border-color:#b42318">↻ Retry</button></div>`:''}
     </div>`;};
@@ -3449,6 +3463,14 @@ function ltiBind(){
   q('[data-lticonf]',b=>b.onclick=()=>ltiConfirm([b.dataset.lticonf]));
   q('[data-ltiretry]',b=>b.onclick=()=>ltiConfirm([b.dataset.ltiretry]));
   q('#lti-all',b=>b.onclick=()=>ltiConfirm(ltiRows().filter(r=>r.lvl==='strong'&&r.tid).map(r=>r.o.wo)));
+  q('[data-ltixl]',b=>b.onclick=()=>{const i=b.dataset.ltixl.indexOf('|'),w=b.dataset.ltixl.slice(0,i),lid=b.dataset.ltixl.slice(i+1);if(LTI.busy.has(w))return;
+    officeWho(async by=>{LTI.busy.add(w);delete LTI.res[w];ltiAfter();
+      try{const h=await lsLiveFor(w);
+        if(h.length){LTI.done.unshift({wo:w,name:h[0].name,already:true});toast(lsHasListMsg(w,h[0]),true);}
+        else{await lsReloadList(lid);const l=lsList(lid);if(!l||l.archived)throw new Error('that Excel list is no longer there');
+          listTag(l,w,true,by);LTI.done.unshift({wo:w,name:l.name,tpl:'Excel upload'});toast('"'+l.name+'" attached to '+w+' ✓');}}
+      catch(e){LTI.res[w]={err:e.message};}
+      LTI.busy.delete(w);ltiAfter();});});
   q('[data-ltichg]',b=>b.onclick=()=>{LTI.open=LTI.open===b.dataset.ltichg?'':b.dataset.ltichg;ltiAfter();});
   q('[data-ltisel]',e=>e.onchange=()=>{const w=e.dataset.ltisel;
     if(e.value==='__type'){const o=DB.orders.find(x=>x.wo===w);LTI.open='';openListEditor(null,w,(lsProjForCust(o&&o.customer)||{}).id||'');return;}
@@ -4147,6 +4169,14 @@ async function lsCopyLines(srcId,map){
   return lsLinesOf(srcId).filter(x=>x.removed_rev==null&&x.status!=='na').map(x=>{const m=x.kind==='saw'&&map[matKey(x.material)];
     return{kind:x.kind,section:x.section,part:x.part,length_mm:x.length_mm,width_mm:x.width_mm,qty:x.qty,unit_qty:x.unit_qty,material:m||x.material,material_other:m?false:!!x.material_other,edging:x.edging,note:x.note,src_line_id:x.id};});
 }
+// The live lists (not archived, not templates) tagged to a WO — asked of the DATABASE, not this screen's copy (another PC may
+// have given the WO a list since this screen last refreshed)
+async function lsLiveFor(wo){
+  const v=/[,{}"\\\s]/.test(wo)?'"'+String(wo).replace(/["\\]/g,'\\$&')+'"':wo;
+  const r=await lsGet('lists?select=*&wos=cs.'+encodeURIComponent('{'+v+'}'));lsPut('lists',r);
+  return r.filter(l=>!l.archived&&!l.is_template&&(l.wos||[]).includes(wo)).map(l=>lsList(l.id)||lsAdapt(l));
+}
+function lsHasListMsg(wo,l){return wo+' already has a cutting list: "'+l.name+'"'+(l.project?' ('+l.project+')':'')+' — open it from Lists. No second list was made (the saw would cut it twice).';}
 async function lsCreateFromTpl(tid,wos,name,by,opt){
   opt=opt||{};
   if(!LST.full.has(tid))await lsReloadList(tid);
@@ -4158,6 +4188,10 @@ async function lsCreateFromTpl(tid,wos,name,by,opt){
   const mine=()=>LST.l.get(id),already=x=>Object.assign({},x,{already:true});
   if(opt.fixedFor){
     for(let n=1;;n++){id='WO:'+opt.fixedFor+(n>1?'#'+n:'');await lsReloadList(id);const ex=mine();if(!ex)break;if(!ex.archived)return already(ex);if(n>=30)throw new Error('too many archived lists for '+opt.fixedFor);}
+    // any OTHER live list already tagged to this WO (made from the template dialog, typed, or an Excel list confirmed on
+    // another PC): no second list — the person is shown that one (marked .already)
+    const oth=(await lsLiveFor(opt.fixedFor)).filter(x=>x.id!==id);
+    if(oth.length)return already(oth[0]);
   }
   const pl={id,name,project_id:t.project_id,list_type:t.list_type==='snag'?'house':t.list_type,type_name:t.type_name||null,template_id:tid,template_rev:+t.rev||1,wos,source:'template'};
   const why='Made from template "'+t.name+'" rev '+(+t.rev||1),lines=await lsCopyLines(tid);
@@ -4189,7 +4223,7 @@ function lsTplDlg(tid,wo){
     const wos=[...ov.querySelectorAll('[data-tpwo]:checked')].map(c=>c.dataset.tpwo),name=ov.querySelector('#tp-name').value.trim(),err=t2=>{ov.querySelector('#tp-err').textContent=t2;};
     if(!wos.length)return err('Tick at least one work order.');if(!name)return err('Give the list a name.');
     officeWho(by=>{const b=ov.querySelector('#tp-go');b.disabled=true;err('Saving…');
-      lsCreateFromTpl(tid,wos,name,by).then(l=>{ov.remove();lstAttachOpen=null;render();toast('"'+l.name+'" made from '+(t.typeName||t.name)+' and attached to '+wos.join(', ')+' ✓');})
+      (async()=>{for(const w of wos){const h=await lsLiveFor(w);if(h.length)throw new Error(lsHasListMsg(w,h[0]));}return lsCreateFromTpl(tid,wos,name,by);})().then(l=>{ov.remove();lstAttachOpen=null;render();toast('"'+l.name+'" made from '+(t.typeName||t.name)+' and attached to '+wos.join(', ')+' ✓');})
         .catch(e=>{b.disabled=false;err('Not saved — '+e.message);});});
   };
 }
