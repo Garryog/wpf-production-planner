@@ -34,7 +34,7 @@ function fixture(on) {
   const r1 = await des.page.evaluate(() => { rolePicker(); return !!document.querySelector('[data-role="design"]'); });
   await des.page.evaluate(async () => { document.getElementById('rovl').className = 'rovl hide'; localStorage.setItem('wpfPin_design', '8888'); setRole('design'); await new Promise(r => setTimeout(r, 200)); });
   const t1 = await txt(des.page);
-  rec('Design office: on the role picker (switch on), PIN 8888 by default, opens straight onto Lists', r1 && (await des.page.evaluate(() => roleOk('design'))) && /Design office/.test(t1) && /House 1/.test(t1) && !!(await des.page.evaluate(() => document.getElementById('lh'))), t1.slice(0, 200));
+  rec('Design office: on the role picker (switch on), PIN 8888 by default, opens straight onto Lists', r1 && (await des.page.evaluate(() => roleOk('design'))) && /Drawing office/.test(t1) && /House 1/.test(t1) && !!(await des.page.evaluate(() => document.getElementById('lh'))), t1.slice(0, 200));
   rec('Design office polls lists every 10 s', (await des.page.evaluate(() => LST.ms)) === 10000);
   // ---- Lists home: search and filters
   const names = () => des.page.evaluate(() => [...document.querySelectorAll('[data-lhrow]')].map(r => r.dataset.lhrow).join());

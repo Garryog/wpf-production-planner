@@ -1285,7 +1285,7 @@ function showTab(t){tab=t;if(V2())lsStart();['b','d','h','l','i','x','s'].forEac
 /* ---------- Role views: Office / Factory Floor / Driver (same live plan, a screen per job) ---------- */
 const ls={get:k=>{try{return localStorage.getItem(k)||'';}catch(e){return'';}},set:(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}}};
 // Every view has its own PIN; the ADMIN PIN opens any view and is the only one that can change PINs.
-const ROLE_LBL={office:'Office',floor:'Floor screen',saw:'Saw',stores:'Stores',driver:'Driver',dash:'Management',pm:'Project Managers',prod:'Production Manager',design:'Design office'};
+const ROLE_LBL={office:'Office',floor:'Floor screen',saw:'Saw',stores:'Stores',driver:'Driver',dash:'Management',pm:'Project Managers',prod:'Production Manager',design:'Drawing office'};
 function pins(){const p=DB.pins||{};return{admin:p.admin||'9000',office:p.office||'2468',driver:p.driver||'1111',floor:p.floor||'2222',saw:p.saw||'3333',stores:p.stores||'4444',dash:p.dash||'5555',pm:p.pm||'6666',prod:p.prod||'7777',design:p.design||'8888'};}
 let ROLE='';
 (function(){
@@ -1340,7 +1340,7 @@ function rolePicker(pinFor){
     <button class="rbtn" data-role="floor"><span class="ri">🏭</span><span>Factory Floor Screen<small>Big read-only display — today &amp; tomorrow's loads, live status.</small></span></button>
     <button class="rbtn" data-role="dash"><span class="ri">📊</span><span>Management Dashboard<small>Live overview — cutting, stores, trucks out, delivered, missed. Read-only.</small></span></button>
     <button class="rbtn" data-role="prod"><span class="ri">🧭</span><span>Production Manager<small>What needs you today — loads at risk, material waiting, missed deliveries, the weekly scorecard.</small></span></button>
-    ${V2()?`<button class="rbtn" data-role="design"><span class="ri">📐</span><span>Design office<small>Cutting lists, templates and project materials.</small></span></button>`:''}
+    ${V2()?`<button class="rbtn" data-role="design"><span class="ri">📐</span><span>Drawing office<small>Cutting lists, templates and project materials.</small></span></button>`:''}
     <button class="rbtn" data-role="pm"><span class="ri">🏗</span><span>Project Managers<small>Deliveries per customer — delivered, on the road, scheduled, coming up.</small></span></button>
     <button class="rbtn" data-role="saw"><span class="ri">🪚</span><span>Saw / Cutting<small>Today's cutting lists — mark each list CUT COMPLETE.</small></span></button>
     <button class="rbtn" data-role="stores"><span class="ri">🧰</span><span>Stores / Fittings<small>Today's fittings lists — mark each list PICKED.</small></span></button>
@@ -1464,7 +1464,7 @@ function renderSettings(app){
     +'<div style="font-size:14px;font-weight:600;margin-bottom:6px">View PINs</div>'
     +'<p style="font-size:12px;color:var(--t3);margin-bottom:12px">Every view is locked by its own PIN, entered once per device. The <b>Admin PIN opens any view</b> and is required to save changes here. Changing a PIN signs every device out of that view until the new one is entered.</p>'
     +'<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px">'
-    +[['admin','🔑 Admin'],['office','🗓 Office'],['floor','🏭 Floor'],['saw','🪚 Saw'],['stores','🧰 Stores'],['driver','🚚 Driver'],['dash','📊 Mgmt'],['pm','🏗 PM'],['prod','🧭 Production']].concat(V2()?[['design','📐 Design']]:[]).map(([k,lbl])=>'<div><label style="font-size:12px;color:var(--t2);display:block;margin-bottom:4px">'+lbl+'</label>'
+    +[['admin','🔑 Admin'],['office','🗓 Office'],['floor','🏭 Floor'],['saw','🪚 Saw'],['stores','🧰 Stores'],['driver','🚚 Driver'],['dash','📊 Mgmt'],['pm','🏗 PM'],['prod','🧭 Production']].concat(V2()?[['design','📐 Drawing office']]:[]).map(([k,lbl])=>'<div><label style="font-size:12px;color:var(--t2);display:block;margin-bottom:4px">'+lbl+'</label>'
       +'<input id="s-pin-'+k+'" type="'+(pinShow?'text':'password')+'" value="'+escA(pins()[k])+'" maxlength="8" autocomplete="off" style="padding:6px 10px;border:1px solid '+(k==='admin'?'#c0392b':'var(--b2)')+';border-radius:6px;font-size:16px;width:95px;letter-spacing:3px"></div>').join('')
     +'</div>'
     +'<button class="btn btn-g" id="btn-save-pins">Save PINs (Admin PIN required)</button> '+'<button class="btn btn-s" id="btn-show-pins">'+(pinShow?'🙈 Hide PINs':'👁 Show PINs (Admin PIN required)')+'</button>'
@@ -3036,15 +3036,15 @@ function lsBindPanel(){
     bk.disabled=true;msg('Switching back…');
     lsSwitchBack(whoNow()).then(r=>{window.LSBACK=r;render();toast('Back on the old lists — '+r.lists+' lists rebuilt');}).catch(e=>{bk.disabled=false;window.LSBACK={err:e.message};msg('<b style="color:#c0392b">Not switched back: '+escA(e.message)+'</b>');});};
 }
-/* ---------- Stage 3 screens (V2 only): Design office, Production Manager Lists tab, Projects, Materials, Lists home ----------
+/* ---------- Stage 3 screens (V2 only): Drawing office, Production Manager Lists tab, Projects, Materials, Lists home ----------
    With the switch off none of these are reachable and nothing here runs. */
-// Templates, projects and materials are edited by the Production Manager, Design office or Admin. From another view the
+// Templates, projects and materials are edited by the Production Manager, Drawing office or Admin. From another view the
 // person enters one of those PINs once; this device remembers it (decision 11).
 function lsEditOk(){
   if(['prod','design'].includes(ROLE))return true;
   const p=pins(),ok=v=>!!v&&[p.prod,p.design,p.admin].includes(v);
   if(ok(ls.get('wpfEditPin')))return true;
-  const v=prompt('Projects, materials and templates are edited by the Production Manager or Design office.\n\nEnter the Production Manager, Design office or Admin PIN:','');
+  const v=prompt('Projects, materials and templates are edited by the Production Manager or Drawing office.\n\nEnter the Production Manager, Drawing office or Admin PIN:','');
   if(v===null)return false;
   if(!ok(v.trim())){toast('Wrong PIN — not changed');return false;}
   ls.set('wpfEditPin',v.trim());return true;
@@ -3127,7 +3127,7 @@ function lsMaterialsDlg(pid,after){
   };
   draw();
 }
-/* Lists home: search, filters, grouped by project. Shared by the office Lists tab, the Design office and the Production Manager. */
+/* Lists home: search, filters, grouped by project. Shared by the office Lists tab, the Drawing office and the Production Manager. */
 const LH={q:'',proj:'',type:'',kind:'live',rev:'',state:''};
 function lsState(l){if(l.archived)return'archived';if(listFinished(l))return'done';return lsLocked(l)?'live':'draft';}
 const LS_STATE={draft:['Draft','#5b6b82'],live:['Live','#1a56db'],done:['Done','#0d6e46'],archived:['Archived','#8e99ab']};
@@ -3195,7 +3195,7 @@ function lsHomeBind(){
     lsDlg(`<div style="font-weight:700;color:#14335c;margin-bottom:8px">${escA(l.project||'')} — ${escA(l.name)} · Rev ${+l.rev||1}</div>${listTableHTML(l,'all')}`);});
   document.querySelectorAll('[data-lhsend]').forEach(b=>b.onclick=()=>{const l=lsList(b.dataset.lhsend);if(!l)return;lqList({t:'done',list:l.id,mode:'send',on:true,by:whoNow()});render();toast('"'+l.name+'" sent to the saw — later changes make a new revision');});
   document.querySelectorAll('[data-lharc]').forEach(b=>b.onclick=()=>{const l=lsList(b.dataset.lharc);if(!l)return;
-    if(l.tpl&&!lsEditOk())return; // templates: Production Manager, Design office or Admin
+    if(l.tpl&&!lsEditOk())return; // templates: Production Manager, Drawing office or Admin
     if(!confirm('Archive the list "'+l.name+'" ('+(l.project||'')+')? The saw and stores will no longer see it. Nothing is deleted.'))return;
     listArchive(l,whoNow());render();toast('List archived');});
 }
@@ -3211,8 +3211,8 @@ function lsHomePage(app,title){
   lsHomeBind();ltiBind();bindHoldBook(['saw','fit'],officeWhoFn);
 }
 function renderDesign(app){
-  if(!V2()){app.innerHTML='<div class="pg"><div class="exp-panel" style="font-size:14px">The Design office view opens when the new cutting lists are switched on (Settings → Cutting lists store).</div></div>';return;}
-  lsHomePage(app,'<h1 style="font-size:22px;color:#14335c;margin:0 0 10px">📐 Design office — lists, templates and materials</h1>');
+  if(!V2()){app.innerHTML='<div class="pg"><div class="exp-panel" style="font-size:14px">The Drawing office view opens when the new cutting lists are switched on (Settings → Cutting lists store).</div></div>';return;}
+  lsHomePage(app,'<h1 style="font-size:22px;color:#14335c;margin:0 0 10px">📐 Drawing office — lists, templates and materials</h1>');
 }
 let prodTab='today';
 function renderProdV2(app){
@@ -3250,7 +3250,7 @@ function waitListHTML(){
    ✓ Confirm makes that WO's list from the template (confirmList → fixed id WO:<wo>); "Confirm all green" does every
    strong suggestion, one row at a time, each with its own result (a failed row keeps a Retry). Nothing is made — and
    nothing reaches the saw — until someone confirms. Shown after an import's Apply, on the office Lists tab, the
-   Production Manager's Lists tab and the Design office home. */
+   Production Manager's Lists tab and the Drawing office home. */
 const LTI={pick:{},open:'',res:{},busy:new Set(),done:[],all:false,showNA:false};
 function lsSuggest(o){return suggestTpl(o,lsCache().all.filter(l=>l.tpl&&!l.archived),lsProjects());}
 function lsListName(o){return o?([o.floor,o.unit].filter(Boolean).join(' ')||o.title||o.wo):'';}
@@ -3418,7 +3418,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
   const live=()=>DB.orders.filter(o=>!o.delDone&&!o.delDelivAt).slice().sort(woCmp);
   const defName=wo=>{const o=DB.orders.find(x=>x.wo===wo);return o?([o.floor,o.unit].filter(Boolean).join(' ')||o.title||wo):'';};
   if(!ex&&st.wo)st.name=defName(st.wo);
-  if(st.tpl&&!lsEditOk())return; // templates: Production Manager, Design office or Admin
+  if(st.tpl&&!lsEditOk())return; // templates: Production Manager, Drawing office or Admin
   const sheetMats=()=>lsMats(st.pid,'sheet').map(m=>m.name),fitMats=()=>lsMats(st.pid,'other').map(m=>m.name);
   st.rows.forEach(r=>{if(r.k==='fit'&&r.mat&&!fitMats().some(n=>n.toLowerCase()===String(r.mat).trim().toLowerCase())){r.matOther=true;}});
   const ov=document.createElement('div');ov.className='pod-ovl';
