@@ -5267,6 +5267,8 @@ function dueToday(l,t){const d=listDeadline(l);return !!d&&d<=cutTodayEnd(t);}
 // opt.cutSince (YYYY-MM-DD): lines/lists finished before that day are left out; lines cut on or after it still count.
 // Lines waiting on material are left out. Dims are mm. Returns {mats:[{mat,m2,sheets,lines,check}],noSize,noQty,lines,sheets}.
 /* One key per board name for grouping: same letters (é typed either way), any case, any run of spaces/NBSP = same board */
+/* Board sizes: 2440, "2440MM", "2440 mm", "2440.0" and "2,440" are the same size (Garry, 3 Nov 2026). Anything else keeps matKey. */
+function sizeKey(v){const t=matKey(v).replace(/\s*mm$/,'');const m=t.match(/^(\d{1,3}(?:,\d{3})+|\d+)(\.\d+)?$/);return m?String(parseFloat(m[1].replace(/,/g,'')+(m[2]||''))):matKey(v);}
 function matKey(s){return String(s==null?'':s).normalize('NFKC').replace(/\s+/g,' ').trim().toLowerCase();}
 function sheetNeed(ls,fromISO,toISO,opt){
   opt=opt||{};const since=opt.cutSince||'';
@@ -5391,7 +5393,7 @@ function combineLists(lsArr,mode){
     const hb=holdsOf(l.id),relOnly=!!listDone(l.id)[mode]&&relOpen(l,mode);
     listRows(l).filter(r=>r.k===mode).filter(r=>{const h=hb[rowKey(r)];if(heldRow(l,rowKey(r)))return false;return !relOnly||(h&&h.st==='rel');})
       .filter(r=>!rowTicked(l.id,rowKey(r))).forEach(r=>{ // already cut/picked — not added to the total again
-      const key=[matKey(r.item),matKey(r.L),matKey(r.W),matKey(r.mat),matKey(r.note)].join('|'); // same normalising as the sheets panel: spaces/NBSP/accents/case don't split a row; first spelling shown
+      const key=[matKey(r.item),sizeKey(r.L),sizeKey(r.W),matKey(r.mat),matKey(r.note)].join('|'); // same normalising as the sheets panel: spaces/NBSP/accents/case don't split a row; first spelling shown
       if(!byKey[key]){byKey[key]={item:r.item,L:r.L,W:r.W,mat:r.mat,note:r.note,k:r.k,qty:0,bad:0,per:Object.create(null)};order.push(key);}
       const g=byKey[key],h=hname(l),qs=String(r.qty==null?'':r.qty).trim(),q=+qs;
       if(/^\d+$/.test(qs)&&q>0){g.qty+=q;g.per[h]=typeof g.per[h]==='string'?g.per[h]+' + '+q:(g.per[h]||0)+q;}
