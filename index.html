@@ -818,6 +818,7 @@ async function loadDB(){
     if(row&&DB.loaded&&BASE&&(UNSURE.length||!same(snap(),BASE))){
       const theirs=planOf(row,BASE.settings);
       const m=mergePlan(BASE,snap(),theirs,{unsure:UNSURE});
+      lqOwn(m.plan.settings,theirs.settings);
       applyPlan(m.plan);noteMerge(m.notes,m.ren,row.updated_by);
       BASE=clone(theirs);unsureKeep(row);VER=row.version===undefined?null:(+row.version||1);
       DB.loadFailed=false;
@@ -850,6 +851,7 @@ async function loadDB(){
       if(row.version!==undefined)ku.forEach(([x,v])=>{if(v>(+row.version||1)){UNSURE.push(x);USV.set(x,v);}});
       if(Object.keys(ren).length)setTimeout(()=>noteMerge([],ren),0);
       cur.settings.listWBs=BASE.settings.listWBs;
+      lqOwn(cur.settings,BASE.settings);
       applyPlan(cur);
       DB.loaded=true;DB.loadFailed=false;
       writePend();
@@ -915,6 +917,7 @@ async function pushPlan(){
     const row=checkRow(await fetchMain());
     const theirs=planOf(row,BASE.settings);
     const m=mergePlan(BASE,snap(),theirs,{unsure:UNSURE});
+    lqOwn(m.plan.settings,theirs.settings);
     applyPlan(m.plan);noteMerge(m.notes,m.ren,row.updated_by);
     BASE=clone(theirs);unsureKeep(row);VER=row.version===undefined?null:(+row.version||1);
     mergedRender();
@@ -2213,7 +2216,7 @@ async function lqFoldV1x(){
   const q=lqRead();if(!q.length)return 0;
   const rebuilt=(DB.lists||[]).some(l=>lsOldRows(l).some(r=>r.lid));
   if(!rebuilt){LQ.err='the old lists on this screen are not the switched-back copy yet';updSaveBar();return 0;}
-  LQ.folding=true;let n=0;const placed=new Set();
+  LQ.folding=true;let n=0;const placed=new Set(),fk=new Map(),stale=[];
   try{
     q.forEach(e=>{
       const l=(DB.lists||[]).find(x=>x.id===e.list),by=e.by||'';
@@ -2221,6 +2224,16 @@ async function lqFoldV1x(){
       if(e.t==='line'){
         const r=lsOldRows(l).find(x=>x.lid===e.id);if(!r)return;
         const k=v1Key(r),mode=r.k==='fit'?'fit':'saw';
+        if(e.fs&&e.fk===k){ // an earlier fold sent this line and never heard back: it may have landed
+          const db=lqLnSt(BASE&&BASE.settings,l.id,k),cur=lqLnSt(DB,l.id,k);
+          if(same(db,e.fs)){placed.add(e.cid);return;} // the database has it — nothing more to do
+          if(!same(cur,e.fs)&&!same(cur,db)){placed.add(e.cid);return;} // changed again on this screen since — that newer tap stands
+          // The database has moved past the version that save would have written, and the line no longer reads what it
+          // sent: the save landed and another screen changed the line afterwards. That later change wins (as on the new
+          // lists, where a change made on another screen is never overwritten) — the line is left as the database has it.
+          if(VER!=null&&+e.fv&&VER>+e.fv){if(!same(cur,db))lqLnPut(DB,l.id,k,db);stale.push(String(r.item||r.mat||'line').trim()||'line');placed.add(e.cid);return;}
+        }
+        fk.set(e.cid,k);
         if(e.act==='release'){if(heldRow(l,k))releaseHolds([{l,k}],by);}
         else if(e.status==='cut'||e.status==='got-out')setRowTick(l,k,mode,by,true);
         else if(e.status==='waiting'){if(!rowTicked(l.id,k))holdRows(l,[k],mode,by);}
@@ -2232,10 +2245,18 @@ async function lqFoldV1x(){
       else if(e.t==='archive')listArchive(l,by);
       n++;placed.add(e.cid);
     });
+    // Each line placed is stamped on the queue with what this fold sends and the version that save would write, so a
+    // save that lands without a reply is recognised next time (above) instead of being placed over a later change.
+    const old=new Map(),fv=VER==null?null:VER+1;
+    lqMut(qq=>qq.forEach(e=>{const k=fk.get(e.cid);if(k===undefined)return;old.set(e.cid,{fk:e.fk,fs:e.fs,fv:e.fv});e.fk=k;e.fs=lqLnSt(DB,e.list,k);e.fv=fv;}));
     // The changes are now in this screen's plan. Keep a device copy straight away (a tab that dies mid-save gets them back
-    // on reopen), and only take them off the queue once the planner save is confirmed — placing them again is harmless.
+    // on reopen), and only take them off the queue once the planner save is confirmed.
     writePend();
     if(!await lqSaveSure()){
+      const u=LQ.sentU,uv=u?USV.get(u):null;
+      lqMut(qq=>qq.forEach(e=>{if(!old.has(e.cid))return;
+        if(u&&uv!=null){e.fv=uv;e.fs=lqLnSt(u.settings,e.list,e.fk);} // no reply: it may have landed with exactly this
+        else{const o=old.get(e.cid);['fk','fs','fv'].forEach(f=>{if(o[f]===undefined)delete e[f];else e[f]=o[f];});}})); // a definite "no": it did not land
       LQ.err='the old lists could not be saved yet — '+q.length+' change'+(q.length!==1?'s are':' is')+' kept on this device and will be tried again';
       updSaveBar();if(ROLE)render();lqKick(10000);return 0;
     }
@@ -2245,17 +2266,39 @@ async function lqFoldV1x(){
     updSaveBar();if(ROLE)render();
     if(n)lqSay(n+' change'+(n!==1?'s':'')+' made on this device before the lists were switched back '+(n!==1?'were':'was')+' added to the lists'+(left?' — '+left+' could not be placed and '+(left!==1?'are':'is')+' kept on this device: tell the office':''));
     else if(left)lqSay(left+' change'+(left!==1?'s':'')+' could not be placed in the old lists — kept on this device: tell the office');
+    if(stale.length)lqSay('Not changed — '+lqNames(stale)+' '+(stale.length!==1?'were':'was')+' changed on another screen after this device sent '+(stale.length!==1?'them':'it')+'. Left as the other screen has '+(stale.length!==1?'them':'it')+' — check '+(stale.length!==1?'them':'it')+'.');
   }finally{LQ.folding=false;}
   return n;
 }
 // Save the planner and say whether THIS save reached the database (a save already in flight is waited for first,
 // because saveDB only queues another one behind it and returns straight away)
 async function lqSaveSure(){
+  LQ.sentU=null;
   for(let i=0;i<600&&SAVING;i++)await new Promise(r=>setTimeout(r,100));
   if(SAVING)return false;
+  const pre=new Set(UNSURE);
   clearTimeout(saveT);await saveDB();
-  return !DB.saveFailed&&!DB.remoteBroken&&!DB.loadFailed;
+  const ok=!DB.saveFailed&&!DB.remoteBroken&&!DB.loadFailed;
+  if(!ok){const nu=UNSURE.filter(p=>!pre.has(p));LQ.sentU=nu[nu.length-1]||null;} // sent with no reply: may have landed
+  return ok;
 }
+// One old-list row's tick and wait in a plan's settings (missing → null), and setting them back
+function lqLnSt(s,list,k){s=s||{};const t=((s.listRow||{})[list]||{})[k],h=((s.listHold||{})[list]||{})[k];return{t:t||null,h:h||null};}
+function lqLnPut(s,list,k,v){
+  s.listRow=s.listRow||{};const t=s.listRow[list]=s.listRow[list]||{};if(v.t)t[k]=clone(v.t);else delete t[k];if(!Object.keys(t).length)delete s.listRow[list];
+  if(v.h){s.listHold=s.listHold||{};(s.listHold[list]=s.listHold[list]||{})[k]=clone(v.h);}else if(s.listHold&&s.listHold[list])delete s.listHold[list][k];
+}
+/* A line a fold sent without a confirmed reply belongs to the queue: a merge or the device copy must not put it back by
+   itself (a tick wins a merge, so it would undo an office untick made after that save landed). Where the plan still
+   reads what the fold sent, the database copy (ref) is used; the next fold then decides from the database (lqFoldV1x).
+   Not while a fold is running — that fold's own save is placing those lines on purpose. */
+function lqOwn(s,ref){
+  try{
+    if(!s||LQ.folding||s.listStore==='v2')return;
+    lqRead().forEach(e=>{if(e.t==='line'&&e.fk&&e.fs&&same(lqLnSt(s,e.list,e.fk),e.fs))lqLnPut(s,e.list,e.fk,lqLnSt(ref,e.list,e.fk));});
+  }catch(e){console.warn('Planner: queue check skipped',e&&e.message);}
+}
+function lqNames(a){const u=[...new Set(a)];return u.slice(0,5).map(x=>'"'+x+'"').join(', ')+(u.length>5?' and '+(u.length-5)+' more':'');}
 function lqSay(m){LQ.msgs.push(m);if(LQ.msgs.length>20)LQ.msgs.shift();toast(m);}
 function lqDrop(cids){lqMut(q=>q.splice(0,q.length,...q.filter(e=>!cids.has(e.cid))));}
 // The switch as the database has it now (not this screen's copy): a device that was offline during a switch back
@@ -2281,6 +2324,11 @@ async function lqSend(){
   if(LQ.busy)return;
   if(!V2()){ // switched back: unsent changes go into the old lists — from a confirmed copy of the plan
     if(lqRead().length&&!DB.lastLoadOk&&!LQ.folding){await lqSwitchedOff();return;} // the last refresh was skipped or failed: reload first
+    if(lqRead().some(e=>e.fs)&&!LQ.folding){ // an earlier fold got no reply: check against the database as it is now
+      for(let i=0;i<100&&SAVING;i++)await new Promise(r=>setTimeout(r,100));
+      await loadDB();
+      if(!DB.lastLoadOk){LQ.err='could not reload the planner to check changes kept on this device — will try again';updSaveBar();lqKick(10000);return;}
+    }
     await lqFoldV1();return;}
   if(!lqRead().length&&!LQ.q.length)return;
   try{const sv=await lqSwitchNow();if(sv!=='v2'){await lqSwitchedOff(sv);return;}}catch(e){LQ.err=(e&&e.message)||'no signal';updSaveBar();return;}
