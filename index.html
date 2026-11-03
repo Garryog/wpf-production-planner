@@ -871,11 +871,18 @@ async function loadDB(){
     const pend=!DB.loaded&&row?readPend():[];
     if(pend.length){
       let cur=noWB(BASE);const ren={},ku=[];
-      pend.forEach(s=>{const b=pbuild(cur,s.d,'b'),us=(Array.isArray(s.us)?s.us:[]).map(ud=>pbuild(b,ud,'m'));
-        us.forEach((x,i)=>ku.push([x,Array.isArray(s.uv)?+s.uv[i]||0:0]));
-        const m=mergePlan(b,pbuild(cur,s.d,'m'),cur,{theirsWins:true,unsure:us});cur=m.plan;Object.assign(ren,m.ren);});
+      const rid=new Set((row.settings&&Array.isArray(row.settings.saveIds)&&row.settings.saveIds)||[]);
+      pend.forEach(s=>{const b=pbuild(cur,s.d,'b'),ud=Array.isArray(s.us)?s.us:[];let us=ud.map(u=>pbuild(b,u,'m')),uv=ud.map((u,i)=>Array.isArray(s.uv)?+s.uv[i]||0:0);
+        // The newest unconfirmed save from that tab whose own tag the database lists did land (e.g. the tab closed during
+        // the check): it is the base, so a later change by another screen (the office's untick) wins over what it sent.
+        // A change made on that tab after it still counts as unsaved. Same idea as unsureLanded.
+        let lb=null;for(let i=ud.length-1;i>=0&&!lb;i--){const e=ud[i].find(e=>e.p&&e.p[0]==='s'&&e.p[1]==='saveIds'&&e.p.length===2);
+          const t=e&&Array.isArray(e.m)?e.m[e.m.length-1]:null;
+          if(t&&!(Array.isArray(e.b)&&e.b.includes(t))&&rid.has(t)){lb=us[i];us=us.slice(i+1);uv=uv.slice(i+1);}}
+        us.forEach((x,i)=>ku.push([x,uv[i]]));
+        const m=mergePlan(lb||b,pbuild(cur,s.d,'m'),cur,{theirsWins:true,unsure:us});cur=m.plan;Object.assign(ren,m.ren);});
       // a save sent just before the tab closed may land after this load — this screen still counts it as its own
-      if(row.version!==undefined){const rid=new Set((row.settings&&row.settings.saveIds)||[]);
+      if(row.version!==undefined){
         ku.forEach(([x,v])=>{if(v>(+row.version||1)){UNSURE.push(x);USV.set(x,v);
           const t=((x.settings||{}).saveIds||[]).slice(-1)[0];if(t&&!rid.has(t))USID.set(x,t);}});} // its tag: lets a later merge see it landed
       if(Object.keys(ren).length)setTimeout(()=>noteMerge([],ren),0);
@@ -934,6 +941,7 @@ async function pushPlan(){
     if(tok)USID.set(mine,tok);
     let resp;
     unsureAdd(mine,VER+1); // counts as "may have landed" from the moment it's sent — a tab closed mid-save keeps the record
+    writePend(); // ...in the device copy too, with its tag, so a reopen can tell whether it landed
     try{resp=await fetch(SUPA_URL+'/production_planner?id=eq.main&version=eq.'+VER+'&select=version',{method:'PATCH',headers:{...SUPA_WHDR,'Prefer':'return=representation'},
       body:JSON.stringify({...mine,version:VER+1,updated_by:whoTag()})});}
     catch(e){ // no reply: it may have landed. Look at the database straight away, before other screens move it on.
