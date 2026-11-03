@@ -908,12 +908,13 @@ function whoTag(){return((whoNow()||'').trim()||'?')+' ['+(ROLE||'?')+']';}
 // One save round: PATCH only if the database is still at our version; otherwise merge and go again.
 async function pushPlan(){
   for(let i=0;i<6;i++){
-    // A fresh tag for this attempt — except an identical resend of the last unconfirmed attempt keeps its tag
-    // (so 30-s retries while offline don't pile up copies in UNSURE). The tag goes in before snap(), so the plan
-    // sent (and BASE once confirmed) already holds it.
-    const lu=UNSURE[UNSURE.length-1],reuse=VER!==null&&lu&&USV.get(lu)===VER+1&&USID.get(lu);
-    let tok=VER!==null&&!reuse?newSaveId():null,mine=snap();
-    if(reuse){if(same(lu,mine))tok=USID.get(lu);else{tok=newSaveId();mine=snap();}}
+    let mine=snap(),tok=null;
+    // A fresh tag for this attempt — put in the live plan and in what is sent, so BASE holds it once confirmed. Not when
+    // the save changes nothing (it needs no tag: losing its reply can't bring anything back), and an identical resend of
+    // the last unconfirmed attempt keeps that one's tag (so 30-s retries while offline don't pile up copies in UNSURE).
+    if(VER!==null){const lu=UNSURE[UNSURE.length-1];
+      if(lu&&USV.get(lu)===VER+1&&USID.get(lu)&&same(lu,mine))tok=USID.get(lu);
+      else if(UNSURE.length||!BASE||!same(mine,BASE)){tok=newSaveId();mine.settings.saveIds=DB.saveIds.slice();}}
     if(VER===null){
       if(DB.saveFailed&&BASE){ // old-style save retrying after a failure: merge in what others saved meanwhile first
         const row=checkRow(await fetchMain());
@@ -930,7 +931,7 @@ async function pushPlan(){
     // Only saves if the database is still at the version we loaded. We ask for VER+1; the database trigger
     // (SUPABASE_CHANGES.md) also sets old+1 on every update — same number, so never a double bump — and
     // bumps it for old-code tabs too. The reply carries just the new version number.
-    USID.set(mine,tok);
+    if(tok)USID.set(mine,tok);
     let resp;
     unsureAdd(mine,VER+1); // counts as "may have landed" from the moment it's sent — a tab closed mid-save keeps the record
     try{resp=await fetch(SUPA_URL+'/production_planner?id=eq.main&version=eq.'+VER+'&select=version',{method:'PATCH',headers:{...SUPA_WHDR,'Prefer':'return=representation'},
