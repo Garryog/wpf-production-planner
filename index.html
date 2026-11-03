@@ -2732,7 +2732,8 @@ async function lsImportWB(wb,entries,fname,by,opt){
   for(const e of entries){
     let sec='';
     const mp=opt.map||{};
-    const lines=(wb.sheets[e.sheet]||[]).map(r=>{if(r.k==='hdr'){sec=String(r.item||'').trim();return lsRowToLine(r);}const ln=lsRowToLine({...r,sec});if(ln.kind==='saw'&&mp[matKey(ln.material)])ln.material=mp[matKey(ln.material)];return ln;});
+    const lines=e.lines?e.lines.map(x=>{const ln={...x};if(ln.kind==='saw'&&mp[matKey(ln.material)])ln.material=mp[matKey(ln.material)];return ln;}) // the new reader (lsParseGrid) — headings, unit blocks, per-unit quantities
+      :(wb.sheets[e.sheet]||[]).map(r=>{if(r.k==='hdr'){sec=String(r.item||'').trim();return lsRowToLine(r);}const ln=lsRowToLine({...r,sec});if(ln.kind==='saw'&&mp[matKey(ln.material)])ln.material=mp[matKey(ln.material)];return ln;});
     out.flagged+=lsFlagMats(lines,pid);
     const live=lists();
     // re-uploading a corrected workbook revises the same list — tags and ticks carry across (diffLines)
@@ -2758,23 +2759,77 @@ async function lsImportWB(wb,entries,fname,by,opt){
   }
   return out;
 }
+/* V2 Excel import: every sheet read by lsParseGrid (unit blocks, per-unit quantities, headings), the Blank / Index / Stock /
+   Door Stock sheets left out (Garry, 3 Nov), and a preview before anything is saved. */
+function lsReadBook(data){
+  const wb=XLSX.read(data,{type:'array',cellDates:true,sheetStubs:true}); // stubs: a formula with no saved value still shows its formula
+  const out={project:'',sheets:[],skipped:[]};
+  wb.SheetNames.forEach(sn=>{
+    if(lsSkipSheet(sn)){out.skipped.push(sn);return;}
+    const g=lsSheetAoa(wb.Sheets[sn]),p=lsParseGrid(g.v,{formulas:g.f,sheet:sn});
+    if(!p.rows.some(r=>r.k==='part')){out.skipped.push(sn);return;}
+    p.rows.forEach(r=>{r.keep=!r.info;}); // a line that isn't a part (room breakdown) starts unticked
+    out.sheets.push({name:String(sn).trim(),meta:p.meta,rows:p.rows,warn:p.warn,on:true});
+    if(p.meta.project&&!out.project)out.project=p.meta.project;
+  });
+  return out;
+}
+// The rows a sheet brings in: an unticked unit block drops its heading and parts; unticked Stores / other lines are dropped
+function lsKeptRows(sh){
+  const out=[];let drop=false;
+  sh.rows.forEach(r=>{
+    if(r.k==='hdr'&&!r.info){drop=r.units!=null&&!r.keep;if(!drop)out.push(r);return;}
+    if(drop||!r.keep)return;
+    out.push(r.info?{k:'hdr',item:r.item,note:r.note}:r);
+  });
+  return out;
+}
+function lsImpPreview(bk,fname,projName,done){
+  const ov=document.createElement('div');ov.className='pod-ovl';
+  const nOn=()=>bk.sheets.filter(s=>s.on).length;
+  const tick=(si,ri,r)=>`<input type="checkbox" data-ipr="${si}|${ri}"${r.keep?' checked':''} title="Untick to leave this out">`;
+  const draw=()=>{
+    ov.innerHTML=`<div class="pod-in" style="min-width:min(1000px,97vw)"><div style="font-weight:800;color:#14335c;font-size:17px;margin-bottom:2px">📥 Import preview — ${escA(fname)}</div>
+      <div style="font-size:12px;color:var(--t3);margin-bottom:8px">Project: <b>${escA(projName)}</b>. Each ticked sheet becomes one cutting list. Rows with a length or width go to the <b>Saw</b>; rows without go to <b>Stores</b>. Untick anything you don't want. Nothing is saved until you press <b>Save</b>.${bk.skipped.length?'<br>Left out: '+bk.skipped.map(n=>'<b>'+escA(n)+'</b>').join(', ')+' (not cutting lists).':''}</div>
+      <div style="max-height:58vh;overflow:auto">${bk.sheets.map((sh,si)=>{const parts=sh.rows.filter(r=>r.k==='part'),saw=parts.filter(r=>+r.L>0||+r.W>0).length,units=sh.rows.filter(r=>r.k==='hdr'&&r.units!=null).length;
+        return `<details class="imp-sh" style="border:1px solid var(--b2);border-radius:6px;margin-bottom:8px;${sh.on?'':'opacity:.55'}"${si===0?' open':''}><summary style="padding:7px 10px;cursor:pointer;font-size:13px"><label onclick="event.stopPropagation()"><input type="checkbox" data-ips="${si}"${sh.on?' checked':''}> <b>${escA(sh.name)}</b></label> — ${saw} saw part${saw!==1?'s':''} · ${parts.length-saw} Stores · ${units} unit block${units!==1?'s':''}${sh.warn.length?` · <span style="color:#8a5a00;font-weight:700">⚠ ${sh.warn.length} to check</span>`:''}</summary>
+        ${sh.warn.length?`<div style="color:#8a5a00;font-size:12px;padding:0 10px 6px">${sh.warn.map(w=>'⚠ '+escA(w)).join('<br>')}</div>`:''}
+        <table class="me-tbl"><thead><tr><th></th><th>Description</th><th>Qty</th><th>Total</th><th>Length</th><th>Width</th><th>Colour</th><th>Edging</th></tr></thead><tbody>${sh.rows.map((r,ri)=>{
+          if(r.k==='hdr'&&r.info)return `<tr style="color:var(--t3)"><td>${tick(si,ri,r)}</td><td colspan="7"><i>${escA(r.item)} ${escA(r.note)}</i> — not a part (left out unless ticked)</td></tr>`;
+          if(r.k==='hdr')return `<tr style="background:${r.units!=null?'#eef3fb':'#f5f6f8'}"><td>${r.units!=null?tick(si,ri,r):''}</td><td colspan="7"><b>${escA(r.item)}</b>${r.units!=null?' — <b>'+escA(r.units)+'</b> unit'+(+r.units!==1?'s':''):''}${r.note?' <span style="color:var(--t3)">'+escA(r.note)+'</span>':''}</td></tr>`;
+          const st=!(+r.L>0||+r.W>0);
+          return `<tr><td>${st?tick(si,ri,r):''}</td><td>${escA(r.item)}${st?' <span class="lst-chip" style="background:#eef0f3;color:#5b6b82">Stores</span>':''}</td><td>${escA(r.qty)}</td><td>${r.total!=null?'<b>'+escA(r.total)+'</b>':''}</td><td>${escA(r.L)}</td><td>${escA(r.W)}</td><td>${escA(r.mat)}</td><td>${escA(r.edging)}</td></tr>`;}).join('')}</tbody></table></details>`;}).join('')}</div>
+      <div style="margin-top:12px;display:flex;gap:10px;justify-content:flex-end"><button class="btn btn-s" id="ip-x">Cancel — save nothing</button><button class="btn btn-g" id="ip-ok"${nOn()?'':' disabled'}>Save ${nOn()} list${nOn()!==1?'s':''}</button></div></div>`;
+    ov.querySelectorAll('[data-ips]').forEach(c=>c.onchange=()=>{bk.sheets[+c.dataset.ips].on=c.checked;draw();});
+    ov.querySelectorAll('[data-ipr]').forEach(c=>c.onchange=()=>{const[a,b]=c.dataset.ipr.split('|');bk.sheets[+a].rows[+b].keep=c.checked;});
+    ov.querySelector('#ip-x').onclick=()=>{ov.remove();done(null);};
+    ov.querySelector('#ip-ok').onclick=()=>{ov.remove();done(bk.sheets.filter(s=>s.on));};
+  };
+  document.body.appendChild(ov);draw();
+}
 function lsUpload(f,pid){
   const msg=document.getElementById('lh-upmsg')||document.getElementById('lst-upmsg');if(msg)msg.textContent='Reading '+f.name+'…';
   const bad=t=>{const m=document.getElementById('lh-upmsg')||document.getElementById('lst-upmsg');if(m)m.innerHTML='<span style="color:var(--red)">'+escA(t)+'</span>';};
   const rd=new FileReader();
   rd.onload=async()=>{
     try{
-      const{wb,entries}=parseListWorkbook(rd.result);
-      if(!entries.length)return bad('No usable sheets found — expected columns: Item | Qty | Length | Width | Material | Edging.');
-      const proj=pid&&LST.p.has(pid)?LST.p.get(pid).name:wb.project||String(f.name||'').replace(/\.(xlsx|xls)$/i,'');
+      let bk;try{bk=lsReadBook(rd.result);}catch(e){return bad('Could not read that file — is it an Excel workbook (.xlsx)?');}
+      if(!bk.sheets.length)return bad('No cutting lists found in '+f.name+' — expected columns: Description | Qty | Length | Width | Colour | Edging.');
+      const proj=pid&&LST.p.has(pid)?LST.p.get(pid).name:bk.project||String(f.name||'').replace(/\.(xlsx|xls)$/i,'');
+      if(msg)msg.textContent='Check the preview — nothing is saved yet.';
+      const pick=await new Promise(r=>lsImpPreview(bk,f.name,proj,r));
+      if(!pick||!pick.length)return bad('Import cancelled — nothing saved.');
+      const entries=pick.map(sh=>({sheet:sh.name,sdate:sh.meta.date||'',lines:lsEdLines(lsKeptRows(sh))}));
+      const wb={project:bk.project,sheets:{}};
       const pid2=pid&&LST.p.has(pid)?pid:await lsProject(proj);
       const unk=lsUnknownMats(wb,entries,pid2);
       const map=unk.length?await new Promise(r=>lsMatchDlg(unk,pid2,r)):{};
       if(!map)return bad('Upload cancelled — nothing saved.');
       if(msg)msg.textContent='Saving '+entries.length+' list'+(entries.length!==1?'s':'')+'…';
       const s=await lsImportWB(wb,entries,f.name,whoNow(),{pid:pid2,map});
+      if(msg)msg.textContent='';
       render();
-      toast(s.n+' lists imported from '+(wb.project||f.name)+(s.same?' — '+s.same+' unchanged':'')+(s.replaced?' — '+s.replaced+' replaced with this newer version'+(s.revised?' ('+s.revised+' new revision'+(s.revised!==1?'s':'')+' for the saw)':''):'')+(s.auto?' — '+s.auto+' work orders auto-tagged. Check the tags.':'')+(s.flagged?' — '+s.flagged+' line'+(s.flagged!==1?'s':'')+' use a material not on the project list (flagged)':''));
+      toast(s.n+' lists imported from '+(bk.project||f.name)+(s.same?' — '+s.same+' unchanged':'')+(s.replaced?' — '+s.replaced+' replaced with this newer version'+(s.revised?' ('+s.revised+' new revision'+(s.revised!==1?'s':'')+' for the saw)':''):'')+(s.auto?' — '+s.auto+' work orders auto-tagged. Check the tags.':'')+(s.flagged?' — '+s.flagged+' line'+(s.flagged!==1?'s':'')+' use a material not on the project list (flagged)':''));
     }catch(e){bad('Could not save that file: '+e.message);}
   };
   rd.readAsArrayBuffer(f);
@@ -3575,7 +3630,8 @@ function openListEditor2(listId,presetWo,presetPid,opt){
 function lsUnknownMats(wb,entries,pid){
   const k=lsMatSet(pid);if(!k.size)return[];
   const seen=new Map();
-  entries.forEach(e=>(wb.sheets[e.sheet]||[]).forEach(r=>{if(r.k!=='saw')return;const m=String(r.mat||'').trim();if(m&&!k.has(matKey(m))&&!seen.has(matKey(m)))seen.set(matKey(m),m);}));
+  const add=v=>{const m=String(v||'').trim();if(m&&!k.has(matKey(m))&&!seen.has(matKey(m)))seen.set(matKey(m),m);};
+  entries.forEach(e=>e.lines?e.lines.forEach(x=>{if(x.kind==='saw')add(x.material);}):(wb.sheets[e.sheet]||[]).forEach(r=>{if(r.k==='saw')add(r.mat);}));
   return[...seen.values()];
 }
 function lsMatchDlg(names,pid,done,opt){
@@ -3947,7 +4003,7 @@ function lsParseGrid(aoa,opt){
     const L=num(cells[2]),W=num(cells[3]),mat=texts[4],edging=texts[5],note=texts[6];
     if(!isNaN(qv)||(!isNaN(L)&&!isNaN(W)&&(A||mat))){
       const sized=!isNaN(L)||!isNaN(W);
-      const p={k:'part',item:sized?A:(A||mat),qty:'',L:isNaN(L)?'':L,W:isNaN(W)?'':W,mat,edging,note,src:r+1};
+      const p={k:'part',item:sized?A:(A||mat),qty:'',L:isNaN(L)?'':L,W:isNaN(W)?'':W,mat,edging:sized?edging:'',note:sized?note:[edging,note].filter(Boolean).join(' · '),src:r+1}; // decision 4: column F is Edging on a saw part, a note on a Stores part
       const qty=isNaN(qv)?'':typeof cells[1]==='number'||/^\d+(\.\d+)?(\s*(off|pcs?|no\.?))?$/i.test(texts[1])?qv:texts[1]; // "2x2" kept as typed, never guessed
       if(cur&&cur.units!=null&&!cur.info){
         const k=perUnit(r,1,cur.u);
@@ -3984,6 +4040,32 @@ function lsPasteAoa(text){
 }
 // Sheets that are never cutting lists (Garry, 3 Nov): the unit library, the index and the stock sheets
 function lsSkipSheet(name){return /^\s*(blank|index|stock|door stock)\s*$/i.test(String(name||''));}
+// per-unit × units = the total to cut ("2x2" or a blank stays as typed — the editor's check asks for a number)
+function lsMul(q,u){const a=String(q==null?'':q).trim(),b=String(u==null?'':u).trim();if(!/^\d+(\.\d+)?$/.test(a)||!/^\d+(\.\d+)?$/.test(b))return a;return String(Math.round(+a*+b*1e6)/1e6);}
+/* Editor / import rows → lines for the tables. A row with a length or width goes to the Saw, one without to Stores.
+   A part's section = the heading above it. Inside a unit block (a heading with units) the row's qty is PER UNIT: the line
+   keeps it as unit_qty and its qty is the TOTAL to cut, so the saw, sheet calculator and labels read qty as before.
+   A unit heading is stored as kind 'hdr' with qty = the number of units. Old-shape rows (k 'saw'/'fit') still work. */
+function lsEdLines(rows){
+  const s=v=>v==null?'':String(v).trim(),n=v=>{const x=parseFloat(String(v==null?'':v).replace(/\s*mm$/i,''));return isNaN(x)?0:x;};
+  let sec='',units=null;
+  return (rows||[]).map(r=>{
+    let ln;
+    if(r.k==='hdr'){sec=s(r.item);units=r.units!==undefined&&r.units!==null?s(r.units):null;
+      ln={kind:'hdr',section:'',part:s(r.item),note:s(r.note)};if(units!==null)ln.qty=units;}
+    else if(r.k==='saw'||r.k==='fit'){ // old shape (k = saw / fit) — as lsRowToLine always did
+      ln={kind:r.k,section:s(r.sec!=null&&s(r.sec)!==''?r.sec:sec),part:s(r.item),qty:s(r.qty),material:s(r.mat)};
+      if(r.k==='saw'){ln.length_mm=r.L;ln.width_mm=r.W;ln.edging=s(r.edging);ln.note=s(r.note);}else{ln.edging=s(r.edging);ln.note=s(r.note);if(r.matOther)ln.material_other=true;}
+    }else{
+      const kind=n(r.L)>0||n(r.W)>0?'saw':'fit',inU=units!==null;
+      ln={kind,section:sec,part:s(r.item),qty:inU?lsMul(r.qty,units):s(r.qty),unit_qty:inU?s(r.qty):'',length_mm:kind==='saw'?r.L:'',width_mm:kind==='saw'?r.W:'',
+        material:s(r.mat),edging:s(r.edging),note:s(r.note)};
+      if(r.matOther)ln.material_other=true;
+    }
+    if(r.lid)ln.id=r.lid;
+    return ln;
+  });
+}
 /* lsParseGrid:end */
 function lists(){if(V2())return lsCache().all.filter(l=>!l.archived&&!l.tpl);return DB.lists||[];}
 function listRows(l){if(V2())return lsView(l.id,true).rows;const wb=(DB.listWBs||{})[l.wb];return wb&&wb.sheets&&wb.sheets[l.sheet]?wb.sheets[l.sheet]:[];}

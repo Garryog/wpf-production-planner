@@ -9,7 +9,7 @@ const upload = async (p, name, sheets) => {
   const b64 = await xlsx(p, sheets);
   await p.evaluate(() => { showTab('l'); document.getElementById('toast').textContent = ''; });
   await p.setInputFiles('#lst-file', { name, mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer: Buffer.from(b64, 'base64') });
-  for (let i = 0; i < 40; i++) { await F.sleep(100); await p.evaluate(() => { const b = document.getElementById('mm-ok'); if (b) b.click(); }); /* material matching: keep as typed */ const t = await p.evaluate(() => document.getElementById('toast').textContent); if (/imported|Could not/.test(t)) return t; const m = await p.evaluate(() => (document.getElementById('lst-upmsg') || {}).textContent || ''); if (/Could not|No usable/.test(m)) return m; }
+  for (let i = 0; i < 40; i++) { await F.sleep(100); await p.evaluate(() => { const b = document.getElementById('ip-ok'); if (b) b.click(); }); /* editor step 2: the import preview comes first */ await p.evaluate(() => { const b = document.getElementById('mm-ok'); if (b) b.click(); }); /* material matching: keep as typed */ const t = await p.evaluate(() => document.getElementById('toast').textContent); if (/imported|Could not/.test(t)) return t; const m = await p.evaluate(() => (document.getElementById('lst-upmsg') || {}).textContent || ''); if (/Could not|No usable/.test(m)) return m; }
   return 'timeout';
 };
 const HOUSE7 = [['Aderrig', null, null, null, null, null], ['Item', 'Qty', 'Length', 'Width', 'Material', 'Edging'], ['BASE UNITS'],

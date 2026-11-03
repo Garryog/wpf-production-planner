@@ -62,7 +62,7 @@ const res = []; const rec = (n, ok, d) => { res.push(ok); console.log((ok ? 'PAS
   const b64 = await off.page.evaluate(() => { const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Aderrig'], ['Side', 2, 720, 560, 'MFC Wht', ''], ['Top', 1, 1200, 560, 'Oak X', ''], ['Back', 1, 700, 600, 'Ply 18', ''], ['Hinge', 8, null, null, 'Blum', '']]), 'House 8'); return XLSX.write(wb, { type: 'base64', bookType: 'xlsx' }); });
   const up = async name => { await off.page.evaluate(() => { showTab('l'); document.getElementById('toast').textContent = ''; }); await off.page.setInputFiles('#lst-file', { name: 'Aderrig.xlsx', mimeType: 'application/octet-stream', buffer: Buffer.from(b64, 'base64') }); };
   await up();
-  for (let i = 0; i < 30 && !(await off.page.evaluate(() => !!document.getElementById('mm-ok'))); i++) await F.sleep(100);
+  for (let i = 0; i < 30 && !(await off.page.evaluate(() => { const b = document.getElementById('ip-ok'); if (b) b.click(); /* editor step 2: the import preview comes first */ return !!document.getElementById('mm-ok'); })); i++) await F.sleep(100);
   const names = await off.page.evaluate(() => [...document.querySelectorAll('.pod-ovl tbody b')].map(b => b.textContent).join('|'));
   rec('upload: the three board names not on the project list are shown for matching (fittings are not)', names === 'MFC Wht|Oak X|Ply 18', names);
   await off.page.evaluate(() => { const s = (i, v) => { document.querySelector('[data-mm="' + i + '"]').value = v; }; s(0, 'M1'); s(2, '__add'); document.getElementById('mm-ok').click(); });
@@ -71,7 +71,7 @@ const res = []; const rec = (n, ok, d) => { res.push(ok); console.log((ok ? 'PAS
   rec('matched name saved as the project material, remembered as an alias', l8l[0] && l8l[0].material === 'MFC White' && !l8l[0].material_other && D.find(S.db, 'project_materials', 'M1').aliases.includes('MFC Wht'), JSON.stringify(l8l.map(x => [x.material, x.material_other])));
   rec('"Add" puts the new board on the project list (not flagged); "keep as typed" is saved flagged', S.db.t.project_materials.some(m => m.project_id === 'P1' && m.name === 'Ply 18' && m.kind === 'sheet') && l8l[2].material_other === false && l8l[1].material === 'Oak X' && l8l[1].material_other === true);
   await up();
-  for (let i = 0; i < 30 && !(await off.page.evaluate(() => !!document.getElementById('mm-ok') || /imported/.test(document.getElementById('toast').textContent))); i++) await F.sleep(100);
+  for (let i = 0; i < 30 && !(await off.page.evaluate(() => { const b = document.getElementById('ip-ok'); if (b) b.click(); return !!document.getElementById('mm-ok') || /imported/.test(document.getElementById('toast').textContent); })); i++) await F.sleep(100);
   const second = await off.page.evaluate(() => [...document.querySelectorAll('.pod-ovl tbody b')].map(b => b.textContent).join('|'));
   rec('next upload: only the name left as typed is asked about again (the alias is remembered)', second === 'Oak X', second);
   await off.page.evaluate(() => { const b = document.getElementById('mm-ok'); if (b) b.click(); });

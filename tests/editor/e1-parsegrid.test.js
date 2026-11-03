@@ -59,6 +59,8 @@ for (const f of ['cutting-list-school.xlsx', 'cutting-list-school-nocache.xlsx']
   rec('a total that is not a whole number per unit is kept and warned about', r.rows[1].qty === 1.5 && r.rows[1].total === 3 && /isn't a whole number/.test(r.warn[0] || ''), JSON.stringify(r));
   const s = lsParseGrid([['Kitchen 1'], ['Side', '2x2', 700, 560, 'W/W']], { paste: true });
   rec('"2x2" is kept as typed, never guessed', s.rows[1].qty === '2x2');
+  const h = lsParseGrid([['Hinge', 8, null, null, 'Blum', 'soft close', 'top drawer']], { paste: true });
+  rec('decision 4: on a Stores part column F is a note, not edging', h.rows[0].edging === '' && h.rows[0].note === 'soft close · top drawer', JSON.stringify(h.rows));
   const t = lsParseGrid([['Aderrig', null, null, null, null, new Date(Date.UTC(2026, 9, 1))], ['Side', 2, 720, 560, 'MFC White', '1mm']]);
   rec('the old layout (project name alone in A1) still gives the project', t.meta.project === 'Aderrig' && t.meta.date === '2026-10-01' && brief(t.rows).join(';') === 'Side|2||720|560|MFC White|1mm', JSON.stringify(t));
   const u = lsParseGrid([['Aderrig'], ['Side', 2, 720, 560, 'MFC White']], { paste: true });
