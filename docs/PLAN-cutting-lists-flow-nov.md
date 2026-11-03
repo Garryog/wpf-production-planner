@@ -1,4 +1,4 @@
-# Plan: cutting-list flow, Garry's 3 Nov changes (Architect draft, awaiting Garry's 4 answers)
+# Plan: cutting-list flow, Garry's 3 Nov changes (Architect, approved by Garry 3 Nov 2026)
 
 ## For Garry: the new flow
 1. **Before step 5 (best case).** The Drawing office or the Production Manager keeps each customer's standard lists ("templates"), one per kitchen/room type (e.g. "Type B kitchen"). They can make a job's list early, and then that job is never flagged.
@@ -79,3 +79,8 @@
 4. On go-live day, show every processed WO with no list. Old ones are cleared with "No list needed" or "Paper list issued".
 5. (3 Nov, later) A WO title with extra words beyond house/type/room (e.g. "- EXTRA UNITS", "- REMEDIAL", "& WARDROBES", "- SHOWHOUSE") is AMBER, never green, so someone checks it first.
 6. (3 Nov, later) A customer heading with only the builder's name (e.g. "CAIRN HOMES") links AUTOMATICALLY when that builder has exactly one project in the planner.
+7. (3 Nov, after Manager review) Day one: NO bulk clear — old jobs are cleared one by one.
+8. Two lists on one WO ON PURPOSE (e.g. kitchen + wardrobes) is allowed from the editor / "+ WO"; the quick Confirm / Use / Create & attach buttons still refuse a second list.
+9. Linking a Cienapps customer to a project: anyone in the office, NO PIN.
+10. Half quantities per unit (e.g. 1.5 × 2) are allowed only when the total to cut is a whole number; otherwise refused with a message.
+Status: flow steps 7 (saw banner "NEW LIST ISSUED – Rev 2 replaces Rev 1", old version "Superseded") and 8 (snag grid) are NOT built yet. Step 7 is to be built before lists are switched on.

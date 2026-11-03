@@ -1,4 +1,4 @@
-# Plan: list editor that works like Excel + Save as template (Architect, 3 Nov 2026) — awaiting Garry's 3 answers
+# Plan: list editor that works like Excel + Save as template (Architect, 3 Nov 2026)
 
 ## For Garry: making a list
 1. Open a project, then **+ New list** (or **Type a list** on a work order). The grid has the same columns as your sheets: **Description | Qty | Length | Width | Colour | Edging | Note**.
