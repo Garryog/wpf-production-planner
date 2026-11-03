@@ -2818,7 +2818,7 @@ async function lsSaveManual(d,by,ex){
     if(k)throw new Error(lsGotMsg(k.wo,await lsOneList(k)));throw e;}
   if(pk)LS_PEND.delete(pk);
   if(pl.replaces){let r=res.retired; // what the database did with the old list in the same step
-    if(r){try{await lsReloadList(pl.replaces);}catch(e){}} // this screen sees the old list archived at once
+    if(r)lsReloadList(pl.replaces).then(()=>render()).catch(()=>{}); // this screen sees the old list archived (in the background — the editor closes at once)
     else{try{await lsReloadList(pl.replaces);const ol=lsList(pl.replaces);r=!ol?'missing':ol.archived?'archived':'live';}catch(e){r='unknown';}} // our own earlier save (its reply was lost)
     d.retiredMsg={archived:' The old list '+on+' is archived (off the saw).',already:' The old list '+on+' was already archived on another screen — left as it is.',
       missing:' The old list '+on+' is no longer there — nothing archived.',kept:' The old list '+on+' was changed on another screen meanwhile — left with the saw: check it and archive it from Lists.',
