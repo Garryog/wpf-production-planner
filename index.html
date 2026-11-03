@@ -3222,8 +3222,7 @@ function prevWorkDay(iso){let d=addDayISO(iso,-1);while(!isWorkDay(d))d=addDayIS
 function lsSawDay(cut){return !cut?'':isWorkDay(cut)?cut:prevWorkDay(cut);}
 function lsAddWorkDays(iso,n){let d=iso;for(let i=0;i<n;i++)d=nextWorkDay(d);return d;}
 function lsOwnerFor(o){
-  const c=String(o&&o.customer||'').trim().toLowerCase();if(!c)return'Production Manager';
-  const p=lsProjects().find(p=>[p.name,p.customer,...(p.cien_names||[])].some(n=>String(n||'').trim().toLowerCase()===c));
+  const p=lsProjForCust(o&&o.customer);
   return(p&&String(p.list_owner||'').trim())||'Production Manager';
 }
 function waitListHTML(){
@@ -3240,7 +3239,69 @@ function waitListHTML(){
 /* ---------- S4 (V2 only): the list editor with project picker, type, edging, and materials picked from the project ----------
    Saw material: only the project's sheet materials (no free typing). Fittings spec: the project's fittings, or "Other…"
    typed — that line gets an amber flag. A material already on a line but not on the project list stays, flagged. */
-function lsProjForCust(c){c=String(c||'').trim().toLowerCase();if(!c)return null;return lsProjects().find(p=>[p.name,p.customer,...(p.cien_names||[])].some(n=>String(n||'').trim().toLowerCase()===c))||null;}
+/* suggestTpl:start */
+/* Customer = project (Garry, 3 Nov): the project title is always part of the Cienapps WO customer heading.
+   projForCust: 1) the heading IS a project's name, customer or one of its Cienapps spellings (cien_names) — case,
+   spaces and punctuation don't matter; 2) otherwise the heading CONTAINS a project name / Cienapps spelling (whole words,
+   4+ letters) — the longest wins. Two different projects equally good = none (never guessed). Inactive projects skipped. */
+function sgNorm(s){return String(s==null?'':s).toLowerCase().replace(/&/g,' and ').replace(/[^a-z0-9]+/g,' ').trim();}
+function projForCust(c,projects){
+  const h=sgNorm(c);if(!h)return null;
+  const ps=(projects||[]).filter(p=>p&&p.active!==false);
+  const one=a=>{const u=[...new Set(a.map(p=>p.id))];return u.length===1?a[0]:null;};
+  const ex=ps.filter(p=>[p.name,p.customer,...(p.cien_names||[])].some(n=>n&&sgNorm(n)===h));
+  if(ex.length)return one(ex);
+  let best=0,hit=[];
+  ps.forEach(p=>[p.name,...(p.cien_names||[])].forEach(n=>{const k=sgNorm(n);if(k.length<4||!(' '+h+' ').includes(' '+k+' '))return;
+    if(k.length>best){best=k.length;hit=[p];}else if(k.length===best)hit.push(p);}));
+  return hit.length?one(hit):null;
+}
+/* suggestTpl(order, templates, projects) → {level:'strong'|'weak'|'none', pid, tid, alts:[template ids, best first], why}
+   Only the project's own live templates. From the WO title and the template's name + type name it reads:
+   the type code ("TYPE B", "Type C1"), the bedrooms ("3 BED"), and the room (kitchen, utility, wardrobes, bathroom).
+   A template whose type, bedrooms or room DIFFERS from the title is never suggested.
+   strong (green) = the type matches and the room agrees (or isn't given), or the template's whole name is in the title
+   and the title names no other type — and no other template is as good. Anything else that fits = weak (amber).
+   Nothing fits = none (grey). Bulk "Confirm all" only ever takes green. */
+const SG_KIND=[['kitchen',/\b(kitchens?|kit)\b/],['utility',/\b(utility|utilities|util)\b/],['wardrobe',/\b(wardrobes?|robes?)\b/],['bathroom',/\b(bathrooms?|baths?|vanity|vanities|en ?suites?)\b/]];
+const SG_STOP=new Set(['and','to','of','on','in','at','or','for','the','with','no','unit','units','house','hse','apt','apartment','block','phase','type','bed','beds','kitchen','kitchens','kit','utility','util','wardrobe','wardrobes','robe','robes','bathroom','bath','vanity','plot','site','new','list','std','standard']);
+function sgFeat(s){
+  const n=sgNorm(s),cm=/\btype ([a-z]{1,2}\d{0,2}[a-z]?|\d{1,2}[a-z]?)\b/.exec(n);
+  const code=cm&&!SG_STOP.has(cm[1])?cm[1]:'',bm=/\b(\d) ?bed/.exec(n);
+  return{n,code,beds:bm?bm[1]:'',kinds:new Set(SG_KIND.filter(([,re])=>re.test(n)).map(([k])=>k)),
+    words:new Set(n.split(' ').filter(w=>w.length>=3&&!/^\d+$/.test(w)&&!SG_STOP.has(w)))};
+}
+function suggestTpl(o,templates,projects){
+  const none=(why,pid)=>({level:'none',pid:pid||'',tid:'',alts:[],why});
+  o=o||{};const p=projForCust(o.customer,projects);
+  if(!p)return none(String(o.customer||'').trim()?'No project is linked to this customer yet':'No customer on this work order');
+  const ts=(templates||[]).filter(t=>t&&t.pid===p.id&&!t.archived);
+  if(!ts.length)return none('This project has no templates yet',p.id);
+  const f=sgFeat(o.title);
+  const sc=ts.map(t=>{
+    const g=sgFeat([t.name,t.typeName].filter(Boolean).join(' '));
+    if(t.ltype==='kitchen'&&!g.kinds.size)g.kinds.add('kitchen');
+    if(g.code&&f.code&&g.code!==f.code)return null;   // a different type
+    if(g.beds&&f.beds&&g.beds!==f.beds)return null;   // a different number of bedrooms
+    const kHit=[...g.kinds].some(k=>f.kinds.has(k));
+    if(g.kinds.size&&f.kinds.size&&!kHit)return null; // a different room
+    const cHit=!!(g.code&&g.code===f.code),bHit=!!(g.beds&&g.beds===f.beds);
+    const ph=[t.name,t.typeName].map(sgNorm).some(x=>x.length>=4&&(' '+f.n+' ').includes(' '+x+' '));
+    const more=[...g.words].filter(w=>f.words.has(w)).length,miss=[...g.words].filter(w=>!f.words.has(w)).length;
+    const score=(cHit?4:0)+(kHit?2:0)+(bHit?1:0)+(ph?3:0)+more-miss*0.5;
+    const strong=(cHit&&(kHit||!g.kinds.size||!f.kinds.size))||(ph&&(!f.code||cHit));
+    const why=[cHit?'type '+f.code.toUpperCase():'',kHit?[...g.kinds].filter(k=>f.kinds.has(k)).join(' + '):'',bHit?f.beds+' bed':'',ph&&!cHit?'name':''].filter(Boolean);
+    return{t,score,strong,why,cHit};
+  }).filter(x=>x&&x.score>0).sort((a,b)=>b.score-a.score||String(a.t.typeName||a.t.name).localeCompare(String(b.t.typeName||b.t.name)));
+  if(!sc.length)return none(f.code?'No "Type '+f.code.toUpperCase()+'" template for this project':'No template matches the title',p.id);
+  if(sc.length>1)sc.forEach(x=>{if(!x.cHit)x.strong=false;}); // a name in the title (no type) is green only when no other template could fit
+  const b=sc[0],st=sc.filter(x=>x.strong),alts=sc.map(x=>x.t.id);
+  ts.slice().sort((a,c)=>String(a.typeName||a.name).localeCompare(String(c.typeName||c.name))).forEach(t=>{if(!alts.includes(t.id))alts.push(t.id);});
+  const strong=b.strong&&(st.length===1||st[0].score-st[1].score>=2);
+  return{level:strong?'strong':'weak',pid:p.id,tid:b.t.id,alts,why:(strong?'Matches ':'Best guess — ')+(b.why.join(', ')||'room')+(!strong&&st.length>1?' (more than one template fits)':'')};
+}
+/* suggestTpl:end */
+function lsProjForCust(c){return projForCust(c,lsProjects());}
 function openListEditor2(listId,presetWo,presetPid,opt){
   opt=opt||{};
   const ex=listId?lsList(listId):null;
