@@ -77,6 +77,8 @@ function variant() {
   rec('Blank / Index / Stock / Door Stock never became lists', !S.db.t.lists.some(x => /^(blank|index|stock|door stock)$/i.test(String(x.name).trim())));
 
   // ---- heading lines never counted: sheet calculator + combined list on the imported list
+  // Excel uploads are no longer auto-tagged (Garry, plan step 6): tag a WO by hand first so the list has a cut-by date
+  await o.page.evaluate(async () => { const l = lists().find(x => x.name === 'Road 2 No 4,5'); listTag(l, DB.orders[0].wo, true, 'Tester'); await lqSend(); await lsPoll(); });
   const calc = await o.page.evaluate(() => { const l = lists().find(x => x.name === 'Road 2 No 4,5'); const sn = sheetNeed([l], '', '9999-12-31'); const cb = combineLists([l], 'saw'); return { lines: sn.lines, noQty: sn.noQty, noSize: sn.noSize, cbHdr: cb.filter(r => /units|Kickers|Road 2/.test(r.item)).length, rows: listRows(l).length }; });
   rec('sheet calculator / combined list: heading and unit-heading lines are never counted as parts', calc.noQty === 0 && calc.noSize === 0 && calc.cbHdr === 0 && calc.lines > 0, JSON.stringify(calc));
 

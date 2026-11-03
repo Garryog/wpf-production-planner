@@ -85,7 +85,8 @@ function server(on) {
       renderImportPreview(IMPPLAN); await document.getElementById('imp-apply').onclick(); await saveDB();
       return { s4: DB.orders.find(o => o.wo === 'WO-26-S4').procAt, need: listsNeeded().map(o => o.wo.replace('WO-26-', '')).sort().join() };
     });
-    rec('off: the import still records procAt (harmless), nothing else changes', imp.s4 === '2026-10-21' && imp.need === 'SOON', JSON.stringify(imp));
+    // Garry's decision (round 1 fix 7b51217): with the switch OFF the import must NOT stamp procAt (switching on stamps it later)
+    rec('off: the import does NOT record procAt, nothing else changes', !imp.s4 && imp.need === 'SOON', JSON.stringify(imp));
     rec('off: settings saved without listDue (same shape as before)', !('listDue' in (S.row.settings || {})), JSON.stringify(Object.keys(S.row.settings || {})));
     rec('off: no calls to the new tables', F.newTableCalls(S).length === 0, F.newTableCalls(S).join());
     rec('off: no page errors', !(S.errors || []).length, (S.errors || []).join(' | '));

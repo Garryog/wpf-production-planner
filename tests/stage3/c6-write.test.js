@@ -12,6 +12,15 @@ const upload = async (p, name, sheets) => {
   for (let i = 0; i < 40; i++) { await F.sleep(100); await p.evaluate(() => { const b = document.getElementById('ip-ok'); if (b) b.click(); }); /* editor step 2: the import preview comes first */ await p.evaluate(() => { const b = document.getElementById('mm-ok'); if (b) b.click(); }); /* material matching: keep as typed */ const t = await p.evaluate(() => document.getElementById('toast').textContent); if (/imported|Could not/.test(t)) return t; const m = await p.evaluate(() => (document.getElementById('lst-upmsg') || {}).textContent || ''); if (/Could not|No usable/.test(m)) return m; }
   return 'timeout';
 };
+// Excel uploads are no longer auto-tagged (Garry, plan step 6): the match is offered in "Cutting lists to issue" as
+// "📥 From an Excel upload: ✓ Use …" and a person confirms it. Clicks that button, sends the attach, waits for the result.
+const useXl = async (p, wo, name) => {
+  const r = await p.evaluate(async ({ wo, name }) => { setWho('Ann'); showTab('l'); await lsPoll(); render(); await new Promise(r => setTimeout(r, 50));
+    const b = [...document.querySelectorAll('[data-ltixl]')].find(x => x.dataset.ltixl.startsWith(wo + '|') && x.textContent.includes(name));
+    if (!b) return 'no Use button for ' + wo + ' / ' + name + ' (offered: ' + [...document.querySelectorAll('[data-ltixl]')].map(x => x.dataset.ltixl + ' ' + x.textContent).join(' ; ') + ')';
+    b.click(); for (let i = 0; i < 40 && LTI.busy.has(wo); i++) await new Promise(r => setTimeout(r, 50)); await lqSend(); await lsPoll(); return 'ok'; }, { wo, name });
+  return r;
+};
 const HOUSE7 = [['Aderrig', null, null, null, null, null], ['Item', 'Qty', 'Length', 'Width', 'Material', 'Edging'], ['BASE UNITS'],
   ['Side', 2, 720, 560, 'MFC White', '1mm ABS'], ['Side', 2, 720, 560, 'MFC White', '1mm ABS'], ['Top', 1, 1200, 560, 'Oak Mystery', ''], ['Hinge', 8, null, null, 'Blum', 'soft close']];
 (async () => {
@@ -26,7 +35,9 @@ const HOUSE7 = [['Aderrig', null, null, null, null, null], ['Item', 'Qty', 'Leng
     const t = await upload(off.page, 'Aderrig.xlsx', { 'House 7': HOUSE7 });
     const l7 = S.db.t.lists.find(l => l.name === 'House 7');
     const ls7 = l7 ? S.db.t.list_lines.filter(x => x.list_id === l7.id).sort((a, b) => a.seq - b.seq) : [];
-    rec('upload: one list in the lists table, in project Aderrig, auto-tagged WO-7 (unit 7)', l7 && l7.project_id === 'P1' && l7.wos.join() === 'WO-7' && l7.source === 'excel' && /1 lists imported/.test(t), t + ' ' + JSON.stringify(l7 && l7.wos));
+    rec('upload: one list in the lists table, in project Aderrig, NOT tagged yet; the toast says WO-7 matched and must be confirmed', l7 && l7.project_id === 'P1' && l7.wos.length === 0 && l7.source === 'excel' && /1 lists imported/.test(t) && /1 work order matched: confirm it/.test(t), t + ' ' + JSON.stringify(l7 && l7.wos));
+    const u7 = await useXl(off.page, 'WO-7', 'House 7');
+    rec('upload: "📥 From an Excel upload: ✓ Use House 7" on WO-7 (unit 7) tags it', u7 === 'ok' && D.find(S.db, 'lists', l7.id).wos.join() === 'WO-7', u7 + ' ' + JSON.stringify(D.find(S.db, 'lists', l7.id).wos));
     rec('upload: header + 4 lines, ids listId:1…, section from the heading, n_saw 3 / n_fit 1', ls7.length === 5 && ls7[0].kind === 'hdr' && ls7[1].id === l7.id + ':2' && ls7[1].section === 'BASE UNITS' && l7.n_saw === 3 && l7.n_fit === 1, JSON.stringify(ls7.map(x => x.kind + ':' + x.part + ':' + x.section)));
     rec('upload: column F is Edging on saw lines; on a fittings line it is the note', ls7[1].edging === '1mm ABS' && !ls7[1].note && ls7[4].note === 'soft close' && !ls7[4].edging);
     rec('upload: a sheet material not on the project list is saved but flagged; listed material is not', ls7[3].material === 'Oak Mystery' && ls7[3].material_other === true && ls7[1].material_other === false && /1 line use a material not on the project list/.test(t), t);

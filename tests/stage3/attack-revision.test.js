@@ -21,6 +21,10 @@ const H7 = [['Aderrig', null, null, null, null, null], ['Item', 'Qty', 'Length',
     const off = await F.dev(browser, S, 'office'), off2 = await F.dev(browser, S, 'office'), saw = await F.dev(browser, S, 'saw');
     await upload(off.page, 'Aderrig.xlsx', { 'House 7': H7 });
     const l7 = S.db.t.lists.find(l => l.name === 'House 7');
+    // Excel uploads are no longer auto-tagged (Garry, plan step 6): a person confirms the match ("✓ Use") — done here
+    // so the saw has the list on its screen for R3
+    await off.page.evaluate(async () => { setWho('Ann'); showTab('l'); await lsPoll(); render(); await new Promise(r => setTimeout(r, 50)); const b = document.querySelector('[data-ltixl^="WO-7|"]'); if (b) b.click(); for (let i = 0; i < 40 && LTI.busy.has('WO-7'); i++) await new Promise(r => setTimeout(r, 50)); await lqSend(); });
+    rec('setup: "✓ Use House 7" tags WO-7', D.find(S.db, 'lists', l7.id).wos.join() === 'WO-7', JSON.stringify(D.find(S.db, 'lists', l7.id).wos));
     D.applyLineChanges(S.db, [{ id: l7.id + ':1', status: 'cut', cid: 'c1', rev: 1 }], 'Sean'); // saw starts → locked
     // R1: the SAME workbook uploaded again (very common) → nothing changed, so no new revision for the saw
     await off.page.evaluate(async () => { await lsPoll(); });
