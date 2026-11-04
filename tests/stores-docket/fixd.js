@@ -22,7 +22,7 @@ function makeServer(row, opt = {}) {
 }
 async function dev(browser, S, role, extra = {}) {
   const t = await SD.open(browser, S, Object.assign({ now: NOW, role }, extra));
-  await t.page.evaluate(async () => { localStorage.setItem('wpfOpName', 'Op'); window.alert = () => {}; if (typeof lsReset === 'function' && V2()) { lsReset(); await lsLoad(); } render(); });
+  await t.page.evaluate(async () => { localStorage.setItem('wpfOpName', 'Op'); window.alert = () => {}; window.prompt = (m, d) => (window.__prompt !== undefined ? window.__prompt : 'Op'); window.confirm = () => true; if (typeof lsReset === 'function' && V2()) { lsReset(); await lsLoad(); } render(); });
   return t;
 }
 // window.open → a fake window that keeps what was written (the printed docket / report)
