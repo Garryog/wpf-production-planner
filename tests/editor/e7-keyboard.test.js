@@ -15,8 +15,8 @@ const res = []; const rec = (n, ok, d) => { res.push(ok); console.log((ok ? 'PAS
   await pg.evaluate(() => { openListEditor(null, 'WO-1'); document.querySelector('.pod-ovl [data-mr="0|item"]').focus(); });
   await pg.keyboard.type('Side panel'); await K('Tab'); await pg.keyboard.type('2'); await K('Tab'); await pg.keyboard.type('720'); await K('Tab'); await pg.keyboard.type('560');
   rec('Tab moves right across the row and you can type straight in', (await at()) === '0|W' && (await vals('item'))[0] === 'Side panel' && (await vals('L'))[0] === '720', await at());
-  await K('Tab', 'Tab', 'Tab');
-  rec('Tab goes on through Colour and Edging to Note', (await at()) === '0|note', await at());
+  await K('Tab', 'Tab', 'Tab', 'Tab');
+  rec('Tab goes on through Colour, Edging 1 and Edging 2 (two edging columns, 4 Nov) to Note', (await at()) === '0|note', await at());
   await K('Tab');
   const n1 = await pg.evaluate(() => document.querySelectorAll('.pod-ovl .me-grid tbody tr').length);
   rec('Tab from the very last cell adds a row and goes to its Description', n1 === 2 && (await at()) === '1|item', n1 + ' ' + (await at()));

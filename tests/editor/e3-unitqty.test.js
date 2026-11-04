@@ -8,7 +8,7 @@ const res = []; const rec = (n, ok, d) => { res.push(ok); console.log((ok ? 'PAS
   // the SQL block: column, alter for test projects, save_list_revision update + insert + "changed?" compare
   const sql = fs.readFileSync(path.join(__dirname, '..', '..', 'SUPABASE_CHANGES.md'), 'utf8');
   rec('SQL: list_lines has unit_qty, plus "add column if not exists" for test projects', /qty text, unit_qty text, material text/.test(sql) && /alter table list_lines add column if not exists unit_qty text;/.test(sql));
-  rec('SQL: save_list_revision writes unit_qty on update and insert, and counts it as a change', /unit_qty=e->>'unit_qty'/.test(sql) && /ex\.qty,ex\.unit_qty,/.test(sql) && /e->>'qty',e->>'unit_qty',e->>'material',coalesce/.test(sql) && /qty,unit_qty,material,material_other,edging,note,snag_id,src_line_id,added_rev/.test(sql));
+  rec('SQL: save_list_revision writes unit_qty on update and insert, and counts it as a change', /unit_qty=e->>'unit_qty'/.test(sql) && /ex\.qty,ex\.unit_qty,/.test(sql) && /e->>'qty',e->>'unit_qty',e->>'material',coalesce/.test(sql) && /qty,unit_qty,material,material_other,edging,(edging2,)?note,snag_id,src_line_id,added_rev/.test(sql));
   const browser = await H.chromium.launch();
   const S = F.makeServer(F.v2Row());
   F.seedList(S, 'L1', { name: 'House 1' });

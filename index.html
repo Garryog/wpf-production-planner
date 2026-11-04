@@ -2672,9 +2672,6 @@ async function lsProject(name,customer){ // the project with this name (any case
 function lsMatSet(pid){const s=new Set();LST.m.forEach(m=>{if(m.project_id===pid&&m.active!==false&&m.kind==='sheet'){s.add(matKey(m.name));(m.aliases||[]).forEach(a=>s.add(matKey(a)));}});s.delete('');return s;} // matKey: case and extra spaces don't matter
 // Two edging columns per piece (Garry, 4 Nov): Edging 1 and Edging 2 (optional), shown together as "L1LE 1mm / L4S 2mm"
 function lsEdgeTxt(x){return x?[x.edging,x.edging2].map(v=>String(v==null?'':v).trim()).filter(Boolean).join(' / '):'';}
-// a cell that reads like an edging code (Excel column G on import / paste → Edging 2): L1LE 1mm, L2S1LE, L4S 2mm, 2L2S, 1mm ABS, No edge
-const LS_EDGE_RE=/^(no\s*edg(e|ing)|L\d+\s*(LE|SE?|L)(\s*\d+\s*(LE|SE?|L))*(\s*\d+(\.\d+)?\s*mm)?|\d+\s*L(\s*\d+\s*S)?(\s*\d+(\.\d+)?\s*mm)?|\d+(\.\d+)?\s*mm(\s*(abs|pvc|edg(e|ing)))?)$/i;
-function lsLooksEdge(s){s=String(s==null?'':s).trim();return !!s&&LS_EDGE_RE.test(s);}
 // An old-shape row → a line. Excel column F is Edging on a saw line (decision 4); typed rows carry edging and note separately.
 function lsRowToLine(r,typed){
   const s=v=>v==null?'':String(v).trim();
@@ -4890,6 +4887,9 @@ function diffLines(old,nw,opt){
 }
 /* diffLines:end */
 /* lsParseGrid:start */
+// a cell that reads like an edging code (Excel column G on import / paste → Edging 2): L1LE 1mm, L2S1LE, L4S 2mm, 2L2S, 1mm ABS, No edge
+const LS_EDGE_RE=/^(no\s*edg(e|ing)|L\d+\s*(LE|SE?|L)(\s*\d+\s*(LE|SE?|L))*(\s*\d+(\.\d+)?\s*mm)?|\d+\s*L(\s*\d+\s*S)?(\s*\d+(\.\d+)?\s*mm)?|\d+(\.\d+)?\s*mm(\s*(abs|pvc|edg(e|ing)))?)$/i;
+function lsLooksEdge(s){s=String(s==null?'':s).trim();return !!s&&LS_EDGE_RE.test(s);}
 /* One reader for WPF's cutting-list sheets — used by the Excel import AND by paste into the list editor. Pure (no screen,
    no database), so the tests can check it on its own.
    aoa: the sheet's rows from A1 (cached values; null = empty). opt.formulas: the same grid with each cell's formula (or null).
