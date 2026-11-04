@@ -3454,7 +3454,7 @@ function lsHomeHTML(){
       ${sel('lh-rev',LH.rev,[['','Any revision'],['revised','Revised (rev 2+)']])}
       ${sel('lh-state',LH.state,[['','Not archived'],['draft','Draft'],['live','Live (with the saw)'],['done','Done'],['archived','Archived']])}
       ${LH.q||LH.proj||LH.type||LH.kind!=='live'||LH.rev||LH.state?'<button class="btn btn-s" id="lh-x" style="font-size:12px">✕ Clear</button>':''}
-      <span style="flex:1"></span>${LH.kind==='tpl'?`<button class="btn btn-s" id="lh-copy"${LH.proj?'':' disabled title="Pick the project first"'}>⧉ Copy from another project</button><button class="btn btn-g" id="lh-newtpl"${LH.proj?'':' disabled title="Pick the project first"'}>＋ New template</button>`:''}<button class="btn btn-s" id="lh-projs">🏗 Projects</button><button class="btn btn-s" id="lh-std" title="The house heading and the standard sub-headings (Fillers and Kickers, Worktops, Stores items) ready to fill">＋ New list – standard layout</button><button class="btn btn-g" id="lh-new">＋ New list</button>
+      <span style="flex:1"></span>${LH.kind==='tpl'?`<button class="btn btn-s" id="lh-copy"${LH.proj?'':' disabled title="Pick the project first"'}>⧉ Copy from another project</button><button class="btn btn-g" id="lh-newtpl"${LH.proj?'':' disabled title="Pick the project first"'}>＋ New template</button>`:''}<button class="btn btn-s" id="lh-projs">🏗 Projects</button><button class="btn btn-s" id="lh-sent" title="Everything sent to a project's site between two dates — print or Excel">📦 Items sent</button><button class="btn btn-s" id="lh-std" title="The house heading and the standard sub-headings (Fillers and Kickers, Worktops, Stores items) ready to fill">＋ New list – standard layout</button><button class="btn btn-g" id="lh-new">＋ New list</button>
     </div>
     <input type="file" id="lh-file" accept=".xlsx,.xls" style="display:none"><div id="lh-upmsg" style="font-size:12px;margin-bottom:6px"></div>
     ${keys.length?keys.map(k=>{const a=grp.get(k);return `<div class="lh-grp" style="margin-bottom:12px"><div style="background:#14335c;color:#fff;border-radius:6px 6px 0 0;padding:7px 10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -3471,6 +3471,7 @@ function lsHomeBind(){
   [['lh-proj','proj'],['lh-type','type'],['lh-kind','kind'],['lh-rev','rev'],['lh-state','state']].forEach(([id,k])=>{const e=document.getElementById(id);if(e)e.onchange=()=>{LH[k]=e.value;render();};});
   const x=document.getElementById('lh-x');if(x)x.onclick=()=>{Object.assign(LH,{q:'',proj:'',type:'',kind:'live',rev:'',state:''});render();};
   const pj=document.getElementById('lh-projs');if(pj)pj.onclick=()=>lsProjectsDlg();
+  const sn=document.getElementById('lh-sent');if(sn)sn.onclick=()=>dkReportDlg();
   const nw=document.getElementById('lh-new');if(nw)nw.onclick=()=>openListEditor(null,'',LH.proj||'');
   const ns=document.getElementById('lh-std');if(ns)ns.onclick=()=>lsNewStd('',LH.proj||'');
   const nt=document.getElementById('lh-newtpl');if(nt)nt.onclick=()=>openListEditor(null,'',LH.proj,{tpl:true});
@@ -3520,7 +3521,8 @@ function renderProdV2(app){
   else if(prodTab==='snags')renderSnags(app);
   else renderProd(app);
   const t=(k,l)=>`<button data-prodtab="${k}" style="padding:9px 18px;border:none;border-radius:6px;font-size:15px;font-weight:700;cursor:pointer;${prodTab===k?'background:#14335c;color:#fff':'background:#e6ebf2;color:#14335c'}">${l}</button>`;
-  app.insertAdjacentHTML('afterbegin',`<div id="prod-strip" style="max-width:1400px;margin:10px auto 0;padding:0 20px;display:flex;gap:8px">${t('today','🧭 Today')}${t('lists','📋 Lists')}${t('snags','🩹 Snags')}</div>`);
+  app.insertAdjacentHTML('afterbegin',`<div id="prod-strip" style="max-width:1400px;margin:10px auto 0;padding:0 20px;display:flex;gap:8px;flex-wrap:wrap">${t('today','🧭 Today')}${t('lists','📋 Lists')}${t('snags','🩹 Snags')}<button id="prod-sent" style="padding:9px 18px;border:none;border-radius:6px;font-size:15px;font-weight:700;cursor:pointer;background:#e6ebf2;color:#14335c">📦 Items sent</button></div>`);
+  document.getElementById('prod-sent').onclick=()=>dkReportDlg();
   document.querySelectorAll('[data-prodtab]').forEach(b=>b.onclick=()=>{prodTab=b.dataset.prodtab;if(prodTab==='lists')lsStart();render();});
 }
 /* "Waiting for a list" on the saw (build note j): each planned job with no list, with its cut-by date, the list due by
@@ -4804,8 +4806,9 @@ let pmTab='';
 function renderPMV2(app){
   if(pmTab==='snags')renderSnags(app);else renderPM(app);
   const t=(k,l)=>`<button data-pmtab="${k}" style="padding:9px 18px;border:none;border-radius:6px;font-size:15px;font-weight:700;cursor:pointer;${pmTab===k?'background:#14335c;color:#fff':'background:#e6ebf2;color:#14335c'}">${l}</button>`;
-  app.insertAdjacentHTML('afterbegin',`<div id="pm-strip" style="max-width:1400px;margin:10px auto 0;padding:0 20px;display:flex;gap:8px">${t('','🚚 Deliveries')}${t('snags','🩹 Snags')}</div>`);
+  app.insertAdjacentHTML('afterbegin',`<div id="pm-strip" style="max-width:1400px;margin:10px auto 0;padding:0 20px;display:flex;gap:8px;flex-wrap:wrap">${t('','🚚 Deliveries')}${t('snags','🩹 Snags')}<button id="pm-sent" style="padding:9px 18px;border:none;border-radius:6px;font-size:15px;font-weight:700;cursor:pointer;background:#e6ebf2;color:#14335c">📦 Items sent</button></div>`);
   document.querySelectorAll('[data-pmtab]').forEach(b=>b.onclick=()=>{pmTab=b.dataset.pmtab;render();});
+  document.getElementById('pm-sent').onclick=()=>dkReportDlg();
 }
 /* ---------- S8 (V2 only): locking and revisions on screen ----------
    A live list locks when it's sent to the saw, when anything is ticked (the database), or when its cut-by date is today or
@@ -6013,9 +6016,74 @@ async function dkListDlg(){
   };
   await load();
 }
+/* "Items sent" report (Garry 21 Oct / 4 Nov): per project and From/To dates, everything that went to site — the items on
+   dockets (not cancelled) and, with the lists switch on, the stores lines ticked "got out" on the bench. Date, docket no.,
+   WO | Floor | Unit | Title (apart), item, qty, spec, list, who, delivered yes/no. Print or Excel. */
+const DK_REP_COLS=['Date','Docket','WO','Floor','Unit','Title','Item','Qty','Spec','List','Sent / got out by','Delivered'];
+function dkDayISO(s,add){const d=new Date(s+'T00:00:00');d.setDate(d.getDate()+(add||0));return d.toISOString();} // local midnight → the database's clock
+async function dkReportRows(pr,from,to){
+  const lo=dkDayISO(from),hi=dkDayISO(to,1),k=s=>String(s||'').trim().toLowerCase(),out=[];
+  const mine=d=>(pr.id&&d.project_id===pr.id)||[pr.name,pr.customer].filter(Boolean).map(k).includes(k(d.project_name));
+  const ds=(await dkLoad('&made_at=gte.'+encodeURIComponent(lo)+'&made_at=lt.'+encodeURIComponent(hi))).filter(d=>d.status!=='cancelled'&&mine(d));
+  ds.forEach(d=>(d.items||[]).filter(i=>i.active!==false).forEach(i=>out.push({at:d.made_at,docket:d.docket_no,wo:i.wo||'',floor:i.floor||'',unit:i.unit||'',title:i.title||'',item:i.item||'',
+    qty:i.qty_text||dkQ(i.qty),spec:i.spec||'',list:i.list_id?((lsList(i.list_id)||{}).name||''):'',by:d.made_by||'',
+    deliv:d.status==='delivered'?'Yes — received by '+(d.received_by||'')+(d.received_at?' '+dkDate(d.received_at):''):'No'})));
+  if(V2()&&pr.id){ // stores lines ticked "got out" on the bench (items held back and sent on a docket are on the docket rows)
+    const ids=[...LST.l.values()].filter(r=>r.project_id===pr.id&&!r.is_template).map(r=>r.id);
+    const ev=[];
+    for(let i=0;i<ids.length;i+=60)ev.push(...await lsGet('list_events?select=*&act=eq.status&to_status=eq.got-out&at=gte.'+encodeURIComponent(lo)+'&at=lt.'+encodeURIComponent(hi)+'&list_id=in.('+ids.slice(i,i+60).map(x=>'"'+encodeURIComponent(x)+'"').join(',')+')'));
+    if(ev.length)await lsLines([...new Set(ev.map(e=>e.list_id))]);
+    const last=new Map();ev.forEach(e=>{const o=last.get(e.line_id);if(!o||String(e.at)>String(o.at))last.set(e.line_id,e);});
+    last.forEach(e=>{const x=LST.ln.get(e.line_id);if(!x||lnSt(x)!=='got-out')return; // unticked since: not sent
+      const l=lsList(x.list_id)||{wos:[]},w=dkWoInfo(l.wos),os=(l.wos||[]).map(v=>DB.orders.find(o=>o.wo===v)).filter(Boolean);
+      out.push({at:e.at,docket:'',wo:w.wo,floor:w.floor,unit:w.unit,title:w.title,item:x.part||'',qty:x.qty==null?'':String(x.qty),spec:[x.material,x.note].map(v=>String(v||'').trim()).filter(Boolean).join(' · '),
+        list:l.name||'',by:e.by||'',deliv:os.length&&os.every(o=>dStage(o)==='deliv')?'Yes — with the job':'No'});});
+  }
+  return out.sort((a,b)=>String(a.at).localeCompare(String(b.at))||String(a.docket).localeCompare(String(b.docket)));
+}
+const dkRepAoa=rows=>rows.map(r=>[dkDate(r.at)+' '+hhmm(r.at),r.docket,r.wo,r.floor,r.unit,r.title,r.item,r.qty,r.spec,r.list,r.by,r.deliv]);
+function dkReportDlg(){
+  const ov=lsDlg('<div id="dkr-body"></div>',1100);ov.id='dk-rep-dlg';
+  const t=todayLocal(),f=new Date(t+'T00:00:00');f.setDate(f.getDate()-30);
+  const S={pr:null,from:isoOf(f),to:t,rows:null,msg:'',busy:false};
+  const body=()=>ov.querySelector('#dkr-body');
+  const run=async()=>{if(!S.pr){S.msg='Pick the project first.';draw();return;}if(!S.from||!S.to||S.from>S.to){S.msg='Check the dates (From must be on or before To).';draw();return;}
+    S.busy=true;S.msg='';draw();try{if(V2()&&!LST.loaded)await lsLoad();S.rows=await dkReportRows(S.pr,S.from,S.to);}catch(e){S.rows=null;S.msg=dkErr(e);}S.busy=false;draw();};
+  const title=()=>'Items sent — '+S.pr.name+' — '+fmt(S.from)+' to '+fmt(S.to);
+  const draw=()=>{
+    const E=escA,ch=dkProjChoices(),v2=V2();
+    body().innerHTML=`<div style="font-weight:800;color:#14335c;font-size:17px;margin-bottom:2px">📦 Items sent to site</div>
+      <div style="font-size:12px;color:var(--t3);margin-bottom:8px">Everything sent to a project's site between two dates: items on dockets${v2?' and stores items ticked "got out"':''}.</div>
+      <div class="dk-two" style="align-items:flex-end"><div><label class="dk-f" for="dkr-proj">Project</label><select id="dkr-proj" class="dk-in"><option value="">— pick the project —</option>${ch.map(p=>`<option value="${E(v2?p.id:p.name)}"${S.pr&&(v2?p.id===S.pr.id:p.name===S.pr.name)?' selected':''}>${E(p.name)}</option>`).join('')}</select></div>
+        <div style="flex:0 1 150px"><label class="dk-f" for="dkr-from">From</label><input type="date" id="dkr-from" class="dk-in" value="${E(S.from)}"></div>
+        <div style="flex:0 1 150px"><label class="dk-f" for="dkr-to">To</label><input type="date" id="dkr-to" class="dk-in" value="${E(S.to)}"></div>
+        <div style="flex:0 1 auto"><button class="btn btn-g" id="dkr-go" style="min-height:38px"${S.busy?' disabled':''}>${S.busy?'Loading…':'Show'}</button></div></div>
+      <div class="dk-bad" style="margin:6px 0">${E(S.msg)}</div>
+      ${S.rows?`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0"><b style="color:#14335c">${S.rows.length} item line${S.rows.length!==1?'s':''}</b><span style="flex:1"></span>
+        <button class="btn btn-s" id="dkr-print"${S.rows.length?'':' disabled'}>🖨 Print</button><button class="btn btn-s" id="dkr-xls"${S.rows.length?'':' disabled'}>⬇ Excel</button></div>
+        ${S.rows.length?`<table class="lst-tbl dk-tbl"><thead><tr>${DK_REP_COLS.map(c=>`<th>${c}</th>`).join('')}</tr></thead><tbody>${S.rows.map(r=>`<tr><td data-l="Date">${E(dkDate(r.at))} ${E(hhmm(r.at))}</td><td data-l="Docket"><b>${E(r.docket)||'—'}</b></td><td data-l="WO">${E(r.wo)}</td><td data-l="Floor">${E(r.floor)}</td><td data-l="Unit">${E(r.unit)}</td><td data-l="Title" class="dk-ti" title="${E(r.title)}">${E(r.title)}</td><td class="dk-it">${E(r.item)}</td><td data-l="Qty">${E(r.qty)}</td><td data-l="Spec">${E(r.spec)}</td><td data-l="List">${E(r.list)}</td><td data-l="By">${E(r.by)}</td><td data-l="Delivered"${/^Yes/.test(r.deliv)?' style="color:#0b7e44;font-weight:700"':''}>${E(r.deliv)}</td></tr>`).join('')}</tbody></table>`
+        :'<div style="color:var(--t3);font-size:13px">Nothing sent in those dates.</div>'}`:''}`;
+    const b=body();
+    b.querySelector('#dkr-proj').onchange=e=>{S.pr=ch.find(p=>(v2?p.id:p.name)===e.target.value)||null;S.rows=null;S.msg='';draw();if(S.pr)run();};
+    b.querySelector('#dkr-from').onchange=e=>{S.from=e.target.value;};b.querySelector('#dkr-to').onchange=e=>{S.to=e.target.value;};
+    b.querySelector('#dkr-go').onclick=()=>run();
+    const pr=b.querySelector('#dkr-print');if(pr)pr.onclick=()=>{
+      const w=window.open('','_blank');if(!w){toast('Pop-up blocked — allow pop-ups for this site to print');return;}
+      w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${E(title())}</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;padding:8mm;font-size:11px;color:#111}
+        h1{font-size:17px;color:#14335c;border-bottom:3px solid #14335c;padding-bottom:3px;margin-bottom:4px}.s{font-size:11px;color:#555;margin-bottom:6px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #888;padding:3px 5px;text-align:left;vertical-align:top}th{background:#eef1f6;font-size:9px;text-transform:uppercase}
+        @media print{@page{size:A4 landscape;margin:8mm}body{padding:0}}</style></head><body><h1>${E(title())}</h1><div class="s">${S.rows.length} item lines · printed ${E(dkDate(new Date().toISOString()))}</div>
+        <table><thead><tr>${DK_REP_COLS.map(c=>`<th>${c}</th>`).join('')}</tr></thead><tbody>${dkRepAoa(S.rows).map(r=>`<tr>${r.map(v=>`<td>${E(v)}</td>`).join('')}</tr>`).join('')}</tbody></table><script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script></body></html>`);
+      w.document.close();};
+    const xl=b.querySelector('#dkr-xls');if(xl)xl.onclick=()=>{
+      const ws=XLSX.utils.aoa_to_sheet([DK_REP_COLS,...dkRepAoa(S.rows)]);ws['!cols']=[{wch:17},{wch:10},{wch:12},{wch:7},{wch:8},{wch:30},{wch:28},{wch:7},{wch:26},{wch:20},{wch:14},{wch:30}];
+      const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Items sent');
+      XLSX.writeFile(wb,'WPF_Items_sent_'+String(S.pr.name).replace(/[^\w-]+/g,'_').slice(0,40)+'_'+S.from+'_'+S.to+'.xlsx');toast('Items sent downloaded');};
+  };
+  draw();
+}
 // Stores bench header: the docket buttons (Stores only — the saw screen is unchanged)
-function dkBarHTML(){return `<div class="dk-bar"><button id="dk-send">🚚 Send to site</button><button id="dk-list">📄 Dockets</button></div>`;}
-function dkBarBind(){const b=id=>document.getElementById(id);if(b('dk-send'))b('dk-send').onclick=()=>dkSendDlg();if(b('dk-list'))b('dk-list').onclick=()=>dkListDlg();}
+function dkBarHTML(){return `<div class="dk-bar"><button id="dk-send">🚚 Send to site</button><button id="dk-list">📄 Dockets</button><button id="dk-rep">📦 Items sent</button></div>`;}
+function dkBarBind(){const b=id=>document.getElementById(id);if(b('dk-send'))b('dk-send').onclick=()=>dkSendDlg();if(b('dk-list'))b('dk-list').onclick=()=>dkListDlg();if(b('dk-rep'))b('dk-rep').onclick=()=>dkReportDlg();}
 function dkProjLines(pid){
   const out=[];
   [...LST.l.values()].filter(r=>r.project_id===pid&&!r.archived&&!r.is_template)
