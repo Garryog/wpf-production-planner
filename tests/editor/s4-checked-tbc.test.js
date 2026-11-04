@@ -12,7 +12,7 @@ const res = []; const rec = (n, ok, d) => { res.push(ok); console.log((ok ? 'PAS
 const J = JSON.stringify;
 (async () => {
   const browser = await H.chromium.launch();
-  const row = F.v2Row();
+  const row = F.v2Row({ listChk: true }); // the Settings switch "Lists must be checked before the saw" is ON for this test
   row.orders.push(H.order({ wo: 'WO-3', customer: 'Aderrig Homes', unit: '3', dueDate: '2026-10-22', origDueDate: '2026-10-22' }));
   row.orders.push(H.order({ wo: 'WO-4', customer: 'Aderrig Homes', unit: '4', dueDate: '2026-10-22', origDueDate: '2026-10-22' }));
   const S = F.makeServer(row);
@@ -86,6 +86,18 @@ const J = JSON.stringify;
   await pg.evaluate(id => { lsViewDlg(id); [...document.querySelectorAll('[data-vchk]')].pop().click(); }, c2);
   await pg.evaluate(async () => { await lqSend(); });
   rec('"Take check away" from the list view', D.find(S.db, 'lists', c2).checked_at == null && D.find(S.db, 'lists', c2).log.slice(-1)[0].what === 'Check taken away');
+  // ---- switch it OFF on the Settings page (Admin PIN): every check sign goes, the waiting list is on the saw again
+  const off = await pg.evaluate(async c3 => {
+    window.prompt = () => pins().admin; showTab('s'); render();
+    const cb = document.getElementById('ls-chk'); if (!cb || !cb.checked) return { err: 'no switch / not ticked' };
+    cb.checked = false; cb.dispatchEvent(new Event('change')); await saveDB();
+    showTab('l'); render();
+    const lti = document.querySelector('#lti') ? document.querySelector('#lti').innerText : '';
+    const row = document.querySelector('[data-lhrow="' + c3 + '"]');
+    return { on: DB.listChk, wait: lsWaitCheckLists().length, lti, row: row ? row.innerText : '', btn: document.querySelectorAll('[data-lhchk],[data-ltichk]').length, saw: workListFor('saw', 3).map(l => l.name) };
+  }, c3);
+  rec('switch OFF (Admin PIN, Settings): no "Waiting for check", no ✓ Check buttons, nothing counted; the waiting list is back on the saw', off.on === false && off.wait === 0 && !/waiting for check/i.test(off.lti + off.row) && off.btn === 0 && off.saw.includes('House 3'), J(off));
+  rec('the switch is saved in the planner settings', await F.sleep(300).then(() => pg.evaluate(() => fullSettings().listChk === false)));
   rec('no page errors', !(S.errors || []).length, (S.errors || []).join(' | '));
   await s.close(); await o.close(); await browser.close();
   const pass = res.filter(Boolean).length;

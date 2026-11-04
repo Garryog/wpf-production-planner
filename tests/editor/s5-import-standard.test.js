@@ -45,7 +45,7 @@ const txt = g.v.slice(2, 12).map(r => (r || []).map(v => v == null ? '' : v).joi
 const q = lsParseGrid(lsPasteAoa(txt), { paste: true });
 rec('paste: house heading + sub-heading + parts, the same as the import', q.rows[0].item === 'House nr 103' && !q.rows[0].sub && q.rows[1].sub === true && q.rows.filter(r => r.k === 'part').length === 8, J(q.rows.slice(0, 3)));
 
-// ---- the real upload (switch on), then what the office, the saw and the check see
+// ---- the real upload (switch on), then what the office and the saw see — "checked before the saw" is OFF (the default, Garry 4 Nov)
 const F = require('../stage3/fix3.js');
 const { H: HH, D } = F;
 const waitFor = async (pg, fn, ms = 5000) => { for (let i = 0; i < ms / 100; i++) { if (await pg.evaluate(fn)) return true; await F.sleep(100); } return false; };
@@ -73,21 +73,16 @@ const waitFor = async (pg, fn, ms = 5000) => { for (let i = 0; i < ms / 100; i++
   rec('saved: Panel Back kind "buy" with its sizes; Kicker saw; Sink fit with spec Hafele Calder', k('Panel Back')[0] && k('Panel Back')[0].kind === 'buy' && +k('Panel Back')[0].length_mm === 900 && k('Kicker')[0].kind === 'saw' && k('Sink')[0].kind === 'fit' && k('Sink')[0].material === 'Hafele Calder', J(ln.map(x => x.kind + ':' + x.part)));
   rec('saved: sub-headings carry their house (section)', ln.filter(x => x.kind === 'hdr' && x.section === 'House nr 103').map(x => x.part).join('|') === 'Fillers and Kickers|ISLAND|Utility 103|Doors FU', J(ln.filter(x => x.kind === 'hdr').map(x => [x.part, x.section])));
   rec('saved: the list counts only saw / stores lines (n_saw, n_fit) — the bought-in panel is in neither', lst && lst.n_saw === ln.filter(x => x.kind === 'saw').length && lst.n_fit === ln.filter(x => x.kind === 'fit').length && ln.filter(x => x.kind === 'buy').length === 1, J(lst && [lst.n_saw, lst.n_fit]));
-  rec('a new Excel list waits for its check', lst && lst.check_req === true && lst.checked_at == null);
-  // tag it to WO-1 and check it, then the saw
+  rec('check switch OFF (default): a new Excel list needs no check', lst && lst.check_req === false && lst.checked_at == null, J(lst && [lst.check_req, lst.checked_at]));
+  // tag it to WO-1, then the saw
   await o.page.evaluate(async id => { await lsRpc('list_attach', { p_list: id, p_wo: 'WO-1', p_on: true, p_by: 'Ann', p_cid: null, p_one: false }); await lsReloadList(id); }, lst.id);
   const view = await o.page.evaluate(id => { lsViewDlg(id); const ov = [...document.querySelectorAll('.pod-ovl')].pop(); const t = ov.innerText, h = ov.innerHTML; ov.remove(); return { t, h }; }, lst.id);
-  rec('office list: "Bought in" shown on the panel, with its sizes; "Waiting for check"', /Panel Back\s*Bought in/.test(view.t) && /1842/.test(view.t) && /Waiting for check/.test(view.t), view.t.slice(0, 300));
+  rec('office list: "Bought in" shown on the panel, with its sizes; no "Waiting for check" and no ✓ Check (switch OFF)', /Panel Back\s*Bought in/.test(view.t) && /1842/.test(view.t) && !/Waiting for check|Not checked|✓ Check/.test(view.t) && !/data-vchk/.test(view.h), view.t.slice(0, 300));
   rec('office list: spec TBC chip names Tap, Worktops and Sink + Tap', /spec TBC: Tap, Worktops, Sink \+ Tap/.test(view.t), (view.t.match(/spec TBC[^\n]*/) || [''])[0]);
   rec('office list: house headings and sub-headings styled differently (wl-h1 / wl-sub)', /wl-sec wl-h1/.test(view.h) && /wl-sec wl-sub/.test(view.h));
   const s = await F.dev(browser, S, 'saw');
   const saw0 = await s.page.evaluate(() => document.getElementById('app').innerText);
-  rec('saw: the unchecked list is NOT on the saw', !/House 103,104/.test(saw0), saw0.slice(0, 300));
-  await o.page.evaluate(id => { localStorage.setItem('wpfEditPin', '7777'); lsCheck(id, true); }, lst.id);
-  await o.page.evaluate(async () => { await lqSend(); });
-  await s.page.evaluate(async () => { await lsPoll(); render(); });
-  const saw1 = await s.page.evaluate(() => document.getElementById('app').innerText);
-  rec('saw: once checked the list is on the saw, with "Issued by …, checked by Ann"', /House 103,104/.test(saw1) && /checked by Ann/.test(saw1), saw1.slice(0, 600));
+  rec('saw: the list is on the saw straight away (no check), with no "checked by" line', /House 103,104/.test(saw0) && !/checked by/.test(saw0), saw0.slice(0, 600));
   const sawRows = await s.page.evaluate(() => { const l = lists().find(x => x.name === 'House 103,104'); return listRows(l).filter(r => r.k === 'saw').map(r => r.item); });
   rec('saw: no bought-in panel and no stores items among its rows; doors and worktops are cut', !sawRows.includes('Panel Back') && !sawRows.includes('Sink') && sawRows.includes('Doors FU') && sawRows.includes('Top'), J(sawRows));
   const card = await s.page.evaluate(() => { const c = [...document.querySelectorAll('.wl-card')].find(x => /House 103,104/.test(x.innerText)); return c ? { t: c.innerText, h: c.innerHTML } : null; });
