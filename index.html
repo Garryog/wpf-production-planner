@@ -5221,8 +5221,11 @@ function listsNeeded(){ // WOs scheduled to deliver inside the lead time with NO
 // "No list needed" is the only way to clear a WO without a list. "Paper list issued" was removed (Garry, 4 Nov): an old
 // 'paper' mark counts as "needs a list" again (lsNA ignores it) and the office's next load clears it with a history line.
 function lsNA(o){return !!(o&&o.listNA&&o.listNA.k!=='paper');}
-function lsPaperOff(){let n=0;DB.orders.forEach(o=>{if(o.listNA&&o.listNA.k==='paper'){delete o.listNA;n++;
-  logEdit(o,'Cutting list: the "Paper list issued" option was removed — this job needs a list again (type one or attach a photo of the list)','Planner');}});return n;}
+// Several office PCs can load before any of them saves: each clears the mark and writes the SAME history line (stamped
+// with the mark's own time, not "now"), so the save merge sees one line, not one per PC.
+function lsPaperOff(){let n=0;DB.orders.forEach(o=>{if(o.listNA&&o.listNA.k==='paper'){const at=o.listNA.at,ok=typeof at==='string'&&!isNaN(Date.parse(at));delete o.listNA;n++;
+  const what='Cutting list: the "Paper list issued" option was removed — this job needs a list again (type one or attach a photo of the list)';
+  if(!(o.log||[]).some(l=>l&&l.what===what)){o.log=o.log||[];o.log.push({at:ok?at:'2026-11-04T00:00:00.000Z',by:'Planner',what,why:''});if(o.log.length>40)o.log=o.log.slice(-40);}}});return n;}
 /* ---------- Photo of a list (Garry, 4 Nov) — a STOP-GAP that replaces "Paper list issued" ----------
    A work order with no typed list can have one or more photos of its paper list attached (phone camera or a file: a photo,
    or a PDF kept as it is). The files go to the Supabase Storage bucket 'list-photos' (SUPABASE_CHANGES.md 2026-11-04); the
