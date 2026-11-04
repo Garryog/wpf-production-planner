@@ -25,8 +25,6 @@ const res = []; const rec = (n, ok, d) => { res.push(ok); console.log((ok ? 'PAS
   await F.sleep(700);
   const L = D.find(S.db, 'lists', 'L1');
   rec('A6: saving a locked list asks why, makes rev 2 with the reason', L.rev === 2 && (await off.page.evaluate(() => window.__p.some(m => /revision 2/.test(m) && /drawing changed \/ site measure \/ error \/ other/.test(m)))) && S.db.t.list_revisions.some(r => r.list_id === 'L1' && r.reason === 'drawing changed'), L.rev);
-  rec('(4 Nov) the revision takes the check away: the saw does not have it until it is checked again', D.find(S.db, 'lists', 'L1').checked_at == null && D.find(S.db, 'lists', 'L1').check_req === true);
-  D.listSetDone(S.db, 'L1', 'check', true, 'Des', null, null); // checked on another PC
   await saw.page.evaluate(async () => { await lsPoll(); render(); });
   const card = await saw.page.evaluate(() => { const b = document.querySelector('[data-wldone="L1"]').closest('.wl-card'); return { t: b.innerText, h: b.innerHTML }; });
   rec('A6: saw card says "REV 2 — 1 changed, 1 added, 1 removed"', /REV 2 — 1 changed, 1 added, 1 removed/.test(card.t), card.t.slice(0, 300));

@@ -40,7 +40,6 @@ const H7 = [['Aderrig', null, null, null, null, null], ['Item', 'Qty', 'Length',
     rec('R2 two offices upload the same corrected workbook at once: one new revision, no duplicate lines', r2.rev === rev0 + 1 && lines2.filter(x => x.removed_rev == null).length === 3, 'rev ' + rev0 + '→' + r2.rev + ' live lines=' + lines2.filter(x => x.removed_rev == null).length + ' | ' + ta + ' | ' + tb);
     rec('R2 the cut Side keeps its tick through both saves', L(S, l7.id + ':1').status === 'cut', L(S, l7.id + ':1').status);
     // R3: tick a line removed by a newer revision (saw screen still on the old rev) → refused, saw told
-    D.listSetDone(S.db, l7.id, 'check', true, 'Des', null, null); // (4 Nov) the saw only has a CHECKED list on its screen — checked on another PC
     await saw.page.evaluate(async () => { await lsPoll(); render(); });
     const H7c = H7b.filter(r => r[0] !== 'Back');
     await off.page.evaluate(async () => { await lsPoll(); });

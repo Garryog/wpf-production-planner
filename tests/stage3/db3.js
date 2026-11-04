@@ -192,6 +192,7 @@ function listSetDone(d, id, mode, on, by, why, cid) {
 const LINE_F = ['section', 'part', 'length_mm', 'width_mm', 'qty', 'unit_qty', 'material', 'edging', 'note'];
 function saveListRevision(d, pl, lines, expect, by, reason) {
   let r = find(d, 'lists', pl.id), isnew = false, nrev;
+  const chk = pl.check_req != null && String(pl.check_req) === 'true'; // (4 Nov) the "checked before the saw" switch, as the app sent it
   // validate everything first — the SQL runs in one transaction, so an error leaves nothing half-written
   if (!r && expect != null) throw new DbError('stale: list ' + pl.id + ' is missing');
   if (r && (expect == null || r.version !== +expect)) throw new DbError('stale: list ' + r.id + ' is at version ' + r.version + ', editor had ' + expect);
@@ -224,14 +225,15 @@ function saveListRevision(d, pl, lines, expect, by, reason) {
     }
   }
   if (!r) {
-    // (4 Nov) a new list waits for its check; a copy of a CHECKED template at that template's revision is checked by its checker
-    const t = pl.source === 'template' && pl.template_id ? d.t.lists.find(x => x.id === pl.template_id && x.is_template && x.checked_at != null && pl.template_rev != null && x.rev === +pl.template_rev) : null;
+    // (4 Nov) with the check switched on (p_list.check_req true), a new list waits for its check; a copy of a CHECKED
+    // template at that template's revision is checked by its checker. Missing / false = no check needed.
+    const t = chk && pl.source === 'template' && pl.template_id ? d.t.lists.find(x => x.id === pl.template_id && x.is_template && x.checked_at != null && pl.template_rev != null && x.rev === +pl.template_rev) : null;
     const log0 = [Object.assign({ at: now(), by, what: 'List created', why: reason == null ? null : reason }, pl.replaces ? { replaces: pl.replaces } : {})];
     if (t) log0.push({ at: now(), by, what: 'Checked', why: 'from template "' + t.name + '" rev ' + t.rev + ', checked by ' + (t.checked_by == null ? '?' : t.checked_by) });
     r = insert(d, 'lists', { id: pl.id, project_id: pl.project_id || null, name: pl.name || '(no name)', list_type: pl.list_type || 'house', type_name: pl.type_name || null,
       is_template: !!pl.is_template, template_id: pl.template_id || null, template_rev: pl.template_rev == null ? null : +pl.template_rev, wos: pl.wos || [],
       no_cut: !!pl.no_cut, no_fit: !!pl.no_fit, source: pl.source || 'manual', sdate: pl.sdate || null, created_by: by, updated_by: by,
-      check_req: true, checked_by: t ? t.checked_by : null, checked_at: t ? now() : null, log: log0 });
+      check_req: chk, checked_by: t ? t.checked_by : null, checked_at: t ? now() : null, log: log0 });
     isnew = true; nrev = 1;
   } else {
     nrev = r.rev;
@@ -263,7 +265,7 @@ function saveListRevision(d, pl, lines, expect, by, reason) {
   ['name', 'list_type', 'source'].forEach(k => { if (pl[k] != null) patch[k] = pl[k]; });
   ['project_id', 'type_name', 'sdate', 'deliver_by'].forEach(k => { if (k in pl) patch[k] = pl[k]; });
   ['no_cut', 'no_fit'].forEach(k => { if (pl[k] != null) patch[k] = !!pl[k]; });
-  if (!isnew) Object.assign(patch, { check_req: true, checked_by: null, checked_at: null }); // (4 Nov) an edit must be checked again
+  if (!isnew) Object.assign(patch, { check_req: chk, checked_by: null, checked_at: null }); // (4 Nov) an edit clears the check (switch ON: must be checked again)
   if (!isnew) patch.log = logAdd(r, { at: now(), by, what: nrev > r.rev ? 'Revision ' + nrev : 'List edited', why: reason == null ? null : reason });
   update(d, 'lists', r, patch);
   return { list: clone(r), lines: clone(d.t.list_lines.filter(x => x.list_id === r.id).sort((a, b) => a.seq - b.seq)), retired };

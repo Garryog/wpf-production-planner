@@ -23,7 +23,7 @@ Newest at the top. Each block must be run in Supabase BEFORE the matching code g
 - **Added 3 Nov 2026 (Manager review — "Make new list from this"):** `save_list_revision` now archives the OLD list in the same step that saves the new one, so a lost reply or a closed browser can never leave both lists on the saw. If the old list was changed on another screen after it was copied, the save stops and the person is asked first ("archive it anyway" or "leave it with the saw"). Only the function changes — no table, no data. Safe to run twice. A part in a unit block that is a FIXED total (it doesn't divide by the units) is saved with `unit_qty` = `fixed` (the column is text already — no change needed).
 - **Added 4 Nov 2026 (simple lists for standard production — Aspect / O'Malleys):**
   - **"Bought in" lines.** A line can now be a fourth kind, `buy` (besides `saw`, `fit` and `hdr`): a panel or item with sizes that is bought in, never cut. The saw, the stores pick list, the sheet calculator, the combined list and the labels only ever read `saw` / `fit` lines, so a bought-in line can never reach them; the office list and print show it as "Bought in". Only the `list_lines` kind check changes (dropped and added again — safe to run twice). No data is touched.
-  - **"Checked by" before the saw.** `lists` gets three columns: `check_req` (this list must be checked before the saw sees it), `checked_by`, `checked_at`. A list made or saved from now on through the app starts as "Waiting for check"; editing a list (a new revision too) clears the check; `list_set_done` has a new mode `check` (on = checked, off = check taken away) that writes the history line; a list confirmed from a template counts as checked only if the template itself is checked (same revision). Lists moved over by "Migrate lists" and snag lists keep `check_req` = false (they reach the saw as before). No new table or function, so no new GRANT lines. Safe to run twice (`add column if not exists`).
+  - **"Checked by" before the saw.** `lists` gets three columns: `check_req` (this list must be checked before the saw sees it), `checked_by`, `checked_at`. Only used when the Settings switch **"Lists must be checked before the saw"** is ON (it is OFF for the initial roll-out, Garry 4 Nov): the app then sends `check_req` = true and a list made or saved through the app starts as "Waiting for check"; with the switch OFF the app sends false and lists reach the saw exactly as before. Editing a list (a new revision too) clears the check; `list_set_done` has a new mode `check` (on = checked, off = check taken away) that writes the history line; a list confirmed from a template counts as checked only if the template itself is checked (same revision). Lists moved over by "Migrate lists" and snag lists keep `check_req` = false (they reach the saw as before). No new table or function, so no new GRANT lines. Safe to run twice (`add column if not exists`).
 - **The app does not use any of this until Garry presses "Migrate lists" (Admin PIN, Settings).** Until then it runs exactly as today, and makes no calls to these tables. So running this early is harmless.
 
 **If you deploy the code without running this first:** nothing changes on the floor (the switch is off). But "Migrate lists" would fail — so run this first anyway.
@@ -362,11 +362,14 @@ grant execute on function list_set_done(text,text,boolean,text,text,text) to ano
 -- differ now (changed on another screen), the save is refused with 'replaced list changed' unless
 -- p_list.replaces_force = true (the person said "archive it anyway") or p_list.replaces_keep = true (leave it with the saw).
 -- The answer says what happened to the old list: retired = 'archived' | 'already' (archived before) | 'missing' | 'kept'.
--- (4 Nov) "Checked by": a new list starts as waiting for its check (check_req) — except a list made from a template
--- (source 'template') at the template's current revision when that template is checked: it is checked by the template's
--- checker. Saving an existing list (an edit or a new revision) always clears the check: it must be checked again.
+-- (4 Nov) "Checked by" — only when the app sends p_list.check_req = true (the Settings switch "Lists must be checked before
+-- the saw" is ON; missing or false = no check needed, the list reaches the saw as before): a new list starts as waiting for
+-- its check — except a list made from a template (source 'template') at the template's current revision when that template
+-- is checked: it is checked by the template's checker. Saving an existing list (an edit or a new revision) always clears
+-- the check, and sets check_req to what the app sent (ON: it must be checked again; OFF: no check needed).
 create or replace function save_list_revision(p_list jsonb, p_lines jsonb, p_expect int, p_by text, p_reason text) returns jsonb language plpgsql as $$
 declare r lists%rowtype; e jsonb; nrev int; ids text[]:='{}'; ex list_lines%rowtype; isnew boolean:=false; o lists%rowtype; retired text; now_lines jsonb; t lists%rowtype;
+ chk boolean:=coalesce((p_list->>'check_req')::boolean,false);
 begin
  perform lists_switch_on();
  select * into r from lists where id=p_list->>'id' for update;
@@ -392,16 +395,16 @@ begin
     retired:='archived';
    end if;
   end if;
-  -- (4 Nov) a new list waits for its check; a copy of a CHECKED template (at that template's revision) is checked by the
-  -- template's checker
-  select * into t from lists where id=p_list->>'template_id' and is_template and checked_at is not null
+  -- (4 Nov) with the check switched on, a new list waits for its check; a copy of a CHECKED template (at that template's
+  -- revision) is checked by the template's checker
+  select * into t from lists where chk and id=p_list->>'template_id' and is_template and checked_at is not null
     and coalesce(p_list->>'source','')='template' and rev=(p_list->>'template_rev')::int;
   insert into lists(id,project_id,name,list_type,type_name,is_template,template_id,template_rev,wos,no_cut,no_fit,source,sdate,created_by,updated_by,check_req,checked_by,checked_at,log)
    values(p_list->>'id',p_list->>'project_id',coalesce(p_list->>'name','(no name)'),coalesce(p_list->>'list_type','house'),p_list->>'type_name',
      coalesce((p_list->>'is_template')::boolean,false),p_list->>'template_id',(p_list->>'template_rev')::int,
      coalesce(array(select jsonb_array_elements_text(p_list->'wos')),'{}'),coalesce((p_list->>'no_cut')::boolean,false),coalesce((p_list->>'no_fit')::boolean,false),
      coalesce(p_list->>'source','manual'),(p_list->>'sdate')::date,p_by,p_by,
-     true,t.checked_by,case when t.id is not null then now() end,
+     chk,t.checked_by,case when t.id is not null then now() end,
      jsonb_build_array(jsonb_build_object('at',now(),'by',p_by,'what','List created','why',p_reason)
        || case when coalesce(p_list->>'replaces','')<>'' then jsonb_build_object('replaces',p_list->>'replaces') else '{}'::jsonb end)
      || case when t.id is not null then jsonb_build_array(jsonb_build_object('at',now(),'by',p_by,'what','Checked',
@@ -458,7 +461,7 @@ begin
    deliver_by=case when p_list ? 'deliver_by' then (p_list->>'deliver_by')::date else deliver_by end,
    n_saw=(select count(*) from list_lines x where x.list_id=r.id and x.removed_rev is null and x.kind='saw'),
    n_fit=(select count(*) from list_lines x where x.list_id=r.id and x.removed_rev is null and x.kind='fit'),
-   check_req=case when isnew then check_req else true end,                 -- (4 Nov) an edit must be checked again
+   check_req=case when isnew then check_req else chk end,                  -- (4 Nov) switch ON: an edit must be checked again
    checked_by=case when isnew then checked_by else null end, checked_at=case when isnew then checked_at else null end,
    log=case when isnew then log else log||jsonb_build_array(jsonb_build_object('at',now(),'by',p_by,
      'what',case when nrev>r.rev then 'Revision '||nrev else 'List edited' end,'why',p_reason)) end

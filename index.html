@@ -701,6 +701,7 @@ function settingsFrom(s,prev){
   ['weekCaps','delx','delNotes','grps','pins','pod','lists','listWBs','listDone','delArchive','staff','listHold','holdLog','listRow','listStore','listStoreAt','saveIds'].forEach(k=>{if(s[k])r[k]=s[k];});
   if(s.hourScale&&s.hourScale.length)r.hourScale=s.hourScale;
   ['wcap','vcap','listLead','listDue'].forEach(k=>{if(s[k]>0)r[k]=s[k];});
+  if(typeof s.listChk==='boolean')r.listChk=s.listChk; // "Lists must be checked before the saw" (missing = keep what we had)
   if(s.exportBase&&typeof s.exportBase==='object')r.exportBase=s.exportBase;
   return r;
 }
@@ -725,6 +726,7 @@ function applyPlan(p){
   ['delx','delNotes','grps','pins','pod','lists','listWBs','listDone','delArchive','staff','listHold','holdLog','listRow','listStore','listStoreAt','saveIds'].forEach(k=>{if(s[k])DB[k]=s[k];});
   if(s.listLead>0)DB.listLead=s.listLead;
   if(s.listDue>0)DB.listDue=s.listDue;
+  if(typeof s.listChk==='boolean')DB.listChk=s.listChk;
   // Export Changes baseline: saved with the plan, so a refresh never resets it — only "Mark as applied" does
   if(s.exportBase){orig={...(s.exportBase.wk||{})};origStep={...(s.exportBase.st||{})};}
 }
@@ -1126,7 +1128,7 @@ async function saveDB(){
 }
 // Never let a tab close while an edit is unsaved, a save is in flight / being checked, or a retry is pending
 window.addEventListener('beforeunload',e=>{if(saveT||SAVING||DB.saveFailed||lqPending()){e.preventDefault();e.returnValue='';}});
-function fullSettings(){return{weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP,delx:DB.delx||[],delNotes:DB.delNotes||{},grps:DB.grps||{},pins:DB.pins||{},pod:DB.pod||{},lists:DB.lists||[],listWBs:DB.listWBs||{},listDone:DB.listDone||{},listLead:DB.listLead||5,delArchive:DB.delArchive||{},staff:DB.staff||[],listHold:DB.listHold||{},holdLog:DB.holdLog||[],listRow:DB.listRow||{},saveIds:DB.saveIds||[],exportBase:{wk:orig,st:origStep},...(DB.listDue>0?{listDue:DB.listDue}:{}),...(DB.listStore?{listStore:DB.listStore,listStoreAt:DB.listStoreAt||''}:{})};}
+function fullSettings(){return{weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP,delx:DB.delx||[],delNotes:DB.delNotes||{},grps:DB.grps||{},pins:DB.pins||{},pod:DB.pod||{},lists:DB.lists||[],listWBs:DB.listWBs||{},listDone:DB.listDone||{},listLead:DB.listLead||5,delArchive:DB.delArchive||{},staff:DB.staff||[],listHold:DB.listHold||{},holdLog:DB.holdLog||[],listRow:DB.listRow||{},saveIds:DB.saveIds||[],exportBase:{wk:orig,st:origStep},...(DB.listDue>0?{listDue:DB.listDue}:{}),listChk:!!DB.listChk,...(DB.listStore?{listStore:DB.listStore,listStoreAt:DB.listStoreAt||''}:{})};}
 /* Stage 3 switch: settings.listStore==='v2' → cutting lists live in their own tables (lists, list_lines…).
    Missing, blank or anything else (switch back writes 'v1') → today's lists in the planner record, untouched. */
 function V2(){return DB.listStore==='v2'||DB.listStore==='switching';} // 'switching' = a Switch back is rebuilding the old lists: screens still read the tables, the database takes no changes
@@ -2693,7 +2695,7 @@ async function lsSaveList(pl,lines,by,reason,opt){
     const cur=LST.l.get(pl.id),df=diffLines(cur?lsLinesOf(pl.id):[],lines,{listId:pl.id});
     if(cur&&lsSame(cur,pl,df))return{list:cur,diff:df,same:true}; // nothing changed: no save, no new revision for the saw
     try{
-      const out=await lsRpc('save_list_revision',{p_list:pl,p_lines:df.lines,p_expect:opt.expect!=null?opt.expect:cur?cur.version:null,p_by:lqBy(by),p_reason:reason||null});
+      const out=await lsRpc('save_list_revision',{p_list:{...pl,check_req:lsChkOn()},p_lines:df.lines,p_expect:opt.expect!=null?opt.expect:cur?cur.version:null,p_by:lqBy(by),p_reason:reason||null});
       LST.full.add(out.list.id);lsPut('lists',[out.list]);lsPut('list_lines',out.lines);
       return{list:out.list,diff:df,retired:out.retired||null};
     }catch(e){if(!/stale/.test(e.message)||i>=2||opt.expect!=null)throw e;await lsReloadList(pl.id);} // changed on another PC meanwhile: compare again
@@ -3249,6 +3251,8 @@ function lsPanelHTML(){
       :'Lists are kept inside the planner record (today\'s way). <b>Migrate lists</b> copies every list, line, tick and waiting line into their own tables, checks the counts match exactly, and only then switches over. A backup is saved and downloaded first. Admin PIN.')+'</p>'
     +(DB.listStore==='switching'?'<div style="color:#c0392b;font-weight:700;margin-bottom:8px">⚠ A switch back was started but did not finish — ticks on the floor are held on each device until it does. Finish it, or stay on the new lists.</div><button class="btn btn-s" id="ls-back">↩ Finish switch back</button> <button class="btn btn-g" id="ls-stay">Stay on the new lists</button>'
       :on?'<button class="btn btn-s" id="ls-back">↩ Switch back to old lists</button>':'<button class="btn btn-g" id="ls-mig">⇪ Migrate lists</button>')
+    +(on?'<div style="margin-top:12px"><label style="font-size:13px;font-weight:600"><input type="checkbox" id="ls-chk"'+(DB.listChk===true?' checked':'')+'> Lists must be checked before the saw</label>'
+      +'<div style="font-size:12px;color:var(--t3)">Off (normal): a list goes to the saw as soon as it is made. On: the saw only sees a list once someone with the Drawing office / Production Manager / Admin PIN has ticked ✓ Check, and a change must be checked again. Only lists made or changed while it is on need the check. Admin PIN.</div></div>':'')
     +'<div id="ls-msg" style="font-size:12px;margin-top:8px"></div></div>';
 }
 function lsBindPanel(){
@@ -3260,6 +3264,9 @@ function lsBindPanel(){
       if(r.ok){render();toast('Lists migrated — '+r.check.lists+' lists, '+r.check.lines+' lines, counts match ✓');}
       else{mg.disabled=false;msg('<b style="color:#c0392b">Counts did not match — NOT switched over.</b> Nothing changed for the floor.<br>'+r.check.bad.slice(0,20).map(b=>escA(b.project+' — '+b.name)+': old '+b.old.n+'/'+b.old.done+'/'+b.old.wait+' · new '+b.now.n+'/'+b.now.done+'/'+b.now.wait+' (lines/done/waiting)').join('<br>'));}})
     .catch(e=>{mg.disabled=false;window.LSMIG={ok:false,err:e.message};msg('<b style="color:#c0392b">Migration stopped: '+escA(e.message)+'</b> — the switch was not set.');});};
+  const ck=document.getElementById('ls-chk');
+  if(ck)ck.onchange=()=>{const v=ck.checked;if(!lsAdminOk()){ck.checked=!v;return;}
+    DB.listChk=v;sched();render();toast(v?'Lists must now be checked before the saw sees them':'Lists go to the saw without a check');};
   const sy=document.getElementById('ls-stay');
   if(sy)sy.onclick=()=>{if(!lsAdminOk())return;DB.listStore='v2';clearTimeout(saveT);saveDB().then(()=>{render();toast(DB.saveFailed?'Not saved yet — retrying':'Back on the new lists ✓');});};
   const bk=document.getElementById('ls-back');
@@ -3385,8 +3392,8 @@ function lsHomeHTML(){
   const prog=(l,m)=>{const n=m==='saw'?l.saw:l.fit;if(!n)return(m==='saw'?l.noCut:l.noFit)?'n/a':'—';if(listDone(l.id)[m])return'✓';const t=Object.values(rowTicks(l.id)).filter(x=>x.m===m).length;return t+'/'+n;};
   const row=l=>{const sup=lsSupersededBy(l);const[st,col]=sup?['Superseded (view only)','#8e99ab']:LS_STATE[lsState(l)];return `<tr data-lhrow="${escA(l.id)}"><td><b>${escA(l.name)}</b>${sup?`<div class="lh-sup" style="font-size:11px;color:#5b6b82">replaced by "${escA(sup.name)}"</div>`:''}${l.tpl?' <span class="lst-chip" style="background:#efe7ff;color:#5b21b6">TEMPLATE'+(l.typeName?' · '+escA(l.typeName):'')+'</span>':''}</td>
     <td>${escA(LS_KINDS[l.ltype]||l.ltype||'')}${l.templateId?`<div style="font-size:11px;color:#5b21b6">${escA(lsTplInfo(l))}</div>`:''}</td><td>${(l.wos||[]).map(w=>`<span class="lst-chip">${escA(w)}</span>`).join('')||'<span style="color:var(--t3)">—</span>'}</td>
-    <td>${(+l.rev||1)>1?`<span class="lst-chip" style="background:#fff4d6;color:#7a5200">Rev ${+l.rev}</span>`:'Rev 1'}</td><td><span style="color:${col};font-weight:700">${st}</span>${!l.archived&&!sup?'<div>'+(l.tpl&&l.checkReq&&!l.checkedAt?'<span class="chk-wait">Not checked</span>':lsCheckChip(l))+'</div>':''}${(t=>t.length?'<div>'+lsTbcChip(t)+'</div>':'')(l.archived?[]:lsTbc(lsView(l.id).rows))}</td><td>🪚 ${prog(l,'saw')}</td><td>🧰 ${prog(l,'fit')}</td>
-    <td class="lh-act">${!l.archived&&!sup&&l.checkReq&&!l.checkedAt?`<button class="btn btn-g" data-lhchk="${escA(l.id)}" style="padding:2px 8px;font-size:11px" title="Drawing office / Production Manager / Admin PIN — the saw sees the list once it is checked">✓ Check</button> `:''}${sup?'':`<button class="btn btn-s" data-lhedit="${escA(l.id)}" style="padding:2px 8px;font-size:11px">✎ Edit</button> `}<button class="btn btn-s" data-lhview="${escA(l.id)}" style="padding:2px 8px;font-size:11px">View</button>${l.archived?'':` <button class="btn btn-s" data-lhastpl="${escA(l.id)}" style="padding:2px 8px;font-size:11px" title="Save this list as a template of the project (ticks are not copied)">📐 Save as template</button>`}${l.tpl?` <button class="btn btn-s" data-lhhist="${escA(l.id)}" style="padding:2px 8px;font-size:11px">🕘 History</button>`:''}${!l.tpl&&!l.archived&&lsState(l)==='draft'?` <button class="btn btn-s" data-lhsend="${escA(l.id)}" style="padding:2px 8px;font-size:11px">➜ Send to saw</button>`:''}${l.archived?'':` <button class="btn btn-s" data-lharc="${escA(l.id)}" style="padding:2px 8px;font-size:11px;color:var(--red);border-color:var(--red)">Archive</button>`}</td></tr>`;};
+    <td>${(+l.rev||1)>1?`<span class="lst-chip" style="background:#fff4d6;color:#7a5200">Rev ${+l.rev}</span>`:'Rev 1'}</td><td><span style="color:${col};font-weight:700">${st}</span>${!l.archived&&!sup?'<div>'+(lsChkOn()&&l.tpl&&l.checkReq&&!l.checkedAt?'<span class="chk-wait">Not checked</span>':lsCheckChip(l))+'</div>':''}${(t=>t.length?'<div>'+lsTbcChip(t)+'</div>':'')(l.archived?[]:lsTbc(lsView(l.id).rows))}</td><td>🪚 ${prog(l,'saw')}</td><td>🧰 ${prog(l,'fit')}</td>
+    <td class="lh-act">${!l.archived&&!sup&&lsChkOn()&&l.checkReq&&!l.checkedAt?`<button class="btn btn-g" data-lhchk="${escA(l.id)}" style="padding:2px 8px;font-size:11px" title="Drawing office / Production Manager / Admin PIN — the saw sees the list once it is checked">✓ Check</button> `:''}${sup?'':`<button class="btn btn-s" data-lhedit="${escA(l.id)}" style="padding:2px 8px;font-size:11px">✎ Edit</button> `}<button class="btn btn-s" data-lhview="${escA(l.id)}" style="padding:2px 8px;font-size:11px">View</button>${l.archived?'':` <button class="btn btn-s" data-lhastpl="${escA(l.id)}" style="padding:2px 8px;font-size:11px" title="Save this list as a template of the project (ticks are not copied)">📐 Save as template</button>`}${l.tpl?` <button class="btn btn-s" data-lhhist="${escA(l.id)}" style="padding:2px 8px;font-size:11px">🕘 History</button>`:''}${!l.tpl&&!l.archived&&lsState(l)==='draft'?` <button class="btn btn-s" data-lhsend="${escA(l.id)}" style="padding:2px 8px;font-size:11px">➜ Send to saw</button>`:''}${l.archived?'':` <button class="btn btn-s" data-lharc="${escA(l.id)}" style="padding:2px 8px;font-size:11px;color:var(--red);border-color:var(--red)">Archive</button>`}</td></tr>`;};
   return `<div class="exp-panel" id="lh">
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
       <div style="font-size:15px;font-weight:700;color:#14335c">📋 Lists — ${ls0.length}</div>
@@ -3502,14 +3509,18 @@ function waitListHTML(){
    Production Manager or Admin PIN ticks "✓ Check" (who and when are recorded; the saw sees "Issued by X, checked by Y").
    Editing a checked list takes the check away — the database does that in the same step as the save. A list confirmed
    from a CHECKED template counts as checked (the database copies the template's check). Lists moved over by "Migrate lists"
-   and snag lists don't need a check. Waiting lists show in "Cutting lists to issue" and on the Lists table. */
-function lsCheckInfo(l){return{need:!!(l&&l.checkReq),ok:!!(l&&l.checkedAt),by:(l&&l.checkedBy)||'',at:(l&&l.checkedAt)||''};}
-function lsWaitCheck(l){return V2()&&!!l&&!l.tpl&&!l.archived&&!!l.checkReq&&!l.checkedAt;}
-function lsWaitCheckLists(){return V2()?lists().filter(l=>lsWaitCheck(l)&&!listFinished(l)):[];}
-function lsCheckChip(l){if(!V2()||!l)return'';const c=lsCheckInfo(l);
+   and snag lists don't need a check. Waiting lists show in "Cutting lists to issue" and on the Lists table.
+   Garry, 4 Nov (initial roll-out): all of this sits behind the Settings switch "Lists must be checked before the saw"
+   (settings.listChk, default OFF). OFF = no Check button, no "Waiting for check", no check chips — lists reach the saw
+   as before, and the app tells the database a save needs no check (check_req false). */
+function lsChkOn(){return V2()&&DB.listChk===true;}
+function lsCheckInfo(l){if(!lsChkOn())return{need:false,ok:false,by:'',at:''};return{need:!!(l&&l.checkReq),ok:!!(l&&l.checkedAt),by:(l&&l.checkedBy)||'',at:(l&&l.checkedAt)||''};}
+function lsWaitCheck(l){return lsChkOn()&&!!l&&!l.tpl&&!l.archived&&!!l.checkReq&&!l.checkedAt;}
+function lsWaitCheckLists(){return lsChkOn()?lists().filter(l=>lsWaitCheck(l)&&!listFinished(l)):[];}
+function lsCheckChip(l){if(!lsChkOn()||!l)return'';const c=lsCheckInfo(l);
   if(c.ok)return `<span class="chk-ok" title="Checked ${escA(fmt(String(c.at).slice(0,10)))}${c.by?' by '+escA(c.by):''}">✓ Checked${c.by?' · '+escA(c.by):''}</span>`;
   return c.need?'<span class="chk-wait" title="The saw does not see this list until it is checked (Drawing office / Production Manager / Admin PIN)">Waiting for check</span>':'';}
-function lsIssuedHTML(l){if(!V2()||!l||!l.checkReq||!l.checkedAt)return'';return `<div class="chk-line">Issued by <b>${escA(l.createdBy||'?')}</b>, checked by <b>${escA(l.checkedBy||'?')}</b></div>`;}
+function lsIssuedHTML(l){if(!lsChkOn()||!l||!l.checkReq||!l.checkedAt)return'';return `<div class="chk-line">Issued by <b>${escA(l.createdBy||'?')}</b>, checked by <b>${escA(l.checkedBy||'?')}</b></div>`;}
 function lsPinOk(what){ // the Drawing office / Production Manager / Admin PIN (remembered on this device, like templates)
   if(['prod','design'].includes(ROLE))return true;
   const p=pins(),ok=v=>!!v&&[p.prod,p.design,p.admin].includes(v);
@@ -3520,7 +3531,7 @@ function lsPinOk(what){ // the Drawing office / Production Manager / Admin PIN (
   ls.set('wpfEditPin',v.trim());return true;
 }
 function lsCheck(id,on){
-  const l=lsList(id);if(!l)return;
+  const l=lsList(id);if(!l||!lsChkOn())return;
   if(!lsPinOk(on?'Checking a list':'Taking a check away'))return;
   if(on){const rows=lsView(id,true).rows,n=k=>rows.filter(r=>r.k===k).length,tbc=lsTbc(rows);
     if(!confirm('Check "'+l.name+'"'+(l.project?' ('+l.project+')':'')+' — Rev '+(+l.rev||1)+'?\n\n'+n('saw')+' saw · '+n('fit')+' stores · '+n('buy')+' bought in'+(tbc.length?'\n⚠ spec TBC: '+tbc.join(', ')+' (the saw is not stopped by this)':'')+'\n\nOnce checked the saw sees it.'))return;}
@@ -4570,7 +4581,7 @@ async function lsCreateFromTpl(tid,wos,name,by,opt){
   if(!opt.fixedFor){try{const res=await lsSaveList(pl,lines,by,why);return res.list;}
     catch(e){const k=lsOneErr(e);if(k)throw new Error(lsGotMsg(k.wo,await lsOneList(k)));throw e;}}
   try{
-    const out=await lsRpc('save_list_revision',{p_list:pl,p_lines:diffLines([],lines,{listId:id}).lines,p_expect:null,p_by:lqBy(by),p_reason:why});
+    const out=await lsRpc('save_list_revision',{p_list:{...pl,check_req:lsChkOn()},p_lines:diffLines([],lines,{listId:id}).lines,p_expect:null,p_by:lqBy(by),p_reason:why});
     LST.full.add(out.list.id);lsPut('lists',[out.list]);lsPut('list_lines',out.lines);return out.list;
   }catch(e){
     if(e.status===409||/stale|duplicate key|23505/i.test(e.message)){await lsReloadList(id);if(mine())return already(mine());} // made on another screen a moment ago
@@ -5666,7 +5677,7 @@ function renderWorkList(app,mode){
     <div class="wl-h"><div style="display:flex;gap:10px;align-items:flex-start">${!isDone?`<button class="wl-chk${wlSel.has(l.id)?' on':''}" data-wlsel="${escA(l.id)}" title="Select for batch cutting across houses">${wlSel.has(l.id)?'✓':''}</button>`:''}<div><span class="wn">${escA(l.name)}</span> <span class="wd">${escA(l.project||'')}${(c=>c&&c!==l.project?' · '+escA(c):'')(listCust(l))}</span><div style="margin-top:3px">${woChips(l)}</div></div></div>
     ${due?(od=>`<span class="wl-due"${od?' style="background:#c0392b;color:#fff"':''}>${od?'⚠ OVERDUE — ':''}${mode==='saw'?'CUT':'PICK'} BY ${fmt(listDeadline(l))} · DELIVERS ${fmt(due)}</span>`)(!isDone&&listOverdue(l)):'<span class="wd">no delivery date yet</span>'}</div>
     ${relOnly?`<div class="rel-note">▶ MATERIAL HAS ARRIVED — ${relRows(l)} row${relRows(l)!==1?'s':''} released from the waiting list. The rest of this house was done ${new Date(dn.at).toLocaleDateString('en-IE')}${dn.by?' by '+escA(dn.by):''}.</div>`:''}
-    ${lsRevBannerBoth(l)}${lsRevBanner(l,mode)}${V2()?(t=>t.length||l.checkedAt?`<div class="chk-bar">${lsIssuedHTML(l)}${lsTbcChip(t,true)}</div>`:'')(lsTbc(lsView(l.id).rows)):''}
+    ${lsRevBannerBoth(l)}${lsRevBanner(l,mode)}${V2()?(t=>t.length||lsIssuedHTML(l)?`<div class="chk-bar">${lsIssuedHTML(l)}${lsTbcChip(t,true)}</div>`:'')(lsTbc(lsView(l.id).rows)):''}
     ${nh?`<div class="hold-note">⏸ ${nh} row${nh!==1?'s':''} waiting on ${mode==='saw'?'material':'stock'} — ${mode==='saw'?'cut':'pick'} the rest and tap ${cfg.done}; the waiting rows come back when released.</div>`:''}
     ${listTableHTML(l,mode,{relOnly,tick:!isDone})}
     <div class="wl-act">${isDone?`<span class="wl-donelbl">${cfg.done} — ${new Date(dn.at).toLocaleDateString('en-IE')} ${hhmm(dn.at)}${dn.by?' by '+escA(dn.by):''}</span><button class="wl-undo" data-wlundo="${escA(l.id)}">Undo</button>`

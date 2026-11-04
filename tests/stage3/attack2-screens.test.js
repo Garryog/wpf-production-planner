@@ -143,7 +143,6 @@ const pinAsked = p => p.evaluate(() => window.__p.filter(m => /PIN/.test(m)).len
     document.querySelectorAll('.pod-ovl').forEach(o => o.remove()); return { ...out, x: window.__x || 0 };
   });
   rec('H1 apostrophes / HTML / emoji in project, owner, material, template and list names: shown as text everywhere, nothing runs', nasty.x === 0 && nasty.home && nasty.mat && nasty.proj && nasty.ed, JSON.stringify(nasty));
-  D.listSetDone(S.db, 'L1', 'check', true, 'Des', null, null); // (4 Nov) L1 was edited above, so the saw only has it once it is checked again
   const sw2 = await F.dev(browser, S, 'saw');
   const sx = await sw2.page.evaluate(() => ({ x: window.__x || 0, t: document.body.innerText.includes(`O'Grady <img`) }));
   rec('H2 saw screen (card + waiting strip owner) with the nasty names: text only', sx.x === 0 && sx.t, JSON.stringify(sx));

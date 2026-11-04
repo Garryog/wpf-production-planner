@@ -96,7 +96,7 @@ const made = (S, wo) => S.db.t.lists.filter(l => (l.wos || []).includes(wo) && !
     rec('after Apply: the panel shows under the import result, with the new WO', /Import applied/.test(r.after) && /Cutting lists to issue — 8/.test(r.after) && /WO-26-11/.test(r.after), r.after.slice(0, 300));
     await t.page.evaluate(() => document.querySelector('[data-lticonf="WO-26-11"]').click()); await F.sleep(700);
     const after = await t.page.evaluate(() => document.getElementById('iprev').innerText);
-    rec('confirm from the import screen: list made, the import summary stays', !!D.find(S.db, 'lists', 'WO:WO-26-11') && /Import applied/.test(after) && /Cutting lists to issue — 8/.test(after) && /1 waiting for check/.test(after), after.slice(0, 200)) // (4 Nov) the new list waits for its check: 7 to make + 1 to check;
+    rec('confirm from the import screen: list made, the import summary stays', !!D.find(S.db, 'lists', 'WO:WO-26-11') && /Import applied/.test(after) && /Cutting lists to issue — 7/.test(after), after.slice(0, 200));
     await t.page.evaluate(() => render());
     rec('a redraw of the import tab keeps the panel', /Cutting lists to issue/.test(await t.page.evaluate(() => document.getElementById('iprev').innerText)));
     await t.close();
