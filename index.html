@@ -357,6 +357,15 @@ details.lti-other{margin-bottom:14px}details.lti-other>summary{cursor:pointer;fo
 .drv-pod .pbtn:disabled{background:#c6cdd8}
 .drv-done-banner{background:#d2f2de;border:1px solid #b3e0c4;color:#0d6e46;border-radius:10px;padding:14px;font-size:15px;font-weight:700;text-align:center;margin-top:10px}
 .hdr-role{margin-left:12px;font-size:13px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.35);color:#fff;border-radius:8px;padding:10px 14px;cursor:pointer;white-space:nowrap}
+.ph-chip{display:inline-block;font-size:10px;font-weight:800;background:#eaf2ff;color:#1a56db;border:1px solid #9cbce8;border-radius:10px;padding:1px 7px;margin-left:4px;cursor:pointer;white-space:nowrap}
+.ph-strip{display:flex;gap:10px;flex-wrap:wrap;padding:10px 14px}.ph-grid{display:flex;gap:10px;flex-wrap:wrap}.ph-cell{display:flex;flex-direction:column;gap:3px;align-items:flex-start}
+.ph-th{all:unset;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;width:150px;height:150px;border:2px solid #9cbce8;border-radius:8px;background:#f4f7fb;overflow:hidden}
+.ph-th img{width:100%;height:100%;object-fit:cover}.ph-pdf{font-weight:800;color:#14335c;font-size:14px}
+.ph-ovl{position:fixed;inset:0;background:#000;z-index:700;display:flex;flex-direction:column}
+.ph-bar{display:flex;gap:8px;align-items:center;padding:8px 10px;background:#14335c;color:#fff;flex-wrap:wrap}
+.ph-bar button,.ph-bar a{background:#fff;color:#14335c;border:none;border-radius:8px;padding:10px 14px;font-size:16px;font-weight:800;cursor:pointer;text-decoration:none;min-width:44px}
+.ph-scr{flex:1;overflow:auto;touch-action:pinch-zoom pan-x pan-y}.ph-scr img{display:block;margin:0 auto;max-width:none}
+@media(max-width:700px){.ph-th{width:120px;height:120px}}
 .pod-ovl{position:fixed;inset:0;background:rgba(12,20,34,.8);z-index:600;display:flex;align-items:center;justify-content:center;padding:20px}
 .pod-ovl .pod-in{background:#fff;border-radius:12px;padding:18px;max-width:900px;max-height:86vh;overflow:auto}
 .pod-ovl img{max-width:260px;border-radius:8px;margin:6px;border:1px solid var(--border)}
@@ -733,6 +742,7 @@ function settingsFrom(s,prev){
   if(s.hourScale&&s.hourScale.length)r.hourScale=s.hourScale;
   ['wcap','vcap','listLead','listDue'].forEach(k=>{if(s[k]>0)r[k]=s[k];});
   if(typeof s.listChk==='boolean')r.listChk=s.listChk; // "Lists must be checked before the saw" (missing = keep what we had)
+  if(typeof s.photoLists==='boolean')r.photoLists=s.photoLists; // "Photo lists allowed" (missing = ON)
   if(s.exportBase&&typeof s.exportBase==='object')r.exportBase=s.exportBase;
   return r;
 }
@@ -758,6 +768,7 @@ function applyPlan(p){
   if(s.listLead>0)DB.listLead=s.listLead;
   if(s.listDue>0)DB.listDue=s.listDue;
   if(typeof s.listChk==='boolean')DB.listChk=s.listChk;
+  if(typeof s.photoLists==='boolean')DB.photoLists=s.photoLists;
   // Export Changes baseline: saved with the plan, so a refresh never resets it — only "Mark as applied" does
   if(s.exportBase){orig={...(s.exportBase.wk||{})};origStep={...(s.exportBase.st||{})};}
 }
@@ -1160,7 +1171,7 @@ async function saveDB(){
 }
 // Never let a tab close while an edit is unsaved, a save is in flight / being checked, or a retry is pending
 window.addEventListener('beforeunload',e=>{if(saveT||SAVING||DB.saveFailed||lqPending()){e.preventDefault();e.returnValue='';}});
-function fullSettings(){return{weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP,delx:DB.delx||[],delNotes:DB.delNotes||{},grps:DB.grps||{},pins:DB.pins||{},pod:DB.pod||{},lists:DB.lists||[],listWBs:DB.listWBs||{},listDone:DB.listDone||{},listLead:DB.listLead||5,delArchive:DB.delArchive||{},staff:DB.staff||[],listHold:DB.listHold||{},holdLog:DB.holdLog||[],listRow:DB.listRow||{},saveIds:DB.saveIds||[],exportBase:{wk:orig,st:origStep},...(DB.listDue>0?{listDue:DB.listDue}:{}),...(typeof DB.listChk==='boolean'?{listChk:DB.listChk}:{}),...(DB.listStore?{listStore:DB.listStore,listStoreAt:DB.listStoreAt||''}:{})};}
+function fullSettings(){return{weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP,delx:DB.delx||[],delNotes:DB.delNotes||{},grps:DB.grps||{},pins:DB.pins||{},pod:DB.pod||{},lists:DB.lists||[],listWBs:DB.listWBs||{},listDone:DB.listDone||{},listLead:DB.listLead||5,delArchive:DB.delArchive||{},staff:DB.staff||[],listHold:DB.listHold||{},holdLog:DB.holdLog||[],listRow:DB.listRow||{},saveIds:DB.saveIds||[],exportBase:{wk:orig,st:origStep},...(DB.listDue>0?{listDue:DB.listDue}:{}),...(typeof DB.listChk==='boolean'?{listChk:DB.listChk}:{}),...(typeof DB.photoLists==='boolean'?{photoLists:DB.photoLists}:{}),...(DB.listStore?{listStore:DB.listStore,listStoreAt:DB.listStoreAt||''}:{})};}
 /* Stage 3 switch: settings.listStore==='v2' → cutting lists live in their own tables (lists, list_lines…).
    Missing, blank or anything else (switch back writes 'v1') → today's lists in the planner record, untouched. */
 function V2(){return DB.listStore==='v2'||DB.listStore==='switching';} // 'switching' = a Switch back is rebuilding the old lists: screens still read the tables, the database takes no changes
@@ -1753,7 +1764,7 @@ function renderBoard(app){
   const lnTd=todayLocal(),lnMap=V2()?new Map(listsNeeded().filter(lsProcessed).map(o=>[o.wo,lsNeedInfo(o,lnTd)])):null;
   // spec TBC on any live list of the job (Garry, 4 Nov): a red chip on the row — it never blocks anything
   const tbcMap=V2()?(()=>{const m=new Map();lists().forEach(l=>{const t=lsTbc(lsView(l.id).rows);if(t.length)(l.wos||[]).forEach(w=>m.set(w,[...new Set([...(m.get(w)||[]),...t])]));});return m;})():null;
-  const lnChip=o=>lsTbcChip(tbcMap&&tbcMap.get(o.wo))+(n=>n?`<span class="ls-nochip${n.late?' late':''}" title="No cutting list yet — ${n.late?'LATE, was due':'due by'} ${n.due?fmt(n.due):'—'}">📋 no list</span>`:'')(lnMap&&lnMap.get(o.wo));
+  const lnChip=o=>lsTbcChip(tbcMap&&tbcMap.get(o.wo))+(phHas(o)?`<span class="ph-chip" data-phwo="${escA(o.wo)}" title="A photo of the paper list is attached — tap to see it">📷 photo list</span>`:'')+(n=>n?`<span class="ls-nochip${n.late?' late':''}" title="No cutting list yet — ${n.late?'LATE, was due':'due by'} ${n.due?fmt(n.due):'—'}">📋 no list</span>`:'')(lnMap&&lnMap.get(o.wo));
   const rowHTML=(o,member,sep)=>`<tr class="${o.colour?'c-'+o.colour:''}${o.hl?' hl-row':''}${sep?' grp-start':''}${member?' grp-member':''}" draggable="true" data-wo="${escA(o.wo)}">
           <td style="text-align:center">${member
             ?`<button class="grm-btn" data-grm="${escA(o.wo)}" title="Take this WO out of the group">×</button>`
@@ -3309,7 +3320,9 @@ function lsPanelHTML(){
     +(DB.listStore==='switching'?'<div style="color:#c0392b;font-weight:700;margin-bottom:8px">⚠ A switch back was started but did not finish — ticks on the floor are held on each device until it does. Finish it, or stay on the new lists.</div><button class="btn btn-s" id="ls-back">↩ Finish switch back</button> <button class="btn btn-g" id="ls-stay">Stay on the new lists</button>'
       :on?'<button class="btn btn-s" id="ls-back">↩ Switch back to old lists</button>':'<button class="btn btn-g" id="ls-mig">⇪ Migrate lists</button>')
     +(on?'<div style="margin-top:12px"><label style="font-size:13px;font-weight:600"><input type="checkbox" id="ls-chk"'+(DB.listChk===true?' checked':'')+'> Lists must be checked before the saw</label>'
-      +'<div style="font-size:12px;color:var(--t3)">Off (normal): a list goes to the saw as soon as it is made. On: the saw only sees a list once someone with the Drawing office / Production Manager / Admin PIN has ticked ✓ Check, and a change must be checked again. Only lists made or changed while it is on need the check. Admin PIN.</div></div>':'')
+      +'<div style="font-size:12px;color:var(--t3)">Off (normal): a list goes to the saw as soon as it is made. On: the saw only sees a list once someone with the Drawing office / Production Manager / Admin PIN has ticked ✓ Check, and a change must be checked again. Only lists made or changed while it is on need the check. Admin PIN.</div></div>'
+      +'<div style="margin-top:12px"><label style="font-size:13px;font-weight:600"><input type="checkbox" id="ls-photo"'+(DB.photoLists!==false?' checked':'')+'> Photo lists allowed</label>'
+      +'<div style="font-size:12px;color:var(--t3)">On (normal for now): a job with no typed list can have a photo of its paper list attached ("📷 Attach photo of list"); the saw and stores open it and tick the job once. Off: the attach buttons go — photos already attached still show. A stop-gap until every list is typed. Admin PIN.</div></div>':'')
     +'<div id="ls-msg" style="font-size:12px;margin-top:8px"></div></div>';
 }
 function lsBindPanel(){
@@ -3324,6 +3337,9 @@ function lsBindPanel(){
   const ck=document.getElementById('ls-chk');
   if(ck)ck.onchange=()=>{const v=ck.checked;if(!lsAdminOk()){ck.checked=!v;return;}
     DB.listChk=v;sched();render();toast(v?'Lists must now be checked before the saw sees them':'Lists go to the saw without a check');};
+  const pc=document.getElementById('ls-photo');
+  if(pc)pc.onchange=()=>{const v=pc.checked;if(!lsAdminOk()){pc.checked=!v;return;}
+    DB.photoLists=v;sched();render();toast(v?'Photo lists allowed — "📷 Attach photo of list" is back':'Photo lists switched off — no more photos can be attached (the ones already attached still show)');};
   const sy=document.getElementById('ls-stay');
   if(sy)sy.onclick=()=>{if(!lsAdminOk())return;DB.listStore='v2';clearTimeout(saveT);saveDB().then(()=>{render();toast(DB.saveFailed?'Not saved yet — retrying':'Back on the new lists ✓');});};
   const bk=document.getElementById('ls-back');
@@ -3609,7 +3625,7 @@ function lsCheck(id,on){
    strong suggestion, one row at a time, each with its own result (a failed row keeps a Retry). Nothing is made — and
    nothing reaches the saw — until someone confirms. Shown after an import's Apply, on the office Lists tab, the
    Production Manager's Lists tab and the Drawing office home. */
-const LTI={pick:{},open:'',res:{},busy:new Set(),done:[],all:false,showNA:false};
+const LTI={pick:{},open:'',res:{},busy:new Set(),done:[],all:false,showNA:false,showPh:false};
 function lsSuggest(o){return suggestTpl(o,lsCache().all.filter(l=>l.tpl&&!l.archived),lsProjects());}
 function lsFuTds(l){ // Lists home: the tagged jobs' Floor and Unit in their own columns (Garry, 4 Nov)
   const os=(l.wos||[]).map(w=>DB.orders.find(x=>x.wo===w)).filter(Boolean),u=f=>[...new Set(os.map(f).filter(Boolean))].map(escA).join(', ')||'<span style="color:var(--t3)">—</span>';
@@ -3648,7 +3664,7 @@ const LTI_COL={strong:['#0d6e46','#e7f6ec','#9fd8b4','✓ Suggested'],weak:['#7a
 function ltiTplName(id){const t=lsList(id);return t?(t.typeName||t.name)+' · Rev '+(+t.rev||1):'';}
 function ltiInner(){
   const rows=ltiRows(),green=rows.filter(r=>r.lvl==='strong'&&r.tid&&!LTI.busy.has(r.o.wo)),wc=lsWaitCheckLists().sort((a,b)=>(listDueKey(a)||'9999').localeCompare(listDueKey(b)||'9999'));
-  const na=DB.orders.filter(o=>lsNA(o)&&!woFinished(o)),show=LTI.all?rows:rows.slice(0,40);
+  const na=DB.orders.filter(o=>lsNA(o)&&!woFinished(o)),phs=phJobs(),show=LTI.all?rows:rows.slice(0,40);
   const btn='font-size:12px;padding:6px 10px;margin:2px 4px 2px 0';
   const row=r=>{const o=r.o,w=o.wo,[c,bg,bd,lbl]=LTI_COL[r.lvl],busy=LTI.busy.has(w),err=(LTI.res[w]||{}).err;
     const pid=r.s.pid,alts=pid?(r.s.alts.length?r.s.alts:lsTemplatesFor(pid).map(t=>t.id)):[];
@@ -3661,6 +3677,7 @@ function ltiInner(){
         ${r.tid?`<button class="btn btn-g" data-lticonf="${escA(w)}" style="${btn}">✓ Confirm</button>`:''}
         ${pid?`<button class="btn btn-s" data-ltichg="${escA(w)}" style="${btn}">${LTI.open===w?'✕ Close':'Change template ▾'}</button>`:''}
         ${r.tid?'':`<button class="btn btn-g" data-ltistd="${escA(w)}" style="${btn}" title="Opens the editor with the house heading and the standard sub-headings ready to fill">＋ New list – standard layout</button>`}
+        ${phOn()?`<button class="btn btn-s" data-ltiph="${escA(w)}" style="${btn}" title="Phone camera or a file (photo or PDF) of the paper list — the saw and stores open it">📷 Attach photo of list</button>`:''}
         <button class="btn btn-s" data-ltina="${escA(w)}|none" style="${btn}">No list needed</button></div>`}
       ${!busy&&pid&&LTI.open===w?`<div class="lti-act"><select data-ltisel="${escA(w)}" style="${LS_INP};max-width:100%"><option value="">— pick a template (${escA(lsProjName(pid))}) —</option>${alts.map(id=>`<option value="${escA(id)}"${id===r.tid?' selected':''}>${escA(ltiTplName(id))}</option>`).join('')}<option value="__type">✍ Type a list instead…</option></select></div>`:''}
       ${!busy&&r.xl.length?`<div class="lti-act"><span style="font-size:12px;color:#14335c;font-weight:700;margin-right:6px">📥 From an Excel upload:</span>${r.xl.map(l=>`<button class="btn btn-s" data-ltixl="${escA(w)}|${escA(l.id)}" style="${btn};overflow-wrap:anywhere;text-align:left;min-height:36px">✓ Use "${escA(l.name)}"${l.project?' ('+escA(l.project)+')':''}</button>`).join('')}</div>`:''}
@@ -3683,6 +3700,8 @@ function ltiInner(){
     ${LTI.done.length?`<div class="lti-done">${LTI.done.slice(0,12).map(d=>`<div>✓ <b>${escA(d.wo)}</b> — "${escA(d.name)}"${d.tpl?' from '+escA(d.tpl):''}${d.already?' <i>(already made on another screen — no second list)</i>':''}</div>`).join('')}${LTI.done.length>12?`<div>…and ${LTI.done.length-12} more</div>`:''}<button class="btn btn-s" id="lti-dx" style="font-size:11px;padding:2px 8px;margin-top:4px">Clear</button></div>`:''}
     ${show.map(row).join('')}
     ${rows.length>show.length?`<button class="btn btn-s" id="lti-more" style="font-size:12px;margin-top:6px">Show all ${rows.length}</button>`:''}
+    ${phs.length?`<div style="margin-top:8px;font-size:12px"><button class="btn btn-s" id="lti-ph" style="font-size:11px;padding:3px 9px">${LTI.showPh?'▲':'▼'} 📷 Photo lists (${phs.length})</button>
+      ${LTI.showPh?phs.map(o=>`<div class="lti-nar"><b>${escA(o.wo)}</b> ${escA(o.title||'')} — ${phList(o).length} photo${phList(o).length!==1?'s':''} · ${escA(phList(o)[0].by||'')} ${fmt(phList(o)[0].at)} <button class="btn btn-s" data-phwo="${escA(o.wo)}" style="font-size:11px;padding:2px 8px">Open</button></div>`).join(''):''}</div>`:''}
     ${na.length?`<div style="margin-top:8px;font-size:12px"><button class="btn btn-s" id="lti-na" style="font-size:11px;padding:3px 9px">${LTI.showNA?'▲':'▼'} Cleared without a planner list (${na.length})</button>
       ${LTI.showNA?na.map(o=>`<div class="lti-nar"><b>${escA(o.wo)}</b> ${escA(o.title||'')} — no list needed · ${escA(o.listNA.by||'')} ${o.listNA.at?fmt(o.listNA.at):''} <button class="btn btn-s" data-ltiundo="${escA(o.wo)}" style="font-size:11px;padding:2px 8px">Undo</button></div>`).join(''):''}</div>`:''}
   </div>`;
@@ -3745,6 +3764,8 @@ function ltiBind(){
     officeWho(by=>{delete o.listNA;logEdit(o,'Cutting list: "no list needed" undone',by);sched();ltiAfter();});});
   q('#lti-more',b=>b.onclick=()=>{LTI.all=true;ltiAfter();});
   q('#lti-na',b=>b.onclick=()=>{LTI.showNA=!LTI.showNA;ltiAfter();});
+  q('#lti-ph',b=>b.onclick=()=>{LTI.showPh=!LTI.showPh;ltiAfter();});
+  q('[data-ltiph]',b=>b.onclick=()=>phPick(b.dataset.ltiph,ltiAfter));
   q('#lti-dx',b=>b.onclick=()=>{LTI.done=[];ltiAfter();});
   ltiLinkBind();
 }
@@ -5187,7 +5208,7 @@ function listsNeeded(){ // WOs scheduled to deliver inside the lead time with NO
   const v2=V2();
   const lim=v2?lsAddWorkDays(todayLocal(),listLead()):new Date(Date.now()+listLead()*86400000).toISOString().slice(0,10); // V2: lead in working days (Christmas, bank holidays)
   return DB.orders.filter(o=>{
-    if(tagged.has(o.wo)||o.delDelivAt||o.delDone||woFinished(o)||isOnHold(o))return false;
+    if(tagged.has(o.wo)||phHas(o)||o.delDelivAt||o.delDone||woFinished(o)||isOnHold(o))return false; // a photo of the list counts as a list (Garry, 4 Nov)
     if(v2&&lsNA(o))return false;                    // V2: marked "No list needed"
     const planned=o.delv&&o.delDay;                 // already on the delivery board
     const dueSoon=o.dueDate&&o.dueDate<=lim;        // due date inside the lead window
@@ -5201,6 +5222,130 @@ function listsNeeded(){ // WOs scheduled to deliver inside the lead time with NO
 function lsNA(o){return !!(o&&o.listNA&&o.listNA.k!=='paper');}
 function lsPaperOff(){let n=0;DB.orders.forEach(o=>{if(o.listNA&&o.listNA.k==='paper'){delete o.listNA;n++;
   logEdit(o,'Cutting list: the "Paper list issued" option was removed — this job needs a list again (type one or attach a photo of the list)','Planner');}});return n;}
+/* ---------- Photo of a list (Garry, 4 Nov) — a STOP-GAP that replaces "Paper list issued" ----------
+   A work order with no typed list can have one or more photos of its paper list attached (phone camera or a file: a photo,
+   or a PDF kept as it is). The files go to the Supabase Storage bucket 'list-photos' (SUPABASE_CHANGES.md 2026-11-04); the
+   job keeps the references in the planner record: o.listPhotos=[{url,at,by[,pdf]}] and o.photoDone={saw:{at,by},fit:{at,by}}
+   (no new table). A WO with a photo counts as "has a list" (listsNeeded: the "Cutting lists to issue" panel, the saw's
+   red/amber warnings, the board's "📋 no list" chip; woReady). The saw / stores get one "Photo list" card per job with
+   ONE tick for the whole job. Settings → "Photo lists allowed" (settings.photoLists, default ON) hides every attach
+   button when OFF; photos already attached still show. Switching it OFF is how the stop-gap is retired. */
+const PH_BUCKET='list-photos';
+function phOn(){return V2()&&DB.photoLists!==false;}
+function phList(o){return o&&Array.isArray(o.listPhotos)?o.listPhotos.filter(p=>p&&typeof p.url==='string'&&/^https:\/\//.test(p.url)):[];}
+function phHas(o){return phList(o).length>0;}
+function phDone(o,m){const d=o&&o.photoDone&&typeof o.photoDone==='object'?o.photoDone[m]:null;return d&&d.at?d:null;}
+// jobs on the saw / stores "Photo list" cards: photos attached, still live (not delivered, shipped or on hold)
+function phJobs(){return DB.orders.filter(o=>phHas(o)&&!woFinished(o)&&!isOnHold(o)&&!o.delDelivAt&&!o.delDone);}
+async function phPut(blob,path,type){ // one file into the bucket — the tests answer this request with a fake server
+  const r=await fetch(SUPA_STORE+'/object/'+PH_BUCKET+'/'+path,{method:'POST',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':type,'x-upsert':'false'},body:blob});
+  if(!r.ok){let t='';try{t=await r.text();}catch(e){}
+    throw new Error(r.status===404||/bucket not found/i.test(t)?'the photo store isn\'t set up yet (the "list-photos" SQL in SUPABASE_CHANGES.md)':'upload refused (HTTP '+r.status+')');}
+  return SUPA_STORE+'/object/public/'+PH_BUCKET+'/'+path;
+}
+async function phAdd(wo,files,by){
+  files=[...(files||[])];if(!files.length)return 0;
+  const ok=files.filter(f=>/^image\//i.test(f.type||'')||/pdf$/i.test(f.type||'')||/\.pdf$/i.test(f.name||''));
+  if(ok.length<files.length)throw new Error('only photos (jpg / png) or a PDF can be attached');
+  if(ok.some(f=>f.size>15e6))throw new Error('that file is too big (over 15 MB)');
+  let n=0;
+  for(const f of ok){
+    const pdf=/pdf$/i.test(f.type||'')||/\.pdf$/i.test(f.name||'');
+    const blob=pdf?f:await shrinkImage(f);
+    const url=await phPut(blob,String(wo).replace(/[^A-Za-z0-9-]/g,'-')+'/'+Date.now()+'-'+Math.floor(Math.random()*1e6)+(pdf?'.pdf':'.jpg'),pdf?'application/pdf':'image/jpeg');
+    const o=DB.orders.find(x=>x.wo===wo);if(!o)throw new Error(wo+' is no longer on the planner');
+    o.listPhotos=phList(o).concat([Object.assign({url,at:nowISO(),by},pdf?{pdf:true}:{})]);n++;
+  }
+  const o=DB.orders.find(x=>x.wo===wo);
+  if(o){logEdit(o,'Cutting list: '+(n===1?'a photo':n+' photos')+' of the list attached (the saw and stores can open '+(n===1?'it':'them')+')',by);sched();}
+  return n;
+}
+function phRemove(wo,url,by){
+  const o=DB.orders.find(x=>x.wo===wo);if(!o)return;
+  const left=phList(o).filter(p=>p.url!==url);
+  if(left.length)o.listPhotos=left;else{delete o.listPhotos;delete o.photoDone;} // no photo left: a new photo starts uncut
+  logEdit(o,'Cutting list: a photo of the list removed'+(left.length?' ('+left.length+' left)':' — no photo left, the job needs a list again'),by);sched();
+}
+// one hidden file box for the whole page: "📷 Attach photo of list" opens the phone's camera / files picker
+function phPick(wo,after){
+  if(!phOn()){toast('Photo lists are switched off in Settings',true);return;}
+  officeWho(by=>{
+    const f=document.createElement('input');f.type='file';f.accept='image/*,application/pdf,.pdf';f.multiple=true;f.style.display='none';f.id='ph-file';
+    document.body.appendChild(f);
+    f.onchange=async()=>{const fs=[...f.files];f.remove();if(!fs.length)return;
+      toast('Uploading '+(fs.length===1?'the photo':fs.length+' photos')+'…');
+      try{const n=await phAdd(wo,fs,by);toast(wo+' — '+(n===1?'photo':n+' photos')+' of the list attached ✓ The saw and stores can open '+(n===1?'it':'them')+'.');}
+      catch(e){toast('Photo NOT attached — '+e.message,true);}
+      if(after)after();else render();};
+    f.click();});
+}
+function phThumbs(o,big){return phList(o).map((p,i)=>p.pdf
+  ?`<button class="ph-th ph-pdf" data-phview="${escA(o.wo)}|${i}" title="Open the PDF">📄 PDF list ${i+1}</button>`
+  :`<button class="ph-th" data-phview="${escA(o.wo)}|${i}" title="Tap to open full screen — pinch to zoom"><img src="${escA(p.url)}" alt="Photo ${i+1} of the list" loading="lazy"${big?' class="ph-big"':''}></button>`).join('');}
+// full screen: the photo fills the screen; pinch or the + / − buttons zoom; arrows when there are several
+function phView(wo,i){
+  const o=DB.orders.find(x=>x.wo===wo)||findDel(wo),ps=phList(o);if(!ps.length)return;
+  i=Math.max(0,Math.min(ps.length-1,+i||0));
+  if(ps[i].pdf){window.open(ps[i].url,'_blank','noopener');return;}
+  let z=1;const ov=document.createElement('div');ov.className='ph-ovl';
+  const draw=()=>{const p=ps[i];ov.innerHTML=`<div class="ph-bar"><b>${escA(wo)} — photo ${i+1} of ${ps.length}</b><span style="flex:1"></span>
+      ${ps.length>1?`<button data-phgo="-1">◀</button><button data-phgo="1">▶</button>`:''}<button data-phz="-1">−</button><button data-phz="1">＋</button>
+      <a href="${escA(p.url)}" target="_blank" rel="noopener">Open</a><button id="ph-x">✕ Close</button></div>
+    <div class="ph-scr"><img src="${escA(p.url)}" alt="Photo of the list" style="width:${Math.round(z*100)}%"></div>`;
+    ov.querySelector('#ph-x').onclick=()=>ov.remove();
+    ov.querySelectorAll('[data-phgo]').forEach(b=>b.onclick=()=>{i=(i+(+b.dataset.phgo)+ps.length)%ps.length;z=1;draw();});
+    ov.querySelectorAll('[data-phz]').forEach(b=>b.onclick=()=>{z=Math.max(1,Math.min(5,z*(+b.dataset.phz>0?1.5:1/1.5)));ov.querySelector('.ph-scr img').style.width=Math.round(z*100)+'%';});};
+  draw();document.body.appendChild(ov);
+}
+// the WO's photo list (board chip, "Photo lists" in the panel): see, add, remove (office / PM / drawing office)
+function phDlg(wo){
+  const o=DB.orders.find(x=>x.wo===wo);if(!o)return;
+  const ed=!['saw','stores','floor','driver','dash'].includes(ROLE);
+  const ov=document.createElement('div');ov.className='pod-ovl';
+  const draw=()=>{const ps=phList(o);
+    ov.innerHTML=`<div class="pod-in" style="min-width:min(560px,94vw)">
+      <div style="font-weight:800;color:#14335c;font-size:16px;margin-bottom:4px">📷 Photo of the list — ${escA(wo)}</div>
+      <div style="margin-bottom:8px">${woColsHTML(o)}</div>
+      <div style="font-size:12px;color:var(--t3);margin-bottom:8px">A stop-gap until the list is typed: the saw and stores open the photo and tick the whole job once. ${['saw','fit'].map(m=>(d=>d?`<b style="color:#0d6e46">${m==='saw'?'Cut complete':'Fittings picked'} ${fmt(d.at)}${d.by?' by '+escA(d.by):''}</b>`:'')(phDone(o,m))).filter(Boolean).join(' · ')}</div>
+      <div class="ph-grid">${ps.map((p,i)=>`<div class="ph-cell">${p.pdf?`<button class="ph-th ph-pdf" data-phview="${escA(wo)}|${i}">📄 PDF list ${i+1}</button>`:`<button class="ph-th" data-phview="${escA(wo)}|${i}"><img src="${escA(p.url)}" alt="Photo ${i+1}" loading="lazy"></button>`}
+        <div style="font-size:11px;color:var(--t3)">${escA(p.by||'')} ${p.at?fmt(p.at):''}</div>${ed?`<button class="btn btn-s" data-phrm="${i}" style="font-size:11px;padding:2px 8px;color:#b42318">✕ Remove</button>`:''}</div>`).join('')||'<div style="color:var(--t3)">No photo attached.</div>'}</div>
+      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">${ed&&phOn()?'<button class="btn btn-g" id="ph-add">📷 Attach photo of list</button>':''}<span style="flex:1"></span><button class="btn btn-s" id="pod-x">Close</button></div></div>`;
+    ov.querySelectorAll('[data-phview]').forEach(b=>b.onclick=()=>{const v=b.dataset.phview,k=v.lastIndexOf('|');phView(v.slice(0,k),+v.slice(k+1));});
+    ov.querySelectorAll('[data-phrm]').forEach(b=>b.onclick=()=>{const p=phList(o)[+b.dataset.phrm];if(!p)return;
+      if(!confirm('Remove this photo from '+wo+'?'+(phList(o).length===1?'\n\nIt is the only one: the job will need a list again.':'')))return;
+      officeWho(by=>{phRemove(wo,p.url,by);draw();render();toast('Photo removed from '+wo);});});
+    const a=ov.querySelector('#ph-add');if(a)a.onclick=()=>phPick(wo,()=>{draw();render();});};
+  ov.onclick=e=>{if(e.target===ov||e.target.id==='pod-x')ov.remove();};
+  draw();document.body.appendChild(ov);
+}
+// Saw / Stores: one "Photo list" card per job — tap the photo to open it, ONE tick for the whole job (no per-line ticks)
+function phCardsHTML(mode){
+  const saw=mode==='saw',js=phJobs().filter(o=>!phDone(o,mode)).sort((a,b)=>(a.dueDate||'9999').localeCompare(b.dueDate||'9999')||woCmp(a,b));
+  if(!js.length)return'';
+  return js.map(o=>`<div class="wl-card ph-card" data-phcard="${escA(o.wo)}">
+    <div class="wl-h"><div><span class="wn">📷 Photo list</span> <span class="wd">${escA(o.wo)}</span>${fuHTML(o,'lst-chip')}<div class="wl-wt">${escA(o.title||'')}${o.customer?' · '+escA(o.customer):''}</div></div>
+      ${o.delv&&o.delDay?`<span class="wl-due">DELIVERS ${escA(slotLbl(o.delVeh,o.delDay))}</span>`:o.dueDate?`<span class="wl-due">DUE ${fmt(o.dueDate)}</span>`:''}</div>
+    ${lists().some(l=>(l.wos||[]).includes(o.wo))?'<div class="hold-note">⚠ This job also has a typed list — check with the office before cutting or picking it twice.</div>':''}
+    <div class="ph-strip">${phThumbs(o)}</div>
+    <div class="wl-act"><span style="font-size:13px;color:var(--t2)">Tap the photo to open it full screen — pinch to zoom. ${saw?'Cut everything on it':'Pick everything on it'}, then tick once.</span>
+      <button class="wl-btn" data-phdone="${escA(o.wo)}">${saw?'✓ CUT COMPLETE':'✓ FITTINGS PICKED'}</button></div></div>`).join('');
+}
+function phDoneRows(mode){
+  return phJobs().filter(o=>phDone(o,mode)).sort((a,b)=>String(phDone(b,mode).at).localeCompare(String(phDone(a,mode).at))).map(o=>{const d=phDone(o,mode);
+    return `<div class="wl-drow"><b>📷 ${escA(o.wo)}</b><span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-c">${escA(o.customer||'')}</span><span class="wl-donelbl" style="font-size:13px">✓ ${fmt(d.at)} ${hhmm(d.at)}${d.by?' · '+escA(d.by):''}</span><button class="wl-undo" data-phundo="${escA(o.wo)}">Undo</button></div>`;}).join('');
+}
+function phBindWork(mode){
+  const saw=mode==='saw';
+  document.querySelectorAll('[data-phview]').forEach(b=>b.onclick=()=>{const v=b.dataset.phview,k=v.lastIndexOf('|');phView(v.slice(0,k),+v.slice(k+1));});
+  document.querySelectorAll('[data-phdone]').forEach(b=>b.onclick=()=>{const wo=b.dataset.phdone;
+    pickName(mode,(saw?'Cut complete':'Fittings picked')+' — '+wo+' (photo list)',by=>{const o=DB.orders.find(x=>x.wo===wo);if(!o)return;
+      o.photoDone=Object.assign({},o.photoDone&&typeof o.photoDone==='object'?o.photoDone:{},{[mode]:{at:nowISO(),by:by||''}});
+      logEdit(o,'Photo list: '+(saw?'cut complete':'fittings picked'),by);sched();render();toast(wo+' — '+(saw?'cut complete':'fittings picked')+' ✓');});});
+  document.querySelectorAll('[data-phundo]').forEach(b=>b.onclick=()=>{const o=DB.orders.find(x=>x.wo===b.dataset.phundo);if(!o||!confirm('Put '+o.wo+' (photo list) back in the queue?'))return;
+    const pd=Object.assign({},o.photoDone||{});delete pd[mode];if(Object.keys(pd).length)o.photoDone=pd;else delete o.photoDone;
+    logEdit(o,'Photo list: '+(saw?'cut complete':'fittings picked')+' undone',ls.get('wpfOpName')||'');sched();render();});
+}
+document.addEventListener('click',e=>{const b=e.target&&e.target.closest&&e.target.closest('[data-phwo]');if(!b)return;e.preventDefault();e.stopPropagation();phDlg(b.dataset.phwo);},true);
 function lsStampProc(){const td=todayLocal();DB.orders.forEach(o=>{if(!o.procAt&&stepNo(o.step)>=5)o.procAt=td;});}
 function lsProcessed(o){const n=stepNo(o&&o.step);return n!==null&&n>=5&&n<=8;}
 // A job with no list: when its list is due and whether that has passed. Due = N working days after the WO was processed
@@ -5780,6 +5925,9 @@ function renderWorkList(app,mode){
   </div>`;};
   // DONE screen: everything signed off, newest first, grouped under its date stamp
   const doneScreen=()=>{
+    const phd=phDoneRows(mode);if(phd)return (closed.length?doneLists():'')+`<div class="wl-dday">📷 PHOTO LISTS</div>`+phd;
+    return doneLists();};
+  const doneLists=()=>{
     if(!closed.length)return `<div class="flr-none">Nothing signed off yet — completed lists land here, date-stamped.</div>`;
     const byDay={};const order=[];
     closed.slice(0,60).forEach(l=>{
@@ -5806,7 +5954,8 @@ function renderWorkList(app,mode){
       <button class="btn2" id="wl-comb" ${selLists.length<2?'disabled title="Select at least 2 lists to combine"':''}>⚡ Combined ${mode==='saw'?'cutting':'fittings'} table</button>
       <button class="btn3" id="wl-lblsel">🏷 Labels for selected</button>
       <button class="btn3" id="wl-clrsel">✕ Clear</button></div>`:''}
-    ${visible.length?visible.map(l=>card(l,false)).join(''):`<div class="flr-none">Nothing to ${mode==='saw'?'cut':'pick'} for today — all clear ✓${upcoming.length?`<div style="font-size:13px;margin-top:6px;color:var(--t3)">${upcoming.length} list${upcoming.length!==1?'s':''} due on later days</div>`:''}</div>`}
+    ${phCardsHTML(mode)}
+    ${visible.length?visible.map(l=>card(l,false)).join(''):phCardsHTML(mode)?'':`<div class="flr-none">Nothing to ${mode==='saw'?'cut':'pick'} for today — all clear ✓${upcoming.length?`<div style="font-size:13px;margin-top:6px;color:var(--t3)">${upcoming.length} list${upcoming.length!==1?'s':''} due on later days</div>`:''}</div>`}
     ${(upcoming.length||undated.length)?`<div style="text-align:center;margin:12px 0"><button class="btn btn-s" id="wl-upc">${wlShowUpcoming?'▴ Hide later days':'▾ Work ahead — show '+(upcoming.length+undated.length)+' list'+(upcoming.length+undated.length!==1?'s':'')+' due on later days'}</button></div>`:''}`}
     <div class="flr-ft">Last update ${hhmm(new Date().toISOString())}</div></div>`;
   const wtg=document.getElementById('wait-tog');if(wtg)wtg.onclick=()=>{sawWaitOpen=!sawWaitOpen;render();};
@@ -5819,6 +5968,7 @@ function renderWorkList(app,mode){
   const pr1=document.getElementById('wl-pr1');if(pr1)pr1.onclick=()=>printWorkList(mode,1);
   const pr3=document.getElementById('wl-pr3');if(pr3)pr3.onclick=()=>printWorkList(mode,3);
   if(mode==='fit')dkBarBind();
+  phBindWork(mode);
   if(wlShowHold)bindHoldBook(holdModes,(what,cb)=>pickName(mode,what,cb));
   document.querySelectorAll('[data-wlhold]').forEach(b=>b.onclick=()=>{const l=lists().find(x=>x.id===b.dataset.wlhold);if(l)openHold(l,mode);});
   document.querySelectorAll('[data-wlc]').forEach(b=>b.onclick=()=>{wlCust=b.dataset.wlc;render();});
@@ -6344,10 +6494,10 @@ function renderFloor(app){
 /* ---------- Driver phone view: check jobs onto the van, group ALL DELIVERED, photo proof ---------- */
 // Cutting/fittings readiness for one WO, from its tagged lists: is the material cut, are the fittings out?
 function woListStat(wo){ // per side: 'none' (not applicable) | 'unset' (no rows, not confirmed) | 'hold' | 'open' | 'done'
-  const ls2=lists().filter(l=>(l.wos||[]).includes(wo));
-  if(!ls2.length)return null;
+  const ls2=lists().filter(l=>(l.wos||[]).includes(wo)),po=ls2.length?null:findDel(wo);
+  if(!ls2.length&&!phHas(po))return null;
   const r=woReady(wo);
-  const when=m=>{let t='';ls2.forEach(l=>{const d=listDone(l.id)[m];if(d&&d.at>t)t=d.at;});return t;};
+  const when=m=>{if(po)return(phDone(po,m)||{}).at||'';let t='';ls2.forEach(l=>{const d=listDone(l.id)[m];if(d&&d.at>t)t=d.at;});return t;};
   const m=x=>x==='na'?'none':x;
   return{saw:m(r.saw),fit:m(r.fit),sawAt:when('saw'),fitAt:when('fit'),lvl:r.lvl,why:r.why};
 }
@@ -8279,7 +8429,10 @@ const SIDE_WHY={saw:{open:'Not cut yet',hold:'Saw waiting on material',unset:'No
                 fit:{open:'Fittings not picked',hold:'Fittings waiting on stock',unset:'No fittings listed — tick "no fittings" if none are needed'}};
 function woReady(wo){
   const ls2=lists().filter(l=>(l.wos||[]).includes(wo));
-  if(!ls2.length)return{lvl:'red',why:['No cutting list issued'],saw:'nolist',fit:'nolist'};
+  if(!ls2.length){const o=findDel(wo);
+    if(phHas(o)){const s={saw:phDone(o,'saw')?'done':'open',fit:phDone(o,'fit')?'done':'open'},nd=['saw','fit'].filter(m=>s[m]==='done').length; // photo list: one tick per side
+      return{lvl:nd===2?'green':nd?'amber':'red',why:['saw','fit'].filter(m=>s[m]!=='done').map(m=>SIDE_WHY[m].open+' (photo list)'),saw:s.saw,fit:s.fit,photo:true};}
+    return{lvl:'red',why:['No cutting list issued'],saw:'nolist',fit:'nolist'};}
   const agg=mode=>{
     const st=ls2.map(l=>sideState(l,mode));
     const real=st.filter(s=>s==='done'||s==='open'||s==='hold');

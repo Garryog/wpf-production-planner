@@ -4,6 +4,37 @@ Newest at the top. Each block must be run in Supabase BEFORE the matching code g
 
 ---
 
+## 2026-11-04 — Photo of a list (Storage bucket `list-photos`) — PENDING, NOT YET RUN — Garry runs this BEFORE merging `feature/stores-dockets`
+
+**What it does (plain English):**
+- Makes a new photo store (a Storage "bucket") called `list-photos`, the same kind as the drivers' `pod` proof-of-delivery photos. The office puts a photo (or PDF) of a paper cutting list there with "📷 Attach photo of list"; the saw and stores open it.
+- Anyone using the app can ADD a photo and VIEW photos. Nobody using the app can change or delete one (no update / delete rules). Photos are up to 15 MB, and only JPG, PNG or PDF.
+- The job only keeps a link to each photo, inside the planner record it already has (`listPhotos`). No new table, so no GRANT lines are needed.
+- **Public for now**, like `pod`: anyone with a photo's exact link can open it (the links are long and random, and not listed anywhere public). **Stage 4 (logins) makes this bucket private** — then only signed-in staff can open the photos.
+- Removing a photo in the planner only takes the link off the job; the file stays in the bucket (nothing is ever deleted).
+
+**If you deploy the code without running this first:** "📷 Attach photo of list" says "the photo store isn't set up yet" and nothing is attached. Nothing else changes. Run this first anyway.
+
+### Steps for Garry
+1. Supabase → WPF project → **SQL Editor** → **New query**. Copy everything in the grey box below, paste, **Run**.
+2. Expected result: **"Success. No rows returned"**. A red error: stop and send a screenshot — do not merge.
+3. Check: **Storage** (left menu) shows a bucket `list-photos` marked **Public**.
+4. Safe to run twice (nothing is duplicated, no data touched).
+
+```sql
+-- ===================== PHOTO OF A LIST — Storage bucket 'list-photos' =====================
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('list-photos', 'list-photos', true, 15728640, array['image/jpeg','image/png','application/pdf'])
+on conflict (id) do update set public = excluded.public, file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
+-- view: anyone using the app (public for now, like 'pod'; Stage 4 makes it private)
+drop policy if exists "list-photos read" on storage.objects;
+create policy "list-photos read" on storage.objects for select to anon, authenticated using (bucket_id = 'list-photos');
+-- add: anyone using the app. No update and no delete policy: a photo can never be changed or deleted from the app.
+drop policy if exists "list-photos add" on storage.objects;
+create policy "list-photos add" on storage.objects for insert to anon, authenticated with check (bucket_id = 'list-photos');
+```
+
 ## 2026-11-02 — Stage 3 cutting lists + snags — PENDING, NOT YET RUN — Garry runs this BEFORE merging `feature/cutting-lists`
 
 **What it does (plain English):**
