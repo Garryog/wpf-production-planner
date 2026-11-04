@@ -202,6 +202,15 @@ button,input,select{font-family:inherit;cursor:pointer}
 .lti-row{background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:6px;font-size:13px}
 .lti-top{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline}
 .lti-wo{font-family:monospace;font-size:14px;color:#14335c}.lti-t{flex:1;min-width:140px;overflow-wrap:anywhere}.lti-c{color:var(--t2);font-size:12px;overflow-wrap:anywhere}
+/* WO | Floor | Unit | Title | Customer as separate columns (Garry, 4 Nov): the title is cut short, full text on hover */
+.wo-cols{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:baseline;min-width:0;flex:1 1 100%}
+.wo-cols .wc-wo{font-family:monospace;font-size:14px;color:#14335c;min-width:64px}.wo-cols .wc-f,.wo-cols .wc-u{min-width:72px}
+.wo-cols .wc-t{flex:1 1 160px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.wo-cols .wc-c{flex:0 1 190px;min-width:0;color:var(--t2);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wo-info{display:flex;gap:6px 8px;flex-wrap:wrap;align-items:flex-end;min-width:0}.wo-info>div{min-width:0}
+.wo-ro{padding:7px 8px;border:1px solid var(--b2);border-radius:6px;font-size:13px;background:#f4f6f9;color:#14335c;min-height:33px;box-sizing:border-box;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wo-info .wf{width:70px}.wo-info .wt{width:230px;max-width:100%}.wo-info .wc{width:170px;max-width:100%}.wo-info .wo-ro{width:0;min-width:100%} /* long text never widens the dialog */
+.lh-ti{max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wl-wo{margin-top:3px}.wl-wt{font-size:13px;opacity:.92;margin-top:1px;overflow-wrap:anywhere}
 .lti-b{display:inline-block;border-radius:5px;padding:1px 7px;font-size:11px;font-weight:700;white-space:nowrap}
 .lti-sug{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center;margin:5px 0 2px}.lti-chip{border:1px solid;border-radius:6px;padding:3px 8px;font-size:12px;overflow-wrap:anywhere}
 .lti-why{font-size:11px;color:var(--t3)}.lti-act{display:flex;flex-wrap:wrap;align-items:center;margin-top:4px}.lti-msg{font-size:12px;font-weight:700;margin-top:4px}
@@ -423,7 +432,7 @@ details.lti-other{margin-bottom:14px}details.lti-other>summary{cursor:pointer;fo
 .me-cl{display:block;margin-bottom:5px}.me-cl>span{display:block;font-size:11px;color:var(--t2);font-weight:600;margin-bottom:2px}
 .me-card input,.me-card select{width:100%;box-sizing:border-box;padding:9px 8px;border:1px solid var(--b2);border-radius:6px;font-size:16px;min-height:42px}.me-card .me-b{font-weight:700}
 .me-c3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}.me-c2{display:grid;grid-template-columns:1fr 1fr;gap:6px}.me-card .me-tot{display:block;margin:2px 0 0}
-@media(max-width:699px){.me-ed .me-top{flex-direction:column;align-items:stretch}.me-ed .me-top select,.me-ed .me-top input{max-width:none!important;width:100%!important}.me-ed .btn{min-height:40px}}.me-grid tr:focus-within td{background:#fffbe6}
+@media(max-width:699px){.wo-info .wt,.wo-info .wc{width:100%}.wo-info .wf{flex:1 1 0}.wo-info .wt,.wo-info .wc{flex:1 1 100%}.me-ed .me-top{flex-direction:column;align-items:stretch}.me-ed .me-top select,.me-ed .me-top input{max-width:none!important;width:100%!important}.me-ed .btn{min-height:40px}}.me-grid tr:focus-within td{background:#fffbe6}
 .me-flag input{width:18px;height:18px}
 /* Simple lists (Garry, 4 Nov): headings first, fewer buttons (the rest under More), bigger type, Bought in */
 .me-ed .me-grid,.me-ed .me-grid input,.me-ed .me-grid select{font-size:15px}.me-ed .me-grid input,.me-ed .me-grid select{min-height:34px}
@@ -2171,6 +2180,14 @@ function fuHTML(o,cls,sty){const f=fuF(o),u=fuU(o),a=k=>` class="${cls||'fu-badg
 function lsFuOf(l){const os=((l&&l.wos)||[]).map(w=>DB.orders.find(x=>x.wo===w)).filter(Boolean),j=f=>[...new Set(os.map(f).filter(Boolean))].join(', ');return{f:j(fuF),u:j(fuU)};} // a list's tagged jobs
 function fuSpans(x,E){return (x.f?`<span class="fu-p">FLOOR <b>${E(x.f)}</b></span>`:'')+(x.u?`<span class="fu-p">UNIT <b>${E(x.u)}</b></span>`:'');} // prints and labels
 function fuLbl(o){const f=fuF(o),u=fuU(o);return[f?'Floor '+f:'',u?'Unit '+u:''].filter(Boolean).join(' · ');}
+/* The WO number and the title are separate fields (Garry, 4 Nov): woShort = a short drop-down label ("WO-3 — Unit 31");
+   woColsHTML = WO | Floor | Unit | Title | Customer as separate cells (title cut short, full text on hover);
+   woInfoHTML = read-only Floor | Unit | Title | Customer boxes beside a work-order picker. */
+function woShort(o){if(!o)return'';const u=fuU(o),f=fuF(o),t=String(o.title||'').trim();return o.wo+(u?' — Unit '+u:f?' — Floor '+f:t?' — '+(t.length>22?t.slice(0,21)+'…':t):'');}
+function woColsHTML(o){const f=fuF(o),u=fuU(o),t=o.title||'',cu=o.customer||'';
+  return `<span class="wo-cols"><b class="wc-wo">${escA(o.wo)}</b><span class="wc-f">${f?`<span class="fu-badge fu-fl" title="Floor">Floor ${escA(f)}</span>`:''}</span><span class="wc-u">${u?`<span class="fu-badge fu-un" title="Unit">Unit ${escA(u)}</span>`:''}</span><span class="wc-t" title="${escA(t)}">${escA(t)}</span><span class="wc-c" title="${escA(cu)}">${escA(cu||'(no customer)')}</span></span>`;}
+function woInfoHTML(o){const b=(k,l,v)=>`<div class="${k}"><label>${l}</label><div class="wo-ro" data-woi="${l}" title="${escA(v)}">${escA(v)||'&nbsp;'}</div></div>`;
+  return b('wf','Floor',fuF(o))+b('wf','Unit',fuU(o))+b('wt','Title',(o&&o.title)||'')+b('wc','Customer',(o&&o.customer)||'');}
 
 /* Dispatch stages: '' → loaded → dispatched (left the factory, timestamped) → delivered */
 function dStage(o){return (o.delDelivAt||o.delDone)?'deliv':(o.delDispAt?'disp':(o.delLoadedAt?'load':''));}
@@ -3422,7 +3439,7 @@ function lsHomeHTML(){
     ${keys.length?keys.map(k=>{const a=grp.get(k);return `<div class="lh-grp" style="margin-bottom:12px"><div style="background:#14335c;color:#fff;border-radius:6px 6px 0 0;padding:7px 10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <b>${escA(k?lsProjName(k):'No project')}</b><span style="font-size:12px;opacity:.85">${a.length} list${a.length!==1?'s':''}</span><span style="flex:1"></span>
         ${k?`<button class="btn btn-s" data-lhtpl="${escA(k)}" style="font-size:11px;padding:3px 9px">Templates</button><button class="btn btn-s" data-lhmat="${escA(k)}" style="font-size:11px;padding:3px 9px">Materials</button><button class="btn btn-s" data-lhnew="${escA(k)}" style="font-size:11px;padding:3px 9px">＋ New list</button><button class="btn btn-s" data-lhimp="${escA(k)}" style="font-size:11px;padding:3px 9px">Import Excel</button>`:''}</div>
-      <table class="lst-tbl" style="margin:0"><thead><tr><th>List</th><th>Type</th><th>Work orders</th><th>Floor</th><th>Unit</th><th>Rev</th><th>State</th><th>Saw</th><th>Stores</th><th></th></tr></thead><tbody>${a.map(row).join('')||'<tr><td colspan="10" style="color:var(--t3)">No lists match.</td></tr>'}</tbody></table></div>`;}).join('')
+      <table class="lst-tbl" style="margin:0"><thead><tr><th>List</th><th>Type</th><th>Work orders</th><th>Floor</th><th>Unit</th><th>Title</th><th>Rev</th><th>State</th><th>Saw</th><th>Stores</th><th></th></tr></thead><tbody>${a.map(row).join('')||'<tr><td colspan="11" style="color:var(--t3)">No lists match.</td></tr>'}</tbody></table></div>`;}).join('')
       :`<div style="font-size:13px;color:var(--t3);padding:10px">${LST.loaded?'No lists match.':'Loading the lists…'}</div>`}
   </div>`;
 }
@@ -3563,7 +3580,8 @@ const LTI={pick:{},open:'',res:{},busy:new Set(),done:[],all:false,showNA:false}
 function lsSuggest(o){return suggestTpl(o,lsCache().all.filter(l=>l.tpl&&!l.archived),lsProjects());}
 function lsFuTds(l){ // Lists home: the tagged jobs' Floor and Unit in their own columns (Garry, 4 Nov)
   const os=(l.wos||[]).map(w=>DB.orders.find(x=>x.wo===w)).filter(Boolean),u=f=>[...new Set(os.map(f).filter(Boolean))].map(escA).join(', ')||'<span style="color:var(--t3)">—</span>';
-  return `<td>${u(fuF)}</td><td>${u(fuU)}</td>`;}
+  const ts=[...new Set(os.map(o=>String(o.title||'').trim()).filter(Boolean))];
+  return `<td>${u(fuF)}</td><td>${u(fuU)}</td><td>${ts.map(t=>`<div class="lh-ti" title="${escA(t)}">${escA(t)}</div>`).join('')||'<span style="color:var(--t3)">—</span>'}</td>`;}
 /* "New list – standard layout" (Garry, 4 Nov): the editor opens with the house heading (from the work order's unit) and the
    standard sub-headings Fillers and Kickers / Worktops / Stores items, two empty rows under each. The Colour drop-down is the
    project's own materials (+ Add new material…). Empty rows and headings with nothing under them never reach the saw. */
@@ -3604,7 +3622,7 @@ function ltiInner(){
     const when=r.onDel?`<span class="lti-b" style="background:#c0392b;color:#fff">🚚 ${escA(slotLbl(o.delVeh,o.delDay))}</span>`:'';
     const due=r.due?`<span class="lti-b" style="${r.late?'background:#c0392b;color:#fff':'background:#eef1f5;color:#14335c'}">${r.late?'LATE · was due '+fmt(r.due):'list due by '+fmt(r.due)}</span>`:'';
     return `<div class="lti-row" data-ltirow="${escA(w)}" style="border-left:5px solid ${bd}">
-      <div class="lti-top"><b class="lti-wo">${escA(w)}</b>${fuHTML(o)}<span class="lti-t">${escA(o.title||'')}</span><span class="lti-c">${escA(o.customer||'(no customer)')}</span>${when}${due}</div>
+      <div class="lti-top">${woColsHTML(o)}${when}${due}</div>
       <div class="lti-sug"><span class="lti-chip" data-ltilvl="${r.lvl}" style="background:${bg};color:${c};border-color:${bd}">${lbl}${r.tid?': <b>'+escA(ltiTplName(r.tid))+'</b>':''}</span><span class="lti-why">${escA(r.lvl==='pick'?'picked by hand':r.s.why)}</span></div>
       ${busy?'<div class="lti-msg" style="color:#14335c">Saving…</div>':`<div class="lti-act">
         ${r.tid?`<button class="btn btn-g" data-lticonf="${escA(w)}" style="${btn}">✓ Confirm</button>`:''}
@@ -4087,8 +4105,9 @@ function openListEditor2(listId,presetWo,presetPid,opt){
           <button class="btn btn-s" id="me-mats" style="font-size:12px"${st.pid?'':' disabled'}>Materials</button></div></div>
         ${st.tpl?'':`<div><label>Work order</label>
           ${st.newWO?`<div style="font-size:12px;color:#5b21b6;font-weight:700;padding:7px 0">New work order ${escA(nextPNumber())} <button class="btn btn-s" id="me-pick" style="font-size:11px;padding:2px 8px">use an existing WO instead</button></div>`
-          :`<div style="display:flex;gap:6px"><select id="me-wo" style="${inp};max-width:330px"><option value="">— pick a work order —</option>${live().map(o=>`<option value="${escA(o.wo)}"${o.wo===st.wo?' selected':''}>${escA(o.wo)}${fuLbl(o)?' · '+escA(fuLbl(o)):''} · ${escA((o.title||'').slice(0,30))} · ${escA(o.customer||'')}</option>`).join('')}</select>
-            ${ex?'':`<button class="btn btn-s" id="me-new" style="font-size:12px;white-space:nowrap">＋ New P-number</button>`}</div>`}</div>`}
+          :`<div style="display:flex;gap:6px"><select id="me-wo" style="${inp};max-width:190px"><option value="">— pick a work order —</option>${live().map(o=>`<option value="${escA(o.wo)}"${o.wo===st.wo?' selected':''} title="${escA([fuLbl(o),o.title,o.customer].filter(Boolean).join(' · '))}">${escA(woShort(o))}</option>`).join('')}</select>
+            ${ex?'':`<button class="btn btn-s" id="me-new" style="font-size:12px;white-space:nowrap">＋ New P-number</button>`}</div>`}</div>
+        ${st.newWO?'':`<div class="wo-info" id="me-woinfo">${woInfoHTML(DB.orders.find(x=>x.wo===st.wo))}</div>`}`}
         <div><label>House / list name</label><input id="me-name" value="${escA(st.name)}" placeholder="e.g. House 18" style="${inp};width:160px"></div>
         <div><label>Type</label><select id="me-type" style="${inp}">${['kitchen','house','room','other'].map(k=>`<option value="${k}"${st.ltype===k?' selected':''}>${LS_KINDS[k]}</option>`).join('')}</select>
           <input id="me-tname" value="${escA(st.tname||'')}" placeholder="e.g. Type B 3-bed" style="${inp};width:140px"></div>
@@ -4186,7 +4205,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       st.pid=e.target.value;edges=lsProjEdges(st.pid);draw();};
     // the name boxes keep st up to date as you type: a redraw (picking a colour, adding a row) no longer puts back the old name
     const nm=g('me-name');if(nm)nm.oninput=()=>{st.name=nm.value;};const tn0=g('me-tname');if(tn0)tn0.oninput=()=>{st.tname=tn0.value;};
-    const w=g('me-wo');if(w)w.onchange=()=>{const prev=st.wo;st.wo=w.value;const ne=g('me-name');if(ne&&(!ne.value||ne.value===defName(prev))){ne.value=defName(st.wo);st.name=ne.value;}
+    const w=g('me-wo');if(w)w.onchange=()=>{const prev=st.wo;st.wo=w.value;const wi=g('me-woinfo');if(wi)wi.innerHTML=woInfoHTML(DB.orders.find(x=>x.wo===st.wo));const ne=g('me-name');if(ne&&(!ne.value||ne.value===defName(prev))){ne.value=defName(st.wo);st.name=ne.value;}
       const h0=R()[0];if(opt.std&&h0&&h0.k==='hdr'&&!h0.sub&&(!String(h0.item||'').trim()||h0.item===lsStdHouse(DB.orders.find(x=>x.wo===prev)))){ // standard layout: the house heading follows the work order
         h0.item=lsStdHouse(DB.orders.find(x=>x.wo===st.wo));const hi=ov.querySelector('[data-mr="0|item"]');if(hi)hi.value=h0.item;}
       const o=DB.orders.find(x=>x.wo===st.wo),p=o&&lsProjForCust(o.customer);if(!st.pid&&p){keep();st.pid=p.id;edges=lsProjEdges(p.id);draw();}};
@@ -4631,8 +4650,8 @@ function lsTplDlg(tid,wo){
     <div style="font-size:12px;color:var(--t3);margin-bottom:8px">${escA(t.project)} — a live copy of the template is made and attached. Later template changes never change it.</div>
     <div style="margin-bottom:8px"><label style="font-size:12px;color:var(--t2)">List name</label><br><input id="tp-name" value="${escA(defName(o))}" style="${LS_INP};width:240px"></div>
     <div style="font-size:12px;font-weight:700;color:#14335c;margin-bottom:4px">Work orders</div>
-    <label class="hold-row"><input type="checkbox" data-tpwo="${escA(wo)}" checked><span><b>${escA(wo)}</b> ${o?fuHTML(o)+' '+escA(o.title||''):''}</span></label>
-    ${more.map(x=>`<label class="hold-row"><input type="checkbox" data-tpwo="${escA(x.wo)}"><span><b>${escA(x.wo)}</b> ${fuHTML(x)} ${escA(x.title||'')}</span></label>`).join('')}
+    <label class="hold-row" style="display:flex;gap:8px;align-items:baseline"><input type="checkbox" data-tpwo="${escA(wo)}" checked>${o?woColsHTML(o):`<b>${escA(wo)}</b>`}</label>
+    ${more.map(x=>`<label class="hold-row" style="display:flex;gap:8px;align-items:baseline"><input type="checkbox" data-tpwo="${escA(x.wo)}">${woColsHTML(x)}</label>`).join('')}
     <div style="max-height:30vh;overflow:auto;margin-top:8px">${listTableHTML(t,'all')}</div>
     <div id="tp-err" style="color:#b42318;font-weight:700;font-size:13px;min-height:18px"></div>
     <div style="text-align:right"><button class="btn btn-g" id="tp-go" style="font-size:14px;padding:9px 20px">Create &amp; attach</button></div>`,820);
@@ -5709,9 +5728,9 @@ function renderWorkList(app,mode){
   const visible=wlCust?visAll.filter(l=>(listCust(l)||'(no customer)')===wlCust):visAll;
   [...wlSel].forEach(id=>{if(!visible.some(l=>l.id===id))wlSel.delete(id);}); // selections only valid while visible in the queue
   const selLists=visible.filter(l=>wlSel.has(l.id));
-  const woChips=l=>(l.wos||[]).map(w=>{const o=DB.orders.find(x=>x.wo===w);return `<span class="lst-chip">${escA(w)}</span>${o&&fuLbl(o)?fuHTML(o,'lst-chip'):''}`;}).join('');
+  const woChips=l=>(l.wos||[]).map(w=>{const o=DB.orders.find(x=>x.wo===w);return `<div class="wl-wo"><span class="lst-chip">${escA(w)}</span>${o&&fuLbl(o)?fuHTML(o,'lst-chip'):''}${o&&o.title?`<div class="wl-wt">${escA(o.title)}</div>`:''}</div>`;}).join('');
   const card=(l,isDone)=>{const dn=listDone(l.id)[mode];const due=listDueKey(l);const relOnly=!isDone&&!!dn&&relOpen(l,mode);const nh=listHoldRows(l,mode,'hold').length;return `<div class="wl-card${isDone?' cdone':''}">
-    <div class="wl-h"><div style="display:flex;gap:10px;align-items:flex-start">${!isDone?`<button class="wl-chk${wlSel.has(l.id)?' on':''}" data-wlsel="${escA(l.id)}" title="Select for batch cutting across houses">${wlSel.has(l.id)?'✓':''}</button>`:''}<div><span class="wn">${escA(l.name)}</span> <span class="wd">${escA(l.project||'')}${(c=>c&&c!==l.project?' · '+escA(c):'')(listCust(l))}</span><div style="margin-top:3px">${woChips(l)}</div></div></div>
+    <div class="wl-h"><div style="display:flex;gap:10px;align-items:flex-start">${!isDone?`<button class="wl-chk${wlSel.has(l.id)?' on':''}" data-wlsel="${escA(l.id)}" title="Select for batch cutting across houses">${wlSel.has(l.id)?'✓':''}</button>`:''}<div><span class="wn">${escA(l.name)}</span> <span class="wd">${escA(l.project||'')}${(c=>c&&c!==l.project?' · '+escA(c):'')(listCust(l))}</span><div>${woChips(l)}</div></div></div>
     ${due?(od=>`<span class="wl-due"${od?' style="background:#c0392b;color:#fff"':''}>${od?'⚠ OVERDUE — ':''}${mode==='saw'?'CUT':'PICK'} BY ${fmt(listDeadline(l))} · DELIVERS ${fmt(due)}</span>`)(!isDone&&listOverdue(l)):'<span class="wd">no delivery date yet</span>'}</div>
     ${relOnly?`<div class="rel-note">▶ MATERIAL HAS ARRIVED — ${relRows(l)} row${relRows(l)!==1?'s':''} released from the waiting list. The rest of this house was done ${new Date(dn.at).toLocaleDateString('en-IE')}${dn.by?' by '+escA(dn.by):''}.</div>`:''}
     ${lsRevBannerBoth(l)}${lsRevBanner(l,mode)}${V2()?(t=>t.length||lsIssuedHTML(l)?`<div class="chk-bar">${lsIssuedHTML(l)}${lsTbcChip(t,true)}</div>`:'')(lsTbc(lsView(l.id).rows)):''}
