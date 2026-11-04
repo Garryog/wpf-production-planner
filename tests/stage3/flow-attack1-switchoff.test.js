@@ -18,13 +18,23 @@ const norm = s => String(s).replace(/\d{1,2}:\d{2}(:\d{2})?/g, 'HH:MM').replace(
 (async () => {
   if (!OLD) { rec('origin/feature/stage2-imports index.html readable from git (run git fetch)', false); done(); process.exit(1); }
   const browser = await H.chromium.launch();
-  const views = [['office', 'b'], ['office', 'l'], ['office', 'i'], ['saw', null], ['prod', null], ['dash', null]];
+  const views = [['office', 'b'], ['office', 'l'], ['office', 'i'], ['saw', null], ['stores', null], ['prod', null], ['dash', null]];
+  // ALLOWED DIFFERENCE (feature/stores-dockets, Garry 4 Nov): the Stores screen has one extra row of buttons — "Send to site",
+  // "Dockets", "Items sent" (free-typed dockets work with the switch off). That row (.dk-bar) is taken out before comparing and
+  // checked on its own below; everything else on every screen must still match feature/stage2-imports exactly.
+  const DK_BAR = '🚚 Send to site 📄 Dockets 📦 Items sent';
   const shot = async html => {
     const S = F.makeServer(row());
     const t = await A.openOld(browser, S, html);
     const out = {};
     for (const [role, tab] of views) {
-      out[role + '/' + (tab || '-')] = await t.page.evaluate(async ({ role, tab }) => { localStorage.setItem('wpfPin_' + role, '9000'); setRole(role); if (tab) showTab(tab); await new Promise(r => setTimeout(r, 150)); return document.getElementById('app') ? document.getElementById('app').innerText : document.body.innerText; }, { role, tab });
+      const got = await t.page.evaluate(async ({ role, tab }) => { localStorage.setItem('wpfPin_' + role, '9000'); setRole(role); if (tab) showTab(tab); await new Promise(r => setTimeout(r, 150));
+        const app = document.getElementById('app'), bar = app ? [...app.querySelectorAll('.dk-bar')] : [];
+        const barText = bar.map(b => b.innerText).join(' '); bar.forEach(b => { b.dataset.dkHide = b.style.display; b.style.display = 'none'; });
+        const txt = app ? app.innerText : document.body.innerText; bar.forEach(b => { b.style.display = b.dataset.dkHide; });
+        return { txt, bar: barText, nbar: bar.length }; }, { role, tab });
+      out[role + '/' + (tab || '-')] = got.txt;
+      (out.__bars = out.__bars || {})[role + '/' + (tab || '-')] = { bar: got.bar, n: got.nbar };
     }
     // the same edit on both: a note on WO-2, then save
     await t.page.evaluate(async () => { localStorage.setItem('wpfPin_office', '9000'); setRole('office'); const o = DB.orders.find(x => x.wo === 'WO-2'); o.notes = 'same edit'; await saveDB(); });
@@ -38,6 +48,9 @@ const norm = s => String(s).replace(/\d{1,2}:\d{2}(:\d{2})?/g, 'HH:MM').replace(
     return { out, saved, calls, errs };
   };
   const a = await shot(OLD), b = await shot(NEW);
+  const bars = b.out.__bars; delete a.out.__bars; delete b.out.__bars;
+  rec('switch off — the only extra: one docket button row, on the Stores screen only, reading exactly "' + DK_BAR + '"',
+    Object.entries(bars).every(([k, v]) => k === 'stores/-' ? v.n === 1 && norm(v.bar) === DK_BAR : v.n === 0), JSON.stringify(bars));
   for (const k of Object.keys(a.out)) {
     const x = norm(a.out[k]), y = norm(b.out[k]);
     let i = 0; while (i < x.length && x[i] === y[i]) i++;
