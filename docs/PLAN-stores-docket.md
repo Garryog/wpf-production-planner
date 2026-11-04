@@ -72,3 +72,8 @@ D0 SQL + mock (tests/stores-docket/). D1 make_docket / delivered / cancel, tests
 1. Should items ALREADY ticked "got out" (held in stores) appear in "Send to site"? Recommend: yes, behind a "Show got out" tick.
 2. Add an optional "Site address" to each project for the docket? Recommend: yes.
 3. Sending part of a line (10 of 20 taps)? Recommend: not now; whole lines only.
+
+## Garry's answers (4 Nov 2026) — APPROVED for build with these changes
+1. Items already ticked "got out" do NOT appear in "Send to site" (no "Show got out" toggle). Only items not yet got out.
+2. Site address: each project has an address, used as the DEFAULT on the docket; the docket also has a free "Delivery instructions" box (per docket) and a signature/received-by block.
+3. PART quantities ARE allowed: type how many of a line go on this docket; the rest stay to send (and show "10 of 20 sent"). The database keeps the sent-so-far per line and refuses sending more than the line's quantity; the line is "got out" only when the full quantity has been sent.

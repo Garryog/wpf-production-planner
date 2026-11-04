@@ -108,6 +108,8 @@ Rules: rank by the leading number. "Shipped" = step 9 only (left the factory →
 - (4 Nov, Garry) FLOOR and UNIT must be kept SEPARATE on all lists and pages (today many screens join them as "floor · unit").
 - (4 Nov, Garry) The work-order field is too long: the WO number and the TITLE must be shown as separate fields/columns (WO | Floor | Unit | Title | Customer), on the editor and everywhere else.
 
+- (4 Nov, Garry) Stores docket plan (docs/PLAN-stores-docket.md) APPROVED: only not-yet-got-out items; project address as the docket default plus delivery instructions and a signature block; part quantities allowed.
+
 ## Progress log
 ### 2 Nov 2026 (scheduled run)
 - Architect confirmed the cutting-list plan against the code; build notes and build order added to docs/PLAN-cutting-lists-stage3.md (fixed garbled characters in both plan files).
