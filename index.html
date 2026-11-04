@@ -4150,10 +4150,11 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     g('me-save').onclick=()=>save();
   };
   const addRow=(at)=>{keep();snap();const c=curRow();const i=at!=null?at:c<0?R().length:R()[c].k==='hdr'?c+1:c+1;R().splice(i,0,blank(i));st.focus=i+'|item';draw();};
-  const addHdr=unit=>{keep();snap();const c=curRow(),i=c<0?R().length:endOfBlock(c);
+  const addHdr=unit=>{keep();snap();const c=curRow();let i=c<0?R().length:endOfBlock(c);
     const h=unit?{k:'hdr',item:'',units:'1',note:''}:{k:'hdr',item:'',note:''};
     // standard lists (Aspect / O'Malleys): the first heading is the house; a heading added below it starts as a sub-heading
     // ("Fillers and Kickers", "ISLAND") — the Heading / Sub-heading box changes it
+    if(!unit&&!st.unitsOn){let j=i;while(j>0&&j-1>=c&&R()[j-1].k==='part'&&lsEmptyRow(R()[j-1]))j--;if(j<i&&j>0){i=j;}} // a heading goes above the empty rows at the end of the block, so they sit under it
     if(!unit&&R().length===1&&lsEmptyRow(R()[0])&&c<=0){keepTotals(()=>R().splice(0,0,h));st.focus='0|item';draw();return;} // a brand-new list: the heading goes first
     if(!unit&&!st.unitsOn&&R().slice(0,i).some(x=>x.k==='hdr'&&!x.sub&&(x.units===undefined||x.units===null)))h.sub=true;
     keepTotals(()=>{R().splice(i,0,h);if(unit)R().splice(i+1,0,blank(i+1));});st.focus=i+'|item';draw();};
