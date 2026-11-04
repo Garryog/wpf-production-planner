@@ -101,6 +101,10 @@ Rules: rank by the leading number. "Shipped" = step 9 only (left the factory →
 
 - (4 Nov) 'Checked by' before issue: OFF for the initial roll-out (keep simple); import one list per sheet; keep amber for stores specs not on the project list.
 
+- (4 Nov, Garry) Stores: reports per project of what has been sent to site, and print a delivery docket for a project (this is the 21 Oct "Items sent" report + a docket; build-order step 4).
+- (4 Nov, Garry) Import: all ASSEMBLED and PALLETED work orders must come through already ticked for delivery (confirms the 22 Oct Stage 2 rule delv=true; to be verified on stage2-imports).
+- (4 Nov, Garry) Cutting list page: an option to start a cutting list in a STANDARD FORMAT; TWO edging options per piece; a dropdown of that project's materials. (Details to confirm: what the standard format contains; what the two edging options are.)
+- (4 Nov, Garry) FLOOR and UNIT must be kept SEPARATE on all lists and pages (today many screens join them as "floor · unit").
 ## Progress log
 ### 2 Nov 2026 (scheduled run)
 - Architect confirmed the cutting-list plan against the code; build notes and build order added to docs/PLAN-cutting-lists-stage3.md (fixed garbled characters in both plan files).
