@@ -5907,6 +5907,46 @@ function dkWhyTxt(r){return (DK_WHY[r.why]||r.why)+(r.left!=null&&r.why!=='sent'
 // The lines of a project that can go on a docket (Garry, 4 Nov: only items NOT yet got out): stores (fit) and bought-in (buy)
 // lines on its live lists — not got out, not marked not needed, not taken off the list. Waiting lines come too, greyed
 // ("release first"). Bought-in lines and part-sent lines drop off once their full quantity has been sent.
+const dkDate=t=>{try{return new Date(t).toLocaleDateString('en-IE',{day:'numeric',month:'short',year:'numeric'});}catch(e){return'';}};
+// The docket as printed (A4): number, date, project, customer, site address, delivery instructions, the items
+// (WO | Floor | Unit | Item | Qty | Spec — Floor and Unit apart), sent by, and the "received by / print name / signature / date" block.
+function dkDocketHTML(d){
+  const E=escA,its=(d.items||[]).filter(i=>d.status==='cancelled'||i.active!==false),can=d.status==='cancelled';
+  const blk=(l,v)=>`<div class="bx"><div class="bl">${l}</div><div class="bv">${v?E(v).replace(/\n/g,'<br>'):'&nbsp;'}</div></div>`;
+  return `<div class="dk${can?' can':''}">${can?'<div class="wm">CANCELLED</div>':''}
+    <div class="hd"><div><div class="co">WESTERN POSTFORM LTD</div><div class="tt">DELIVERY DOCKET — STORES</div></div><div class="no"><div class="nl">Docket no.</div><div class="nn">${E(d.docket_no)}</div><div class="nd">${E(dkDate(d.made_at))}</div></div></div>
+    ${can?`<div class="cn">CANCELLED ${E(dkDate(d.cancelled_at))}${d.cancelled_by?' by '+E(d.cancelled_by):''} — ${E(d.cancel_why||'')}</div>`:''}
+    <div class="g2">${blk('Project',d.project_name)}${blk('Customer',d.customer)}</div>
+    <div class="g2">${blk('Deliver to (site address)',d.site_address)}${blk('Delivery instructions',d.delivery_instructions)}</div>
+    <table><thead><tr><th>WO</th><th>Floor</th><th>Unit</th><th>Item</th><th class="n">Qty</th><th>Spec</th></tr></thead><tbody>
+    ${its.map(i=>`<tr><td class="m">${E(i.wo)}</td><td>${E(i.floor)}</td><td>${E(i.unit)}</td><td><b>${E(i.item)}</b>${i.title?`<div class="ti">${E(i.title)}</div>`:''}</td><td class="n">${E(i.qty_text!=null&&i.qty_text!==''?i.qty_text:dkQ(i.qty))}</td><td>${E(i.spec)}</td></tr>`).join('')}
+    </tbody></table><div class="ct">${its.length} item line${its.length!==1?'s':''}</div>
+    <div class="sb"><b>Sent by:</b> ${E(d.made_by)} &nbsp; ${E(dkDate(d.made_at))} ${E(hhmm(d.made_at))}</div>
+    <div class="rc"><div class="rt">Received on site</div>
+      <div class="rr"><span>Received by (print name):</span><b>${d.status==='delivered'?E(d.received_by):''}</b></div>
+      <div class="rr"><span>Signature:</span><b>${d.status==='delivered'&&d.signature_name?'signed: '+E(d.signature_name):''}</b></div>
+      <div class="rr"><span>Date:</span><b>${d.status==='delivered'&&d.received_at?E(dkDate(d.received_at)):''}</b></div></div>
+  </div>`;
+}
+const DK_PRINT_CSS=`*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;padding:8mm;color:#111;font-size:12px}
+  .dk{position:relative;page-break-after:always}.dk:last-child{page-break-after:auto}
+  .hd{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #14335c;padding-bottom:3mm;margin-bottom:3mm}
+  .co{font-size:20px;font-weight:900;color:#14335c}.tt{font-size:13px;font-weight:700;letter-spacing:.5px;margin-top:1mm}
+  .no{text-align:right;border:2px solid #14335c;border-radius:2mm;padding:2mm 4mm}.nl{font-size:10px;text-transform:uppercase;color:#555}.nn{font-size:24px;font-weight:900;color:#14335c;font-family:monospace}.nd{font-size:12px}
+  .g2{display:flex;gap:3mm;margin-bottom:3mm}.bx{flex:1;border:1px solid #888;border-radius:1.5mm;padding:2mm;min-height:14mm}.bl{font-size:9px;text-transform:uppercase;color:#555;margin-bottom:1mm}.bv{font-size:13px;font-weight:700}
+  table{width:100%;border-collapse:collapse;margin-top:2mm}th,td{border:1px solid #888;padding:5px 6px;text-align:left;vertical-align:top}th{background:#eef1f6;font-size:10px;text-transform:uppercase}
+  .n{text-align:right;font-family:monospace;font-size:14px;white-space:nowrap}.m{font-family:monospace}.ti{font-size:10px;color:#555}.ct{font-size:11px;color:#555;margin-top:1mm}
+  .sb{margin-top:4mm;font-size:13px}.rc{margin-top:5mm;border:2px solid #14335c;border-radius:2mm;padding:3mm;page-break-inside:avoid}.rt{font-weight:900;color:#14335c;font-size:14px;margin-bottom:2mm}
+  .rr{display:flex;gap:3mm;align-items:flex-end;margin:4mm 0 0}.rr span{white-space:nowrap;font-size:12px}.rr b{flex:1;border-bottom:1px solid #111;min-height:7mm;font-size:14px;padding-left:2mm}
+  .cn{background:#fdecea;border:2px solid #b42318;color:#b42318;font-weight:800;padding:2mm;margin-bottom:3mm}.wm{position:absolute;top:70mm;left:0;right:0;text-align:center;font-size:70px;font-weight:900;color:rgba(180,35,24,.15);transform:rotate(-20deg);pointer-events:none}
+  @media print{@page{size:A4 portrait;margin:8mm}body{padding:0}}`;
+function dkPrint(ds){
+  ds=Array.isArray(ds)?ds:[ds];
+  const w=window.open('','_blank');
+  if(!w){toast('Pop-up blocked — allow pop-ups for this site to print');return;}
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>WPF docket ${escA(ds.map(d=>d.docket_no).join(', '))}</title><style>${DK_PRINT_CSS}</style></head><body>${ds.map(dkDocketHTML).join('')}<script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script></body></html>`);
+  w.document.close();
+}
 // Stores bench header: the docket buttons (Stores only — the saw screen is unchanged)
 function dkBarHTML(){return `<div class="dk-bar"><button id="dk-send">🚚 Send to site</button></div>`;}
 function dkBarBind(){const b=id=>document.getElementById(id);if(b('dk-send'))b('dk-send').onclick=()=>dkSendDlg();}
