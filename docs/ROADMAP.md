@@ -65,6 +65,7 @@ Rule: cap each release at one area of the floor. Nothing new is decided until th
 - Stock levels: not yet; forklift view shows need only.
 - CNC floor screens: one PC/tablet per machine; the operator ticks CUT on that machine's screen.
 - Stage 2 addition (22 Oct): a Cienapps import that brings a job in at "Assembly complete" or "Palleted" automatically puts it on the delivery board (delv=true; no van/day assigned; never untags; preview shows "N auto-tagged for delivery").
+- Auto-tag in the planner too (Garry, 4 Nov): "in planner when step is updated to assembled or palleted it is auto ticked for delivery". The board step dropdown (the only place the planner sets a step) ticks delv=true on a move to 7 or 8 (pool, no van/day; never untags; a job already tagged keeps its van/day; a hand-untag at that step or later is respected, same as the import; shipped jobs left alone), logged "Auto-tagged for delivery — step changed to 8. PALLETED by X". Go-live gap: one-off Deliveries button "Tag assembled/palleted jobs for delivery (N)" (office, asks first) ticks every job already at 7/8 not yet tagged. On hold still hides a tagged job from the board.
 
 ### Cienapps status ladder (exact wording, from Garry's screenshot 22 Oct 2026)
 1. DRAWING · 2. NO SITE MEASURE DONE · 3. READY FOR UPLOAD · 4. READY FOR PRODUCTION · 5. WORK ORDER PROCESSED · 6. JOB CUT COMPLETE · 7. ASSEMBLY COMPLETE · 8. PALLETED · 9. JOB SHIPPED · 10. INSTALLED TO BE INVOICE · 11. COMPLETED AND INVOICED · 12. ON HOLD / DELETE
@@ -109,6 +110,8 @@ Rules: rank by the leading number. "Shipped" = step 9 only (left the factory →
 - (4 Nov, Garry) The work-order field is too long: the WO number and the TITLE must be shown as separate fields/columns (WO | Floor | Unit | Title | Customer), on the editor and everywhere else.
 
 - (4 Nov, Garry) Stores docket plan (docs/PLAN-stores-docket.md) APPROVED: only not-yet-got-out items; project address as the docket default plus delivery instructions and a signature block; part quantities allowed.
+
+- (4 Nov, Garry) When a job's STEP is changed in the planner itself (not only on import) to 7. ASSEMBLY COMPLETE or 8. PALLETED, it is auto-ticked for delivery (delv=true, no van/day), same rule as the import. Never untags.
 
 ## Progress log
 ### 2 Nov 2026 (scheduled run)
