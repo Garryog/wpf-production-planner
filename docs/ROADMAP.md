@@ -106,6 +106,8 @@ Rules: rank by the leading number. "Shipped" = step 9 only (left the factory →
 - (4 Nov, Garry) Cutting list page: an option to start a cutting list in a STANDARD FORMAT; TWO edging options per piece; a dropdown of that project's materials. (Details to confirm: what the standard format contains; what the two edging options are.)
 - (4 Nov, Garry, answers) Edging = TWO edging columns per piece (Edging 1, Edging 2). "Standard format" new list = the standard headings ready to fill (house heading, Fillers and Kickers, Worktops, Stores items). Stores docket: when items are held back and sent in a batch (e.g. 20 taps for a project in one go), stores must generate a docket for that batch and keep a record of it; reports per project of everything sent to site.
 - (4 Nov, Garry) FLOOR and UNIT must be kept SEPARATE on all lists and pages (today many screens join them as "floor · unit").
+- (4 Nov, Garry) The work-order field is too long: the WO number and the TITLE must be shown as separate fields/columns (WO | Floor | Unit | Title | Customer), on the editor and everywhere else.
+
 ## Progress log
 ### 2 Nov 2026 (scheduled run)
 - Architect confirmed the cutting-list plan against the code; build notes and build order added to docs/PLAN-cutting-lists-stage3.md (fixed garbled characters in both plan files).
