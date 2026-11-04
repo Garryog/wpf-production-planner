@@ -5320,12 +5320,17 @@ function phDlg(wo){
   draw();document.body.appendChild(ov);
 }
 // Saw / Stores: one "Photo list" card per job — tap the photo to open it, ONE tick for the whole job (no per-line ticks)
-function phCardsHTML(mode){
-  const saw=mode==='saw',js=phJobs().filter(o=>!phDone(o,mode)).sort((a,b)=>(a.dueDate||'9999').localeCompare(b.dueDate||'9999')||woCmp(a,b));
-  if(!js.length)return'';
+// phL(o): a photo job seen as a one-WO list, so it follows exactly the typed lists' date rule (listDeadline / dueToday)
+function phL(o){return{wos:[o.wo]};}
+// the photo jobs still to cut / pick, split like the typed lists: due now (today + overdue) and later / undated
+function phOpen(mode,t){const js=phJobs().filter(o=>!phDone(o,mode)).sort((a,b)=>(a.dueDate||'9999').localeCompare(b.dueDate||'9999')||woCmp(a,b));
+  return{now:js.filter(o=>dueToday(phL(o),t)),later:js.filter(o=>!dueToday(phL(o),t))};}
+function phCardsHTML(mode,js){
+  const saw=mode==='saw';
+  if(!js||!js.length)return'';
   return js.map(o=>`<div class="wl-card ph-card" data-phcard="${escA(o.wo)}">
     <div class="wl-h"><div><span class="wn">📷 Photo list</span> <span class="wd">${escA(o.wo)}</span>${fuHTML(o,'lst-chip')}<div class="wl-wt">${escA(o.title||'')}${o.customer?' · '+escA(o.customer):''}</div></div>
-      ${o.delv&&o.delDay?`<span class="wl-due">DELIVERS ${escA(slotLbl(o.delVeh,o.delDay))}</span>`:o.dueDate?`<span class="wl-due">DUE ${fmt(o.dueDate)}</span>`:''}</div>
+      ${(od=>`<span class="wl-due"${od?' style="background:#c0392b;color:#fff"':''}>${od?'⚠ OVERDUE — ':''}${o.delv&&o.delDay?'DELIVERS '+escA(slotLbl(o.delVeh,o.delDay)):o.dueDate?'DUE '+fmt(o.dueDate):''}</span>`)(listOverdue(phL(o)))}</div>
     ${lists().some(l=>(l.wos||[]).includes(o.wo))?'<div class="hold-note">⚠ This job also has a typed list — check with the office before cutting or picking it twice.</div>':''}
     <div class="ph-strip">${phThumbs(o)}</div>
     <div class="wl-act"><span style="font-size:13px;color:var(--t2)">Tap the photo to open it full screen — pinch to zoom. ${saw?'Cut everything on it':'Pick everything on it'}, then tick once.</span>
@@ -5908,9 +5913,14 @@ function renderWorkList(app,mode){
   const holdModes=mode==='saw'?['saw']:['fit','saw']; // stores books material in, so it can release saw holds too
   const nHold=allHolds(holdModes,'hold').length;
   const visAll=(wlShowDone||wlShowHold)?[]:(wlShowUpcoming?[...dueNow,...upcoming,...undated]:dueNow);
-  const custs=[...new Set(visAll.map(listCust).map(c=>c||'(no customer)'))].sort();
+  // photo-list jobs follow the same rule: due now on the TO DO, later days behind "Work ahead", the Customer filter applies
+  const phO=phOpen(mode,todayISO),phAll=(wlShowDone||wlShowHold)?[]:(wlShowUpcoming?[...phO.now,...phO.later]:phO.now);
+  const phCu=o=>o.customer||'(no customer)',nCu=c=>visAll.filter(l=>(listCust(l)||'(no customer)')===c).length+phAll.filter(o=>phCu(o)===c).length;
+  const custs=[...new Set(visAll.map(listCust).map(c=>c||'(no customer)').concat(phAll.map(phCu)))].sort();
   if(wlCust&&!custs.includes(wlCust))wlCust='';
   const visible=wlCust?visAll.filter(l=>(listCust(l)||'(no customer)')===wlCust):visAll;
+  const phVis=wlCust?phAll.filter(o=>phCu(o)===wlCust):phAll,phCards=phCardsHTML(mode,phVis);
+  const nNow=dueNow.length+phO.now.length,nOd=dueNow.filter(listOverdue).length+phO.now.filter(o=>listOverdue(phL(o))).length,nLater=upcoming.length+undated.length+phO.later.length;
   [...wlSel].forEach(id=>{if(!visible.some(l=>l.id===id))wlSel.delete(id);}); // selections only valid while visible in the queue
   const selLists=visible.filter(l=>wlSel.has(l.id));
   const woChips=l=>(l.wos||[]).map(w=>{const o=DB.orders.find(x=>x.wo===w);return `<div class="wl-wo"><span class="lst-chip">${escA(w)}</span>${o&&fuLbl(o)?fuHTML(o,'lst-chip'):''}${o&&o.title?`<div class="wl-wt">${escA(o.title)}</div>`:''}</div>`;}).join('');
@@ -5942,22 +5952,22 @@ function renderWorkList(app,mode){
   };
   app.innerHTML=`<div class="wl"><h1>${cfg.icon} ${cfg.title}<span>today + anything not cleared · updates automatically</span></h1>
     ${mode==='fit'?dkBarHTML():''}<div class="wl-tabs">
-      <button id="wl-tab-todo" class="${!wlShowDone?'on':''}">${mode==='saw'?'🪚':'🧰'} TO DO — ${dueNow.length} today${dueNow.filter(listOverdue).length?` <span style="color:#ffb3a7">(${dueNow.filter(listOverdue).length} overdue)</span>`:''}</button>
+      <button id="wl-tab-todo" class="${!wlShowDone?'on':''}">${mode==='saw'?'🪚':'🧰'} TO DO — ${nNow} today${nOd?` <span style="color:#ffb3a7">(${nOd} overdue)</span>`:''}</button>
       <button id="wl-tab-hold" class="${wlShowHold?'on':''}">⏸ WAITING — ${nHold}</button>
       <button id="wl-tab-done" class="${wlShowDone?'on':''}">✓ DONE — ${closed.length}</button>
       <span class="wl-print"><button id="wl-pr1" title="Paper fallback — today's work and anything overdue, with tick boxes and initials">🖨 Print today</button><button id="wl-pr3" title="Paper fallback for a longer outage — the next 3 days">🖨 Next 3 days</button></span>
     </div>
     ${wlShowHold?`<div class="wl-hint">Rows parked because ${mode==='saw'?'the material':'stock'} isn't in. When it arrives, tap <b>ARRIVED — RELEASE</b> and the rows go straight back on the ${mode==='saw'?'saw':'stores'} queue as due work.</div>`+holdBookHTML(holdModes):wlShowDone?doneScreen():`
     ${mode==='saw'?sawNewListHTML(open)+waitListHTML()+sheetNeedHTML():''}
-    ${custs.length>1?`<div class="wl-cust"><span>Customer:</span><button class="${!wlCust?'on':''}" data-wlc="">All · ${visAll.length}</button>${custs.map(c=>`<button class="${wlCust===c?'on':''}" data-wlc="${escA(c)}">${escA(c)} · ${visAll.filter(l=>(listCust(l)||'(no customer)')===c).length}</button>`).join('')}</div>`:''}
+    ${custs.length>1?`<div class="wl-cust"><span>Customer:</span><button class="${!wlCust?'on':''}" data-wlc="">All · ${visAll.length+phAll.length}</button>${custs.map(c=>`<button class="${wlCust===c?'on':''}" data-wlc="${escA(c)}">${escA(c)} · ${nCu(c)}</button>`).join('')}</div>`:''}
     ${visible.length>1?`<div style="font-size:12px;color:var(--t3);margin:-4px 0 10px">Cutting several houses together? Tick the box on each list for a combined table with per-house quantities and location labels.</div>`:''}
     ${selLists.length?`<div class="wl-selbar"><b>${selLists.length} house${selLists.length!==1?'s':''} selected</b>
       <button class="btn2" id="wl-comb" ${selLists.length<2?'disabled title="Select at least 2 lists to combine"':''}>⚡ Combined ${mode==='saw'?'cutting':'fittings'} table</button>
       <button class="btn3" id="wl-lblsel">🏷 Labels for selected</button>
       <button class="btn3" id="wl-clrsel">✕ Clear</button></div>`:''}
-    ${phCardsHTML(mode)}
-    ${visible.length?visible.map(l=>card(l,false)).join(''):phCardsHTML(mode)?'':`<div class="flr-none">Nothing to ${mode==='saw'?'cut':'pick'} for today — all clear ✓${upcoming.length?`<div style="font-size:13px;margin-top:6px;color:var(--t3)">${upcoming.length} list${upcoming.length!==1?'s':''} due on later days</div>`:''}</div>`}
-    ${(upcoming.length||undated.length)?`<div style="text-align:center;margin:12px 0"><button class="btn btn-s" id="wl-upc">${wlShowUpcoming?'▴ Hide later days':'▾ Work ahead — show '+(upcoming.length+undated.length)+' list'+(upcoming.length+undated.length!==1?'s':'')+' due on later days'}</button></div>`:''}`}
+    ${phCards}
+    ${visible.length?visible.map(l=>card(l,false)).join(''):phCards?'':`<div class="flr-none">Nothing to ${mode==='saw'?'cut':'pick'} for today — all clear ✓${upcoming.length+phO.later.length?`<div style="font-size:13px;margin-top:6px;color:var(--t3)">${upcoming.length+phO.later.length} list${upcoming.length+phO.later.length!==1?'s':''} due on later days</div>`:''}</div>`}
+    ${nLater?`<div style="text-align:center;margin:12px 0"><button class="btn btn-s" id="wl-upc">${wlShowUpcoming?'▴ Hide later days':'▾ Work ahead — show '+nLater+' list'+(nLater!==1?'s':'')+' due on later days'}</button></div>`:''}`}
     <div class="flr-ft">Last update ${hhmm(new Date().toISOString())}</div></div>`;
   const wtg=document.getElementById('wait-tog');if(wtg)wtg.onclick=()=>{sawWaitOpen=!sawWaitOpen;render();};
   document.querySelectorAll('[data-sawseen]').forEach(b=>b.onclick=()=>{sawSeenSet(b.dataset.sawseen);render();});
@@ -8733,18 +8743,27 @@ function openListEditor(listId,presetWo,presetPid,opt){
 }
 
 /* ---------- Print fallback: today's Saw / Stores work on A4, tick box + initials per row ---------- */
-function workListFor(mode,days){
-  const today=todayLocal();
+// the last cut-by day a paper sheet covers: today (+ the non-working days ahead), or the next N days
+function wlPrintEnd(days){
+  const today=todayLocal(),e=cutTodayEnd(today);
   const lim=new Date();lim.setDate(lim.getDate()+Math.max(0,days-1));
   const limISO=lim.getFullYear()+'-'+String(lim.getMonth()+1).padStart(2,'0')+'-'+String(lim.getDate()).padStart(2,'0');
+  return days>1&&limISO>e?limISO:e;
+}
+function workListFor(mode,days){
+  const end=wlPrintEnd(days);
   return workLists().filter(l=>(mode==='saw'?l.saw:l.fit)>0&&!(mode==='saw'&&lsWaitCheck(l))) // never an unchecked list on the saw's paper either
     .filter(l=>!listDone(l.id)[mode]||relOpen(l,mode))
-    .filter(l=>{const d=listDeadline(l),e=cutTodayEnd(today);return d&&d<=(days>1&&limISO>e?limISO:e);})
+    .filter(l=>{const d=listDeadline(l);return d&&d<=end;})
     .sort((a,b)=>(listDueKey(a)||'9999').localeCompare(listDueKey(b)||'9999'));
 }
+// photo-list jobs on the same paper sheet, by the same cut-by rule as the typed lists
+function phPrintFor(mode,days){const end=wlPrintEnd(days);
+  return phJobs().filter(o=>!phDone(o,mode)).filter(o=>{const d=listDeadline(phL(o));return d&&d<=end;})
+    .sort((a,b)=>(a.dueDate||'9999').localeCompare(b.dueDate||'9999')||woCmp(a,b));}
 function printWorkList(mode,days){
-  const ls2=workListFor(mode,days),saw=mode==='saw',E=escA;
-  if(!ls2.length){toast('Nothing to print — no '+(saw?'cutting':'fittings')+' due in that range');return;}
+  const ls2=workListFor(mode,days),phs=phPrintFor(mode,days),saw=mode==='saw',E=escA;
+  if(!ls2.length&&!phs.length){toast('Nothing to print — no '+(saw?'cutting':'fittings')+' due in that range');return;}
   const today=new Date().toLocaleDateString('en-IE',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   const block=l=>{
     const done=listDone(l.id)[mode],h=holdsOf(l.id);
@@ -8759,6 +8778,15 @@ function printWorkList(mode,days){
       </tbody></table>
       <div class="sig">${saw?'Cut complete':'Picked'} — signed: ______________________ &nbsp; time: ________</div></div>`;
   };
+  // a photo-list job: one block per job — WO / Floor / Unit / title, then each photo printed full width (a PDF can't be
+  // printed inside the sheet: its link is printed instead, to open on a PC or phone)
+  const phBlock=o=>{const f=fuF(o),u=fuU(o),l=phL(o);
+    return `<div class="blk phb"><div class="bh"><span class="hs">📷 PHOTO LIST · ${E(o.wo)}</span><span>${f?'Floor <b>'+E(f)+'</b> · ':''}${u?'Unit <b>'+E(u)+'</b> · ':''}${E(o.title||'')}${o.customer?' · '+E(o.customer):''}</span>
+      <span class="dl">${listOverdue(l)?'OVERDUE · ':''}${saw?'CUT':'PICK'} BY ${E(fmt(listDeadline(l)))} · DELIVERS ${E(fmt(listDueKey(l)))}</span></div>
+      <div class="wos">${saw?'Cut':'Pick'} everything on the photo${phList(o).length>1?'s':''} below, then sign once for the whole job.</div>
+      ${phList(o).map((p,i)=>p.pdf?`<div class="phpdf">📄 PDF list ${i+1} — open it in the planner (Saw / Stores → Photo list) or at: ${E(p.url)}</div>`
+        :`<div class="phi"><img src="${E(p.url)}" alt="Photo ${i+1} of the list for ${E(o.wo)}"></div>`).join('')}
+      <div class="sig">${saw?'Cut complete':'Picked'} — signed: ______________________ &nbsp; time: ________</div></div>`;};
   const w=window.open('','_blank');
   if(!w){toast('Pop-up blocked — allow pop-ups for this site to print');return;}
   w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>WPF ${saw?'Saw':'Stores'} sheet ${E(todayLocal())}</title><style>
@@ -8773,10 +8801,12 @@ function printWorkList(mode,days){
   .n{text-align:right;font-family:monospace;font-size:13px}.tk{width:9mm;text-align:center;font-size:16px}.in{width:18mm}
   tr.sec td{background:#14335c;color:#fff;font-weight:800;font-size:13px}tr.sec.sub td{background:#e6ebf2;color:#14335c;padding-left:14px}
   tr.held td{background:#f3f3f3;color:#666}tr.done td{background:#f3f3f3;color:#666;text-decoration:line-through}tr.done td.tk{text-decoration:none;font-weight:800}.sig{margin-top:3mm;font-size:12px}
+  .phb{page-break-inside:auto}.phi{margin:2mm 0;page-break-inside:avoid;text-align:center}.phi img{max-width:100%;max-height:250mm;object-fit:contain;border:1px solid #888}
+  .phpdf{border:1px dashed #888;padding:3mm;margin:2mm 0;font-size:12px;word-break:break-all}
   @media print{@page{size:A4 portrait;margin:8mm}body{padding:0}}
   </style></head><body><h1><span>${saw?'🪚 SAW — cutting sheet':'🧰 STORES — fittings sheet'}</span><span>${E(today)}</span></h1>
   <div class="note">Paper fallback — tick each row as you go and sign each house. Hand the sheet to the office so it can be entered in the planner. ${days>1?'Covers the next '+days+' days and anything overdue.':'Today\'s work and anything overdue.'}</div>
-  ${ls2.map(block).join('')}<script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script></body></html>`);
+  ${ls2.map(l=>({k:listDueKey(l)||'9999',h:()=>block(l)})).concat(phs.map(o=>({k:listDueKey(phL(o))||'9999',h:()=>phBlock(o)}))).sort((x,y)=>x.k.localeCompare(y.k)).map(x=>x.h()).join('')}<script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script></body></html>`);
   w.document.close();
 }
 

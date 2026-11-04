@@ -13,7 +13,9 @@ const far = '2026-12-15';
 function server() {
   const o = (wo, x) => H.order(Object.assign({ wo, step: '6. JOB CUT COMPLETE', title: 'House ' + wo, customer: 'Aderrig Homes', procAt: '2026-10-20', dueDate: far, origDueDate: far, plannedWeek: '2026-12-14' }, x || {}));
   const row = F.v2Row(); row.orders = [
-    o('WO-PH', { title: 'House <b>7</b> "kitchen"', delv: true, delVeh: 'VOLVO', delDay: 'Thu' }),
+    // due 22 Oct (cut by today): photo cards follow the typed lists' date rule (Tester round 6) — a job due in December
+    // would only show behind "Work ahead"
+    o('WO-PH', { title: 'House <b>7</b> "kitchen"', dueDate: '2026-10-22', origDueDate: '2026-10-22', delv: true, delVeh: 'VOLVO', delDay: 'Thu' }),
     o('WO-B'),
     o('WO-OLD', { listPhotos: 'garbage', photoDone: 7 }), // damaged / old-shape fields must not crash anything
   ];

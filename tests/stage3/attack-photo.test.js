@@ -162,7 +162,8 @@ const ord = (p, wo) => p.evaluate(w => JSON.parse(JSON.stringify(DB.orders.find(
   await F.sleep(800); await A.page.evaluate(async () => { await saveDB(); await loadDB(); });
   const d1 = S.row.orders.find(o => o.wo === 'WO-D');
   await attach(A.page, 'WO-D', [{ name: 'new.png', mimeType: 'image/png', buffer: PNG }]);
-  await A.page.evaluate(async () => { await saveDB(); }); await saw.page.evaluate(async () => { await loadDB(); render(); });
+  // WO-D is due 15 Dec: photo cards follow the typed lists' date rule (round 6 fix), so open "Work ahead" to see its card
+  await A.page.evaluate(async () => { await saveDB(); }); await saw.page.evaluate(async () => { await loadDB(); wlShowUpcoming = true; render(); });
   const d2 = await saw.page.evaluate(() => ({ card: !!document.querySelector('[data-phcard="WO-D"]'), pd: (DB.orders.find(x => x.wo === 'WO-D') || {}).photoDone }));
   rec('P11 last photo removed while the saw ticked it; a NEW photo attached later must start uncut (card on the saw)', d2.card && !d2.pd, 'after clash: listPhotos=' + JSON.stringify(d1.listPhotos) + ' photoDone=' + JSON.stringify(d1.photoDone) + ' | after new photo: ' + JSON.stringify(d2));
 
