@@ -2168,6 +2168,8 @@ const fuF=o=>{const v=o?(o.floor!=null&&o.floor!==''?o.floor:o.f):'';return Stri
 const fuU=o=>{const v=o?(o.unit!=null&&o.unit!==''?o.unit:o.u):'';return String(v==null?'':v).trim();};
 function fuHTML(o,cls,sty){const f=fuF(o),u=fuU(o),a=k=>` class="${cls||'fu-badge'} ${k}"${sty?' style="'+sty+'"':''}`;
   return [f?`<span${a('fu-fl')} title="Floor">Floor ${escA(f)}</span>`:'',u?`<span${a('fu-un')} title="Unit">Unit ${escA(u)}</span>`:''].filter(Boolean).join(' ');}
+function lsFuOf(l){const os=((l&&l.wos)||[]).map(w=>DB.orders.find(x=>x.wo===w)).filter(Boolean),j=f=>[...new Set(os.map(f).filter(Boolean))].join(', ');return{f:j(fuF),u:j(fuU)};} // a list's tagged jobs
+function fuSpans(x,E){return (x.f?`<span class="fu-p">FLOOR <b>${E(x.f)}</b></span>`:'')+(x.u?`<span class="fu-p">UNIT <b>${E(x.u)}</b></span>`:'');} // prints and labels
 function fuLbl(o){const f=fuF(o),u=fuU(o);return[f?'Floor '+f:'',u?'Unit '+u:''].filter(Boolean).join(' · ');}
 
 /* Dispatch stages: '' → loaded → dispatched (left the factory, timestamped) → delivered */
@@ -5622,7 +5624,7 @@ function printLabels(lsArr,mode){
     <div class="lb-item">${E(r.item||r.mat||'')}</div>
     <div class="lb-mid"><span class="lb-qty">×${E(r.qty)}</span><span class="lb-dims">${saw&&(r.L||r.W)?E(r.L)+' × '+E(r.W):''}</span></div>
     <div class="lb-sub">${E(r.mat||'')}${r.note?' · '+E(r.note):''}</div>
-    <div class="lb-wos">${(l.wos||[]).map(E).join(' · ')}</div></div>`;
+    <div class="lb-wos">${(l.wos||[]).map(E).join(' · ')}${fuSpans(lsFuOf(l),E)}</div></div>`;
   let labels='';
   lsArr.forEach(l=>{
     const rows=listRows(l).filter(r=>r.k===mode);path=lsHdrPath(listRows(l));
@@ -5632,7 +5634,7 @@ function printLabels(lsArr,mode){
       ${listCust(l)?`<div class="lb-cust">${E(listCust(l))}</div>`:''}
       <div class="lb-item">${saw?'CUT PACK':'FITTINGS BOX'}</div>
       <div class="lb-sub">${rows.length} line item${rows.length!==1?'s':''} · printed ${new Date().toLocaleDateString('en-IE')}</div>
-      <div class="lb-wos">${(l.wos||[]).map(E).join(' · ')}</div></div>`;
+      <div class="lb-wos">${(l.wos||[]).map(E).join(' · ')}${fuSpans(lsFuOf(l),E)}</div></div>`;
     rows.forEach(r=>{labels+=one(l,r);});
   });
   const w=window.open('','_blank');
@@ -5657,6 +5659,8 @@ function printLabels(lsArr,mode){
   .lb-sub{font-size:12px;color:#444;margin-top:auto}
   .lb-hd .lb-sub{color:#cbd5e6}
   .lb-wos{font-size:10px;font-family:monospace;color:#888;margin-top:1mm}
+  .fu-p{margin-left:4mm;font-size:12px;color:#14335c}.fu-p b{font-size:15px}
+  .lb-hd .fu-p{color:#fff}
   .lb-hd .lb-wos{color:#cbd5e6}
   @media print{@page{size:A4 portrait;margin:8mm} body{padding:0}}
   </style></head><body><div class="sheet">${labels}</div><script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script></body></html>`);
@@ -8132,7 +8136,7 @@ function printWorkList(mode,days){
     const rows=V2()?lsHdrKeep(listRows(l),want):listRows(l).filter(want); // the headings print too (Garry, 4 Nov)
     return `<div class="blk"><div class="bh"><span class="hs">${E(l.name)}${V2()?' · Rev '+(+l.rev||1):''}</span><span>${E(l.project||'')}${listCust(l)&&listCust(l)!==l.project?' · '+E(listCust(l)):''}</span>
       <span class="dl">${listOverdue(l)?'OVERDUE · ':''}${saw?'CUT':'PICK'} BY ${E(fmt(listDeadline(l)))} · DELIVERS ${E(fmt(listDueKey(l)))}</span></div>
-      <div class="wos">${(l.wos||[]).map(E).join(' · ')}${relOnly?' · <b>MATERIAL ARRIVED — these rows only</b>':''}</div>
+      <div class="wos">${(l.wos||[]).map(E).join(' · ')}${fuSpans(lsFuOf(l),E)}${relOnly?' · <b>MATERIAL ARRIVED — these rows only</b>':''}</div>
       <table><thead><tr><th class="tk">✓</th><th>Item</th><th class="n">Qty</th>${saw?'<th class="n">Length</th><th class="n">Width</th><th>Material</th><th>Edging / note</th>':'<th>Spec</th><th>Note</th>'}<th class="in">Initials</th></tr></thead><tbody>
       ${rows.map(r=>{if(r.k==='hdr')return `<tr class="sec${r.sub?' sub':''}"><td colspan="${saw?8:6}">${E(r.item)}${r.note?' · '+E(r.note):''}</td></tr>`;const k=rowKey(r),held=heldRow(l,k),tkd=!held&&rowTicked(l.id,k);return `<tr${held?' class="held"':tkd?' class="done"':''}><td class="tk">${held?'⏸':tkd?'✓':'☐'}</td><td>${held?'<b>WAITING ON MATERIAL</b> — ':''}${E(r.item||'')}</td><td class="n">${E(r.qty)}</td>${saw?`<td class="n">${E(r.L)}</td><td class="n">${E(r.W)}</td><td>${E(r.mat)}</td><td>${E(r.note)}</td>`:`<td>${E(r.mat)}</td><td>${E(r.note)}</td>`}<td class="in"></td></tr>`;}).join('')}
       </tbody></table>
@@ -8147,6 +8151,7 @@ function printWorkList(mode,days){
   .blk{border:1.5px solid #333;border-radius:2mm;padding:3mm;margin-bottom:5mm;page-break-inside:avoid}
   .bh{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}.hs{font-size:20px;font-weight:800;color:#14335c}.dl{margin-left:auto;font-weight:800}
   .wos{font-family:monospace;font-size:10px;color:#555;margin:1mm 0 2mm}
+  .fu-p{margin-left:5mm;font-size:11px;color:#000}.fu-p b{font-size:13px}
   table{width:100%;border-collapse:collapse}th,td{border:1px solid #888;padding:4px 5px;text-align:left;vertical-align:top}th{background:#eef1f6;font-size:10px;text-transform:uppercase}
   .n{text-align:right;font-family:monospace;font-size:13px}.tk{width:9mm;text-align:center;font-size:16px}.in{width:18mm}
   tr.sec td{background:#14335c;color:#fff;font-weight:800;font-size:13px}tr.sec.sub td{background:#e6ebf2;color:#14335c;padding-left:14px}
