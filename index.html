@@ -2335,7 +2335,7 @@ function lsView(id,open){ // rows / ticks / holds of one list, in the old shapes
     if(x.removed_rev!=null||x.status==='na')return; // removed and not-needed lines never reach the bench
     const L=x.length_mm==null||x.length_mm===''?'':+x.length_mm,W=x.width_mm==null||x.width_mm===''?'':+x.width_mm;
     const r=x.kind==='hdr'?{id:x.id,k:'hdr',item:lsHdrName(x),note:[x.material,x.note].filter(s=>String(s||'').trim()).join(' · '),...(String(x.section||'').trim()?{sub:true}:{})} // a heading with a section = a sub-heading under that house heading
-      :{id:x.id,k:x.kind,item:x.part||'',qty:lsQty(x.qty),L,W,mat:x.material||'',note:[x.edging,x.note].filter(s=>String(s||'').trim()).join(' · '),sec:x.section||''};
+      :{id:x.id,k:x.kind,item:x.part||'',qty:lsQty(x.qty),L,W,mat:x.material||'',note:[lsEdgeTxt(x),x.note].filter(s=>String(s||'').trim()).join(' · '),sec:x.section||''};
     if(x.kind==='fit'){delete r.L;delete r.W;}
     v.rows.push(r);
     if(x.kind==='hdr')return;
@@ -2670,14 +2670,19 @@ async function lsProject(name,customer){ // the project with this name (any case
   throw new Error('could not set up the project "'+n+'" (HTTP '+r.status+')');
 }
 function lsMatSet(pid){const s=new Set();LST.m.forEach(m=>{if(m.project_id===pid&&m.active!==false&&m.kind==='sheet'){s.add(matKey(m.name));(m.aliases||[]).forEach(a=>s.add(matKey(a)));}});s.delete('');return s;} // matKey: case and extra spaces don't matter
+// Two edging columns per piece (Garry, 4 Nov): Edging 1 and Edging 2 (optional), shown together as "L1LE 1mm / L4S 2mm"
+function lsEdgeTxt(x){return x?[x.edging,x.edging2].map(v=>String(v==null?'':v).trim()).filter(Boolean).join(' / '):'';}
+// a cell that reads like an edging code (Excel column G on import / paste → Edging 2): L1LE 1mm, L2S1LE, L4S 2mm, 2L2S, 1mm ABS, No edge
+const LS_EDGE_RE=/^(no\s*edg(e|ing)|L\d+\s*(LE|SE?|L)(\s*\d+\s*(LE|SE?|L))*(\s*\d+(\.\d+)?\s*mm)?|\d+\s*L(\s*\d+\s*S)?(\s*\d+(\.\d+)?\s*mm)?|\d+(\.\d+)?\s*mm(\s*(abs|pvc|edg(e|ing)))?)$/i;
+function lsLooksEdge(s){s=String(s==null?'':s).trim();return !!s&&LS_EDGE_RE.test(s);}
 // An old-shape row → a line. Excel column F is Edging on a saw line (decision 4); typed rows carry edging and note separately.
 function lsRowToLine(r,typed){
   const s=v=>v==null?'':String(v).trim();
   if(r.k==='hdr')return{kind:'hdr',part:s(r.item),note:s(r.note)};
   const ln={kind:r.k,section:s(r.sec),part:s(r.item),qty:s(r.qty),material:s(r.mat)};
   if(typed&&r.lid)ln.id=r.lid; // the editor row's own line: saved onto that line, never onto its twin
-  if(r.k==='saw'||r.k==='buy'){ln.length_mm=r.L;ln.width_mm=r.W;ln.edging=typed?s(r.edging):s(r.note);ln.note=typed?s(r.note):'';}
-  else{ln.edging='';ln.note=s(r.note);if(typed&&r.matOther)ln.material_other=true;}
+  if(r.k==='saw'||r.k==='buy'){ln.length_mm=r.L;ln.width_mm=r.W;ln.edging=typed?s(r.edging):s(r.note);ln.edging2=typed?s(r.edging2):'';ln.note=typed?s(r.note):'';}
+  else{ln.edging='';ln.edging2='';ln.note=s(r.note);if(typed&&r.matOther)ln.material_other=true;}
   return ln;
 }
 function lsFlagMats(lines,pid){ // sheet material not on the project's list → saved, but flagged (decision 7); only once the project has a list
@@ -2711,7 +2716,7 @@ async function lsSaveList(pl,lines,by,reason,opt){
     }catch(e){if(!/stale/.test(e.message)||i>=2||opt.expect!=null)throw e;await lsReloadList(pl.id);} // changed on another PC meanwhile: compare again
   }
 }
-function lsLineSig(x){const n=v=>v==null||v===''?'':+v,t=v=>v==null?'':String(v).trim();return JSON.stringify([x.kind,t(x.section),t(x.part),n(x.length_mm),n(x.width_mm),t(x.qty),t(x.material),t(x.edging),t(x.note),t(x.unit_qty)]);}
+function lsLineSig(x){const n=v=>v==null||v===''?'':+v,t=v=>v==null?'':String(v).trim();return JSON.stringify([x.kind,t(x.section),t(x.part),n(x.length_mm),n(x.width_mm),t(x.qty),t(x.material),t(x.edging),t(x.note),t(x.unit_qty),t(x.edging2)]);}
 function lsEditRows(id){ // the typed-list editor's rows, with edging and note kept apart; each remembers its line and when the editor opened
   // 'opened' = the newest database time on the list or any of its lines (a tick can land on a line after the list's own time)
   // Headings stay in the editor (they used to be dropped, so editing an imported list lost them on the saw). Inside a unit
@@ -2724,7 +2729,7 @@ function lsEditRows(id){ // the typed-list editor's rows, with edging and note k
     if(x.kind==='hdr'){const u=String(x.qty==null?'':x.qty).trim();units=u?+u:null;const h={k:'hdr',item:x.part||'',note:x.note||'',...base};if(u){h.units=u;h.u0=u;}if(String(x.section||'').trim())h.sub=true;return h;}
     let q=lsQty(x.qty),fixed=false;
     if(units){const pu=lsPerUnit(x,units);q=lsQty(pu.qty);fixed=pu.fixed;} // one rule for every place: lsPerUnit
-    return{k:x.kind,item:x.part||'',qty:q,...(fixed?{fixed:true}:{}),L:x.length_mm==null?'':+x.length_mm,W:x.width_mm==null?'':+x.width_mm,mat:x.material||'',edging:x.edging||'',note:x.note||'',sec:x.section||'',...base};
+    return{k:x.kind,item:x.part||'',qty:q,...(fixed?{fixed:true}:{}),L:x.length_mm==null?'':+x.length_mm,W:x.width_mm==null?'':+x.width_mm,mat:x.material||'',edging:x.edging||'',edging2:x.edging2||'',note:x.note||'',sec:x.section||'',...base};
   });
 }
 /* Another office saved this list after this editor opened it. Merge, never overwrite silently:
@@ -2738,7 +2743,7 @@ function lsEditMerge(id,rows,lines){
   const now=lsLinesOf(id).filter(x=>x.removed_rev==null),byId=new Map(now.map(x=>[x.id,x])); // headings too — they are kept in the editor now
   const mine=new Set(rows.filter(r=>r.lid).map(r=>r.lid));
   const nm=x=>(x.part||x.material||'line')+' ×'+(x.qty==null?'':x.qty);
-  const asLine=x=>({id:x.id,kind:x.kind,section:x.section,part:x.part,length_mm:x.length_mm,width_mm:x.width_mm,qty:x.qty,unit_qty:x.unit_qty,material:x.material,material_other:!!x.material_other,edging:x.edging,note:x.note});
+  const asLine=x=>({id:x.id,kind:x.kind,section:x.section,part:x.part,length_mm:x.length_mm,width_mm:x.width_mm,qty:x.qty,unit_qty:x.unit_qty,material:x.material,material_other:!!x.material_other,edging:x.edging,edging2:x.edging2,note:x.note});
   const over=[];let kept=0;
   rows.forEach((r,i)=>{
     if(!r.lid||!r.sig)return;
@@ -2973,7 +2978,7 @@ function lsImpPreview(bk,fname,projName,done){
           const pu=r.bu!=null,qc=r.qtyErr?`${pu?'<span style="font-size:11px;font-weight:700;color:#14335c">per unit</span> ':''}<input data-ipq="${si}|${ri}" value="${escA(r.qty)}" inputmode="decimal" placeholder="${pu?'⚠ per unit':'⚠ qty'}" title="${pu?'The quantity could not be read — type the number for ONE unit (it is multiplied by the '+escA(r.bu)+' units; the total to cut shows beside it), or untick the row':'The quantity could not be read — type the number to cut, or untick the row'}" style="width:62px;${String(r.qty==null?'':r.qty).trim()===''?'border:2px solid #d48a00;background:#fff6e0':''}">`
             :escA(r.qty)+(r.fixed?' <span style="font-size:11px;color:var(--t3)" title="Doesn\'t divide by the units — kept as a fixed total">fixed</span>':'');
           const tot=r.qtyErr&&pu?(String(r.qty==null?'':r.qty).trim()===''?'':lsMul(r.qty,r.bu)):r.total;
-          return `<tr${r.qtyErr?' style="background:#fff8ea"':''}><td>${st||r.qtyErr?tick(si,ri,r):''}</td><td>${escA(r.item)}${r.buy?' <span class="buy-chip">Bought in</span>':st?' <span class="lst-chip" style="background:#eef0f3;color:#5b6b82">Stores</span>':''}${r.qtyErr?' <span style="color:#8a5a00;font-weight:700">⚠ quantity could not be read</span>':''}</td><td>${qc}</td><td><b data-ipt="${si}|${ri}">${tot!=null?escA(tot):''}</b></td><td>${escA(r.L)}</td><td>${escA(r.W)}</td><td>${escA(r.mat)}</td><td>${escA(r.edging)}</td></tr>`;}).join('')}</tbody></table></details>`;}).join('')}</div>
+          return `<tr${r.qtyErr?' style="background:#fff8ea"':''}><td>${st||r.qtyErr?tick(si,ri,r):''}</td><td>${escA(r.item)}${r.buy?' <span class="buy-chip">Bought in</span>':st?' <span class="lst-chip" style="background:#eef0f3;color:#5b6b82">Stores</span>':''}${r.qtyErr?' <span style="color:#8a5a00;font-weight:700">⚠ quantity could not be read</span>':''}</td><td>${qc}</td><td><b data-ipt="${si}|${ri}">${tot!=null?escA(tot):''}</b></td><td>${escA(r.L)}</td><td>${escA(r.W)}</td><td>${escA(r.mat)}</td><td>${escA(lsEdgeTxt(r))}</td></tr>`;}).join('')}</tbody></table></details>`;}).join('')}</div>
       <div id="ip-blank" style="margin-top:8px;color:#8a5a00;font-size:12px;font-weight:700;text-align:right">${blank()?'⚠ '+blank()+' part'+(blank()!==1?'s have':' has')+' no quantity (it could not be read) — type the number or untick '+(blank()!==1?'them':'it')+' before saving':''}</div>
       <div style="margin-top:12px;display:flex;gap:10px;justify-content:flex-end"><button class="btn btn-s" id="ip-x">Cancel — save nothing</button><button class="btn btn-g" id="ip-ok"${nOn()&&!blank()?'':' disabled'}>Save ${nOn()} list${nOn()!==1?'s':''}</button></div></div>`;
     ov.querySelectorAll('[data-ips]').forEach(c=>c.onchange=()=>{bk.sheets[+c.dataset.ips].on=c.checked;draw();});
@@ -3146,7 +3151,7 @@ function lsOldFrom(listRows0,lines){
   lines.filter(x=>x.removed_rev==null&&x.status!=='na').sort((a,b)=>(a.seq||0)-(b.seq||0)).forEach(x=>{
     const n=v=>v==null||v===''?'':+v;
     const r=x.kind==='hdr'?{k:'hdr',item:lsHdrName(x),note:x.note||''}
-      :x.kind==='saw'?{k:'saw',item:x.part||'',qty:lsQty(x.qty),L:n(x.length_mm),W:n(x.width_mm),mat:x.material||'',note:[x.edging,x.note].filter(s=>String(s||'').trim()).join(' · ')}
+      :x.kind==='saw'?{k:'saw',item:x.part||'',qty:lsQty(x.qty),L:n(x.length_mm),W:n(x.width_mm),mat:x.material||'',note:[lsEdgeTxt(x),x.note].filter(s=>String(s||'').trim()).join(' · ')}
       :{k:'fit',item:x.part||'',qty:lsQty(x.qty),mat:x.material||'',note:x.kind==='buy'?['Bought in',[x.length_mm,x.width_mm].filter(v=>v!=null&&v!=='').map(v=>+v).join(' × '),x.note].filter(s=>String(s||'').trim()).join(' · '):x.note||''}; // the old store has no "bought in": a Stores line that says so (never the saw)
     r.lid=x.id;rows.push(r);
     if(x.kind==='hdr')return;
@@ -3237,7 +3242,7 @@ function lsRescue(pick){
   if(need.length){if(!LST.rescuing)LST.rescuing=lsGetIn('lists','id',need.filter(id=>!LST.l.has(id))).then(r=>{lsPut('lists',r);return lsLines(need);}).catch(()=>{}).then(()=>{LST.rescuing=null;if([...want].every(id=>LST.full.has(id)))lsRescue(pick);});return 0;}
   const byList=new Map();
   const lineOf=(lid,k)=>{let m=byList.get(lid);if(!m){m=new Map();lsLinesOf(lid).forEach(x=>{if(x.removed_rev!=null||x.kind==='hdr'||x.status==='na')return;
-      const kk=v1Key({k:x.kind,item:x.part,L:x.kind==='saw'&&x.length_mm!=null?+x.length_mm:'',W:x.kind==='saw'&&x.width_mm!=null?+x.width_mm:'',mat:x.material,note:x.kind==='saw'?[x.edging,x.note].filter(s=>String(s||'').trim()).join(' · '):x.note});
+      const kk=v1Key({k:x.kind,item:x.part,L:x.kind==='saw'&&x.length_mm!=null?+x.length_mm:'',W:x.kind==='saw'&&x.width_mm!=null?+x.width_mm:'',mat:x.material,note:x.kind==='saw'?[lsEdgeTxt(x),x.note].filter(s=>String(s||'').trim()).join(' · '):x.note});
       if(!m.has(kk))m.set(kk,[]);m.get(kk).push(x);});byList.set(lid,m);}return m.get(k)||[];};
   let done0;try{done0=new Set(JSON.parse(localStorage.getItem('wpfRescued')||'[]'));}catch(e){done0=new Set();}
   const send=(x,st,by,tag)=>{const cid='rescue:'+lsHash(x.id+'|'+tag);if(done0.has(cid)||LQ.q.some(e=>e.cid===cid))return;
@@ -3940,7 +3945,7 @@ function lsTbc(lines){
 /* lsTbc:end */
 function lsTbcChip(names,big){return names&&names.length?`<span class="tbc-chip"${big?' style="font-size:14px"':''} title="Spec still to be confirmed — production is not blocked">⚠ spec TBC: ${escA(names.join(', '))}</span>`:'';}
 function lsNum(v){const x=parseFloat(String(v==null?'':v).replace(/\s*mm$/i,''));return isNaN(x)?0:x;}
-function lsEmptyRow(r){return r.k==='part'&&['item','qty','L','W','edging','note'].every(f=>String(r[f]==null?'':r[f]).trim()==='');}
+function lsEmptyRow(r){return r.k==='part'&&['item','qty','L','W','edging','edging2','note'].every(f=>String(r[f]==null?'':r[f]).trim()==='');}
 function openListEditor2(listId,presetWo,presetPid,opt){
   opt=opt||{};
   const ex=listId?lsList(listId):null;
@@ -3955,7 +3960,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
   const o0=!ex&&presetWo?DB.orders.find(x=>x.wo===presetWo):null;
   const toRow=r=>{const x={...r};if(x.k==='buy')x.buy=true;if(x.k!=='hdr')x.k='part';return x;};
   const fresh=r=>{const x=toRow(r);['lid','sig','opened','ids','src','keep','info','total','u0','qtyErr','bu'].forEach(k=>delete x[k]);return x;};
-  const st={rows:ex?lsEditRows(ex.id).map(toRow):opt.rows?opt.rows.map(fresh):[{k:'part',item:'',qty:'',L:'',W:'',mat:'',edging:'',note:''}],
+  const st={rows:ex?lsEditRows(ex.id).map(toRow):opt.rows?opt.rows.map(fresh):[{k:'part',item:'',qty:'',L:'',W:'',mat:'',edging:'',edging2:'',note:''}],
     wo:ex?((ex.wos||[])[0]||''):(presetWo||''),name:ex?ex.name:(opt.name||''),pid:ex?ex.pid:(presetPid||((lsProjForCust(o0&&o0.customer)||{}).id)||''),
     ltype:ex?(ex.ltype||'house'):(opt.ltype||(opt.tpl?'kitchen':'house')),tname:ex?ex.typeName:(opt.tname||''),tpl:ex?ex.tpl:!!opt.tpl,noCut:ex?!!ex.noCut:false,noFit:ex?!!ex.noFit:false,newWO:false,pw:{title:'',cust:'',floor:'',unit:'',due:'',val:'',hrs:''},
     carcass:'',door:'',undo:[],cur:'',focus:'',snapKey:'',note:opt.note||'',from:!ex&&opt.from&&opt.from.id?opt.from:null,
@@ -3986,7 +3991,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
   // a new row starts with the colour of the SAW row above (or the carcass colour). It is only a default (matAuto): a row that
   // is saved as Stores (no length or width) with that default still on it is saved with NO colour (Garry, 3 Nov).
   const defMat=i=>{for(let j=i-1;j>=0;j--){const r=R()[j];if(r.k==='part'&&(lsNum(r.L)>0||lsNum(r.W)>0)&&String(r.mat||'').trim())return r.mat;}return st.carcass||st.door||'';};
-  const blank=i=>{const m=defMat(i),r={k:'part',item:'',qty:'',L:'',W:'',mat:m,edging:'',note:''};if(m)r.matAuto=m;return r;};
+  const blank=i=>{const m=defMat(i),r={k:'part',item:'',qty:'',L:'',W:'',mat:m,edging:'',edging2:'',note:''};if(m)r.matAuto=m;return r;};
   const noAutoStores=r=>lsAutoHidden(r)?{...r,mat:''}:r;
   const snap=()=>{st.undo.push(JSON.stringify(R()));if(st.undo.length>100)st.undo.shift();};
   // a structural change (row deleted / heading added) never changes a part's TOTAL: per-unit quantities are re-worked
@@ -4016,8 +4021,8 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       return `<tr data-row="${i}" class="me-h${unit?' me-u':''}${sub?' me-hs':''}"><td class="me-n">${i+1}<span class="me-ht">${unit?'Unit':sub?'Sub':'Heading'}</span></td>
         <td><input data-mr="${i}|item" value="${escA(r.item)}" placeholder="${unit?'Unit — e.g. 900 Single Rail + 2 shelves':sub?'Sub-heading — e.g. Fillers and Kickers':'Heading — e.g. House nr 103'}" class="me-b"></td>
         ${unit?`<td class="me-q"><input data-mr="${i}|units" value="${escA(r.units)}" inputmode="numeric" class="me-b me-w52"${sawStarted&&r.lid?' disabled':''} title="Number of units"> <span class="me-ul">units</span></td>
-          <td colspan="4">${sawStarted&&r.lid?`<span class="me-lock">🔒 ${escA(LS_LOCK_MSG)}</span> <button class="btn btn-s" data-mecopy="1" style="font-size:12px;padding:3px 9px">Make new list from this</button>`:'<span class="me-hint">Qty below is for ONE unit — the total to cut is shown beside it</span>'}</td>`
-          :`<td colspan="5"><select data-mhs="${i}" class="me-hsel" title="A heading (the house) or a sub-heading under it (Fillers and Kickers, ISLAND, Utility, Doors FU)"><option value="">Heading</option><option value="sub"${sub?' selected':''}>Sub-heading</option></select></td>`}
+          <td colspan="5">${sawStarted&&r.lid?`<span class="me-lock">🔒 ${escA(LS_LOCK_MSG)}</span> <button class="btn btn-s" data-mecopy="1" style="font-size:12px;padding:3px 9px">Make new list from this</button>`:'<span class="me-hint">Qty below is for ONE unit — the total to cut is shown beside it</span>'}</td>`
+          :`<td colspan="6"><select data-mhs="${i}" class="me-hsel" title="A heading (the house) or a sub-heading under it (Fillers and Kickers, ISLAND, Utility, Doors FU)"><option value="">Heading</option><option value="sub"${sub?' selected':''}>Sub-heading</option></select></td>`}
         <td><input data-mr="${i}|note" value="${escA(r.note||'')}" placeholder="Note" ></td><td></td>
         <td><button class="btn btn-s me-x" data-mrx="${i}" title="Delete row">✕</button></td></tr>`;}
     const u=b.U[i],tg=tagTxt(r);
@@ -4027,7 +4032,8 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       <td><input data-mr="${i}|L" value="${escA(r.L)}" inputmode="decimal" placeholder="L" ></td>
       <td><input data-mr="${i}|W" value="${escA(r.W)}" inputmode="decimal" placeholder="W" ></td>
       <td>${matSel(r,i)}</td>
-      <td><input data-mr="${i}|edging" value="${escA(r.edging||'')}" list="me-edg" placeholder="Edging" ></td>
+      <td><input data-mr="${i}|edging" value="${escA(r.edging||'')}" list="me-edg" placeholder="Edging 1" ></td>
+      <td><input data-mr="${i}|edging2" value="${escA(r.edging2||'')}" list="me-edg" placeholder="Edging 2" ></td>
       <td><input data-mr="${i}|note" value="${escA(r.note||'')}" placeholder="Note" ></td>
       <td class="me-bi"><input type="checkbox" data-mbuy="${i}"${r.buy?' checked':''} title="Bought in — never cut, never picked: shows on the list for checking and delivery"></td>
       <td><button class="btn btn-s me-x" data-mrx="${i}" title="Delete row">✕</button></td></tr>`;
@@ -4045,12 +4051,12 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       ${lab('Description',`<input data-mr="${i}|item" value="${escA(r.item)}">`)}${prevCut(r)}
       <div class="me-c3">${lab(u!=null?(r.fixed?'Qty (fixed total)':'Qty (1 unit)'):'Qty',`<input data-mr="${i}|qty" value="${escA(r.qty)}" inputmode="decimal">`+(u!=null?`<span class="me-tot" data-tot="${i}">${totHTML(r,u)}</span>`:''))}${lab('Length',`<input data-mr="${i}|L" value="${escA(r.L)}" inputmode="decimal">`)}${lab('Width',`<input data-mr="${i}|W" value="${escA(r.W)}" inputmode="decimal">`)}</div>
       ${lab(isStores(r)?'Item / spec':'Colour',matSel(r,i))}
-      <div class="me-c2">${lab('Edging',`<input data-mr="${i}|edging" value="${escA(r.edging||'')}" list="me-edg">`)}${lab('Note',`<input data-mr="${i}|note" value="${escA(r.note||'')}">`)}</div>
+      <div class="me-c2">${lab('Edging 1',`<input data-mr="${i}|edging" value="${escA(r.edging||'')}" list="me-edg">`)}${lab('Edging 2',`<input data-mr="${i}|edging2" value="${escA(r.edging2||'')}" list="me-edg">`)}</div><div class="me-c2">${lab('Note',`<input data-mr="${i}|note" value="${escA(r.note||'')}">`)}</div>
       <label class="me-flag me-bic"><input type="checkbox" data-mbuy="${i}"${r.buy?' checked':''}> Bought in — not cut</label></div>`;
   };
   const gridHTML=()=>{const b=blocks();
     if(window.innerWidth<700)return `<div class="me-cards">${R().map((r,i)=>cardHTML(r,i,b)).join('')||'<div style="color:var(--t3);padding:10px">No rows yet — press ＋ Row.</div>'}</div>`;
-    return `<table class="me-tbl me-grid"><colgroup><col style="width:84px"><col><col style="width:110px"><col style="width:80px"><col style="width:80px"><col style="width:170px"><col style="width:112px"><col style="width:16%"><col style="width:58px"><col style="width:42px"></colgroup><thead><tr><th></th><th>Description</th><th>Qty</th><th>Length</th><th>Width</th><th>Colour</th><th>Edging</th><th>Note</th><th title="Bought in — never cut or picked">Bought in</th><th></th></tr></thead><tbody>${R().map((r,i)=>rowHTML(r,i,b)).join('')||'<tr><td colspan="10" style="color:var(--t3);padding:10px">No rows yet — press ＋ Heading or ＋ Row.</td></tr>'}</tbody></table>`;};
+    return `<table class="me-tbl me-grid"><colgroup><col style="width:84px"><col><col style="width:110px"><col style="width:80px"><col style="width:80px"><col style="width:170px"><col style="width:104px"><col style="width:104px"><col style="width:14%"><col style="width:58px"><col style="width:42px"></colgroup><thead><tr><th></th><th>Description</th><th>Qty</th><th>Length</th><th>Width</th><th>Colour</th><th>Edging 1</th><th>Edging 2</th><th>Note</th><th title="Bought in — never cut or picked">Bought in</th><th></th></tr></thead><tbody>${R().map((r,i)=>rowHTML(r,i,b)).join('')||'<tr><td colspan="11" style="color:var(--t3);padding:10px">No rows yet — press ＋ Heading or ＋ Row.</td></tr>'}</tbody></table>`;};
   const updTotals=()=>{const b=blocks();ov.querySelectorAll('[data-tot]').forEach(e=>{const i=+e.dataset.tot,r=R()[i];if(r&&b.U[i]!=null)e.innerHTML=totHTML(r,b.U[i]);});};
   const updTag=i=>{const t=ov.querySelector('[data-tag="'+i+'"]'),r=R()[i];if(t&&r){const tg=tagTxt(r);t.textContent=tg;t.hidden=!tg;}
     const s=ov.querySelector('[data-mr="'+i+'|mat"]');if(s&&r&&r.matAuto&&String(r.mat||'')===String(r.matAuto)){const w=lsAutoHidden(r)?'':String(r.mat);if(s.value!==w&&(w===''||[...s.options].some(x=>x.value===w)))s.value=w;}};
@@ -4139,7 +4145,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       if(el.tagName==='SELECT'){el.onchange=el.oninput=()=>{const r=R()[i];if(!r||!ov.contains(el)||el.value===r.mat)return; // input + change both fire: act once
         if(el.value==='__add'){addMat(i);return;}snap();r.mat=el.value;delete r.matAuto;st.focus=i+'|mat';draw();};return;}
       el.oninput=()=>{const r=R()[i];if(!r)return;if(st.snapKey!==el.dataset.mr){snap();st.snapKey=el.dataset.mr;}r[f]=el.value;if(f==='qty')delete r.fixed;
-        if(f==='qty'||f==='units')updTotals();if(f==='L'||f==='W'||f==='item'||f==='qty'||f==='edging'||f==='note')updTag(i);};
+        if(f==='qty'||f==='units')updTotals();if(f==='L'||f==='W'||f==='item'||f==='qty'||f==='edging'||f==='edging2'||f==='note')updTag(i);};
     });
     ov.querySelectorAll('[data-mrx]').forEach(b=>b.onclick=()=>delRow(+b.dataset.mrx));
     ov.querySelectorAll('[data-mhs]').forEach(e=>e.onchange=()=>{const i=+e.dataset.mhs,r=R()[i];if(!r)return;keep();snap();if(e.value==='sub')r.sub=true;else delete r.sub;st.focus=i+'|item';draw();});
@@ -4202,7 +4208,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       lines.forEach(x=>{if(x.kind==='hdr'){cur=String(x.qty==null?'':x.qty).trim()?{name:x.part||'',units:+x.qty||1,parts:[]}:null;if(cur)blocks0.push(cur);return;}if(cur)cur.parts.push(x);});
       if(!blocks0.length&&!st.unitsOn){ // a house-type template (Aspect / O'Malleys): its rows go in as they are — headings, sub-headings, bought-in; change anything for this house
         const add=lines.map(x=>x.kind==='hdr'?{k:'hdr',item:x.part||'',note:x.note||'',...(String(x.section||'').trim()?{sub:true}:{})}
-          :{k:'part',item:x.part||'',qty:x.qty==null?'':String(x.qty),L:x.length_mm==null?'':String(+x.length_mm),W:x.width_mm==null?'':String(+x.width_mm),mat:x.material||'',edging:x.edging||'',note:x.note||'',...(x.kind==='buy'?{buy:true}:{})});
+          :{k:'part',item:x.part||'',qty:x.qty==null?'':String(x.qty),L:x.length_mm==null?'':String(+x.length_mm),W:x.width_mm==null?'':String(+x.width_mm),mat:x.material||'',edging:x.edging||'',edging2:x.edging2||'',note:x.note||'',...(x.kind==='buy'?{buy:true}:{})});
         if(!add.length){body.innerHTML='<span style="color:var(--t2)">That template has no rows.</span>';return;}
         snap();const c=curRow(),at=c<0?R().length:endOfBlock(c),drop=R().length===1&&lsEmptyRow(R()[0])?1:0,at2=drop?0:at;
         R().splice(at2,drop,...add);dl.remove();st.focus=at2+'|item';draw();
@@ -4221,7 +4227,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
         const n=String(body.querySelector('#it-n').value||'').trim();if(!/^\d+$/.test(n)||+n<1){body.querySelector('#it-err').textContent='How many units? A whole number, 1 or more.';return;}
         const o=opts[+(body.querySelector('[name="it-u"]:checked')||{}).value||0];
         snap();const c=curRow(),at=c<0?R().length:endOfBlock(c);
-        const add=[{k:'hdr',item:o.name,units:n,note:''},...o.parts.map(({x,per,fixed})=>({k:'part',item:x.part||'',qty:per,...(fixed?{fixed:true}:{}),L:x.length_mm==null?'':String(+x.length_mm),W:x.width_mm==null?'':String(+x.width_mm),mat:x.material||'',edging:x.edging||'',note:x.note||''}))];
+        const add=[{k:'hdr',item:o.name,units:n,note:''},...o.parts.map(({x,per,fixed})=>({k:'part',item:x.part||'',qty:per,...(fixed?{fixed:true}:{}),L:x.length_mm==null?'':String(+x.length_mm),W:x.width_mm==null?'':String(+x.width_mm),mat:x.material||'',edging:x.edging||'',edging2:x.edging2||'',note:x.note||''}))];
         const drop=R().length===1&&lsEmptyRow(R()[0])?1:0,at2=drop?0:at; // a brand-new list's one empty row is replaced
         R().splice(at2,drop,...add);
         dl.remove();st.focus=at2+'|units';st.focusAll=true;draw();
@@ -4308,8 +4314,8 @@ function openListEditor2(listId,presetWo,presetPid,opt){
   ov.addEventListener('focusin',e=>{const m=e.target&&e.target.dataset&&e.target.dataset.mr;if(m){st.cur=m;if(st.snapKey!==m)st.snapKey='';}});
   // ---- keyboard, like Excel (not on phones): Tab / Shift+Tab, Enter down (a new row at the bottom), arrows, Ctrl+D fill
   //      down, Insert adds a row, Ctrl+Delete deletes the row, Ctrl+Z undoes. The cursor stays where it was after a redraw.
-  const COL={item:0,qty:1,units:1,L:2,W:3,mat:4,edging:5,note:6};
-  const cellsOf=i=>{const r=R()[i];if(!r)return[];if(r.k!=='hdr')return['item','qty','L','W','mat','edging','note'];
+  const COL={item:0,qty:1,units:1,L:2,W:3,mat:4,edging:5,edging2:6,note:7};
+  const cellsOf=i=>{const r=R()[i];if(!r)return[];if(r.k!=='hdr')return['item','qty','L','W','mat','edging','edging2','note'];
     return r.units!==undefined&&r.units!==null&&!(sawStarted&&r.lid)?['item','units','note']:['item','note'];};
   const go=(i,f,all)=>{if(i<0||i>=R().length)return false;const cs=cellsOf(i);if(!cs.includes(f)){const c=COL[f];f=cs.reduce((b,x)=>Math.abs(COL[x]-c)<Math.abs(COL[b]-c)?x:b,cs[0]);}
     const e=ov.querySelector('[data-mr="'+i+'|'+f+'"]');if(!e)return false;e.focus();if(e.select&&all!==false)e.select();return true;};
@@ -4369,7 +4375,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       return;
     }
     // fill cells from the cursor: down the rows, across the columns (rows are added at the bottom when needed)
-    const order=['item','qty','L','W','mat','edging','note'],c0=Math.max(0,order.indexOf(f==='units'?'qty':f));let n=0;
+    const order=['item','qty','L','W','mat','edging','edging2','note'],c0=Math.max(0,order.indexOf(f==='units'?'qty':f));let n=0;
     aoa.forEach((row,ri)=>{const j=i+ri;if(j>=R().length)R().push(blank(R().length));const r=R()[j];
       row.forEach((v,ci)=>{const fld=order[c0+ci];if(!fld)return;const val=v==null?'':String(v).trim();
         if(r.k==='hdr'){if(fld==='item'||fld==='note'){r[fld]=val;n++;}else if(fld==='qty'&&r.units!=null&&!(sawStarted&&r.lid)){r.units=val;n++;}return;}
@@ -4388,7 +4394,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
    new revision with an optional "what changed" note, listed in History; lists already made from it never change. */
 function lsTplCopy(lines){ // lines → clean template lines: no ids, no ticks, no links
   return (lines||[]).filter(x=>x.removed_rev==null&&x.status!=='na').map(x=>({kind:x.kind,section:x.section||'',part:x.part||'',length_mm:x.length_mm,width_mm:x.width_mm,qty:x.qty==null?'':String(x.qty),
-    unit_qty:x.unit_qty==null?'':String(x.unit_qty),material:x.material||'',material_other:!!x.material_other,edging:x.edging||'',note:x.note||''}));
+    unit_qty:x.unit_qty==null?'':String(x.unit_qty),material:x.material||'',material_other:!!x.material_other,edging:x.edging||'',edging2:x.edging2||'',note:x.note||''}));
 }
 function lsTplByName(pid,name){const k=matKey(name);return k?lsTemplatesFor(pid).find(t=>matKey(t.typeName||t.name)===k||matKey(t.name)===k):null;}
 function lsSaveAsTpl(src,done){
@@ -4464,7 +4470,7 @@ function lsLinesTable(lines){
   const ls0=(lines||[]).filter(x=>x.removed_rev==null).sort((a,b)=>(a.seq||0)-(b.seq||0));
   return `<table class="lst-tbl"><thead><tr><th>Description</th><th>Qty</th><th>Per unit</th><th>Length</th><th>Width</th><th>Colour</th><th>Edging</th><th>Note</th></tr></thead><tbody>${ls0.map(x=>x.kind==='hdr'
     ?`<tr style="background:#eef3fb"><td colspan="8"><b>${escA(lsHdrName(x))}</b>${x.note?' <span style="color:var(--t3)">'+escA(x.note)+'</span>':''}</td></tr>`
-    :`<tr><td>${escA(x.part||'')}${x.kind==='fit'?' <span class="lst-chip" style="background:#eef0f3;color:#5b6b82">Stores</span>':x.kind==='buy'?' <span class="buy-chip">Bought in</span>':''}</td><td><b>${escA(x.qty==null?'':x.qty)}</b></td><td>${escA(x.unit_qty||'')}</td><td>${escA(x.length_mm==null?'':+x.length_mm)}</td><td>${escA(x.width_mm==null?'':+x.width_mm)}</td><td>${escA(x.material||'')}</td><td>${escA(x.edging||'')}</td><td>${escA(x.note||'')}</td></tr>`).join('')||'<tr><td colspan="8" style="color:var(--t3)">No lines.</td></tr>'}</tbody></table>`;
+    :`<tr><td>${escA(x.part||'')}${x.kind==='fit'?' <span class="lst-chip" style="background:#eef0f3;color:#5b6b82">Stores</span>':x.kind==='buy'?' <span class="buy-chip">Bought in</span>':''}</td><td><b>${escA(x.qty==null?'':x.qty)}</b></td><td>${escA(x.unit_qty||'')}</td><td>${escA(x.length_mm==null?'':+x.length_mm)}</td><td>${escA(x.width_mm==null?'':+x.width_mm)}</td><td>${escA(x.material||'')}</td><td>${escA(lsEdgeTxt(x))}</td><td>${escA(x.note||'')}</td></tr>`).join('')||'<tr><td colspan="8" style="color:var(--t3)">No lines.</td></tr>'}</tbody></table>`;
 }
 function lsTplHistory(id){
   const l=lsList(id);if(!l)return;
@@ -4556,13 +4562,13 @@ function lsPrevCutBadge(lineId){ // the saw view: a line of a list that replaced
 // the old list's lines as copied (content only, never ticks) — "Make new list from this" sends them with the save and the
 // database compares them before it archives the old list (save_list_revision, replaces_lines): a change since is asked about
 function lsOldLines(id){const o={},v=x=>x===undefined?null:x,n=x=>x==null||x===''?v(x):+x;
-  lsLinesOf(id).filter(x=>x.removed_rev==null).forEach(x=>{o[x.id]=[x.kind,x.section,x.part,n(x.length_mm),n(x.width_mm),x.qty,x.unit_qty,x.material,x.edging,x.note].map(v);});return o;}
+  lsLinesOf(id).filter(x=>x.removed_rev==null).forEach(x=>{o[x.id]=[x.kind,x.section,x.part,n(x.length_mm),n(x.width_mm),x.qty,x.unit_qty,x.material,x.edging,x.note,x.edging2].map(v);});return o;}
 function lsOldSig(id){const l=LST.l.get(id);return (+(l&&l.rev)||1)+'#'+lsLinesOf(id).filter(x=>x.removed_rev==null).map(lsLineSig).join(';');} // content, not ticks
 async function lsCopyLines(srcId,map){
   if(!LST.full.has(srcId))await lsReloadList(srcId);
   map=map||{};
   return lsLinesOf(srcId).filter(x=>x.removed_rev==null&&x.status!=='na').map(x=>{const m=x.kind==='saw'&&map[matKey(x.material)];
-    return{kind:x.kind,section:x.section,part:x.part,length_mm:x.length_mm,width_mm:x.width_mm,qty:x.qty,unit_qty:x.unit_qty,material:m||x.material,material_other:m?false:!!x.material_other,edging:x.edging,note:x.note,src_line_id:x.id};});
+    return{kind:x.kind,section:x.section,part:x.part,length_mm:x.length_mm,width_mm:x.width_mm,qty:x.qty,unit_qty:x.unit_qty,material:m||x.material,material_other:m?false:!!x.material_other,edging:x.edging,edging2:x.edging2,note:x.note,src_line_id:x.id};});
 }
 // The live lists (not archived, not templates) tagged to a WO — asked of the DATABASE, not this screen's copy (another PC may
 // have given the WO a list since this screen last refreshed)
@@ -4824,7 +4830,7 @@ function diffLines(old,nw,opt){
   opt=opt||{};old=old||[];nw=nw||[];
   const T=v=>String(v==null?'':v).trim().replace(/\s+/g,' ').toLowerCase();
   const N=v=>{const s=String(v==null?'':v).trim().replace(/\s*mm$/i,'');if(s==='')return'';const n=Number(s);return isNaN(n)?s.toLowerCase().replace(/\s+/g,' '):String(n);};
-  const key=x=>[T(x.kind),T(x.part),N(x.length_mm),N(x.width_mm),N(x.qty),T(x.material),T(x.edging)].join('|');
+  const key=x=>[T(x.kind),T(x.part),N(x.length_mm),N(x.width_mm),N(x.qty),T(x.material),T(x.edging),T(x.edging2)].join('|');
   const pk=x=>[T(x.kind),T(x.part),T(x.section)].join('|');
   const isDone=x=>x.status==='cut'||x.status==='got-out';
   const sq=x=>+x.seq||0;
@@ -4854,7 +4860,7 @@ function diffLines(old,nw,opt){
   nw.forEach((x,i)=>{
     const o=match[i],id=o?o.id:mk();
     const ln={id,seq:i+1,kind:x.kind,section:txt(x.section),part:txt(x.part),length_mm:num(x.length_mm),width_mm:num(x.width_mm),qty:txt(x.qty),unit_qty:txt(x.unit_qty),
-      material:txt(x.material),material_other:!!x.material_other,edging:txt(x.edging),note:txt(x.note)};
+      material:txt(x.material),material_other:!!x.material_other,edging:txt(x.edging),edging2:txt(x.edging2),note:txt(x.note)};
     if(x.snag_id)ln.snag_id=x.snag_id;
     if(x.src_line_id)ln.src_line_id=x.src_line_id;
     if(how[i]==='changed'){ln.reset=true;out.changed.push(id);}
@@ -4917,9 +4923,9 @@ function lsParseGrid(aoa,opt){
   const HOUSE=/^\s*(house|block|apt\.?|apartment|plot)\b|\bhouse\s*(nr|no\.?|number)\b/i;let seenHouse=false;
   const heading=(item,note,r)=>{const h={k:'hdr',item,note,src:r+1};if(HOUSE.test(item)){seenHouse=true;}else if(seenHouse)h.sub=true;return h;};
   const BOUGHT=/^\s*bought[\s-]*in\s*\.?\s*$/i,TBCW=/(^|[^a-z0-9])(t\.?\s?b\.?\s?c\.?|to be confirmed|none chosen|not chosen)(?=$|[^a-z0-9])/i; // TBCW: the same words as lsTbc // the whole Edging or Note cell says "Bought in" (never a note like "Cut down bought in doors")
-  const nRows=aoa.length;
+  const nRows=aoa.length;let e2col=false; // a column-header row with "Edging 2" in G: G is always Edging 2, H the note
   for(let r=0;r<nRows;r++){
-    const cells=[0,1,2,3,4,5,6].map(c=>val(r,c));
+    const cells=[0,1,2,3,4,5,6,7].map(c=>val(r,c));
     if(cells.every(v=>v==null||str(v)===''))continue;
     const A=str(cells[0]),texts=cells.map(str);
     // 1. header labels: Project / Title / Date / Carcass colour / Door colour / Nr of units — the value is the next filled cell.
@@ -4936,7 +4942,7 @@ function lsParseGrid(aoa,opt){
     }
     // 2. the column-header row ("Description | Qty | Length …") is labels, not a part
     // ("Description:", "Item Description", " DESCRIPTION " too)
-    if(/^(item\s+)?(description|item|part( name)?)\s*:?$/i.test(A)&&texts.slice(1).some(t=>/^(qty|nr|no\.?|quantity|length|width|dimension|colou?r|material)\s*:?$/i.test(t)))continue;
+    if(/^(item\s+)?(description|item|part( name)?)\s*:?$/i.test(A)&&texts.slice(1).some(t=>/^(qty|nr|no\.?|quantity|length|width|dimension|colou?r|material)\s*:?$/i.test(t))){e2col=/edg/i.test(texts[6]);continue;}
     // 3. "2 | total nr of units" sets the units of the block above
     const ui=texts.findIndex(t=>UNITS.test(t));
     if(ui>=0){
@@ -4950,11 +4956,11 @@ function lsParseGrid(aoa,opt){
     // 4. the legacy project row: the very first row, one name in A (and maybe the date in F)
     if(r===0&&!opt.paste&&A&&cells.slice(1).every((v,c)=>v==null||(c===4&&(v instanceof Date||isoDate(v))))){meta.project=A;if(cells[5]!=null)meta.date=isoDate(cells[5]);continue;}
     const qv=cells[1]==null?NaN:typeof cells[1]==='number'?cells[1]:parseFloat(texts[1]);
-    const L=num(cells[2]),W=num(cells[3]),mat=texts[4],edging=texts[5],note=texts[6];
+    const L=num(cells[2]),W=num(cells[3]),mat=texts[4],edging=texts[5],sz=!isNaN(L)||!isNaN(W),e2=sz&&!BOUGHT.test(texts[6])&&(e2col||lsLooksEdge(texts[6]))?texts[6]:'',note=e2||(e2col&&sz)?texts[7]:texts[6];
     if(!isNaN(qv)||(!isNaN(L)&&!isNaN(W)&&(A||mat))){
       const sized=!isNaN(L)||!isNaN(W);
       // a door row with no description under "Doors FU" takes the heading's name (4 Nov)
-      const p={k:'part',item:sized?(A||(cur&&!cur.info&&cur.units==null?cur.item:'')):(A||mat),qty:'',L:isNaN(L)?'':L,W:isNaN(W)?'':W,mat,edging:sized?edging:'',note:sized?note:[edging,note].filter(Boolean).join(' · '),src:r+1}; // decision 4: column F is Edging on a saw part, a note on a Stores part
+      const p={k:'part',item:sized?(A||(cur&&!cur.info&&cur.units==null?cur.item:'')):(A||mat),qty:'',L:isNaN(L)?'':L,W:isNaN(W)?'':W,mat,edging:sized?edging:'',...(sized?{edging2:e2}:{}),note:sized?note:[edging,note].filter(Boolean).join(' · '),src:r+1}; // decision 4: column F is Edging on a saw part, a note on a Stores part
       // "Bought in" in the Edging or Note cell: ticked Bought in (never cut), and that cell is not kept as an edging / note
       if(BOUGHT.test(edging)||BOUGHT.test(note)){p.buy=true;const e2=BOUGHT.test(edging)?'':edging,n2=BOUGHT.test(note)?'':note;if(sized){p.edging=e2;p.note=n2;}else p.note=[e2,n2].filter(Boolean).join(' · ');}
       let qty=isNaN(qv)?'':typeof cells[1]==='number'||/^\d+(\.\d+)?(\s*(off|pcs?|no\.?))?$/i.test(texts[1])?qv:texts[1]; // "2x2" kept as typed, never guessed
@@ -5046,7 +5052,7 @@ function lsEdLines(rows){
       ln={kind:'hdr',section:r.sub&&top?top:'',part:s(r.item),note:s(r.note)};if(units!==null)ln.qty=units;if(!(r.sub&&top))top=s(r.item);}
     else{ // 'part': Saw if it has a length or width; old-shape rows (k 'saw' / 'fit') keep their kind
       const kind=r.buy||r.k==='buy'?'buy':r.k==='saw'||r.k==='fit'?r.k:n(r.L)>0||n(r.W)>0?'saw':'fit',inU=units!==null; // "Bought in" ticked: never the saw or stores
-      ln={kind,section:sec||s(r.sec),part:s(r.item),qty:inU&&!r.fixed?lsMul(r.qty,units):s(r.qty),unit_qty:inU?(r.fixed?LS_FIXED:s(r.qty)):'',material:s(r.mat),edging:s(r.edging),note:s(r.note)};
+      ln={kind,section:sec||s(r.sec),part:s(r.item),qty:inU&&!r.fixed?lsMul(r.qty,units):s(r.qty),unit_qty:inU?(r.fixed?LS_FIXED:s(r.qty)):'',material:s(r.mat),edging:s(r.edging),edging2:s(r.edging2),note:s(r.note)};
       // a per-unit quantity with more than 3 decimals (0.666667) would save rounding noise (2.000001): kept as a fixed total
       // — but only when that total is WHOLE (0.666667 × 3 = 2). 0.3333 × 4 = 1.333 is never turned into a fixed 1.333: it stays
       // per unit and the save is refused for a saw part (lsHalfTotal).

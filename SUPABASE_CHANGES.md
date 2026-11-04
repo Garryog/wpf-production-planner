@@ -24,6 +24,7 @@ Newest at the top. Each block must be run in Supabase BEFORE the matching code g
 - **Added 4 Nov 2026 (simple lists for standard production — Aspect / O'Malleys):**
   - **"Bought in" lines.** A line can now be a fourth kind, `buy` (besides `saw`, `fit` and `hdr`): a panel or item with sizes that is bought in, never cut. The saw, the stores pick list, the sheet calculator, the combined list and the labels only ever read `saw` / `fit` lines, so a bought-in line can never reach them; the office list and print show it as "Bought in". Only the `list_lines` kind check changes (dropped and added again — safe to run twice). No data is touched.
   - **"Checked by" before the saw.** `lists` gets three columns: `check_req` (this list must be checked before the saw sees it), `checked_by`, `checked_at`. Only used when the Settings switch **"Lists must be checked before the saw"** is ON (it is OFF for the initial roll-out, Garry 4 Nov): the app then sends `check_req` = true and a list made or saved through the app starts as "Waiting for check"; with the switch OFF the app sends false and lists reach the saw exactly as before. Editing a list (a new revision too) clears the check; `list_set_done` has a new mode `check` (on = checked, off = check taken away) that writes the history line; a list confirmed from a template counts as checked only if the template itself is checked (same revision). Lists moved over by "Migrate lists" and snag lists keep `check_req` = false (they reach the saw as before). No new table or function, so no new GRANT lines. Safe to run twice (`add column if not exists`).
+- **Added 4 Nov 2026 (two edging columns, Garry):** `list_lines` gets an `edging2` column — the second, optional edging on a piece ("Edging 1" stays in `edging`). The saw, prints and labels show both ("L1LE 1mm / L4S 2mm"). `save_list_revision` writes it, and changing it counts as a change to the line (like Edging 1). If this block was already run on a test project, the `alter table list_lines add column if not exists edging2 text;` line adds the column (safe to run twice). No new table, so no new GRANT lines — the existing `list_lines` grants cover it.
 - **The app does not use any of this until Garry presses "Migrate lists" (Admin PIN, Settings).** Until then it runs exactly as today, and makes no calls to these tables. So running this early is harmless.
 
 **If you deploy the code without running this first:** nothing changes on the floor (the switch is off). But "Migrate lists" would fail — so run this first anyway.
@@ -101,7 +102,7 @@ create index if not exists lists_wos on lists using gin(wos);
 create table if not exists list_lines(id text primary key, list_id text not null references lists(id), seq int not null,
   kind text not null check(kind in('saw','fit','hdr','buy')), section text, part text,
   length_mm numeric, width_mm numeric, qty text, unit_qty text, material text, material_other boolean not null default false,
-  edging text, note text,
+  edging text, edging2 text, note text,
   status text not null default 'todo' check(status in('todo','cut','got-out','waiting','na')),
   status_by text, status_at timestamptz, released_at timestamptz, released_by text,
   added_rev int, changed_rev int, removed_rev int, src_line_id text,
@@ -109,6 +110,7 @@ create table if not exists list_lines(id text primary key, list_id text not null
   version int not null default 1, updated_at timestamptz not null default now());
 alter table list_lines add column if not exists mig_sig text;
 alter table list_lines add column if not exists unit_qty text;    -- list editor (3 Nov): per-unit quantity in a unit block; qty stays the total
+alter table list_lines add column if not exists edging2 text;     -- (4 Nov) a second, optional edging per piece (Edging 1 = edging)
 -- 4 Nov: a 'buy' line = bought in (has sizes, never cut, never picked): only the office list shows it
 alter table list_lines drop constraint if exists list_lines_kind_check;
 alter table list_lines add constraint list_lines_kind_check check(kind in('saw','fit','hdr','buy'));
@@ -352,13 +354,13 @@ grant execute on function list_set_done(text,text,boolean,text,text,text) to ano
 -- Save an edit or a new revision in one go.
 -- p_list: the list's fields ({id, name, project_id, ...}; missing keys are left as they are).
 -- p_lines: every line the list should now have ({id, seq, kind, section, part, length_mm, width_mm, qty, unit_qty, material,
---          material_other, edging, note, snag_id, src_line_id, reset}); reset:true = content changed, so the tick resets.
+--          material_other, edging, edging2, note, snag_id, src_line_id, reset}); reset:true = content changed, so the tick resets.
 -- p_expect: the list version the editor started from (null = a brand-new list).
 -- A brand-new list (3 Nov): p_list.one_per_wo = true → refused if any of its WOs already has a live list (lists_one_per_wo);
 -- p_list.replaces = <old list id> ("Make new list from this") → refused if that old list already has a live replacement.
 -- (3 Nov, Manager review) …and the OLD list is archived in this same step, so the saw never has both, even if the reply is
 -- lost. p_list.replaces_lines = the old list's lines as they were when it was copied ({line id: [kind, section, part,
--- length_mm, width_mm, qty, unit_qty, material, edging, note]} — content only, ticks don't count): if the old list's lines
+-- length_mm, width_mm, qty, unit_qty, material, edging, note, edging2]} — content only, ticks don't count): if the old list's lines
 -- differ now (changed on another screen), the save is refused with 'replaced list changed' unless
 -- p_list.replaces_force = true (the person said "archive it anyway") or p_list.replaces_keep = true (leave it with the saw).
 -- The answer says what happened to the old list: retired = 'archived' | 'already' (archived before) | 'missing' | 'kept'.
@@ -384,7 +386,7 @@ begin
    elsif o.archived then retired:='already';
    elsif coalesce((p_list->>'replaces_keep')::boolean,false) then retired:='kept';
    else
-    select coalesce(jsonb_object_agg(x.id,jsonb_build_array(x.kind,x.section,x.part,x.length_mm,x.width_mm,x.qty,x.unit_qty,x.material,x.edging,x.note)),'{}'::jsonb)
+    select coalesce(jsonb_object_agg(x.id,jsonb_build_array(x.kind,x.section,x.part,x.length_mm,x.width_mm,x.qty,x.unit_qty,x.material,x.edging,x.note,x.edging2)),'{}'::jsonb)
       into now_lines from list_lines x where x.list_id=o.id and x.removed_rev is null;
     if jsonb_typeof(p_list->'replaces_lines')='object' and not coalesce((p_list->>'replaces_force')::boolean,false) and now_lines<>p_list->'replaces_lines' then
      raise exception 'replaced list changed: "%" was changed on another screen after it was copied', o.name using errcode='P0001', detail=o.id, hint='replaced-changed';
@@ -430,7 +432,7 @@ begin
    -- 4. content only; status is NEVER written here unless the line really changed (reset) — a tick landing mid-edit survives
    update list_lines set seq=coalesce((e->>'seq')::int,seq), kind=coalesce(e->>'kind',kind), section=e->>'section', part=e->>'part',
      length_mm=(e->>'length_mm')::numeric, width_mm=(e->>'width_mm')::numeric, qty=e->>'qty', unit_qty=e->>'unit_qty', material=e->>'material',
-     material_other=coalesce((e->>'material_other')::boolean,false), edging=e->>'edging', note=e->>'note',
+     material_other=coalesce((e->>'material_other')::boolean,false), edging=e->>'edging', edging2=e->>'edging2', note=e->>'note',
      snag_id=coalesce(e->>'snag_id',snag_id), removed_rev=null,
      status=case when (e->>'reset')::boolean then 'todo' else status end,
      status_by=case when (e->>'reset')::boolean then null else status_by end,
@@ -439,15 +441,15 @@ begin
      changed_rev=case when (e->>'reset')::boolean then nrev else changed_rev end
     where id=ex.id   -- an unchanged line is left alone (its version and time don't move — other editors can tell what changed)
       and (coalesce((e->>'reset')::boolean,false) or ex.removed_rev is not null
-        or row(ex.seq,ex.kind,ex.section,ex.part,ex.length_mm,ex.width_mm,ex.qty,ex.unit_qty,ex.material,ex.material_other,ex.edging,ex.note)
+        or row(ex.seq,ex.kind,ex.section,ex.part,ex.length_mm,ex.width_mm,ex.qty,ex.unit_qty,ex.material,ex.material_other,ex.edging,ex.edging2,ex.note)
            is distinct from row(coalesce((e->>'seq')::int,ex.seq),coalesce(e->>'kind',ex.kind),e->>'section',e->>'part',(e->>'length_mm')::numeric,
-             (e->>'width_mm')::numeric,e->>'qty',e->>'unit_qty',e->>'material',coalesce((e->>'material_other')::boolean,false),e->>'edging',e->>'note')
+             (e->>'width_mm')::numeric,e->>'qty',e->>'unit_qty',e->>'material',coalesce((e->>'material_other')::boolean,false),e->>'edging',e->>'edging2',e->>'note')
         or (e->>'snag_id' is not null and e->>'snag_id' is distinct from ex.snag_id));
   else
    -- 3. new lines
-   insert into list_lines(id,list_id,seq,kind,section,part,length_mm,width_mm,qty,unit_qty,material,material_other,edging,note,snag_id,src_line_id,added_rev)
+   insert into list_lines(id,list_id,seq,kind,section,part,length_mm,width_mm,qty,unit_qty,material,material_other,edging,edging2,note,snag_id,src_line_id,added_rev)
     values(e->>'id',r.id,coalesce((e->>'seq')::int,0),e->>'kind',e->>'section',e->>'part',(e->>'length_mm')::numeric,(e->>'width_mm')::numeric,
-     e->>'qty',e->>'unit_qty',e->>'material',coalesce((e->>'material_other')::boolean,false),e->>'edging',e->>'note',e->>'snag_id',e->>'src_line_id',nrev);
+     e->>'qty',e->>'unit_qty',e->>'material',coalesce((e->>'material_other')::boolean,false),e->>'edging',e->>'edging2',e->>'note',e->>'snag_id',e->>'src_line_id',nrev);
   end if;
  end loop;
  -- 5. lines that have gone are marked removed, never deleted
