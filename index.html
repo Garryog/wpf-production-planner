@@ -3419,7 +3419,7 @@ function lsHomeHTML(){
       ${sel('lh-rev',LH.rev,[['','Any revision'],['revised','Revised (rev 2+)']])}
       ${sel('lh-state',LH.state,[['','Not archived'],['draft','Draft'],['live','Live (with the saw)'],['done','Done'],['archived','Archived']])}
       ${LH.q||LH.proj||LH.type||LH.kind!=='live'||LH.rev||LH.state?'<button class="btn btn-s" id="lh-x" style="font-size:12px">✕ Clear</button>':''}
-      <span style="flex:1"></span>${LH.kind==='tpl'?`<button class="btn btn-s" id="lh-copy"${LH.proj?'':' disabled title="Pick the project first"'}>⧉ Copy from another project</button><button class="btn btn-g" id="lh-newtpl"${LH.proj?'':' disabled title="Pick the project first"'}>＋ New template</button>`:''}<button class="btn btn-s" id="lh-projs">🏗 Projects</button><button class="btn btn-g" id="lh-new">＋ New list</button>
+      <span style="flex:1"></span>${LH.kind==='tpl'?`<button class="btn btn-s" id="lh-copy"${LH.proj?'':' disabled title="Pick the project first"'}>⧉ Copy from another project</button><button class="btn btn-g" id="lh-newtpl"${LH.proj?'':' disabled title="Pick the project first"'}>＋ New template</button>`:''}<button class="btn btn-s" id="lh-projs">🏗 Projects</button><button class="btn btn-s" id="lh-std" title="The house heading and the standard sub-headings (Fillers and Kickers, Worktops, Stores items) ready to fill">＋ New list – standard layout</button><button class="btn btn-g" id="lh-new">＋ New list</button>
     </div>
     <input type="file" id="lh-file" accept=".xlsx,.xls" style="display:none"><div id="lh-upmsg" style="font-size:12px;margin-bottom:6px"></div>
     ${keys.length?keys.map(k=>{const a=grp.get(k);return `<div class="lh-grp" style="margin-bottom:12px"><div style="background:#14335c;color:#fff;border-radius:6px 6px 0 0;padding:7px 10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -3437,6 +3437,7 @@ function lsHomeBind(){
   const x=document.getElementById('lh-x');if(x)x.onclick=()=>{Object.assign(LH,{q:'',proj:'',type:'',kind:'live',rev:'',state:''});render();};
   const pj=document.getElementById('lh-projs');if(pj)pj.onclick=()=>lsProjectsDlg();
   const nw=document.getElementById('lh-new');if(nw)nw.onclick=()=>openListEditor(null,'',LH.proj||'');
+  const ns=document.getElementById('lh-std');if(ns)ns.onclick=()=>lsNewStd('',LH.proj||'');
   const nt=document.getElementById('lh-newtpl');if(nt)nt.onclick=()=>openListEditor(null,'',LH.proj,{tpl:true});
   const cp=document.getElementById('lh-copy');if(cp)cp.onclick=()=>lsCopyDlg(LH.proj);
   document.querySelectorAll('[data-lhtpl]').forEach(b=>b.onclick=()=>{LH.proj=b.dataset.lhtpl;LH.kind='tpl';render();});
@@ -3566,6 +3567,15 @@ function lsSuggest(o){return suggestTpl(o,lsCache().all.filter(l=>l.tpl&&!l.arch
 function lsFuTds(l){ // Lists home: the tagged jobs' Floor and Unit in their own columns (Garry, 4 Nov)
   const os=(l.wos||[]).map(w=>DB.orders.find(x=>x.wo===w)).filter(Boolean),u=f=>[...new Set(os.map(f).filter(Boolean))].map(escA).join(', ')||'<span style="color:var(--t3)">—</span>';
   return `<td>${u(fuF)}</td><td>${u(fuU)}</td>`;}
+/* "New list – standard layout" (Garry, 4 Nov): the editor opens with the house heading (from the work order's unit) and the
+   standard sub-headings Fillers and Kickers / Worktops / Stores items, two empty rows under each. The Colour drop-down is the
+   project's own materials (+ Add new material…). Empty rows and headings with nothing under them never reach the saw. */
+const LS_STD_SUBS=['Fillers and Kickers','Worktops','Stores items'];
+function lsStdHouse(o){const u=fuU(o);return !u?'':/^\d+[a-z]?$/i.test(u)?'House '+u:u;}
+function lsStdRows(o){const e=()=>({k:'part',item:'',qty:'',L:'',W:'',mat:'',edging:'',edging2:'',note:''});
+  return[{k:'hdr',item:lsStdHouse(o),note:''},...LS_STD_SUBS.flatMap(s=>[{k:'hdr',item:s,note:'',sub:true},e(),e()])];}
+function lsNewStd(wo,pid){const o=wo?DB.orders.find(x=>x.wo===wo):null;
+  openListEditor(null,wo||'',pid||(o&&(lsProjForCust(o.customer)||{}).id)||'',{std:true,rows:lsStdRows(o),note:'Standard layout — fill in the rows under each heading. Empty rows, and headings with nothing under them, are left off the saw.'});}
 function lsListName(o){return o?(fuU(o)||o.title||o.wo):'';}
 async function confirmList(wo,tid,by){
   const o=DB.orders.find(x=>x.wo===wo);if(!o)throw new Error(wo+' is no longer on the planner');
@@ -3602,6 +3612,7 @@ function ltiInner(){
       ${busy?'<div class="lti-msg" style="color:#14335c">Saving…</div>':`<div class="lti-act">
         ${r.tid?`<button class="btn btn-g" data-lticonf="${escA(w)}" style="${btn}">✓ Confirm</button>`:''}
         ${pid?`<button class="btn btn-s" data-ltichg="${escA(w)}" style="${btn}">${LTI.open===w?'✕ Close':'Change template ▾'}</button>`:''}
+        ${r.tid?'':`<button class="btn btn-g" data-ltistd="${escA(w)}" style="${btn}" title="Opens the editor with the house heading and the standard sub-headings ready to fill">＋ New list – standard layout</button>`}
         <button class="btn btn-s" data-ltina="${escA(w)}|none" style="${btn}">No list needed</button>
         <button class="btn btn-s" data-ltina="${escA(w)}|paper" style="${btn}">Paper list issued</button></div>`}
       ${!busy&&pid&&LTI.open===w?`<div class="lti-act"><select data-ltisel="${escA(w)}" style="${LS_INP};max-width:100%"><option value="">— pick a template (${escA(lsProjName(pid))}) —</option>${alts.map(id=>`<option value="${escA(id)}"${id===r.tid?' selected':''}>${escA(ltiTplName(id))}</option>`).join('')}<option value="__type">✍ Type a list instead…</option></select></div>`:''}
@@ -3674,6 +3685,7 @@ function ltiBind(){
   q('[data-ltiretry]',b=>b.onclick=()=>{const w=b.dataset.ltiretry,r=LTI.res[w]||{};if(r.again)r.again();else ltiConfirm([w]);}); // ↻ Retry does the SAME thing again: an Excel list stays that Excel list, a link stays that link
   q('#lti-all',b=>b.onclick=()=>ltiConfirm(ltiRows().filter(r=>r.lvl==='strong'&&r.tid).map(r=>r.o.wo)));
   q('[data-ltixl]',b=>b.onclick=()=>{const i=b.dataset.ltixl.indexOf('|');ltiUse(b.dataset.ltixl.slice(0,i),b.dataset.ltixl.slice(i+1));});
+  q('[data-ltistd]',b=>b.onclick=()=>lsNewStd(b.dataset.ltistd));
   q('[data-ltichg]',b=>b.onclick=()=>{LTI.open=LTI.open===b.dataset.ltichg?'':b.dataset.ltichg;ltiAfter();});
   q('[data-ltisel]',e=>e.onchange=()=>{const w=e.dataset.ltisel;
     if(e.value==='__type'){const o=DB.orders.find(x=>x.wo===w);LTI.open='';openListEditor(null,w,(lsProjForCust(o&&o.customer)||{}).id||'');return;}
@@ -4056,7 +4068,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
   };
   const gridHTML=()=>{const b=blocks();
     if(window.innerWidth<700)return `<div class="me-cards">${R().map((r,i)=>cardHTML(r,i,b)).join('')||'<div style="color:var(--t3);padding:10px">No rows yet — press ＋ Row.</div>'}</div>`;
-    return `<table class="me-tbl me-grid"><colgroup><col style="width:84px"><col><col style="width:110px"><col style="width:80px"><col style="width:80px"><col style="width:170px"><col style="width:104px"><col style="width:104px"><col style="width:14%"><col style="width:58px"><col style="width:42px"></colgroup><thead><tr><th></th><th>Description</th><th>Qty</th><th>Length</th><th>Width</th><th>Colour</th><th>Edging 1</th><th>Edging 2</th><th>Note</th><th title="Bought in — never cut or picked">Bought in</th><th></th></tr></thead><tbody>${R().map((r,i)=>rowHTML(r,i,b)).join('')||'<tr><td colspan="11" style="color:var(--t3);padding:10px">No rows yet — press ＋ Heading or ＋ Row.</td></tr>'}</tbody></table>`;};
+    return `<table class="me-tbl me-grid"><colgroup><col style="width:84px"><col><col style="width:104px"><col style="width:70px"><col style="width:70px"><col style="width:150px"><col style="width:92px"><col style="width:92px"><col style="width:12%"><col style="width:58px"><col style="width:42px"></colgroup><thead><tr><th></th><th>Description</th><th>Qty</th><th>Length</th><th>Width</th><th>Colour</th><th>Edging 1</th><th>Edging 2</th><th>Note</th><th title="Bought in — never cut or picked">Bought in</th><th></th></tr></thead><tbody>${R().map((r,i)=>rowHTML(r,i,b)).join('')||'<tr><td colspan="11" style="color:var(--t3);padding:10px">No rows yet — press ＋ Heading or ＋ Row.</td></tr>'}</tbody></table>`;};
   const updTotals=()=>{const b=blocks();ov.querySelectorAll('[data-tot]').forEach(e=>{const i=+e.dataset.tot,r=R()[i];if(r&&b.U[i]!=null)e.innerHTML=totHTML(r,b.U[i]);});};
   const updTag=i=>{const t=ov.querySelector('[data-tag="'+i+'"]'),r=R()[i];if(t&&r){const tg=tagTxt(r);t.textContent=tg;t.hidden=!tg;}
     const s=ov.querySelector('[data-mr="'+i+'|mat"]');if(s&&r&&r.matAuto&&String(r.mat||'')===String(r.matAuto)){const w=lsAutoHidden(r)?'':String(r.mat);if(s.value!==w&&(w===''||[...s.options].some(x=>x.value===w)))s.value=w;}};
@@ -4175,7 +4187,11 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       if(e.target.value==='__new'){if(!lsEditOk()){draw();return;}const n=prompt('New project name:','');if(!n||!n.trim()){draw();return;}
         lsProject(n.trim()).then(id=>{st.pid=id;edges=lsProjEdges(id);draw();}).catch(x=>{draw();g('me-err').textContent='Project not added — '+x.message;});return;}
       st.pid=e.target.value;edges=lsProjEdges(st.pid);draw();};
-    const w=g('me-wo');if(w)w.onchange=()=>{const prev=st.wo;st.wo=w.value;const ne=g('me-name');if(ne&&(!ne.value||ne.value===defName(prev)))ne.value=defName(st.wo);
+    // the name boxes keep st up to date as you type: a redraw (picking a colour, adding a row) no longer puts back the old name
+    const nm=g('me-name');if(nm)nm.oninput=()=>{st.name=nm.value;};const tn0=g('me-tname');if(tn0)tn0.oninput=()=>{st.tname=tn0.value;};
+    const w=g('me-wo');if(w)w.onchange=()=>{const prev=st.wo;st.wo=w.value;const ne=g('me-name');if(ne&&(!ne.value||ne.value===defName(prev))){ne.value=defName(st.wo);st.name=ne.value;}
+      const h0=R()[0];if(opt.std&&h0&&h0.k==='hdr'&&!h0.sub&&(!String(h0.item||'').trim()||h0.item===lsStdHouse(DB.orders.find(x=>x.wo===prev)))){ // standard layout: the house heading follows the work order
+        h0.item=lsStdHouse(DB.orders.find(x=>x.wo===st.wo));const hi=ov.querySelector('[data-mr="0|item"]');if(hi)hi.value=h0.item;}
       const o=DB.orders.find(x=>x.wo===st.wo),p=o&&lsProjForCust(o.customer);if(!st.pid&&p){keep();st.pid=p.id;edges=lsProjEdges(p.id);draw();}};
     g('me-save').onclick=()=>save();
   };
