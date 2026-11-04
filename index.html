@@ -5841,6 +5841,52 @@ function renderWorkList(app,mode){
   });
 }
 
+/* ---------- Stores dockets (SUPABASE_CHANGES.md 2026-11-04 "Stores dockets") ----------
+   A docket = a batch of stores / bought-in items sent to a project's site (e.g. 20 taps held back in stores), numbered
+   D26-0001… The two docket tables are written ONLY by the database functions make_docket / docket_delivered / docket_cancel,
+   which hold the rules: part quantities (10 of 20), never more than the line's quantity, two PCs can't send the same items,
+   one number per docket. With the lists switch OFF only free-typed items go on a docket (old lists have no permanent line
+   ids). Dockets are read when a docket screen is opened — never polled, and never at start-up. */
+const DK={};
+const dkNum=q=>{const s=String(q==null?'':q).trim();return /^\d+(\.\d+)?$/.test(s)?+s:null;};
+const dkQ=n=>n==null?'':String(+(+n).toFixed(3));
+function dkErr(e){const m=String((e&&e.message)||e||'');
+  if(/\b404\b|42P01|PGRST20[25]|does not exist|Could not find the (function|table)/.test(m))return 'The docket tables aren\'t set up in the database yet — the "Stores dockets" SQL in SUPABASE_CHANGES.md has to be run first.';
+  if(/Failed to fetch|NetworkError|Load failed|network/i.test(m))return 'No connection to the database — try again when the signal is back.';
+  return m;}
+// WO | Floor | Unit | Title of a list's work orders (Floor and Unit kept apart, Garry 4 Nov)
+function dkWoInfo(wos){const os=(wos||[]).map(w=>DB.orders.find(o=>o.wo===w)).filter(Boolean),j=f=>[...new Set(os.map(f).map(v=>String(v==null?'':v).trim()).filter(Boolean))].join(', ');
+  return{wo:(wos||[]).join(', '),floor:j(fuF),unit:j(fuU),title:j(o=>o.title)};}
+async function dkRpc(fn,args){
+  try{return await lsRpc(fn,args);}
+  catch(e){if(e.status==null&&!/switched off/.test(String(e.message)))e.lost=true;throw e;} // no reply: it may have landed
+}
+// Make one docket. docket: {project_id|project_name, customer, site_address, delivery_instructions, cid}; items: [{line_id, qty, wo, floor, unit, title}] or
+// free-typed [{item, qty, wo, floor, unit, title, spec}]. Reply {ok, id, docket_no} or {ok:false, refused:[{line_id, why, left, dockets}]}.
+async function dkMake(docket,items,by){return dkRpc('make_docket',{p_docket:docket,p_items:items,p_by:by});}
+async function dkDelivered(id,recBy,recAt,sig,by){return dkRpc('docket_delivered',{p_id:id,p_received_by:recBy,p_received_at:recAt||null,p_signature_name:sig||null,p_by:by});}
+async function dkCancel(id,why,by){return dkRpc('docket_cancel',{p_id:id,p_why:why,p_by:by});}
+// Dockets (newest first) + their items. q: extra PostgREST filters, e.g. '&made_at=gte.…'
+async function dkLoad(q){
+  const ds=await lsGet('stores_dockets?select=*'+(q||'')+'&order=made_at.desc,id');
+  const its=ds.length?await lsGetIn('stores_docket_items','docket_id',ds.map(d=>d.id)):[];
+  const by=new Map(ds.map(d=>[d.id,[]]));its.forEach(i=>{const a=by.get(i.docket_id);if(a)a.push(i);});
+  by.forEach(a=>a.sort((x,y)=>(x.seq||0)-(y.seq||0)||(+x.id)-(+y.id)));
+  return ds.map(d=>({...d,items:by.get(d.id)||[]}));
+}
+// Sent so far per line (live dockets only): {line_id: {n: qty sent, k: items, dk: [docket numbers]}}
+async function dkSentFor(lineIds){
+  const its=lineIds.length?(await lsGetIn('stores_docket_items','line_id',lineIds)).filter(i=>i.active):[];
+  const dks=its.length?await lsGetIn('stores_dockets','id',[...new Set(its.map(i=>i.docket_id))]):[];
+  const no=new Map(dks.map(d=>[d.id,d.docket_no])),m={};
+  its.forEach(i=>{const s=m[i.line_id]||(m[i.line_id]={n:0,k:0,dk:[]});s.n+=i.qty==null?0:+i.qty;s.k++;const d=no.get(i.docket_id);if(d&&!s.dk.includes(d))s.dk.push(d);});
+  return m;
+}
+const DK_WHY={missing:'not on the list any more',removed:'taken off the list',['not-live']:'the list was replaced or archived',['other-project']:'belongs to another project',['wrong-kind']:'not a stores or bought-in item',
+  ['not-needed']:'marked not needed',waiting:'waiting on stock — release it first',['got-out']:'already got out',sent:'already sent',['bad-qty']:'type how many to send',['too-many']:'more than is left to send',
+  ['no-item']:'type what the item is',['no-qty']:'type how many'};
+function dkWhyTxt(r){return (DK_WHY[r.why]||r.why)+(r.left!=null&&r.why!=='sent'&&r.left>0?' — only '+dkQ(r.left)+' left':'')+(r.dockets?' (on '+r.dockets+')':'');}
+
 /* ---------- Management dashboard: one live read-only picture of the whole chain ---------- */
 function renderDash(app){
   const all=delAll();
