@@ -68,11 +68,11 @@ const dlg = p => p.evaluate(() => !!document.getElementById('dk-send-dlg'));
     await p.page.evaluate(() => dkMake({ project_id: 'P1', cid: 'Z1' }, [{ line_id: 'L1:3', qty: '8' }], 'Op'));
     await p.page.evaluate(() => document.getElementById('dk-list').click()); await X.sleep(500);
     S.offlineD = true;
-    await p.page.evaluate(() => { window.prompt = () => 'wrong'; document.querySelector('[data-dkcan]').click(); }); await X.sleep(800);
+    await p.page.evaluate(() => { window.prompt = () => 'wrong'; document.querySelector('[data-dkcan]').click(); document.querySelector('#dk-left [data-dkleft="0"]').click(); }); await X.sleep(800);
     const m = await p.page.evaluate(() => document.getElementById('dkl-msg').textContent);
     rec('5 cancel with no connection: "Not cancelled — No connection…" still shown after the reload', /^Not cancelled — No connection/.test(m) && S.db.t.stores_dockets[0].status === 'made', m);
     S.offlineD = false;
-    await p.page.evaluate(() => document.querySelector('[data-dkcan]').click()); await X.sleep(800);
+    await p.page.evaluate(() => { document.querySelector('[data-dkcan]').click(); document.querySelector('#dk-left [data-dkleft="0"]').click(); }); await X.sleep(800);
     const m2 = await p.page.evaluate(() => document.getElementById('dkl-msg').textContent);
     rec('5 cancelled once the signal is back: the old message is cleared', S.db.t.stores_dockets[0].status === 'cancelled' && m2 === '', m2);
   }

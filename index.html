@@ -3480,7 +3480,7 @@ function lsHomeHTML(){
       ${sel('lh-rev',LH.rev,[['','Any revision'],['revised','Revised (rev 2+)']])}
       ${sel('lh-state',LH.state,[['','Not archived'],['draft','Draft'],['live','Live (with the saw)'],['done','Done'],['archived','Archived']])}
       ${LH.q||LH.proj||LH.type||LH.kind!=='live'||LH.rev||LH.state?'<button class="btn btn-s" id="lh-x" style="font-size:12px">✕ Clear</button>':''}
-      <span style="flex:1"></span>${LH.kind==='tpl'?`<button class="btn btn-s" id="lh-copy"${LH.proj?'':' disabled title="Pick the project first"'}>⧉ Copy from another project</button><button class="btn btn-g" id="lh-newtpl"${LH.proj?'':' disabled title="Pick the project first"'}>＋ New template</button>`:''}<button class="btn btn-s" id="lh-projs">🏗 Projects</button><button class="btn btn-s" id="lh-sent" title="Everything sent to a project's site between two dates — print or Excel">📦 Items sent</button><button class="btn btn-s" id="lh-std" title="The house heading and the standard sub-headings (Fillers and Kickers, Worktops, Stores items) ready to fill">＋ New list – standard layout</button><button class="btn btn-g" id="lh-new">＋ New list</button>
+      <span style="flex:1"></span>${LH.kind==='tpl'?`<button class="btn btn-s" id="lh-copy"${LH.proj?'':' disabled title="Pick the project first"'}>⧉ Copy from another project</button><button class="btn btn-g" id="lh-newtpl"${LH.proj?'':' disabled title="Pick the project first"'}>＋ New template</button>`:''}<button class="btn btn-s" id="lh-projs">🏗 Projects</button><button class="btn btn-s dk-gate" id="lh-sent"${dkVis()?'':' hidden'} title="Everything sent to a project's site between two dates — print or Excel">📦 Items sent</button><button class="btn btn-s" id="lh-std" title="The house heading and the standard sub-headings (Fillers and Kickers, Worktops, Stores items) ready to fill">＋ New list – standard layout</button><button class="btn btn-g" id="lh-new">＋ New list</button>
     </div>
     <input type="file" id="lh-file" accept=".xlsx,.xls" style="display:none"><div id="lh-upmsg" style="font-size:12px;margin-bottom:6px"></div>
     ${keys.length?keys.map(k=>{const a=grp.get(k);return `<div class="lh-grp" style="margin-bottom:12px"><div style="background:#14335c;color:#fff;border-radius:6px 6px 0 0;padding:7px 10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -3497,7 +3497,7 @@ function lsHomeBind(){
   [['lh-proj','proj'],['lh-type','type'],['lh-kind','kind'],['lh-rev','rev'],['lh-state','state']].forEach(([id,k])=>{const e=document.getElementById(id);if(e)e.onchange=()=>{LH[k]=e.value;render();};});
   const x=document.getElementById('lh-x');if(x)x.onclick=()=>{Object.assign(LH,{q:'',proj:'',type:'',kind:'live',rev:'',state:''});render();};
   const pj=document.getElementById('lh-projs');if(pj)pj.onclick=()=>lsProjectsDlg();
-  const sn=document.getElementById('lh-sent');if(sn)sn.onclick=()=>dkReportDlg();
+  const sn=document.getElementById('lh-sent');if(sn){sn.onclick=()=>dkReportDlg();dkShow();}
   const nw=document.getElementById('lh-new');if(nw)nw.onclick=()=>openListEditor(null,'',LH.proj||'');
   const ns=document.getElementById('lh-std');if(ns)ns.onclick=()=>lsNewStd('',LH.proj||'');
   const nt=document.getElementById('lh-newtpl');if(nt)nt.onclick=()=>openListEditor(null,'',LH.proj,{tpl:true});
@@ -3547,8 +3547,8 @@ function renderProdV2(app){
   else if(prodTab==='snags')renderSnags(app);
   else renderProd(app);
   const t=(k,l)=>`<button data-prodtab="${k}" style="padding:9px 18px;border:none;border-radius:6px;font-size:15px;font-weight:700;cursor:pointer;${prodTab===k?'background:#14335c;color:#fff':'background:#e6ebf2;color:#14335c'}">${l}</button>`;
-  app.insertAdjacentHTML('afterbegin',`<div id="prod-strip" style="max-width:1400px;margin:10px auto 0;padding:0 20px;display:flex;gap:8px;flex-wrap:wrap">${t('today','🧭 Today')}${t('lists','📋 Lists')}${t('snags','🩹 Snags')}<button id="prod-sent" style="padding:9px 18px;border:none;border-radius:6px;font-size:15px;font-weight:700;cursor:pointer;background:#e6ebf2;color:#14335c">📦 Items sent</button></div>`);
-  document.getElementById('prod-sent').onclick=()=>dkReportDlg();
+  app.insertAdjacentHTML('afterbegin',`<div id="prod-strip" style="max-width:1400px;margin:10px auto 0;padding:0 20px;display:flex;gap:8px;flex-wrap:wrap">${t('today','🧭 Today')}${t('lists','📋 Lists')}${t('snags','🩹 Snags')}<button id="prod-sent" class="dk-gate"${dkVis()?'':' hidden'} style="padding:9px 18px;border:none;border-radius:6px;font-size:15px;font-weight:700;cursor:pointer;background:#e6ebf2;color:#14335c">📦 Items sent</button></div>`);
+  document.getElementById('prod-sent').onclick=()=>dkReportDlg();dkShow();
   document.querySelectorAll('[data-prodtab]').forEach(b=>b.onclick=()=>{prodTab=b.dataset.prodtab;if(prodTab==='lists')lsStart();render();});
 }
 /* "Waiting for a list" on the saw (build note j): each planned job with no list, with its cut-by date, the list due by
@@ -4837,9 +4837,9 @@ let pmTab='';
 function renderPMV2(app){
   if(pmTab==='snags')renderSnags(app);else renderPM(app);
   const t=(k,l)=>`<button data-pmtab="${k}" style="padding:9px 18px;border:none;border-radius:6px;font-size:15px;font-weight:700;cursor:pointer;${pmTab===k?'background:#14335c;color:#fff':'background:#e6ebf2;color:#14335c'}">${l}</button>`;
-  app.insertAdjacentHTML('afterbegin',`<div id="pm-strip" style="max-width:1400px;margin:10px auto 0;padding:0 20px;display:flex;gap:8px;flex-wrap:wrap">${t('','🚚 Deliveries')}${t('snags','🩹 Snags')}<button id="pm-sent" style="padding:9px 18px;border:none;border-radius:6px;font-size:15px;font-weight:700;cursor:pointer;background:#e6ebf2;color:#14335c">📦 Items sent</button></div>`);
+  app.insertAdjacentHTML('afterbegin',`<div id="pm-strip" style="max-width:1400px;margin:10px auto 0;padding:0 20px;display:flex;gap:8px;flex-wrap:wrap">${t('','🚚 Deliveries')}${t('snags','🩹 Snags')}<button id="pm-sent" class="dk-gate"${dkVis()?'':' hidden'} style="padding:9px 18px;border:none;border-radius:6px;font-size:15px;font-weight:700;cursor:pointer;background:#e6ebf2;color:#14335c">📦 Items sent</button></div>`);
   document.querySelectorAll('[data-pmtab]').forEach(b=>b.onclick=()=>{pmTab=b.dataset.pmtab;render();});
-  document.getElementById('pm-sent').onclick=()=>dkReportDlg();
+  document.getElementById('pm-sent').onclick=()=>dkReportDlg();dkShow();
 }
 /* ---------- S8 (V2 only): locking and revisions on screen ----------
    A live list locks when it's sent to the saw, when anything is ticked (the database), or when its cut-by date is today or
@@ -6057,7 +6057,21 @@ async function dkRpc(fn,args){
 // free-typed [{item, qty, wo, floor, unit, title, spec}]. Reply {ok, id, docket_no} or {ok:false, refused:[{line_id, why, left, dockets}]}.
 async function dkMake(docket,items,by){return dkRpc('make_docket',{p_docket:docket,p_items:items,p_by:by});}
 async function dkDelivered(id,recBy,recAt,sig,by){return dkRpc('docket_delivered',{p_id:id,p_received_by:recBy,p_received_at:recAt||null,p_signature_name:sig||null,p_by:by});}
-async function dkCancel(id,why,by){return dkRpc('docket_cancel',{p_id:id,p_why:why,p_by:by});}
+// left (Garry, 4 Nov): did the items leave stores? true = only the docket is voided; false = items back to "to pick"
+async function dkCancel(id,why,by,left){if(left!==true&&left!==false)throw new Error('say whether the items left stores');return dkRpc('docket_cancel',{p_id:id,p_why:why,p_by:by,p_left:left});}
+// Cancel a docket: "Did these items leave stores?" — Yes / No / don't cancel. cb(true|false)
+function dkLeftAsk(no,cb){
+  const ov=document.createElement('div');ov.className='pod-ovl';ov.id='dk-left';
+  ov.innerHTML=`<div class="pod-in" style="min-width:min(440px,92vw);max-width:520px">
+    <div style="font-weight:800;color:#14335c;font-size:17px;margin-bottom:6px">Cancel docket ${escA(no)}</div>
+    <div style="font-size:18px;font-weight:800;margin-bottom:12px">Did these items leave stores?</div>
+    <button class="rbtn" data-dkleft="1" style="display:block;width:100%;text-align:left;font-size:15px;margin-bottom:8px"><b>Yes — they left</b><br><span style="font-size:12px;color:var(--t3)">The items stay "got out". Only the docket is cancelled.</span></button>
+    <button class="rbtn" data-dkleft="0" style="display:block;width:100%;text-align:left;font-size:15px;margin-bottom:8px"><b>No — still in stores</b><br><span style="font-size:12px;color:var(--t3)">The items go back to "to pick" and can go on another docket.</span></button>
+    <div style="text-align:right;margin-top:6px"><button class="btn btn-s" id="pod-x">Don't cancel</button></div></div>`;
+  document.body.appendChild(ov);
+  ov.onclick=e=>{if(e.target===ov||e.target.id==='pod-x')ov.remove();};
+  ov.querySelectorAll('[data-dkleft]').forEach(b=>b.onclick=()=>{ov.remove();cb(b.dataset.dkleft==='1');});
+}
 // Dockets (newest first) + their items. q: extra PostgREST filters, e.g. '&made_at=gte.…'
 async function dkLoad(q){
   const ds=await lsGet('stores_dockets?select=*'+(q||'')+'&order=made_at.desc,id');
@@ -6132,7 +6146,7 @@ async function dkListDlg(){
   // keep=true: a reload after Cancel / Delivered keeps the message that action just set (A7: it was wiped)
   const load=async keep=>{try{S.all=await dkLoad();if(!keep)S.msg='';}catch(e){S.msg=(keep&&S.msg?S.msg+' — ':'')+dkErr(e);}draw();};
   const today=()=>todayLocal();
-  const stHTML=d=>d.status==='cancelled'?`<span class="dk-st can">CANCELLED</span> <span class="dk-sm">${escA(dkDate(d.cancelled_at))}${d.cancelled_by?' · '+escA(d.cancelled_by):''} — ${escA(d.cancel_why||'')}</span>`
+  const stHTML=d=>d.status==='cancelled'?`<span class="dk-st can">CANCELLED</span> <span class="dk-sm">${escA(dkDate(d.cancelled_at))}${d.cancelled_by?' · '+escA(d.cancelled_by):''} — ${escA(d.cancel_why||'')}${d.cancel_left===true?' · items left stores':d.cancel_left===false?' · items back to stores':''}</span>`
     :d.status==='delivered'?`<span class="dk-st ok">✓ DELIVERED</span> <span class="dk-sm">received by <b>${escA(d.received_by||'')}</b> ${escA(dkDate(d.received_at))}${d.signature_name?' · signed '+escA(d.signature_name):''}</span>`
     :'<span class="dk-st">Sent — not signed back yet</span>';
   const draw=()=>{
@@ -6173,14 +6187,14 @@ async function dkListDlg(){
         catch(e){S.msg='Not saved — '+dkErr(e);}
         S.busy=false;await load(true);});});
     b.querySelectorAll('[data-dkcan]').forEach(x=>x.onclick=()=>{const d=find(x.dataset.dkcan);if(!d||S.busy)return;
-      const why=prompt('Cancel docket '+d.docket_no+'?\n\nIt stays on record marked CANCELLED, and its items can be sent again.\n\nWhy is it being cancelled?','');
+      const why=prompt('Cancel docket '+d.docket_no+'?\n\nIt stays on record marked CANCELLED.\n\nWhy is it being cancelled?','');
       if(why===null)return;if(!why.trim()){toast('Not cancelled — a reason is needed');return;}
-      pickName('fit','Cancel docket '+d.docket_no,async by=>{S.busy=true;S.msg='';
-        try{const r=await dkCancel(d.id,why.trim(),by);
-          if(r&&r.ok){toast(d.docket_no+' cancelled');if(V2())lsPoll();}
+      dkLeftAsk(d.docket_no,left=>pickName('fit','Cancel docket '+d.docket_no,async by=>{S.busy=true;S.msg='';
+        try{const r=await dkCancel(d.id,why.trim(),by,left);
+          if(r&&r.ok){toast(d.docket_no+' cancelled — '+(left?'the items stay got out':'the items are back to "to pick"'));if(V2())lsPoll();}
           else S.msg=d.docket_no+' was already marked delivered — it can\'t be cancelled.';}
         catch(e){S.msg='Not cancelled — '+dkErr(e);}
-        S.busy=false;await load(true);});});
+        S.busy=false;await load(true);}));});
   };
   await load();
 }
@@ -6192,10 +6206,10 @@ function dkDayISO(s,add){const d=new Date(s+'T00:00:00');d.setDate(d.getDate()+(
 async function dkReportRows(pr,from,to){
   const lo=dkDayISO(from),hi=dkDayISO(to,1),k=s=>String(s||'').trim().toLowerCase(),out=[];
   const mine=d=>(pr.id&&d.project_id===pr.id)||[pr.name,pr.customer].filter(Boolean).map(k).includes(k(d.project_name));
-  const ds=(await dkLoad('&made_at=gte.'+encodeURIComponent(lo)+'&made_at=lt.'+encodeURIComponent(hi))).filter(d=>d.status!=='cancelled'&&mine(d));
+  const ds=(await dkLoad('&made_at=gte.'+encodeURIComponent(lo)+'&made_at=lt.'+encodeURIComponent(hi))).filter(d=>(d.status!=='cancelled'||d.cancel_left===true)&&mine(d)); // a cancelled docket whose items left stores: they still went
   ds.forEach(d=>(d.items||[]).filter(i=>i.active!==false).forEach(i=>out.push({at:d.made_at,docket:d.docket_no,wo:i.wo||'',floor:i.floor||'',unit:i.unit||'',title:i.title||'',item:i.item||'',
     qty:i.qty_text||dkQ(i.qty),spec:i.spec||'',list:i.list_id?((lsList(i.list_id)||{}).name||''):'',by:d.made_by||'',
-    deliv:d.status==='delivered'?'Yes — received by '+(d.received_by||'')+(d.received_at?' '+dkDate(d.received_at):''):'No'})));
+    deliv:d.status==='cancelled'?'No — docket '+d.docket_no+' cancelled (items left stores)':d.status==='delivered'?'Yes — received by '+(d.received_by||'')+(d.received_at?' '+dkDate(d.received_at):''):'No'})));
   if(V2()&&pr.id){ // stores lines ticked "got out" on the bench (items held back and sent on a docket are on the docket rows)
     const ids=[...LST.l.values()].filter(r=>r.project_id===pr.id&&!r.is_template).map(r=>r.id);
     const ev=[];
@@ -6250,8 +6264,20 @@ function dkReportDlg(){
   draw();
 }
 // Stores bench header: the docket buttons (Stores only — the saw screen is unchanged)
-function dkBarHTML(){return `<div class="dk-bar"><button id="dk-send">🚚 Send to site</button><button id="dk-list">📄 Dockets</button><button id="dk-rep">📦 Items sent</button></div>`;}
-function dkBarBind(){const b=id=>document.getElementById(id);if(b('dk-send'))b('dk-send').onclick=()=>dkSendDlg();if(b('dk-list'))b('dk-list').onclick=()=>dkListDlg();if(b('dk-rep'))b('dk-rep').onclick=()=>dkReportDlg();}
+function dkBarHTML(){return `<div class="dk-bar"><button id="dk-send" class="dk-gate"${dkVis()?'':' hidden'} title="A docket for fittings (stores and bought-in items) going to a project's site">🚚 Send fittings to site</button><button id="dk-list" class="dk-gate"${dkVis()?'':' hidden'}>📄 Dockets</button><button id="dk-rep" class="dk-gate"${dkVis()?'':' hidden'}>📦 Items sent</button></div>`;}
+function dkBarBind(){const b=id=>document.getElementById(id);if(b('dk-send'))b('dk-send').onclick=()=>dkSendDlg();if(b('dk-list'))b('dk-list').onclick=()=>dkListDlg();if(b('dk-rep'))b('dk-rep').onclick=()=>dkReportDlg();dkShow();}
+/* (Manager, 4 Nov) Before the "Stores dockets" SQL is run, the Send to site / Dockets / Items sent buttons are hidden quietly
+   instead of giving a technical message. ONE probe per page load, cached: tables there = show; "not found" = hidden for
+   this session; no reply (offline) = show (the dialogs say "no connection") and ask again a minute later. */
+const DKP={st:'',busy:false,retry:0};
+function dkVis(){return DKP.st==='ok'||(DKP.st==='net');}
+function dkProbe(){
+  if(DKP.busy||DKP.st==='ok'||DKP.st==='missing'||(DKP.st==='net'&&Date.now()<DKP.retry))return;DKP.busy=true;
+  lsGet1('stores_dockets?select=id&limit=1').then(()=>{DKP.st='ok';},e=>{const m=String((e&&e.message)||e||'');
+    if(/\b404\b|42P01|PGRST20[25]|does not exist|Could not find the (function|table)/.test(m))DKP.st='missing';else{DKP.st='net';DKP.retry=Date.now()+60000;}})
+   .then(()=>{DKP.busy=false;dkShow();});
+}
+function dkShow(){const v=dkVis();document.querySelectorAll('.dk-gate').forEach(b=>{b.hidden=!v;});dkProbe();}
 function dkProjLines(pid){
   const out=[];
   [...LST.l.values()].filter(r=>r.project_id===pid&&!r.archived&&!r.is_template)
@@ -6307,14 +6333,14 @@ async function dkSendDlg(){
       <td data-l="Title"><input class="dk-in" data-dkf="${i}|title" value="${E(f.title)}" placeholder="Title"></td><td class="dk-it"><input class="dk-in" data-dkf="${i}|item" value="${E(f.item)}" placeholder="Item, e.g. Spare handles"></td><td data-l="Spec"><input class="dk-in" data-dkf="${i}|spec" value="${E(f.spec)}" placeholder="Spec"></td>
       <td class="dk-q" data-l="Qty"><input inputmode="decimal" data-dkf="${i}|qty" value="${E(f.qty)}" placeholder="Qty"></td><td></td></tr>`;
     body().innerHTML=`<div style="font-weight:800;color:#14335c;font-size:17px;margin-bottom:2px">🚚 Send to site</div>
-      <div style="font-size:12px;color:var(--t3);margin-bottom:8px">${v2?'Tick what goes to site and how many. The planner gives the docket its number and marks the items got out.':'Type what goes to site. (Items from the cutting lists can be picked once the new cutting lists are switched on.)'}</div>
+      <div style="font-size:12px;color:var(--t3);margin-bottom:8px">${v2?'Dockets are for <b>fittings</b> (stores and bought-in items) — cutting-list (saw) parts are not docketed. Tick the fittings going to site and how many. The planner gives the docket its number and marks them got out.':'Dockets are for fittings (stores and bought-in items). Type the fittings going to site. (Fittings from the cutting lists can be picked once the new cutting lists are switched on.)'}</div>
       <label class="dk-f" for="dk-proj">Project</label><select id="dk-proj" class="dk-in"><option value="">— pick the project —</option>${ch.map(p=>`<option value="${E(v2?p.id:p.name)}"${pr&&(v2?p.id===pr.id:p.name===pr.name)?' selected':''}>${E(p.name)}${p.customer&&p.customer!==p.name?' — '+E(p.customer):''}</option>`).join('')}</select>
       ${!pr?'':`<div class="dk-two"><div><label class="dk-f" for="dk-site">Deliver to (site address)</label><textarea id="dk-site" class="dk-in" rows="2" placeholder="Site address">${E(S.site)}</textarea></div>
         <div><label class="dk-f" for="dk-instr">Delivery instructions</label><textarea id="dk-instr" class="dk-in" rows="2" placeholder="e.g. Block C, ground floor — ask for the site foreman">${E(S.instr)}</textarea></div></div>
-      ${v2?`<div class="dk-h">Items not yet got out${S.loading?' — loading…':' · '+S.rows.length}</div>
+      ${v2?`<div class="dk-h">Fittings not yet got out${S.loading?' — loading…':' · '+S.rows.length}</div>
         ${S.rows.length?`<div style="margin:2px 0 4px"><button class="btn btn-s" id="dk-all" style="font-size:12px">Tick all ready</button> <button class="btn btn-s" id="dk-none" style="font-size:12px">Untick all</button></div>
         <table class="lst-tbl dk-tbl"><thead><tr><th></th><th>WO</th><th>Floor</th><th>Unit</th><th>Title</th><th>Item</th><th>Spec</th><th>Send</th><th>Sent</th></tr></thead><tbody>${S.rows.map(row).join('')}</tbody></table>`
-        :S.loading?'':'<div style="font-size:13px;color:var(--t3);padding:6px 0">Nothing left to send on this project\'s lists.</div>'}`:''}
+        :S.loading?'':'<div style="font-size:13px;color:var(--t3);padding:6px 0">No fittings left to send on this project\'s lists.</div>'}`:''}
       <div class="dk-h">${v2?'Items not on a list (typed)':'Items'}</div>
       <table class="lst-tbl dk-tbl dk-ftbl"><thead><tr><th></th><th>WO</th><th>Floor</th><th>Unit</th><th>Title</th><th>Item</th><th>Spec</th><th>Qty</th><th></th></tr></thead><tbody>${S.free.map(fr).join('')}</tbody></table>
       <datalist id="dk-wos">${dkWosFor(pr).map(w=>`<option value="${E(w)}">`).join('')}</datalist>

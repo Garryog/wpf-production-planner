@@ -627,7 +627,10 @@ create trigger list_lines_snag after update of status on list_lines for each row
 - Three database functions hold the rules (the app can only READ the docket tables; it can't add, change or delete rows itself):
   - `make_docket` — checks every item first and refuses the whole docket (nothing saved) if a line is waiting (release it first), not needed, already got out, already fully sent, or asked for more than is left. Two PCs sending the same taps at the same moment: the second one waits, then is told they're already on the first docket. Takes the next number for the year — two PCs never get the same number. A resend after a lost reply gives back the docket already made (no second docket). Free-typed items (e.g. spare handles not on any list) work whether the new cutting lists are switched on or not; items picked from cutting lists only work with the lists switched on.
   - `docket_delivered` — the signed docket came back: who received it on site (print name), the date, the name signed.
-  - `docket_cancel` — a wrong docket is cancelled with a reason; it stays on record, marked CANCELLED. Its quantities can be sent again, and a stores line it had marked "got out" goes back to "to pick". A delivered docket can't be cancelled.
+  - `docket_cancel` — a wrong docket is cancelled with a reason; it stays on record, marked CANCELLED. A delivered docket can't be cancelled. **Stores is asked "Did these items leave stores?" (Garry, 4 Nov):**
+    - **Yes** — only the docket is voided: the items stay "got out" and still count as sent (they really left), and the "Items sent" report still lists them, marked "docket cancelled".
+    - **No** — the items are still in stores: their quantities can be sent again, and a stores line this docket had marked "got out" goes back to "to pick".
+    - (Added 4 Nov: `docket_cancel` gets a fourth setting `p_left` and `stores_dockets` a `cancel_left` column. If this block was already run on a test project, running it again drops the old three-setting `docket_cancel` and adds the column — safe to run twice.)
 - Nothing is deleted. No DELETE permission for anyone using the app.
 - Depends on the Stage 3 block (it uses `lists_touch()`, `lists_switch_on()` and the `projects`, `lists`, `list_lines`, `list_events` tables) — run that first.
 
@@ -639,7 +642,7 @@ create trigger list_lines_snag after update of status on list_lines for each row
 3. Expected result: **"Success. No rows returned"**. A red error: stop and send a screenshot — do not merge.
 4. Check: **Table Editor** shows `stores_dockets` and `stores_docket_items` (both empty), and `projects` has a `site_address` column.
 5. Check: **Database → Functions** shows `make_docket`, `docket_delivered`, `docket_cancel`; **Database → Triggers** shows `stores_dockets_touch` on `stores_dockets`.
-6. Safe to run twice (nothing is duplicated, no data touched). Tested twice in a row on a throwaway Postgres set up like Supabase, then the checks in `tests/stores-docket/pg-check.sql` (part quantities, two PCs at once, numbering, cancel, delivered, switch off) all passed.
+6. Safe to run twice (nothing is duplicated, no data touched). Tested twice in a row on a throwaway Postgres set up like Supabase, then the checks in `tests/stores-docket/pg-check.sql` (part quantities, two PCs at once, numbering, cancel, delivered, switch off) all passed. Re-tested 4 Nov after the cancel change ("Did these items leave stores?"): run twice on a fresh database, and once on top of the earlier version of this block — both passed.
 
 ```sql
 -- ===================== STORES DOCKETS — runs AFTER the Stage 3 block =====================
@@ -657,9 +660,11 @@ create table if not exists stores_dockets(id text primary key, docket_no text no
   status text not null default 'made' check(status in('made','delivered','cancelled')),
   delivered_at timestamptz, delivered_by text, received_by text, received_at date, signature_name text,
   cancelled_at timestamptz, cancelled_by text, cancel_why text,
+  cancel_left boolean,                                                 -- (4 Nov) cancelled: did the items leave stores? true = only the docket was voided
   cid text,                                                            -- the PC's id for this "Make docket" tap: a resend is recognised
   version int not null default 1, updated_at timestamptz not null default now(), updated_by text,
   unique(yr,seq));
+alter table stores_dockets add column if not exists cancel_left boolean;
 create unique index if not exists sd_cid on stores_dockets(cid) where cid is not null;
 create index if not exists sd_proj on stores_dockets(project_id, made_at);
 create index if not exists sd_pname on stores_dockets(lower(project_name), made_at);
@@ -834,15 +839,21 @@ end $$;
 revoke execute on function docket_delivered(text,text,date,text,text) from public;
 grant execute on function docket_delivered(text,text,date,text,text) to anon, authenticated, service_role;
 
--- docket_cancel: a wrong docket is cancelled with a reason (never deleted). Its items stop counting as sent, so their
--- quantity can go on another docket; a stores line this docket marked "got out" goes back to "to pick" (unless someone
--- ticked it again since). A delivered docket can't be cancelled. Cancelling twice changes nothing.
-create or replace function docket_cancel(p_id text, p_why text, p_by text) returns jsonb
+-- docket_cancel: a wrong docket is cancelled with a reason (never deleted). A delivered docket can't be cancelled; cancelling
+-- twice changes nothing. Stores is asked "Did these items leave stores?" (Garry, 4 Nov) — p_left:
+--  true  = they left: only the docket is voided. Its items stay active (they still count as sent, so the same taps can't be
+--          sent twice) and every line keeps its status ("got out" stays got out). The report shows them as "docket cancelled".
+--  false = still in stores: its items stop counting as sent, so their quantity can go on another docket; a stores line this
+--          docket marked "got out" goes back to "to pick" (unless someone ticked it again since).
+-- (4 Nov: the old three-setting version is dropped first, so running this block again is safe.)
+drop function if exists docket_cancel(text,text,text);
+create or replace function docket_cancel(p_id text, p_why text, p_by text, p_left boolean) returns jsonb
 language plpgsql security definer set search_path=public as $$
-declare d stores_dockets%rowtype; lids text[]; l list_lines%rowtype;
+declare d stores_dockets%rowtype; lids text[]; l list_lines%rowtype; v_note text;
 begin
  if coalesce(btrim(p_by),'')='' then raise exception 'say who is cancelling the docket'; end if;
  if coalesce(btrim(p_why),'')='' then raise exception 'give the reason for cancelling'; end if;
+ if p_left is null then raise exception 'say whether the items left stores'; end if;
  select array_agg(distinct line_id order by line_id) into lids from stores_docket_items where docket_id=p_id and line_id is not null;
  if lids is not null then
   perform lists_switch_on();
@@ -851,25 +862,27 @@ begin
  end if;
  select * into d from stores_dockets where id=p_id for update;
  if not found then raise exception 'missing docket'; end if;
- if d.status='cancelled' then return jsonb_build_object('ok',true,'dup',true,'docket_no',d.docket_no); end if;
+ if d.status='cancelled' then return jsonb_build_object('ok',true,'dup',true,'docket_no',d.docket_no,'left',d.cancel_left); end if;
  if d.status='delivered' then return jsonb_build_object('ok',false,'why','delivered','docket_no',d.docket_no); end if;
- update stores_dockets set status='cancelled',cancelled_at=now(),cancelled_by=btrim(p_by),cancel_why=btrim(p_why),updated_by=btrim(p_by) where id=p_id;
- update stores_docket_items set active=false where docket_id=p_id;
+ update stores_dockets set status='cancelled',cancelled_at=now(),cancelled_by=btrim(p_by),cancel_why=btrim(p_why),cancel_left=p_left,
+  updated_by=btrim(p_by) where id=p_id;
+ v_note:=d.docket_no||' cancelled'||case when p_left then ' (items left stores)' else ' (items still in stores)' end||': '||btrim(p_why);
+ if not p_left then update stores_docket_items set active=false where docket_id=p_id; end if;
  for l in select * from list_lines where id=any(coalesce(lids,'{}')) order by id loop
-  if l.status='got-out' and exists(select 1 from stores_docket_items i where i.line_id=l.id and i.got_out_at is not null
+  if not p_left and l.status='got-out' and exists(select 1 from stores_docket_items i where i.line_id=l.id and i.got_out_at is not null
        and i.got_out_at=l.status_at) then
    update list_lines set status='todo',status_by=btrim(p_by),status_at=now() where id=l.id returning * into l;
    insert into list_events(list_id,line_id,act,from_status,to_status,by,note,v_after)
-    values(l.list_id,l.id,'docket-cancel','got-out','todo',btrim(p_by),d.docket_no||' cancelled: '||btrim(p_why),l.version);
+    values(l.list_id,l.id,'docket-cancel','got-out','todo',btrim(p_by),v_note,l.version);
   else
    insert into list_events(list_id,line_id,act,from_status,to_status,by,note,v_after)
-    values(l.list_id,l.id,'docket-cancel',l.status,l.status,btrim(p_by),d.docket_no||' cancelled: '||btrim(p_why),l.version);
+    values(l.list_id,l.id,'docket-cancel',l.status,l.status,btrim(p_by),v_note,l.version);
   end if;
  end loop;
- return jsonb_build_object('ok',true,'docket_no',d.docket_no);
+ return jsonb_build_object('ok',true,'docket_no',d.docket_no,'left',p_left);
 end $$;
-revoke execute on function docket_cancel(text,text,text) from public;
-grant execute on function docket_cancel(text,text,text) to anon, authenticated, service_role;
+revoke execute on function docket_cancel(text,text,text,boolean) from public;
+grant execute on function docket_cancel(text,text,text,boolean) to anon, authenticated, service_role;
 ```
 
 ---

@@ -47,11 +47,17 @@ const cards = p => p.evaluate(() => [...document.querySelectorAll('[data-dkcard]
   rec('cancel without a reason: not cancelled', S.db.t.stores_dockets.find(d => d.id === m3.id).status === 'made');
   await a.page.evaluate(() => { window.__prompt = 'Sent twice by mistake'; });
   await a.page.evaluate(id => document.querySelector('[data-dkcan="' + id + '"]').click(), m3.id);
+  const ask = await a.page.evaluate(() => { const o = document.getElementById('dk-left'); return o ? o.innerText : ''; });
+  rec('cancel asks "Did these items leave stores?" — Yes / No / Don\'t cancel (Garry, 4 Nov)', /Did these items leave stores\?/.test(ask) && /Yes — they left/.test(ask) && /No — still in stores/.test(ask) && /Don't cancel/.test(ask), ask);
+  await a.page.evaluate(() => document.querySelector('#dk-left #pod-x').click()); await X.sleep(300);
+  rec('"Don\'t cancel" changes nothing', S.db.t.stores_dockets.find(d => d.id === m3.id).status === 'made' && !(await a.page.evaluate(() => !!document.getElementById('dk-left'))));
+  await a.page.evaluate(id => document.querySelector('[data-dkcan="' + id + '"]').click(), m3.id);
+  await a.page.evaluate(() => document.querySelector('#dk-left [data-dkleft="0"]').click());
   await X.sleep(600);
   const k3 = S.db.t.stores_dockets.find(d => d.id === m3.id);
-  rec('cancel: kept, CANCELLED with the reason; the taps line back to to-pick (10 free again)', k3.status === 'cancelled' && k3.cancel_why === 'Sent twice by mistake' && X.line(S, 'L1:2').status === 'todo' && S.db.t.stores_dockets.length === 3);
+  rec('cancel, "No — still in stores": kept, CANCELLED with the reason; the taps line back to to-pick (10 free again)', k3.status === 'cancelled' && k3.cancel_why === 'Sent twice by mistake' && X.line(S, 'L1:2').status === 'todo' && S.db.t.stores_dockets.length === 3);
   const t3 = await a.page.evaluate(id => document.querySelector('[data-dkcard="' + id + '"]').innerText, m3.id);
-  rec('list shows CANCELLED and the reason', /CANCELLED/.test(t3) && /Sent twice by mistake/.test(t3));
+  rec('list shows CANCELLED, the reason and "items back to stores"', /CANCELLED/.test(t3) && /Sent twice by mistake/.test(t3) && /items back to stores/.test(t3), t3);
   rec('nothing deleted, no direct writes to the docket tables', !S.deniedD && !S.log.some(x => /^(POST|PATCH|DELETE) \/stores_/.test(x)));
   await a.page.screenshot({ path: '/dev/null' }).catch(() => {});
   // "+ New docket" opens Send to site

@@ -65,7 +65,7 @@ function makeDocket(d, p, items, by) {
   if (d.t.stores_dockets.some(x => x.docket_no === no)) throw new DbError('duplicate key value violates unique constraint "stores_dockets_docket_no_key"', '23505');
   d.t.stores_dockets.push({ id, docket_no: no, yr, seq, project_id: pid, project_name: pname, customer: pcust, site_address: nz(p.site_address),
     delivery_instructions: nz(p.delivery_instructions), note: nz(p.note), made_at: at, made_by: t(by), status: 'made', delivered_at: null, delivered_by: null,
-    received_by: null, received_at: null, signature_name: null, cancelled_at: null, cancelled_by: null, cancel_why: null, cid, version: 1, updated_at: at, updated_by: t(by) });
+    received_by: null, received_at: null, signature_name: null, cancelled_at: null, cancelled_by: null, cancel_why: null, cancel_left: null, cid, version: 1, updated_at: at, updated_by: t(by) });
   let k = 0;
   for (const it of items) {
     k++;
@@ -104,33 +104,37 @@ function docketDelivered(d, id, recBy, recAt, sig, by) {
   touch(k, t(by), d);
   return { ok: true, docket_no: k.docket_no };
 }
-// ---- docket_cancel(p_id, p_why, p_by)
-function docketCancel(d, id, why, by) {
+// ---- docket_cancel(p_id, p_why, p_by, p_left) — p_left (Garry, 4 Nov): did the items leave stores?
+//      true = only the docket is voided (items stay active / sent, lines keep their status); false = items free again,
+//      a line this docket marked got out goes back to to-pick
+function docketCancel(d, id, why, by, left) {
   ensure(d);
   if (!t(by)) throw new DbError('say who is cancelling the docket');
   if (!t(why)) throw new DbError('give the reason for cancelling');
+  if (left !== true && left !== false) throw new DbError('say whether the items left stores');
   const its = d.t.stores_docket_items.filter(i => i.docket_id === id);
   const lids = [...new Set(its.map(i => i.line_id).filter(Boolean))].sort();
   if (lids.length) switchOn(d);
   const k = find(d, 'stores_dockets', id); if (!k) throw new DbError('missing docket');
-  if (k.status === 'cancelled') return { ok: true, dup: true, docket_no: k.docket_no };
+  if (k.status === 'cancelled') return { ok: true, dup: true, docket_no: k.docket_no, left: k.cancel_left };
   if (k.status === 'delivered') return { ok: false, why: 'delivered', docket_no: k.docket_no };
-  Object.assign(k, { status: 'cancelled', cancelled_at: now(d), cancelled_by: t(by), cancel_why: t(why) }); touch(k, t(by), d);
-  its.forEach(i => { i.active = false; });
+  Object.assign(k, { status: 'cancelled', cancelled_at: now(d), cancelled_by: t(by), cancel_why: t(why), cancel_left: left }); touch(k, t(by), d);
+  if (!left) its.forEach(i => { i.active = false; });
+  const note = k.docket_no + ' cancelled' + (left ? ' (items left stores)' : ' (items still in stores)') + ': ' + t(why);
   for (const lid of lids) {
     const l = find(d, 'list_lines', lid); if (!l) continue;
-    const mine = l.status === 'got-out' && d.t.stores_docket_items.some(i => i.line_id === l.id && i.got_out_at != null && Date.parse(i.got_out_at) === Date.parse(l.status_at));
+    const mine = !left && l.status === 'got-out' && d.t.stores_docket_items.some(i => i.line_id === l.id && i.got_out_at != null && Date.parse(i.got_out_at) === Date.parse(l.status_at));
     const from = l.status;
     if (mine) lineUpdate(d, l, { status: 'todo', status_by: t(by), status_at: now(d) });
-    D3.insert(d, 'list_events', { list_id: l.list_id, line_id: l.id, act: 'docket-cancel', from_status: from, to_status: l.status, by: t(by), note: k.docket_no + ' cancelled: ' + t(why), v_after: l.version, at: now(d) });
+    D3.insert(d, 'list_events', { list_id: l.list_id, line_id: l.id, act: 'docket-cancel', from_status: from, to_status: l.status, by: t(by), note, v_after: l.version, at: now(d) });
   }
-  return { ok: true, docket_no: k.docket_no };
+  return { ok: true, docket_no: k.docket_no, left };
 }
 // Each function runs in one transaction: an error part-way leaves nothing behind
 const txn = f => (d, a) => { const snap = clone(d.t), seq = clone(d.seq); try { return f(d, a); } catch (e) { d.t = snap; d.seq = seq; throw e; } };
 const RPC = {
   make_docket: txn((d, a) => makeDocket(d, a.p_docket, a.p_items, a.p_by)),
   docket_delivered: txn((d, a) => docketDelivered(d, a.p_id, a.p_received_by, a.p_received_at, a.p_signature_name, a.p_by)),
-  docket_cancel: txn((d, a) => docketCancel(d, a.p_id, a.p_why, a.p_by)),
+  docket_cancel: txn((d, a) => docketCancel(d, a.p_id, a.p_why, a.p_by, a.p_left)),
 };
 module.exports = { makeDb, ensure, makeDocket, docketDelivered, docketCancel, RPC, TABLES, D3 };

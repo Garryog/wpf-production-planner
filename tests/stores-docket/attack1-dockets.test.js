@@ -33,7 +33,7 @@ const active = (S, lid) => S.db.t.stores_docket_items.filter(i => i.line_id === 
     // ---------- A2: cancel racing a send of the rest
     const d1 = S.db.t.stores_dockets[0], left = 20 - active(S, 'L1:2');
     S.holdD = new Promise(r => { rel = r; });
-    const pc = a.page.evaluate(id => dkCancel(id, 'wrong', 'Op'), d1.id), ps = make(b.page, [{ line_id: 'L1:2', qty: String(left) }], 'B2');
+    const pc = a.page.evaluate(id => dkCancel(id, 'wrong', 'Op', false), d1.id), ps = make(b.page, [{ line_id: 'L1:2', qty: String(left) }], 'B2');
     await X.sleep(300); S.holdD = null; rel();
     const [rc, rs] = await Promise.all([pc, ps]);
     const sent = active(S, 'L1:2'), st = X.line(S, 'L1:2').status;
@@ -52,7 +52,7 @@ const active = (S, lid) => S.db.t.stores_docket_items.filter(i => i.line_id === 
     await s.page.evaluate(() => document.getElementById('pod-x') && document.getElementById('pod-x').click());
     // bench ticks it again (picked by hand), then cancel the docket → the hand tick stays
     const t2 = await X.F3.tapRow(s.page, 'data-rt', 'L1:2'); await X.F3.send(s.page);
-    const c = await s.page.evaluate(id => dkCancel(id, 'oops', 'Op'), S2.db.t.stores_dockets[0].id);
+    const c = await s.page.evaluate(id => dkCancel(id, 'oops', 'Op', false), S2.db.t.stores_dockets[0].id);
     rec('A3 re-ticked by hand then docket cancelled: the hand tick (got out) stays', t2 === 'ok' && c.ok && X.line(S2, 'L1:2').status === 'got-out', t2 + ' ' + X.line(S2, 'L1:2').status);
     // ---------- A3b: the Items sent report must not count the taps twice (15 on a docket + the bench tick of the whole line)
     const S3 = X.makeServer(); const r3 = await X.dev(browser, S3, 'stores');
@@ -98,7 +98,7 @@ const active = (S, lid) => S.db.t.stores_docket_items.filter(i => i.line_id === 
     await make(p1.page, [{ line_id: 'L1:3', qty: '8' }], 'C1');
     await p1.page.evaluate(() => document.getElementById('dk-list').click()); await X.sleep(500);
     await p2.page.evaluate(id => dkDelivered(id, 'Joe', '2026-10-21', '', 'Op'), S7.db.t.stores_dockets[0].id);
-    await p1.page.evaluate(() => { window.prompt = () => 'wrong'; document.querySelector('[data-dkcan]').click(); }); await X.sleep(800);
+    await p1.page.evaluate(() => { window.prompt = () => 'wrong'; document.querySelector('[data-dkcan]').click(); const n = document.querySelector('#dk-left [data-dkleft="0"]'); if (n) n.click(); }); await X.sleep(800);
     const m7 = await p1.page.evaluate(() => document.getElementById('dkl-msg').textContent + ' | ' + document.getElementById('dk-list-dlg').innerText);
     rec('A7 stale screen: delivered docket NOT cancelled, told "already marked delivered" (the message must not be wiped by the reload), shows DELIVERED, no Cancel button now', S7.db.t.stores_dockets[0].status === 'delivered' && /already marked delivered/.test(m7) && /DELIVERED/.test(m7)
       && !(await p1.page.evaluate(() => !!document.querySelector('[data-dkcan]'))) && X.line(S7, 'L1:3').status === 'got-out', m7.slice(0, 300));

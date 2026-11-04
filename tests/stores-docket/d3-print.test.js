@@ -36,7 +36,7 @@ const res = []; const rec = (n, ok, d) => { res.push(ok); console.log((ok ? 'PAS
   const h2 = await a.page.evaluate(async id => dkDocketHTML((await dkLoad('&id=eq.' + id))[0]), d.id);
   rec('delivered docket prints the received-by name and date', /Joe Site/.test(h2) && /22 Oct 2026/.test(h2) && /signed: J\. Site/.test(h2));
   const r2 = await a.page.evaluate(() => dkMake({ project_id: 'P1' }, [{ item: 'Bin', qty: '1' }], 'Op'));
-  await a.page.evaluate(id => dkCancel(id, 'Typed twice', 'Op'), r2.id);
+  await a.page.evaluate(id => dkCancel(id, 'Typed twice', 'Op', false), r2.id);
   const h3 = await a.page.evaluate(async id => dkDocketHTML((await dkLoad('&id=eq.' + id))[0]), r2.id);
   rec('cancelled docket prints CANCELLED with the reason, items still listed', /class="wm">CANCELLED/.test(h3) && /Typed twice/.test(h3) && /<b>Bin<\/b>/.test(h3));
   rec('no page errors', !(S.errors || []).length, JSON.stringify(S.errors));

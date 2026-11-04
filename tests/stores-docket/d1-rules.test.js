@@ -43,15 +43,29 @@ const why = r => (r.refused || []).map(x => x.why).join(',');
   rec('a got-out line is refused (says which dockets)', !r.ok && why(r) === 'got-out' && r.refused[0].dockets === 'D26-0001, D26-0002', JSON.stringify(r));
   // cancel frees the quantity
   const d2 = d.t.stores_dockets.find(x => x.docket_no === 'D26-0002');
-  rec('cancel needs a reason', throws(() => DD.RPC.docket_cancel(d, { p_id: d2.id, p_why: ' ', p_by: 'Stores' }), /reason/));
-  r = DD.RPC.docket_cancel(d, { p_id: d2.id, p_why: 'Wrong taps', p_by: 'Stores' });
+  rec('cancel needs a reason', throws(() => DD.RPC.docket_cancel(d, { p_id: d2.id, p_why: ' ', p_by: 'Stores', p_left: false }), /reason/));
+  r = DD.RPC.docket_cancel(d, { p_id: d2.id, p_why: 'Wrong taps', p_by: 'Stores', p_left: false });
   const k2 = () => d.t.stores_dockets.find(x => x.id === d2.id); // a refused call puts the whole database back (a fresh copy)
   rec('cancel: docket kept, marked cancelled with the reason and who', r.ok && k2().status === 'cancelled' && k2().cancel_why === 'Wrong taps' && k2().cancelled_by === 'Stores' && d.t.stores_dockets.length === 2);
   rec('cancel: its items no longer count; the line goes back to to-pick', d.t.stores_docket_items.filter(i => i.docket_id === d2.id).every(i => !i.active) && L(d, 'L1:1').status === 'todo');
   r = mk(d, [{ line_id: 'L1:1', qty: '11' }]);
   rec('after cancel: 11 still refused (10 left), 10 OK', !r.ok && r.refused[0].left === 10 && mk(d, [{ line_id: 'L1:1', qty: '10' }]).ok);
   rec('cancelled numbers are never reused (next is D26-0003)', d.t.stores_dockets.map(x => x.docket_no).join() === 'D26-0001,D26-0002,D26-0003');
-  rec('cancel twice: no change, says already (dup)', DD.RPC.docket_cancel(d, { p_id: d2.id, p_why: 'again', p_by: 'X' }).dup === true && k2().cancel_why === 'Wrong taps');
+  rec('cancel twice: no change, says already (dup)', DD.RPC.docket_cancel(d, { p_id: d2.id, p_why: 'again', p_by: 'X', p_left: false }).dup === true && k2().cancel_why === 'Wrong taps');
+}
+{ // cancel asks "Did these items leave stores?" (Garry, 4 Nov) — p_left
+  const d = seed();
+  mk(d, [{ line_id: 'L1:1', qty: '20' }]); mk(d, [{ line_id: 'L1:3', qty: '1' }]);
+  const a = d.t.stores_dockets[0], b = d.t.stores_dockets[1];
+  rec('cancel without saying whether the items left: refused', throws(() => DD.RPC.docket_cancel(d, { p_id: a.id, p_why: 'x', p_by: 'S' }), /left stores/) && d.t.stores_dockets[0].status === 'made');
+  let r = DD.RPC.docket_cancel(d, { p_id: a.id, p_why: 'Wrong paperwork', p_by: 'Stores', p_left: true });
+  const ka = () => d.t.stores_dockets.find(x => x.id === a.id);
+  rec('Yes, they left: docket CANCELLED (cancel_left true), the taps stay got out', r.ok && r.left === true && ka().status === 'cancelled' && ka().cancel_left === true && L(d, 'L1:1').status === 'got-out');
+  rec('Yes: its items still count as sent — the same taps can\'t go on another docket', d.t.stores_docket_items.filter(i => i.docket_id === a.id).every(i => i.active) && !mk(d, [{ line_id: 'L1:1', qty: '1' }]).ok);
+  rec('Yes: the history says "items left stores"', d.t.list_events.some(e => e.line_id === 'L1:1' && e.act === 'docket-cancel' && e.from_status === 'got-out' && e.to_status === 'got-out' && /items left stores/.test(e.note)));
+  r = DD.RPC.docket_cancel(d, { p_id: b.id, p_why: 'Not sent', p_by: 'Stores', p_left: false });
+  rec('No, still in stores: items free again (bought-in worktop can be sent again)', r.ok && r.left === false && d.t.stores_dockets.find(x => x.id === b.id).cancel_left === false && mk(d, [{ line_id: 'L1:3', qty: '1' }]).ok);
+  rec('cancelling again (either answer) changes nothing', DD.RPC.docket_cancel(d, { p_id: a.id, p_why: 'y', p_by: 'S', p_left: false }).dup === true && ka().cancel_left === true && L(d, 'L1:1').status === 'got-out');
 }
 { // refusals and kinds
   const d = seed();
@@ -84,7 +98,7 @@ const why = r => (r.refused || []).map(x => x.why).join(',');
   const r = DD.RPC.make_docket(d, { p_docket: { project_name: 'Cherrywood', customer: 'Cairn' }, p_items: [{ item: 'Spare hinges', qty: '6', wo: 'WO-5', floor: '1', unit: '12' }], p_by: 'Stores' });
   rec('switch OFF: a free-typed docket works (project by name, no project id)', r.ok && d.t.stores_dockets.find(x => x.id === r.id).project_id === null && d.t.stores_dockets.find(x => x.id === r.id).project_name === 'Cherrywood');
   rec('a docket needs a project', throws(() => DD.RPC.make_docket(d, { p_docket: {}, p_items: [{ item: 'x', qty: '1' }], p_by: 'S' }), /project/));
-  rec('switch OFF: cancelling a free-typed docket works', DD.RPC.docket_cancel(d, { p_id: r.id, p_why: 'test', p_by: 'S' }).ok);
+  rec('switch OFF: cancelling a free-typed docket works', DD.RPC.docket_cancel(d, { p_id: r.id, p_why: 'test', p_by: 'S', p_left: false }).ok);
 }
 { // delivered
   const d = seed();
@@ -93,8 +107,8 @@ const why = r => (r.refused || []).map(x => x.why).join(',');
   let r = DD.RPC.docket_delivered(d, { p_id: a.id, p_received_by: 'Joe Site', p_received_at: '2026-11-05', p_signature_name: 'J Site', p_by: 'Office' });
   const k = d.t.stores_dockets.find(x => x.id === a.id);
   rec('delivered: received by, date, signed name, who marked it', r.ok && k.status === 'delivered' && k.received_by === 'Joe Site' && k.received_at === '2026-11-05' && k.signature_name === 'J Site' && k.delivered_by === 'Office');
-  rec('a delivered docket can\'t be cancelled', DD.RPC.docket_cancel(d, { p_id: a.id, p_why: 'x', p_by: 'S' }).why === 'delivered' && k.status === 'delivered');
-  DD.RPC.docket_cancel(d, { p_id: b.id, p_why: 'x', p_by: 'S' });
+  rec('a delivered docket can\'t be cancelled', DD.RPC.docket_cancel(d, { p_id: a.id, p_why: 'x', p_by: 'S', p_left: false }).why === 'delivered' && k.status === 'delivered');
+  DD.RPC.docket_cancel(d, { p_id: b.id, p_why: 'x', p_by: 'S', p_left: false });
   rec('a cancelled docket can\'t be marked delivered', DD.RPC.docket_delivered(d, { p_id: b.id, p_received_by: 'Joe', p_by: 'S' }).why === 'cancelled');
 }
 { // numbering by year (Irish time)

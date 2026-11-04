@@ -20,7 +20,7 @@ const tbl = p => p.evaluate(() => [...document.querySelectorAll('#dk-rep-dlg .dk
   at('2026-10-05T09:00:00Z'); await a.page.evaluate(() => dkMake({ project_id: 'P1' }, [{ item: 'Old item', qty: '1', wo: 'WO-1' }], 'Op'));
   at('2026-10-20T09:00:00Z'); const m1 = await a.page.evaluate(() => dkMake({ project_id: 'P1' }, [{ line_id: 'L1:2', qty: '10', wo: 'WO-1', floor: 'GF', unit: '12', title: 'HOUSE WO-1 TYPE B' }, { item: 'Spare handles', qty: '4', wo: 'WO-2', floor: '1', unit: '14' }], 'Mary'));
   at('2026-10-20T10:00:00Z'); const m2 = await a.page.evaluate(() => dkMake({ project_id: 'P1' }, [{ item: 'Wrong thing', qty: '9' }], 'Mary'));
-  await a.page.evaluate(id => dkCancel(id, 'mistake', 'Mary'), m2.id);
+  await a.page.evaluate(id => dkCancel(id, 'mistake', 'Mary', false), m2.id);
   at('2026-10-20T11:00:00Z'); await a.page.evaluate(() => dkMake({ project_name: 'Cherrywood' }, [{ item: 'Other project', qty: '1' }], 'Mary'));
   await a.page.evaluate(id => dkDelivered(id, 'Joe Site', '2026-10-21', '', 'Op'), m1.id);
   // the hinge line ticked got out on the bench (no docket)

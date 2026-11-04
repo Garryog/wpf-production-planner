@@ -22,7 +22,7 @@ const norm = s => String(s).replace(/\d{1,2}:\d{2}(:\d{2})?/g, 'HH:MM').replace(
   // ALLOWED DIFFERENCE (feature/stores-dockets, Garry 4 Nov): the Stores screen has one extra row of buttons — "Send to site",
   // "Dockets", "Items sent" (free-typed dockets work with the switch off). That row (.dk-bar) is taken out before comparing and
   // checked on its own below; everything else on every screen must still match feature/stage2-imports exactly.
-  const DK_BAR = '🚚 Send to site 📄 Dockets 📦 Items sent';
+  const DK_BAR = '🚚 Send fittings to site 📄 Dockets 📦 Items sent'; // (4 Nov) hidden quietly (empty) while the docket tables don't exist
   const shot = async html => {
     const S = F.makeServer(row());
     const t = await A.openOld(browser, S, html);
@@ -50,7 +50,7 @@ const norm = s => String(s).replace(/\d{1,2}:\d{2}(:\d{2})?/g, 'HH:MM').replace(
   const a = await shot(OLD), b = await shot(NEW);
   const bars = b.out.__bars; delete a.out.__bars; delete b.out.__bars;
   rec('switch off — the only extra: one docket button row, on the Stores screen only, reading exactly "' + DK_BAR + '"',
-    Object.entries(bars).every(([k, v]) => k === 'stores/-' ? v.n === 1 && norm(v.bar) === DK_BAR : v.n === 0), JSON.stringify(bars));
+    Object.entries(bars).every(([k, v]) => k === 'stores/-' ? v.n === 1 && (norm(v.bar) === DK_BAR || norm(v.bar) === '') : v.n === 0), JSON.stringify(bars));
   for (const k of Object.keys(a.out)) {
     const x = norm(a.out[k]), y = norm(b.out[k]);
     let i = 0; while (i < x.length && x[i] === y[i]) i++;

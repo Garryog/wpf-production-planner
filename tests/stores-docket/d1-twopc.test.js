@@ -37,7 +37,7 @@ const res = []; const rec = (n, ok, d) => { res.push(ok); console.log((ok ? 'PAS
   rec('waiting line refused: "waiting on stock — release it first"', !r5.ok && (await a.page.evaluate(r => dkWhyTxt(r), r5.refused[0])) === 'waiting on stock — release it first');
   // cancel frees the quantity
   const d2 = S.db.t.stores_dockets.find(x => x.docket_no === 'D26-0002');
-  const c = await a.page.evaluate(id => dkCancel(id, 'Wrong count', 'Op'), d2.id);
+  const c = await a.page.evaluate(id => dkCancel(id, 'Wrong count', 'Op', false), d2.id);
   rec('cancel D26-0002: hinges back to to-pick, 3 free again', c.ok && X.line(S, 'L1:3').status === 'todo' && (await a.page.evaluate(() => dkSentFor(['L1:3'])))['L1:3'].n === 5);
   const dl = await a.page.evaluate(id => dkDelivered(id, 'Joe Site', '2026-10-22', '', 'Op'), S.db.t.stores_dockets[0].id);
   rec('delivered: received by Joe Site', dl.ok && S.db.t.stores_dockets[0].received_by === 'Joe Site');

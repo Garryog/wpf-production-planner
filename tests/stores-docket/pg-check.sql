@@ -1,6 +1,8 @@
 -- Stores dockets: the SQL in SUPABASE_CHANGES.md ("Stores dockets" block) checked on a THROWAWAY local Postgres set up
 -- like Supabase (roles anon / authenticated / service_role; Stage 1 + Stage 3 + Stores dockets blocks run first, twice).
 -- Never run this against the live project. Run: psql -v ON_ERROR_STOP=1 -d <throwaway db> -f tests/stores-docket/pg-check.sql
+-- The throwaway database also needs the app's own rights on the planner record, as on Supabase:
+--   grant select, insert, update on production_planner to anon, authenticated;
 -- Every check raises an error (and stops) if it fails; the last line prints ALL PG CHECKS PASSED.
 -- the keep-switch trigger only lets the switch move the way Migrate / Switch back move it
 update production_planner set settings=jsonb_build_object('listStore','migrating') where id='main' and coalesce(settings->>'listStore','v1')='v1';
@@ -66,16 +68,25 @@ do $$ declare r jsonb; n int; begin
  r:=make_docket('{"project_id":"PG1"}','[{"line_id":"PGL1:2","qty":"8"}]','S'); if not (r->>'ok')::boolean then raise exception 'FAIL after release %',r; end if;
  -- cancel docket 0002: its 10 taps are free again, the line goes back to to-pick
  select id into r from (select to_jsonb(id) id from stores_dockets where docket_no like 'D__-0002') z;
- begin perform docket_cancel(r#>>'{}','','S'); raise exception 'FAIL cancel without reason'; exception when raise_exception then if sqlerrm like 'FAIL%' then raise; end if; end;
- r:=docket_cancel((select id from stores_dockets where docket_no like 'D__-0002'),'Wrong taps','Stores');
+ begin perform docket_cancel(r#>>'{}','','S',false); raise exception 'FAIL cancel without reason'; exception when raise_exception then if sqlerrm like 'FAIL%' then raise; end if; end;
+ begin perform docket_cancel(r#>>'{}','Wrong taps','S',null); raise exception 'FAIL cancel without the left-stores answer';
+ exception when raise_exception then if sqlerrm like 'FAIL%' then raise; end if; if sqlerrm not like '%left stores%' then raise exception 'FAIL wrong error %',sqlerrm; end if; end;
+ r:=docket_cancel((select id from stores_dockets where docket_no like 'D__-0002'),'Wrong taps','Stores',false);
  if not (r->>'ok')::boolean then raise exception 'FAIL cancel %',r; end if;
  if (select status from list_lines where id='PGL1:1')<>'todo' then raise exception 'FAIL cancel frees the line'; end if;
  if (select status from stores_dockets where docket_no like 'D__-0002')<>'cancelled' then raise exception 'FAIL cancelled kept'; end if;
  r:=make_docket('{"project_id":"PG1"}','[{"line_id":"PGL1:1","qty":"10"}]','S'); if not (r->>'ok')::boolean then raise exception 'FAIL resend after cancel %',r; end if;
+ -- (4 Nov) cancel "Yes, the items left stores": only the docket is voided — the taps stay got out and still count as sent
+ r:=docket_cancel(r->>'id','Wrong paperwork','Stores',true);
+ if not (r->>'ok')::boolean or (r->>'left')::boolean is not true then raise exception 'FAIL cancel left %',r; end if;
+ if (select status from list_lines where id='PGL1:1')<>'got-out' then raise exception 'FAIL left: the taps must stay got out'; end if;
+ if (select cancel_left from stores_dockets where docket_no=r->>'docket_no') is not true then raise exception 'FAIL left: cancel_left recorded'; end if;
+ if exists(select 1 from stores_docket_items where docket_id=(select id from stores_dockets where docket_no=r->>'docket_no') and not active) then raise exception 'FAIL left: items stay active'; end if;
+ r:=make_docket('{"project_id":"PG1"}','[{"line_id":"PGL1:1","qty":"1"}]','S'); if (r->>'ok')::boolean then raise exception 'FAIL left: the taps were sent again %',r; end if;
  -- delivered
  r:=docket_delivered((select id from stores_dockets where docket_no like 'D__-0001'),'Joe Site','2026-11-05','J. Site','Office');
  if not (r->>'ok')::boolean or (select received_by from stores_dockets where docket_no like 'D__-0001')<>'Joe Site' then raise exception 'FAIL delivered %',r; end if;
- r:=docket_cancel((select id from stores_dockets where docket_no like 'D__-0001'),'x','S'); if (r->>'ok')::boolean then raise exception 'FAIL cancel delivered %',r; end if;
+ r:=docket_cancel((select id from stores_dockets where docket_no like 'D__-0001'),'x','S',false); if (r->>'ok')::boolean then raise exception 'FAIL cancel delivered %',r; end if;
  r:=docket_delivered((select id from stores_dockets where docket_no like 'D__-0002'),'Joe','2026-11-05',null,'S'); if (r->>'ok')::boolean then raise exception 'FAIL deliver cancelled %',r; end if;
  -- switch OFF: free-typed dockets still work, list lines refused
  reset role;
