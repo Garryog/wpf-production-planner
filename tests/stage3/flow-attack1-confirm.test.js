@@ -45,9 +45,9 @@ const made = (S, wo) => S.db.t.lists.filter(l => (l.wos || []).includes(wo) && !
     const o4 = S.row.orders.find(x => x.wo === 'WO-4');
     rec('PC A "No list needed" on WO-4; PC B (not refreshed) edits WO-4 notes and saves → both kept', o4.listNA && o4.listNA.k === 'none' && o4.notes === 'Site says hold the doors', JSON.stringify({ na: o4.listNA, n: o4.notes }));
     await a.page.evaluate(async () => { setWho('Ann'); showTab('l'); await new Promise(r => setTimeout(r, 100)); document.querySelector('[data-ltina="WO-6|none"]').click(); await saveDB(); });
-    await b.page.evaluate(async () => { setWho('Bob'); showTab('l'); await new Promise(r => setTimeout(r, 100)); const btn = document.querySelector('[data-ltina="WO-6|paper"]'); if (btn) btn.click(); await saveDB(); });
+    await b.page.evaluate(async () => { setWho('Bob'); showTab('l'); await new Promise(r => setTimeout(r, 100)); const btn = document.querySelector('[data-ltina="WO-6|none"]'); if (btn) btn.click(); await saveDB(); });
     const o6 = S.row.orders.find(x => x.wo === 'WO-6'), na = o6.listNA || {};
-    rec('A "No list needed" and B (not refreshed) "Paper list issued" on WO-6 at once → one consistent record (what + who from the same person)', (na.k === 'none' && na.by === 'Ann') || (na.k === 'paper' && na.by === 'Bob'), JSON.stringify(na));
+    rec('A and B (not refreshed) both "No list needed" on WO-6 at once ("Paper list issued" removed, Garry 4 Nov) → one consistent record', na.k === 'none' && (na.by === 'Ann' || na.by === 'Bob'), JSON.stringify(na));
     // Undo on A while B (stale) still shows WO-6 cleared and saves something else
     await a.page.evaluate(async () => { await loadDB(); showTab('l'); LTI.showNA = true; render(); await new Promise(r => setTimeout(r, 100)); const u = document.querySelector('[data-ltiundo="WO-6"]'); if (u) u.click(); await saveDB(); });
     await b.page.evaluate(async () => { const o = DB.orders.find(x => x.wo === 'WO-6'); o.notes = 'later'; await saveDB(); });
@@ -72,9 +72,9 @@ const made = (S, wo) => S.db.t.lists.filter(l => (l.wos || []).includes(wo) && !
     S.row.orders.forEach(o => { if (o.procAt === undefined || o.procAt === '') delete o.procAt; });
     const saw = await F.dev(browser, S, 'saw');
     const w = await saw.page.evaluate(() => { const g = id => document.getElementById(id); sawWaitOpen = true; render(); return { red: g('wait-red') ? [...g('wait-red').querySelectorAll('[data-waitwo]')].map(r => r.dataset.waitwo) : [], amb: g('wait-amber') ? [...g('wait-amber').querySelectorAll('[data-waitwo]')].map(r => r.dataset.waitwo) : [] }; });
-    rec('RED only for WOs with a van AND a day (D-VANDAY, D-STEP4)', w.red.sort().join() === 'D-STEP4,D-VANDAY', JSON.stringify(w));
+    rec('RED only for WOs with a van AND a day (D-VANDAY, D-STEP4; an old "Paper list issued" mark D-PAPER needs a list again, Garry 4 Nov)', w.red.sort().join() === 'D-PAPER,D-STEP4,D-VANDAY', JSON.stringify(w));
     rec('pool / van-without-day only AMBER', w.amb.includes('D-POOL') && w.amb.includes('D-VANONLY') && !w.red.includes('D-POOL') && !w.red.includes('D-VANONLY'), JSON.stringify(w));
-    rec('"Paper list issued" and on-hold jobs on a van are not shown at all', !w.red.concat(w.amb).some(x => /D-PAPER|D-HOLD/.test(x)), JSON.stringify(w));
+    rec('on-hold jobs on a van are not shown at all', !w.red.concat(w.amb).some(x => /D-HOLD/.test(x)), JSON.stringify(w));
     const due = await saw.page.evaluate(() => Object.fromEntries(['BH-1', 'BH-SAT', 'NP-1', 'NP-2'].map(wo => { const n = lsNeedInfo(DB.orders.find(o => o.wo === wo), '2026-10-21'); return [wo, n.due + (n.late ? ':late' : '')]; })));
     rec('due: processed Thu 22 Oct, 2 working days over the October bank holiday → Tue 27 Oct', due['BH-1'] === '2026-10-27', JSON.stringify(due));
     rec('due: processed on Saturday 24 Oct → Wed 28 Oct', due['BH-SAT'] === '2026-10-28', JSON.stringify(due));

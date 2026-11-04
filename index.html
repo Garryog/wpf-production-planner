@@ -1004,7 +1004,8 @@ async function loadDB(){
     DB.loadFailed=false;
     DB.loaded=true; // this page has held a good copy of the plan at least once
     setSS('ok');
-    if(migr||drop)sched(); // store the migrated baseline / put back one an old tab dropped
+    const pap=ROLE==='office'&&VER!==null&&V2()&&lsPaperOff()>0; // old "Paper list issued" marks cleared once, by the office (Garry, 4 Nov)
+    if(migr||drop||pap)sched(); // store the migrated baseline / put back one an old tab dropped
     if(DB.orders.length)ls.set('wpfSawJobs','1');
   }catch(e){
     DB.lastLoadOk=false;
@@ -3647,7 +3648,7 @@ const LTI_COL={strong:['#0d6e46','#e7f6ec','#9fd8b4','✓ Suggested'],weak:['#7a
 function ltiTplName(id){const t=lsList(id);return t?(t.typeName||t.name)+' · Rev '+(+t.rev||1):'';}
 function ltiInner(){
   const rows=ltiRows(),green=rows.filter(r=>r.lvl==='strong'&&r.tid&&!LTI.busy.has(r.o.wo)),wc=lsWaitCheckLists().sort((a,b)=>(listDueKey(a)||'9999').localeCompare(listDueKey(b)||'9999'));
-  const na=DB.orders.filter(o=>o.listNA&&!woFinished(o)),show=LTI.all?rows:rows.slice(0,40);
+  const na=DB.orders.filter(o=>lsNA(o)&&!woFinished(o)),show=LTI.all?rows:rows.slice(0,40);
   const btn='font-size:12px;padding:6px 10px;margin:2px 4px 2px 0';
   const row=r=>{const o=r.o,w=o.wo,[c,bg,bd,lbl]=LTI_COL[r.lvl],busy=LTI.busy.has(w),err=(LTI.res[w]||{}).err;
     const pid=r.s.pid,alts=pid?(r.s.alts.length?r.s.alts:lsTemplatesFor(pid).map(t=>t.id)):[];
@@ -3660,8 +3661,7 @@ function ltiInner(){
         ${r.tid?`<button class="btn btn-g" data-lticonf="${escA(w)}" style="${btn}">✓ Confirm</button>`:''}
         ${pid?`<button class="btn btn-s" data-ltichg="${escA(w)}" style="${btn}">${LTI.open===w?'✕ Close':'Change template ▾'}</button>`:''}
         ${r.tid?'':`<button class="btn btn-g" data-ltistd="${escA(w)}" style="${btn}" title="Opens the editor with the house heading and the standard sub-headings ready to fill">＋ New list – standard layout</button>`}
-        <button class="btn btn-s" data-ltina="${escA(w)}|none" style="${btn}">No list needed</button>
-        <button class="btn btn-s" data-ltina="${escA(w)}|paper" style="${btn}">Paper list issued</button></div>`}
+        <button class="btn btn-s" data-ltina="${escA(w)}|none" style="${btn}">No list needed</button></div>`}
       ${!busy&&pid&&LTI.open===w?`<div class="lti-act"><select data-ltisel="${escA(w)}" style="${LS_INP};max-width:100%"><option value="">— pick a template (${escA(lsProjName(pid))}) —</option>${alts.map(id=>`<option value="${escA(id)}"${id===r.tid?' selected':''}>${escA(ltiTplName(id))}</option>`).join('')}<option value="__type">✍ Type a list instead…</option></select></div>`:''}
       ${!busy&&r.xl.length?`<div class="lti-act"><span style="font-size:12px;color:#14335c;font-weight:700;margin-right:6px">📥 From an Excel upload:</span>${r.xl.map(l=>`<button class="btn btn-s" data-ltixl="${escA(w)}|${escA(l.id)}" style="${btn};overflow-wrap:anywhere;text-align:left;min-height:36px">✓ Use "${escA(l.name)}"${l.project?' ('+escA(l.project)+')':''}</button>`).join('')}</div>`:''}
       ${!busy&&!pid?ltiLinkHTML(o):''}
@@ -3684,7 +3684,7 @@ function ltiInner(){
     ${show.map(row).join('')}
     ${rows.length>show.length?`<button class="btn btn-s" id="lti-more" style="font-size:12px;margin-top:6px">Show all ${rows.length}</button>`:''}
     ${na.length?`<div style="margin-top:8px;font-size:12px"><button class="btn btn-s" id="lti-na" style="font-size:11px;padding:3px 9px">${LTI.showNA?'▲':'▼'} Cleared without a planner list (${na.length})</button>
-      ${LTI.showNA?na.map(o=>`<div class="lti-nar"><b>${escA(o.wo)}</b> ${escA(o.title||'')} — ${o.listNA.k==='paper'?'paper list issued':'no list needed'} · ${escA(o.listNA.by||'')} ${o.listNA.at?fmt(o.listNA.at):''} <button class="btn btn-s" data-ltiundo="${escA(o.wo)}" style="font-size:11px;padding:2px 8px">Undo</button></div>`).join(''):''}</div>`:''}
+      ${LTI.showNA?na.map(o=>`<div class="lti-nar"><b>${escA(o.wo)}</b> ${escA(o.title||'')} — no list needed · ${escA(o.listNA.by||'')} ${o.listNA.at?fmt(o.listNA.at):''} <button class="btn btn-s" data-ltiundo="${escA(o.wo)}" style="font-size:11px;padding:2px 8px">Undo</button></div>`).join(''):''}</div>`:''}
   </div>`;
 }
 // After an Apply, the import tab keeps the panel when it is redrawn (a refresh), until the page is reloaded
@@ -3738,10 +3738,11 @@ function ltiBind(){
     if(e.value==='__type'){const o=DB.orders.find(x=>x.wo===w);LTI.open='';openListEditor(null,w,(lsProjForCust(o&&o.customer)||{}).id||'');return;}
     if(e.value)LTI.pick[w]=e.value;else delete LTI.pick[w];LTI.open='';ltiAfter();});
   q('[data-ltina]',b=>b.onclick=()=>{const[w,k]=b.dataset.ltina.split('|'),o=DB.orders.find(x=>x.wo===w);if(!o)return;
-    officeWho(by=>{o.listNA={k,by,at:nowISO()};logEdit(o,k==='paper'?'Cutting list: paper list issued (no list in the planner)':'Cutting list: no list needed',by);sched();ltiAfter();
-      toast(w+' — '+(k==='paper'?'paper list issued':'no list needed')+' ✓');});});
+    if(k!=='none')return; // "No list needed" is the only option ("Paper list issued" removed, Garry 4 Nov)
+    officeWho(by=>{o.listNA={k,by,at:nowISO()};logEdit(o,'Cutting list: no list needed',by);sched();ltiAfter();
+      toast(w+' — no list needed ✓');});});
   q('[data-ltiundo]',b=>b.onclick=()=>{const o=DB.orders.find(x=>x.wo===b.dataset.ltiundo);if(!o)return;
-    officeWho(by=>{const k=o.listNA&&o.listNA.k;delete o.listNA;logEdit(o,'Cutting list: "'+(k==='paper'?'paper list issued':'no list needed')+'" undone',by);sched();ltiAfter();});});
+    officeWho(by=>{delete o.listNA;logEdit(o,'Cutting list: "no list needed" undone',by);sched();ltiAfter();});});
   q('#lti-more',b=>b.onclick=()=>{LTI.all=true;ltiAfter();});
   q('#lti-na',b=>b.onclick=()=>{LTI.showNA=!LTI.showNA;ltiAfter();});
   q('#lti-dx',b=>b.onclick=()=>{LTI.done=[];ltiAfter();});
@@ -5187,7 +5188,7 @@ function listsNeeded(){ // WOs scheduled to deliver inside the lead time with NO
   const lim=v2?lsAddWorkDays(todayLocal(),listLead()):new Date(Date.now()+listLead()*86400000).toISOString().slice(0,10); // V2: lead in working days (Christmas, bank holidays)
   return DB.orders.filter(o=>{
     if(tagged.has(o.wo)||o.delDelivAt||o.delDone||woFinished(o)||isOnHold(o))return false;
-    if(v2&&o.listNA)return false;                   // V2: marked "No list needed" / "Paper list issued"
+    if(v2&&lsNA(o))return false;                    // V2: marked "No list needed"
     const planned=o.delv&&o.delDay;                 // already on the delivery board
     const dueSoon=o.dueDate&&o.dueDate<=lim;        // due date inside the lead window
     return planned||dueSoon||(v2&&lsProcessed(o));  // V2: also every live job at steps 5-8 (Garry, 3 Nov)
@@ -5195,6 +5196,11 @@ function listsNeeded(){ // WOs scheduled to deliver inside the lead time with NO
 }
 // Cienapps 5. WORK ORDER PROCESSED to 8. PALLETED: the cutting list should exist (it is issued with the work order).
 // Shipped (9-11) and on hold are left out by listsNeeded.
+// "No list needed" is the only way to clear a WO without a list. "Paper list issued" was removed (Garry, 4 Nov): an old
+// 'paper' mark counts as "needs a list" again (lsNA ignores it) and the office's next load clears it with a history line.
+function lsNA(o){return !!(o&&o.listNA&&o.listNA.k!=='paper');}
+function lsPaperOff(){let n=0;DB.orders.forEach(o=>{if(o.listNA&&o.listNA.k==='paper'){delete o.listNA;n++;
+  logEdit(o,'Cutting list: the "Paper list issued" option was removed — this job needs a list again (type one or attach a photo of the list)','Planner');}});return n;}
 function lsStampProc(){const td=todayLocal();DB.orders.forEach(o=>{if(!o.procAt&&stepNo(o.step)>=5)o.procAt=td;});}
 function lsProcessed(o){const n=stepNo(o&&o.step);return n!==null&&n>=5&&n<=8;}
 // A job with no list: when its list is due and whether that has passed. Due = N working days after the WO was processed

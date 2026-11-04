@@ -63,10 +63,11 @@ const made = (S, wo) => S.db.t.lists.filter(l => (l.wos || []).includes(wo) && !
     rec('Retry: WO-6 made', made(S, 'WO-6').length === 1 && D.find(S.db, 'lists', 'WO:WO-6'));
     // No list needed / Paper list issued / Undo
     await t.page.evaluate(() => document.querySelector('[data-ltina="WO-4|none"]').click());
-    await t.page.evaluate(() => document.querySelector('[data-ltina="WO-5|paper"]').click());
+    rec('no "Paper list issued" button any more (Garry, 4 Nov) — "No list needed" only', await t.page.evaluate(() => !document.querySelector('[data-ltina$="|paper"]') && !/Paper list issued/.test(document.body.innerText) && !!document.querySelector('[data-ltina="WO-5|none"]')));
+    await t.page.evaluate(() => document.querySelector('[data-ltina="WO-5|none"]').click());
     await t.page.evaluate(async () => { await saveDB(); });
     const na = o => (S.row.orders.find(x => x.wo === o) || {}).listNA || {};
-    rec('"No list needed" and "Paper list issued" are saved on the WO (with who) and the rows go', na('WO-4').k === 'none' && na('WO-5').k === 'paper' && na('WO-4').by === 'Ann' && (await panel(t.page)).rows.length === 0, JSON.stringify([na('WO-4'), na('WO-5')]));
+    rec('"No list needed" is saved on the WO (with who) and the rows go', na('WO-4').k === 'none' && na('WO-5').k === 'none' && na('WO-4').by === 'Ann' && (await panel(t.page)).rows.length === 0, JSON.stringify([na('WO-4'), na('WO-5')]));
     rec('…and recorded in the WO history', await t.page.evaluate(() => (DB.orders.find(o => o.wo === 'WO-4').log || []).some(l => /no list needed/.test(l.what))));
     await t.page.evaluate(() => { document.getElementById('lti-na').click(); document.querySelector('[data-ltiundo="WO-4"]').click(); });
     rec('Undo brings WO-4 back to the panel', (await panel(t.page)).rows.includes('WO-4:none'));

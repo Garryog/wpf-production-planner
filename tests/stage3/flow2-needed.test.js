@@ -33,8 +33,9 @@ function server(on) {
     const S = server(true);
     const t = await F.dev(browser, S, 'office');
     const need = await t.page.evaluate(() => listsNeeded().map(o => o.wo.replace('WO-26-', '')).sort().join());
-    rec('on: steps 5, 6, 7 ("7.ASSEMBLY COMPLETE " no space / trailing space), 8 with no list are needed, plus the old due-soon rule', need === ['S5', 'S6', 'S7', 'S8', 'SOON'].sort().join(), need);
-    rec('on: step 4, shipped 9/10, on hold, "No list needed", "Paper list issued", has a list, on the Shipped tab → not needed', !/S4|S9|S10|HOLD|NA|PAPER|LISTED|SHIPD/.test(need), need);
+    rec('on: steps 5, 6, 7 ("7.ASSEMBLY COMPLETE " no space / trailing space), 8 with no list are needed, plus the old due-soon rule', need === ['S5', 'S6', 'S7', 'S8', 'SOON', 'PAPER'].sort().join(), need);
+    rec('an old "Paper list issued" mark (option removed, Garry 4 Nov) counts as needing a list again; the office load clears it with a history line', await t.page.evaluate(() => { const o = DB.orders.find(x => x.wo === 'WO-26-PAPER'); return !o.listNA && (o.log || []).some(l => /Paper list issued" option was removed/.test(l.what)); }));
+    rec('on: step 4, shipped 9/10, on hold, "No list needed", has a list, on the Shipped tab → not needed', !/S4|S9|S10|HOLD|-NA|LISTED|SHIPD/.test(need.split(',').map(x => '-' + x).join()), need);
     // procAt via an import
     const imp = await t.page.evaluate(async () => {
       showTab('i');
