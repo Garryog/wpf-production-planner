@@ -4095,7 +4095,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     const v=!id&&lsAutoHidden(r)?'':String(r.mat||'').trim();
     const sm=sheetMats(),fm=fitMats(),all=[...sm,...fm],on=all.find(n=>n.toLowerCase()===v.toLowerCase());
     const o=n=>`<option value="${escA(n)}"${on===n?' selected':''}>${escA(n)}</option>`;
-    return `<select ${id?'id="'+id+'"':'data-mr="'+i+'|mat"'} class="me-c"${id?` style="${inp};width:100%${v&&!on?';'+amber:''}"`:v&&!on?` style="${amber}"`:''}${v&&!on?' title="Not on the project\'s materials — flagged for the Production Manager"':''}><option value="">${id?'— none —':!id&&isStores(r)?'— item / spec —':'— colour —'}</option>
+    return `<select ${id?'id="'+id+'"':'data-mr="'+i+'|mat"'} class="me-c"${id?` style="${inp};width:100%${v&&!on?';'+amber:''}"`:v&&!on?` style="${amber}"`:''}${v&&!on?' title="Not on the project\'s materials — flagged for the Production Manager"':''}><option value="">${id?'— none —':!id&&isStores(r)?'— item / spec —':'— material —'}</option>
       ${sm.length?`<optgroup label="Boards / materials">${sm.map(o).join('')}</optgroup>`:''}${fm.length&&!sized&&!id?`<optgroup label="Fittings &amp; hardware">${fm.map(o).join('')}</optgroup>`:''}
       ${v&&!on?`<option value="${escA(v)}" selected>⚠ ${escA(v)} (not on the project list)</option>`:''}${id?'':'<option value="__add">＋ Add new material…</option>'}</select>`;};
   const rowHTML=(r,i,b)=>{
