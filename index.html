@@ -6218,7 +6218,11 @@ async function dkListDlg(){
       if(why===null)return;if(!why.trim()){toast('Not cancelled — a reason is needed');return;}
       dkLeftAsk(d.docket_no,left=>pickName('fit','Cancel docket '+d.docket_no,async by=>{S.busy=true;S.msg='';
         try{const r=await dkCancel(d.id,why.trim(),by,left);
-          if(r&&r.ok){toast(d.docket_no+' cancelled — '+(left?'the items stay got out':'the items are back to "to pick"'));if(V2())lsPoll();}
+          // the database's reply says what actually happened: dup = another screen had already cancelled it, and its
+          // answer to "did the items leave stores?" (r.left) is the one that stands — not the answer given here
+          if(r&&r.ok&&r.dup){const lf=r.left===true?'the items left stores (they stay got out)':r.left===false?'the items are back to "to pick"':'';
+            S.msg=d.docket_no+' was already cancelled on another screen — nothing changed here.'+(lf?' On that screen: '+lf+'.':'');toast(S.msg,true);}
+          else if(r&&r.ok){toast(d.docket_no+' cancelled — '+(left?'the items stay got out':'the items are back to "to pick"'));if(V2())lsPoll();}
           else S.msg=d.docket_no+' was already marked delivered — it can\'t be cancelled.';}
         catch(e){S.msg='Not cancelled — '+dkErr(e);}
         S.busy=false;await load(true);}));});
