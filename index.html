@@ -466,6 +466,11 @@ details.lti-other{margin-bottom:14px}details.lti-other>summary{cursor:pointer;fo
   .dk-tbl tr{display:flex;flex-wrap:wrap;align-items:center;gap:2px 10px;border-bottom:1px solid var(--border);padding:6px 2px}.dk-tbl td{border:none!important;padding:1px 2px}
   .dk-tbl td[data-l]::before{content:attr(data-l) " ";color:var(--t3);font-size:10px;text-transform:uppercase}.dk-tbl td.dk-c{order:0}.dk-tbl td.dk-it{order:1;flex:1 1 60%;font-weight:700}.dk-tbl td{order:2}
   .dk-ti{max-width:none;white-space:normal}.dk-ftbl td{flex:1 1 40%}.dk-ftbl td.dk-it{flex:1 1 100%}.dk-ftbl td.dk-c{display:none}.dk-ftbl td[data-l]::before{display:block}.dk-go .wl-btn{width:100%}}
+.dk-card{border:1px solid var(--border);border-left:5px solid #1a56db;border-radius:8px;padding:8px 10px;margin-bottom:8px;background:#fff}.dk-card.can{border-left-color:#b42318;background:#fdf6f5}
+.dk-ch{display:flex;gap:4px 12px;flex-wrap:wrap;align-items:baseline}.dk-no{font-family:monospace;font-size:17px;color:#14335c}.dk-pj{font-weight:700}.dk-sm{font-size:12px;color:var(--t3)}
+.dk-st{font-size:12px;font-weight:800;color:#7a4a00}.dk-st.ok{color:#0b7e44}.dk-st.can{color:#b42318}
+.dk-acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}.dk-acts .btn{min-height:36px}.dk-cx{color:var(--red)!important;border-color:var(--red)!important}
+.dk-dv{background:#f4fbf6;border:1px solid #9ad3b0;border-radius:8px;padding:8px;margin-top:6px}
 /* Bench PCs (saw / stores): condensed so more houses fit on one screen */
 .wl{max-width:1240px;padding:8px 14px}
 .wl h1{font-size:20px;padding-bottom:4px;margin-bottom:8px;border-width:3px}
@@ -5947,9 +5952,70 @@ function dkPrint(ds){
   w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>WPF docket ${escA(ds.map(d=>d.docket_no).join(', '))}</title><style>${DK_PRINT_CSS}</style></head><body>${ds.map(dkDocketHTML).join('')}<script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script></body></html>`);
   w.document.close();
 }
+/* "Dockets" (Stores): every docket, newest first, filter by project. Open (see the items), print again, mark
+   "Delivered — received by", or cancel with a reason (kept on record, marked CANCELLED; its items can be sent again). */
+async function dkListDlg(){
+  const ov=lsDlg('<div id="dkl-body"><div style="font-weight:800;color:#14335c;font-size:17px">📄 Dockets</div><div style="padding:10px 0;color:var(--t3)">Loading…</div></div>',900);
+  ov.id='dk-list-dlg';
+  const S={all:[],proj:'',open:new Set(),deliv:'',msg:'',busy:false};
+  const body=()=>ov.querySelector('#dkl-body');
+  const load=async()=>{try{S.all=await dkLoad();S.msg='';}catch(e){S.msg=dkErr(e);}draw();};
+  const today=()=>todayLocal();
+  const stHTML=d=>d.status==='cancelled'?`<span class="dk-st can">CANCELLED</span> <span class="dk-sm">${escA(dkDate(d.cancelled_at))}${d.cancelled_by?' · '+escA(d.cancelled_by):''} — ${escA(d.cancel_why||'')}</span>`
+    :d.status==='delivered'?`<span class="dk-st ok">✓ DELIVERED</span> <span class="dk-sm">received by <b>${escA(d.received_by||'')}</b> ${escA(dkDate(d.received_at))}${d.signature_name?' · signed '+escA(d.signature_name):''}</span>`
+    :'<span class="dk-st">Sent — not signed back yet</span>';
+  const draw=()=>{
+    const E=escA,projs=[...new Set(S.all.map(d=>d.project_name))].sort((a,b)=>String(a).localeCompare(String(b)));
+    if(S.proj&&!projs.includes(S.proj))S.proj='';
+    const ds=S.all.filter(d=>!S.proj||d.project_name===S.proj);
+    const its=d=>(d.items||[]);
+    const card=d=>`<div class="dk-card${d.status==='cancelled'?' can':''}" data-dkcard="${E(d.id)}">
+      <div class="dk-ch"><b class="dk-no">${E(d.docket_no)}</b><span>${E(dkDate(d.made_at))} ${E(hhmm(d.made_at))}</span><span class="dk-pj">${E(d.project_name)}</span><span class="dk-sm">${its(d).length} item${its(d).length!==1?'s':''} · sent by ${E(d.made_by)}</span></div>
+      <div>${stHTML(d)}</div>
+      ${S.open.has(d.id)?`<table class="lst-tbl dk-tbl" style="margin-top:6px"><thead><tr><th>WO</th><th>Floor</th><th>Unit</th><th>Item</th><th>Qty</th><th>Spec</th></tr></thead><tbody>${its(d).map(i=>`<tr><td data-l="WO">${E(i.wo)}</td><td data-l="Floor">${E(i.floor)}</td><td data-l="Unit">${E(i.unit)}</td><td class="dk-it">${E(i.item)}</td><td data-l="Qty">${E(i.qty_text||dkQ(i.qty))}</td><td data-l="Spec">${E(i.spec)}</td></tr>`).join('')}</tbody></table>
+        ${d.site_address?`<div class="dk-sm" style="margin-top:4px"><b>Deliver to:</b> ${E(d.site_address)}</div>`:''}${d.delivery_instructions?`<div class="dk-sm"><b>Instructions:</b> ${E(d.delivery_instructions)}</div>`:''}`:''}
+      ${S.deliv===d.id?`<div class="dk-dv"><label class="dk-f">Received by (print name)</label><input class="dk-in" id="dkv-by" placeholder="Name of the person on site">
+        <div class="dk-two"><div><label class="dk-f">Date received</label><input class="dk-in" type="date" id="dkv-at" value="${E(today())}"></div><div><label class="dk-f">Signed as (if different)</label><input class="dk-in" id="dkv-sig" placeholder="optional"></div></div>
+        <div style="margin-top:6px;display:flex;gap:6px;justify-content:flex-end"><button class="btn btn-s" data-dkvx="1">Cancel</button><button class="btn btn-g" data-dkvok="${E(d.id)}">✓ Save — delivered</button></div></div>`:''}
+      <div class="dk-acts"><button class="btn btn-s" data-dkopen="${E(d.id)}">${S.open.has(d.id)?'▴ Close':'▾ Open'}</button><button class="btn btn-s" data-dkprint="${E(d.id)}">🖨 Print</button>
+        ${d.status==='made'?`<button class="btn btn-s" data-dkdel="${E(d.id)}">✓ Delivered — received by…</button><button class="btn btn-s dk-cx" data-dkcan="${E(d.id)}">Cancel docket</button>`:''}</div></div>`;
+    body().innerHTML=`<div style="font-weight:800;color:#14335c;font-size:17px;margin-bottom:2px">📄 Dockets</div>
+      <div style="font-size:12px;color:var(--t3);margin-bottom:8px">Every docket sent to site. Dockets are never deleted — a wrong one is cancelled with a reason.</div>
+      <div class="dk-two" style="align-items:flex-end"><div><label class="dk-f" for="dkl-proj">Project</label><select id="dkl-proj" class="dk-in"><option value="">All projects · ${S.all.length}</option>${projs.map(p=>`<option value="${E(p)}"${p===S.proj?' selected':''}>${E(p)} · ${S.all.filter(d=>d.project_name===p).length}</option>`).join('')}</select></div>
+        <div style="flex:0 1 auto"><button class="btn btn-g" id="dkl-new" style="min-height:38px">＋ New docket</button></div></div>
+      <div id="dkl-msg" class="dk-bad" style="margin:6px 0">${E(S.msg)}</div>
+      ${ds.length?ds.map(card).join(''):`<div style="color:var(--t3);font-size:13px;padding:8px 0">No dockets yet.</div>`}`;
+    const b=body(),find=id=>S.all.find(d=>d.id===id);
+    b.querySelector('#dkl-proj').onchange=e=>{S.proj=e.target.value;draw();};
+    b.querySelector('#dkl-new').onclick=()=>{ov.remove();dkSendDlg();};
+    b.querySelectorAll('[data-dkopen]').forEach(x=>x.onclick=()=>{const id=x.dataset.dkopen;S.open.has(id)?S.open.delete(id):S.open.add(id);draw();});
+    b.querySelectorAll('[data-dkprint]').forEach(x=>x.onclick=()=>{const d=find(x.dataset.dkprint);if(d)dkPrint(d);});
+    b.querySelectorAll('[data-dkdel]').forEach(x=>x.onclick=()=>{S.deliv=x.dataset.dkdel;draw();const i=b.querySelector('#dkv-by');if(i)i.focus();});
+    b.querySelectorAll('[data-dkvx]').forEach(x=>x.onclick=()=>{S.deliv='';draw();});
+    b.querySelectorAll('[data-dkvok]').forEach(x=>x.onclick=()=>{const d=find(x.dataset.dkvok);if(!d||S.busy)return;
+      const rb=b.querySelector('#dkv-by').value.trim(),at=b.querySelector('#dkv-at').value,sig=b.querySelector('#dkv-sig').value.trim();
+      if(!rb){S.msg='Type who received it on site (print name).';const m=b.querySelector('#dkl-msg');if(m)m.textContent=S.msg;return;}
+      pickName('fit','Docket '+d.docket_no+' delivered',async by=>{S.busy=true;
+        try{const r=await dkDelivered(d.id,rb,at||null,sig,by);
+          if(r&&r.ok){toast(d.docket_no+' marked delivered — received by '+rb);S.deliv='';}
+          else S.msg=d.docket_no+' was cancelled on another screen — not marked delivered.';}
+        catch(e){S.msg='Not saved — '+dkErr(e);}
+        S.busy=false;await load();});});
+    b.querySelectorAll('[data-dkcan]').forEach(x=>x.onclick=()=>{const d=find(x.dataset.dkcan);if(!d||S.busy)return;
+      const why=prompt('Cancel docket '+d.docket_no+'?\n\nIt stays on record marked CANCELLED, and its items can be sent again.\n\nWhy is it being cancelled?','');
+      if(why===null)return;if(!why.trim()){toast('Not cancelled — a reason is needed');return;}
+      pickName('fit','Cancel docket '+d.docket_no,async by=>{S.busy=true;
+        try{const r=await dkCancel(d.id,why.trim(),by);
+          if(r&&r.ok){toast(d.docket_no+' cancelled');if(V2())lsPoll();}
+          else S.msg=d.docket_no+' was already marked delivered — it can\'t be cancelled.';}
+        catch(e){S.msg='Not cancelled — '+dkErr(e);}
+        S.busy=false;await load();});});
+  };
+  await load();
+}
 // Stores bench header: the docket buttons (Stores only — the saw screen is unchanged)
-function dkBarHTML(){return `<div class="dk-bar"><button id="dk-send">🚚 Send to site</button></div>`;}
-function dkBarBind(){const b=id=>document.getElementById(id);if(b('dk-send'))b('dk-send').onclick=()=>dkSendDlg();}
+function dkBarHTML(){return `<div class="dk-bar"><button id="dk-send">🚚 Send to site</button><button id="dk-list">📄 Dockets</button></div>`;}
+function dkBarBind(){const b=id=>document.getElementById(id);if(b('dk-send'))b('dk-send').onclick=()=>dkSendDlg();if(b('dk-list'))b('dk-list').onclick=()=>dkListDlg();}
 function dkProjLines(pid){
   const out=[];
   [...LST.l.values()].filter(r=>r.project_id===pid&&!r.archived&&!r.is_template)
