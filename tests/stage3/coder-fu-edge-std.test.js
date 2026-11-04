@@ -43,7 +43,7 @@ let pass = 0, fail = 0; const rec = (n, ok, d) => { ok ? pass++ : fail++; consol
   rec('office board: separate Floor and Unit columns ("1" and "22")', board.fi >= 0 && board.ui === board.fi + 1 && board.f === '1' && board.u === '22', JSON.stringify(board));
   if (SHOTS) { await p.evaluate(() => { const r = [...document.querySelectorAll('.wo-table tbody tr')].find(r => /WO-1\b/.test(r.textContent)); if (r) r.scrollIntoView({ block: 'center' }); }); await p.screenshot({ path: SHOTS + '/board-row-1400.png' }); }
   const lh = await p.evaluate(() => { showTab('l'); const th = [...document.querySelector('[data-lhrow="L1"]').closest('table').querySelectorAll('th')].map(x => x.textContent.trim()); const r = document.querySelector('[data-lhrow="L1"]');
-    return { th, cells: r ? [...r.children].map(x => x.textContent.trim()) : null, std: !!document.getElementById('lh-std') }; });
+    return { th, cells: r ? [...r.children].map(x => x.textContent.trim()) : null, std: !!document.getElementById('lh-new') && !document.getElementById('lh-std') && !!document.getElementById('lh-blank') }; });
   const fi = lh.th.indexOf('Floor');
   rec('Lists home: its own Floor and Unit columns (1 / 22)', fi > 0 && lh.th[fi + 1] === 'Unit' && lh.cells && lh.cells[fi] === '1' && lh.cells[fi + 1] === '22', JSON.stringify(lh));
   const srch = await p.evaluate(() => { const r = {}; for (const q of ['22', 'WO-1']) { LH.q = q; render(); r[q] = !!document.querySelector('[data-lhrow="L1"]'); } LH.q = ''; render(); return r; });
@@ -82,10 +82,10 @@ let pass = 0, fail = 0; const rec = (n, ok, d) => { ok ? pass++ : fail++; consol
   rec('lsLooksEdge: codes yes, words / numbers no', JSON.stringify(pg.looks) === JSON.stringify([true, true, true, true, true, true, true, false, false, false, false, false]), JSON.stringify(pg.looks));
 
   // ---- 3. standard layout from Lists home
-  const sl = await p.evaluate(async () => { showTab('l'); LH.proj = 'P1'; render(); document.getElementById('lh-std').click(); await new Promise(r => setTimeout(r, 100));
+  const sl = await p.evaluate(async () => { showTab('l'); LH.proj = 'P1'; render(); document.getElementById('lh-new').click(); await new Promise(r => setTimeout(r, 100));
     const rows = [...document.querySelectorAll('.me-grid tbody tr')].map(r => { const i = r.querySelector('[data-mr$="|item"]'); return (r.classList.contains('me-h') ? (r.classList.contains('me-hs') ? 'SUB:' : 'HDR:') : 'ROW:') + (i ? i.value : ''); });
     return { rows, title: document.querySelector('.me-ed').innerText.slice(0, 200) }; });
-  rec('Lists home "New list – standard layout": heading, then Fillers and Kickers / Worktops / Stores items with 2 empty rows each',
+  rec('Lists home "＋ New list" (one button, the standard layout — Garry 4 Nov; Blank list under More): heading, then Fillers and Kickers / Worktops / Stores items with 2 empty rows each',
     sl.rows.join(',') === 'HDR:,SUB:Fillers and Kickers,ROW:,ROW:,SUB:Worktops,ROW:,ROW:,SUB:Stores items,ROW:,ROW:', JSON.stringify(sl.rows));
   // pick WO-3 → the house heading follows the work order's unit; the project's colours only
   const sw = await p.evaluate(async () => { const w = document.getElementById('me-wo'); w.value = 'WO-3'; w.onchange(); await new Promise(r => setTimeout(r, 100));

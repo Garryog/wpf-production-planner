@@ -448,7 +448,7 @@ details.lti-other{margin-bottom:14px}details.lti-other>summary{cursor:pointer;fo
 .me-bar{display:flex;gap:8px;margin:10px 0 6px;flex-wrap:wrap;align-items:flex-start}.me-big{font-size:15px;padding:8px 16px;min-height:38px}
 .me-more{position:relative}.me-more>summary{list-style:none;cursor:pointer;display:inline-block}.me-more>summary::-webkit-details-marker{display:none}
 .me-morep{position:absolute;z-index:5;left:0;top:44px;background:#fff;border:1px solid var(--b2);border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.15);padding:10px 12px;display:flex;flex-direction:column;gap:8px;min-width:280px}
-.me-morep .btn[hidden]{display:none}.me-defc{display:flex;gap:8px;flex-wrap:wrap}.me-defc label{display:block;font-size:11px;color:var(--t2);font-weight:600;margin-bottom:3px}.me-defc>div{flex:1;min-width:120px}
+.me-morep .btn[hidden]{display:none}.lh-more .me-morep{left:auto;right:0;top:40px;min-width:160px}.me-defc{display:flex;gap:8px;flex-wrap:wrap}.me-defc label{display:block;font-size:11px;color:var(--t2);font-weight:600;margin-bottom:3px}.me-defc>div{flex:1;min-width:120px}
 .me-ed .me-keys{font-size:12px;background:#f6f8fb;border:1px solid var(--border);border-radius:6px;padding:6px 10px;margin:0 0 6px}.me-keys[hidden]{display:none!important}
 .me-h:not(.me-u):not(.me-hs) td{background:#14335c}.me-h:not(.me-u):not(.me-hs) .me-b{font-size:16px;background:#fff}.me-h:not(.me-u):not(.me-hs) .me-n{color:#cbd5e6}
 .me-hs td{background:#eaf0f8}.me-hs td:nth-child(2){padding-left:18px}.me-hsel{width:auto!important;font-size:12px!important;min-height:28px!important}
@@ -3480,7 +3480,7 @@ function lsHomeHTML(){
       ${sel('lh-rev',LH.rev,[['','Any revision'],['revised','Revised (rev 2+)']])}
       ${sel('lh-state',LH.state,[['','Not archived'],['draft','Draft'],['live','Live (with the saw)'],['done','Done'],['archived','Archived']])}
       ${LH.q||LH.proj||LH.type||LH.kind!=='live'||LH.rev||LH.state?'<button class="btn btn-s" id="lh-x" style="font-size:12px">✕ Clear</button>':''}
-      <span style="flex:1"></span>${LH.kind==='tpl'?`<button class="btn btn-s" id="lh-copy"${LH.proj?'':' disabled title="Pick the project first"'}>⧉ Copy from another project</button><button class="btn btn-g" id="lh-newtpl"${LH.proj?'':' disabled title="Pick the project first"'}>＋ New template</button>`:''}<button class="btn btn-s" id="lh-projs">🏗 Projects</button><button class="btn btn-s dk-gate" id="lh-sent"${dkVis()?'':' hidden'} title="Everything sent to a project's site between two dates — print or Excel">📦 Items sent</button><button class="btn btn-s" id="lh-std" title="The house heading and the standard sub-headings (Fillers and Kickers, Worktops, Stores items) ready to fill">＋ New list – standard layout</button><button class="btn btn-g" id="lh-new">＋ New list</button>
+      <span style="flex:1"></span>${LH.kind==='tpl'?`<button class="btn btn-s" id="lh-copy"${LH.proj?'':' disabled title="Pick the project first"'}>⧉ Copy from another project</button><button class="btn btn-g" id="lh-newtpl"${LH.proj?'':' disabled title="Pick the project first"'}>＋ New template</button>`:''}<button class="btn btn-s" id="lh-projs">🏗 Projects</button><button class="btn btn-s dk-gate" id="lh-sent"${dkVis()?'':' hidden'} title="Everything sent to a project's site between two dates — print or Excel">📦 Items sent</button><button class="btn btn-g" id="lh-new" title="Opens the standard layout: the house heading and the sub-headings Fillers and Kickers, Worktops, Stores items, ready to fill">＋ New list</button><details class="me-more lh-more" id="lh-more"><summary class="btn btn-s">More ▾</summary><div class="me-morep"><button class="btn btn-s" id="lh-blank" title="An empty list with no headings">Blank list</button></div></details>
     </div>
     <input type="file" id="lh-file" accept=".xlsx,.xls" style="display:none"><div id="lh-upmsg" style="font-size:12px;margin-bottom:6px"></div>
     ${keys.length?keys.map(k=>{const a=grp.get(k);return `<div class="lh-grp" style="margin-bottom:12px"><div style="background:#14335c;color:#fff;border-radius:6px 6px 0 0;padding:7px 10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -3498,13 +3498,14 @@ function lsHomeBind(){
   const x=document.getElementById('lh-x');if(x)x.onclick=()=>{Object.assign(LH,{q:'',proj:'',type:'',kind:'live',rev:'',state:''});render();};
   const pj=document.getElementById('lh-projs');if(pj)pj.onclick=()=>lsProjectsDlg();
   const sn=document.getElementById('lh-sent');if(sn){sn.onclick=()=>dkReportDlg();dkShow();}
-  const nw=document.getElementById('lh-new');if(nw)nw.onclick=()=>openListEditor(null,'',LH.proj||'');
-  const ns=document.getElementById('lh-std');if(ns)ns.onclick=()=>lsNewStd('',LH.proj||'');
+  // (Garry, 4 Nov) one "＋ New list" — the standard layout; an empty list is under More ▾ → Blank list
+  const nw=document.getElementById('lh-new');if(nw)nw.onclick=()=>lsNewStd('',LH.proj||'');
+  const nb=document.getElementById('lh-blank');if(nb)nb.onclick=()=>{const m=document.getElementById('lh-more');if(m)m.open=false;openListEditor(null,'',LH.proj||'');};
   const nt=document.getElementById('lh-newtpl');if(nt)nt.onclick=()=>openListEditor(null,'',LH.proj,{tpl:true});
   const cp=document.getElementById('lh-copy');if(cp)cp.onclick=()=>lsCopyDlg(LH.proj);
   document.querySelectorAll('[data-lhtpl]').forEach(b=>b.onclick=()=>{LH.proj=b.dataset.lhtpl;LH.kind='tpl';render();});
   document.querySelectorAll('[data-lhmat]').forEach(b=>b.onclick=()=>lsMaterialsDlg(b.dataset.lhmat));
-  document.querySelectorAll('[data-lhnew]').forEach(b=>b.onclick=()=>openListEditor(null,'',b.dataset.lhnew));
+  document.querySelectorAll('[data-lhnew]').forEach(b=>b.onclick=()=>lsNewStd('',b.dataset.lhnew)); // the standard layout, like ＋ New list
   const fi=document.getElementById('lh-file');
   document.querySelectorAll('[data-lhimp]').forEach(b=>b.onclick=()=>{lhImpPid=b.dataset.lhimp;if(fi)fi.click();});
   if(fi)fi.onchange=()=>{const f=fi.files[0];if(f)lsUpload(f,lhImpPid);fi.value='';};
