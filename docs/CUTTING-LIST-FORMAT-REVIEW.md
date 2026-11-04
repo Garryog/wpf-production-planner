@@ -21,3 +21,22 @@ Source: SharePoint "Production - General / Jobs Ready for Production" (read-only
 - Carcass/door colour is set once in the list header and fills down. Colour and edging are dropdowns of the codes WPF already uses, and free text is still allowed.
 - Work like Excel: Tab/Enter between cells, paste rows straight from Excel, fill down, insert/delete row, unit headings as group rows.
 - The existing "Import Excel" (one workbook per project, one sheet per house) must read these real workbooks correctly, including unit blocks with "total nr of units", per-house sub-headings and formula quantities. This is to be checked against real files before building.
+
+## Addendum 4 Nov 2026: standard production (Garry: "Cairn Homes is a bad example")
+Garry: most cabinets come off the CNCs. The saw list is mainly the **fillers and exposed material** (plus some worktops). **Aspect Athenry** and **O'Malleys** are the typical examples. Cairn Homes (wardrobes, everything off the saw) is the exception.
+
+What those workbooks show ("Aspect Cutting List.xlsx", "O'Malleys - Cutting List.xlsx"):
+- **One sheet holds several houses.** Each house is a heading ("House nr 103", "House 7 — Type 2", "Block B Apt 29"), followed by sub-headings: "Fillers and Kickers", "Worktops, Fillers and Kickers", "ISLAND", "Utility 103", "Doors FU", "Doors WU".
+- **Each house is about 10–25 lines:**
+  - Saw parts: Kicker, Fillers, Gable, Tall Gable, Island Gables, Island Back, Heat Pump Frame, Cross Rails, Batten, Raw MDF, Head filler.
+  - Worktops: "Top 1000×600 Frosty Matt 25mm, No Cap".
+  - Fittings / appliances with a quantity and the item named in the colour column: Kicker vent, Sink "Hafele Calder", Tap, Extractor, Gola rail "J Type", Gola clips, Robe handles.
+  - "Bought in" items that have sizes but must NOT be cut, e.g. "Panel Back 900×1842 Nautic Blue — Bought in".
+  - Free-text notes: "Talk to Ollie", "Cut down bought in doors at 345".
+  - Door rows with no description, sitting under a "Doors FU" heading.
+- **No "units × N" blocks.** Houses of the same type are near-copies with small differences: LH/RH sink handing, an extra filler, a 625 vs 628 gable.
+- **Spec placeholders on the list:** "Worktops — None Chosen / TBC / Corian", "Sink + Tap — TBC".
+- **Edging codes seen:** L1L+2SE 1mm, L1L2SE 1MM, L1LE 1mm, L2LE 1mm, L4S 1mm, L4S 2mm R, "No Cap", "Bought in", and an edge colour ("L2LE 1mm Blue").
+- **Material includes thickness:** "36mm Grey Bordelino", "Frosty Matt 25mm", "18mm MDF".
+
+**What this means:** the planner should keep it simple. One list per house, with headings and sub-headings. Templates are a whole house type, copied per house and tweaked. A fast way to make the same list for several houses is needed. Row kinds are Saw / Worktop / Stores item / Bought in / Note. Unit blocks × N become optional (Cairn-style robe jobs only).
