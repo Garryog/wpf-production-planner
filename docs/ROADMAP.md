@@ -110,6 +110,8 @@ Rules: rank by the leading number. "Shipped" = step 9 only (left the factory →
 
 - (4 Nov, Garry) Stores docket plan (docs/PLAN-stores-docket.md) APPROVED: only not-yet-got-out items; project address as the docket default plus delivery instructions and a signature block; part quantities allowed.
 
+- (4 Nov, Garry) When a job's STEP is changed in the planner itself (not only on import) to 7. ASSEMBLY COMPLETE or 8. PALLETED, it is auto-ticked for delivery (delv=true, no van/day), same rule as the import. Never untags.
+
 ## Progress log
 ### 2 Nov 2026 (scheduled run)
 - Architect confirmed the cutting-list plan against the code; build notes and build order added to docs/PLAN-cutting-lists-stage3.md (fixed garbled characters in both plan files).
