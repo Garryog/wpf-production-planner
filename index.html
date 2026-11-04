@@ -1910,7 +1910,7 @@ function renderBoard(app){
   document.querySelectorAll('[data-s]').forEach(th=>th.onclick=()=>{const s=th.dataset.s;if(sortCol===s)sortDir*=-1;else{sortCol=s;sortDir=1;}render();});
   // Every board edit is stamped with the person at this machine (asked once per tab)
   document.querySelectorAll('[data-wsel]').forEach(sel=>sel.onchange=function(){const o=DB.orders.find(x=>x.wo===this.dataset.wsel);const v=this.value;if(o)officeWho(by=>{const was=o.plannedWeek||'';o.plannedWeek=v;logEdit(o,'Build week '+(was?wkLbl(was):'unscheduled')+' → '+(v?wkLbl(v):'unscheduled'),by);sched();render();},()=>render());});
-  document.querySelectorAll('[data-stepsel]').forEach(sel=>sel.onchange=function(){const o=DB.orders.find(x=>x.wo===this.dataset.stepsel);const v=this.value;if(o)officeWho(by=>{logEdit(o,'Step '+(o.step||'—')+' → '+v,by);o.step=v;sched();render();toast('Step updated');},()=>render());});
+  document.querySelectorAll('[data-stepsel]').forEach(sel=>sel.onchange=function(){const o=DB.orders.find(x=>x.wo===this.dataset.stepsel);const v=this.value;if(o)officeWho(by=>{logEdit(o,'Step '+(o.step||'—')+' → '+v,by);o.step=v;const tg=delvAuto(o,by);if(tg)updDelBadge();sched();render();toast(tg?'Step updated — ticked for delivery':'Step updated');},()=>render());});
   document.querySelectorAll('[data-hl]').forEach(el=>el.onclick=function(){const o=DB.orders.find(x=>x.wo===this.dataset.hl);if(o){o.hl=!o.hl;sched();render();}});
   document.querySelectorAll('[data-hi]').forEach(inp=>inp.onchange=function(){const o=DB.orders.find(x=>x.wo===this.dataset.hi);const v=parseFloat(this.value)||0;if(o)officeWho(by=>{logEdit(o,'Hours '+o.hours+' → '+v,by);o.hours=v;o.hoursEstimated=false;o.hoursSrc='hand';sched();render();},()=>render());});
   document.querySelectorAll('[data-del]').forEach(btn=>btn.onclick=()=>{
@@ -2032,6 +2032,12 @@ function delHidden(o){return isOnHold(o)&&!o.delLoadedAt&&!o.delDispAt&&!o.delDe
    delvOverride — untagged from delivery by hand (stops the 7/8 auto-tag); completeOverride — "Undo complete" (stops 11 re-completing). */
 function delvMark(o){if(o.delv)delete o.delvOverride;else o.delvOverride=o.step||o.cienStep||'(none)';}
 function ovrHolds(ov,cs){if(!ov)return false;const a=stepRank(cs),b=stepRank(ov);return !(a!==null&&b!==null&&a>b);}
+/* Garry, 4 Nov: a job whose step is set to 7 ASSEMBLY COMPLETE or 8 PALLETED in the planner is ticked for delivery
+   (pool, no van/day). Never untags; a job already tagged keeps its van/day; a hand-untag at this step or later is
+   respected (same rule as the import); shipped jobs are left alone. On hold still hides it from the board (delHidden). */
+function delvAutoOk(o){const n=stepNo(o&&o.step);return !!o&&(n===7||n===8)&&!o.delv&&!o.shippedAt&&!ovrHolds(o.delvOverride,o.step);}
+function delvAuto(o,by,what){if(!delvAutoOk(o))return false;o.delv=true;delete o.delvOverride;
+  logEdit(o,(what||'Auto-tagged for delivery — step changed to '+o.step)+' by '+(by||'—'),by);return true;}
 function delAll(){return[...DB.orders.filter(o=>o.delv&&!delHidden(o)),...(DB.delx||[])];}
 function findDel(wo){return DB.orders.find(o=>o.wo===wo)||(DB.delx||[]).find(o=>o.wo===wo);}
 function woCmp(a,b){
@@ -3085,6 +3091,7 @@ function dchip(o,showCust){
 
 function renderDeliveries(app){
   const tagged=delAll();
+  const catchUp=DB.orders.filter(delvAutoOk); // go-live gap: jobs already at 7/8 before the auto-tag rule existed
   const pool=tagged.filter(o=>!o.delDay);
   const done=tagged.filter(o=>o.delDone).length;
   const notes=DB.delNotes||{};
@@ -3106,6 +3113,7 @@ function renderDeliveries(app){
         <button class="btn btn-blue" id="btn-delprint">🖨 Print A3 Poster</button>
         <button class="btn btn-g" id="btn-delexp">⬇ Export Delivery Plan</button>
         <button class="btn btn-s" id="btn-delarch" title="Archived delivery weeks — every cleared week is kept here with all stamps and names">📚 Past weeks</button>
+        ${ROLE==='office'&&catchUp.length?`<button class="btn btn-s" id="btn-deltag" title="One-off: tick for delivery every job already at 7 ASSEMBLY COMPLETE or 8 PALLETED that is not on the board yet">Tag assembled/palleted jobs for delivery (${catchUp.length})</button>`:''}
         <button class="btn btn-s" id="btn-delreset" style="border-color:var(--red);color:var(--red)">Clear Week — Start Fresh</button>
       </span>
     </div>
@@ -3295,6 +3303,13 @@ function renderDeliveries(app){
   const pp=document.getElementById('btn-delprint');if(pp)pp.onclick=printPoster;
   const rsh=document.getElementById('btn-runsheets');if(rsh)rsh.onclick=printRunSheets;
   const ab=document.getElementById('btn-delarch');if(ab)ab.onclick=openDelArchive;
+  const dt8=document.getElementById('btn-deltag');
+  if(dt8)dt8.onclick=()=>{
+    const js=DB.orders.filter(delvAutoOk);if(!js.length){toast('Nothing to tag');render();return;}
+    if(!confirm('Tick '+js.length+' job'+(js.length===1?'':'s')+' at 7 ASSEMBLY COMPLETE / 8 PALLETED for delivery?\n\nThey go into the pool (no van or day). Jobs already on the board, shipped, or untagged by hand are left as they are.'))return;
+    officeWho(by=>{let n=0;DB.orders.filter(delvAutoOk).forEach(o=>{if(delvAuto(o,by,'Tagged for delivery — already at '+o.step+' (one-off catch-up)'))n++;});
+      updDelBadge();sched();render();toast(n+' job'+(n===1?'':'s')+' ticked for delivery');});
+  };
   const rs=document.getElementById('btn-delreset');
   if(rs)rs.onclick=async()=>{
     if(!confirm('Clear the whole delivery plan ('+tagged.length+' jobs)? A safety backup of the whole plan is saved to the database first, and the week is ARCHIVED (📚 Past weeks keeps every job, timestamp, name and note), then the board starts fresh for the next production meeting.'))return;
