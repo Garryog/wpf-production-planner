@@ -99,3 +99,4 @@ Garry: "everything needs to be very simple to use". The standard is Aspect / O'M
 7. **Fewer buttons and less help text** in the editor. Keep: + Row, + Heading, Insert from template, Save, Save as template. Everything else goes under "More". Keyboard hints move to a small "?" button. Bigger font.
 8. **Stores rows:** in the Colour column a stores row shows "Item / spec" (e.g. Sink → "Hafele Calder"). Notes per line stay ("Talk to Ollie").
 Not wanted now: "same list to many houses in one go".
+**Garry, 4 Nov (after seeing it):** leave "Checked by" OFF for the initial roll-out to keep things simple. Lists reach the saw without a check, there is no "Waiting for check" state, and no re-check on revisions. Keep the code behind a Settings switch ("Lists must be checked before the saw"), default OFF and hidden from staff. Import: one list per sheet (as built). Keep amber for stores specs not on the project list.

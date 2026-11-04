@@ -99,6 +99,8 @@ Rules: rank by the leading number. "Shipped" = step 9 only (left the factory →
 
 - (4 Nov) Cutting lists must be VERY simple. Standard production = Aspect / O'Malleys (saw list = fillers, exposed panels, worktops; cabinets off CNC). Approved: headings prominent, unit blocks hidden by default, 'Bought in' tick per line, worktops cut on the saw, TBC spec flags in red, 'Checked by' (Drawing office / PM) required before a list reaches the saw, fewer buttons. See docs/PLAN-list-editor-excel.md 'Simplify for standard production'.
 
+- (4 Nov) 'Checked by' before issue: OFF for the initial roll-out (keep simple); import one list per sheet; keep amber for stores specs not on the project list.
+
 ## Progress log
 ### 2 Nov 2026 (scheduled run)
 - Architect confirmed the cutting-list plan against the code; build notes and build order added to docs/PLAN-cutting-lists-stage3.md (fixed garbled characters in both plan files).
