@@ -460,12 +460,12 @@ details.lti-other{margin-bottom:14px}details.lti-other>summary{cursor:pointer;fo
 .dk-tbl td{vertical-align:middle}.dk-tbl td.dk-q input{width:72px;padding:6px;font-size:15px;text-align:right;border:1px solid var(--b2);border-radius:6px}
 .dk-ftbl td.dk-q input{width:64px}.dk-ftbl td .dk-in{font-size:13px;padding:5px 6px}
 .dk-tbl tr.dk-wait td{color:#8a8a8a;background:#f5f5f5}.dk-tbl tr.dk-on td{background:#eaf7ef}.dk-wt{font-size:12px;font-weight:700;color:#7a4a00}
-.dk-ti{max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dk-ti{max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.dk-nw{white-space:nowrap}
 .dk-bad{color:#b42318;font-weight:700;font-size:12px}.dk-chk{width:24px;height:24px}.dk-go{margin-top:12px;text-align:right}.dk-go .wl-btn:disabled{opacity:.5;cursor:default}
 @media(max-width:700px){.dk-tbl,.dk-tbl tbody,.dk-tbl tr,.dk-tbl td{display:block;width:auto}.dk-tbl thead{display:none}
   .dk-tbl tr{display:flex;flex-wrap:wrap;align-items:center;gap:2px 10px;border-bottom:1px solid var(--border);padding:6px 2px}.dk-tbl td{border:none!important;padding:1px 2px}
   .dk-tbl td[data-l]::before{content:attr(data-l) " ";color:var(--t3);font-size:10px;text-transform:uppercase}.dk-tbl td.dk-c{order:0}.dk-tbl td.dk-it{order:1;flex:1 1 60%;font-weight:700}.dk-tbl td{order:2}
-  .dk-ti{max-width:none;white-space:normal}.dk-ftbl td{flex:1 1 40%}.dk-ftbl td.dk-it{flex:1 1 100%}.dk-ftbl td.dk-c{display:none}.dk-ftbl td[data-l]::before{display:block}.dk-go .wl-btn{width:100%}}
+  .dk-tbl tr.dk-on{background:#eaf7ef}.dk-tbl tr.dk-wait{background:#f5f5f5}.dk-ti{max-width:none;white-space:normal}.dk-ftbl td{flex:1 1 40%}.dk-ftbl td.dk-it{flex:1 1 100%}.dk-ftbl td.dk-c{display:none}.dk-ftbl td[data-l]::before{display:block}.dk-go .wl-btn{width:100%}}
 .dk-card{border:1px solid var(--border);border-left:5px solid #1a56db;border-radius:8px;padding:8px 10px;margin-bottom:8px;background:#fff}.dk-card.can{border-left-color:#b42318;background:#fdf6f5}
 .dk-ch{display:flex;gap:4px 12px;flex-wrap:wrap;align-items:baseline}.dk-no{font-family:monospace;font-size:17px;color:#14335c}.dk-pj{font-weight:700}.dk-sm{font-size:12px;color:var(--t3)}
 .dk-st{font-size:12px;font-weight:800;color:#7a4a00}.dk-st.ok{color:#0b7e44}.dk-st.can{color:#b42318}
@@ -6064,7 +6064,7 @@ function dkReportDlg(){
       <div class="dk-bad" style="margin:6px 0">${E(S.msg)}</div>
       ${S.rows?`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0"><b style="color:#14335c">${S.rows.length} item line${S.rows.length!==1?'s':''}</b><span style="flex:1"></span>
         <button class="btn btn-s" id="dkr-print"${S.rows.length?'':' disabled'}>🖨 Print</button><button class="btn btn-s" id="dkr-xls"${S.rows.length?'':' disabled'}>⬇ Excel</button></div>
-        ${S.rows.length?`<table class="lst-tbl dk-tbl"><thead><tr>${DK_REP_COLS.map(c=>`<th>${c}</th>`).join('')}</tr></thead><tbody>${S.rows.map(r=>`<tr><td data-l="Date">${E(dkDate(r.at))} ${E(hhmm(r.at))}</td><td data-l="Docket"><b>${E(r.docket)||'—'}</b></td><td data-l="WO">${E(r.wo)}</td><td data-l="Floor">${E(r.floor)}</td><td data-l="Unit">${E(r.unit)}</td><td data-l="Title" class="dk-ti" title="${E(r.title)}">${E(r.title)}</td><td class="dk-it">${E(r.item)}</td><td data-l="Qty">${E(r.qty)}</td><td data-l="Spec">${E(r.spec)}</td><td data-l="List">${E(r.list)}</td><td data-l="By">${E(r.by)}</td><td data-l="Delivered"${/^Yes/.test(r.deliv)?' style="color:#0b7e44;font-weight:700"':''}>${E(r.deliv)}</td></tr>`).join('')}</tbody></table>`
+        ${S.rows.length?`<table class="lst-tbl dk-tbl"><thead><tr>${DK_REP_COLS.map(c=>`<th>${c}</th>`).join('')}</tr></thead><tbody>${S.rows.map(r=>`<tr><td data-l="Date">${E(dkDate(r.at))} ${E(hhmm(r.at))}</td><td data-l="Docket" class="dk-nw"><b>${E(r.docket)||'—'}</b></td><td data-l="WO" class="dk-nw">${E(r.wo)}</td><td data-l="Floor">${E(r.floor)}</td><td data-l="Unit">${E(r.unit)}</td><td data-l="Title" class="dk-ti" title="${E(r.title)}">${E(r.title)}</td><td class="dk-it">${E(r.item)}</td><td data-l="Qty">${E(r.qty)}</td><td data-l="Spec">${E(r.spec)}</td><td data-l="List">${E(r.list)}</td><td data-l="By">${E(r.by)}</td><td data-l="Delivered"${/^Yes/.test(r.deliv)?' style="color:#0b7e44;font-weight:700"':''}>${E(r.deliv)}</td></tr>`).join('')}</tbody></table>`
         :'<div style="color:var(--t3);font-size:13px">Nothing sent in those dates.</div>'}`:''}`;
     const b=body();
     b.querySelector('#dkr-proj').onchange=e=>{S.pr=ch.find(p=>(v2?p.id:p.name)===e.target.value)||null;S.rows=null;S.msg='';draw();if(S.pr)run();};
@@ -6132,7 +6132,7 @@ async function dkSendDlg(){
     const tick=S.rows.filter(o=>S.sel.has(o.x.id)).length,nf=S.free.filter(f=>f.item.trim()).length;
     const row=o=>{const x=o.x,s=S.sent[x.id],tot=dkNum(x.qty),lf=left(o),wait=o.st==='waiting',on=S.sel.has(x.id),spec=[x.material,lsEdgeTxt(x),x.note].map(v=>String(v||'').trim()).filter(Boolean).join(' · ');
       return `<tr class="${wait?'dk-wait':on?'dk-on':''}" data-dkrow="${E(x.id)}"><td class="dk-c">${wait?'':`<input type="checkbox" class="dk-chk" data-dksel="${E(x.id)}"${on?' checked':''} aria-label="Send">`}</td>
-        <td data-l="WO">${E(o.info.wo)||'—'}</td><td data-l="Floor">${E(o.info.floor)}</td><td data-l="Unit">${E(o.info.unit)}</td><td data-l="Title" class="dk-ti" title="${E(o.info.title)}">${E(o.info.title)}</td>
+        <td data-l="WO" class="dk-nw">${E(o.info.wo)||'—'}</td><td data-l="Floor">${E(o.info.floor)}</td><td data-l="Unit">${E(o.info.unit)}</td><td data-l="Title" class="dk-ti" title="${E(o.info.title)}">${E(o.info.title)}</td>
         <td class="dk-it">${E(x.part||'')}${x.kind==='buy'?' <span class="lst-chip" style="background:#e0f2fe;color:#075985">Bought in</span>':''}${S.bad[x.id]?`<div class="dk-bad">✕ ${E(S.bad[x.id])}</div>`:''}</td><td data-l="Spec">${E(spec)}</td>
         <td class="dk-q" data-l="Send">${wait?'<span class="dk-wt">⏸ Waiting — release first</span>':tot==null?`<b>${E(x.qty||'—')}</b> <span style="font-size:11px;color:var(--t3)">(whole line)</span>`:`<input inputmode="decimal" data-dkq="${E(x.id)}" value="${E(on?S.sel.get(x.id):dkQ(lf))}" aria-label="How many to send">`}</td>
         <td data-l="Sent" style="font-size:12px;color:var(--t3)">${tot!=null?(s&&s.n?`<b style="color:#14335c">${dkQ(s.n)} of ${dkQ(tot)} sent</b>${s.dk.length?' ('+E(s.dk.join(', '))+')':''}`:'of '+dkQ(tot)):''}</td></tr>`;};
