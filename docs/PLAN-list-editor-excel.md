@@ -87,3 +87,15 @@ Paste and import both go through one pure function, `lsParseGrid(aoa, {formulas}
 3. **"Blank" sheet on import: ignore it** (and the Index, Stock and Door Stock sheets). No "Standard units" template from it. "Insert unit from template…" (step 10) still works from templates made with Save as template.
 4. (3 Nov, after seeing the build) "Make new list from this" → the OLD list is ARCHIVED automatically once the new list is saved (taken off the saw). Parts already cut on the old list show on the new list as "already cut on old list" so the saw can check before cutting again.
 5. Stores (fittings) rows start with NO colour (they do not copy the row above); pick one only if needed.
+
+## Simplify for standard production (Garry, 4 Nov 2026), APPROVED
+Garry: "everything needs to be very simple to use". The standard is Aspect / O'Malleys: cabinets come off the CNC, and the saw list is fillers, exposed panels and worktops (see docs/CUTTING-LIST-FORMAT-REVIEW.md, addendum).
+1. **Headings:** "+ Heading" is the first, most obvious button. Allow sub-headings (e.g. House 103 → Fillers and Kickers / ISLAND / Utility / Doors FU). Headings show clearly on the saw view, prints and labels.
+2. **Unit blocks × N are hidden by default.** Show them only when "Unit blocks (robe jobs)" is ticked in the editor's "More" menu, or when the list already has them.
+3. **"Bought in" tick on each line:** a bought-in line is never sent to the saw (and doesn't count in the sheet calculator or labels). It shows on the list as "Bought in" for checking and delivery. Importing a row whose edging/note says "Bought in" ticks it automatically.
+4. **Worktops are cut on the saw** like any other panel. No special handling, except that the material name carries the thickness (25mm/36mm/38mm), so the sheet calculator keeps them separate from 18mm board.
+5. **TBC spec flags:** any line whose colour/spec/description is "TBC", "None chosen" or "To be confirmed" (or blank on a worktop/sink/tap line) shows RED on the list, the saw view and the board ("spec TBC: Worktops"). It doesn't block production. This links to the spec checklist in docs/PLAN-projects-hub.md when that is built.
+6. **"Checked by" before issue:** a list can't go to the saw until someone with the Drawing office / Production Manager / Admin PIN ticks "Checked". It records who and when, and the saw sees "Issued by X, checked by Y". Editing a checked list clears "Checked" and asks again (a revision must be re-checked). Confirm-from-template counts as checked only if the template itself is checked.
+7. **Fewer buttons and less help text** in the editor. Keep: + Row, + Heading, Insert from template, Save, Save as template. Everything else goes under "More". Keyboard hints move to a small "?" button. Bigger font.
+8. **Stores rows:** in the Colour column a stores row shows "Item / spec" (e.g. Sink → "Hafele Calder"). Notes per line stay ("Talk to Ollie").
+Not wanted now: "same list to many houses in one go".

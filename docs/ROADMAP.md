@@ -97,6 +97,8 @@ Rules: rank by the leading number. "Shipped" = step 9 only (left the factory →
 - List editor plan (docs/PLAN-list-editor-excel.md) APPROVED 3 Nov with Garry's answers: colour = dropdown of project materials + 'Add new material'; changing number of units after the saw started = a NEW list; ignore the 'Blank' sheet on Excel import.
 - (7) Revisions: when a list changes, a NEW cutting list needs to be created (Garry, 3 Nov). (8) Main problem today: cutting lists are issued too late. The saw must also be told when a job that is SCHEDULED FOR DELIVERY has no cutting list.
 
+- (4 Nov) Cutting lists must be VERY simple. Standard production = Aspect / O'Malleys (saw list = fillers, exposed panels, worktops; cabinets off CNC). Approved: headings prominent, unit blocks hidden by default, 'Bought in' tick per line, worktops cut on the saw, TBC spec flags in red, 'Checked by' (Drawing office / PM) required before a list reaches the saw, fewer buttons. See docs/PLAN-list-editor-excel.md 'Simplify for standard production'.
+
 ## Progress log
 ### 2 Nov 2026 (scheduled run)
 - Architect confirmed the cutting-list plan against the code; build notes and build order added to docs/PLAN-cutting-lists-stage3.md (fixed garbled characters in both plan files).
