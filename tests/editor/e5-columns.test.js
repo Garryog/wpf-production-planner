@@ -19,9 +19,9 @@ const S_ = (k, v) => `(()=>{const e=document.querySelector('.pod-ovl [data-mr="$
     return { th: [...ov.querySelectorAll('.me-grid thead th')].map(t => t.textContent).filter(Boolean).join('|'), k: ov.querySelectorAll('.me-k').length, fit: !!ov.querySelector('#me-addfit'),
       opts: [...ov.querySelector('[data-mr="0|mat"]').options].map(x => x.value).join('|'), groups: [...ov.querySelector('[data-mr="0|mat"]').querySelectorAll('optgroup')].map(g => g.label).join('|'),
       edg: [...ov.querySelectorAll('#me-edg option')].map(x => x.value).join('|'), list: ov.querySelector('[data-mr="0|edging"]').getAttribute('list') }; });
-  rec('columns: Description | Qty | Length | Width | Colour | Edging 1 | Edging 2 | Note | Bought in (Bought in tick and the second edging column added 4 Nov)', a.th === 'Description|Qty|Length|Width|Colour|Edging 1|Edging 2|Note|Bought in', a.th);
+  rec('columns: Description | Qty | Length | Width | Material | Edging 1 | Edging 2 | Note | Bought in (Bought in tick and the second edging column added 4 Nov)', a.th === 'Description|Qty|Length|Width|Material|Edging 1|Edging 2|Note|Bought in', a.th);
   rec('no Saw / Fittings column and no "+ Fittings row" button', a.k === 0 && !a.fit);
-  rec('Colour is a dropdown of the project\'s materials + "＋ Add new material…" (fittings offered on a row with no size)', a.opts === '|MFC White|W/W|Blum hinge|__add' && a.groups === 'Boards / colours|Fittings & hardware', a.opts + ' / ' + a.groups);
+  rec('Material (was Colour, Garry 4 Nov) is a dropdown of the project\'s materials + "＋ Add new material…" (fittings offered on a row with no size)', a.opts === '|MFC White|W/W|Blum hinge|__add' && a.groups === 'Boards / materials|Fittings & hardware', a.opts + ' / ' + a.groups);
   rec('Edging offers L1LE 1mm, L2S1LE, L4S 1mm, L4S 2mm, No edge and codes used on the project; free text allowed', a.edg === 'L1LE 1mm|L2S1LE|L4S 1mm|L4S 2mm|No edge|1mm ABS' && a.list === 'me-edg', a.edg);
   // type a saw row and a stores row
   await pg.evaluate(S_('0|item', 'Side panel')); await pg.evaluate(S_('0|qty', '2')); await pg.evaluate(S_('0|L', '2380')); await pg.evaluate(S_('0|W', '570')); await pg.evaluate(S_('0|mat', 'W/W'));
@@ -76,7 +76,7 @@ const S_ = (k, v) => `(()=>{const e=document.querySelector('.pod-ovl [data-mr="$
     document.getElementById('me-save').click(); const e1 = document.getElementById('me-err').textContent;
     const s2 = document.querySelector('.pod-ovl [data-mr="0|mat"]'); s2.value = 'MFC White'; s2.onchange(); const q = document.querySelector('.pod-ovl [data-mr="0|qty"]'); q.value = ''; q.oninput();
     document.getElementById('me-save').click(); const e2 = document.getElementById('me-err').textContent; document.querySelector('.pod-ovl').remove(); return [e1, e2]; });
-  rec('a saw row with no colour: "Pick the colour for every saw row ("Gable" (row 1))"', /Pick the colour for every saw row \("Gable" \(row 1\)\)/.test(v[0]), v[0]);
+  rec('a saw row with no colour: "Pick the material for every saw row ("Gable" (row 1))"', /Pick the material for every saw row \("Gable" \(row 1\)\)/.test(v[0]), v[0]);
   rec('a row with no quantity is refused in plain English', /needs a quantity/.test(v[1]), v[1]);
   rec('no page errors', !(S.errors || []).length, (S.errors || []).join(' | '));
   await o.close(); await browser.close();

@@ -84,7 +84,7 @@ const waitFor = async (p, fn, ms = 4000) => { for (let i = 0; i < ms / 100; i++)
   await o.page.setInputFiles(await o.page.evaluate(() => document.getElementById('lh-file') ? '#lh-file' : '#lst-file'), { name: 'Empty.xlsx', mimeType: 'application/octet-stream', buffer: Buffer.from(b64, 'base64') });
   await F.sleep(500);
   const em = await o.page.evaluate(() => (document.getElementById('lh-upmsg') || document.getElementById('lst-upmsg')).textContent);
-  rec('no lists in the file: plain-English message with the right column names', /No cutting lists found in Empty\.xlsx — expected columns: Description \| Qty \| Length \| Width \| Colour \| Edging/.test(em), em);
+  rec('no lists in the file: plain-English message with the right column names', /No cutting lists found in Empty\.xlsx — expected columns: Description \| Qty \| Length \| Width \| Material \(or Colour\) \| Edging/.test(em), em);
   rec('no page errors', !(S.errors || []).length, (S.errors || []).join(' | '));
   await o.close(); await browser.close();
   const pass = res.filter(Boolean).length;

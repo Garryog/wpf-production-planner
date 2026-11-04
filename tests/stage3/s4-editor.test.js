@@ -34,7 +34,7 @@ const res = []; const rec = (n, ok, d) => { res.push(ok); console.log((ok ? 'PAS
     const s = (k, v) => { const e = o.querySelector('[data-mr="' + k + '"]'); e.value = v; (e.oninput || e.onchange)(); };
     s('0|item', 'Gable'); s('0|qty', '2'); s('0|L', '900'); s('0|W', '560'); s('0|edging', '1mm');
     o.querySelector('#me-save').click(); return o.querySelector('#me-err').textContent; });
-  rec('a saw row with no material is refused', /Pick the colour for every saw row/.test(c), c);
+  rec('a saw row with no material is refused', /Pick the material for every saw row/.test(c), c);
   const d = await off.page.evaluate(() => { const o = document.querySelector('.pod-ovl');
     const s = (k, v) => { const e = o.querySelector('[data-mr="' + k + '"]'); e.value = v; (e.oninput || e.onchange)(); };
     s('0|mat', 'MFC White'); o.querySelector('#me-addsaw').click(); document.querySelector('.pod-ovl #me-addsaw').click();

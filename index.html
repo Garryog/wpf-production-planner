@@ -3011,7 +3011,7 @@ function lsImpPreview(bk,fname,projName,done){
       <div style="max-height:58vh;overflow:auto">${bk.sheets.map((sh,si)=>{const parts=sh.rows.filter(r=>r.k==='part'),saw=parts.filter(r=>+r.L>0||+r.W>0).length,units=sh.rows.filter(r=>r.k==='hdr'&&r.units!=null).length;
         return `<details class="imp-sh" style="border:1px solid var(--b2);border-radius:6px;margin-bottom:8px;${sh.on?'':'opacity:.55'}"${si===0?' open':''}><summary style="padding:7px 10px;cursor:pointer;font-size:13px"><label onclick="event.stopPropagation()"><input type="checkbox" data-ips="${si}"${sh.on?' checked':''}> <b>${escA(sh.name)}</b></label> — ${saw} saw part${saw!==1?'s':''} · ${parts.length-saw} Stores · ${units} unit block${units!==1?'s':''}${sh.warn.length?` · <span style="color:#8a5a00;font-weight:700">⚠ ${sh.warn.length} to check</span>`:''}</summary>
         ${sh.warn.length?`<div style="color:#8a5a00;font-size:12px;padding:0 10px 6px">${sh.warn.map(w=>'⚠ '+escA(w)).join('<br>')}</div>`:''}
-        <table class="me-tbl"><thead><tr><th></th><th>Description</th><th>Qty</th><th>Total</th><th>Length</th><th>Width</th><th>Colour</th><th>Edging</th></tr></thead><tbody>${sh.rows.map((r,ri)=>{
+        <table class="me-tbl"><thead><tr><th></th><th>Description</th><th>Qty</th><th>Total</th><th>Length</th><th>Width</th><th>Material</th><th>Edging</th></tr></thead><tbody>${sh.rows.map((r,ri)=>{
           if(r.k==='hdr'&&r.info)return `<tr style="color:var(--t3)"><td>${tick(si,ri,r)}</td><td colspan="7"><i>${escA(r.item)} ${escA(r.note)}</i> — ${r.total?'a totals row, not a part — left out':'not a part (left out unless ticked)'}</td></tr>`;
           if(r.k==='hdr')return `<tr style="background:${r.units!=null?'#eef3fb':r.sub?'#f5f6f8':'#dfe7f2'}"><td>${r.units!=null?tick(si,ri,r):''}</td><td colspan="7"${r.sub?' style="padding-left:18px"':''}><b>${escA(r.item)}</b>${r.units!=null?' — <b>'+escA(r.units)+'</b> unit'+(+r.units!==1?'s':''):''}${r.note?' <span style="color:var(--t3)">'+escA(r.note)+'</span>':''}</td></tr>`;
           const st=!(+r.L>0||+r.W>0);
@@ -3042,7 +3042,7 @@ function lsUpload(f,pid){
   rd.onload=async()=>{
     try{
       let bk;try{bk=lsReadBook(rd.result);}catch(e){return bad('Could not read that file — is it an Excel workbook (.xlsx)?');}
-      if(!bk.sheets.length)return bad('No cutting lists found in '+f.name+' — expected columns: Description | Qty | Length | Width | Colour | Edging.');
+      if(!bk.sheets.length)return bad('No cutting lists found in '+f.name+' — expected columns: Description | Qty | Length | Width | Material (or Colour) | Edging.');
       const proj=pid&&LST.p.has(pid)?LST.p.get(pid).name:bk.project||String(f.name||'').replace(/\.(xlsx|xls)$/i,'');
       if(msg)msg.textContent='Check the preview — nothing is saved yet.';
       const pick=await new Promise(r=>lsImpPreview(bk,f.name,proj,r));
@@ -4073,7 +4073,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     const sm=sheetMats(),fm=fitMats(),all=[...sm,...fm],on=all.find(n=>n.toLowerCase()===v.toLowerCase());
     const o=n=>`<option value="${escA(n)}"${on===n?' selected':''}>${escA(n)}</option>`;
     return `<select ${id?'id="'+id+'"':'data-mr="'+i+'|mat"'} class="me-c"${id?` style="${inp};width:100%${v&&!on?';'+amber:''}"`:v&&!on?` style="${amber}"`:''}${v&&!on?' title="Not on the project\'s materials — flagged for the Production Manager"':''}><option value="">${id?'— none —':!id&&isStores(r)?'— item / spec —':'— colour —'}</option>
-      ${sm.length?`<optgroup label="Boards / colours">${sm.map(o).join('')}</optgroup>`:''}${fm.length&&!sized&&!id?`<optgroup label="Fittings &amp; hardware">${fm.map(o).join('')}</optgroup>`:''}
+      ${sm.length?`<optgroup label="Boards / materials">${sm.map(o).join('')}</optgroup>`:''}${fm.length&&!sized&&!id?`<optgroup label="Fittings &amp; hardware">${fm.map(o).join('')}</optgroup>`:''}
       ${v&&!on?`<option value="${escA(v)}" selected>⚠ ${escA(v)} (not on the project list)</option>`:''}${id?'':'<option value="__add">＋ Add new material…</option>'}</select>`;};
   const rowHTML=(r,i,b)=>{
     if(r.k==='hdr'){const unit=r.units!==undefined&&r.units!==null,sub=!unit&&!!r.sub;
@@ -4109,13 +4109,13 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     return `<div class="me-card${u!=null?' me-cinu':''}${r.buy?' me-buy':''}" data-row="${i}"><div class="me-chd"><b>${i+1}</b><span class="me-st" data-tag="${i}"${tg?'':' hidden'}>${tg}</span><span style="flex:1"></span>${x}</div>
       ${lab('Description',`<input data-mr="${i}|item" value="${escA(r.item)}">`)}${prevCut(r)}
       <div class="me-c3">${lab(u!=null?(r.fixed?'Qty (fixed total)':'Qty (1 unit)'):'Qty',`<input data-mr="${i}|qty" value="${escA(r.qty)}" inputmode="decimal">`+(u!=null?`<span class="me-tot" data-tot="${i}">${totHTML(r,u)}</span>`:''))}${lab('Length',`<input data-mr="${i}|L" value="${escA(r.L)}" inputmode="decimal">`)}${lab('Width',`<input data-mr="${i}|W" value="${escA(r.W)}" inputmode="decimal">`)}</div>
-      ${lab(isStores(r)?'Item / spec':'Colour',matSel(r,i))}
+      ${lab(isStores(r)?'Item / spec':'Material',matSel(r,i))}
       <div class="me-c2">${lab('Edging 1',`<input data-mr="${i}|edging" value="${escA(r.edging||'')}" list="me-edg">`)}${lab('Edging 2',`<input data-mr="${i}|edging2" value="${escA(r.edging2||'')}" list="me-edg">`)}</div><div class="me-c2">${lab('Note',`<input data-mr="${i}|note" value="${escA(r.note||'')}">`)}</div>
       <label class="me-flag me-bic"><input type="checkbox" data-mbuy="${i}"${r.buy?' checked':''}> Bought in — not cut</label></div>`;
   };
   const gridHTML=()=>{const b=blocks();
     if(window.innerWidth<700)return `<div class="me-cards">${R().map((r,i)=>cardHTML(r,i,b)).join('')||'<div style="color:var(--t3);padding:10px">No rows yet — press ＋ Row.</div>'}</div>`;
-    return `<table class="me-tbl me-grid"><colgroup><col style="width:84px"><col><col style="width:104px"><col style="width:70px"><col style="width:70px"><col style="width:150px"><col style="width:92px"><col style="width:92px"><col style="width:12%"><col style="width:58px"><col style="width:42px"></colgroup><thead><tr><th></th><th>Description</th><th>Qty</th><th>Length</th><th>Width</th><th>Colour</th><th>Edging 1</th><th>Edging 2</th><th>Note</th><th title="Bought in — never cut or picked">Bought in</th><th></th></tr></thead><tbody>${R().map((r,i)=>rowHTML(r,i,b)).join('')||'<tr><td colspan="11" style="color:var(--t3);padding:10px">No rows yet — press ＋ Heading or ＋ Row.</td></tr>'}</tbody></table>`;};
+    return `<table class="me-tbl me-grid"><colgroup><col style="width:84px"><col><col style="width:104px"><col style="width:70px"><col style="width:70px"><col style="width:150px"><col style="width:92px"><col style="width:92px"><col style="width:12%"><col style="width:58px"><col style="width:42px"></colgroup><thead><tr><th></th><th>Description</th><th>Qty</th><th>Length</th><th>Width</th><th>Material</th><th>Edging 1</th><th>Edging 2</th><th>Note</th><th title="Bought in — never cut or picked">Bought in</th><th></th></tr></thead><tbody>${R().map((r,i)=>rowHTML(r,i,b)).join('')||'<tr><td colspan="11" style="color:var(--t3);padding:10px">No rows yet — press ＋ Heading or ＋ Row.</td></tr>'}</tbody></table>`;};
   const updTotals=()=>{const b=blocks();ov.querySelectorAll('[data-tot]').forEach(e=>{const i=+e.dataset.tot,r=R()[i];if(r&&b.U[i]!=null)e.innerHTML=totHTML(r,b.U[i]);});};
   const updTag=i=>{const t=ov.querySelector('[data-tag="'+i+'"]'),r=R()[i];if(t&&r){const tg=tagTxt(r);t.textContent=tg;t.hidden=!tg;}
     const s=ov.querySelector('[data-mr="'+i+'|mat"]');if(s&&r&&r.matAuto&&String(r.mat||'')===String(r.matAuto)){const w=lsAutoHidden(r)?'':String(r.mat);if(s.value!==w&&(w===''||[...s.options].some(x=>x.value===w)))s.value=w;}};
@@ -4149,7 +4149,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
         <input id="me-pfloor" placeholder="Floor" value="${escA(st.pw.floor)}" style="${inp};width:70px"><input id="me-punit" placeholder="Unit" value="${escA(st.pw.unit)}" style="${inp};width:70px">
         <label style="font-size:12px;color:var(--t2)">Due *</label><input id="me-pdue" type="date" value="${escA(st.pw.due)}" style="${inp}">
         <input id="me-pval" type="number" min="0" placeholder="€ value" value="${escA(st.pw.val)}" style="${inp};width:100px"><input id="me-phrs" type="number" min="0" step="0.5" placeholder="Hours" value="${escA(st.pw.hrs)}" style="${inp};width:80px"></div>`:''}
-      ${st.pid&&!sm.length?'<div style="font-size:12px;color:#8a5a00;font-weight:700;margin-top:8px">⚠ This project has no materials yet — pick ＋ Add new material… in a Colour box, or add them under Materials.</div>':''}
+      ${st.pid&&!sm.length?'<div style="font-size:12px;color:#8a5a00;font-weight:700;margin-top:8px">⚠ This project has no materials yet — pick ＋ Add new material… in a Material box, or add them under Materials.</div>':''}
       <datalist id="me-edg">${edges.map(e=>`<option value="${escA(e)}">`).join('')}</datalist>
       <div id="me-grid" style="${window.innerWidth<700?'':'max-height:50vh;overflow:auto;'}margin-top:10px">${gridHTML()}</div>
       <div class="me-bar">
@@ -4162,12 +4162,12 @@ function openListEditor2(listId,presetWo,presetPid,opt){
           <label class="me-flag"><input type="checkbox" id="me-nofit"${st.noFit?' checked':''}> No fittings on this job</label>
           <label class="me-flag" title="${hasUnits()?'This list has unit blocks, so they are shown':'Robe jobs: a unit heading with the number of units, then the parts for ONE unit'}"><input type="checkbox" id="me-units"${st.unitsOn?' checked':''}${hasUnits()?' disabled':''}> Unit blocks (robe jobs)</label>
           <button class="btn btn-s" id="me-addunit" title="A unit heading with the number of units, then the parts for ONE unit"${st.unitsOn?'':' hidden'}>＋ Unit block</button>
-          <div class="me-defc"><div><label>Carcass colour</label>${matSel({mat:st.carcass},0,'me-carc')}</div><div><label>Door colour</label>${matSel({mat:st.door},0,'me-door')}</div></div>
+          <div class="me-defc"><div><label>Carcass material</label>${matSel({mat:st.carcass},0,'me-carc')}</div><div><label>Door material</label>${matSel({mat:st.door},0,'me-door')}</div></div>
         </div></details>
         <span style="flex:1"></span>
         <button class="btn btn-s me-big" id="me-help" title="How the editor works, and the keyboard">?</button>
       </div>
-      <div class="me-keys"${st.help?'':' hidden'}>Rows with a length or width go to the <b>Saw</b>; rows without go to <b>Stores</b>; <b>Bought in</b> rows are never cut or picked. Colours come from the project's materials — pick <b>＋ Add new material…</b> if one is missing. A new row starts with the colour of the saw row above.<br>Works like Excel: <b>Tab</b> / <b>Shift+Tab</b> across · <b>Enter</b> down (a new row at the bottom) · arrow keys · <b>Ctrl+D</b> copies the cell above · <b>Insert</b> adds a row · <b>Ctrl+Delete</b> deletes the row · <b>Ctrl+Z</b> undo · paste rows straight from Excel</div>
+      <div class="me-keys"${st.help?'':' hidden'}>Rows with a length or width go to the <b>Saw</b>; rows without go to <b>Stores</b>; <b>Bought in</b> rows are never cut or picked. Materials come from the project's list — pick <b>＋ Add new material…</b> if one is missing. A new row starts with the material of the saw row above.<br>Works like Excel: <b>Tab</b> / <b>Shift+Tab</b> across · <b>Enter</b> down (a new row at the bottom) · arrow keys · <b>Ctrl+D</b> copies the cell above · <b>Insert</b> adds a row · <b>Ctrl+Delete</b> deletes the row · <b>Ctrl+Z</b> undo · paste rows straight from Excel</div>
       <div id="me-err" style="color:#b42318;font-weight:700;font-size:13px;min-height:18px"></div>
       <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">${ex&&st.tpl?'<button class="btn btn-s" id="me-hist">🕘 History</button>':''}${st.tpl?'':'<button class="btn btn-s" id="me-astpl" title="Save these rows as a template of the project (unsaved changes included)">📐 Save as template</button>'}<span style="flex:1"></span><button class="btn btn-s" id="pod-x">Cancel</button><button class="btn btn-g" id="me-save" style="font-size:14px;padding:9px 20px">${ex?'Save changes':st.tpl?'Save template':'Save list → Saw & Stores'}</button></div>
     </div>`;
@@ -4179,7 +4179,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
   const addMat=i=>{ // "+ Add new material…": on the project's list if the person has the PIN, otherwise on this row only, flagged
     const r=R()[i],pname=lsProjName(st.pid)||'this project',kind=lsNum(r.L)>0||lsNum(r.W)>0||!String(r.item||'').trim()?'sheet':'other';
     if(!st.pid){draw();ov.querySelector('#me-err').textContent='Pick the project first — materials belong to a project.';return;}
-    const n0=prompt('New material / colour for '+pname+' (e.g. W/W, UD96, WHB):','');
+    const n0=prompt('New material for '+pname+' (e.g. W/W, UD96, WHB):','');
     const n=String(n0||'').trim();if(!n){st.focus=i+'|mat';draw();return;}
     const flag=why=>{snap();r.mat=n;delete r.matAuto;st.focus=i+'|mat';draw();toast('"'+n+'" is used on this row only and flagged for the Production Manager'+(why?' — '+why:'')+'. They can add it to the project\'s materials.');};
     const ex0=lsMatClash(st.pid,n,'');
@@ -4325,7 +4325,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     const sm=sheetMats(),all=new Set([...lsMats(st.pid,'sheet'),...lsMats(st.pid,'other')].flatMap(m=>[m.name,...(m.aliases||[])]).map(matKey));
     const sized=r=>lsNum(r.L)>0||lsNum(r.W)>0;
     const bad=rows.find(r=>r.k==='part'&&!r.buy&&sized(r)&&sm.length&&!String(r.mat||'').trim());
-    if(bad)return err('Pick the colour for every saw row ("'+(String(bad.item||'').trim()||'unnamed')+'"'+at(bad)+').');
+    if(bad)return err('Pick the material for every saw row ("'+(String(bad.item||'').trim()||'unnamed')+'"'+at(bad)+').');
     const neg=rows.find(r=>r.k==='part'&&/^\s*-/.test(String(r.qty==null?'':r.qty)));
     if(neg)return err('A quantity can\'t be negative ("'+(String(neg.item||'').trim()||'unnamed')+'"'+at(neg)+') — type the number to cut.');
     if(sawStarted&&rows.some(lsUnitsChanged))return err(LS_LOCK_MSG+'.');
@@ -4532,7 +4532,7 @@ function lsSaveAsTpl(src,done){
 // A read-only table of lines (a template revision, or a list as it was)
 function lsLinesTable(lines){
   const ls0=(lines||[]).filter(x=>x.removed_rev==null).sort((a,b)=>(a.seq||0)-(b.seq||0));
-  return `<table class="lst-tbl"><thead><tr><th>Description</th><th>Qty</th><th>Per unit</th><th>Length</th><th>Width</th><th>Colour</th><th>Edging</th><th>Note</th></tr></thead><tbody>${ls0.map(x=>x.kind==='hdr'
+  return `<table class="lst-tbl"><thead><tr><th>Description</th><th>Qty</th><th>Per unit</th><th>Length</th><th>Width</th><th>Material</th><th>Edging</th><th>Note</th></tr></thead><tbody>${ls0.map(x=>x.kind==='hdr'
     ?`<tr style="background:#eef3fb"><td colspan="8"><b>${escA(lsHdrName(x))}</b>${x.note?' <span style="color:var(--t3)">'+escA(x.note)+'</span>':''}</td></tr>`
     :`<tr><td>${escA(x.part||'')}${x.kind==='fit'?' <span class="lst-chip" style="background:#eef0f3;color:#5b6b82">Stores</span>':x.kind==='buy'?' <span class="buy-chip">Bought in</span>':''}</td><td><b>${escA(x.qty==null?'':x.qty)}</b></td><td>${escA(x.unit_qty||'')}</td><td>${escA(x.length_mm==null?'':+x.length_mm)}</td><td>${escA(x.width_mm==null?'':+x.width_mm)}</td><td>${escA(x.material||'')}</td><td>${escA(lsEdgeTxt(x))}</td><td>${escA(x.note||'')}</td></tr>`).join('')||'<tr><td colspan="8" style="color:var(--t3)">No lines.</td></tr>'}</tbody></table>`;
 }
