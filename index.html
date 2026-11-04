@@ -5882,9 +5882,11 @@ function dkErr(e){const m=String((e&&e.message)||e||'');
   if(/\b404\b|42P01|PGRST20[25]|does not exist|Could not find the (function|table)/.test(m))return 'The docket tables aren\'t set up in the database yet — the "Stores dockets" SQL in SUPABASE_CHANGES.md has to be run first.';
   if(/Failed to fetch|NetworkError|Load failed|network/i.test(m))return 'No connection to the database — try again when the signal is back.';
   return m;}
-// WO | Floor | Unit | Title of a list's work orders (Floor and Unit kept apart, Garry 4 Nov)
-function dkWoInfo(wos){const os=(wos||[]).map(w=>DB.orders.find(o=>o.wo===w)).filter(Boolean),j=f=>[...new Set(os.map(f).map(v=>String(v==null?'':v).trim()).filter(Boolean))].join(', ');
-  return{wo:(wos||[]).join(', '),floor:j(fuF),unit:j(fuU),title:j(o=>o.title)};}
+// WO | Floor | Unit | Title of a list's work orders (Floor and Unit kept apart, Garry 4 Nov). Floor and Unit are listed
+// one per WO in the same order as the WOs (never de-duplicated, "—" for a blank one), so each stays paired with its WO.
+function dkWoInfo(wos){wos=wos||[];const os=wos.map(w=>DB.orders.find(o=>o.wo===w)||null),t=v=>String(v==null?'':v).trim();
+  const p=f=>{const a=os.map(o=>o?t(f(o)):'');return a.some(Boolean)?a.map(v=>v||'—').join(', '):'';};
+  return{wo:wos.join(', '),floor:p(fuF),unit:p(fuU),title:[...new Set(os.filter(Boolean).map(o=>t(o.title)).filter(Boolean))].join(', ')};}
 async function dkRpc(fn,args){
   try{return await lsRpc(fn,args);}
   catch(e){if(e.status==null&&!/switched off/.test(String(e.message)))e.lost=true;throw e;} // no reply: it may have landed
@@ -5965,7 +5967,8 @@ async function dkListDlg(){
   ov.id='dk-list-dlg';
   const S={all:[],proj:'',open:new Set(),deliv:'',msg:'',busy:false};
   const body=()=>ov.querySelector('#dkl-body');
-  const load=async()=>{try{S.all=await dkLoad();S.msg='';}catch(e){S.msg=dkErr(e);}draw();};
+  // keep=true: a reload after Cancel / Delivered keeps the message that action just set (A7: it was wiped)
+  const load=async keep=>{try{S.all=await dkLoad();if(!keep)S.msg='';}catch(e){S.msg=(keep&&S.msg?S.msg+' — ':'')+dkErr(e);}draw();};
   const today=()=>todayLocal();
   const stHTML=d=>d.status==='cancelled'?`<span class="dk-st can">CANCELLED</span> <span class="dk-sm">${escA(dkDate(d.cancelled_at))}${d.cancelled_by?' · '+escA(d.cancelled_by):''} — ${escA(d.cancel_why||'')}</span>`
     :d.status==='delivered'?`<span class="dk-st ok">✓ DELIVERED</span> <span class="dk-sm">received by <b>${escA(d.received_by||'')}</b> ${escA(dkDate(d.received_at))}${d.signature_name?' · signed '+escA(d.signature_name):''}</span>`
@@ -6001,21 +6004,21 @@ async function dkListDlg(){
     b.querySelectorAll('[data-dkvok]').forEach(x=>x.onclick=()=>{const d=find(x.dataset.dkvok);if(!d||S.busy)return;
       const rb=b.querySelector('#dkv-by').value.trim(),at=b.querySelector('#dkv-at').value,sig=b.querySelector('#dkv-sig').value.trim();
       if(!rb){S.msg='Type who received it on site (print name).';const m=b.querySelector('#dkl-msg');if(m)m.textContent=S.msg;return;}
-      pickName('fit','Docket '+d.docket_no+' delivered',async by=>{S.busy=true;
+      pickName('fit','Docket '+d.docket_no+' delivered',async by=>{S.busy=true;S.msg='';
         try{const r=await dkDelivered(d.id,rb,at||null,sig,by);
           if(r&&r.ok){toast(d.docket_no+' marked delivered — received by '+rb);S.deliv='';}
           else S.msg=d.docket_no+' was cancelled on another screen — not marked delivered.';}
         catch(e){S.msg='Not saved — '+dkErr(e);}
-        S.busy=false;await load();});});
+        S.busy=false;await load(true);});});
     b.querySelectorAll('[data-dkcan]').forEach(x=>x.onclick=()=>{const d=find(x.dataset.dkcan);if(!d||S.busy)return;
       const why=prompt('Cancel docket '+d.docket_no+'?\n\nIt stays on record marked CANCELLED, and its items can be sent again.\n\nWhy is it being cancelled?','');
       if(why===null)return;if(!why.trim()){toast('Not cancelled — a reason is needed');return;}
-      pickName('fit','Cancel docket '+d.docket_no,async by=>{S.busy=true;
+      pickName('fit','Cancel docket '+d.docket_no,async by=>{S.busy=true;S.msg='';
         try{const r=await dkCancel(d.id,why.trim(),by);
           if(r&&r.ok){toast(d.docket_no+' cancelled');if(V2())lsPoll();}
           else S.msg=d.docket_no+' was already marked delivered — it can\'t be cancelled.';}
         catch(e){S.msg='Not cancelled — '+dkErr(e);}
-        S.busy=false;await load();});});
+        S.busy=false;await load(true);});});
   };
   await load();
 }
@@ -6112,7 +6115,9 @@ async function dkSendDlg(){
   const v2=V2();
   const ov=lsDlg('<div id="dk-body"><div style="font-weight:800;color:#14335c;font-size:17px">🚚 Send to site</div><div style="padding:10px 0;color:var(--t3)">Loading…</div></div>',980);
   ov.id='dk-send-dlg';
-  const S={pr:null,rows:[],sent:{},sel:new Map(),free:[],site:'',instr:'',msg:'',bad:{},busy:false,cid:'',loading:false};
+  const S={pr:null,rows:[],sent:{},sel:new Map(),free:[],site:'',instr:'',msg:'',bad:{},busy:false,cid:'',pend:'',loading:false};
+  // pend: the tap id of a Make docket whose reply was lost. Edits don't clear it; the next tap first asks the database
+  // whether that docket landed (A5b: an edit after a lost reply used to make a second docket).
   if(v2&&!LST.loaded){try{await lsLoad();}catch(e){}}
   const body=()=>ov.querySelector('#dk-body');
   const left=o=>{const tot=dkNum(o.x.qty),s=S.sent[o.x.id]||{n:0,k:0,dk:[]};return tot==null?(s.k?0:null):Math.max(0,tot-s.n);};
@@ -6121,12 +6126,12 @@ async function dkSendDlg(){
     const ch=dkProjChoices();S.pr=ch.find(p=>(v2?p.id:p.name)===pid)||null;S.sel.clear();S.bad={};S.msg='';S.cid='';S.rows=[];S.sent={};
     S.site=S.pr?S.pr.site:'';S.instr='';if(!S.free.length)S.free=[freeBlank()];
     if(S.pr&&v2){S.loading=true;draw();
-      try{const ids=[...LST.l.values()].filter(r=>r.project_id===S.pr.id&&!r.archived&&!r.is_template).map(r=>r.id);await lsLines(ids);
-        const rows=dkProjLines(S.pr.id);S.sent=await dkSentFor(rows.map(o=>o.x.id));S.rows=rows.filter(o=>left(o)!==0);}
-      catch(e){S.msg=dkErr(e);}
+      try{await reload();}catch(e){S.msg=dkErr(e);}
       S.loading=false;}
     draw();
   };
+  const reload=async()=>{const ids=[...LST.l.values()].filter(r=>r.project_id===S.pr.id&&!r.archived&&!r.is_template).map(r=>r.id);await lsLines(ids);
+    const rows=dkProjLines(S.pr.id);S.sent=await dkSentFor(rows.map(o=>o.x.id));S.rows=rows.filter(o=>left(o)!==0);};
   const draw=()=>{
     const ch=dkProjChoices(),E=escA,pr=S.pr;
     const tick=S.rows.filter(o=>S.sel.has(o.x.id)).length,nf=S.free.filter(f=>f.item.trim()).length;
@@ -6177,20 +6182,33 @@ async function dkSendDlg(){
     if(!items.length){S.msg='Tick or type at least one item.';draw();return;}
     const noQ=items.find(i=>!i.line_id&&!i.qty);if(noQ){S.msg='Type how many for "'+noQ.item+'".';draw();return;}
     pickName('fit','Make docket — '+S.pr.name,async by=>{
-      S.busy=true;S.msg='';S.bad={};S.cid=S.cid||uid('dk');draw();
+      S.busy=true;S.msg='';S.bad={};draw();
+      if(S.pend){ // the last tap got no reply: find out whether that docket landed BEFORE sending anything else
+        let d;
+        try{d=(await dkLoad('&cid=eq.'+encodeURIComponent(S.pend)))[0]||null;}
+        catch(e){S.busy=false;S.msg='Still no reply from the database — can\'t check yet whether the last docket was made, so nothing new was sent. Tap Make docket again when the signal is back.';draw();return;}
+        if(d){const same=S.cid===S.pend;S.pend='';S.cid='';if(v2)lsPoll();
+          if(same){ov.remove();toast('Docket '+d.docket_no+' had already been made (the reply was lost) — printing');dkPrint(d);render();return;}
+          dkPrint(d);S.sel.clear();S.free=[freeBlank()];
+          if(v2&&S.pr){try{await reload();}catch(e){}}
+          S.busy=false;S.msg='Docket '+d.docket_no+' HAD been made before the reply was lost — it is printing now, with what was ticked and typed at that tap. Your changes after that were NOT sent. Check the docket, and make another one only for anything still missing.';
+          draw();return;}
+        S.cid=S.pend; // not made: send now under the same tap id, so the first tap arriving late can never make a second docket
+      }
+      S.cid=S.cid||uid('dk');
       const dk={project_id:S.pr.id||null,project_name:S.pr.name,customer:S.pr.customer||null,site_address:S.site.trim(),delivery_instructions:S.instr.trim(),cid:S.cid};
       try{
         const r=await dkMake(dk,items,by);
-        if(r&&r.ok){S.cid='';ov.remove();toast('Docket '+r.docket_no+' made'+(r.dup?' (it had already been made)':'')+' — printing');if(v2)lsPoll();
+        if(r&&r.ok){S.cid='';S.pend='';ov.remove();toast('Docket '+r.docket_no+' made'+(r.dup?' (it had already been made)':'')+' — printing');if(v2)lsPoll();
           try{const d=(await dkLoad('&id=eq.'+encodeURIComponent(r.id)))[0];if(d)dkPrint(d);}catch(e){toast('Docket '+r.docket_no+' made — open it from 📄 Dockets to print');}
           render();return;}
-        S.cid='';const bad=(r&&r.refused)||[];
+        S.cid='';S.pend='';const bad=(r&&r.refused)||[];
         bad.forEach(x=>{if(x.line_id)S.bad[x.line_id]=dkWhyTxt(x);});
         const fb=bad.find(x=>!x.line_id);
         S.msg='Nothing was sent — '+(bad.filter(x=>x.line_id).length?'see the items marked ✕ (another PC may have just sent them). ':'')+(fb?dkWhyTxt(fb)+(fb.item?' ("'+fb.item+'")':'')+'.':'');
         try{S.sent=await dkSentFor(S.rows.map(o=>o.x.id));}catch(e){}
       }catch(e){
-        if(e.lost)S.msg='No reply from the database — the docket may have been made. Tap Make docket again: it will NOT make a second one.';
+        if(e.lost){S.pend=S.cid;S.msg='No reply from the database — the docket may have been made. Tap Make docket again: it will NOT make a second one.';}
         else{S.cid='';S.msg='Not made — '+dkErr(e);}
       }
       S.busy=false;draw();
