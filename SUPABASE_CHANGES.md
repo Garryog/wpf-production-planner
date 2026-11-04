@@ -587,6 +587,262 @@ create trigger list_lines_snag after update of status on list_lines for each row
 
 ---
 
+## 2026-11-04 — Stores dockets + "Items sent" — PENDING, NOT YET RUN — Garry runs this AFTER the Stage 3 block above and BEFORE merging `feature/stores-dockets`
+
+**What it does (plain English):**
+- Adds a **Site address** to each project (`projects.site_address`). It is the default "deliver to" address on that project's dockets; each docket can change it.
+- Creates two new tables: `stores_dockets` (one row per docket: number D26-0001…, project, customer, site address, delivery instructions, who made it and when, delivered / received by / date / signed name, or cancelled with a reason) and `stores_docket_items` (what went on each docket: WO, floor, unit, title, item, quantity, spec — the docket keeps its own copy, so a later list change never changes a docket).
+- **Part quantities (Garry, 4 Nov):** each docket line records how many went (e.g. 10 of 20 taps). The database adds up what has been sent on live dockets, refuses to send more than the line's quantity, and only marks a stores line "got out" once the full quantity has been sent.
+- Three database functions hold the rules (the app can only READ the docket tables; it can't add, change or delete rows itself):
+  - `make_docket` — checks every item first and refuses the whole docket (nothing saved) if a line is waiting (release it first), not needed, already got out, already fully sent, or asked for more than is left. Two PCs sending the same taps at the same moment: the second one waits, then is told they're already on the first docket. Takes the next number for the year — two PCs never get the same number. A resend after a lost reply gives back the docket already made (no second docket). Free-typed items (e.g. spare handles not on any list) work whether the new cutting lists are switched on or not; items picked from cutting lists only work with the lists switched on.
+  - `docket_delivered` — the signed docket came back: who received it on site (print name), the date, the name signed.
+  - `docket_cancel` — a wrong docket is cancelled with a reason; it stays on record, marked CANCELLED. Its quantities can be sent again, and a stores line it had marked "got out" goes back to "to pick". A delivered docket can't be cancelled.
+- Nothing is deleted. No DELETE permission for anyone using the app.
+- Depends on the Stage 3 block (it uses `lists_touch()`, `lists_switch_on()` and the `projects`, `lists`, `list_lines`, `list_events` tables) — run that first.
+
+**If you deploy the code without running this first:** the Stores screen's "Send to site", "Dockets" and "Items sent" buttons show "the docket tables aren't set up yet". Nothing else changes. Run this first anyway.
+
+### Steps for Garry
+1. Make sure the Stage 3 block above has been run (Table Editor shows `lists` and `list_lines`).
+2. Supabase → WPF project → **SQL Editor** → **New query**. Copy everything in the grey box below, paste, **Run**.
+3. Expected result: **"Success. No rows returned"**. A red error: stop and send a screenshot — do not merge.
+4. Check: **Table Editor** shows `stores_dockets` and `stores_docket_items` (both empty), and `projects` has a `site_address` column.
+5. Check: **Database → Functions** shows `make_docket`, `docket_delivered`, `docket_cancel`; **Database → Triggers** shows `stores_dockets_touch` on `stores_dockets`.
+6. Safe to run twice (nothing is duplicated, no data touched). Tested twice in a row on a throwaway Postgres set up like Supabase, then the checks in `tests/stores-docket/pg-check.sql` (part quantities, two PCs at once, numbering, cancel, delivered, switch off) all passed.
+
+```sql
+-- ===================== STORES DOCKETS — runs AFTER the Stage 3 block =====================
+-- Each project's site address: the default "deliver to" on its dockets (each docket can change it)
+alter table projects add column if not exists site_address text;
+
+-- One row per docket. Never deleted: a wrong docket is cancelled with a reason and stays on record.
+-- project_id is blank when the cutting lists are still on the old store (free-typed dockets only): project_name is the
+-- project / customer name as it was when the docket was made, so the docket prints the same even if a project is renamed.
+create table if not exists stores_dockets(id text primary key, docket_no text not null unique,
+  yr int not null, seq int not null,
+  project_id text references projects(id), project_name text not null, customer text,
+  site_address text, delivery_instructions text, note text,
+  made_at timestamptz not null default now(), made_by text not null,
+  status text not null default 'made' check(status in('made','delivered','cancelled')),
+  delivered_at timestamptz, delivered_by text, received_by text, received_at date, signature_name text,
+  cancelled_at timestamptz, cancelled_by text, cancel_why text,
+  cid text,                                                            -- the PC's id for this "Make docket" tap: a resend is recognised
+  version int not null default 1, updated_at timestamptz not null default now(), updated_by text,
+  unique(yr,seq));
+create unique index if not exists sd_cid on stores_dockets(cid) where cid is not null;
+create index if not exists sd_proj on stores_dockets(project_id, made_at);
+create index if not exists sd_pname on stores_dockets(lower(project_name), made_at);
+create index if not exists sd_upd on stores_dockets(updated_at);
+
+-- One row per item on a docket. The docket keeps its own copy of the text (WO, floor, unit, item, spec), so a later list
+-- revision never changes a docket. qty = how many of the line went on this docket (part quantities: 10 of 20);
+-- a line's "sent so far" = the sum of qty on its ACTIVE items (a cancelled docket's items are made inactive).
+create table if not exists stores_docket_items(id bigserial primary key,
+  docket_id text not null references stores_dockets(id), seq int not null default 0,
+  line_id text references list_lines(id), list_id text,
+  kind text not null check(kind in('fit','buy','free')),
+  wo text, floor text, unit text, title text, item text not null,
+  qty numeric check(qty is null or qty>0), qty_text text, spec text,
+  active boolean not null default true,
+  got_out_at timestamptz);                                             -- set when THIS docket finished the line (marked it got out)
+create index if not exists sdi_docket on stores_docket_items(docket_id);
+create index if not exists sdi_line on stores_docket_items(line_id) where line_id is not null;
+
+drop trigger if exists stores_dockets_touch on stores_dockets;
+create trigger stores_dockets_touch before update on stores_dockets for each row execute function lists_touch();
+
+-- Row level security: everyone using the app can READ dockets. Nobody using the app can add, change or delete rows
+-- directly — dockets are only ever written by the three functions below, which hold the rules.
+alter table stores_dockets enable row level security;
+alter table stores_docket_items enable row level security;
+drop policy if exists "stores_dockets read" on stores_dockets;
+create policy "stores_dockets read" on stores_dockets for select to anon, authenticated using (true);
+drop policy if exists "stores_docket_items read" on stores_docket_items;
+create policy "stores_docket_items read" on stores_docket_items for select to anon, authenticated using (true);
+
+-- Grants (30 Oct rule). Read only for the app; no DELETE for anyone using the app (a docket is cancelled, never deleted).
+grant select on stores_dockets, stores_docket_items to anon, authenticated;
+revoke insert, update, delete, truncate on stores_dockets, stores_docket_items from anon, authenticated;
+grant all on stores_dockets, stores_docket_items to service_role;
+revoke all on sequence stores_docket_items_id_seq from anon, authenticated;
+grant usage, select on sequence stores_docket_items_id_seq to service_role;
+
+-- make_docket: makes one docket in one step.
+--  p_docket: {project_id (blank on the old store), project_name, customer, site_address, delivery_instructions, note, cid}
+--  p_items:  [{line_id, qty, wo, floor, unit, title}]  — a stores / bought-in line from a cutting list (switch ON only)
+--         or [{item, qty, wo, floor, unit, title, spec}] — a free-typed item (works with the switch ON or OFF)
+--  Refuses the WHOLE docket (writes nothing) if any line is: missing, removed, on an archived list or a template, on
+--  another project, not a stores / bought-in line, not needed, waiting (release it first), already got out, already
+--  fully sent, or asked for more than is left to send. Reply: {ok:false, refused:[{line_id, why, left, dockets}]}.
+--  Otherwise takes the next number for the year (D26-0001 …; two PCs never get the same one), saves the docket and its
+--  items, and marks a stores line "got out" once its full quantity has been sent. Reply: {ok:true, id, docket_no, made_at}.
+--  The same cid sent again (a reply lost in bad signal) returns the docket already made: {ok:true, dup:true, …}.
+create or replace function make_docket(p_docket jsonb, p_items jsonb, p_by text) returns jsonb
+language plpgsql security definer set search_path=public as $$
+declare it jsonb; l record; v_id text; v_yr int; v_seq int; v_no text; v_at timestamptz; bad jsonb:='[]';
+  tot numeric; sent numeric; nsent int; want numeric; lids text[]; pid text; pname text; pcust text; v_cid text;
+  dks text; k int:=0; got timestamptz; qt text; d stores_dockets%rowtype;
+begin
+ if coalesce(btrim(p_by),'')='' then raise exception 'say who is sending the docket'; end if;
+ if p_items is null or jsonb_typeof(p_items)<>'array' or jsonb_array_length(p_items)=0 then
+  raise exception 'a docket needs at least one item'; end if;
+ v_cid:=nullif(btrim(p_docket->>'cid'),'');
+ if v_cid is not null then
+  perform pg_advisory_xact_lock(hashtext('docket-cid:'||v_cid));        -- a resend waits for the first to finish …
+  select * into d from stores_dockets where cid=v_cid;
+  if found then return jsonb_build_object('ok',true,'dup',true,'id',d.id,'docket_no',d.docket_no,'made_at',d.made_at); end if;
+ end if;
+ pid:=nullif(btrim(p_docket->>'project_id'),'');
+ pname:=nullif(btrim(p_docket->>'project_name'),'');
+ pcust:=nullif(btrim(p_docket->>'customer'),'');
+ if pid is not null then
+  select name, coalesce(pcust,customer) into pname, pcust from projects where id=pid;
+  if not found then raise exception 'that project is not in the database'; end if;
+ end if;
+ if pname is null then raise exception 'pick the project first'; end if;
+ select array_agg(distinct x->>'line_id' order by x->>'line_id') into lids
+  from jsonb_array_elements(p_items) x where nullif(x->>'line_id','') is not null;
+ if lids is not null then
+  perform lists_switch_on();                                            -- list lines only while the lists are on the new store
+  if (select count(*) from jsonb_array_elements(p_items) x where nullif(x->>'line_id','') is not null)<>array_length(lids,1) then
+   raise exception 'the same line is on this docket twice'; end if;
+  -- lock order as apply_line_changes: the lists (id order), then the lines (id order). A second PC sending the same
+  -- lines waits here until the first docket is saved, then sees those lines as sent.
+  perform 1 from lists where id in (select x.list_id from list_lines x where x.id=any(lids)) order by id for update;
+  perform 1 from list_lines where id=any(lids) order by id for update;
+ end if;
+ -- check every item before writing anything
+ for it in select * from jsonb_array_elements(p_items) loop
+  if nullif(it->>'line_id','') is null then
+   if coalesce(btrim(it->>'item'),'')='' then bad:=bad||jsonb_build_object('line_id',null,'why','no-item');
+   elsif coalesce(btrim(it->>'qty'),'')='' then bad:=bad||jsonb_build_object('line_id',null,'item',it->>'item','why','no-qty'); end if;
+   continue;
+  end if;
+  select x.*, li.project_id as lpid, li.archived as larch, li.is_template as ltpl into l
+   from list_lines x join lists li on li.id=x.list_id where x.id=it->>'line_id';
+  if not found then bad:=bad||jsonb_build_object('line_id',it->>'line_id','why','missing'); continue; end if;
+  select coalesce(sum(i.qty),0), count(*), string_agg(distinct dk.docket_no,', ') into sent, nsent, dks
+   from stores_docket_items i join stores_dockets dk on dk.id=i.docket_id where i.line_id=l.id and i.active;
+  tot:=case when btrim(coalesce(l.qty,'')) ~ '^\d+(\.\d+)?$' then btrim(l.qty)::numeric end;
+  want:=case when btrim(coalesce(it->>'qty','')) ~ '^\d+(\.\d+)?$' then btrim(it->>'qty')::numeric end;
+  if l.removed_rev is not null then bad:=bad||jsonb_build_object('line_id',l.id,'why','removed');
+  elsif l.larch or l.ltpl then bad:=bad||jsonb_build_object('line_id',l.id,'why','not-live');
+  elsif pid is not null and l.lpid is distinct from pid then bad:=bad||jsonb_build_object('line_id',l.id,'why','other-project');
+  elsif l.kind not in('fit','buy') then bad:=bad||jsonb_build_object('line_id',l.id,'why','wrong-kind');
+  elsif l.status='na' then bad:=bad||jsonb_build_object('line_id',l.id,'why','not-needed');
+  elsif l.status='waiting' then bad:=bad||jsonb_build_object('line_id',l.id,'why','waiting');
+  elsif l.status='got-out' then bad:=bad||jsonb_build_object('line_id',l.id,'why','got-out','dockets',dks);
+  elsif tot is null then                                                -- "2x2", blank …: the whole line goes on one docket
+   if nsent>0 then bad:=bad||jsonb_build_object('line_id',l.id,'why','sent','left',0,'dockets',dks); end if;
+  elsif sent>=tot then bad:=bad||jsonb_build_object('line_id',l.id,'why','sent','left',0,'dockets',dks);
+  elsif want is null or want<=0 then bad:=bad||jsonb_build_object('line_id',l.id,'why','bad-qty','left',tot-sent);
+  elsif want>tot-sent then bad:=bad||jsonb_build_object('line_id',l.id,'why','too-many','left',tot-sent,'dockets',dks);
+  end if;
+ end loop;
+ if jsonb_array_length(bad)>0 then return jsonb_build_object('ok',false,'refused',bad); end if;
+ -- the next number for this year (Irish time): one PC at a time, so two PCs never get the same number
+ perform pg_advisory_xact_lock(hashtext('stores_docket_no'));
+ v_yr:=extract(year from (now() at time zone 'Europe/Dublin'))::int;
+ select coalesce(max(seq),0)+1 into v_seq from stores_dockets where yr=v_yr;
+ v_no:='D'||lpad((v_yr%100)::text,2,'0')||'-'||lpad(v_seq::text,4,'0');
+ v_id:='DK'||replace(gen_random_uuid()::text,'-','');
+ insert into stores_dockets(id,docket_no,yr,seq,project_id,project_name,customer,site_address,delivery_instructions,note,made_by,cid,updated_by)
+  values(v_id,v_no,v_yr,v_seq,pid,pname,pcust,nullif(btrim(p_docket->>'site_address'),''),
+   nullif(btrim(p_docket->>'delivery_instructions'),''),nullif(btrim(p_docket->>'note'),''),btrim(p_by),v_cid,btrim(p_by))
+  returning made_at into v_at;
+ for it in select * from jsonb_array_elements(p_items) loop
+  k:=k+1; got:=null;
+  if nullif(it->>'line_id','') is null then
+   qt:=btrim(it->>'qty');
+   insert into stores_docket_items(docket_id,seq,kind,wo,floor,unit,title,item,qty,qty_text,spec)
+    values(v_id,k,'free',nullif(btrim(it->>'wo'),''),nullif(btrim(it->>'floor'),''),nullif(btrim(it->>'unit'),''),
+     nullif(btrim(it->>'title'),''),btrim(it->>'item'),case when qt ~ '^\d+(\.\d+)?$' and qt::numeric>0 then qt::numeric end,qt,nullif(btrim(it->>'spec'),''));
+   continue;
+  end if;
+  select * into l from list_lines where id=it->>'line_id';
+  tot:=case when btrim(coalesce(l.qty,'')) ~ '^\d+(\.\d+)?$' then btrim(l.qty)::numeric end;
+  want:=case when tot is null then null else btrim(it->>'qty')::numeric end;
+  select coalesce(sum(i.qty),0) into sent from stores_docket_items i where i.line_id=l.id and i.active;
+  -- a stores line that is still to pick becomes "got out" once its full quantity has been sent (bought-in lines keep
+  -- their status: the docket item is their record)
+  if l.kind='fit' and l.status='todo' and (tot is null or sent+want>=tot) then
+   update list_lines set status='got-out',status_by=btrim(p_by),status_at=now() where id=l.id returning * into l;
+   got:=l.status_at;
+   update lists set locked=true, updated_by=btrim(p_by) where id=l.list_id and not locked;
+  end if;
+  insert into stores_docket_items(docket_id,seq,line_id,list_id,kind,wo,floor,unit,title,item,qty,qty_text,spec,got_out_at)
+   values(v_id,k,l.id,l.list_id,l.kind,nullif(btrim(it->>'wo'),''),nullif(btrim(it->>'floor'),''),nullif(btrim(it->>'unit'),''),
+    nullif(btrim(it->>'title'),''),coalesce(nullif(btrim(l.part),''),'(no name)'),want,coalesce(want::text,nullif(btrim(l.qty),'')),
+    nullif(concat_ws(' · ',nullif(btrim(l.material),''),nullif(btrim(l.note),'')),''),got);
+  insert into list_events(list_id,line_id,act,from_status,to_status,by,note,v_after)
+   values(l.list_id,l.id,'docket',case when got is null then l.status else 'todo' end,l.status,btrim(p_by),
+    v_no||' · '||coalesce(want::text,coalesce(l.qty,''))||case when tot is null then '' else ' of '||tot::text end,l.version);
+ end loop;
+ return jsonb_build_object('ok',true,'id',v_id,'docket_no',v_no,'made_at',v_at);
+end $$;
+revoke execute on function make_docket(jsonb,jsonb,text) from public;
+grant execute on function make_docket(jsonb,jsonb,text) to anon, authenticated, service_role;
+
+-- docket_delivered: the signed docket came back. Records who received it on site (print name), the date and the name
+-- signed. A cancelled docket can't be marked delivered. Marking it twice changes nothing ({ok:true, dup:true}).
+create or replace function docket_delivered(p_id text, p_received_by text, p_received_at date, p_signature_name text, p_by text) returns jsonb
+language plpgsql security definer set search_path=public as $$
+declare d stores_dockets%rowtype;
+begin
+ if coalesce(btrim(p_by),'')='' then raise exception 'say who is marking the docket delivered'; end if;
+ if coalesce(btrim(p_received_by),'')='' then raise exception 'type who received it on site'; end if;
+ select * into d from stores_dockets where id=p_id for update;
+ if not found then raise exception 'missing docket'; end if;
+ if d.status='cancelled' then return jsonb_build_object('ok',false,'why','cancelled','docket_no',d.docket_no); end if;
+ if d.status='delivered' then return jsonb_build_object('ok',true,'dup',true,'docket_no',d.docket_no,'received_by',d.received_by); end if;
+ update stores_dockets set status='delivered',delivered_at=now(),delivered_by=btrim(p_by),received_by=btrim(p_received_by),
+  received_at=coalesce(p_received_at,(now() at time zone 'Europe/Dublin')::date),signature_name=nullif(btrim(p_signature_name),''),
+  updated_by=btrim(p_by) where id=p_id;
+ return jsonb_build_object('ok',true,'docket_no',d.docket_no);
+end $$;
+revoke execute on function docket_delivered(text,text,date,text,text) from public;
+grant execute on function docket_delivered(text,text,date,text,text) to anon, authenticated, service_role;
+
+-- docket_cancel: a wrong docket is cancelled with a reason (never deleted). Its items stop counting as sent, so their
+-- quantity can go on another docket; a stores line this docket marked "got out" goes back to "to pick" (unless someone
+-- ticked it again since). A delivered docket can't be cancelled. Cancelling twice changes nothing.
+create or replace function docket_cancel(p_id text, p_why text, p_by text) returns jsonb
+language plpgsql security definer set search_path=public as $$
+declare d stores_dockets%rowtype; lids text[]; l list_lines%rowtype;
+begin
+ if coalesce(btrim(p_by),'')='' then raise exception 'say who is cancelling the docket'; end if;
+ if coalesce(btrim(p_why),'')='' then raise exception 'give the reason for cancelling'; end if;
+ select array_agg(distinct line_id order by line_id) into lids from stores_docket_items where docket_id=p_id and line_id is not null;
+ if lids is not null then
+  perform lists_switch_on();
+  perform 1 from lists where id in (select x.list_id from list_lines x where x.id=any(lids)) order by id for update;
+  perform 1 from list_lines where id=any(lids) order by id for update;
+ end if;
+ select * into d from stores_dockets where id=p_id for update;
+ if not found then raise exception 'missing docket'; end if;
+ if d.status='cancelled' then return jsonb_build_object('ok',true,'dup',true,'docket_no',d.docket_no); end if;
+ if d.status='delivered' then return jsonb_build_object('ok',false,'why','delivered','docket_no',d.docket_no); end if;
+ update stores_dockets set status='cancelled',cancelled_at=now(),cancelled_by=btrim(p_by),cancel_why=btrim(p_why),updated_by=btrim(p_by) where id=p_id;
+ update stores_docket_items set active=false where docket_id=p_id;
+ for l in select * from list_lines where id=any(coalesce(lids,'{}')) order by id loop
+  if l.status='got-out' and exists(select 1 from stores_docket_items i where i.line_id=l.id and i.got_out_at is not null
+       and i.got_out_at=l.status_at) then
+   update list_lines set status='todo',status_by=btrim(p_by),status_at=now() where id=l.id returning * into l;
+   insert into list_events(list_id,line_id,act,from_status,to_status,by,note,v_after)
+    values(l.list_id,l.id,'docket-cancel','got-out','todo',btrim(p_by),d.docket_no||' cancelled: '||btrim(p_why),l.version);
+  else
+   insert into list_events(list_id,line_id,act,from_status,to_status,by,note,v_after)
+    values(l.list_id,l.id,'docket-cancel',l.status,l.status,btrim(p_by),d.docket_no||' cancelled: '||btrim(p_why),l.version);
+  end if;
+ end loop;
+ return jsonb_build_object('ok',true,'docket_no',d.docket_no);
+end $$;
+revoke execute on function docket_cancel(text,text,text) from public;
+grant execute on function docket_cancel(text,text,text) to anon, authenticated, service_role;
+```
+
+---
+
 ## 2026-10-20 — Stage 1 "Stop the data loss" — run BEFORE deploying
 
 **What it does (plain English):**
