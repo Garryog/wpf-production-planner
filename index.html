@@ -194,6 +194,11 @@ button,input,select{font-family:inherit;cursor:pointer}
 .wl-dday{font-size:13px;font-weight:800;color:#14335c;text-transform:uppercase;letter-spacing:.5px;margin:16px 0 6px;border-bottom:2px solid #14335c;padding-bottom:3px}
 .ls-nochip{display:inline-block;margin-left:4px;font-size:10px;font-weight:700;border-radius:4px;padding:0 5px;background:#fff4d6;color:#7a4a00;border:1px solid #e0a43a;white-space:nowrap;vertical-align:middle}
 .ls-nochip.late{background:#c0392b;color:#fff;border-color:#c0392b}
+.tbc-chip{display:inline-block;margin-left:4px;font-size:11px;font-weight:800;border-radius:4px;padding:1px 6px;background:#c0392b;color:#fff;white-space:normal;vertical-align:middle}
+.tbc-cell{color:#c0392b!important;font-weight:800}
+.buy-chip{display:inline-block;margin-left:4px;font-size:10px;font-weight:800;border-radius:4px;padding:1px 6px;background:#e3f4f8;color:#0b5566;border:1px solid #7cc3d3;white-space:nowrap}
+.chk-wait{display:inline-block;font-size:11px;font-weight:800;border-radius:4px;padding:1px 6px;background:#fff4d6;color:#7a4a00;border:1px solid #e0a43a;white-space:nowrap}
+.chk-ok{display:inline-block;font-size:11px;font-weight:700;border-radius:4px;padding:1px 6px;background:#e7f6ec;color:#0d6e46;border:1px solid #9fd8b4;white-space:nowrap}
 .lti-row{background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:6px;font-size:13px}
 .lti-top{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline}
 .lti-wo{font-family:monospace;font-size:14px;color:#14335c}.lti-t{flex:1;min-width:140px;overflow-wrap:anywhere}.lti-c{color:var(--t2);font-size:12px;overflow-wrap:anywhere}
@@ -3822,6 +3827,28 @@ function lsAutoHidden(r){return !!r&&r.k==='part'&&!(lsNum(r.L)>0||lsNum(r.W)>0)
 function lsTicked(id){return !!id&&Object.keys(lsView(id).ticks).length>0;} // the saw (or stores) has started: any line ticked
 function lsHasEditPin(){if(['prod','design'].includes(ROLE))return true;const p=pins(),v=ls.get('wpfEditPin');return !!v&&[p.prod,p.design,p.admin].includes(v);}
 const LS_LOCK_MSG='Saw has started — make a new list for a different number of units';
+/* lsTbc:start */
+/* "spec TBC" (Garry, 4 Nov): a line whose description or colour/spec says TBC / None chosen / To be confirmed — or a
+   worktop / sink / tap line with no colour/spec — is shown RED on the list, the saw and the board. It never blocks.
+   lines: database lines (kind/part/material/section) or screen rows (k/item/mat). Returns the names, once each, in order. */
+const LS_TBC=/(^|[^a-z0-9])(t\.?\s?b\.?\s?c\.?|to be confirmed|none chosen|not chosen)(?=$|[^a-z0-9])/i;
+const LS_TBC_ITEM=/\b(work\s*tops?|sinks?|taps?)\b|^\s*tops?\b(?!\s*cornice)/i;
+function lsTbc(lines){
+  const out=[],seen=new Set(),s=v=>v==null?'':String(v).trim();let hdr='',n=0;
+  (lines||[]).forEach(x=>{
+    if(!x||x.removed_rev!=null||x.status==='na')return;
+    const k=x.kind||x.k,desc=s(x.part!==undefined?x.part:x.item),spec=s(x.material!==undefined?x.material:x.mat);
+    if(k==='hdr'){if(desc)hdr=desc;return;}
+    n++;
+    const tbc=LS_TBC.test(desc)||LS_TBC.test(spec)||(!spec&&LS_TBC_ITEM.test(desc));
+    if(!tbc)return;
+    const name=desc&&!LS_TBC.test(desc)?desc:s(x.section)||s(x.sec)||hdr||'line '+n;
+    if(!seen.has(name)){seen.add(name);out.push(name);}
+  });
+  return out;
+}
+/* lsTbc:end */
+function lsTbcChip(names,big){return names&&names.length?`<span class="tbc-chip"${big?' style="font-size:14px"':''} title="Spec still to be confirmed — production is not blocked">⚠ spec TBC: ${escA(names.join(', '))}</span>`:'';}
 function lsNum(v){const x=parseFloat(String(v==null?'':v).replace(/\s*mm$/i,''));return isNaN(x)?0:x;}
 function lsEmptyRow(r){return r.k==='part'&&['item','qty','L','W','edging','note'].every(f=>String(r[f]==null?'':r[f]).trim()==='');}
 function openListEditor2(listId,presetWo,presetPid,opt){
