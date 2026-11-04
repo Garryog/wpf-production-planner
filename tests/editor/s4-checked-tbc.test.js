@@ -97,7 +97,7 @@ const J = JSON.stringify;
     return { on: DB.listChk, wait: lsWaitCheckLists().length, lti, row: row ? row.innerText : '', btn: document.querySelectorAll('[data-lhchk],[data-ltichk]').length, saw: workListFor('saw', 3).map(l => l.name) };
   }, c3);
   rec('switch OFF (Admin PIN, Settings): no "Waiting for check", no ✓ Check buttons, nothing counted; the waiting list is back on the saw', off.on === false && off.wait === 0 && !/waiting for check/i.test(off.lti + off.row) && off.btn === 0 && off.saw.includes('House 3'), J(off));
-  rec('the switch is saved in the planner settings', await F.sleep(300).then(() => pg.evaluate(() => fullSettings().listChk === false)));
+  rec('the switch is saved in the planner settings', await F.sleep(300).then(() => pg.evaluate(() => fullSettings().listChk === false && JSON.parse(JSON.stringify(snap())).settings.listChk === false)));
   rec('no page errors', !(S.errors || []).length, (S.errors || []).join(' | '));
   await s.close(); await o.close(); await browser.close();
   const pass = res.filter(Boolean).length;
