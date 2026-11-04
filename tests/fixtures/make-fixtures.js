@@ -80,6 +80,43 @@ function school(noCache) {
   XLSX.utils.book_append_sheet(wb, sheet(rows, noCache), '1200 Wall Units');
   return wb;
 }
-const files = { 'cutting-list-customer-a.xlsx': house(false), 'cutting-list-customer-a-nocache.xlsx': house(true), 'cutting-list-school.xlsx': school(false), 'cutting-list-school-nocache.xlsx': school(true) };
+// (4 Nov) Standard production: modelled on "Aspect Cutting List.xlsx" / "O'Malleys - Cutting List.xlsx" (SharePoint, read
+// 4 Nov 2026 — docs/CUTTING-LIST-FORMAT-REVIEW.md addendum), ANONYMISED (customer → "Customer B"). One sheet, several houses:
+// a "House nr …" heading, sub-headings (Fillers and Kickers, ISLAND, Utility, Doors FU), 10–25 lines each of fillers /
+// gables / kickers / worktops, stores items with the item named in column E, a bought-in panel with sizes, spec "TBC"
+// placeholders, notes in column G, and door rows with no description under "Doors FU". No unit blocks.
+function standardSheet() {
+  const G = '18mm Grey Bordelino', rows = [['Project', "Customer B – Phase 2", null, null, 'Date', new Date(Date.UTC(2026, 9, 12))],
+    ['Description', 'Qty', 'Length', 'Width', 'Colour', 'Edging', 'Note'],
+    ['House nr 103'],
+    ['Fillers and Kickers'],
+    ['Kicker', 3, 2400, 150, G, 'L1LE 1mm'], ['Fillers', 2, 720, 100, G, 'L1L+2SE 1mm'], ['Gable', 1, 870, 625, G, 'L4S 1mm'],
+    ['Tall Gable', 1, 2200, 600, G, 'L2LE 1mm Blue'], ['Head filler', 1, 1200, 60, G, 'L1LE 1mm'],
+    ['Top', 1, 1000, 600, 'Frosty Matt 25mm', 'No Cap'], ['Top', 1, 3000, 600, 'Frosty Matt 25mm', 'No Cap'],
+    ['Kicker vent', 2, null, null, 'Chrome'], ['Sink', 1, null, null, 'Hafele Calder', null, 'Talk to Ollie'], ['Tap', 1, null, null, 'TBC'],
+    ['Extractor', 1, null, null, 'Hafele 600 Black'], ['Gola rail', 3, null, null, 'J Type'], ['Gola clips', 12],
+    ['Panel Back', 1, 900, 1842, 'Nautic Blue', 'Bought in'],
+    ['ISLAND'],
+    ['Island Gables', 2, 870, 900, '36mm Grey Bordelino', 'L4S 2mm R'], ['Island Back', 1, 2400, 870, G, 'L2LE 1mm'],
+    ['Worktops', null, null, null, 'None Chosen / TBC / Corian'],
+    ['Utility 103'],
+    ['Heat Pump Frame', 1, 1800, 600, '18mm MDF', 'No edge'], ['Batten', 4, 600, 70, 'Raw MDF'],
+    ['Sink + Tap — TBC'],
+    ['Doors FU'],
+    [null, 4, 715, 497, 'Nautic Blue', 'L4S 1mm', 'Cut down bought in doors at 345'], [null, 2, 715, 297, 'Nautic Blue', 'L4S 1mm'],
+    [],
+    ['House nr 104'],
+    ['Worktops, Fillers and Kickers'],
+    ['Kicker', 3, 2400, 150, G, 'L1LE 1mm'], ['Gable', 1, 870, 628, G, 'L4S 1mm'], ['Top', 1, 2400, 600, 'Frosty Matt 25mm', 'No Cap'],
+    ['Sink', 1, null, null, 'Hafele Calder', null, 'RH sink'], ['Robe handles', 6, null, null, 'Brushed steel']];
+  return rows;
+}
+function standard() {
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, sheet([['Site', 'House'], ['Phase 2', 103], ['Phase 2', 104]]), 'Index');
+  XLSX.utils.book_append_sheet(wb, sheet(standardSheet()), 'House 103,104');
+  return wb;
+}
+const files = { 'cutting-list-customer-b-standard.xlsx': standard(), 'cutting-list-customer-a.xlsx': house(false), 'cutting-list-customer-a-nocache.xlsx': house(true), 'cutting-list-school.xlsx': school(false), 'cutting-list-school-nocache.xlsx': school(true) };
 Object.entries(files).forEach(([n, wb]) => { require('fs').writeFileSync(path.join(OUT, n), XLSX.write(wb, { type: 'buffer', bookType: 'xlsx', cellDates: true })); console.log('wrote', n); });
 module.exports = { files };

@@ -2955,13 +2955,13 @@ function lsImpPreview(bk,fname,projName,done){
         ${sh.warn.length?`<div style="color:#8a5a00;font-size:12px;padding:0 10px 6px">${sh.warn.map(w=>'⚠ '+escA(w)).join('<br>')}</div>`:''}
         <table class="me-tbl"><thead><tr><th></th><th>Description</th><th>Qty</th><th>Total</th><th>Length</th><th>Width</th><th>Colour</th><th>Edging</th></tr></thead><tbody>${sh.rows.map((r,ri)=>{
           if(r.k==='hdr'&&r.info)return `<tr style="color:var(--t3)"><td>${tick(si,ri,r)}</td><td colspan="7"><i>${escA(r.item)} ${escA(r.note)}</i> — ${r.total?'a totals row, not a part — left out':'not a part (left out unless ticked)'}</td></tr>`;
-          if(r.k==='hdr')return `<tr style="background:${r.units!=null?'#eef3fb':'#f5f6f8'}"><td>${r.units!=null?tick(si,ri,r):''}</td><td colspan="7"><b>${escA(r.item)}</b>${r.units!=null?' — <b>'+escA(r.units)+'</b> unit'+(+r.units!==1?'s':''):''}${r.note?' <span style="color:var(--t3)">'+escA(r.note)+'</span>':''}</td></tr>`;
+          if(r.k==='hdr')return `<tr style="background:${r.units!=null?'#eef3fb':r.sub?'#f5f6f8':'#dfe7f2'}"><td>${r.units!=null?tick(si,ri,r):''}</td><td colspan="7"${r.sub?' style="padding-left:18px"':''}><b>${escA(r.item)}</b>${r.units!=null?' — <b>'+escA(r.units)+'</b> unit'+(+r.units!==1?'s':''):''}${r.note?' <span style="color:var(--t3)">'+escA(r.note)+'</span>':''}</td></tr>`;
           const st=!(+r.L>0||+r.W>0);
           // a ⚠ box inside a unit block takes the quantity for ONE unit — the total to cut (× units) shows beside it as you type
           const pu=r.bu!=null,qc=r.qtyErr?`${pu?'<span style="font-size:11px;font-weight:700;color:#14335c">per unit</span> ':''}<input data-ipq="${si}|${ri}" value="${escA(r.qty)}" inputmode="decimal" placeholder="${pu?'⚠ per unit':'⚠ qty'}" title="${pu?'The quantity could not be read — type the number for ONE unit (it is multiplied by the '+escA(r.bu)+' units; the total to cut shows beside it), or untick the row':'The quantity could not be read — type the number to cut, or untick the row'}" style="width:62px;${String(r.qty==null?'':r.qty).trim()===''?'border:2px solid #d48a00;background:#fff6e0':''}">`
             :escA(r.qty)+(r.fixed?' <span style="font-size:11px;color:var(--t3)" title="Doesn\'t divide by the units — kept as a fixed total">fixed</span>':'');
           const tot=r.qtyErr&&pu?(String(r.qty==null?'':r.qty).trim()===''?'':lsMul(r.qty,r.bu)):r.total;
-          return `<tr${r.qtyErr?' style="background:#fff8ea"':''}><td>${st||r.qtyErr?tick(si,ri,r):''}</td><td>${escA(r.item)}${st?' <span class="lst-chip" style="background:#eef0f3;color:#5b6b82">Stores</span>':''}${r.qtyErr?' <span style="color:#8a5a00;font-weight:700">⚠ quantity could not be read</span>':''}</td><td>${qc}</td><td><b data-ipt="${si}|${ri}">${tot!=null?escA(tot):''}</b></td><td>${escA(r.L)}</td><td>${escA(r.W)}</td><td>${escA(r.mat)}</td><td>${escA(r.edging)}</td></tr>`;}).join('')}</tbody></table></details>`;}).join('')}</div>
+          return `<tr${r.qtyErr?' style="background:#fff8ea"':''}><td>${st||r.qtyErr?tick(si,ri,r):''}</td><td>${escA(r.item)}${r.buy?' <span class="buy-chip">Bought in</span>':st?' <span class="lst-chip" style="background:#eef0f3;color:#5b6b82">Stores</span>':''}${r.qtyErr?' <span style="color:#8a5a00;font-weight:700">⚠ quantity could not be read</span>':''}</td><td>${qc}</td><td><b data-ipt="${si}|${ri}">${tot!=null?escA(tot):''}</b></td><td>${escA(r.L)}</td><td>${escA(r.W)}</td><td>${escA(r.mat)}</td><td>${escA(r.edging)}</td></tr>`;}).join('')}</tbody></table></details>`;}).join('')}</div>
       <div id="ip-blank" style="margin-top:8px;color:#8a5a00;font-size:12px;font-weight:700;text-align:right">${blank()?'⚠ '+blank()+' part'+(blank()!==1?'s have':' has')+' no quantity (it could not be read) — type the number or untick '+(blank()!==1?'them':'it')+' before saving':''}</div>
       <div style="margin-top:12px;display:flex;gap:10px;justify-content:flex-end"><button class="btn btn-s" id="ip-x">Cancel — save nothing</button><button class="btn btn-g" id="ip-ok"${nOn()&&!blank()?'':' disabled'}>Save ${nOn()} list${nOn()!==1?'s':''}</button></div></div>`;
     ov.querySelectorAll('[data-ips]').forEach(c=>c.onchange=()=>{bk.sheets[+c.dataset.ips].on=c.checked;draw();});
@@ -4240,10 +4240,12 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     if(st.newWO){const title=(g('me-ptitle').value||'').trim(),due=g('me-pdue').value;
       if(!title)return err('The new work order needs a title.');if(!due)return err('The new work order needs a due date — it drives the cutting deadline.');wo='__NEW__';}
     const d={...st,rows,wo,project:(LST.p.get(st.pid)||{}).name||'',replaces:!ex&&!st.tpl&&st.from?st.from:null};
-    const chk=rows.filter(r=>r.k==='part'&&!r.buy).map((r,j)=>({k:sized(r)?'saw':'fit',item:r.item,qty:totalOf(r,b[rows.indexOf(r)]),L:r.L,W:r.W}));
+    // a spec placeholder ("Worktops — None chosen / TBC", no quantity, no size) never blocks the save: it stays on the list, red
+    const tbcHold=r=>!sized(r)&&String(r.qty==null?'':r.qty).trim()===''&&lsTbc([r]).length>0;
+    const chk=rows.filter(r=>r.k==='part'&&!r.buy&&!tbcHold(r)).map((r,j)=>({k:sized(r)?'saw':'fit',item:r.item,qty:totalOf(r,b[rows.indexOf(r)]),L:r.L,W:r.W}));
     // Bought in rows: never cut or picked — they only need a description and a quantity
     for(const r of rows.filter(r=>r.k==='part'&&r.buy)){if(!String(r.item||'').trim())return err('Every Bought in row needs a description'+at(r)+'.');if(!(+totalOf(r,b[rows.indexOf(r)])>0))return err('Every Bought in row needs a quantity ("'+String(r.item).trim()+'"'+at(r)+').');}
-    const onlyBuy=!chk.length&&rows.some(r=>r.k==='part'&&r.buy);
+    const onlyBuy=!chk.length&&rows.some(r=>r.k==='part'&&(r.buy||tbcHold(r)));
     const e=manualListValidate({...d,rows:onlyBuy?[{k:'saw',item:'x',qty:1,L:1,W:1}]:chk,noCut:onlyBuy?false:d.noCut,noFit:onlyBuy?false:d.noFit,wo:st.tpl?'(template)':d.wo});if(e)return err(e.replace(/saw row/g,'saw row (with a length or width)').replace(/fittings row/g,'Stores row (no length or width)'));
     if(ex&&ex.tpl){const w=prompt('What changed in this template? (optional — shown in its History; it becomes Rev '+((+ex.rev||1)+1)+')','');if(w===null)return;d.why=w.trim()?w.trim():'Template edited';}
     officeWho(by=>{
@@ -4883,19 +4885,28 @@ function lsParseGrid(aoa,opt){
   let cur=null; // the current heading row; cur.u = {r,c} of its units cell once it is a unit block
   const startUnits=(n,r,c)=>{
     if(!cur||cur.info||cur.units!=null){cur={k:'hdr',item:opt.sheet?String(opt.sheet).trim():'Units',note:'',src:r+1};rows.push(cur);}
-    cur.units=n;cur.u={r,c};
+    cur.units=n;cur.u={r,c};delete cur.sub; // a unit heading is never a sub-heading
   };
+  // (4 Nov) standard lists (Aspect / O'Malleys): a house heading ("House nr 103", "House 7 — Type 2", "Block B Apt 29") is a
+  // heading; every other heading after it ("Fillers and Kickers", "ISLAND", "Utility 103", "Doors FU") is a SUB-heading
+  const HOUSE=/^\s*(house|block|apt\.?|apartment|plot)\b|\bhouse\s*(nr|no\.?|number)\b/i;let seenHouse=false;
+  const heading=(item,note,r)=>{const h={k:'hdr',item,note,src:r+1};if(HOUSE.test(item)){seenHouse=true;}else if(seenHouse)h.sub=true;return h;};
+  const BOUGHT=/^\s*bought[\s-]*in\s*\.?\s*$/i,TBCW=/(^|[^a-z0-9])(t\.?\s?b\.?\s?c\.?|to be confirmed|none chosen|not chosen)(?=$|[^a-z0-9])/i; // TBCW: the same words as lsTbc // the whole Edging or Note cell says "Bought in" (never a note like "Cut down bought in doors")
   const nRows=aoa.length;
   for(let r=0;r<nRows;r++){
     const cells=[0,1,2,3,4,5,6].map(c=>val(r,c));
     if(cells.every(v=>v==null||str(v)===''))continue;
     const A=str(cells[0]),texts=cells.map(str);
-    // 1. header labels: Project / Title / Date / Carcass colour / Door colour / Nr of units — the value is the next filled cell
+    // 1. header labels: Project / Title / Date / Carcass colour / Door colour / Nr of units — the value is the next filled cell.
+    //    Several on one row ("Project | Customer B | | Date | 12/10/2026") are all read; so is "Project: X  Date: Y" in one cell.
+    const pd=/^\s*project( name)?\s*:\s*(.+?)(?:\s+date\s*:\s*(.+))?$/i.exec(A);
+    if(pd&&texts.slice(1).every(t=>t==='')){meta.project=pd[2].trim();if(pd[3])meta.date=isoDate(pd[3].trim());continue;}
     if(LBL.test(A)){
-      const k=A.toLowerCase(),vi=cells.findIndex((v,c)=>c>0&&v!=null&&str(v)!=='');const v=vi>0?cells[vi]:null;
-      if(/^project/.test(k))meta.project=str(v);else if(/^title/.test(k))meta.title=str(v);else if(/^date/.test(k))meta.date=isoDate(v);
-      else if(/^carcass/.test(k))meta.carcass=str(v);else if(/^door/.test(k))meta.door=str(v);
-      else if(!isNaN(num(v))&&num(v)>0)startUnits(num(v),r,vi);
+      for(let c0=0;c0<7;c0++){if(!LBL.test(texts[c0]))continue;
+        const k=texts[c0].toLowerCase(),vi=cells.findIndex((v,c)=>c>c0&&v!=null&&str(v)!=='');const v=vi>0&&!LBL.test(texts[vi])?cells[vi]:null;
+        if(/^project/.test(k))meta.project=str(v);else if(/^title/.test(k))meta.title=str(v);else if(/^date/.test(k))meta.date=isoDate(v);
+        else if(/^carcass/.test(k))meta.carcass=str(v);else if(/^door/.test(k))meta.door=str(v);
+        else if(!isNaN(num(v))&&num(v)>0)startUnits(num(v),r,vi);}
       continue;
     }
     // 2. the column-header row ("Description | Qty | Length …") is labels, not a part
@@ -4917,7 +4928,10 @@ function lsParseGrid(aoa,opt){
     const L=num(cells[2]),W=num(cells[3]),mat=texts[4],edging=texts[5],note=texts[6];
     if(!isNaN(qv)||(!isNaN(L)&&!isNaN(W)&&(A||mat))){
       const sized=!isNaN(L)||!isNaN(W);
-      const p={k:'part',item:sized?A:(A||mat),qty:'',L:isNaN(L)?'':L,W:isNaN(W)?'':W,mat,edging:sized?edging:'',note:sized?note:[edging,note].filter(Boolean).join(' · '),src:r+1}; // decision 4: column F is Edging on a saw part, a note on a Stores part
+      // a door row with no description under "Doors FU" takes the heading's name (4 Nov)
+      const p={k:'part',item:sized?(A||(cur&&!cur.info&&cur.units==null?cur.item:'')):(A||mat),qty:'',L:isNaN(L)?'':L,W:isNaN(W)?'':W,mat,edging:sized?edging:'',note:sized?note:[edging,note].filter(Boolean).join(' · '),src:r+1}; // decision 4: column F is Edging on a saw part, a note on a Stores part
+      // "Bought in" in the Edging or Note cell: ticked Bought in (never cut), and that cell is not kept as an edging / note
+      if(BOUGHT.test(edging)||BOUGHT.test(note)){p.buy=true;const e2=BOUGHT.test(edging)?'':edging,n2=BOUGHT.test(note)?'':note;if(sized){p.edging=e2;p.note=n2;}else p.note=[e2,n2].filter(Boolean).join(' · ');}
       let qty=isNaN(qv)?'':typeof cells[1]==='number'||/^\d+(\.\d+)?(\s*(off|pcs?|no\.?))?$/i.test(texts[1])?qv:texts[1]; // "2x2" kept as typed, never guessed
       // a quantity that can't be used: a formula with no saved value, or a negative number → blank + ⚠ (the preview asks for a number)
       if(cells[1]==null&&fm(r,1)){p.qtyErr=true;warn.push('Row '+(r+1)+' "'+(p.item||'part')+'": the quantity is a formula with no saved value ("='+fm(r,1)+'") — it could not be read; type the number to cut');}
@@ -4938,7 +4952,11 @@ function lsParseGrid(aoa,opt){
     }
     if(A||mat){
       if(!isNaN(L)||!isNaN(W)){rows.push({k:'hdr',info:true,item:A||mat,note:texts.slice(1,7).filter(Boolean).join(' '),src:r+1});continue;} // e.g. "Science Lab 1 … 6"
-      cur={k:'hdr',item:A||mat,note:A?[mat,edging,note].filter(Boolean).join(' · '):'',src:r+1};rows.push(cur);
+      // (4 Nov) a spec placeholder is a line, not a heading: "Worktops | … | None Chosen / TBC / Corian", "Sink + Tap — TBC".
+      // Kept as a Stores line with no quantity, shown red (spec TBC) — never a heading that hides it
+      const tb=/^(.*?)\s*[—–-]+\s*(tbc|t\.b\.c\.?|to be confirmed|none chosen)\s*$/i.exec(A);
+      if(A&&(TBCW.test(mat)||tb)){rows.push({k:'part',item:tb?tb[1].trim():A,qty:'',L:'',W:'',mat:tb&&!mat?tb[2]:mat,edging:'',note:[edging,note].filter(Boolean).join(' · '),src:r+1});continue;}
+      cur=heading(A||mat,A?[mat,edging,note].filter(Boolean).join(' · '):'',r);rows.push(cur);
     }
   }
   rows.forEach(x=>{delete x.u;});
