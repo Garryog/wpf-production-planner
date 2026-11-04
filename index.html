@@ -3356,24 +3356,27 @@ function lsProjectsDlg(){
   const draw=()=>{
     const ps=lsProjects(true);
     ov.querySelector('#pj-body').innerHTML=`<div style="font-weight:800;color:#14335c;font-size:17px;margin-bottom:2px">🏗 Projects</div>
-      <div style="font-size:12px;color:var(--t3);margin-bottom:10px">Rename, change the customer or who owns the lists, or set a project inactive. Projects are never deleted.</div>
-      <table class="lst-tbl"><thead><tr><th>Project</th><th>Customer (Cienapps)</th><th>Lists owned by</th><th>Active</th><th></th></tr></thead><tbody>
+      <div style="font-size:12px;color:var(--t3);margin-bottom:10px">Rename, change the customer or who owns the lists, set the site address (the default "deliver to" on stores dockets), or set a project inactive. Projects are never deleted.</div>
+      <table class="lst-tbl"><thead><tr><th>Project</th><th>Customer (Cienapps)</th><th>Lists owned by</th><th>Site address (dockets)</th><th>Active</th><th></th></tr></thead><tbody>
       ${ps.map(p=>`<tr${p.active===false?' style="opacity:.6"':''}><td><input data-pjn="${escA(p.id)}" value="${escA(p.name)}" style="${LS_INP};width:100%"></td><td><input data-pjc="${escA(p.id)}" value="${escA(p.customer||'')}" style="${LS_INP};width:100%"></td>
-        <td><input data-pjo="${escA(p.id)}" value="${escA(p.list_owner||'')}" placeholder="Production Manager" style="${LS_INP};width:100%"></td><td><input type="checkbox" data-pja="${escA(p.id)}"${p.active!==false?' checked':''}></td>
+        <td><input data-pjo="${escA(p.id)}" value="${escA(p.list_owner||'')}" placeholder="Production Manager" style="${LS_INP};width:100%"></td><td><textarea data-pjsa="${escA(p.id)}" rows="1" placeholder="Default 'deliver to' on dockets" style="${LS_INP};width:100%;min-width:160px;font-family:inherit">${escA(p.site_address||'')}</textarea></td><td><input type="checkbox" data-pja="${escA(p.id)}"${p.active!==false?' checked':''}></td>
         <td style="white-space:nowrap"><button class="btn btn-g" data-pjs="${escA(p.id)}" style="font-size:12px;padding:4px 10px">Save</button> <button class="btn btn-s" data-pjm="${escA(p.id)}" style="font-size:12px;padding:4px 10px">Materials</button></td></tr>`).join('')}
-      <tr><td><input id="pj-new-n" placeholder="New project name" style="${LS_INP};width:100%"></td><td><input id="pj-new-c" placeholder="Customer" style="${LS_INP};width:100%"></td><td><input id="pj-new-o" placeholder="Production Manager" style="${LS_INP};width:100%"></td><td></td>
+      <tr><td><input id="pj-new-n" placeholder="New project name" style="${LS_INP};width:100%"></td><td><input id="pj-new-c" placeholder="Customer" style="${LS_INP};width:100%"></td><td><input id="pj-new-o" placeholder="Production Manager" style="${LS_INP};width:100%"></td><td><textarea id="pj-new-sa" rows="1" placeholder="Site address" style="${LS_INP};width:100%;min-width:160px;font-family:inherit"></textarea></td><td></td>
         <td><button class="btn btn-g" id="pj-add" style="font-size:12px;padding:4px 10px">＋ Add</button></td></tr></tbody></table><div id="pj-msg" style="font-size:12px;color:#b42318;font-weight:700;margin-top:6px"></div>`;
     const msg=t=>{const e=ov.querySelector('#pj-msg');if(e)e.textContent=t;};
     const val=(a,id)=>(ov.querySelector('['+a+'="'+id+'"]')||{}).value||'';
     ov.querySelectorAll('[data-pjs]').forEach(b=>b.onclick=()=>{const id=b.dataset.pjs,p=LST.p.get(id);if(!p||!lsEditOk())return;
       const name=val('data-pjn',id).trim();if(!name)return msg('A project needs a name.');
       const other=lsProjFind(name);if(other&&other.id!==id)return msg('Another project is already called "'+name+'".');
-      lsWrite('projects',p,{name,customer:val('data-pjc',id).trim()||null,list_owner:val('data-pjo',id).trim()||null,active:ov.querySelector('[data-pja="'+id+'"]').checked})
-        .then(()=>{toast('Project saved');draw();}).catch(e=>{draw();msg('Not saved — '+e.message);});});
+      // the site address is only sent when it changed, so projects still save before the Stores dockets SQL adds the column
+      const sa=val('data-pjsa',id).trim(),saP=sa!==String(p.site_address||'').trim()?{site_address:sa||null}:{};
+      lsWrite('projects',p,{name,customer:val('data-pjc',id).trim()||null,list_owner:val('data-pjo',id).trim()||null,active:ov.querySelector('[data-pja="'+id+'"]').checked,...saP})
+        .then(()=>{toast('Project saved');draw();}).catch(e=>{draw();msg('Not saved — '+(/site_address/.test(e.message)?dkErr('404'):e.message));});});
     ov.querySelectorAll('[data-pjm]').forEach(b=>b.onclick=()=>{ov.remove();lsMaterialsDlg(b.dataset.pjm);});
     ov.querySelector('#pj-add').onclick=()=>{if(!lsEditOk())return;const name=ov.querySelector('#pj-new-n').value.trim();if(!name)return msg('Type the project name first.');
       if(lsProjFind(name))return msg('There is already a project called "'+name+'".');
-      lsWrite('projects',{id:uid('P'),name,customer:ov.querySelector('#pj-new-c').value.trim()||null,list_owner:ov.querySelector('#pj-new-o').value.trim()||null}).then(()=>{toast(name+' added');draw();}).catch(e=>msg('Not added — '+e.message));};
+      const sa=ov.querySelector('#pj-new-sa').value.trim();
+      lsWrite('projects',{id:uid('P'),name,customer:ov.querySelector('#pj-new-c').value.trim()||null,list_owner:ov.querySelector('#pj-new-o').value.trim()||null,...(sa?{site_address:sa}:{})}).then(()=>{toast(name+' added');draw();}).catch(e=>msg('Not added — '+(/site_address/.test(e.message)?dkErr('404'):e.message)));};
   };
   draw();
 }
