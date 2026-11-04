@@ -203,6 +203,7 @@ button,input,select{font-family:inherit;cursor:pointer}
 .dchip-top{display:flex;align-items:center;gap:6px}
 .dchip-top b{font-family:monospace;font-size:12px;font-weight:700;color:#14335c;white-space:nowrap}
 .dfu{font-size:10px;font-weight:700;background:#eef2f7;border:1px solid #d8dfe8;border-radius:4px;padding:1px 5px;color:#3b4c63;white-space:nowrap}
+.fu-fl+.fu-un{margin-left:4px}
 .fu-badge{font-family:monospace;font-size:11px;font-weight:600;background:#f2f5f9;border:1px solid #e0e5ec;border-radius:4px;padding:1px 6px;color:var(--t2);white-space:nowrap}
 .dsrch{width:100%;max-width:420px;padding:7px 11px;border:1px solid var(--b2);border-radius:6px;font-size:12px;margin-bottom:8px}
 .dsrch:focus{border-color:#7ba7e0}
@@ -1958,9 +1959,9 @@ function renderShipped(app){
   const held=DB.orders.filter(o=>isOnHold(o)&&!isShipped(o));
   const hs=shHoldQ?held.filter(o=>[o.wo,o.title,o.customer,o.floor,o.unit].some(v=>String(v||'').toLowerCase().includes(shHoldQ.toLowerCase()))):held;
   const card=o=>{
-    const deliv=dStage(o)==='deliv',w=am.get(o.wo)||0,fu=[o.floor,o.unit].filter(Boolean).join(' · ');
+    const deliv=dStage(o)==='deliv',w=am.get(o.wo)||0;
     return `<div class="sh-card${o.completeAt?' sh-done':''}">
-      <div class="sh-top"><span class="wo-num">${escA(o.wo)}</span>${fu?`<span class="fu-badge">${escA(fu)}</span>`:''}${addBadge(o)}
+      <div class="sh-top"><span class="wo-num">${escA(o.wo)}</span>${fuHTML(o)}${addBadge(o)}
         <span class="sh-pill ${deliv?'ok':'no'}">${deliv?'✓ Delivered '+dt(o.delDelivAt):(o.delDispAt?'🚚 On the road':o.delv?'🚚 On Deliveries':'Not delivered')}</span>
         ${w?`<span class="sh-pill warn" title="Waiting (N/A) lines on its cutting/fittings lists — also shown on the Capacity Board">⚠ ${w} waiting</span>`:''}</div>
       <div class="sh-t">${escA(o.title||'')}</div>
@@ -1990,7 +1991,7 @@ function renderShipped(app){
       <div style="font-size:14px;font-weight:700;margin-bottom:4px">⏸ On hold in Cienapps <span id="sh-hcnt" style="font-weight:400;color:var(--t2)">(${held.length})</span></div>
       <div style="font-size:12px;color:var(--t2);margin-bottom:8px">Step 12 ON HOLD / DELETE. Off the Capacity Board, week totals and capacity — never deleted. The next import with any other step puts the job back on the board.</div>
       ${held.length?`<input class="search-input" id="sh-hq" placeholder="Search on-hold jobs…" value="${escA(shHoldQ)}" style="margin-bottom:8px">`:''}
-      ${hs.length?hs.slice(0,300).map(o=>`<div class="sh-card"><div class="sh-top"><span class="wo-num">${escA(o.wo)}</span>${[o.floor,o.unit].filter(Boolean).length?`<span class="fu-badge">${escA([o.floor,o.unit].filter(Boolean).join(' · '))}</span>`:''}<span class="sh-pill no">⏸ On hold</span>${(am.get(o.wo)||0)?`<span class="sh-pill warn" title="Waiting (N/A) lines on its cutting/fittings lists">⚠ ${am.get(o.wo)} line${am.get(o.wo)!==1?'s':''} waiting</span>`:''}${!delHidden(o)&&o.delv?'<span class="sh-pill warn">🚚 Already loaded / on a van</span>':''}</div>
+      ${hs.length?hs.slice(0,300).map(o=>`<div class="sh-card"><div class="sh-top"><span class="wo-num">${escA(o.wo)}</span>${fuHTML(o)}<span class="sh-pill no">⏸ On hold</span>${(am.get(o.wo)||0)?`<span class="sh-pill warn" title="Waiting (N/A) lines on its cutting/fittings lists">⚠ ${am.get(o.wo)} line${am.get(o.wo)!==1?'s':''} waiting</span>`:''}${!delHidden(o)&&o.delv?'<span class="sh-pill warn">🚚 Already loaded / on a van</span>':''}</div>
         <div class="sh-t">${escA(o.title||'')}</div><div class="sh-m">${escA(o.customer||'')} · on hold since ${dt(o.holdAt)} · ${o.hours!=null?escA(String(o.hours))+'h · ':''}due ${fmt(o.dueDate)}</div>${o.holdDel?`<div class="sh-m">Taken off Deliveries when it went on hold (was ${escA(o.holdDel)}) — not put back automatically</div>`:''}</div>`).join(''):`<div class="empty">${held.length?'No on-hold jobs match.':'No jobs on hold.'}</div>`}
     </div>
   </div>`;
@@ -2043,6 +2044,13 @@ function woCmp(a,b){
 }
 function dayVal(d){return delAll().filter(o=>o.delDay===d).reduce((a,o)=>a+(+o.value||0),0);}
 const escA=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+/* Floor and Unit are always shown apart, each with its own label (Garry, 4 Nov 2026) — never run together as "floor · unit".
+   fuF/fuU read a job (floor/unit) or a stored delivery-week row (f/u). fuHTML = two separate badges; fuLbl = plain text. */
+const fuF=o=>{const v=o?(o.floor!=null&&o.floor!==''?o.floor:o.f):'';return String(v==null?'':v).trim();};
+const fuU=o=>{const v=o?(o.unit!=null&&o.unit!==''?o.unit:o.u):'';return String(v==null?'':v).trim();};
+function fuHTML(o,cls,sty){const f=fuF(o),u=fuU(o),a=k=>` class="${cls||'fu-badge'} ${k}"${sty?' style="'+sty+'"':''}`;
+  return [f?`<span${a('fu-fl')} title="Floor">Floor ${escA(f)}</span>`:'',u?`<span${a('fu-un')} title="Unit">Unit ${escA(u)}</span>`:''].filter(Boolean).join(' ');}
+function fuLbl(o){const f=fuF(o),u=fuU(o);return[f?'Floor '+f:'',u?'Unit '+u:''].filter(Boolean).join(' · ');}
 
 /* Dispatch stages: '' → loaded → dispatched (left the factory, timestamped) → delivered */
 function dStage(o){return (o.delDelivAt||o.delDone)?'deliv':(o.delDispAt?'disp':(o.delLoadedAt?'load':''));}
@@ -2062,7 +2070,7 @@ function partLoadGaps(jobs){
       const sameGrp=j.grp&&o.grp===j.grp;
       return sameUnit||sameGrp;
     });
-    rel.forEach(o=>{seen.add(o.wo);gaps.push({forWo:j.wo,unit:[j.floor,j.unit].filter(Boolean).join(' '),wo:o.wo,title:o.title});});
+    rel.forEach(o=>{seen.add(o.wo);gaps.push({forWo:j.wo,floor:j.floor||'',unit:j.unit||'',wo:o.wo,title:o.title});});
   });
   return gaps;
 }
@@ -2190,16 +2198,16 @@ let lstAttachOpen=null;  // WO in the needed panel whose attach row is open
 function renderLists(app){
   const need=listsNeeded();
   const all=[...lists()].sort((a,b)=>(listDueKey(a)||'9999').localeCompare(listDueKey(b)||'9999')||String(a.name).localeCompare(String(b.name)));
-  const woLbl=w=>{const o=DB.orders.find(x=>x.wo===w);return o?`${w} (${[o.floor,o.unit].filter(Boolean).join(' ')})`:w;};
+  const woLbl=w=>{const o=DB.orders.find(x=>x.wo===w);return o&&fuLbl(o)?`${w} (${fuLbl(o)})`:w;};
   const candFor=o=>{const u=parseInt(o.unit);if(isNaN(u))return[];return all.filter(l=>{const ns=(String(l.sheet).match(/\d+/g)||[]).map(Number);return ns.includes(u)&&!(l.wos||[]).includes(o.wo);});};
   app.innerHTML=`<div class="pg">
     ${need.length?`<div class="exp-panel" style="border:2px solid #c0392b;background:#fdf3f2">
       <div style="font-size:14px;font-weight:700;color:#8a1c10;margin-bottom:6px">⚠ Cutting lists needed — ${need.length} work order${need.length!==1?'s':''} scheduled with no list tagged</div>
       <p style="font-size:12px;color:#8a1c10;margin-bottom:10px">These are on the delivery board or due within ${listLead()} days. Upload the cutting list below and tag it, so the saw and stores see it in good time.</p>
-      <table class="lst-tbl"><thead><tr><th>WO #</th><th>Floor/Unit</th><th>Title</th><th>Customer</th><th>Due</th><th>Why flagged</th><th></th></tr></thead><tbody>
-      ${need.slice(0,30).map(o=>{const cands=lstAttachOpen===o.wo?candFor(o):[];return `<tr style="cursor:pointer" data-nrow="${escA(o.wo)}"><td style="font-family:monospace;font-weight:700">${escA(o.wo)}</td><td>${escA([o.floor,o.unit].filter(Boolean).join(' · '))}</td><td>${escA(o.title)}</td><td>${escA(o.customer)}</td><td>${fmt(o.dueDate)}</td><td>${o.delv&&o.delDay?'On delivery board ('+escA(o.delDay)+')':'Due within '+listLead()+' days'}</td>
+      <table class="lst-tbl"><thead><tr><th>WO #</th><th>Floor</th><th>Unit</th><th>Title</th><th>Customer</th><th>Due</th><th>Why flagged</th><th></th></tr></thead><tbody>
+      ${need.slice(0,30).map(o=>{const cands=lstAttachOpen===o.wo?candFor(o):[];return `<tr style="cursor:pointer" data-nrow="${escA(o.wo)}"><td style="font-family:monospace;font-weight:700">${escA(o.wo)}</td><td>${escA(fuF(o))}</td><td>${escA(fuU(o))}</td><td>${escA(o.title)}</td><td>${escA(o.customer)}</td><td>${fmt(o.dueDate)}</td><td>${o.delv&&o.delDay?'On delivery board ('+escA(o.delDay)+')':'Due within '+listLead()+' days'}</td>
         <td style="white-space:nowrap"><button class="btn btn-s" data-natt="${escA(o.wo)}" style="padding:2px 8px;font-size:11px">${lstAttachOpen===o.wo?'✕ close':'➕ Attach list'}</button></td></tr>
-      ${lstAttachOpen===o.wo?`<tr><td colspan="7" style="background:#fff;border:1px solid var(--b2);padding:10px">
+      ${lstAttachOpen===o.wo?`<tr><td colspan="8" style="background:#fff;border:1px solid var(--b2);padding:10px">
         <div style="font-size:12px;font-weight:700;color:#14335c;margin-bottom:6px">Attach a cutting list to ${escA(o.wo)}${o.unit?' (unit '+escA(o.unit)+')':''}:</div>
         <button class="btn btn-g" data-mtype="${escA(o.wo)}" style="margin:2px 6px 6px 0;font-size:12px">✍ Type a list for ${escA(o.wo)}</button><br>
         ${cands.length?cands.slice(0,8).map(l=>`<button class="btn btn-s" data-attdo="${escA(l.id)}|${escA(o.wo)}" style="margin:2px;font-size:11px">+ ${escA(l.project||'')} — ${escA(l.name)}</button>`).join(''):`<span style="font-size:12px;color:var(--t3)">No library list matches unit ${escA(o.unit||'?')} — pick one below or upload the workbook.</span>`}
@@ -2253,7 +2261,7 @@ function renderLists(app){
         <td>${(l.wos||[]).map(w=>`<span class="lst-chip" title="${escA(woLbl(w))}${isOnHold(DB.orders.find(o=>o.wo===w))?' — ON HOLD in Cienapps':''}">${escA(w)}${isOnHold(DB.orders.find(o=>o.wo===w))?' ⏸':''}<button data-untag="${escA(l.id)}|${escA(w)}" title="Remove tag">×</button></span>`).join('')||'<span style="color:#c0392b;font-size:11px;font-weight:700">UNTAGGED</span>'}
           <button class="btn btn-s" data-tag="${escA(l.id)}" style="padding:2px 8px;font-size:11px">✎ tag</button>
           ${lstTagOpen===l.id?`<div style="margin-top:6px;background:#f7f9fc;border:1px solid var(--b2);border-radius:6px;padding:8px">
-            ${suggestWOs(l).filter(o=>!(l.wos||[]).includes(o.wo)).slice(0,8).map(o=>`<button class="btn btn-s" data-tagadd="${escA(l.id)}|${escA(o.wo)}" style="padding:2px 8px;font-size:11px;margin:2px" title="${escA(o.title)} — ${escA(o.customer)}">+ ${escA(o.wo)} (${escA([o.floor,o.unit].filter(Boolean).join(' '))})</button>`).join('')||'<span style="font-size:11px;color:var(--t3)">No automatic matches — type a WO:</span>'}
+            ${suggestWOs(l).filter(o=>!(l.wos||[]).includes(o.wo)).slice(0,8).map(o=>`<button class="btn btn-s" data-tagadd="${escA(l.id)}|${escA(o.wo)}" style="padding:2px 8px;font-size:11px;margin:2px" title="${escA(o.title)} — ${escA(o.customer)}">+ ${escA(o.wo)}${fuLbl(o)?' ('+escA(fuLbl(o))+')':''}</button>`).join('')||'<span style="font-size:11px;color:var(--t3)">No automatic matches — type a WO:</span>'}
             <div style="margin-top:5px;display:flex;gap:6px"><input id="tagin-${escA(l.id)}" placeholder="WO-PF-…" style="padding:4px 8px;border:1px solid var(--b2);border-radius:5px;font-size:12px;width:170px"><button class="btn btn-s" data-tagman="${escA(l.id)}" style="font-size:11px">Add</button></div>
           </div>`:''}
         </td>
@@ -2573,7 +2581,7 @@ function openCombined(lsArr,mode){
     <div style="font-weight:800;color:#14335c;font-size:17px;margin-bottom:2px">${saw?'⚡ Combined cutting list':'⚡ Combined fittings list'} — ${lsArr.length} houses</div>
     <div style="font-size:12px;color:var(--t3);margin-bottom:6px">Cut/pick the total, split per house as labelled — quantities per house stay beside every line. Lines already ticked ${saw?'cut':'picked'} are left out.</div>
     <div style="background:#f4f7fb;border:1px solid var(--border);border-radius:7px;padding:7px 10px;margin-bottom:10px">
-      ${lsArr.map(l=>{let o=null;for(const w of (l.wos||[])){o=DB.orders.find(x=>x.wo===w);if(o)break;}return `<div style="font-size:12px;color:#14335c;padding:1px 0"><b>${escA(hl.get(l.id))}</b>${o&&(o.floor||o.unit)?' · '+escA([o.floor,o.unit].filter(Boolean).join(' · ')):''}${o&&o.title?' · '+escA(o.title):''}${o&&o.customer?' · <b>'+escA(o.customer)+'</b>':''}</div>`;}).join('')}
+      ${lsArr.map(l=>{let o=null;for(const w of (l.wos||[])){o=DB.orders.find(x=>x.wo===w);if(o)break;}return `<div style="font-size:12px;color:#14335c;padding:1px 0"><b>${escA(hl.get(l.id))}</b>${o&&fuLbl(o)?' '+fuHTML(o):''}${o&&o.title?' · '+escA(o.title):''}${o&&o.customer?' · <b>'+escA(o.customer)+'</b>':''}</div>`;}).join('')}
     </div>
     <table class="wl-tbl"><thead><tr><th style="width:24%">Item</th><th>Total</th>${saw?'<th>Length</th><th>Width</th>':''}<th>${saw?'Material':'Spec'}</th><th>${saw?'Edging / Note':'Note'}</th><th style="width:26%">Per house</th></tr></thead><tbody>
     ${rows.map(r=>`<tr><td>${escA(r.item)||'—'}</td><td class="num" style="font-size:17px">${r.qty}${r.bad?`<div style="font-size:12px;color:#c0392b;font-weight:700;white-space:nowrap">+ ${r.bad} not added — check quantity</div>`:''}</td>${saw?`<td class="num">${escA(r.L)}</td><td class="num">${escA(r.W)}</td>`:''}<td>${escA(r.mat)}</td><td>${escA(r.note)}</td>
@@ -2667,7 +2675,7 @@ function renderWorkList(app,mode){
   const visible=wlCust?visAll.filter(l=>(listCust(l)||'(no customer)')===wlCust):visAll;
   [...wlSel].forEach(id=>{if(!visible.some(l=>l.id===id))wlSel.delete(id);}); // selections only valid while visible in the queue
   const selLists=visible.filter(l=>wlSel.has(l.id));
-  const woChips=l=>(l.wos||[]).map(w=>{const o=DB.orders.find(x=>x.wo===w);return `<span class="lst-chip">${escA(w)}${o&&(o.floor||o.unit)?' · '+escA([o.floor,o.unit].filter(Boolean).join(' ')):''}</span>`;}).join('');
+  const woChips=l=>(l.wos||[]).map(w=>{const o=DB.orders.find(x=>x.wo===w);return `<span class="lst-chip">${escA(w)}</span>${o&&fuLbl(o)?fuHTML(o,'lst-chip'):''}`;}).join('');
   const card=(l,isDone)=>{const dn=listDone(l.id)[mode];const due=listDueKey(l);const relOnly=!isDone&&!!dn&&relOpen(l,mode);const nh=listHoldRows(l,mode,'hold').length;return `<div class="wl-card${isDone?' cdone':''}">
     <div class="wl-h"><div style="display:flex;gap:10px;align-items:flex-start">${!isDone?`<button class="wl-chk${wlSel.has(l.id)?' on':''}" data-wlsel="${escA(l.id)}" title="Select for batch cutting across houses">${wlSel.has(l.id)?'✓':''}</button>`:''}<div><span class="wn">${escA(l.name)}</span> <span class="wd">${escA(l.project||'')}${(c=>c&&c!==l.project?' · '+escA(c):'')(listCust(l))}</span><div style="margin-top:3px">${woChips(l)}</div></div></div>
     ${due?(od=>`<span class="wl-due"${od?' style="background:#c0392b;color:#fff"':''}>${od?'⚠ OVERDUE — ':''}${mode==='saw'?'CUT':'PICK'} BY ${fmt(listDeadline(l))} · DELIVERS ${fmt(due)}</span>`)(!isDone&&listOverdue(l)):'<span class="wd">no delivery date yet</span>'}</div>
@@ -2792,7 +2800,7 @@ function renderDash(app){
   const needed=listsNeeded();
   const srt=(a,b)=>(listDueKey(a)||'9999').localeCompare(listDueKey(b)||'9999');
   const tile=(n,lbl,sub,color)=>`<div class="dsh-tile" style="border-top:4px solid ${color}"><div class="dsh-n" style="color:${color}">${n}</div><div class="dsh-l">${lbl}</div>${sub?`<div class="dsh-s">${sub}</div>`:''}</div>`;
-  const jrow=o=>`<div class="dsh-row"><b>${escA(o.wo)}</b>${(o.floor||o.unit)?`<span class="flr-fu" style="font-size:12px">${escA([o.floor,o.unit].filter(Boolean).join(' · '))}</span>`:''}<span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-c">${escA(o.customer||'')}</span><span class="dsh-x">${escA(vehLbl(o.delVeh)||'')} ${escA(o.delDay||'')}</span></div>`;
+  const jrow=o=>`<div class="dsh-row"><b>${escA(o.wo)}</b>${fuHTML(o,'flr-fu','font-size:12px')}<span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-c">${escA(o.customer||'')}</span><span class="dsh-x">${escA(vehLbl(o.delVeh)||'')} ${escA(o.delDay||'')}</span></div>`;
   const panel=(title,color,rows,empty)=>`<div class="dsh-p"><div class="dsh-ph" style="background:${color}">${title}</div>${rows.length?rows.join(''):`<div class="dsh-row" style="color:var(--t3);font-style:italic">${empty}</div>`}</div>`;
   const perf=weekPerf(liveWeekJobs(),todayIx);
   const movedJ=all.filter(o=>(o.delMoves||[]).length);
@@ -2849,13 +2857,12 @@ function renderPM(app){
     const coming=DB.orders.filter(o=>(o.customer||'')===c&&!o.delDay&&!o.delDone&&!isShipped(o)&&!isOnHold(o)&&o.dueDate&&o.dueDate>=todayISO)
       .sort((a,b)=>a.dueDate.localeCompare(b.dueDate)).slice(0,12);
     if(!sched.length&&!delivWk.length&&!past.length&&!coming.length)return'';
-    const fu=o=>[o.floor||o.f,o.unit||o.u].filter(Boolean).join(' · ');
-    return `<div class="dsh-p" style="margin-bottom:14px">
+        return `<div class="dsh-p" style="margin-bottom:14px">
       <div class="dsh-ph" style="background:#14335c;font-size:15px">👤 ${escA(c)} — ${sched.length} scheduled · ${delivWk.length} delivered this week · ${past.length?past.length+' past':'no earlier deliveries'} · ${coming.length} coming up</div>
-      ${sched.length?`<div class="pm-sec">🚚 SCHEDULED THIS WEEK</div>`+sched.map(o=>row(`<b>${escA(o.wo)}</b>${fu(o)?`<span class="flr-fu" style="font-size:12px">${escA(fu(o))}</span>`:''}<span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-x">${escA(vehLbl(o.delVeh)||'')} ${escA(o.delDay||'')} · ${stageLbl(o)}</span>`)).join(''):''}
-      ${delivWk.length?`<div class="pm-sec" style="color:#0d6e46">✓ DELIVERED THIS WEEK</div>`+delivWk.map(o=>row(`<b>${escA(o.wo)}</b>${fu(o)?`<span class="flr-fu" style="font-size:12px">${escA(fu(o))}</span>`:''}<span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-x" style="color:#0d6e46">${o.delDelivAt?new Date(o.delDelivAt).toLocaleDateString('en-IE',{weekday:'short',day:'numeric',month:'short'})+' '+dStageTime(o):''}${o.delivBy?' · '+escA(o.delivBy):''}</span>`)).join(''):''}
-      ${past.length?`<div class="pm-sec" style="color:var(--t3)">📚 DELIVERED — PAST WEEKS</div>`+past.map(j=>row(`<b>${escA(j.wo)}</b>${fu(j)?`<span class="flr-fu" style="font-size:12px">${escA(fu(j))}</span>`:''}<span class="dsh-t">${escA(j.t||'')}</span><span class="dsh-x">${new Date(j._at).toLocaleDateString('en-IE',{day:'numeric',month:'short'})}${j.vBy?' · '+escA(j.vBy):''}</span>`)).join(''):''}
-      ${coming.length?`<div class="pm-sec" style="color:#8a6d00">📅 COMING UP — due, not yet on the delivery board</div>`+coming.map(o=>row(`<b>${escA(o.wo)}</b>${fu(o)?`<span class="flr-fu" style="font-size:12px">${escA(fu(o))}</span>`:''}<span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-x">due ${fmt(o.dueDate)}${o.plannedWeek?' · build '+wkLbl(o.plannedWeek):''}</span>`)).join(''):''}
+      ${sched.length?`<div class="pm-sec">🚚 SCHEDULED THIS WEEK</div>`+sched.map(o=>row(`<b>${escA(o.wo)}</b>${fuHTML(o,'flr-fu','font-size:12px')}<span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-x">${escA(vehLbl(o.delVeh)||'')} ${escA(o.delDay||'')} · ${stageLbl(o)}</span>`)).join(''):''}
+      ${delivWk.length?`<div class="pm-sec" style="color:#0d6e46">✓ DELIVERED THIS WEEK</div>`+delivWk.map(o=>row(`<b>${escA(o.wo)}</b>${fuHTML(o,'flr-fu','font-size:12px')}<span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-x" style="color:#0d6e46">${o.delDelivAt?new Date(o.delDelivAt).toLocaleDateString('en-IE',{weekday:'short',day:'numeric',month:'short'})+' '+dStageTime(o):''}${o.delivBy?' · '+escA(o.delivBy):''}</span>`)).join(''):''}
+      ${past.length?`<div class="pm-sec" style="color:var(--t3)">📚 DELIVERED — PAST WEEKS</div>`+past.map(j=>row(`<b>${escA(j.wo)}</b>${fuHTML(j,'flr-fu','font-size:12px')}<span class="dsh-t">${escA(j.t||'')}</span><span class="dsh-x">${new Date(j._at).toLocaleDateString('en-IE',{day:'numeric',month:'short'})}${j.vBy?' · '+escA(j.vBy):''}</span>`)).join(''):''}
+      ${coming.length?`<div class="pm-sec" style="color:#8a6d00">📅 COMING UP — due, not yet on the delivery board</div>`+coming.map(o=>row(`<b>${escA(o.wo)}</b>${fuHTML(o,'flr-fu','font-size:12px')}<span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-x">due ${fmt(o.dueDate)}${o.plannedWeek?' · build '+wkLbl(o.plannedWeek):''}</span>`)).join(''):''}
     </div>`;
   };
   app.innerHTML=`<div class="dsh">
@@ -2880,7 +2887,7 @@ function renderFloor(app){
   const col=(day,label)=>{
     const vehs=DEL_VEH.map(v=>({v,jobs:delAll().filter(o=>o.delVeh===v.k&&o.delDay===day).sort(woCmp)})).filter(x=>x.jobs.length);
     const inner=vehs.length?vehs.map(x=>`<div class="flr-veh"><div class="flr-vh">${escA(x.v.n)}<span>${x.jobs.length} job${x.jobs.length!==1?'s':''}${x.v.sub?' · '+escA(x.v.sub):''}</span></div>
-      ${x.jobs.map(o=>{const st=dStage(o);return`<div class="flr-job"><b>${escA(o.wo)}</b>${(o.floor||o.unit)?`<span class="flr-fu">${escA([o.floor,o.unit].filter(Boolean).join(' · '))}</span>`:''}<span class="flr-t">${escA(o.title)||'—'}<div class="flr-c">${escA(o.customer||'')}</div></span><span class="flr-st s-${st}">${st?dStageLbl[st]+(dStageTime(o)?' '+dStageTime(o):''):'TO LOAD'}</span></div>`;}).join('')}
+      ${x.jobs.map(o=>{const st=dStage(o);return`<div class="flr-job"><b>${escA(o.wo)}</b>${fuHTML(o,'flr-fu')}<span class="flr-t">${escA(o.title)||'—'}<div class="flr-c">${escA(o.customer||'')}</div></span><span class="flr-st s-${st}">${st?dStageLbl[st]+(dStageTime(o)?' '+dStageTime(o):''):'TO LOAD'}</span></div>`;}).join('')}
     </div>`).join(''):`<div class="flr-none">No deliveries planned for ${day}</div>`;
     return `<div class="flr-col"><h2>${label}<span>${day}</span></h2>${inner}</div>`;
   };
@@ -2961,7 +2968,7 @@ function renderDriver(app){
       !jobs.length?`<div class="flr-none">No jobs planned for ${escA(vehLbl(veh))} on ${day}</div>`:`
       <div class="drv-stat"><span><b>${escA(vehLbl(veh))} — ${day}</b> · ${jobs.length} job${jobs.length!==1?'s':''}</span><span>${onVan}/${jobs.length} on van · ${delivd} delivered</span></div>
       ${jobs.map(o=>{const st=dStage(o);return`<div class="drv-job${st==='deliv'?' done':st==='disp'?' disp':st?' on':''}">
-        <div class="drv-ji"><b>${escA(o.wo)}</b>${(o.floor||o.unit)?`<span class="drv-fu">${escA([o.floor,o.unit].filter(Boolean).join(' · '))}</span>`:''}
+        <div class="drv-ji"><b>${escA(o.wo)}</b>${fuHTML(o,'drv-fu')}
           <div class="drv-jt">${escA(o.title)||'—'}</div><div class="drv-jc">${escA(o.customer||'')}${st==='deliv'?' · ✓ delivered '+dStageTime(o)+(o.delivBy?' by '+escA(o.delivBy):''):st==='disp'?' · dispatched '+dStageTime(o):''}</div>${st==='deliv'?'':listStatHTML(o.wo)}</div>
         ${st==='deliv'?`<div style="font-size:28px;color:#0b7e44;flex-shrink:0">✓</div>`:`<div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">
           <button class="drv-tick${st?' on':''}" data-dl="${escA(o.wo)}">${st?'ON VAN ✓':'ON VAN'}</button>
@@ -3062,7 +3069,7 @@ function dchip(o,showCust){
   const st=dStage(o);
   const rd=(!st&&!o.manual)?woReady(o.wo):null; // one colour per job until it's loaded — detail behind the ⓘ button
   return `<div class="dchip${rd?' rdy-'+rd.lvl:''}${st==='deliv'?' done':''}${st==='disp'?' dispd':''}${st==='load'?' loadd':''}${o.manual?' manual':''}${delSel.has(o.wo)?' sel':''}" draggable="true" data-dw="${escA(o.wo)}" title="Click to select · drag onto a day${o.manual?' · added manually':''}">
-    <div class="dchip-top"><b>${escA(o.wo)}</b>${(o.floor||o.unit)?`<span class="dfu">${escA([o.floor,o.unit].filter(Boolean).join(' · '))}</span>`:''}<span class="dcv">€${Math.round(o.value||0).toLocaleString()}</span>
+    <div class="dchip-top"><b>${escA(o.wo)}</b>${fuHTML(o,'dfu')}<span class="dcv">€${Math.round(o.value||0).toLocaleString()}</span>
       <span class="dchip-btns">${rd?`<button class="dinfo" data-dinfo="${escA(o.wo)}" title="${escA(RDY_LBL[rd.lvl]+(rd.why.length?' — '+rd.why.join(' · '):''))} — tap for detail">ⓘ</button>`:''}<button class="dchk${st?' on':''}" data-dd="${escA(o.wo)}" title="Status: ${dStageLbl[st]||'planned'} — tap to update (opens a menu)">${st==='deliv'?'✓':st==='disp'?'D':st==='load'?'L':'·'}</button><button data-dx="${escA(o.wo)}" title="${o.delDay?'Return to pool':(o.manual?'Delete this manual job':'Remove from delivery plan')}">×</button></span>
     </div>
     <div class="dchip-t">${escA(o.title)||'—'}</div>
@@ -3319,10 +3326,10 @@ function openDelArchive(detailKey){
     const rows=[...a.jobs].sort((x,y)=>DEL_DAYS.indexOf(x.d)-DEL_DAYS.indexOf(y.d)||String(x.v).localeCompare(String(y.v))||woCmp({wo:x.wo},{wo:y.wo}));
     detail=`<div style="margin-top:14px;border-top:2px solid var(--border);padding-top:10px">
       <div style="font-weight:700;color:#14335c;margin-bottom:6px">Week archived ${new Date(a.at).toLocaleDateString('en-IE')} — ${a.jobs.length} jobs</div>
-      <table class="lst-tbl"><thead><tr><th>Day</th><th>Vehicle</th><th>WO #</th><th>Floor/Unit</th><th>Title</th><th>Customer</th><th>€</th><th>Loaded</th><th>Dispatched</th><th>Delivered</th></tr></thead><tbody>
-      ${rows.map(j=>`<tr><td>${escA(j.d)||'—'}</td><td>${escA(vehLbl(j.v)||j.v)||'—'}</td><td style="font-family:monospace;font-weight:700">${escA(j.wo)}</td><td>${escA([j.f,j.u].filter(Boolean).join(' · '))}</td><td>${escA(j.t)}</td><td>${escA(j.c)}</td><td>${j.val?j.val.toLocaleString():''}</td>
+      <table class="lst-tbl"><thead><tr><th>Day</th><th>Vehicle</th><th>WO #</th><th>Floor</th><th>Unit</th><th>Title</th><th>Customer</th><th>€</th><th>Loaded</th><th>Dispatched</th><th>Delivered</th></tr></thead><tbody>
+      ${rows.map(j=>`<tr><td>${escA(j.d)||'—'}</td><td>${escA(vehLbl(j.v)||j.v)||'—'}</td><td style="font-family:monospace;font-weight:700">${escA(j.wo)}</td><td>${escA(fuF(j))}</td><td>${escA(fuU(j))}</td><td>${escA(j.t)}</td><td>${escA(j.c)}</td><td>${j.val?j.val.toLocaleString():''}</td>
         <td>${stamp(j.lAt)}${j.lBy?' · '+escA(j.lBy):''}</td><td>${stamp(j.dAt)}</td><td style="color:#0d6e46;font-weight:700">${stamp(j.vAt)}${j.vBy?' · '+escA(j.vBy):''}</td></tr>`).join('')}
-      ${Object.keys(a.notes||{}).filter(d=>(a.notes[d]||'').trim()).map(d=>`<tr><td style="font-weight:700">${escA(d)}</td><td colspan="9" style="font-style:italic;color:var(--t2)">Note: ${escA(a.notes[d])}</td></tr>`).join('')}
+      ${Object.keys(a.notes||{}).filter(d=>(a.notes[d]||'').trim()).map(d=>`<tr><td style="font-weight:700">${escA(d)}</td><td colspan="10" style="font-style:italic;color:var(--t2)">Note: ${escA(a.notes[d])}</td></tr>`).join('')}
       </tbody></table></div>`;
   }
   ov.innerHTML=`<div class="pod-in" style="min-width:min(1050px,95vw)">
@@ -3550,9 +3557,8 @@ function exportSnapshot(){
   const now=new Date();
   const stamp=now.toLocaleDateString('en-IE',{weekday:'short',day:'numeric',month:'short',year:'numeric'})+' '+now.toLocaleTimeString('en-IE',{hour:'2-digit',minute:'2-digit'});
   const weeks=get8Wks();
-  const fuTxt=o=>[o.floor,o.unit].filter(Boolean).join(' · ');
   const rowT=o=>`<tr${o.grp&&DB.grps&&DB.grps[o.grp]?' class="mem"':''}>
-    <td class="mono">${o.delv?'🚚 ':''}${E(o.wo)}</td><td class="mono">${E(fuTxt(o))||'—'}</td>
+    <td class="mono">${o.delv?'🚚 ':''}${E(o.wo)}</td><td class="mono">${E(fuF(o))||'—'}</td><td class="mono">${E(fuU(o))||'—'}</td>
     <td>${E(o.title)}${o.grp&&DB.grps&&DB.grps[o.grp]?`<span class="gtag">${E(DB.grps[o.grp].title)}</span>`:''}</td>
     <td class="cust">${E(o.customer)}</td><td class="r">${o.hours}h</td>
     <td>${o.dueDate?fmt(o.dueDate):'—'}</td><td class="r">€${Math.round(o.value||0).toLocaleString()}</td>
@@ -3564,7 +3570,7 @@ function exportSnapshot(){
     if(!os.length)return'';
     const cnt=os.filter(o=>!isShipped(o)),th=cnt.reduce((a,o)=>a+(+o.hours||0),0),tv=cnt.reduce((a,o)=>a+(+o.value||0),0);
     return `<h2>${E(label)} <span>${cnt.length} jobs · ${Math.round(th*10)/10}h · €${Math.round(tv).toLocaleString()}</span></h2>
-    <table><thead><tr><th>WO #</th><th>Floor·Unit</th><th>Title</th><th>Customer</th><th class="r">Hrs</th><th>Due</th><th class="r">Value</th><th>Step</th></tr></thead>
+    <table><thead><tr><th>WO #</th><th>Floor</th><th>Unit</th><th>Title</th><th>Customer</th><th class="r">Hrs</th><th>Due</th><th class="r">Value</th><th>Step</th></tr></thead>
     <tbody>${os.map(rowT).join('')}</tbody></table>`;
   };
   const knownWks=new Set(weeks);
@@ -3575,7 +3581,7 @@ function exportSnapshot(){
   // delivery grid
   const all=delAll();
   const notes=DB.delNotes||{};
-  const cell=(v,d)=>all.filter(o=>o.delVeh===v&&o.delDay===d).sort(woCmp).map(o=>`<div class="job${o.delDone?' done':''}"><b>${E(o.wo)}</b> ${E(fuTxt(o))}<br>${E(o.title)}<span>${E(o.customer)}</span></div>`).join('');
+  const cell=(v,d)=>all.filter(o=>o.delVeh===v&&o.delDay===d).sort(woCmp).map(o=>`<div class="job${o.delDone?' done':''}"><b>${E(o.wo)}</b> ${E(fuLbl(o))}<br>${E(o.title)}<span>${E(o.customer)}</span></div>`).join('');
   const delHTML=all.length?`<h2 style="margin-top:34px">Delivery Plan <span>${all.length} tagged · week value €${Math.round(all.filter(o=>o.delDay).reduce((a,o)=>a+(+o.value||0),0)).toLocaleString()}</span></h2>
   <table class="dg"><thead><tr><th>Vehicle</th>${DEL_DAYS.map(d=>`<th>${d}</th>`).join('')}</tr></thead><tbody>
   ${DEL_VEH.map(v=>`<tr><td class="veh">${E(v.n)}</td>${DEL_DAYS.map(d=>`<td>${cell(v.k,d)}</td>`).join('')}</tr>`).join('')}
@@ -4314,7 +4320,7 @@ function analyzeImport(input,source){
         const onVan=!!((ex.delv||ex.delLoadedAt||ex.delDispAt)&&!ex.delDelivAt&&!ex.delDone);
         shipped.push({wo:ex.wo,key:r.key,title:ex.title||'',customer:ex.customer||'',cs,onVan});
         if(onVan)inTransit.push({wo:ex.wo,title:ex.title||'',reason:stepInvoiced(cs)?'invoiced':'shipped',veh:vehLbl(ex.delVeh)||'',day:ex.delDay||''});
-        if(!ex.delDispAt&&!ex.delDelivAt&&!ex.delDone)dispGaps.push({wo:ex.wo,title:ex.title||'',customer:ex.customer||'',unit:[ex.floor,ex.unit].filter(Boolean).join(' · '),reason:stepInvoiced(cs)?'invoiced':'shipped'});
+        if(!ex.delDispAt&&!ex.delDelivAt&&!ex.delDone)dispGaps.push({wo:ex.wo,title:ex.title||'',customer:ex.customer||'',floor:ex.floor||'',unit:ex.unit||'',reason:stepInvoiced(cs)?'invoiced':'shipped'});
       }
       // 10 INSTALLED TO BE INVOICE → marked installed on the Shipped tab; 11 COMPLETED AND INVOICED → marked complete
       if(stepInstalled(cs)&&(ex.shippedAt||shipped.some(s=>s.key===r.key))){
@@ -4373,7 +4379,7 @@ function renderImportPreview(plan){
     </div>`:''}
     ${plan.dispGaps.length?`<div style="background:#fdecea;border:2px solid #e57368;border-radius:8px;padding:12px 15px;margin-bottom:12px">
       <div style="font-size:13px;font-weight:700;color:#8a1c10;margin-bottom:6px">⚠ CHECK THESE — Cienapps says shipped/invoiced, but the planner has NO dispatch record:</div>
-      ${plan.dispGaps.map(g=>`<div style="font-size:12px;color:#8a1c10;padding:2px 0"><b style="font-family:monospace">${escA(g.wo)}</b>${g.unit?' · '+escA(g.unit):''} — ${escA(g.title)}${g.customer?' <span style="opacity:.75">('+escA(g.customer)+')</span>':''} <span style="font-weight:700">[${escA(g.reason)} in Cienapps]</span></div>`).join('')}
+      ${plan.dispGaps.map(g=>`<div style="font-size:12px;color:#8a1c10;padding:2px 0"><b style="font-family:monospace">${escA(g.wo)}</b>${fuLbl(g)?' · '+escA(fuLbl(g)):''} — ${escA(g.title)}${g.customer?' <span style="opacity:.75">('+escA(g.customer)+')</span>':''} <span style="font-weight:700">[${escA(g.reason)} in Cienapps]</span></div>`).join('')}
       <div style="font-size:11px;color:#8a1c10;margin-top:6px">If any of these are still in the factory, Cienapps is ahead of reality — fix the status there and get the job on a van.</div>
     </div>`:''}
     ${dc.length||sd.length?`<div id="imp-differs" style="background:#fffbeb;border:2px solid #e8b931;border-radius:8px;padding:12px 15px;margin-bottom:10px">
@@ -4977,7 +4983,7 @@ function openListEditor(listId,presetWo){
   const st={rows:ex?listRows(ex).filter(r=>r.k!=='hdr').map(r=>({...r})):[{k:'saw',item:'',qty:'',L:'',W:'',mat:'',note:''}],
     wo:ex?((ex.wos||[])[0]||''):(presetWo||''),name:ex?ex.name:'',project:ex?ex.project:'',noCut:ex?!!ex.noCut:false,noFit:ex?!!ex.noFit:false,newWO:false,pw:{title:'',cust:'',floor:'',unit:'',due:'',val:'',hrs:''}};
   const live=()=>DB.orders.filter(o=>!o.delDone&&!o.delDelivAt).slice().sort(woCmp);
-  const defName=wo=>{const o=DB.orders.find(x=>x.wo===wo);return o?([o.floor,o.unit].filter(Boolean).join(' ')||o.title||wo):'';};
+  const defName=wo=>{const o=DB.orders.find(x=>x.wo===wo);return o?(fuU(o)||o.title||wo):'';};
   if(!ex&&st.wo){st.name=defName(st.wo);const o=DB.orders.find(x=>x.wo===st.wo);st.project=o?o.customer||'':'';}
   const mats=knownMaterials();
   const ov=document.createElement('div');ov.className='pod-ovl';
@@ -4998,7 +5004,7 @@ function openListEditor(listId,presetWo){
       <div class="me-top">
         <div><label>Work order</label>
           ${st.newWO?`<div style="font-size:12px;color:#5b21b6;font-weight:700;padding:7px 0">New work order ${escA(nextPNumber())} <button class="btn btn-s" id="me-pick" style="font-size:11px;padding:2px 8px">use an existing WO instead</button></div>`
-          :`<div style="display:flex;gap:6px"><select id="me-wo" style="${inp};max-width:360px"><option value="">— pick a work order —</option>${live().map(o=>`<option value="${escA(o.wo)}"${o.wo===st.wo?' selected':''}>${escA(o.wo)} · ${escA([o.floor,o.unit].filter(Boolean).join(' '))} · ${escA((o.title||'').slice(0,34))} · ${escA(o.customer||'')}</option>`).join('')}</select>
+          :`<div style="display:flex;gap:6px"><select id="me-wo" style="${inp};max-width:360px"><option value="">— pick a work order —</option>${live().map(o=>`<option value="${escA(o.wo)}"${o.wo===st.wo?' selected':''}>${escA(o.wo)}${fuLbl(o)?' · '+escA(fuLbl(o)):''} · ${escA((o.title||'').slice(0,34))} · ${escA(o.customer||'')}</option>`).join('')}</select>
             ${ex?'':`<button class="btn btn-s" id="me-new" style="font-size:12px;white-space:nowrap">＋ New P-number</button>`}</div>`}
         </div>
         <div><label>House / list name</label><input id="me-name" value="${escA(st.name)}" placeholder="e.g. House 18" style="${inp};width:170px"></div>
@@ -5162,7 +5168,7 @@ function renderProd(app){
   const missNo=missedJobs().filter(o=>!o.missWhy);
   const moved=all.filter(o=>(o.delMoves||[]).length);
   const dot=l=>`<span class="rdy-dot rdy-${l}"></span>`;
-  const rRow=o=>{const r=rdy(o);return `<div class="dsh-row">${dot(r.lvl)}<b>${escA(o.wo)}</b>${(o.floor||o.unit)?`<span class="flr-fu" style="font-size:12px">${escA([o.floor,o.unit].filter(Boolean).join(' · '))}</span>`:''}<span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-c">${escA(o.customer||'')}</span><span class="dsh-x">${escA(slotLbl(o.delVeh,o.delDay))} · <b class="rdy-t-${r.lvl}">${escA(r.why.join(' · '))}</b></span></div>`;};
+  const rRow=o=>{const r=rdy(o);return `<div class="dsh-row">${dot(r.lvl)}<b>${escA(o.wo)}</b>${fuHTML(o,'flr-fu','font-size:12px')}<span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-c">${escA(o.customer||'')}</span><span class="dsh-x">${escA(slotLbl(o.delVeh,o.delDay))} · <b class="rdy-t-${r.lvl}">${escA(r.why.join(' · '))}</b></span></div>`;};
   const panel=(title,color,inner)=>`<div class="dsh-p"><div class="dsh-ph" style="background:${color}">${title}</div>${inner}</div>`;
   const none=t=>`<div class="dsh-row" style="color:var(--t3);font-style:italic">${t}</div>`;
   const tile=(n,lbl,sub,bad)=>`<div class="dsh-tile" style="border-top:4px solid ${bad?'#c0392b':'#5b6b82'}"><div class="dsh-n" style="color:${bad?'#c0392b':'#14335c'}">${n}</div><div class="dsh-l">${lbl}</div>${sub?`<div class="dsh-s">${sub}</div>`:''}</div>`;
