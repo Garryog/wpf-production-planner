@@ -13,7 +13,7 @@ function defaults(t, r) {
     project_materials: { aliases: [], active: true, sort: 0, version: 1, updated_at: n, updated_by: null },
     lists: { project_id: null, list_type: 'house', type_name: null, is_template: false, template_id: null, template_rev: null, rev: 1, locked: false, sent_at: null,
       wos: [], no_cut: false, no_fit: false, saw_done_at: null, saw_done_by: null, fit_done_at: null, fit_done_by: null, source: 'manual', sdate: null,
-      deliver_by: null, archived: false, log: [], n_saw: 0, n_fit: 0, version: 1, created_at: n, created_by: null, updated_at: n, updated_by: null },
+      deliver_by: null, archived: false, log: [], n_saw: 0, n_fit: 0, check_req: false, checked_by: null, checked_at: null, version: 1, created_at: n, created_by: null, updated_at: n, updated_by: null },
     list_lines: { section: null, part: null, length_mm: null, width_mm: null, qty: null, unit_qty: null, material: null, material_other: false, edging: null, note: null,
       status: 'todo', status_by: null, status_at: null, released_at: null, released_by: null, added_rev: null, changed_rev: null, removed_rev: null,
       src_line_id: null, snag_id: null, mig_sig: null, version: 1, updated_at: n },
@@ -28,12 +28,12 @@ function defaults(t, r) {
 const CHECKS = {
   project_materials: r => ['sheet', 'other'].includes(r.kind),
   lists: r => ['kitchen', 'house', 'room', 'other', 'snag'].includes(r.list_type) && ['excel', 'manual', 'template', 'migrated'].includes(r.source),
-  list_lines: r => ['saw', 'fit', 'hdr'].includes(r.kind) && ['todo', 'cut', 'got-out', 'waiting', 'na'].includes(r.status),
+  list_lines: r => ['saw', 'fit', 'hdr', 'buy'].includes(r.kind) && ['todo', 'cut', 'got-out', 'waiting', 'na'].includes(r.status),
   snags: r => ['saw', 'fit'].includes(r.kind) && ['raised', 'on-list', 'cut', 'on-van', 'delivered', 'placed', 'couldnt-place', 'closed', 'cancelled'].includes(r.status),
 };
 class DbError extends Error { constructor(m, code, detail, hint) { super(m); this.code = code || 'P0001'; this.detail = detail == null ? null : detail; this.hint = hint == null ? null : hint; } }
 // Postgres column types: '' or rubbish in a date / number column is an error, not a blank (the SQL casts with ::date / ::numeric)
-const DATES = ['sdate', 'deliver_by', 'sent_at', 'saw_done_at', 'fit_done_at', 'status_at', 'released_at', 'raised_at'], NUMS = ['length_mm', 'width_mm', 'seq', 'template_rev', 'rev', 'added_rev', 'changed_rev', 'removed_rev', 'n_saw', 'n_fit', 'sort'];
+const DATES = ['sdate', 'deliver_by', 'sent_at', 'checked_at', 'saw_done_at', 'fit_done_at', 'status_at', 'released_at', 'raised_at'], NUMS = ['length_mm', 'width_mm', 'seq', 'template_rev', 'rev', 'added_rev', 'changed_rev', 'removed_rev', 'n_saw', 'n_fit', 'sort'];
 function typeCheck(t, r) {
   DATES.forEach(k => { if (k in r && r[k] != null && (r[k] === '' || isNaN(Date.parse(r[k])))) throw new DbError('invalid input syntax for type date/timestamp: "' + r[k] + '"', '22007'); });
   NUMS.forEach(k => { if (k in r && r[k] != null && (r[k] === '' || typeof r[k] === 'boolean' || isNaN(+r[k]))) throw new DbError('invalid input syntax for type numeric: "' + r[k] + '"', '22P02'); });
@@ -179,6 +179,8 @@ function listSetDone(d, id, mode, on, by, why, cid) {
     update(d, 'lists', r, { [f]: !!on, updated_by: by, log: logAdd(r, { at: now(), by, what: (f === 'no_cut' ? 'No cutting' : 'No fittings') + (on ? ' ticked' : ' unticked'), why }) });
   } else if (mode === 'send') {
     update(d, 'lists', r, { sent_at: r.sent_at || now(), locked: true, updated_by: by, log: logAdd(r, { at: now(), by, what: 'Sent to the saw', why }) });
+  } else if (mode === 'check') { // (4 Nov) "Checked by": on = checked by p_by now; off = the check taken away
+    update(d, 'lists', r, { checked_by: on ? by : null, checked_at: on ? now() : null, updated_by: by, log: logAdd(r, { at: now(), by, what: on ? 'Checked' : 'Check taken away', why }) });
   } else if (mode === 'archive') {
     update(d, 'lists', r, { archived: !!on, updated_by: by, log: logAdd(r, { at: now(), by, what: on ? 'Archived' : 'Brought back from the archive', why }) });
   } else throw new DbError('bad mode ' + mode);
@@ -197,7 +199,7 @@ function saveListRevision(d, pl, lines, expect, by, reason) {
     if (e.id == null || e.id === '') throw new DbError('null value in column "id" of relation "list_lines"', '23502');
     const ex = find(d, 'list_lines', e.id);
     if (ex && r && ex.list_id !== r.id) throw new DbError('duplicate key value violates unique constraint "list_lines_pkey"', '23505');
-    if (!ex && !['saw', 'fit', 'hdr'].includes(e.kind)) throw new DbError('new row violates check constraint', '23514');
+    if (!ex && !['saw', 'fit', 'hdr', 'buy'].includes(e.kind)) throw new DbError('new row violates check constraint', '23514');
   }
   if (!r && pl.one_per_wo) onePerWo(d, pl.wos || [], [pl.id]);
   let retired = null;
@@ -222,10 +224,14 @@ function saveListRevision(d, pl, lines, expect, by, reason) {
     }
   }
   if (!r) {
+    // (4 Nov) a new list waits for its check; a copy of a CHECKED template at that template's revision is checked by its checker
+    const t = pl.source === 'template' && pl.template_id ? d.t.lists.find(x => x.id === pl.template_id && x.is_template && x.checked_at != null && pl.template_rev != null && x.rev === +pl.template_rev) : null;
+    const log0 = [Object.assign({ at: now(), by, what: 'List created', why: reason == null ? null : reason }, pl.replaces ? { replaces: pl.replaces } : {})];
+    if (t) log0.push({ at: now(), by, what: 'Checked', why: 'from template "' + t.name + '" rev ' + t.rev + ', checked by ' + (t.checked_by == null ? '?' : t.checked_by) });
     r = insert(d, 'lists', { id: pl.id, project_id: pl.project_id || null, name: pl.name || '(no name)', list_type: pl.list_type || 'house', type_name: pl.type_name || null,
       is_template: !!pl.is_template, template_id: pl.template_id || null, template_rev: pl.template_rev == null ? null : +pl.template_rev, wos: pl.wos || [],
       no_cut: !!pl.no_cut, no_fit: !!pl.no_fit, source: pl.source || 'manual', sdate: pl.sdate || null, created_by: by, updated_by: by,
-      log: [Object.assign({ at: now(), by, what: 'List created', why: reason == null ? null : reason }, pl.replaces ? { replaces: pl.replaces } : {})] });
+      check_req: true, checked_by: t ? t.checked_by : null, checked_at: t ? now() : null, log: log0 });
     isnew = true; nrev = 1;
   } else {
     nrev = r.rev;
@@ -257,6 +263,7 @@ function saveListRevision(d, pl, lines, expect, by, reason) {
   ['name', 'list_type', 'source'].forEach(k => { if (pl[k] != null) patch[k] = pl[k]; });
   ['project_id', 'type_name', 'sdate', 'deliver_by'].forEach(k => { if (k in pl) patch[k] = pl[k]; });
   ['no_cut', 'no_fit'].forEach(k => { if (pl[k] != null) patch[k] = !!pl[k]; });
+  if (!isnew) Object.assign(patch, { check_req: true, checked_by: null, checked_at: null }); // (4 Nov) an edit must be checked again
   if (!isnew) patch.log = logAdd(r, { at: now(), by, what: nrev > r.rev ? 'Revision ' + nrev : 'List edited', why: reason == null ? null : reason });
   update(d, 'lists', r, patch);
   return { list: clone(r), lines: clone(d.t.list_lines.filter(x => x.list_id === r.id).sort((a, b) => a.seq - b.seq)), retired };

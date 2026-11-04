@@ -21,6 +21,9 @@ Newest at the top. Each block must be run in Supabase BEFORE the matching code g
 - **Added 3 Nov 2026 (list editor):** `list_lines` has a `unit_qty` column — the quantity for ONE unit when a line sits in a unit block ("Side panel 2 per unit × 3 units"). The line's `qty` is still the TOTAL to cut, so the saw, sheet calculator and labels read it exactly as before. A unit heading is a heading line whose `qty` is the number of units. If this block was already run on a test project, the `alter table list_lines add column if not exists unit_qty text;` line below adds the column (safe to run twice). No new table, so no new GRANT lines — the existing `list_lines` grants cover it. Include it in the migration rehearsal.
 - **Added 3 Nov 2026 (Tester round 2 — one live list per work order):** two PCs issuing a list for the same work order at the same moment could each make one, and the saw would cut it twice. The database now refuses the second one. A new helper `lists_one_per_wo` makes the two take turns (a lock per work order) and refuses a second live list (not archived, not a template) for that work order. It is used only by the cutting-list flow — ✓ Confirm, "✓ Use" an Excel upload, and "Create & attach" from a template — so an office can still deliberately put two lists of different kinds (kitchen + wardrobes) on one work order from the editor or "+ WO". A second helper, `lists_one_replacement`, stops "Make new list from this" on two PCs making two replacements of the same old list. `list_attach` gains one optional setting (`p_one`), so the old version is dropped first (only the function, never any data). The new helpers have their own GRANT lines.
 - **Added 3 Nov 2026 (Manager review — "Make new list from this"):** `save_list_revision` now archives the OLD list in the same step that saves the new one, so a lost reply or a closed browser can never leave both lists on the saw. If the old list was changed on another screen after it was copied, the save stops and the person is asked first ("archive it anyway" or "leave it with the saw"). Only the function changes — no table, no data. Safe to run twice. A part in a unit block that is a FIXED total (it doesn't divide by the units) is saved with `unit_qty` = `fixed` (the column is text already — no change needed).
+- **Added 4 Nov 2026 (simple lists for standard production — Aspect / O'Malleys):**
+  - **"Bought in" lines.** A line can now be a fourth kind, `buy` (besides `saw`, `fit` and `hdr`): a panel or item with sizes that is bought in, never cut. The saw, the stores pick list, the sheet calculator, the combined list and the labels only ever read `saw` / `fit` lines, so a bought-in line can never reach them; the office list and print show it as "Bought in". Only the `list_lines` kind check changes (dropped and added again — safe to run twice). No data is touched.
+  - **"Checked by" before the saw.** `lists` gets three columns: `check_req` (this list must be checked before the saw sees it), `checked_by`, `checked_at`. A list made or saved from now on through the app starts as "Waiting for check"; editing a list (a new revision too) clears the check; `list_set_done` has a new mode `check` (on = checked, off = check taken away) that writes the history line; a list confirmed from a template counts as checked only if the template itself is checked (same revision). Lists moved over by "Migrate lists" and snag lists keep `check_req` = false (they reach the saw as before). No new table or function, so no new GRANT lines. Safe to run twice (`add column if not exists`).
 - **The app does not use any of this until Garry presses "Migrate lists" (Admin PIN, Settings).** Until then it runs exactly as today, and makes no calls to these tables. So running this early is harmless.
 
 **If you deploy the code without running this first:** nothing changes on the floor (the switch is off). But "Migrate lists" would fail — so run this first anyway.
@@ -88,11 +91,15 @@ create table if not exists lists(id text primary key, project_id text references
   updated_at timestamptz not null default now(), updated_by text);
 alter table lists add column if not exists n_saw int not null default 0;
 alter table lists add column if not exists n_fit int not null default 0;
+-- 4 Nov: "Checked by" — a list with check_req = true reaches the saw only once checked (Drawing office / PM / Admin)
+alter table lists add column if not exists check_req boolean not null default false;
+alter table lists add column if not exists checked_by text;
+alter table lists add column if not exists checked_at timestamptz;
 create index if not exists lists_upd on lists(updated_at);
 create index if not exists lists_wos on lists using gin(wos);
 
 create table if not exists list_lines(id text primary key, list_id text not null references lists(id), seq int not null,
-  kind text not null check(kind in('saw','fit','hdr')), section text, part text,
+  kind text not null check(kind in('saw','fit','hdr','buy')), section text, part text,
   length_mm numeric, width_mm numeric, qty text, unit_qty text, material text, material_other boolean not null default false,
   edging text, note text,
   status text not null default 'todo' check(status in('todo','cut','got-out','waiting','na')),
@@ -102,6 +109,9 @@ create table if not exists list_lines(id text primary key, list_id text not null
   version int not null default 1, updated_at timestamptz not null default now());
 alter table list_lines add column if not exists mig_sig text;
 alter table list_lines add column if not exists unit_qty text;    -- list editor (3 Nov): per-unit quantity in a unit block; qty stays the total
+-- 4 Nov: a 'buy' line = bought in (has sizes, never cut, never picked): only the office list shows it
+alter table list_lines drop constraint if exists list_lines_kind_check;
+alter table list_lines add constraint list_lines_kind_check check(kind in('saw','fit','hdr','buy'));
 create index if not exists ll_list on list_lines(list_id);
 create index if not exists ll_upd on list_lines(updated_at);
 
@@ -300,7 +310,8 @@ end $$;
 grant execute on function list_attach(text,text,boolean,text,text,boolean) to anon, authenticated, service_role;
 
 -- Sign-offs and flags (build note g). p_mode: 'saw' | 'fit' (sign-off; off = send back / undo) | 'no_cut' | 'no_fit'
--- | 'send' (Send to saw: locks the list) | 'archive' (Delete on the Lists tab — the list is hidden, never deleted). The database writes the history line, never the browser.
+-- | 'send' (Send to saw: locks the list) | 'archive' (Delete on the Lists tab — the list is hidden, never deleted)
+-- | 'check' (4 Nov: on = "Checked" by p_by now — the saw sees the list; off = the check taken away). The database writes the history line, never the browser.
 -- p_cid: the device's id for this tap — the same tap sent again (reply lost) changes nothing and adds no history.
 create or replace function list_set_done(p_list text, p_mode text, p_on boolean, p_by text, p_why text default null, p_cid text default null) returns jsonb language plpgsql as $$
 declare r lists%rowtype; what text;
@@ -326,6 +337,9 @@ begin
  elsif p_mode='send' then -- 'Send to saw': the list locks; later edits are revisions
   update lists set sent_at=coalesce(sent_at,now()), locked=true, updated_by=p_by,
     log=log||jsonb_build_array(jsonb_build_object('at',now(),'by',p_by,'what','Sent to the saw','why',p_why)) where id=p_list returning * into r;
+ elsif p_mode='check' then
+  update lists set checked_by=case when p_on then p_by end, checked_at=case when p_on then now() end, updated_by=p_by,
+    log=log||jsonb_build_array(jsonb_build_object('at',now(),'by',p_by,'what',case when p_on then 'Checked' else 'Check taken away' end,'why',p_why)) where id=p_list returning * into r;
  elsif p_mode='archive' then
   update lists set archived=p_on, updated_by=p_by,
     log=log||jsonb_build_array(jsonb_build_object('at',now(),'by',p_by,'what',case when p_on then 'Archived' else 'Brought back from the archive' end,'why',p_why)) where id=p_list returning * into r;
@@ -348,8 +362,11 @@ grant execute on function list_set_done(text,text,boolean,text,text,text) to ano
 -- differ now (changed on another screen), the save is refused with 'replaced list changed' unless
 -- p_list.replaces_force = true (the person said "archive it anyway") or p_list.replaces_keep = true (leave it with the saw).
 -- The answer says what happened to the old list: retired = 'archived' | 'already' (archived before) | 'missing' | 'kept'.
+-- (4 Nov) "Checked by": a new list starts as waiting for its check (check_req) — except a list made from a template
+-- (source 'template') at the template's current revision when that template is checked: it is checked by the template's
+-- checker. Saving an existing list (an edit or a new revision) always clears the check: it must be checked again.
 create or replace function save_list_revision(p_list jsonb, p_lines jsonb, p_expect int, p_by text, p_reason text) returns jsonb language plpgsql as $$
-declare r lists%rowtype; e jsonb; nrev int; ids text[]:='{}'; ex list_lines%rowtype; isnew boolean:=false; o lists%rowtype; retired text; now_lines jsonb;
+declare r lists%rowtype; e jsonb; nrev int; ids text[]:='{}'; ex list_lines%rowtype; isnew boolean:=false; o lists%rowtype; retired text; now_lines jsonb; t lists%rowtype;
 begin
  perform lists_switch_on();
  select * into r from lists where id=p_list->>'id' for update;
@@ -375,13 +392,20 @@ begin
     retired:='archived';
    end if;
   end if;
-  insert into lists(id,project_id,name,list_type,type_name,is_template,template_id,template_rev,wos,no_cut,no_fit,source,sdate,created_by,updated_by,log)
+  -- (4 Nov) a new list waits for its check; a copy of a CHECKED template (at that template's revision) is checked by the
+  -- template's checker
+  select * into t from lists where id=p_list->>'template_id' and is_template and checked_at is not null
+    and coalesce(p_list->>'source','')='template' and rev=(p_list->>'template_rev')::int;
+  insert into lists(id,project_id,name,list_type,type_name,is_template,template_id,template_rev,wos,no_cut,no_fit,source,sdate,created_by,updated_by,check_req,checked_by,checked_at,log)
    values(p_list->>'id',p_list->>'project_id',coalesce(p_list->>'name','(no name)'),coalesce(p_list->>'list_type','house'),p_list->>'type_name',
      coalesce((p_list->>'is_template')::boolean,false),p_list->>'template_id',(p_list->>'template_rev')::int,
      coalesce(array(select jsonb_array_elements_text(p_list->'wos')),'{}'),coalesce((p_list->>'no_cut')::boolean,false),coalesce((p_list->>'no_fit')::boolean,false),
      coalesce(p_list->>'source','manual'),(p_list->>'sdate')::date,p_by,p_by,
+     true,t.checked_by,case when t.id is not null then now() end,
      jsonb_build_array(jsonb_build_object('at',now(),'by',p_by,'what','List created','why',p_reason)
-       || case when coalesce(p_list->>'replaces','')<>'' then jsonb_build_object('replaces',p_list->>'replaces') else '{}'::jsonb end))
+       || case when coalesce(p_list->>'replaces','')<>'' then jsonb_build_object('replaces',p_list->>'replaces') else '{}'::jsonb end)
+     || case when t.id is not null then jsonb_build_array(jsonb_build_object('at',now(),'by',p_by,'what','Checked',
+          'why','from template "'||t.name||'" rev '||t.rev||', checked by '||coalesce(t.checked_by,'?'))) else '[]'::jsonb end)
    returning * into r;
   isnew:=true; nrev:=1;
  else
@@ -434,6 +458,8 @@ begin
    deliver_by=case when p_list ? 'deliver_by' then (p_list->>'deliver_by')::date else deliver_by end,
    n_saw=(select count(*) from list_lines x where x.list_id=r.id and x.removed_rev is null and x.kind='saw'),
    n_fit=(select count(*) from list_lines x where x.list_id=r.id and x.removed_rev is null and x.kind='fit'),
+   check_req=case when isnew then check_req else true end,                 -- (4 Nov) an edit must be checked again
+   checked_by=case when isnew then checked_by else null end, checked_at=case when isnew then checked_at else null end,
    log=case when isnew then log else log||jsonb_build_array(jsonb_build_object('at',now(),'by',p_by,
      'what',case when nrev>r.rev then 'Revision '||nrev else 'List edited' end,'why',p_reason)) end
   where id=r.id returning * into r;
