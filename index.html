@@ -5238,8 +5238,12 @@ function phHas(o){return phList(o).length>0;}
 function phDone(o,m){const d=o&&o.photoDone&&typeof o.photoDone==='object'?o.photoDone[m]:null;return d&&d.at?d:null;}
 // jobs on the saw / stores "Photo list" cards: photos attached, still live (not delivered, shipped or on hold)
 function phJobs(){return DB.orders.filter(o=>phHas(o)&&!woFinished(o)&&!isOnHold(o)&&!o.delDelivAt&&!o.delDone);}
+// upload errors in plain words: no signal (Chrome "Failed to fetch", Safari "Load failed", …) never shows as a technical message
+function phErr(e){const m=String((e&&e.message)||e||'');
+  return LS_LOST_RE.test(m.trim())||/Failed to fetch|NetworkError|Load failed|network/i.test(m)?'no connection — check the signal and try again':m;}
 async function phPut(blob,path,type){ // one file into the bucket — the tests answer this request with a fake server
-  const r=await fetch(SUPA_STORE+'/object/'+PH_BUCKET+'/'+path,{method:'POST',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':type,'x-upsert':'false'},body:blob});
+  let r;try{r=await fetch(SUPA_STORE+'/object/'+PH_BUCKET+'/'+path,{method:'POST',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':type,'x-upsert':'false'},body:blob});}
+  catch(e){throw new Error(phErr(e));}
   if(!r.ok){let t='';try{t=await r.text();}catch(e){}
     throw new Error(r.status===404||/bucket not found/i.test(t)?'the photo store isn\'t set up yet (the "list-photos" SQL in SUPABASE_CHANGES.md)':'upload refused (HTTP '+r.status+')');}
   return SUPA_STORE+'/object/public/'+PH_BUCKET+'/'+path;
@@ -5249,17 +5253,24 @@ async function phAdd(wo,files,by){
   const ok=files.filter(f=>/^image\//i.test(f.type||'')||/pdf$/i.test(f.type||'')||/\.pdf$/i.test(f.name||''));
   if(ok.length<files.length)throw new Error('only photos (jpg / png) or a PDF can be attached');
   if(ok.some(f=>f.size>15e6))throw new Error('that file is too big (over 15 MB)');
-  let n=0;
+  // One file at a time. If the signal drops half way, the photos that DID land are kept, with a history line, and the
+  // caller is told honestly ("1 of 2 photos attached"): {n, of, err}. Nothing landed → the error is thrown as before.
+  let n=0,err=null;
   for(const f of ok){
-    const pdf=/pdf$/i.test(f.type||'')||/\.pdf$/i.test(f.name||'');
-    const blob=pdf?f:await shrinkImage(f);
-    const url=await phPut(blob,String(wo).replace(/[^A-Za-z0-9-]/g,'-')+'/'+Date.now()+'-'+Math.floor(Math.random()*1e6)+(pdf?'.pdf':'.jpg'),pdf?'application/pdf':'image/jpeg');
-    const o=DB.orders.find(x=>x.wo===wo);if(!o)throw new Error(wo+' is no longer on the planner');
-    o.listPhotos=phList(o).concat([Object.assign({url,at:nowISO(),by},pdf?{pdf:true}:{})]);n++;
+    try{
+      const pdf=/pdf$/i.test(f.type||'')||/\.pdf$/i.test(f.name||'');
+      const blob=pdf?f:await shrinkImage(f);
+      const url=await phPut(blob,String(wo).replace(/[^A-Za-z0-9-]/g,'-')+'/'+Date.now()+'-'+Math.floor(Math.random()*1e6)+(pdf?'.pdf':'.jpg'),pdf?'application/pdf':'image/jpeg');
+      const o=DB.orders.find(x=>x.wo===wo);if(!o)throw new Error(wo+' is no longer on the planner');
+      // no photo before this one: any old CUT COMPLETE / FITTINGS PICKED tick belongs to a photo that is gone — start uncut
+      if(!phHas(o))delete o.photoDone;
+      o.listPhotos=phList(o).concat([Object.assign({url,at:nowISO(),by},pdf?{pdf:true}:{})]);n++;
+    }catch(e){err=e;break;}
   }
   const o=DB.orders.find(x=>x.wo===wo);
-  if(o){logEdit(o,'Cutting list: '+(n===1?'a photo':n+' photos')+' of the list attached (the saw and stores can open '+(n===1?'it':'them')+')',by);sched();}
-  return n;
+  if(o&&n){logEdit(o,'Cutting list: '+(n===1?'a photo':n+' photos')+' of the list attached'+(n<ok.length?' ('+n+' of '+ok.length+' — the rest did not upload)':'')+' (the saw and stores can open '+(n===1?'it':'them')+')',by);sched();}
+  if(err&&!n)throw new Error(phErr(err));
+  return{n,of:ok.length,err:err?phErr(err):''};
 }
 function phRemove(wo,url,by){
   const o=DB.orders.find(x=>x.wo===wo);if(!o)return;
@@ -5275,8 +5286,10 @@ function phPick(wo,after){
     document.body.appendChild(f);
     f.onchange=async()=>{const fs=[...f.files];f.remove();if(!fs.length)return;
       toast('Uploading '+(fs.length===1?'the photo':fs.length+' photos')+'…');
-      try{const n=await phAdd(wo,fs,by);toast(wo+' — '+(n===1?'photo':n+' photos')+' of the list attached ✓ The saw and stores can open '+(n===1?'it':'them')+'.');}
-      catch(e){toast('Photo NOT attached — '+e.message,true);}
+      try{const r=await phAdd(wo,fs,by),n=r.n;
+        if(r.err)toast(wo+' — only '+n+' of '+r.of+' photos attached. The other'+(r.of-n===1?' one was':' '+(r.of-n)+' were')+' NOT attached ('+r.err+').',true);
+        else toast(wo+' — '+(n===1?'photo':n+' photos')+' of the list attached ✓ The saw and stores can open '+(n===1?'it':'them')+'.');}
+      catch(e){toast('Photo NOT attached — '+phErr(e),true);}
       if(after)after();else render();};
     f.click();});
 }
