@@ -21,7 +21,7 @@ const lines = (S, id) => S.db.t.list_lines.filter(x => x.list_id === id && x.rem
   await off.page.evaluate(() => document.querySelector('[data-tplatt^="T1|WO-1"]').click());
   await F.sleep(400);
   const dlg = await off.page.evaluate(() => { const o = document.querySelector('.pod-ovl'); return o ? { name: o.querySelector('#tp-name').value, wos: [...o.querySelectorAll('[data-tpwo]')].map(c => c.dataset.tpwo + (c.checked ? '+' : '')).join(','), rows: o.querySelectorAll('.wl-tbl tbody tr').length } : null; });
-  rec('preview: WO-1 ticked, WO-2 (same project, no list) offered, name filled in, template lines shown', dlg && dlg.wos === 'WO-1+,WO-2' && dlg.name === 'GF 1' && dlg.rows === 4, JSON.stringify(dlg));
+  rec('preview: WO-1 ticked, WO-2 (same project, no list) offered, name filled in (the unit — floor kept apart, Garry 4 Nov), template lines shown', dlg && dlg.wos === 'WO-1+,WO-2' && dlg.name === '1' && dlg.rows === 4, JSON.stringify(dlg));
   await off.page.evaluate(() => document.getElementById('tp-go').click());
   await F.sleep(600);
   const live = S.db.t.lists.find(l => l.template_id === 'T1');
