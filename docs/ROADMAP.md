@@ -115,6 +115,8 @@ Rules: rank by the leading number. "Shipped" = step 9 only (left the factory →
 
 - (4 Nov, Garry) Be more aware of SIMPLEST use, especially for production and stores. REMOVE the "Paper list issued" option. Maybe allow attaching a PHOTO of a list instead. In the cutting list rename "Colour" to "Material".
 
+- (4 Nov, Garry, answers) Photo of a list REPLACES the paper option: on a WO with no typed list, attach a photo (phone camera or file); the saw must be able to open it; it is a stop-gap to be removed later once the typed system is in place (keep it simple, easy to switch off). Docket cancel ASKS "Did these items leave stores?" (Yes = stay got out; No = back to 'to pick'). Dockets are for FITTINGS (stores items) only for now — cutting-list (saw) items are not docketed, so no per-WO quantity split is needed.
+
 ## Progress log
 ### 2 Nov 2026 (scheduled run)
 - Architect confirmed the cutting-list plan against the code; build notes and build order added to docs/PLAN-cutting-lists-stage3.md (fixed garbled characters in both plan files).

@@ -77,3 +77,5 @@ D0 SQL + mock (tests/stores-docket/). D1 make_docket / delivered / cancel, tests
 1. Items already ticked "got out" do NOT appear in "Send to site" (no "Show got out" toggle). Only items not yet got out.
 2. Site address: each project has an address, used as the DEFAULT on the docket; the docket also has a free "Delivery instructions" box (per docket) and a signature/received-by block.
 3. PART quantities ARE allowed: type how many of a line go on this docket; the rest stay to send (and show "10 of 20 sent"). The database keeps the sent-so-far per line and refuses sending more than the line's quantity; the line is "got out" only when the full quantity has been sent.
+4. (4 Nov, later) Dockets are for FITTINGS (stores + bought-in items) only for now; saw/cutting-list items are not docketed. The per-WO quantity split (Tester A9) is NOT built; a multi-WO list shows its WOs listed on the row.
+5. Cancel asks "Did these items leave stores?" — Yes: items stay got out and only the docket is voided; No: items go back to "to pick".
