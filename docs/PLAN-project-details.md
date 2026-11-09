@@ -133,3 +133,37 @@ one (Q2); the SQL not yet run (sheet hidden, nothing breaks).
 
 ---
 ## Progress log
+
+### 9 Nov 2026 (evening run 1) — all four items built, Tester round 1 fixed, Manager GO WITH CONDITIONS
+- **Architect:** this plan. Built with the recommended answer to Q1–Q5 (unattended run) — Garry still to confirm them.
+- **Coder** (8581e18, 4bd…/HEAD~2, 6275cf0, 816583e):
+  - Pending SQL block "Project details" at the top of SUPABASE_CHANGES.md (`project_spec_items` + `project_events`,
+    rules + history triggers, GRANTs, no DELETE). Run twice on a throwaway Postgres; tests/project-details/pg-check.sql
+    ALL PG CHECKS PASSED (fresh database and upgrade of the earlier draft). Fake database: tests/project-details/dbp.js / srvp.js.
+  - Item 1: Project details window (`lsSpecDlg`), checklist per project type, material / edging drop-downs, sign-off,
+    un-sign, extra items, History, Print; red chip on the list window, saw and stores cards, Lists page, PM tab;
+    red banner + spec block on printed saw/stores sheets. Hidden quietly until the SQL is run.
+  - Item 2: Floor / Unit / Title / Customer editable in the list window (`woInfoEdHTML`, `jobInfoSet`, `o.pov`);
+    import keeps the planner value and clears it when Cienapps catches up; job history; Export Changes "Job details"
+    section + Excel sheet.
+  - Item 3: 🧱 Materials and 📝 Project details on the Lists page toolbar and project headers; ✎ Project details and
+    Materials beside the Project picker.
+  - Item 4: `lsMatEditOk` — PM, Office, Production Manager, Drawing office edit materials without a PIN; Saw, Stores,
+    Drivers, Floor read-only; Management keeps the PIN. PM view has a new 🏗 Projects tab.
+- **Tester round 1** (attack1-merge / -spec / -phone / -pg): 1 High, 4 Medium, 6 Low. All fixed except 1c (an OLD-version
+  tab running a Cienapps import overwrites a planner correction) → added to ACCEPTED-FAILURES (close every screen on
+  go-live day), Garry to confirm.
+- **Full suite** (HEAD 816583e, 181 files, one at a time): 3,309 pass / 38 fail. Baseline (feature/list-excel-template):
+  3,206 pass / 26 fail. Every baseline failure is the same; the new ones:
+  - attack1-merge 1c (accepted-failures, pending Garry);
+  - 11 checks in OLD tests that test the rules Garry changed on 9 Nov — they expect the office to need a PIN to add a
+    material (stage3 s1s3-screens ×2, attack2-screens G1/G7, s4-editor ×2, editor e5-columns ×3) and the Floor / Unit /
+    Title / Customer boxes to be read-only text (stage3 coder-wo-cols ×2). **Next run: Tester rewrites these to the new
+    rule** (office/PM add materials without a PIN; boxes editable), then re-run the full suite.
+  - e7 redraw timing (also slow on the baseline run — two suites ran side by side).
+- **Manager:** item 3 GO; item 4 GO (once Garry confirms Q3); items 1 and 2 GO WITH CONDITIONS (SQL first, Garry's answers
+  to Q1/Q2/Q5, 1c accepted, every screen closed and reopened at release). Release order: list-excel-template first,
+  then this branch; Stage 3 SQL, then Project details SQL.
+- **Waiting on Garry:** Q1–Q5 above; yes/no on the 1c accepted-failure row.
+- **Next run:** Tester updates the 11 old checks + attacks the Materials window at 360 px; full suite; Manager final verdict;
+  then screenshots and the final summary.
