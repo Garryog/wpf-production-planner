@@ -202,8 +202,8 @@ button,input,select{font-family:inherit;cursor:pointer}
 .spec-ro{padding:4px 0;font-size:13px}.spec-act{white-space:nowrap}
 .pjh-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;border-bottom:1px solid var(--b2);padding:8px 2px}.pjh-n{flex:1;min-width:200px}.pjh-n span{font-size:12px;color:var(--t3);margin-left:6px}.pjh-n .spec-chip{color:#fff;margin-left:0;display:inline-block}.pjh-b{display:flex;gap:6px;flex-wrap:wrap}
 .pp-list{display:flex;flex-direction:column;gap:6px;max-height:55vh;overflow:auto}.pp-b{text-align:left;padding:10px 12px;border:1px solid var(--b2);border-radius:6px;background:#fff;font-size:14px;cursor:pointer}.pp-b span{font-size:12px;color:var(--t3)}
-.wo-ed{padding:6px 8px;border:1px solid var(--b2);border-radius:6px;font-size:13px;color:#14335c;min-height:33px;box-sizing:border-box;width:0;min-width:100%;background:#fff}.wo-ed.wo-ov{border-color:#e0a43a;background:#fff8e6}.wo-ovn{font-size:11px;color:#8a5a00;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.wo-ovn button{border:none;background:none;color:#1a56db;cursor:pointer;font-size:11px;padding:0 2px;text-decoration:underline}
-@media(max-width:699px){.spec-tbl thead{display:none}.spec-tbl,.spec-tbl tbody,.spec-tbl tr,.spec-tbl td{display:block;width:100%;box-sizing:border-box}.spec-tbl tr{border:1px solid var(--b2);border-radius:6px;margin-bottom:8px;padding:6px}.spec-tbl td{border:none!important;padding:3px 2px}.spec-tbl td[data-l]:not([data-l=""])::before{content:attr(data-l);display:block;font-size:11px;color:var(--t3);font-weight:700}.spec-tbl .btn{min-height:40px}.spec-tbl select,.spec-tbl input{min-height:40px;font-size:15px}.pjh-b .btn{min-height:40px}}
+.wo-ed{padding:6px 8px;border:1px solid var(--b2);border-radius:6px;font-size:13px;color:#14335c;min-height:33px;box-sizing:border-box;width:0;min-width:100%;background:#fff}.wo-ed.wo-ov{border-color:#e0a43a;background:#fff8e6}.wo-ovn{font-size:11px;color:#8a5a00;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.wo-ovn button{min-width:28px;min-height:24px;border:none;background:none;color:#1a56db;cursor:pointer;font-size:11px;padding:0 2px;text-decoration:underline}
+@media(max-width:699px){.wo-ovn button{min-width:44px;min-height:40px;font-size:14px}.spec-tbl thead{display:none}.spec-tbl,.spec-tbl tbody,.spec-tbl tr,.spec-tbl td{display:block;width:100%;box-sizing:border-box}.spec-tbl tr{border:1px solid var(--b2);border-radius:6px;margin-bottom:8px;padding:6px}.spec-tbl td{border:none!important;padding:3px 2px}.spec-tbl td[data-l]:not([data-l=""])::before{content:attr(data-l);display:block;font-size:11px;color:var(--t3);font-weight:700}.spec-tbl .btn{min-height:40px}.spec-tbl select,.spec-tbl input{min-height:40px;font-size:15px}.pjh-b .btn{min-height:40px}}
 .tbc-chip{display:inline-block;margin-left:4px;font-size:11px;font-weight:800;border-radius:4px;padding:1px 6px;background:#c0392b;color:#fff;white-space:normal;vertical-align:middle}
 .tbc-cell{color:#c0392b!important;font-weight:800}
 .buy-chip{display:inline-block;margin-left:4px;font-size:10px;font-weight:800;border-radius:4px;padding:1px 6px;background:#e3f4f8;color:#0b5566;border:1px solid #7cc3d3;white-space:nowrap}
@@ -2245,13 +2245,13 @@ function woInfoHTML(o){const b=(k,l,v)=>`<div class="${k}"><label>${l}</label><d
    clears the override by itself. Planner work orders (P-numbers) aren't in Cienapps: edited directly, never listed. */
 const POV_F={floor:'Floor',unit:'Unit',title:'Title',customer:'Customer'};
 function povVal(o,k){return k==='floor'?fuF(o):k==='unit'?fuU(o):String((o&&o[k])==null?'':o[k]).trim();}
-function povList(){const out=[];DB.orders.forEach(o=>{if(!o||!o.pov||/^P-\d+$/.test(o.wo))return;Object.keys(POV_F).forEach(k=>{const v=o.pov[k];if(v&&typeof v==='object')out.push({o,k,cien:String(v.cien==null?'':v.cien),now:povVal(o,k),by:v.by||'',at:v.at||''});});});
+function povList(){const out=[];DB.orders.forEach(o=>{if(!o||!o.pov||/^P-\d+$/.test(o.wo))return;Object.keys(POV_F).forEach(k=>{const v=o.pov[k];if(v&&typeof v==='object'&&String(v.cien==null?'':v.cien).trim()!==povVal(o,k))out.push({o,k,cien:String(v.cien==null?'':v.cien),now:povVal(o,k),by:v.by||'',at:v.at||''});});});
   return out.sort((a,b)=>String(a.o.wo).localeCompare(String(b.o.wo),undefined,{numeric:true})||Object.keys(POV_F).indexOf(a.k)-Object.keys(POV_F).indexOf(b.k));}
 function povSheet(){const ws=XLSX.utils.aoa_to_sheet([['WO #','Field','Cienapps says','Planner value (enter in Cienapps)','Changed by','Changed at'],...povList().map(x=>[x.o.wo,POV_F[x.k],x.cien,x.now,x.by,x.at?new Date(x.at).toLocaleString('en-IE'):''])]);ws['!cols']=[{wch:16},{wch:10},{wch:34},{wch:34},{wch:18},{wch:20}];return ws;}
 function povClear(o,k){if(!o.pov)return;delete o.pov[k];if(!Object.keys(o.pov).length)delete o.pov;logEdit(o,'Cienapps now has the planner\'s '+POV_F[k]+' — no longer on Export Changes','(import)');}
 function jobInfoSet(o,k,v){
   if(!o||!POV_F[k])return false;v=String(v==null?'':v).replace(/\s+/g,' ').trim();
-  if(k==='title'&&!v){toast('A job needs a title — not changed');return false;}
+  if((k==='title'||k==='customer')&&!v){toast('A job needs a '+k+' — not changed');return false;}
   const old=povVal(o,k);if(v===old)return false;
   const by=lqBy(''),at=nowISO(),isP=/^P-\d+$/.test(o.wo);
   let cien=null;
@@ -2271,7 +2271,7 @@ function woInfoEdHTML(o){if(!o)return woInfoHTML(o);
 function woInfoBind(root,o){if(!root||!o)return;
   const redo=()=>{root.innerHTML=woInfoEdHTML(o);woInfoBind(root,o);};
   root.querySelectorAll('[data-woe]').forEach(i=>i.onchange=()=>{const k=i.dataset.woe;
-    if(k==='customer'&&i.value.trim()&&!confirm('Change the customer of '+o.wo+' to "'+i.value.trim()+'"?\n\nThe customer decides which project the job belongs to (its materials and project details). Cienapps is not changed — the change is listed in Export Changes for Cienapps.')){redo();return;}
+    if(k==='customer'&&i.value.trim()&&!confirm('Change the customer of '+o.wo+' to "'+i.value.trim()+'"?\n\nThe customer decides which project the job belongs to (materials and project details for NEW lists; lists already made stay on their project). Cienapps is not changed — the change is listed in Export Changes for Cienapps.')){redo();return;}
     if(jobInfoSet(o,k,i.value))toast(POV_F[k]+' saved on '+o.wo+(/^P-\d+$/.test(o.wo)?'':' — listed in Export Changes for Cienapps'));redo();});
   root.querySelectorAll('[data-woundo]').forEach(b=>b.onclick=()=>{const k=b.dataset.woundo,pv=o.pov&&o.pov[k];if(!pv)return;
     if(jobInfoSet(o,k,pv.cien||''))toast(POV_F[k]+' back to the Cienapps value');redo();});}
@@ -3550,6 +3550,7 @@ async function specLoad(full){ // called by the list store's load and poll; one 
     const was=SPECP.st;SPECP.st='ok';return n+(was!=='ok'?1:0);}
   catch(e){if(specMissing(e))SPECP.st='missing';else if(SPECP.st!=='ok'){SPECP.st='net';SPECP.retry=Date.now()+60000;}return 0;}
 }
+const SPEC_TBC=/^(t\.?\s*b\.?\s*c\.?|t\.?\s*b\.?\s*a\.?|to be (confirmed|advised))$/i; // all mean not signed off (the database says the same)
 const specNorm=s=>String(s==null?'':s).normalize('NFKC').replace(/\s+/g,' ').trim().toLowerCase();
 const specIsOther=item=>/^other\s*info/i.test(String(item||'').trim());
 function specKind(item){const s=String(item||'');if(specIsOther(s))return'note';if(/edg(e)?ing/i.test(s))return'edge';if(/material|worktop\s*colou?r/i.test(s))return'mat';return'text';}
@@ -3577,26 +3578,35 @@ document.addEventListener('click',e=>{const b=e.target&&e.target.closest&&e.targ
 // Who may change values / sign off (Garry's answers 1 and 3 — recommended defaults, see the plan)
 function specRO(){return['saw','stores','driver','floor'].includes(ROLE);}
 function specEditOk(){if(['pm','office','prod','design'].includes(ROLE))return true;if(specRO()){toast('Project details are read-only on this screen');return false;}return lsEditOk();}
-function specSignOk(){if(['pm','prod','design'].includes(ROLE))return true;if(specRO()){toast('Project details are read-only on this screen');return false;}return lsPinOk('Signing off the project details');}
+function specSignOk(){if(['pm','prod','design'].includes(ROLE))return true;if(specRO()){toast('Project details are read-only on this screen');return false;}
+  const p=pins(),ok=v=>!!v&&[p.pm,p.prod,p.design,p.admin].includes(v);if(ok(ls.get('wpfSignPin'))||ok(ls.get('wpfEditPin')))return true;
+  const v=prompt('Signing off the project details needs the Project Manager, Drawing office, Production Manager or Admin PIN.\n\nEnter the PIN:','');
+  if(v===null)return false;if(!ok(v.trim())){toast('Wrong PIN — not signed off');return false;}ls.set('wpfSignPin',v.trim());return true;}
 function specWho(){const w=String(whoNow()||'').trim();if(w)return w;return opName('Sign off');}
 async function specFresh(pid){lsPut('project_spec_items',await lsGet('project_spec_items?select=*&project_id=eq.'+encodeURIComponent(pid)),true);}
 // Save one item: a version-checked change of the row this screen showed, or a new row the first time the item is edited
 async function specSave(pid,e,patch){
   if(e.row)return lsWrite('project_spec_items',e.row,patch);
   try{return await lsWrite('project_spec_items',{id:uid('SP'),project_id:pid,item:e.item,sort:e.extra?e.sort:e.sort,is_extra:!!e.extra,...patch});}
-  catch(x){if(/already used/.test(x.message)){await specFresh(pid).catch(()=>{});throw new Error(e.extra?'there is already an item called "'+e.item+'" on this sheet':'changed on another screen meanwhile — showing it as it is now, try again');}throw x;}
+  catch(x){if(/already used/.test(x.message)){await specFresh(pid).catch(()=>{});
+      const got=[...LST.ps.values()].find(r=>r.project_id===pid&&specNorm(r.item)===specNorm(e.item));
+      if(got&&!e.extra&&specNorm(got.value)===specNorm(patch.value))return got; // our own save landed earlier (its reply was lost)
+      throw new Error(e.extra?'there is already an item called "'+e.item+'" on this sheet':'changed on another screen meanwhile — showing it as it is now, try again');}
+    await specFresh(pid).catch(()=>{}); // no reply (bad signal): it may have landed — show what the database has so a retry changes that row
+    throw /fetch|network/i.test(x.message)?new Error('no reply from the database — check what is shown now and try again'):x;}
 }
 function specStHTML(e){const s=specSt(e),r=e.row;
   if(specIsOther(e.item))return '<span class="spec-st spec-note">notes</span>';
   if(s==='signed-off')return `<span class="spec-st spec-ok">✓ Signed off</span><div class="spec-by">${escA(r.signed_by||'?')} · ${escA(fmt(r.signed_at))}</div>`;
   if(s==='proposed')return '<span class="spec-st spec-prop">Proposed</span>';
   return '<span class="spec-st spec-no">NOT SIGNED OFF</span>';}
-const SPEC_DLG={draw:null,el:null};
+const SPEC_DLG={draw:null,el:null,pend:false};
 function lsSpecDlg(pid){
   if(!specVis())return;const p0=LST.p.get(pid);if(!p0)return;
   const ro=specRO();
   const ov=lsDlg('<div id="sp-body"></div>',920);SPEC_DLG.el=ov;
   ov.addEventListener('click',e=>{if(e.target===ov||e.target.id==='pod-x'){SPEC_DLG.draw=null;SPEC_DLG.el=null;}});
+  ov.addEventListener('focusout',()=>setTimeout(()=>{if(!SPEC_DLG.pend||SPEC_DLG.el!==ov)return;const a=document.activeElement;if(a&&ov.contains(a)&&a.matches('[data-spv],#sp-new')&&a.value!==a.defaultValue)return;SPEC_DLG.pend=false;if(SPEC_DLG.draw)SPEC_DLG.draw();},0)); // a save that came back while another box was being typed in redraws once that box is left
   const edges=lsProjEdges(pid);
   const draw=()=>{
     if(!document.body.contains(ov)){SPEC_DLG.draw=null;return;}
@@ -3604,7 +3614,7 @@ function lsSpecDlg(pid){
     const valBox=(e,i)=>{const v=e.row&&e.row.value!=null?String(e.row.value):'',k=specKind(e.item);
       if(ro)return `<div class="spec-ro">${escA(v)||'<span style="color:var(--t3)">—</span>'}</div>`;
       if(k==='note')return `<textarea data-spv="${i}" rows="3" placeholder="Variations, house types, anything else" style="${LS_INP};width:100%;font-family:inherit">${escA(v)}</textarea>`;
-      if(k==='mat'){const on=mats.find(m=>specNorm(m.name)===specNorm(v));
+      if(k==='mat'){const on=mats.find(m=>specNorm(m.name)===specNorm(v))||mats.find(m=>e.row&&e.row.material_id===m.id)||mats.find(m=>(m.aliases||[]).some(a=>specNorm(a)===specNorm(v)));
         return `<select data-spv="${i}" style="${LS_INP};width:100%"><option value="">— not specified —</option><option value="TBC"${/^tbc$/i.test(v)?' selected':''}>TBC</option>${mats.length?`<optgroup label="This project's materials">${mats.map(m=>`<option value="${escA(m.name)}"${on===m?' selected':''}>${escA(m.name)}</option>`).join('')}</optgroup>`:''}${v&&!on&&!/^tbc$/i.test(v)?`<option value="${escA(v)}" selected>⚠ ${escA(v)} (not on the project's materials)</option>`:''}<option value="__add">＋ Add new material…</option></select>`;}
       if(k==='edge'){const on=edges.find(x=>specNorm(x)===specNorm(v));
         return `<select data-spv="${i}" style="${LS_INP};width:100%"><option value="">— not specified —</option><option value="TBC"${/^tbc$/i.test(v)?' selected':''}>TBC</option>${edges.map(x=>`<option value="${escA(x)}"${on===x?' selected':''}>${escA(x)}</option>`).join('')}${v&&!on&&!/^tbc$/i.test(v)?`<option value="${escA(v)}" selected>${escA(v)}</option>`:''}<option value="__other">Other…</option></select>`;}
@@ -3621,10 +3631,11 @@ function lsSpecDlg(pid){
       ${ro?'':`<tr><td colspan="4"><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><b style="font-size:13px">＋ Extra item</b><input id="sp-new" placeholder="e.g. Splashback" style="${LS_INP};flex:1;min-width:140px"><button class="btn btn-g" id="sp-add" style="font-size:12px;padding:4px 10px">Add</button></div></td></tr>`}
       </tbody></table><div id="sp-msg" style="font-size:12px;color:#b42318;font-weight:700;margin-top:6px"></div><div id="sp-hist"></div>`;
     const msg=t=>{const m=ov.querySelector('#sp-msg');if(m)m.textContent=t;};
-    const after=ok=>{draw();if(ok)toast(ok);};
-    const save=(i,patch,ok)=>{const e=its[i];if(!e||!specEditOk()){draw();return;}
+    const after=ok=>{if(ok)toast(ok);const a=document.activeElement;if(a&&ov.contains(a)&&a.matches('[data-spv],#sp-new')&&a.value!==a.defaultValue){SPEC_DLG.pend=true;return;}draw();};
+    const cur=i=>{const e=its[i];if(!e||e.row)return e;return specItems(pid).find(x=>specNorm(x.item)===specNorm(e.item))||e;}; // an item drawn with no row may have one now (our own save whose reply was lost); a drawn row stays as shown, so a change made elsewhere is refused, never overwritten
+    const save=(i,patch,ok)=>{const e=cur(i);if(!e||!specEditOk()){draw();return;}
       specSave(pid,e,patch).then(()=>after(ok||'Saved')).catch(x=>{after('');msg('Not saved — '+x.message);});};
-    ov.querySelectorAll('[data-spv]').forEach(b=>b.onchange=()=>{const i=+b.dataset.spv,e=its[i];let v=b.value;
+    ov.querySelectorAll('[data-spv]').forEach(b=>b.onchange=()=>{const i=+b.dataset.spv,e=cur(i);let v=b.value;
       if(v==='__add'){draw();lsMaterialsDlg(pid,()=>{if(SPEC_DLG.draw)SPEC_DLG.draw();});return;}
       if(v==='__other'){const t=prompt('Edging for '+e.item+':','');if(t===null||!t.trim()){draw();return;}v=t.trim();}
       const old=e.row&&e.row.value!=null?String(e.row.value):'';if(v.trim()===old.trim())return;
@@ -3633,7 +3644,7 @@ function lsSpecDlg(pid){
       if(e.row&&e.row.status==='signed-off'&&!confirm(e.item+' is signed off ('+(e.row.signed_by||'?')+').\n\nChanging it takes the sign-off away — it goes back to Proposed and shows red until it is signed off again. Change it?')){draw();return;}
       save(i,patch,e.item+' saved');});
     ov.querySelectorAll('[data-sps]').forEach(b=>b.onclick=()=>{const i=+b.dataset.sps,e=its[i];if(!e||!e.row)return;
-      if(!/\S/.test(e.row.value||'')||/^tbc$/i.test(String(e.row.value).trim()))return msg('Blank or TBC can\'t be signed off.');
+      if(!/\S/.test(e.row.value||'')||SPEC_TBC.test(specNorm(e.row.value)))return msg('Blank or TBC can\'t be signed off.');
       if(!specSignOk())return;const who=specWho();if(!who)return;
       lsWrite('project_spec_items',e.row,{status:'signed-off',signed_by:who}).then(()=>after(e.item+' signed off ✓')).catch(x=>{after('');msg('Not signed off — '+x.message);});});
     ov.querySelectorAll('[data-spu]').forEach(b=>b.onclick=()=>{const i=+b.dataset.spu,e=its[i];if(!e||!e.row||!specSignOk())return;
@@ -8514,10 +8525,10 @@ function applyImport(plan){
     const dec=plan.dueDec||{},at=nowISO();
     (plan.updates||[]).forEach(u=>{
       const ex=get(u);if(!ex)return; // deleted on another screen meanwhile — nothing to update
-      const s=u.set||{};
+      const s=u.set||{},kept=[];
       Object.keys(s).forEach(k=>{if(k==='dueDate')return;
         // changed in the planner since the preview (9 Nov overrides): the planner's value stays, Cienapps' is remembered
-        if(POV_F[k]&&ex.pov&&ex.pov[k]&&typeof ex.pov[k]==='object'){const nv=String(s[k]==null?'':s[k]).trim();if(nv===povVal(ex,k))povClear(ex,k);else ex.pov[k]={...ex.pov[k],cien:nv};return;}
+        if(POV_F[k]&&ex.pov&&ex.pov[k]&&typeof ex.pov[k]==='object'){const nv=String(s[k]==null?'':s[k]).trim();if(nv===povVal(ex,k))povClear(ex,k);else{ex.pov[k]={...ex.pov[k],cien:nv};kept.push(k);}return;}
         ex[k]=s[k];});
       if('cienHold' in s){if(s.cienHold){ex.holdAt=at;holdUntag(ex);}else{delete ex.cienHold;delete ex.holdAt;ex.holdBack=at;}}
       if('dueDate' in s){
@@ -8525,9 +8536,12 @@ function applyImport(plan){
         else{if(!ex.origDueDate)ex.origDueDate=ex.dueDate||'';ex.dueDate=s.dueDate;delete ex.dueKeep;}
       }
       if('step' in s)origStep[ex.wo]=s.step; // the step came FROM Cienapps — nothing to send back
+      if(kept.length)u={...u,what:String(u.what||'').split(' · ').filter(w=>!kept.some(k=>w.startsWith(k+':'))).concat(kept.map(k=>k+': planner value kept (Cienapps: '+s[k]+')')).join(' · ')};
       if(u.what)logEdit(ex,'Cienapps import: '+u.what+('dueDate' in s?(u.what?' · ':'')+'due '+(dec[u.wo]==='keep'?'kept '+(ex.dueDate||'—'):'→ '+s.dueDate):''),'(import)');
     });
-    (plan.povs||[]).forEach(p=>{const ex=get(p);if(!ex||!ex.pov||!ex.pov[p.k]||typeof ex.pov[p.k]!=='object')return;
+    (plan.povs||[]).forEach(p=>{const ex=get(p);if(!ex)return;
+      if(!ex.pov||!ex.pov[p.k]||typeof ex.pov[p.k]!=='object'){ // the override was undone after the preview: Cienapps' newer value lands
+        if(!p.clear&&p.cien!=null&&povVal(ex,p.k)!==p.cien){const was=povVal(ex,p.k);ex[p.k]=p.cien;if(p.k==='floor'&&ex.f!=null)ex.f=p.cien;if(p.k==='unit'&&ex.u!=null)ex.u=p.cien;logEdit(ex,'Cienapps import: '+POV_F[p.k].toLowerCase()+': '+(was||'(none)')+' → '+p.cien,'(import)');}return;}
       if(p.clear){if(povVal(ex,p.k)===p.v)povClear(ex,p.k);} // only if the planner value is still the one Cienapps now has
       else ex.pov[p.k]={...ex.pov[p.k],cien:p.cien};});
     (plan.fills||[]).forEach(f=>{const ex=get(f);if(!ex)return;Object.keys(f.set).forEach(k=>{if(f.set[k]===undefined)delete ex[k];else ex[k]=f.set[k];});});

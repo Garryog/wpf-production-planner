@@ -42,9 +42,14 @@ create table if not exists project_spec_items(id text primary key, project_id te
   signed_by text, signed_at timestamptz, note text,
   version int not null default 1, updated_at timestamptz not null default now(), updated_by text);
 alter table project_spec_items drop constraint if exists psi_signed_needs_value;
-alter table project_spec_items add constraint psi_signed_needs_value
-  check(status<>'signed-off' or (coalesce(trim(value),'')<>'' and upper(trim(value))<>'TBC'));
+-- TBC, T.B.C., TBA, "to be confirmed / advised" = not signed off (pasted no-break spaces, tabs and full-width letters count too)
+create or replace function psi_tbc(v text) returns boolean language sql immutable as $$
+ select coalesce(upper(btrim(regexp_replace(normalize(coalesce(v,''),NFKC),'\s+',' ','g'))),'')
+   ~ '^(|T\.? ?B\.? ?C\.?|T\.? ?B\.? ?A\.?|TO BE (CONFIRMED|ADVISED))$'
+$$;
+alter table project_spec_items add constraint psi_signed_needs_value check(status<>'signed-off' or not psi_tbc(value));
 create unique index if not exists psi_uq on project_spec_items(project_id, lower(trim(item)));
+
 
 -- Who changed what on a project, written ONLY by the database (the app can read it, never write or change it)
 create table if not exists project_events(id bigserial primary key, project_id text, entity text, entity_id text,
@@ -56,9 +61,9 @@ create index if not exists pe_entity on project_events(entity_id);
 --   changing a signed-off value drops it back to proposed.
 create or replace function psi_rules() returns trigger language plpgsql as $$
 begin
-  new.value := nullif(btrim(coalesce(new.value,'')),'');
-  new.item := btrim(new.item);
-  if new.value is null or upper(new.value)='TBC' then
+  new.value := nullif(regexp_replace(normalize(coalesce(new.value,''),NFKC),'^\s+|\s+$','','g'),'');
+  new.item := btrim(regexp_replace(normalize(new.item,NFKC),'\s+',' ','g'));
+  if psi_tbc(new.value) then
     new.status := 'not-specified';
   elsif tg_op='UPDATE' and old.status='signed-off' and new.status='signed-off' and new.value is distinct from old.value then
     new.status := 'proposed';
@@ -108,6 +113,7 @@ create policy "project_events read" on project_events for select to anon, authen
 -- Grants (30 Oct rule). No DELETE for anyone using the app. project_events: read only (the database writes it).
 grant select, insert, update on project_spec_items to anon, authenticated;
 grant select on project_events to anon, authenticated;
+grant execute on function psi_tbc(text) to anon, authenticated, service_role;
 grant all on project_spec_items, project_events to service_role;
 grant usage, select on sequence project_events_id_seq to service_role;
 ```
