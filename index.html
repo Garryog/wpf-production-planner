@@ -412,6 +412,7 @@ details.lti-other{margin-bottom:14px}details.lti-other>summary{cursor:pointer;fo
 .hold-note,.rel-note{border-radius:8px;padding:9px 12px;margin:6px 0 8px;font-size:14px;font-weight:700}
 .hold-note{background:#fff6e5;border:1px solid #e0a43a;color:#6b3f00}
 .rel-note{background:#e9f8ef;border:1px solid #7cc79b;color:#0b5e34}
+/*dates*/.moved-note{border-radius:8px;padding:9px 12px;margin:6px 0 8px;font-size:14px;font-weight:700;background:#eaf2ff;border:1px solid #1a56db;color:#14335c}
 .hold-grp{background:#fff;border:2px solid #e0a43a;border-radius:10px;padding:8px;margin-bottom:10px}
 .hold-gh{display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap;font-size:16px;font-weight:800;color:#6b3f00;margin-bottom:6px}
 .hold-row{display:flex;gap:10px;align-items:center;padding:10px;border-bottom:1px solid var(--border);font-size:14px;cursor:pointer}
@@ -5449,7 +5450,7 @@ function phCardsHTML(mode,js){
   return js.map(o=>`<div class="wl-card ph-card" data-phcard="${escA(o.wo)}">
     <div class="wl-h"><div><span class="wn">📷 Photo list</span> <span class="wd">${escA(o.wo)}</span>${fuHTML(o,'lst-chip')}<div class="wl-wt">${escA(o.title||'')}${o.customer?' · '+escA(o.customer):''}</div></div>
       ${(od=>`<span class="wl-due"${od?' style="background:#c0392b;color:#fff"':''}>${od?'⚠ OVERDUE — ':''}${o.delv&&o.delDay?'DELIVERS '+escA(slotLbl(o.delVeh,o.delDay)):o.dueDate?'DUE '+fmt(o.dueDate):''}</span>`)(listOverdue(phL(o)))}</div>
-    ${lists().some(l=>(l.wos||[]).includes(o.wo))?'<div class="hold-note">⚠ This job also has a typed list — check with the office before cutting or picking it twice.</div>':''}
+    ${movedBanner(o)}${lists().some(l=>(l.wos||[]).includes(o.wo))?'<div class="hold-note">⚠ This job also has a typed list — check with the office before cutting or picking it twice.</div>':''}
     <div class="ph-strip">${phThumbs(o)}</div>
     <div class="wl-act"><span style="font-size:13px;color:var(--t2)">Tap the photo to open it full screen — pinch to zoom. ${saw?'Cut everything on it':'Pick everything on it'}, then tick once.</span>
       <button class="wl-btn" data-phdone="${escA(o.wo)}">${saw?'✓ CUT COMPLETE':'✓ FITTINGS PICKED'}</button></div></div>`).join('');
@@ -6045,7 +6046,7 @@ function renderWorkList(app,mode){
   const card=(l,isDone)=>{const dn=listDone(l.id)[mode];const due=listDueKey(l);const relOnly=!isDone&&!!dn&&relOpen(l,mode);const nh=listHoldRows(l,mode,'hold').length;return `<div class="wl-card${isDone?' cdone':''}">
     <div class="wl-h"><div style="display:flex;gap:10px;align-items:flex-start">${!isDone?`<button class="wl-chk${wlSel.has(l.id)?' on':''}" data-wlsel="${escA(l.id)}" title="Select for batch cutting across houses">${wlSel.has(l.id)?'✓':''}</button>`:''}<div><span class="wn">${escA(l.name)}</span> <span class="wd">${escA(l.project||'')}${(c=>c&&c!==l.project?' · '+escA(c):'')(listCust(l))}</span><div>${woChips(l)}</div></div></div>
     ${due?(od=>`<span class="wl-due"${od?' style="background:#c0392b;color:#fff"':''}>${od?'⚠ OVERDUE — ':''}${mode==='saw'?'CUT':'PICK'} BY ${fmt(listDeadline(l))} · DELIVERS ${fmt(due)}</span>`)(!isDone&&listOverdue(l)):'<span class="wd">no delivery date yet</span>'}</div>
-    ${relOnly?`<div class="rel-note">▶ MATERIAL HAS ARRIVED — ${relRows(l)} row${relRows(l)!==1?'s':''} released from the waiting list. The rest of this house was done ${new Date(dn.at).toLocaleDateString('en-IE')}${dn.by?' by '+escA(dn.by):''}.</div>`:''}
+    ${movedBanners(l.wos)}${relOnly?`<div class="rel-note">▶ MATERIAL HAS ARRIVED — ${relRows(l)} row${relRows(l)!==1?'s':''} released from the waiting list. The rest of this house was done ${new Date(dn.at).toLocaleDateString('en-IE')}${dn.by?' by '+escA(dn.by):''}.</div>`:''}
     ${lsRevBannerBoth(l)}${lsRevBanner(l,mode)}${V2()?(t=>t.length||lsIssuedHTML(l)?`<div class="chk-bar">${lsIssuedHTML(l)}${lsTbcChip(t,true)}</div>`:'')(lsTbc(lsView(l.id).rows)):''}
     ${nh?`<div class="hold-note">⏸ ${nh} row${nh!==1?'s':''} waiting on ${mode==='saw'?'material':'stock'} — ${mode==='saw'?'cut':'pick'} the rest and tap ${cfg.done}; the waiting rows come back when released.</div>`:''}
     ${listTableHTML(l,mode,{relOnly,tick:!isDone})}
@@ -8678,6 +8679,14 @@ function dmBindChips(root){
   (root||document).querySelectorAll('[data-duemv]').forEach(b=>b.onclick=e=>{e.stopPropagation();dmCheckDlg(b.dataset.duemv);});
   (root||document).querySelectorAll('[data-duedlg]').forEach(b=>b.onclick=e=>{e.stopPropagation();dateDlg([b.dataset.duedlg]);});
 }
+// Saw / stores: "this job has moved" on the card from the date change until the end of the next working day (A7)
+function movedBanner(o,today){
+  const h=(o&&o.dueHist)||[],x=h[h.length-1];if(!x||!x.at)return'';
+  const d=new Date(x.at);if(isNaN(d))return'';
+  if((today||todayLocal())>nextWorkDay(isoOf(d)))return'';
+  return `<div class="moved-note">📅 ${escA(o.wo)} HAS MOVED — now due ${escA(fmt(x.to))} (was ${escA(x.from?fmt(x.from):'—')})${x.why?' · '+escA(x.why):''}${x.src==='cienapps'?' · Cienapps':x.by?' · '+escA(x.by):''}</div>`;
+}
+function movedBanners(wos){return (wos||[]).map(w=>movedBanner(DB.orders.find(o=>o.wo===w))).join('');}
 function dateSummaryDlg(res){ /*dates: after a group move — what moved and what needs a look*/
   res=res||{};const rs=(res.rows||[]).filter(r=>!r.skipped),fl=rs.filter(r=>r.flags&&r.flags.length),sk=res.skipped||[];
   const ov=document.createElement('div');ov.className='pod-ovl';ov.id='date-sum';
