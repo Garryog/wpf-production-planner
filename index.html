@@ -8491,6 +8491,102 @@ function woCut(o){
 }
 function woProgrammed(o){return stepNo(o&&o.step)===5;}
 
+/*dates: ---------- The date engine — the ONLY code that moves a job's due date as a "date move" (board, delivery card,
+   group move, Cienapps import Take; Job B's PM sequence will call it too).
+   moveDates(jobs, change, reason, by, opts) → {rows, apply()}
+     jobs   : job objects or WO numbers
+     change : {due:'YYYY-MM-DD'} or {shift:{n, unit:'wk'|'wd'}}   (field:'due' — 'deliv' is phase 2)
+     reason : {why, note}      opts: {src:'planner'|'group'|'cienapps'|'pmseq', keepWeek?, frozenDays?, requestOnly?}
+   rows is a pure preview (nothing written). apply() looks every job up again, works its row out again on the latest
+   data, writes it, logs it and saves. Rules (Garry, 9 Nov): week follows the due week unless already cut (A3);
+   a booked job comes off the van into the pool flagged "rebook", a loaded one stays and is flagged (A4);
+   every change kept in dueHist, origDueDate kept (A5); dueKeep = the date Cienapps still has (A6). ---------- */
+function dmFind(j){
+  if(j&&typeof j==='object'&&DB.orders.includes(j))return j;
+  const wo=typeof j==='string'?j:(j&&j.wo);
+  return wo==null?null:(DB.orders.find(o=>o.wo===wo)||null);
+}
+function dmShiftWd(iso,n){let d=iso;n=Math.round(+n||0);for(let i=0;i<Math.abs(n);i++)d=n>0?nextWorkDay(d):prevWorkDay(d);return d;}
+function dmTarget(o,ch){
+  if(ch&&ch.due)return String(ch.due).slice(0,10);
+  if(ch&&ch.shift&&o.dueDate&&+ch.shift.n){const n=+ch.shift.n;return ch.shift.unit==='wd'?dmShiftWd(o.dueDate,n):addDayISO(o.dueDate,7*n);}
+  return'';
+}
+const DM_FLAG={'cut-week-kept':'already cut — build week kept, check it','on-van-loaded':'already loaded — stays on the van, check it',
+  'bank-hol':'not a working day','past':'date is in the past — build week is this week','beyond-8wks':'beyond the 8 board weeks — Unscheduled',
+  'programmed':'programmed (step 5) — take it out of the nest'};
+function dmFlagTxt(f,r){
+  if(f==='bank-hol'&&r&&r.to){const d=new Date(r.to+'T12:00:00').getDay();return (d===0||d===6?'a '+(d===0?'Sunday':'Saturday'):'a bank holiday')+' — working day before is '+fmt(prevWorkDay(r.to));}
+  return DM_FLAG[f]||f;
+}
+function dmRow(o,ch,opts){
+  opts=opts||{};
+  const from=o.dueDate||'',to=dmTarget(o,ch);
+  const r={wo:o.wo,from,to,wkFrom:o.plannedWeek||'',wkTo:o.plannedWeek||'',weekKept:false,vanPulled:false,vanKept:false,skipped:'',flags:[],slot:''};
+  if(!to){r.skipped=ch&&ch.shift&&!from?'no due date to move from':'no new date';return r;}
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(to)||isNaN(new Date(to+'T12:00:00'))){r.skipped='not a date';return r;}
+  if(to===from){r.skipped='already due '+fmt(to);return r;}
+  if(opts.src!=='cienapps'){ // Cienapps is the customer date: an import Take always lands, as it always has
+    if(o.delDelivAt||o.delDone){r.skipped='already delivered';return r;}
+    if(isShipped(o)){r.skipped='already shipped';return r;}
+  }
+  if(!opts.keepWeek){
+    const wk=dueWeekFor(to);
+    if(woCut(o)){if(wk!==r.wkFrom){r.weekKept=true;r.flags.push('cut-week-kept');}}
+    else{r.wkTo=wk;if(wk===''&&r.wkFrom!=='')r.flags.push('beyond-8wks');if(woProgrammed(o)&&wk!==r.wkFrom)r.flags.push('programmed');}
+  }
+  if(!isWorkDay(to))r.flags.push('bank-hol');
+  if(to<todayLocal())r.flags.push('past');
+  if((o.delVeh||o.delDay)&&dStage(o)!=='deliv'){
+    if(dStage(o)){r.vanKept=true;r.flags.push('on-van-loaded');}
+    else{r.vanPulled=true;r.slot=slotLbl(o.delVeh,o.delDay);}
+  }
+  return r;
+}
+function moveDates(jobs,change,reason,by,opts){
+  opts=opts||{};reason=reason||{};change=change||{};jobs=(jobs||[]).filter(j=>j!=null);
+  const rows=jobs.map(j=>{const o=dmFind(j);return o?dmRow(o,change,opts):{wo:typeof j==='string'?j:(j&&j.wo)||'',skipped:'not on the planner any more',flags:[]};});
+  const apply=()=>{
+    const at=nowISO(),src=opts.src||'planner',why=String(reason.why||''),note=String(reason.note||'').trim();
+    const res={moved:0,weeksKept:0,pulled:0,flagged:0,skipped:[],rows:[]},done=new Set();
+    jobs.forEach(j=>{
+      const o=dmFind(j);
+      if(!o){res.skipped.push({wo:typeof j==='string'?j:(j&&j.wo)||'',why:'not on the planner any more'});return;}
+      if(done.has(o))return;done.add(o);
+      const r=dmRow(o,change,opts);res.rows.push(r);
+      if(r.skipped){res.skipped.push({wo:o.wo,why:r.skipped});return;}
+      // the date Cienapps still holds (dueKeep): set on the first planner move, gone when the planner is back on it
+      if(!o.origDueDate)o.origDueDate=r.from;
+      if(src==='cienapps')delete o.dueKeep;
+      else if(!/^P-/i.test(String(o.wo))){if(!o.dueKeep&&r.from)o.dueKeep=r.from;if(o.dueKeep===r.to)delete o.dueKeep;}
+      o.dueDate=r.to;
+      o.dueHist=(o.dueHist||[]).concat({at,by:by||'',f:'due',from:r.from,to:r.to,why,note,src}).slice(-100);
+      const what=['Due date '+(r.from?fmt(r.from):'—')+' → '+fmt(r.to)];
+      if(!opts.keepWeek){
+        if(r.weekKept){o.dueMv={at,by:by||'',from:r.from,to:r.to};what.push('build week kept '+(r.wkFrom?wkLbl(r.wkFrom):'unscheduled')+' (already cut)');res.weeksKept++;}
+        else{
+          if(r.wkTo!==(o.plannedWeek||'')){what.push('build week '+(o.plannedWeek?wkLbl(o.plannedWeek):'unscheduled')+' → '+(r.wkTo?wkLbl(r.wkTo):'unscheduled'));o.plannedWeek=r.wkTo;}
+          delete o.dueMv;
+          if(r.flags.includes('programmed'))o.dueMv={at,by:by||'',from:r.from,to:r.to,prog:true};
+        }
+      }
+      if(r.vanPulled){
+        const was=[o.delVeh||'',o.delDay||''].concat(o.delWk?[o.delWk]:[]).join('|');
+        (o.delMoves=o.delMoves||[]).push({at,by:by||'',why:'Due date moved'+(why?' — '+why:''),from:(o.delVeh||'')+'|'+(o.delDay||''),to:''});
+        o.delRebook={at,by:by||'',why,was};
+        what.push('taken off '+r.slot+' — rebook');
+        o.delVeh='';o.delDay='';delete o.delWk;res.pulled++;
+      }
+      if(r.vanKept){o.dueMv={...(o.dueMv||{at,by:by||'',from:r.from,to:r.to}),loaded:true};what.push('already loaded — left on the van, check');}
+      logEdit(o,what.join(' · ')+(src==='cienapps'?' (Cienapps import)':src==='group'?' (group move)':''),by||'',[why,note].filter(Boolean).join(': '));
+      res.moved++;if(r.flags.length)res.flagged++;
+    });
+    if(res.moved){if(res.pulled&&typeof updDelBadge==='function')updDelBadge();sched();}
+    return res;
+  };
+  return{rows,apply,change,reason,opts};
+}
+
 /* ---------- Delivery moves: first placement is stamped; every later move needs a name AND a reason ---------- */
 function slotLbl(v,d){return d?((vehLbl(v)||v)+' '+d):'the pool';}
 function placeJobs(moved,veh,day){
@@ -8511,6 +8607,7 @@ function placeJobs(moved,veh,day){
         logEdit(o,'Delivery planned for '+slotLbl(veh,day),by);
       }
       o.delVeh=veh;o.delDay=day;
+      if(day)delete o.delRebook; /*dates: booked again*/
     });
     delSel.clear();sched();render();
     if(day)showReadiness(changing.map(o=>o.wo),'scheduled to '+slotLbl(veh,day));
