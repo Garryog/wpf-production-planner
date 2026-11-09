@@ -1815,7 +1815,7 @@ function renderBoard(app){
           <td><input class="grp-title" data-gtitle="${gid}" value="${escA(g.title||'')}" title="Group title — click to edit"></td>
           <td><span class="wo-cust" title="${escA(cs.join(', '))}">${cs.length===1?escA(cs[0]):cs.length+' customers'}</span></td>
           <td style="text-align:right;font-weight:700;white-space:nowrap">${Math.round(th*10)/10}h</td>
-          <td>${due?dueBadge(due,wk,null):'—'}</td>
+          <td><span class="dm-due" data-gduedlg="${escA(gid)}" title="Tap to move the dates of the whole group">${due?dueBadge(due,wk,null):'<span class="due-badge due-ok">—</span>'}</span>${(n=>n?`<span class="dm-chip" data-gtog="${escA(gid)}" title="${n} job${n!==1?'s':''} in this group had the due date moved — open the group to see">🔁 ${n} moved</span>`:'')(ms.filter(o=>(o.dueHist||[]).length).length)}${(n=>n?`<span class="dm-chip amber" data-gtog="${escA(gid)}" title="Open the group and tap the chip on each job">📅 ${n} to check</span>`:'')(ms.filter(o=>o.dueMv).length)}</td>
           <td style="text-align:right;font-weight:700;white-space:nowrap">€${Math.round(tv).toLocaleString()}</td>
           <td style="color:var(--t3);font-size:11px">—</td>
           <td><select class="week-sel" data-gwsel="${gid}" style="font-weight:600">${weekOpts(wk,mixed)}</select></td>
@@ -1945,6 +1945,7 @@ function renderBoard(app){
   ${grpSel.size?`<div class="grp-bar">
     <b>${grpSel.size} selected</b><span>${Math.round(selH*10)/10}h · €${Math.round(selV).toLocaleString()}</span>
     <button class="btn btn-g" id="btn-mkgrp" style="padding:6px 14px">Group into one line</button>
+    <button class="btn btn-s" id="btn-gdates" style="padding:6px 14px" title="Change the due date of every selected job, with one reason">📅 Move dates (${grpSel.size})</button>
     <button id="btn-gclear" style="background:none;border:none;color:#bcd0f0;text-decoration:underline;cursor:pointer;font-size:12px">clear</button>
   </div>`:''}
   </div>`;
@@ -2033,6 +2034,8 @@ function renderBoard(app){
     render();
   };
   const mg=document.getElementById('btn-mkgrp');if(mg)mg.onclick=makeGroup;
+  const gdt=document.getElementById('btn-gdates');if(gdt)gdt.onclick=()=>dateDlg([...grpSel]); /*dates*/
+  document.querySelectorAll('[data-gduedlg]').forEach(el=>el.onclick=e=>{e.stopPropagation();dateDlg(grpMembers(el.dataset.gduedlg).map(o=>o.wo));});
   const gc=document.getElementById('btn-gclear');if(gc)gc.onclick=()=>{grpSel.clear();render();};
   document.querySelectorAll('[data-gtog]').forEach(el=>el.onclick=()=>{
     const g=el.dataset.gtog;
@@ -6869,7 +6872,7 @@ function renderDeliveries(app){
       <input id="aj-val" type="number" min="0" placeholder="€ value" style="width:100px">
       <button class="btn btn-g" id="aj-add">Add to pool</button>
     </div>
-    ${delSel.size?`<div class="selbar" style="margin-top:10px"><b>${delSel.size} selected</b> — drag any selected card onto a day to move them all <button id="selclr">clear selection</button></div>`:''}
+    ${delSel.size?`<div class="selbar" style="margin-top:10px"><b>${delSel.size} selected</b> — drag any selected card onto a day to move them all <button id="selclr">clear selection</button>${[...delSel].some(w=>DB.orders.some(o=>o.wo===w))?` <button id="seldates" title="Change the due date of the selected jobs together, with one reason">📅 Move dates</button>`:''}</div>`:''}
     <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin:10px 0 5px">
       <span style="font-size:11px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.4px">To plan — ${pool.length} job${pool.length!==1?'s':''}</span>
       <input class="dsrch" id="dsrch" placeholder="🔍 Filter jobs — WO, customer, floor, unit, title…" value="${escA(delFilter)}">
@@ -6938,6 +6941,7 @@ function renderDeliveries(app){
     render();
   });
   const sc=document.getElementById('selclr');if(sc)sc.onclick=()=>{delSel.clear();render();};
+  const sdt=document.getElementById('seldates');if(sdt)sdt.onclick=()=>dateDlg([...delSel]); /*dates: group move from ticked cards*/
   // Status menu: plain-words choices instead of a cryptic cycle — no more silent mis-click to DELIVERED
   document.querySelectorAll('[data-dd]').forEach(b=>b.onclick=()=>{
     const o=findDel(b.dataset.dd);if(!o)return;
@@ -8640,6 +8644,18 @@ function dmBindChips(root){
   (root||document).querySelectorAll('[data-duehist]').forEach(b=>b.onclick=e=>{e.stopPropagation();dmHistDlg(b.dataset.duehist);});
   (root||document).querySelectorAll('[data-duemv]').forEach(b=>b.onclick=e=>{e.stopPropagation();dmCheckDlg(b.dataset.duemv);});
   (root||document).querySelectorAll('[data-duedlg]').forEach(b=>b.onclick=e=>{e.stopPropagation();dateDlg([b.dataset.duedlg]);});
+}
+function dateSummaryDlg(res){ /*dates: after a group move — what moved and what needs a look*/
+  res=res||{};const rs=(res.rows||[]).filter(r=>!r.skipped),fl=rs.filter(r=>r.flags&&r.flags.length),sk=res.skipped||[];
+  const ov=document.createElement('div');ov.className='pod-ovl';ov.id='date-sum';
+  ov.innerHTML=`<div class="pod-in" style="width:min(600px,96vw)">
+    <div style="font-weight:800;color:#14335c;font-size:16px;margin-bottom:6px">Dates moved</div>
+    <div style="font-size:14px;margin-bottom:8px"><b>${+res.moved||0} moved</b> · ${+res.weeksKept||0} week${res.weeksKept!==1?'s':''} kept (already cut) · ${+res.pulled||0} taken off vans · ${+res.flagged||0} flagged${sk.length?' · '+sk.length+' not moved':''}</div>
+    ${fl.length?`<div style="font-size:13px;font-weight:700;margin:6px 0 3px">Check these</div>${fl.slice(0,50).map(r=>`<div style="font-size:12px;padding:2px 0;border-bottom:1px solid var(--border)"><b style="font-family:monospace">${escA(r.wo)}</b> ${escA(fmt(r.from))} → ${escA(fmt(r.to))} — ${r.flags.map(f=>escA(dmFlagTxt(f,r))).join(' · ')}</div>`).join('')}${fl.length>50?`<div style="font-size:11px;color:var(--t3)">…and ${fl.length-50} more</div>`:''}`:''}
+    ${rs.some(r=>r.vanPulled)?`<div style="font-size:12px;color:#b45309;margin-top:6px">Taken off vans (now in To Plan, "date moved — rebook"): ${rs.filter(r=>r.vanPulled).map(r=>escA(r.wo)+' ('+escA(r.slot)+')').join(' · ')}</div>`:''}
+    ${sk.length?`<div style="font-size:12px;color:var(--t3);margin-top:6px">Not moved: ${sk.slice(0,40).map(s=>escA(s.wo)+' ('+escA(s.why)+')').join(' · ')}${sk.length>40?' …':''}</div>`:''}
+    <div style="margin-top:12px;text-align:right"><button class="btn btn-g" id="pod-x" style="min-height:44px">OK</button></div></div>`;
+  document.body.appendChild(ov);ov.onclick=e=>{if(e.target===ov||e.target.id==='pod-x')ov.remove();};
 }
 function dateDlg(wos){
   wos=[...new Set((wos||[]).filter(Boolean))];
