@@ -8345,8 +8345,12 @@ function applyImport(plan){
     toast(`Import applied — ${fresh.length} added, ${(plan.updates||[]).length} updated${nShip?', '+nShip+' to Shipped':''}`);
 }
 
+/*dates: jobs whose planner due date differs from the date Cienapps still has (dueKeep). They stay on the list until
+   an import shows Cienapps has the planner date (that import clears dueKeep) — "Mark as applied" leaves them. */
+function datesToCien(){return DB.orders.filter(o=>o.dueKeep&&o.dueDate&&o.dueKeep!==o.dueDate&&!/^P-/i.test(String(o.wo))).sort(woCmp);}
+function dtLast(o){const h=(o.dueHist||[]).filter(x=>x.src!=='cienapps');return h[h.length-1]||null;}
 function renderExport(app){
-  const chg=changes();
+  const chg=changes(),dts=datesToCien();
   const weeks=get8Wks();
   app.innerHTML=`<div class="pg">
   <div class="exp-panel">
@@ -8376,6 +8380,23 @@ function renderExport(app){
       <button class="btn btn-s" id="btn-mark">Mark as applied (reset tracker)</button>
     </div>`}
   </div>
+  <div class="exp-panel" id="exp-dates">
+    <div style="font-size:14px;font-weight:600;margin-bottom:6px">📅 Dates to change in Cienapps</div>
+    <p style="font-size:12px;color:var(--t3);margin-bottom:12px">Due dates changed in the planner. Type the new date into Cienapps. Each line stays here until an import shows Cienapps has the new date — "Mark as applied" does not clear it.</p>
+    ${!dts.length?`<div class="empty">No due dates to change in Cienapps.</div>`:`
+    <div class="wo-table-wrap" style="margin-bottom:14px"><table class="wo-table">
+      <thead><tr><th>WO #</th><th>Floor</th><th>Unit</th><th>Title</th><th>Customer</th><th>Cienapps has</th><th>Change to</th><th>Why</th><th>By</th><th>Moved</th></tr></thead>
+      <tbody>${dts.map(o=>{const h=dtLast(o);return `<tr>
+        <td><span class="wo-num">${escA(o.wo)}</span></td><td>${escA(o.floor||'')}</td><td>${escA(o.unit||'')}</td>
+        <td>${escA(o.title)}</td><td style="color:var(--t2)">${escA(o.customer)}</td>
+        <td style="color:var(--t3)">${escA(fmt(o.dueKeep))} Wk${wkNum(o.dueKeep)}</td>
+        <td style="font-weight:700;color:var(--blue)">${escA(fmt(o.dueDate))} Wk${wkNum(o.dueDate)}</td>
+        <td style="font-size:12px">${h?escA(h.why+(h.note?' — '+h.note:'')):''}</td>
+        <td style="font-size:12px">${h?escA(h.by):''}</td>
+        <td style="font-size:12px;color:var(--t3)">${h&&h.at?escA(new Date(h.at).toLocaleDateString('en-IE')):''}${(o.dueHist||[]).length>1?' · '+o.dueHist.length+'×':''}</td></tr>`;}).join('')}</tbody>
+    </table></div>
+    <button class="btn btn-g" id="btn-xchg2">Download Changes Excel</button>`}
+  </div>
   <div class="exp-panel">
     <div style="font-size:14px;font-weight:600;margin-bottom:6px">Full Schedule Export</div>
     <p style="font-size:12px;color:var(--t3);margin-bottom:12px">All work orders with current planned weeks and 8-week summary.</p>
@@ -8384,16 +8405,24 @@ function renderExport(app){
   </div>`;
   // hours inputs on this tab must save exactly like the board's (they looked live but were dead)
   document.querySelectorAll('[data-hi]').forEach(inp=>inp.onchange=function(){const o=DB.orders.find(x=>x.wo===this.dataset.hi);const v=parseFloat(this.value)||0;if(o)officeWho(by=>{logEdit(o,'Hours '+o.hours+' → '+v,by);o.hours=v;o.hoursEstimated=false;o.hoursSrc='hand';sched();render();},()=>render());});
-  document.getElementById('btn-xchg')?.addEventListener('click',()=>{
+  const xchg=()=>{
     const wb=XLSX.utils.book_new();
     const rows=[['WO #','Title','Customer','Hours','Week Was','Week Now','Step Was','Step Now','Week Start','Due Date','Notes'],
       ...chg.map(o=>[o.wo,o.title,o.customer,o.hours,wkLbl(orig[o.wo])||'Unscheduled',wkLbl(o.plannedWeek)||'Unscheduled',origStep[o.wo]||'',o.step||'',o.plannedWeek||'',o.dueDate||'',o.notes||''])];
     const ws=XLSX.utils.aoa_to_sheet(rows);
     ws['!cols']=[{wch:16},{wch:35},{wch:28},{wch:7},{wch:16},{wch:16},{wch:20},{wch:20},{wch:13},{wch:12},{wch:30}];
     XLSX.utils.book_append_sheet(wb,ws,'Changes');
+    // dates: the due dates to type into Cienapps (own sheet, so the Changes sheet keeps its columns)
+    const drows=[['WO #','Floor','Unit','Title','Customer','Cienapps Has','Change To','Why','Note','By','Moved On','Times Moved'],
+      ...dts.map(o=>{const h=dtLast(o)||{};return[o.wo,o.floor||'',o.unit||'',o.title||'',o.customer||'',o.dueKeep||'',o.dueDate||'',h.why||'',h.note||'',h.by||'',h.at?h.at.slice(0,10):'',(o.dueHist||[]).length];})];
+    const wsd=XLSX.utils.aoa_to_sheet(drows);
+    wsd['!cols']=[{wch:16},{wch:8},{wch:8},{wch:35},{wch:28},{wch:12},{wch:12},{wch:18},{wch:30},{wch:14},{wch:11},{wch:6}];
+    XLSX.utils.book_append_sheet(wb,wsd,'Dates');
     XLSX.writeFile(wb,'WPF_Changes_'+new Date().toISOString().split('T')[0]+'.xlsx');
     toast('Changes exported ✓');
-  });
+  };
+  document.getElementById('btn-xchg')?.addEventListener('click',xchg);
+  document.getElementById('btn-xchg2')?.addEventListener('click',xchg);
   document.getElementById('btn-mark')?.addEventListener('click',()=>{DB.orders.forEach(o=>{orig[o.wo]=o.plannedWeek||'';origStep[o.wo]=o.step||'';});sched();toast('Change tracker reset');render();});
   document.getElementById('btn-xfull')?.addEventListener('click',()=>{
     const weeks=get8Wks();
