@@ -2091,7 +2091,7 @@ function renderBoard(app){
   document.querySelectorAll('[data-s]').forEach(th=>th.onclick=()=>{const s=th.dataset.s;if(sortCol===s)sortDir*=-1;else{sortCol=s;sortDir=1;}render();});
   // Every board edit is stamped with the person at this machine (asked once per tab)
   document.querySelectorAll('[data-wsel]').forEach(sel=>sel.onchange=function(){const o=DB.orders.find(x=>x.wo===this.dataset.wsel);const v=this.value;if(o)officeWho(by=>{const was=o.plannedWeek||'';o.plannedWeek=v;if(o.dueMv&&!o.dueMv.prog&&!o.dueMv.loaded)delete o.dueMv;/*dates: week checked by hand (programmed / loaded chips stay until tapped)*/logEdit(o,'Build week '+(was?wkLbl(was):'unscheduled')+' → '+(v?wkLbl(v):'unscheduled'),by);sched();render();},()=>render());});
-  document.querySelectorAll('[data-stepsel]').forEach(sel=>sel.onchange=function(){const o=DB.orders.find(x=>x.wo===this.dataset.stepsel);const v=this.value;if(o)officeWho(by=>{logEdit(o,'Step '+(o.step||'—')+' → '+v,by);o.step=v;const tg=delvAuto(o,by);if(tg)updDelBadge();sched();render();toast(tg?'Step updated — ticked for delivery':'Step updated');},()=>render());});
+  document.querySelectorAll('[data-stepsel]').forEach(sel=>sel.onchange=function(){const o=DB.orders.find(x=>x.wo===this.dataset.stepsel);const v=this.value;if(o)officeWho(by=>{logEdit(o,'Step '+(o.step||'—')+' → '+v,by);o.step=v;storeStamp(o);/*dates*/const tg=delvAuto(o,by);if(tg)updDelBadge();sched();render();toast(tg?'Step updated — ticked for delivery':'Step updated');},()=>render());});
   document.querySelectorAll('[data-hl]').forEach(el=>el.onclick=function(){const o=DB.orders.find(x=>x.wo===this.dataset.hl);if(o){o.hl=!o.hl;sched();render();}});
   document.querySelectorAll('[data-hi]').forEach(inp=>inp.onchange=function(){const o=DB.orders.find(x=>x.wo===this.dataset.hi);const v=parseFloat(this.value)||0;if(o)officeWho(by=>{logEdit(o,'Hours '+o.hours+' → '+v,by);o.hours=v;o.hoursEstimated=false;o.hoursSrc='hand';sched();render();},()=>render());});
   document.querySelectorAll('[data-del]').forEach(btn=>btn.onclick=()=>{
@@ -6884,6 +6884,7 @@ function renderDeliveries(app){
         <div class="dpool-chips">${list.map(o=>dchip(o,later||k==='__rebook')).join('')}</div>
       </div>`;
   const nOrd=[...delSel].filter(w=>DB.orders.some(o=>o.wo===w)).length;
+  const store=inStoreJobs(),storeOld=store.filter(x=>x.n!=null&&x.n>14).length;
 
   app.innerHTML=`<div class="pg">
   ${later?'':missPanelHTML()}
@@ -6892,7 +6893,8 @@ function renderDeliveries(app){
     <p style="font-size:12px;color:#8a5a00;margin-bottom:8px">They were put on a van and day before the board knew about weeks. Until you answer they show under This week. Asked once.</p>
     <button class="btn btn-s" data-legwk="0">This week — Wk ${wkNum(thisWk())}</button> <button class="btn btn-s" data-legwk="1">Next week — Wk ${wkNum(wkPlus(thisWk(),1))}</button></div>`:''}
   <div class="del-panel">
-    <div class="del-tabs" id="del-tabs">${tabs.map(t=>`<button class="del-tab${t===delTab?' on':''}${t!=='later'&&delTabWk(t)<W0?' past':''}" data-deltab="${escA(t)}">${escA(tabLbl(t))}<span class="n">(${tabN(t)})</span></button>`).join('')}</div>
+    <div class="del-tabs" id="del-tabs">${tabs.map(t=>`<button class="del-tab${t===delTab?' on':''}${t!=='later'&&delTabWk(t)<W0?' past':''}" data-deltab="${escA(t)}">${escA(tabLbl(t))}<span class="n">(${tabN(t)})</span></button>`).join('')}<button class="del-tab" id="btn-instore" style="${delStoreOpen?'background:#0e7490;color:#fff;border-color:#0e7490':storeOld?'border-color:#d4880f;color:#8a5a00':''}" title="Built jobs (7 / 8) sitting in store with no van booked">🏬 In store ${store.length}${storeOld?` <span class="n">(${storeOld} &gt; 14 days)</span>`:''}</button></div>
+    ${delStoreOpen?inStoreHTML(store):''}
     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px">
       <div style="font-size:14px;font-weight:600" id="del-wkh">${later?'Later — jobs due after Wk '+wkNum(W3)+' (pool only)':'Delivery Board — Wk '+wkNum(wk)+' · Mon '+dShort(wk)+' – Sat '+dShort(addDayISO(wk,5))+(past?' (past week — close it when it is done)':'')}</div>
       <span style="font-size:12px;color:var(--t2)">${tagged.length} tagged · ${later?pool.length+' due later':tagged.filter(o=>slotIn(o,wk)).length+' booked this week'} · ${done} delivered</span>
@@ -6944,6 +6946,17 @@ function renderDeliveries(app){
 
   // ----- bindings -----
   document.querySelectorAll('[data-deltab]').forEach(b=>b.onclick=()=>{delTab=b.dataset.deltab;render();}); /*dates: week tabs*/
+  const isb=document.getElementById('btn-instore');if(isb)isb.onclick=()=>{delStoreOpen=!delStoreOpen;render();};
+  document.querySelectorAll('[data-storebook]').forEach(b=>b.onclick=()=>{ // ⤵ Book: tick it for delivery if it isn't, select it, open its week
+    const o=DB.orders.find(x=>x.wo===b.dataset.storebook);if(!o)return;
+    const go=by=>{
+      if(!o.delv){o.delv=true;delvMark(o);logEdit(o,'Tagged for delivery from In store',by);updDelBadge();sched();}
+      delSel.clear();delSel.add(o.wo);
+      const off=+offOf(poolWk(o));delTab=off>=0&&off<=3?String(off):'0';
+      render();toast(o.wo+' selected — tap ⤵ Place on a van and day');
+    };
+    if(o.delv)go('');else officeWho(go);
+  });
   document.querySelectorAll('.dchip').forEach(ch=>{
     ch.onclick=e=>{
       if(e.target.closest('button'))return;
@@ -8375,6 +8388,7 @@ function applyImport(plan){
       const ex=get(u);if(!ex)return; // deleted on another screen meanwhile — nothing to update
       const s=u.set||{};
       Object.keys(s).forEach(k=>{if(k!=='dueDate')ex[k]=s[k];});
+      if('step' in s)storeStamp(ex,at); /*dates: first reached 7/8*/
       if('cienHold' in s){if(s.cienHold){ex.holdAt=at;holdUntag(ex);}else{delete ex.cienHold;delete ex.holdAt;ex.holdBack=at;}}
       if('dueDate' in s){
         if(dec[u.wo]==='keep')ex.dueKeep=s.dueDate; // planner date kept; this Cienapps date won't be asked about again
@@ -8402,6 +8416,7 @@ function applyImport(plan){
     autoSchedule(fresh.filter(o=>!noAuto.has(woKey(o.wo)))); // (autoSchedule sorts its list; the jobs keep the file's order on the board data)
     fresh.forEach(o=>{
       if(o.cienHold)o.holdAt=at;
+      storeStamp(o,at); /*dates: arrives at 7/8*/
       DB.orders.push(o);board.set(woKey(o.wo),o);
       orig[o.wo]=o.plannedWeek||'';origStep[o.wo]=o.step||''; // baseline AFTER auto-schedule so auto-assignments don't show as changes
     });
@@ -8613,6 +8628,22 @@ function setLegacyWk(wk,by){
   DB.delLegacyWk=wk;const n=DB.delNotes=DB.delNotes||{};
   DEL_DAYS.forEach((d,i)=>{if(n[d]==null)return;const k=addDayISO(wk,i);if(n[k]==null||n[k]==='')n[k]=n[d];delete n[d];});
   toast('Bookings from before the week tabs are now in Wk '+wkNum(wk)+(by?' — '+by:''));sched();
+}
+/*dates: storeAt — when a job first reached 7 ASSEMBLY COMPLETE / 8 PALLETED. Stamped only by the board's step box and the
+   import (never by a boot migration). Older jobs: read from their history, else "date unknown". */
+function storeStamp(o,at){if(o&&stepForDelivery(o.step)&&!o.storeAt)o.storeAt=at||nowISO();}
+function storeSince(o){if(o.storeAt)return o.storeAt;const l=(o.log||[]).find(x=>x&&/→\s*(?:[78]\.\s*)?(assembly complete|palleted)|auto-tagged for delivery/i.test(String(x.what||'')));return l&&l.at?l.at:'';}
+function storeDays(o){const s=storeSince(o);if(!s||isNaN(new Date(s)))return null;return Math.max(0,Math.round((new Date(todayLocal()+'T12:00:00')-new Date(isoOf(new Date(s))+'T12:00:00'))/86400000));}
+// In store: at 7/8, not on a van, not shipped / on hold / delivered — oldest first, "date unknown" last
+function inStoreJobs(){return DB.orders.filter(o=>stepForDelivery(o.step)&&!o.delDay&&!isShipped(o)&&!isOnHold(o)&&dStage(o)!=='deliv'&&!o.delDone)
+  .map(o=>({o,n:storeDays(o)})).sort((a,b)=>(b.n==null?-1:b.n)-(a.n==null?-1:a.n)||woCmp(a.o,b.o));}
+let delStoreOpen=false;
+function inStoreHTML(rows){
+  return `<div class="del-panel" id="del-store" style="border:2px solid #0e7490">
+    <div style="font-size:14px;font-weight:700;color:#0e7490;margin-bottom:4px">🏬 In store — built (7 / 8), not on a van · ${rows.length} job${rows.length!==1?'s':''}</div>
+    <p style="font-size:12px;color:var(--t3);margin-bottom:6px">Oldest first. Amber = more than 14 days in store. ⤵ Book selects it — then tap ⤵ Place on a van and day.</p>
+    ${rows.length?rows.map(({o,n})=>`<div class="dsh-row" style="flex-wrap:wrap${n!=null&&n>14?';background:#fff3d6':''}"><b>${escA(o.wo)}</b>${fuHTML(o,'flr-fu','font-size:12px')}<span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-c">${escA(o.customer||'')}</span><span class="dsh-x">${escA(String(o.step||'').replace(/^\d+\.\s*/,''))} · ${n==null?'<i>date unknown</i>':'<b'+(n>14?' style="color:#8a5a00"':'')+'>'+n+' day'+(n!==1?'s':'')+' in store</b>'}${o.dueDate?' · due '+escA(fmt(o.dueDate)):''}</span><button class="btn btn-s" data-storebook="${escA(o.wo)}" style="min-height:36px">⤵ Book</button></div>`).join(''):'<div style="font-size:12px;color:var(--t3)">Nothing sitting in store ✓</div>'}
+  </div>`;
 }
 // The build week a due date belongs on — exactly autoSchedule's rule: no date or overdue → this week; past the
 // 8 board weeks → '' (Unscheduled); otherwise the week the due date falls in.
