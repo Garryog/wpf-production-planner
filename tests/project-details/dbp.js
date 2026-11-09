@@ -7,13 +7,15 @@ const { DbError, clone, find } = D3;
 const TABLES = ['project_spec_items', 'project_events'];
 const now = () => new Date().toISOString();
 const t = v => (v == null ? '' : String(v)).trim();
+// psi_tbc(): blank, TBC, T.B.C., TBA, "to be confirmed / advised" (after NFKC, any whitespace)
+const tbc = v => /^(|T\.? ?B\.? ?C\.?|T\.? ?B\.? ?A\.?|TO BE (CONFIRMED|ADVISED))$/.test(String(v == null ? '' : v).normalize('NFKC').replace(/\s+/g, ' ').trim().toUpperCase());
 function makeDb() { const d = DD.makeDb(); TABLES.forEach(x => { d.t[x] = []; }); d.seq.project_events = 1; return d; }
 function ensure(d) { TABLES.forEach(x => { if (!d.t[x]) d.t[x] = []; }); if (!d.seq.project_events) d.seq.project_events = 1; }
 const COLS = ['id', 'project_id', 'item', 'sort', 'is_extra', 'value', 'material_id', 'status', 'signed_by', 'signed_at', 'note', 'version', 'updated_at', 'updated_by'];
 // psi_rules (BEFORE INSERT OR UPDATE)
 function rules(n, old) {
-  n.value = t(n.value) || null; n.item = t(n.item);
-  if (n.value == null || n.value.toUpperCase() === 'TBC') n.status = 'not-specified';
+  n.value = String(n.value == null ? '' : n.value).normalize('NFKC').replace(/^\s+|\s+$/g, '') || null; n.item = String(n.item == null ? '' : n.item).normalize('NFKC').replace(/\s+/g, ' ').trim();
+  if (tbc(n.value)) n.status = 'not-specified';
   else if (old && old.status === 'signed-off' && n.status === 'signed-off' && n.value !== old.value) n.status = 'proposed';
   else if (n.status === 'not-specified') n.status = 'proposed';
   if (n.status !== 'signed-off') { n.signed_by = null; n.signed_at = null; }
@@ -22,7 +24,7 @@ function rules(n, old) {
 }
 function check(n, d, self) {
   if (!['not-specified', 'proposed', 'signed-off'].includes(n.status)) throw new DbError('new row violates check constraint', '23514');
-  if (n.status === 'signed-off' && (!t(n.value) || t(n.value).toUpperCase() === 'TBC')) throw new DbError('new row violates check constraint "psi_signed_needs_value"', '23514');
+  if (n.status === 'signed-off' && tbc(n.value)) throw new DbError('new row violates check constraint "psi_signed_needs_value"', '23514');
   if (!n.project_id || !find(d, 'projects', n.project_id)) throw new DbError('insert or update violates foreign key constraint', '23503');
   if (n.material_id && !find(d, 'project_materials', n.material_id)) throw new DbError('insert or update violates foreign key constraint', '23503');
   if (d.t.project_spec_items.some(x => x !== self && x.id !== n.id && x.project_id === n.project_id && t(x.item).toLowerCase() === t(n.item).toLowerCase()))
