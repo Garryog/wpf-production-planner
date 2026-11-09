@@ -73,6 +73,117 @@ refused this screen because it is out of date. Refresh the page" when refused (`
 
 ---
 
+## 2026-11-09 — Project details (spec sheet) — PENDING, NOT YET RUN — Garry runs this AFTER the Stage 3 block and BEFORE merging `feature/project-details`
+
+**What it does (plain English):**
+- Makes a new table `project_spec_items`: one row per item on a project's spec sheet ("Project details": Carcass Material,
+  Hinges, Worktop Colour …) with its value, its status (Not specified / Proposed / Signed off) and who signed it off and when.
+- The DATABASE keeps the rules, so an old or out-of-date screen can't break them: a blank or "TBC" value is always "Not
+  specified" and can never be signed off; changing a signed-off value drops it back to "Proposed" and clears the signer;
+  a sign-off can't be re-dated or re-named afterwards. One row per item per project (two PCs can't make two).
+- Makes a history table `project_events`: every add / change / sign-off is written there BY THE DATABASE (who, when, old
+  value, new value). The app can read it but never write, change or delete it.
+- Nothing is deleted: the app gets NO delete permission on either table. Writes are only taken while the lists are switched
+  on (the same rule as snags and materials). The existing planner record and tables are untouched.
+- Every new table has its own GRANT lines (30 Oct rule).
+
+**If you deploy the code without running this first:** the "📝 Project details" buttons and the red "SPEC NOT SIGNED OFF"
+chips simply don't appear (the screens check once per page load and hide them quietly). Everything else in the release —
+materials for PMs / office, editing Floor / Unit / Title / Customer — works without it.
+
+**Tested:** run twice on a throwaway Postgres set up like Supabase (after the Stage 1, Stage 3 and Stores dockets blocks);
+`tests/project-details/pg-check.sql` checks every rule above — ALL PG CHECKS PASSED (9 Nov).
+
+### Steps for Garry
+1. Supabase → WPF project → **SQL Editor** → **New query**. Copy everything in the grey box below, paste, **Run**.
+2. Expected result: **"Success. No rows returned"**. A red error: stop and send a screenshot — do not merge.
+3. Check: **Table Editor** shows `project_spec_items` and `project_events` (both empty). **Database → Triggers** shows
+   `psi_rules`, `psi_log` and `project_spec_items_touch` on `project_spec_items`.
+4. Safe to run twice (nothing is duplicated, no data touched).
+
+```sql
+-- ===================== PROJECT DETAILS (spec sheet) — project_spec_items + project_events =====================
+-- Runs AFTER the Stage 3 block (it needs projects, project_materials, lists_touch and lists_writable). Safe to run twice.
+create table if not exists project_spec_items(id text primary key, project_id text not null references projects(id),
+  item text not null, sort int not null default 0, is_extra boolean not null default false,
+  value text, material_id text references project_materials(id),
+  status text not null default 'not-specified' check(status in('not-specified','proposed','signed-off')),
+  signed_by text, signed_at timestamptz, note text,
+  version int not null default 1, updated_at timestamptz not null default now(), updated_by text);
+alter table project_spec_items drop constraint if exists psi_signed_needs_value;
+alter table project_spec_items add constraint psi_signed_needs_value
+  check(status<>'signed-off' or (coalesce(trim(value),'')<>'' and upper(trim(value))<>'TBC'));
+create unique index if not exists psi_uq on project_spec_items(project_id, lower(trim(item)));
+
+-- Who changed what on a project, written ONLY by the database (the app can read it, never write or change it)
+create table if not exists project_events(id bigserial primary key, project_id text, entity text, entity_id text,
+  act text, old jsonb, new jsonb, by text, at timestamptz default now());
+create index if not exists pe_entity on project_events(entity_id);
+
+-- The spec rules, kept by the database so an old or out-of-date screen can't break them:
+--   blank or TBC = not specified (never signed off) · any other value = proposed · signed off records who and when ·
+--   changing a signed-off value drops it back to proposed.
+create or replace function psi_rules() returns trigger language plpgsql as $$
+begin
+  new.value := nullif(btrim(coalesce(new.value,'')),'');
+  new.item := btrim(new.item);
+  if new.value is null or upper(new.value)='TBC' then
+    new.status := 'not-specified';
+  elsif tg_op='UPDATE' and old.status='signed-off' and new.status='signed-off' and new.value is distinct from old.value then
+    new.status := 'proposed';
+  elsif new.status='not-specified' then
+    new.status := 'proposed';
+  end if;
+  if new.status<>'signed-off' then new.signed_by := null; new.signed_at := null;
+  elsif tg_op='INSERT' or old.status<>'signed-off' then
+    new.signed_at := now(); new.signed_by := coalesce(nullif(btrim(coalesce(new.signed_by,'')),''), new.updated_by, '?');
+  else new.signed_at := old.signed_at; new.signed_by := old.signed_by; -- a sign-off can't be re-dated or re-named
+  end if;
+  return new;
+end $$;
+drop trigger if exists psi_rules on project_spec_items;
+create trigger psi_rules before insert or update on project_spec_items for each row execute function psi_rules();
+drop trigger if exists project_spec_items_touch on project_spec_items;
+create trigger project_spec_items_touch before update on project_spec_items for each row execute function lists_touch();
+
+create or replace function psi_log() returns trigger language plpgsql security definer set search_path=public as $$
+begin
+  if tg_op='UPDATE' and new.value is not distinct from old.value and new.status=old.status and new.item=old.item then return null; end if;
+  insert into project_events(project_id,entity,entity_id,act,old,new,by)
+  values(new.project_id,'spec',new.id,
+    case when tg_op='INSERT' then 'add' when new.status='signed-off' and old.status<>'signed-off' then 'sign-off'
+         when old.status='signed-off' and new.status<>'signed-off' then 'unsign' else 'edit' end,
+    case when tg_op='UPDATE' then jsonb_build_object('value',old.value,'status',old.status,'item',old.item) end,
+    jsonb_build_object('value',new.value,'status',new.status,'item',new.item,'signed_by',new.signed_by),
+    coalesce(new.updated_by,'?'));
+  return null;
+end $$;
+drop trigger if exists psi_log on project_spec_items;
+create trigger psi_log after insert or update on project_spec_items for each row execute function psi_log();
+
+-- Row level security: everyone using the app can read; add and change only while the lists are on the new store
+-- (the same rule as snags and materials). Nobody can delete.
+alter table project_spec_items enable row level security;
+drop policy if exists "project_spec_items read" on project_spec_items;
+create policy "project_spec_items read" on project_spec_items for select to anon, authenticated using (true);
+drop policy if exists "project_spec_items add" on project_spec_items;
+create policy "project_spec_items add" on project_spec_items for insert to anon, authenticated with check (lists_writable());
+drop policy if exists "project_spec_items edit" on project_spec_items;
+create policy "project_spec_items edit" on project_spec_items for update to anon, authenticated using (lists_writable()) with check (lists_writable());
+alter table project_events enable row level security;
+drop policy if exists "project_events read" on project_events;
+create policy "project_events read" on project_events for select to anon, authenticated using (true);
+
+-- Grants (30 Oct rule). No DELETE for anyone using the app. project_events: read only (the database writes it).
+grant select, insert, update on project_spec_items to anon, authenticated;
+grant select on project_events to anon, authenticated;
+grant all on project_spec_items, project_events to service_role;
+grant usage, select on sequence project_events_id_seq to service_role;
+```
+
+
+---
+
 ## 2026-11-04 — Photo of a list (Storage bucket `list-photos`) — PENDING, NOT YET RUN — Garry runs this BEFORE merging `feature/stores-dockets`
 
 **What it does (plain English):**
