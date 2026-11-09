@@ -744,6 +744,7 @@ function settingsFrom(s,prev){
   if(typeof s.listChk==='boolean')r.listChk=s.listChk; // "Lists must be checked before the saw" (missing = keep what we had)
   if(typeof s.photoLists==='boolean')r.photoLists=s.photoLists; // "Photo lists allowed" (missing = ON)
   if(s.exportBase&&typeof s.exportBase==='object')r.exportBase=s.exportBase;
+  if(typeof s.delLegacyWk==='string'&&s.delLegacyWk)r.delLegacyWk=s.delLegacyWk; /*dates: week given to bookings made before week tabs*/
   return r;
 }
 // The database row has no Export Changes baseline but this screen holds one: an old-version tab saved the whole
@@ -769,6 +770,7 @@ function applyPlan(p){
   if(s.listDue>0)DB.listDue=s.listDue;
   if(typeof s.listChk==='boolean')DB.listChk=s.listChk;
   if(typeof s.photoLists==='boolean')DB.photoLists=s.photoLists;
+  if(typeof s.delLegacyWk==='string'&&s.delLegacyWk)DB.delLegacyWk=s.delLegacyWk; /*dates*/
   // Export Changes baseline: saved with the plan, so a refresh never resets it — only "Mark as applied" does
   if(s.exportBase){orig={...(s.exportBase.wk||{})};origStep={...(s.exportBase.st||{})};}
 }
@@ -850,17 +852,18 @@ function mHours(b,m,t,path,N,o,u){
    Changed on both: a side that has it loaded / on the road / delivered beats a side that untagged it (e.g. going on
    hold while the driver loads it) — logged on the job. Any other two-sided change (e.g. office moves the day while
    the driver loads it) merges field by field as before, so neither the move nor the load is lost. */
-const DEL_K=['delv','delVeh','delDay','delLoadedAt','delDispAt','delDelivAt','ldBy','delivBy','delDone','holdDel'];
+const DEL_K=['delv','delVeh','delDay','delLoadedAt','delDispAt','delDelivAt','ldBy','delivBy','delDone','holdDel','delWk','delRebook']; /*dates: + booking week, "date moved — rebook"*/
 function mDel(b,m,t,path,N,o,u){
   const pick=x=>{const r={};DEL_K.forEach(k=>{if(x&&x[k]!==undefined)r[k]=x[k];});return r;};
   const ts=x=>!!(x.delLoadedAt||x.delDispAt||x.delDelivAt);
   const untag=x=>!ts(x)&&!x.delv&&!x.delVeh&&!x.delDay;
-  const desc=x=>(x.delDelivAt||x.delDone)?'delivered':x.delDispAt?'on the road':x.delLoadedAt?'loaded':(x.delv||x.delVeh||x.delDay)?'tagged '+([x.delVeh,x.delDay].filter(Boolean).join(' ')||'no van/day'):'untagged';
+  const desc=x=>(x.delDelivAt||x.delDone)?'delivered':x.delDispAt?'on the road':x.delLoadedAt?'loaded':(x.delRebook&&!x.delDay)?'taken off the van (date moved)':(x.delv||x.delVeh||x.delDay)?'tagged '+([x.delVeh,x.delDay].filter(Boolean).join(' ')||'no van/day'):'untagged';
   let B=pick(b);const M=pick(m),T=pick(t);
   for(const x of u)if(x!==NOU&&x&&typeof x==='object'&&same(T,pick(x))){B=pick(x);break;}
   if(same(M,T)||same(T,B))return M;
   if(same(M,B)&&!u.some(x=>x!==NOU&&x&&typeof x==='object'&&!same(pick(x),B)))return T; // else e.g. "delivered" sent then undone here
-  const win=ts(M)&&untag(T)?M:ts(T)&&untag(M)?T:null;
+  const pulled=x=>!ts(x)&&!!x.delRebook&&!x.delDay; /*dates: taken off the van by a date move — loading on the other side beats it (loaded is never pulled)*/
+  const win=ts(M)&&(untag(T)||pulled(T))?M:ts(T)&&(untag(M)||pulled(M))?T:null;
   if(!win)return null;
   N.push({path:path.concat('delivery'),kept:desc(win),lost:desc(win===M?T:M)});
   return win;
@@ -1171,7 +1174,7 @@ async function saveDB(){
 }
 // Never let a tab close while an edit is unsaved, a save is in flight / being checked, or a retry is pending
 window.addEventListener('beforeunload',e=>{if(saveT||SAVING||DB.saveFailed||lqPending()){e.preventDefault();e.returnValue='';}});
-function fullSettings(){return{weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP,delx:DB.delx||[],delNotes:DB.delNotes||{},grps:DB.grps||{},pins:DB.pins||{},pod:DB.pod||{},lists:DB.lists||[],listWBs:DB.listWBs||{},listDone:DB.listDone||{},listLead:DB.listLead||5,delArchive:DB.delArchive||{},staff:DB.staff||[],listHold:DB.listHold||{},holdLog:DB.holdLog||[],listRow:DB.listRow||{},saveIds:DB.saveIds||[],exportBase:{wk:orig,st:origStep},...(DB.listDue>0?{listDue:DB.listDue}:{}),...(typeof DB.listChk==='boolean'?{listChk:DB.listChk}:{}),...(typeof DB.photoLists==='boolean'?{photoLists:DB.photoLists}:{}),...(DB.listStore?{listStore:DB.listStore,listStoreAt:DB.listStoreAt||''}:{})};}
+function fullSettings(){return{weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP,delx:DB.delx||[],delNotes:DB.delNotes||{},grps:DB.grps||{},pins:DB.pins||{},pod:DB.pod||{},lists:DB.lists||[],listWBs:DB.listWBs||{},listDone:DB.listDone||{},listLead:DB.listLead||5,delArchive:DB.delArchive||{},staff:DB.staff||[],listHold:DB.listHold||{},holdLog:DB.holdLog||[],listRow:DB.listRow||{},saveIds:DB.saveIds||[],exportBase:{wk:orig,st:origStep},...(DB.listDue>0?{listDue:DB.listDue}:{}),...(typeof DB.listChk==='boolean'?{listChk:DB.listChk}:{}),...(typeof DB.photoLists==='boolean'?{photoLists:DB.photoLists}:{}),...(DB.delLegacyWk?{delLegacyWk:DB.delLegacyWk}:{}),...(DB.listStore?{listStore:DB.listStore,listStoreAt:DB.listStoreAt||''}:{})};}
 /* Stage 3 switch: settings.listStore==='v2' → cutting lists live in their own tables (lists, list_lines…).
    Missing, blank or anything else (switch back writes 'v1') → today's lists in the planner record, untouched. */
 function V2(){return DB.listStore==='v2'||DB.listStore==='switching';} // 'switching' = a Switch back is rebuilding the old lists: screens still read the tables, the database takes no changes
@@ -8214,12 +8217,12 @@ function reanalyzeImport(p){
 /* What the planner holds for a job, for every field an import can write or depends on (due date, step, hours and
    where they came from, week, delivery tag/van/day, shipped / on hold / installed / complete, the planner's overrides).
    Apply compares this between the preview and the latest database copy. */
-const PRE_K=['dueDate','dueKeep','step','hours','plannedWeek','delv','delVeh','delDay','delLoadedAt','shippedAt','shipBack','cienHold','installedAt','completeAt','completeOverride','delvOverride'];
-const PRE_L={dueDate:'due date',dueKeep:'due date',step:'step',hours:'hours',plannedWeek:'week',delv:'delivery tag',delVeh:'van',delDay:'delivery day',delLoadedAt:'loaded',shippedAt:'shipped',shipBack:'brought back',cienHold:'on hold',installedAt:'installed',completeAt:'complete',completeOverride:'complete undone',delvOverride:'untagged'};
-function preOf(ex){return JSON.stringify(PRE_K.map(k=>ex[k]==null||ex[k]===''||ex[k]===false?null:ex[k]).concat(hSrc(ex)));}
+const PRE_K=['dueDate','dueKeep','step','hours','plannedWeek','delv','delVeh','delDay','delLoadedAt','shippedAt','shipBack','cienHold','installedAt','completeAt','completeOverride','delvOverride','delWk','delRebook'];
+const PRE_L={dueDate:'due date',dueKeep:'due date',step:'step',hours:'hours',plannedWeek:'week',delv:'delivery tag',delVeh:'van',delDay:'delivery day',delLoadedAt:'loaded',shippedAt:'shipped',shipBack:'brought back',cienHold:'on hold',installedAt:'installed',completeAt:'complete',completeOverride:'complete undone',delvOverride:'untagged',delWk:'delivery week',delRebook:'taken off the van'};
+function preOf(ex){return JSON.stringify(PRE_K.map(k=>ex[k]==null||ex[k]===''||ex[k]===false?null:ex[k]).concat(hSrc(ex),(ex.dueHist||[]).length));} /*dates: + date-history length (a planner date move since the preview)*/
 function preWhat(a,b){
   try{const A=JSON.parse(a),B=JSON.parse(b),r=new Set();PRE_K.forEach((k,i)=>{if(JSON.stringify(A[i])!==JSON.stringify(B[i]))r.add(PRE_L[k]);});
-    if(A[PRE_K.length]!==B[PRE_K.length])r.add('hours');return[...r].join(', ');}catch(e){return'';}
+    if(A[PRE_K.length]!==B[PRE_K.length])r.add('hours');if((A[PRE_K.length+1]||0)!==(B[PRE_K.length+1]||0))r.add('due date');return[...r].join(', ');}catch(e){return'';}
 }
 // Every change a plan would make, as key → plain-English label (what's compared between preview and Apply)
 function planActs(p){
