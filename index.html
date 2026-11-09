@@ -6865,7 +6865,7 @@ function renderDeliveries(app){
   if(!tabs.includes(delTab))delTab='0';
   const later=delTab==='later',wk=later?'':delTabWk(),past=!later&&wk<W0;
   // the pool: each job sits in its due week; overdue, no date and manual jobs sit in This week; past W+3 = Later
-  const poolWk=o=>{const w=!o.manual&&o.dueDate?wkOf(o.dueDate):'';return !w||w<W0?W0:w;};
+  const poolWk=delPoolWk;
   const poolAll=tagged.filter(o=>!o.delDay);
   const poolOf=t=>t==='later'?poolAll.filter(o=>poolWk(o)>W3):(w=>w<W0?[]:poolAll.filter(o=>poolWk(o)===w))(delTabWk(t));
   const pool=poolOf(delTab);
@@ -7104,10 +7104,10 @@ function renderDeliveries(app){
     DB.delx.push({wo,title,customer:document.getElementById('aj-cust').value.trim(),value:parseFloat(document.getElementById('aj-val').value)||0,manual:true,delVeh:'',delDay:'',delDone:false});
     sched();render();toast(wo+' added to the pool');
   };
-  const ex=document.getElementById('btn-delexp');if(ex)ex.onclick=exportDeliveries;
-  const pp=document.getElementById('btn-delprint');if(pp)pp.onclick=printPoster;
-  const rsh=document.getElementById('btn-runsheets');if(rsh)rsh.onclick=printRunSheets;
-  const ab=document.getElementById('btn-delarch');if(ab)ab.onclick=openDelArchive;
+  const ex=document.getElementById('btn-delexp');if(ex)ex.onclick=()=>exportDeliveries(wk); /*dates: this tab's week*/
+  const pp=document.getElementById('btn-delprint');if(pp)pp.onclick=()=>printPoster(wk);
+  const rsh=document.getElementById('btn-runsheets');if(rsh)rsh.onclick=()=>printRunSheets(wk);
+  const ab=document.getElementById('btn-delarch');if(ab)ab.onclick=()=>openDelArchive();
   const dt8=document.getElementById('btn-deltag');
   if(dt8)dt8.onclick=()=>{
     const js=DB.orders.filter(delvAutoOk);if(!js.length){toast('Nothing to tag');render();return;}
@@ -7218,13 +7218,13 @@ function openDelArchive(detailKey){
 
 /* Printable A4 run sheets: one docket per vehicle per day with tick boxes and signature lines.
    Print at load-out, the loader ticks each job onto the van and signs — the paper trail for dispatch. */
-function printRunSheets(){
+function printRunSheets(wk){ /*dates: the open tab's week (default this week)*/
+  wk=typeof wk==='string'&&wk?wk:(delTabWk()||thisWk());
   const all=delAll();
-  const planned=all.filter(o=>o.delDay&&o.delVeh);
-  if(!planned.length){toast('No jobs placed on a vehicle and day yet');return;}
-  const now=new Date();const dow=now.getDay();
-  const mon=new Date(now.getFullYear(),now.getMonth(),now.getDate()-dow+(dow===0?-6:1)+7); // next week's Monday (same rule as the poster)
-  const dd=i=>{const d=new Date(mon);d.setDate(d.getDate()+i);return d;};
+  const planned=all.filter(o=>o.delVeh&&slotIn(o,wk));
+  if(!planned.length){toast('No jobs placed on a vehicle and day in Wk '+wkNum(wk)+' yet');return;}
+  const now=new Date();
+  const dd=i=>new Date(addDayISO(wk,i)+'T12:00:00');
   const fmtD=(d,o)=>d.toLocaleDateString('en-IE',o);
   const printed=fmtD(now,{weekday:'short',day:'numeric',month:'short',year:'numeric'})+' '+hhmm(now.toISOString());
   const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
@@ -7234,9 +7234,9 @@ function printRunSheets(){
     DEL_DAYS.forEach((d,di)=>{
       const jobs=planned.filter(o=>o.delVeh===v.k&&o.delDay===d).sort(woCmp);
       if(!jobs.length)return;
-      const note=(DB.delNotes||{})[d]||'';
+      const note=delNoteGet(addDayISO(wk,di));
       sheets+=`<div class="sheet">
-        <div class="hd"><div><div class="kick">WPF DISPATCH RUN SHEET</div><div class="h1">${esc(v.n)} — ${DAYNAMES[di]} ${fmtD(dd(di),{day:'numeric',month:'short',year:'numeric'})}</div></div>
+        <div class="hd"><div><div class="kick">WPF DISPATCH RUN SHEET</div><div class="h1">${esc(v.n)} — ${DAYNAMES[di]} ${fmtD(dd(di),{day:'numeric',month:'short',year:'numeric'})}</div><div class="kick" style="color:#555;margin-top:4px">WK ${wkNum(wk)}</div></div>
         <div class="meta">${jobs.length} job${jobs.length!==1?'s':''} · €${Math.round(jobs.reduce((a,o)=>a+(+o.value||0),0)).toLocaleString()}<br>Printed ${esc(printed)}</div></div>
         ${note?`<div class="note">NOTE: ${esc(note)}</div>`:''}
         <table><thead><tr><th class="tick">ON VAN</th><th>WO #</th><th>FLOOR</th><th>UNIT</th><th>DESCRIPTION</th><th>CUSTOMER / SITE</th><th class="tick">CHECKED</th></tr></thead><tbody>
@@ -7251,7 +7251,7 @@ function printRunSheets(){
       </div>`;
     });
   });
-  const doc=`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>WPF Run Sheets — printed ${esc(printed)}</title><style>
+  const doc=`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>WPF Run Sheets — Wk ${wkNum(wk)} — printed ${esc(printed)}</title><style>
 @page{size:A4 portrait;margin:12mm}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#17191d;background:#8a8886}
@@ -7277,20 +7277,20 @@ tr:nth-child(even) td{background:#f4f3f1}
   const w=window.open('','_blank');
   if(!w){toast('Popup blocked — allow popups for this page');return;}
   w.document.write(doc);w.document.close();
-  toast('Run sheets opened — one page per van per day, A4');
+  toast('Run sheets for Wk '+wkNum(wk)+' opened — one page per van per day, A4');
 }
 
 /* Print the delivery plan as A3 landscape wall posters:
    Sheet 1 Artic · Sheet 2 Trucks (Volvo/Renault/Iveco/Crafter + notes) · Sheet 3 Smart Movers (only if used) */
-function printPoster(){
+function printPoster(wk){ /*dates: the open tab's week (default this week) — it used to be "next week" whatever was on the board*/
+  wk=typeof wk==='string'&&wk?wk:(delTabWk()||thisWk());
   const all=delAll();
-  const planned=all.filter(o=>o.delDay);
-  if(!planned.length){toast('No jobs placed on a vehicle and day yet');return;}
-  const notes=DB.delNotes||{};
-  const now=new Date();const dow=now.getDay();
-  const mon=new Date(now.getFullYear(),now.getMonth(),now.getDate()-dow+(dow===0?-6:1)+7); // next week's Monday
-  const dd=i=>{const d=new Date(mon);d.setDate(d.getDate()+i);return d;};
-  const wn=wkNum(mon);
+  const planned=all.filter(o=>slotIn(o,wk));
+  if(!planned.length){toast('No jobs placed on a vehicle and day in Wk '+wkNum(wk)+' yet');return;}
+  const notes={};DEL_DAYS.forEach((d,i)=>{notes[d]=delNoteGet(addDayISO(wk,i));});
+  const now=new Date();
+  const dd=i=>new Date(addDayISO(wk,i)+'T12:00:00');
+  const wn=wkNum(wk);
   const fmtD=(d,o)=>d.toLocaleDateString('en-IE',o);
   const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
   const DAYNAMES=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
@@ -7309,7 +7309,7 @@ function printPoster(){
   const body=sheet('Artic',vRow(DEL_VEH[0]),'',1)
     +sheet('Trucks',DEL_VEH.slice(1,5).map(vRow).join(''),notesRow,2)
     +(smart?sheet('Smart Movers',vRow(DEL_VEH[5]),'',3):'');
-  const doc=`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>WPF Delivery Plan \u2014 Week ${wn}</title>
+  const doc=`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>WPF Delivery Plan \u2014 Wk ${wn} (${esc(dShort(wk))})</title>
 <style>
 @page{size:A3 landscape;margin:0}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
@@ -7436,15 +7436,16 @@ function exportSnapshot(){
     +extraWks.map(w=>wkSection(w,wkLbl(w))).join('')
     +wkSection('','Unscheduled');
   // delivery grid
-  const all=delAll();
-  const notes=DB.delNotes||{};
-  const cell=(v,d)=>all.filter(o=>o.delVeh===v&&o.delDay===d).sort(woCmp).map(o=>`<div class="job${o.delDone?' done':''}"><b>${E(o.wo)}</b> ${E(fuLbl(o))}<br>${E(o.title)}<span>${E(o.customer)}</span></div>`).join('');
-  const delHTML=all.length?`<h2 style="margin-top:34px">Delivery Plan <span>${all.length} tagged · week value €${Math.round(all.filter(o=>o.delDay).reduce((a,o)=>a+(+o.value||0),0)).toLocaleString()}</span></h2>
-  <table class="dg"><thead><tr><th>Vehicle</th>${DEL_DAYS.map(d=>`<th>${d}</th>`).join('')}</tr></thead><tbody>
+  const all=delAll(),sw=thisWk(); /*dates: the snapshot shows this week's grid; other weeks' bookings are listed under it*/
+  const notes={};DEL_DAYS.forEach((d,i)=>{notes[d]=delNoteGet(addDayISO(sw,i));});
+  const cell=(v,d)=>all.filter(o=>o.delVeh===v&&slotIn(o,sw,d)).sort(woCmp).map(o=>`<div class="job${o.delDone?' done':''}"><b>${E(o.wo)}</b> ${E(fuLbl(o))}<br>${E(o.title)}<span>${E(o.customer)}</span></div>`).join('');
+  const delHTML=all.length?`<h2 style="margin-top:34px">Delivery Plan <span>${all.length} tagged · Wk ${wkNum(sw)} value €${Math.round(all.filter(o=>slotIn(o,sw)).reduce((a,o)=>a+(+o.value||0),0)).toLocaleString()}</span></h2>
+  <table class="dg"><thead><tr><th>Vehicle</th>${DEL_DAYS.map((d,i)=>`<th>${d} ${dShort(addDayISO(sw,i))}</th>`).join('')}</tr></thead><tbody>
   ${DEL_VEH.map(v=>`<tr><td class="veh">${E(v.n)}</td>${DEL_DAYS.map(d=>`<td>${cell(v.k,d)}</td>`).join('')}</tr>`).join('')}
   <tr><td class="veh">Notes</td>${DEL_DAYS.map(d=>`<td class="nt">${E(notes[d]||'')}</td>`).join('')}</tr>
-  <tr><td class="veh">Value/day</td>${DEL_DAYS.map(d=>{const v=all.filter(o=>o.delDay===d).reduce((a,o)=>a+(+o.value||0),0);return `<td class="r"><b>${v?'€'+Math.round(v).toLocaleString():'—'}</b></td>`;}).join('')}</tr>
+  <tr><td class="veh">Value/day</td>${DEL_DAYS.map(d=>{const v=all.filter(o=>slotIn(o,sw,d)).reduce((a,o)=>a+(+o.value||0),0);return `<td class="r"><b>${v?'€'+Math.round(v).toLocaleString():'—'}</b></td>`;}).join('')}</tr>
   ${all.filter(o=>!o.delDay).length?`<tr><td class="veh">Unplanned</td><td colspan="6">${all.filter(o=>!o.delDay).sort(woCmp).map(o=>E(o.wo)).join(', ')}</td></tr>`:''}
+  ${all.filter(o=>o.delDay&&slotWk(o)!==sw).length?`<tr><td class="veh">Other weeks</td><td colspan="6">${all.filter(o=>o.delDay&&slotWk(o)!==sw).sort((a,b)=>slotDate(a).localeCompare(slotDate(b))).map(o=>E(o.wo)+' ('+E(slotLblO(o))+')').join(', ')}</td></tr>`:''}
   </tbody></table>`:'';
   const totH=DB.orders.reduce((a,o)=>a+o.hours,0),totV=DB.orders.reduce((a,o)=>a+(o.value||0),0);
   const doc=`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -7488,13 +7489,14 @@ ${delHTML}
   toast('Snapshot saved — email it or drop it on OneDrive; it opens anywhere');
 }
 
-function exportDeliveries(){
-  const all=delAll();
-  if(!all.length){toast('No jobs tagged for delivery yet');return;}
-  const notes=DB.delNotes||{};
+function exportDeliveries(wk){ /*dates: one week — its bookings + the jobs still to plan for it*/
+  wk=typeof wk==='string'&&wk?wk:(delTabWk()||thisWk());
+  const all=delAll().filter(o=>o.delDay?slotWk(o)===wk:delPoolWk(o)===wk);
+  if(!all.length){toast('Nothing booked or to plan in Wk '+wkNum(wk));return;}
+  const notes={};DEL_DAYS.forEach((d,i)=>{notes[d]=delNoteGet(addDayISO(wk,i));});
   // Calendar sheet — mirrors the on-screen grid
   const jobTxt=o=>o.wo+' — '+(o.title||'')+(o.customer?'  ['+o.customer+']':'')+'  €'+Math.round(o.value||0).toLocaleString()+(o.delDone?'  — DELIVERED':'');
-  const cal=[['Vehicle',...DEL_DAYS]];
+  const cal=[['Wk '+wkNum(wk)+' — Mon '+dShort(wk)+' to Sat '+dShort(addDayISO(wk,5))],['Vehicle',...DEL_DAYS.map((d,i)=>d+' '+dShort(addDayISO(wk,i)))]];
   DEL_VEH.forEach(v=>{
     const by={};DEL_DAYS.forEach(d=>{by[d]=all.filter(o=>o.delVeh===v.k&&o.delDay===d).sort(woCmp);});
     const k=Math.max(1,...DEL_DAYS.map(d=>by[d].length));
@@ -7503,7 +7505,7 @@ function exportDeliveries(){
   });
   cal.push(['NOTES',...DEL_DAYS.map(d=>notes[d]||'')]);
   cal.push(['JOBS / DAY',...DEL_DAYS.map(d=>all.filter(o=>o.delDay===d).length)]);
-  cal.push(['VALUE / DAY €',...DEL_DAYS.map(d=>Math.round(dayVal(d)))]);
+  cal.push(['VALUE / DAY €',...DEL_DAYS.map(d=>Math.round(dayVal(d,wk)))]);
   cal.push(['WEEK TOTAL €',Math.round(all.filter(o=>o.delDay).reduce((a,o)=>a+(+o.value||0),0))]);
   const un=all.filter(o=>!o.delDay);
   if(un.length)cal.push(['UNPLANNED',un.length+' job'+(un.length!==1?'s':'')+' still in the pool — see Unplanned sheet']);
@@ -7513,7 +7515,7 @@ function exportDeliveries(){
   const vehIx=o=>{const i=DEL_VEH.findIndex(v=>v.k===o.delVeh);return i<0?99:i;};
   const srt=(a,b)=>dayIx(a)-dayIx(b)||vehIx(a)-vehIx(b)||woCmp(a,b);
   const hdr=['Day','Vehicle','WO #','Floor','Unit','Order #','Title','Customer','Value €','Hours','Status'];
-  const rowOf=o=>[o.delDay||'UNPLANNED',vehLbl(o.delVeh)||'Unassigned',o.wo,o.floor||'',o.unit||'',o.orderNo||'',o.title||'',o.customer||'',Math.round(o.value||0),o.hours||'',(dStage(o)?dStageLbl[dStage(o)]+(dStageTime(o)?' '+dStageTime(o):''):(o.manual?'added manually':''))];
+  const rowOf=o=>[o.delDay?o.delDay+' '+slotDate(o):'UNPLANNED',vehLbl(o.delVeh)||'Unassigned',o.wo,o.floor||'',o.unit||'',o.orderNo||'',o.title||'',o.customer||'',Math.round(o.value||0),o.hours||'',(dStage(o)?dStageLbl[dStage(o)]+(dStageTime(o)?' '+dStageTime(o):''):(o.manual?'added manually':''))];
   const widths=[{wch:10},{wch:13},{wch:14},{wch:7},{wch:9},{wch:9},{wch:34},{wch:30},{wch:9},{wch:7},{wch:15}];
   const mkSheet=list=>{const ws=XLSX.utils.aoa_to_sheet([hdr,...[...list].sort(srt).map(rowOf)]);ws['!cols']=widths;return ws;};
 
@@ -7525,8 +7527,8 @@ function exportDeliveries(){
   XLSX.utils.book_append_sheet(wb,mkSheet(all.filter(o=>o.delVeh==='ARTIC')),'Artic');
   XLSX.utils.book_append_sheet(wb,mkSheet(all.filter(o=>o.delVeh&&o.delVeh!=='ARTIC')),'Trucks');
   if(un.length)XLSX.utils.book_append_sheet(wb,mkSheet(un),'Unplanned');
-  XLSX.writeFile(wb,'WPF_Deliveries_'+new Date().toISOString().split('T')[0]+'.xlsx');
-  toast('Delivery plan exported');
+  XLSX.writeFile(wb,'WPF_Deliveries_Wk'+wkNum(wk)+'_'+wk+'.xlsx');
+  toast('Delivery plan for Wk '+wkNum(wk)+' exported');
 }
 
 function renderImport(app){
@@ -8523,10 +8525,10 @@ function renderExport(app){
     const weeks=get8Wks();
     const wb=XLSX.utils.book_new();
     const sorted=[...DB.orders].sort((a,b)=>{if(!a.plannedWeek&&b.plannedWeek)return 1;if(a.plannedWeek&&!b.plannedWeek)return-1;return(a.plannedWeek||'').localeCompare(b.plannedWeek||'');});
-    const rows=[['WO #','Title','Customer','Hours','Planned Week','Week Start','Due Date','Step','Sales Rep','Notes','Vehicle','Delivery Day','Delivered At','Delivered By','Shipped At','Sheets (Cienapps)'],
-      ...sorted.map(o=>[o.wo,o.title,o.customer,o.hours,wkLbl(o.plannedWeek)||'Unscheduled',o.plannedWeek||'',o.dueDate||'',(o.step||'').replace(/^\d+\.\s*/,''),o.salesRep||'',o.notes||'',o.delVeh?(vehLbl(o.delVeh)||o.delVeh):'',o.delDay||'',o.delDelivAt?new Date(o.delDelivAt).toLocaleString('en-IE'):'',o.delivBy||'',o.shippedAt?new Date(o.shippedAt).toLocaleString('en-IE'):'',o.sheetsCien!=null?o.sheetsCien:''])];
+    const rows=[['WO #','Title','Customer','Hours','Planned Week','Week Start','Due Date','Step','Sales Rep','Notes','Vehicle','Delivery Day','Delivered At','Delivered By','Shipped At','Sheets (Cienapps)','Orig due','Moved ×'],
+      ...sorted.map(o=>[o.wo,o.title,o.customer,o.hours,wkLbl(o.plannedWeek)||'Unscheduled',o.plannedWeek||'',o.dueDate||'',(o.step||'').replace(/^\d+\.\s*/,''),o.salesRep||'',o.notes||'',o.delVeh?(vehLbl(o.delVeh)||o.delVeh):'',o.delDay?o.delDay+' '+slotDate(o):'',o.delDelivAt?new Date(o.delDelivAt).toLocaleString('en-IE'):'',o.delivBy||'',o.shippedAt?new Date(o.shippedAt).toLocaleString('en-IE'):'',o.sheetsCien!=null?o.sheetsCien:'',o.origDueDate||'',(o.dueHist||[]).length||''])]; /*dates: + original due date and how many times it moved*/
     const ws=XLSX.utils.aoa_to_sheet(rows);
-    ws['!cols']=[{wch:16},{wch:35},{wch:28},{wch:7},{wch:16},{wch:13},{wch:12},{wch:20},{wch:16},{wch:30},{wch:12},{wch:10},{wch:18},{wch:14},{wch:18},{wch:10}];
+    ws['!cols']=[{wch:16},{wch:35},{wch:28},{wch:7},{wch:16},{wch:13},{wch:12},{wch:20},{wch:16},{wch:30},{wch:12},{wch:10},{wch:18},{wch:14},{wch:18},{wch:10},{wch:12},{wch:8}];
     XLSX.utils.book_append_sheet(wb,ws,'Full Schedule');
     const srows=[['Week','Start Date','Orders','Hours','Capacity','% Used','Status'],...weeks.map(wk=>{const h=wkHrs(wk),cnt=wkCnt(wk),cap=wkCap(wk),pct=Math.round(h/cap*100);return[wkLbl(wk),wk,cnt,h,cap,pct+'%',pct>=100?'OVER':pct>=80?'NEAR OK':'OK'];})];
     const ws2=XLSX.utils.aoa_to_sheet(srows);ws2['!cols']=[{wch:16},{wch:13},{wch:8},{wch:8},{wch:10},{wch:8},{wch:12}];
@@ -8638,6 +8640,8 @@ function storeDays(o){const s=storeSince(o);if(!s||isNaN(new Date(s)))return nul
 function inStoreJobs(){return DB.orders.filter(o=>stepForDelivery(o.step)&&!o.delDay&&!isShipped(o)&&!isOnHold(o)&&dStage(o)!=='deliv'&&!o.delDone)
   .map(o=>({o,n:storeDays(o)})).sort((a,b)=>(b.n==null?-1:b.n)-(a.n==null?-1:a.n)||woCmp(a.o,b.o));}
 let delStoreOpen=false;
+// the week a job still to plan belongs to: its due week; overdue, no date and manual jobs → this week
+function delPoolWk(o){const W0=thisWk(),w=o&&!o.manual&&o.dueDate?wkOf(o.dueDate):'';return !w||w<W0?W0:w;}
 function inStoreHTML(rows){
   return `<div class="del-panel" id="del-store" style="border:2px solid #0e7490">
     <div style="font-size:14px;font-weight:700;color:#0e7490;margin-bottom:4px">🏬 In store — built (7 / 8), not on a van · ${rows.length} job${rows.length!==1?'s':''}</div>
