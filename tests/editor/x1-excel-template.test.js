@@ -15,8 +15,8 @@ const TPL = path.join(ROOT, 'templates', 'WPF-Cutting-List-Template.xlsx');
 const FX1 = path.join(ROOT, 'tests', 'fixtures', 'xl-template-filled.xlsx'), FX2 = path.join(ROOT, 'tests', 'fixtures', 'xl-template-two-houses.xlsx');
 // ---- the reader on the template itself
 const wb = XLSX.read(fs.readFileSync(TPL), { type: 'buffer', cellDates: true, sheetStubs: true });
-rec('template sheets: READ ME, House 1, Example', wb.SheetNames.join('|') === 'READ ME|House 1|Example', wb.SheetNames.join('|'));
-rec('READ ME and Example are never imported; House 1 is', lsSkipSheet('READ ME') && lsSkipSheet('Example') && !lsSkipSheet('House 1') && lsSkipSheet('Read me') && lsSkipSheet('Example (2)'));
+rec('template sheets: READ ME, House 1, Example, Edging', wb.SheetNames.join('|') === 'READ ME|House 1|Example|Edging', wb.SheetNames.join('|'));
+rec('READ ME and Example are never imported; House 1 is', lsSkipSheet('READ ME') && lsSkipSheet('Example') && !lsSkipSheet('House 1') && lsSkipSheet('Read me') && lsSkipSheet('Example (2)') && lsSkipSheet('Edging'));
 const ex = (() => { const g = lsSheetAoa(wb.Sheets.Example); return lsParseGrid(g.v, { formulas: g.f, sheet: 'Example' }); })();
 rec('Example: project, title, date, carcass and door materials read from the yellow boxes', ex.meta.project === 'Example Homes – Phase 2' && ex.meta.title === 'House type B – 3 bed' && ex.meta.date === '2026-11-09' && ex.meta.carcass === '18mm MFC White' && ex.meta.door === '18mm MFC Bardolino Oak', J(ex.meta));
 rec('Example: no warnings', !ex.warn.length, J(ex.warn));
@@ -25,7 +25,7 @@ rec('Example: "Carcass material" is not a heading or a part', !ex.rows.some(r =>
 rec('Example: House nr 18 heading + 3 sub-headings', hd.map(r => (r.sub ? 'S:' : 'H:') + r.item).join('|') === 'H:House nr 18|S:Fillers and Kickers|S:Worktops|S:Stores items', J(hd));
 rec('Example: 9 parts, 5 saw (with sizes) and 4 stores', parts.length === 9 && parts.filter(r => +r.L > 0).length === 5, J(parts));
 const panel = parts.find(r => /End panel/.test(r.item));
-rec('Example: Edging 1, Edging 2 and the note land in the right fields', panel && panel.edging === 'L1LE 2mm' && panel.edging2 === 'L2S 1mm' && panel.note === 'Grain runs with length', J(panel));
+rec('Example: Edging 1, Edging 2 and the note land in the right fields', panel && panel.edging === 'L2LE 1mm' && panel.edging2 === 'L2S1LE' && panel.note === 'Grain runs with length', J(panel));
 const fr = parts.find(r => /fridge/.test(r.item));
 rec('Example: "Bought in" typed in the Note column of a Stores row is ticked Bought in', fr && fr.buy === true && fr.note === '', J(fr));
 rec('Example: TBC in Material is kept as the spec', parts.find(r => /Sink/.test(r.item)).mat === 'TBC');

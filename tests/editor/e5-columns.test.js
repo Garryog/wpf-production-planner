@@ -18,11 +18,11 @@ const S_ = (k, v) => `(()=>{const e=document.querySelector('.pod-ovl [data-mr="$
   const a = await pg.evaluate(() => { openListEditor(null, 'WO-1'); const ov = document.querySelector('.pod-ovl');
     return { th: [...ov.querySelectorAll('.me-grid thead th')].map(t => t.textContent).filter(Boolean).join('|'), k: ov.querySelectorAll('.me-k').length, fit: !!ov.querySelector('#me-addfit'),
       opts: [...ov.querySelector('[data-mr="0|mat"]').options].map(x => x.value).join('|'), groups: [...ov.querySelector('[data-mr="0|mat"]').querySelectorAll('optgroup')].map(g => g.label).join('|'),
-      edg: [...ov.querySelectorAll('#me-edg option')].map(x => x.value).join('|'), list: ov.querySelector('[data-mr="0|edging"]').getAttribute('list') }; });
+      edg: [...ov.querySelector('[data-mr="0|edging"]').options].map(x => x.value).join('|'), list: ov.querySelector('[data-mr="0|edging"]').tagName }; });
   rec('columns: Description | Qty | Length | Width | Material | Edging 1 | Edging 2 | Note | Bought in (Bought in tick and the second edging column added 4 Nov)', a.th === 'Description|Qty|Length|Width|Material|Edging 1|Edging 2|Note|Bought in', a.th);
   rec('no Saw / Fittings column and no "+ Fittings row" button', a.k === 0 && !a.fit);
   rec('Material (was Colour, Garry 4 Nov) is a dropdown of the project\'s materials + "＋ Add new material…" (fittings offered on a row with no size)', a.opts === '|MFC White|W/W|Blum hinge|__add' && a.groups === 'Boards / materials|Fittings & hardware', a.opts + ' / ' + a.groups);
-  rec('Edging offers L1LE 1mm, L2S1LE, L4S 1mm, L4S 2mm, No edge and codes used on the project; free text allowed', a.edg === 'L1LE 1mm|L2S1LE|L4S 1mm|L4S 2mm|No edge|1mm ABS' && a.list === 'me-edg', a.edg);
+  rec('Edging is a drop-down (Garry 9 Nov) of the codes on WPF\'s lists + codes used on the project, then Other…', a.edg === '|L1LE 1mm|L2LE 1mm|L2S1LE|L1L2SE 1mm|L4S 1mm|L4S 2mm|L4S 2mm R|No edge|No Cap|1mm ABS|__other' && a.list === 'SELECT', a.edg + ' ' + a.list);
   // type a saw row and a stores row
   await pg.evaluate(S_('0|item', 'Side panel')); await pg.evaluate(S_('0|qty', '2')); await pg.evaluate(S_('0|L', '2380')); await pg.evaluate(S_('0|W', '570')); await pg.evaluate(S_('0|mat', 'W/W'));
   const t0 = await pg.evaluate(() => document.querySelector('[data-tag="0"]').hidden);

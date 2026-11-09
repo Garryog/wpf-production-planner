@@ -86,7 +86,7 @@ const cnt = S => ({ p: S.db.t.projects.length, l: S.db.t.lists.length, ln: S.db.
   // ---- more v2 work before switching back: a tick, a park, a release, a new list
   await F.tapRow(saw.page, 'data-rt', 'L2:1'); // untick Gable
   await F.tapRow(saw.page, 'data-rna', 'L1:6'); await F.send(saw.page);
-  await off.page.evaluate(async () => { await lsPoll(); openListEditor(null, 'WO-1'); const ov = document.querySelector('.pod-ovl'); const s = (k2, v2) => { const e = ov.querySelector('[data-mr="' + k2 + '"]'); e.value = v2; e.oninput(); }; s('0|item', 'Plinth'); s('0|qty', '2'); s('0|L', '2400'); s('0|W', '150'); s('0|mat', 'MFC White'); s('0|edging', '1mm'); ov.querySelector('#me-name').value = 'House 1 extras'; ov.querySelector('#me-save').click(); });
+  await off.page.evaluate(async () => { await lsPoll(); openListEditor(null, 'WO-1'); const ov = document.querySelector('.pod-ovl'); const s = (k2, v2) => { const e = ov.querySelector('[data-mr="' + k2 + '"]'); if (e.tagName === 'SELECT' && ![...e.options].some(o => o.value === v2)) e.add(new Option(v2, v2)); /* an edging code not in the drop-down = the user's "Other…" (9 Nov) */ e.value = v2; e.oninput(); }; s('0|item', 'Plinth'); s('0|qty', '2'); s('0|L', '2400'); s('0|W', '150'); s('0|mat', 'MFC White'); s('0|edging', '1mm'); ov.querySelector('#me-name').value = 'House 1 extras'; ov.querySelector('#me-save').click(); });
   await F.sleep(600);
   const nl = S.db.t.lists.find(l => l.name === 'House 1 extras');
   D.applyLineChanges(S.db, [{ id: nl.id + ':1', status: 'cut', cid: 'z', rev: 1 }], 'Sean');

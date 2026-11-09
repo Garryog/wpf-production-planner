@@ -58,9 +58,9 @@ let pass = 0, fail = 0; const rec = (n, ok, d) => { ok ? pass++ : fail++; consol
     const th = [...document.querySelectorAll('.me-grid th')].map(x => x.textContent.trim());
     const e1 = document.querySelector('[data-mr="2|edging"]'), e2 = document.querySelector('[data-mr="2|edging2"]');
     const g1 = document.querySelector('[data-mr="1|edging2"]');
-    return { th, e1: e1 && e1.value, e2: e2 && e2.value, list: e2 && e2.getAttribute('list'), g1: g1 && g1.value, opts: [...document.querySelectorAll('#me-edg option')].map(o => o.value) }; });
+    return { th, e1: e1 && e1.value, e2: e2 && e2.value, list: e2 && e2.tagName, g1: g1 && g1.value, opts: e2 ? [...e2.options].map(o => o.value) : [] }; });
   rec('editor: columns "Edging 1" and "Edging 2" side by side', ed.th.indexOf('Edging 2') === ed.th.indexOf('Edging 1') + 1 && ed.th.indexOf('Edging 1') > 0, JSON.stringify(ed.th));
-  rec('editor: Edging 2 loads the saved value and uses the same code list (drop-down + free text)', ed.g1 === 'L4S 2mm' && ed.list === 'me-edg' && ed.opts.includes('L1LE 1mm') && ed.opts.includes('L4S 2mm'), JSON.stringify(ed));
+  rec('editor: Edging 2 loads the saved value and uses the same code list (drop-down + free text)', ed.g1 === 'L4S 2mm' && ed.list === 'SELECT' && ed.opts.includes('L1LE 1mm') && ed.opts.includes('L4S 2mm'), JSON.stringify(ed));
   await p.evaluate(() => { const e = document.querySelector('[data-mr="2|edging2"]'); e.value = 'L2S1LE'; e.dispatchEvent(new Event('input', { bubbles: true })); e.dispatchEvent(new Event('change', { bubbles: true })); });
   await p.evaluate(async () => { localStorage.setItem('wpfOffName', 'Ann'); document.getElementById('me-save').click(); await new Promise(r => setTimeout(r, 300)); const b = [...document.querySelectorAll('button')].find(x => /^(OK|Save|Continue)/.test(x.textContent.trim()) && x.closest('.pod-ovl') && !x.closest('.me-ed')); if (b) b.click(); await new Promise(r => setTimeout(r, 800)); });
   const k = D.find(S.db, 'list_lines', 'L1:3'), g = D.find(S.db, 'list_lines', 'L1:2');

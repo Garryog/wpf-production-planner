@@ -31,14 +31,14 @@ const res = []; const rec = (n, ok, d) => { res.push(ok); console.log((ok ? 'PAS
   rec('changing the project changes the materials offered', b === '|Birch ply|__add', b);
   // validation, fittings Other…
   const c = await off.page.evaluate(() => { const o = document.querySelector('.pod-ovl'), p = o.querySelector('#me-pid'); p.value = 'P1'; p.onchange({ target: p });
-    const s = (k, v) => { const e = o.querySelector('[data-mr="' + k + '"]'); e.value = v; (e.oninput || e.onchange)(); };
+    const s = (k, v) => { const e = o.querySelector('[data-mr="' + k + '"]'); if (e.tagName === 'SELECT' && ![...e.options].some(o => o.value === v)) e.add(new Option(v, v)); /* an edging code not in the drop-down = the user's "Other…" (9 Nov) */ e.value = v; (e.oninput || e.onchange)(); };
     s('0|item', 'Gable'); s('0|qty', '2'); s('0|L', '900'); s('0|W', '560'); s('0|edging', '1mm');
     o.querySelector('#me-save').click(); return o.querySelector('#me-err').textContent; });
   rec('a saw row with no material is refused', /Pick the material for every saw row/.test(c), c);
   const d = await off.page.evaluate(() => { const o = document.querySelector('.pod-ovl');
-    const s = (k, v) => { const e = o.querySelector('[data-mr="' + k + '"]'); e.value = v; (e.oninput || e.onchange)(); };
+    const s = (k, v) => { const e = o.querySelector('[data-mr="' + k + '"]'); if (e.tagName === 'SELECT' && ![...e.options].some(o => o.value === v)) e.add(new Option(v, v)); /* an edging code not in the drop-down = the user's "Other…" (9 Nov) */ e.value = v; (e.oninput || e.onchange)(); };
     s('0|mat', 'MFC White'); o.querySelector('#me-addsaw').click(); document.querySelector('.pod-ovl #me-addsaw').click();
-    const s2 = (k, v) => { const e = document.querySelector('.pod-ovl [data-mr="' + k + '"]'); e.value = v; (e.oninput || e.onchange)(); };
+    const s2 = (k, v) => { const e = document.querySelector('.pod-ovl [data-mr="' + k + '"]'); if (e.tagName === 'SELECT' && ![...e.options].some(o => o.value === v)) e.add(new Option(v, v)); /* an edging code not in the drop-down = the user's "Other…" (9 Nov) */ e.value = v; (e.oninput || e.onchange)(); };
     s2('1|item', 'Hinge'); s2('1|qty', '8'); s2('1|mat', 'Blum hinge');
     s2('2|item', 'Sink'); s2('2|qty', '1');
     const pr = window.prompt; localStorage.removeItem('wpfEditPin'); const ans = ['Franke 1.5 bowl', null]; window.prompt = () => ans.shift(); // "+ Add new material…", no PIN → this row only, flagged
