@@ -8684,7 +8684,7 @@ function movedBanner(o,today){
   const h=(o&&o.dueHist)||[],x=h[h.length-1];if(!x||!x.at)return'';
   const d=new Date(x.at);if(isNaN(d))return'';
   if((today||todayLocal())>nextWorkDay(isoOf(d)))return'';
-  return `<div class="moved-note">📅 ${escA(o.wo)} HAS MOVED — now due ${escA(fmt(x.to))} (was ${escA(x.from?fmt(x.from):'—')})${x.why?' · '+escA(x.why):''}${x.src==='cienapps'?' · Cienapps':x.by?' · '+escA(x.by):''}</div>`;
+  return `<div class="moved-note">📅 ${escA(o.wo)} HAS MOVED — now due ${escA(fmt(x.to))} (was ${escA(x.from?fmt(x.from):'—')})${x.why?' · '+escA(x.why):''}${x.src!=='cienapps'&&x.by?' · '+escA(x.by):''}</div>`;
 }
 function movedBanners(wos){return (wos||[]).map(w=>movedBanner(DB.orders.find(o=>o.wo===w))).join('');}
 function dateSummaryDlg(res){ /*dates: after a group move — what moved and what needs a look*/
