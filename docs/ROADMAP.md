@@ -117,6 +117,22 @@ Rules: rank by the leading number. "Shipped" = step 9 only (left the factory →
 
 - (4 Nov, Garry, answers) Photo of a list REPLACES the paper option: on a WO with no typed list, attach a photo (phone camera or file); the saw must be able to open it; it is a stop-gap to be removed later once the typed system is in place (keep it simple, easy to switch off). Docket cancel ASKS "Did these items leave stores?" (Yes = stay got out; No = back to 'to pick'). Dockets are for FITTINGS (stores items) only for now — cutting-list (saw) items are not docketed, so no per-WO quantity split is needed.
 
+### Dates & deliveries decisions (9 Nov 2026, Garry) — Job A, plan docs/PLAN-dates-deliveries.md
+- Order of work: "Dates & deliveries first"; PM sequence, Cienapps upload and Johnny's pool go WITH project details (Job B); CNC view after both.
+- Already built 4 Nov: step 7 ASSEMBLY COMPLETE / 8 PALLETED (planner or import) ticks the job for delivery, logged; one-off catch-up button.
+- A1 Deliveries page in WEEKS: tabs This week / Next week / +2 / +3 / Later, each with its own vehicle × Mon–Sat grid and day notes; past weeks keep working. To Plan pool grouped by due week. "In store — ready, no delivery date" section (assembled/palleted, not on a van, days in store, amber after 14 days). A3 poster and Excel export per week.
+- A2 Due date editable on the Capacity Board row AND the delivery card/pool: date picker + reason (Customer delay · Site not ready · Production · Materials · Design/drawings · Other + note). One change moves the job on both pages.
+- A3 Planned week follows the new due week UNLESS already cut (step 6+ or saw ticks): week stays, flagged "due date moved — check week".
+- A4 A job booked on a van/day whose due date changes comes OFF the van, back into the To Plan pool of its new week, flagged "date moved — rebook" (logged). Never silently keep the old booking.
+- A5 Every date change stores who/when/old/new/reason; original due date kept (origDueDate); "moved N×" badge on board row and delivery card.
+- A6 Every planner date change is listed in Export Changes; a re-import still carrying the old Cienapps date does NOT put it back (planner date wins until Cienapps matches, then the override clears).
+- A7 Knock-on: cutting-list due date, saw cut-by and stores pick date move with it; saw and stores show "this job has moved" on the card for a day.
+- A8 Delivery date per job (Cienapps column L "Delivery/install date" when present, else set in the planner); build due date works back from it (default 3 working days, Settings). Changing the delivery date moves the build dates; changing the build date alone still allowed (flag if after delivery).
+- A9 "Don't build too early": a not-yet-cut job whose due date moves out by more than 14 days is flagged (and suggested to move out of the current planned week).
+- A10 Site-ready confirmation by PM or office; jobs on the delivery board within N working days (Settings, default 5) without it show amber "site not confirmed"; who/when logged.
+- A11 GROUP moving of due (and delivery) dates with one reason — from board group-select/groups, by project/customer, or ticked cards on the delivery page; same A3–A7 rules; summary of what moved and what was flagged.
+- Not wanted: a weekly date-changes report.
+
 ## Progress log
 ### 2 Nov 2026 (scheduled run)
 - Architect confirmed the cutting-list plan against the code; build notes and build order added to docs/PLAN-cutting-lists-stage3.md (fixed garbled characters in both plan files).
