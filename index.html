@@ -1337,8 +1337,9 @@ function wkNum(d){ // ISO-8601 week number — matches Irish calendars and Ciena
   return Math.ceil(((dt-y0)/86400000+1)/7);
 }
 function wkLbl(k){if(!k)return'—';const d=new Date(k);return'Wk '+wkNum(d)+' · '+d.toLocaleDateString('en-IE',{day:'numeric',month:'short'});}
-// Step a week at a time in UTC (getMonday is UTC) — a local-time step repeated a Monday across the March clock change
-function get8Wks(){const w=[];let d=getMonday(new Date());for(let i=0;i<8;i++){w.push(wkKey(d));d=new Date(d);d.setUTCDate(d.getUTCDate()+7);}return w;}
+// This week from the LOCAL date (dates: Monday 00:00–01:00 summer time is in the new week), then a week at a time in UTC
+// (a local-time step repeated a Monday across the March clock change)
+function get8Wks(){const w=[];let d=new Date(wkOf(todayLocal())+'T00:00:00Z');for(let i=0;i<8;i++){w.push(wkKey(d));d=new Date(d);d.setUTCDate(d.getUTCDate()+7);}return w;}
 function wkCap(k){return DB.weekCaps&&DB.weekCaps[k]?DB.weekCaps[k]:WCAP;}
 /* Shipped (Cienapps shipped/invoiced): off the Capacity Board and out of every week total, but kept — the Shipped tab
    holds it until installation is complete, and Deliveries keeps it until the driver confirms. */
