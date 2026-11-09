@@ -136,7 +136,7 @@ one (Q2); the SQL not yet run (sheet hidden, nothing breaks).
 
 ### 9 Nov 2026 (evening run 1) — all four items built, Tester round 1 fixed, Manager GO WITH CONDITIONS
 - **Architect:** this plan. Built with the recommended answer to Q1–Q5 (unattended run) — Garry still to confirm them.
-- **Coder** (8581e18, 4bd…/HEAD~2, 6275cf0, 816583e):
+- **Coder** (8581e18, 3df4d16, 6275cf0, 816583e):
   - Pending SQL block "Project details" at the top of SUPABASE_CHANGES.md (`project_spec_items` + `project_events`,
     rules + history triggers, GRANTs, no DELETE). Run twice on a throwaway Postgres; tests/project-details/pg-check.sql
     ALL PG CHECKS PASSED (fresh database and upgrade of the earlier draft). Fake database: tests/project-details/dbp.js / srvp.js.
