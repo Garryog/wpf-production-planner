@@ -555,7 +555,7 @@ details.lti-other{margin-bottom:14px}details.lti-other>summary{cursor:pointer;fo
 <div class="rovl hide" id="rovl"></div>
 <script>
 const SUPA_URL='https://klyropbsupqfmtjjwlfa.supabase.co/rest/v1';
-const SUPA_KEY='sb_publishable_CF4Aizmuq0ChPfVHL6K66w_78VFQC1e'; // new-style Supabase key (legacy JWT keys were disabled by Supabase on 2026-09-11 and are kept only as a re-enabled fallback)
+const SUPA_KEY='sb_publishable_8Roj0BuQAXxYTjffP-r9Ag_lQHwi8P7'; // new-style Supabase key (legacy JWT keys were disabled by Supabase on 2026-09-11 and are kept only as a re-enabled fallback)
 const SUPA_HDR={'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'};
 const SUPA_WHDR={'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=minimal'};
 const SUPA_STORE='https://klyropbsupqfmtjjwlfa.supabase.co/storage/v1'; // proof-of-delivery photos live in the public 'pod' bucket
@@ -743,6 +743,7 @@ function settingsFrom(s,prev){
   ['wcap','vcap','listLead','listDue'].forEach(k=>{if(s[k]>0)r[k]=s[k];});
   if(typeof s.listChk==='boolean')r.listChk=s.listChk; // "Lists must be checked before the saw" (missing = keep what we had)
   if(typeof s.photoLists==='boolean')r.photoLists=s.photoLists; // "Photo lists allowed" (missing = ON)
+  if(typeof s.listDelOnly==='boolean')r.listDelOnly=s.listDelOnly; // (10 Nov) "Only jobs ticked for delivery need a list" (missing = OFF)
   if(s.exportBase&&typeof s.exportBase==='object')r.exportBase=s.exportBase;
   return r;
 }
@@ -769,6 +770,7 @@ function applyPlan(p){
   if(s.listDue>0)DB.listDue=s.listDue;
   if(typeof s.listChk==='boolean')DB.listChk=s.listChk;
   if(typeof s.photoLists==='boolean')DB.photoLists=s.photoLists;
+  if(typeof s.listDelOnly==='boolean')DB.listDelOnly=s.listDelOnly;
   // Export Changes baseline: saved with the plan, so a refresh never resets it — only "Mark as applied" does
   if(s.exportBase){orig={...(s.exportBase.wk||{})};origStep={...(s.exportBase.st||{})};}
 }
@@ -1171,7 +1173,7 @@ async function saveDB(){
 }
 // Never let a tab close while an edit is unsaved, a save is in flight / being checked, or a retry is pending
 window.addEventListener('beforeunload',e=>{if(saveT||SAVING||DB.saveFailed||lqPending()){e.preventDefault();e.returnValue='';}});
-function fullSettings(){return{weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP,delx:DB.delx||[],delNotes:DB.delNotes||{},grps:DB.grps||{},pins:DB.pins||{},pod:DB.pod||{},lists:DB.lists||[],listWBs:DB.listWBs||{},listDone:DB.listDone||{},listLead:DB.listLead||5,delArchive:DB.delArchive||{},staff:DB.staff||[],listHold:DB.listHold||{},holdLog:DB.holdLog||[],listRow:DB.listRow||{},saveIds:DB.saveIds||[],exportBase:{wk:orig,st:origStep},...(DB.listDue>0?{listDue:DB.listDue}:{}),...(typeof DB.listChk==='boolean'?{listChk:DB.listChk}:{}),...(typeof DB.photoLists==='boolean'?{photoLists:DB.photoLists}:{}),...(DB.listStore?{listStore:DB.listStore,listStoreAt:DB.listStoreAt||''}:{})};}
+function fullSettings(){return{weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP,delx:DB.delx||[],delNotes:DB.delNotes||{},grps:DB.grps||{},pins:DB.pins||{},pod:DB.pod||{},lists:DB.lists||[],listWBs:DB.listWBs||{},listDone:DB.listDone||{},listLead:DB.listLead||5,delArchive:DB.delArchive||{},staff:DB.staff||[],listHold:DB.listHold||{},holdLog:DB.holdLog||[],listRow:DB.listRow||{},saveIds:DB.saveIds||[],exportBase:{wk:orig,st:origStep},...(DB.listDue>0?{listDue:DB.listDue}:{}),...(typeof DB.listChk==='boolean'?{listChk:DB.listChk}:{}),...(typeof DB.photoLists==='boolean'?{photoLists:DB.photoLists}:{}),...(typeof DB.listDelOnly==='boolean'?{listDelOnly:DB.listDelOnly}:{}),...(DB.listStore?{listStore:DB.listStore,listStoreAt:DB.listStoreAt||''}:{})};}
 /* Stage 3 switch: settings.listStore==='v2' → cutting lists live in their own tables (lists, list_lines…).
    Missing, blank or anything else (switch back writes 'v1') → today's lists in the planner record, untouched. */
 function V2(){return DB.listStore==='v2'||DB.listStore==='switching';} // 'switching' = a Switch back is rebuilding the old lists: screens still read the tables, the database takes no changes
@@ -3321,6 +3323,8 @@ function lsPanelHTML(){
       :on?'<button class="btn btn-s" id="ls-back">↩ Switch back to old lists</button>':'<button class="btn btn-g" id="ls-mig">⇪ Migrate lists</button>')
     +(on?'<div style="margin-top:12px"><label style="font-size:13px;font-weight:600"><input type="checkbox" id="ls-chk"'+(DB.listChk===true?' checked':'')+'> Lists must be checked before the saw</label>'
       +'<div style="font-size:12px;color:var(--t3)">Off (normal): a list goes to the saw as soon as it is made. On: the saw only sees a list once someone with the Drawing office / Production Manager / Admin PIN has ticked ✓ Check, and a change must be checked again. Only lists made or changed while it is on need the check. Admin PIN.</div></div>'
+      +'<div style="margin-top:12px"><label style="font-size:13px;font-weight:600"><input type="checkbox" id="ls-delonly"'+(DB.listDelOnly===true?' checked':'')+'> Only jobs ticked for delivery need a list</label>'
+      +'<div style="font-size:12px;color:var(--t3)">On (start-up, from 10 Nov): "Cutting lists to issue", the counts and the saw\'s warnings only ask for lists for jobs ticked 🚚 for delivery — the long list of older jobs is left out (nothing is marked or deleted). Off: every job at steps 5–8 needs a list, as designed.</div></div>'
       +'<div style="margin-top:12px"><label style="font-size:13px;font-weight:600"><input type="checkbox" id="ls-photo"'+(DB.photoLists!==false?' checked':'')+'> Photo lists allowed</label>'
       +'<div style="font-size:12px;color:var(--t3)">On (normal for now): a job with no typed list can have a photo of its paper list attached ("📷 Attach photo of list"); the saw and stores open it and tick the job once. Off: the attach buttons go — photos already attached still show. A stop-gap until every list is typed. Admin PIN.</div></div>':'')
     +'<div id="ls-msg" style="font-size:12px;margin-top:8px"></div></div>';
@@ -3337,6 +3341,9 @@ function lsBindPanel(){
   const ck=document.getElementById('ls-chk');
   if(ck)ck.onchange=()=>{const v=ck.checked;if(!lsAdminOk()){ck.checked=!v;return;}
     DB.listChk=v;sched();render();toast(v?'Lists must now be checked before the saw sees them':'Lists go to the saw without a check');};
+  const dl=document.getElementById('ls-delonly');
+  if(dl)dl.onchange=()=>{const v=dl.checked;if(!lsAdminOk()){dl.checked=!v;return;}
+    DB.listDelOnly=v;sched();render();toast(v?'Only jobs ticked for delivery need a cutting list now':'Every job at steps 5–8 needs a cutting list again');};
   const pc=document.getElementById('ls-photo');
   if(pc)pc.onchange=()=>{const v=pc.checked;if(!lsAdminOk()){pc.checked=!v;return;}
     DB.photoLists=v;sched();render();toast(v?'Photo lists allowed — "📷 Attach photo of list" is back':'Photo lists switched off — no more photos can be attached (the ones already attached still show)');};
@@ -5301,6 +5308,7 @@ function listsNeeded(){ // WOs scheduled to deliver inside the lead time with NO
   return DB.orders.filter(o=>{
     if(tagged.has(o.wo)||phHas(o)||o.delDelivAt||o.delDone||woFinished(o)||isOnHold(o))return false; // a photo of the list counts as a list (Garry, 4 Nov)
     if(v2&&lsNA(o))return false;                    // V2: marked "No list needed"
+    if(DB.listDelOnly===true&&!o.delv)return false; // (Garry, 9 Nov) start-up: only jobs ticked for delivery need a list — the long backlog is left out, never marked
     const planned=o.delv&&o.delDay;                 // already on the delivery board
     const dueSoon=o.dueDate&&o.dueDate<=lim;        // due date inside the lead window
     return planned||dueSoon||(v2&&lsProcessed(o));  // V2: also every live job at steps 5-8 (Garry, 3 Nov)
