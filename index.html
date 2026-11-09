@@ -80,6 +80,11 @@ button,input,select{font-family:inherit;cursor:pointer}
 .wo-title{font-weight:500;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
 .wo-cust{color:var(--t2);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
 .due-badge{display:inline-block;padding:2px 7px;border-radius:4px;font-size:11px;font-weight:600}
+/*dates*/.dm-due{cursor:pointer}.dm-due:hover .due-badge{outline:2px solid #1a56db}
+.dm-chip{display:inline-block;margin:2px 0 0 4px;font-size:10px;font-weight:700;border-radius:4px;padding:1px 5px;background:#eef3fb;color:#14418f;border:1px solid #b9cdec;cursor:pointer;white-space:nowrap;font-family:inherit}
+.dm-chip.amber{background:#fff4d6;color:#7a4a00;border-color:#e0a43a}.dm-chip.red{background:#fde8e8;color:#b42318;border-color:#e57368}
+.dchip-due{display:inline-block;border:none;background:none;padding:0;margin-top:2px;font-size:11px;color:var(--t2);text-decoration:underline dotted;cursor:pointer;font-family:inherit}
+.dm-moved{margin-top:2px;font-size:10px;font-weight:700;color:#b45309}
 .due-late{background:var(--rl);color:var(--red)}.due-soon{background:var(--al);color:var(--amber)}.due-ok{background:var(--gl);color:var(--green)}
 .step-badge{font-size:10px;padding:2px 6px;border-radius:3px;background:var(--bl);color:var(--blue);white-space:nowrap}
 .week-sel{padding:4px 8px;border:1px solid var(--b2);border-radius:5px;font-size:12px;background:#fff;width:120px}
@@ -1780,7 +1785,7 @@ function renderBoard(app){
           <td><span class="wo-title" title="${escA(o.title)}">${escA(o.title)}</span></td>
           <td><span class="wo-cust" title="${escA(o.customer)}">${escA(o.customer)}</span></td>
           <td style="text-align:right"><input type="number" step="0.5" min="0" style="width:52px;text-align:right;border:1px solid ${o.hoursEstimated?'#f59e0b':'var(--b2)'};border-radius:4px;padding:2px 4px;font-size:12px;font-weight:600;background:${o.hoursEstimated?'#fffbeb':'#fff'}" title="${o.hoursEstimated?'Estimated from value — verify':'Actual hours from Cienapps'}" data-hi="${escA(o.wo)}" value="${+o.hours||0}"></td>
-          <td>${dueBadge(o.dueDate,o.plannedWeek,o.origDueDate)}</td>
+          <td><span class="dm-due" data-duedlg="${escA(o.wo)}" title="Tap to change the due date">${dueBadge(o.dueDate,o.plannedWeek,o.origDueDate)}</span>${dmChips(o)}</td>
           <td style="text-align:right;font-size:12px;color:var(--t2)">€${Math.round(o.value||0).toLocaleString()}</td>
           <td><select class="step-sel" data-stepsel="${escA(o.wo)}" style="font-size:11px;padding:3px 4px;border-radius:6px;border:1px solid var(--b2);background:#fff;color:var(--text);max-width:120px">
             ${getSteps().map(s=>`<option value="${escA(s)}"${(o.step||'')===s?' selected':''}>${escA(s.replace(/^\d+\.\s*/,''))}</option>`).join('')}
@@ -2059,6 +2064,7 @@ function renderBoard(app){
     const o=DB.orders.find(x=>x.wo===b.dataset.grm);
     if(o){delete o.grp;cleanGroups();sched();render();toast(o.wo+' taken out of the group');}
   });
+  dmBindChips(app); /*dates: due date → Change dates; moved N× → history; check-week chip*/
   const sn=document.getElementById('btn-snap');if(sn)sn.onclick=exportSnapshot;
   const ca=document.getElementById('btn-clearall');
   if(ca)ca.onclick=async()=>{
@@ -2072,7 +2078,7 @@ function renderBoard(app){
   };
   document.querySelectorAll('[data-s]').forEach(th=>th.onclick=()=>{const s=th.dataset.s;if(sortCol===s)sortDir*=-1;else{sortCol=s;sortDir=1;}render();});
   // Every board edit is stamped with the person at this machine (asked once per tab)
-  document.querySelectorAll('[data-wsel]').forEach(sel=>sel.onchange=function(){const o=DB.orders.find(x=>x.wo===this.dataset.wsel);const v=this.value;if(o)officeWho(by=>{const was=o.plannedWeek||'';o.plannedWeek=v;logEdit(o,'Build week '+(was?wkLbl(was):'unscheduled')+' → '+(v?wkLbl(v):'unscheduled'),by);sched();render();},()=>render());});
+  document.querySelectorAll('[data-wsel]').forEach(sel=>sel.onchange=function(){const o=DB.orders.find(x=>x.wo===this.dataset.wsel);const v=this.value;if(o)officeWho(by=>{const was=o.plannedWeek||'';o.plannedWeek=v;delete o.dueMv;/*dates: week checked by hand*/logEdit(o,'Build week '+(was?wkLbl(was):'unscheduled')+' → '+(v?wkLbl(v):'unscheduled'),by);sched();render();},()=>render());});
   document.querySelectorAll('[data-stepsel]').forEach(sel=>sel.onchange=function(){const o=DB.orders.find(x=>x.wo===this.dataset.stepsel);const v=this.value;if(o)officeWho(by=>{logEdit(o,'Step '+(o.step||'—')+' → '+v,by);o.step=v;const tg=delvAuto(o,by);if(tg)updDelBadge();sched();render();toast(tg?'Step updated — ticked for delivery':'Step updated');},()=>render());});
   document.querySelectorAll('[data-hl]').forEach(el=>el.onclick=function(){const o=DB.orders.find(x=>x.wo===this.dataset.hl);if(o){o.hl=!o.hl;sched();render();}});
   document.querySelectorAll('[data-hi]').forEach(inp=>inp.onchange=function(){const o=DB.orders.find(x=>x.wo===this.dataset.hi);const v=parseFloat(this.value)||0;if(o)officeWho(by=>{logEdit(o,'Hours '+o.hours+' → '+v,by);o.hours=v;o.hoursEstimated=false;o.hoursSrc='hand';sched();render();},()=>render());});
@@ -6820,6 +6826,7 @@ function dchip(o,showCust){
       <span class="dchip-btns">${rd?`<button class="dinfo" data-dinfo="${escA(o.wo)}" title="${escA(RDY_LBL[rd.lvl]+(rd.why.length?' — '+rd.why.join(' · '):''))} — tap for detail">ⓘ</button>`:''}<button class="dchk${st?' on':''}" data-dd="${escA(o.wo)}" title="Status: ${dStageLbl[st]||'planned'} — tap to update (opens a menu)">${st==='deliv'?'✓':st==='disp'?'D':st==='load'?'L':'·'}</button><button data-dx="${escA(o.wo)}" title="${o.delDay?'Return to pool':(o.manual?'Delete this manual job':'Remove from delivery plan')}">×</button></span>
     </div>
     <div class="dchip-t">${escA(o.title)||'—'}</div>
+    ${!o.manual?`<div><button class="dchip-due" data-duedlg="${escA(o.wo)}" title="Tap to change the due date">due ${o.dueDate?escA(fmt(o.dueDate))+' Wk'+wkNum(o.dueDate):'—'}</button>${(o.dueHist||[]).length?`<button class="dm-chip" data-duehist="${escA(o.wo)}" title="Due date changed — tap for the history">🔁 date ×${o.dueHist.length}</button>`:''}</div>`:''}${o.delRebook&&!o.delDay?`<div class="dm-moved" title="${escA('Taken off '+(o.delRebook.was||'').split('|').slice(0,2).join(' ')+' by '+(o.delRebook.by||'')+(o.delRebook.why?' — '+o.delRebook.why:''))}">📅 date moved — rebook</div>`:''}${o.dueMv&&o.dueMv.loaded&&dStage(o)&&dStage(o)!=='deliv'?`<div class="dm-moved" style="color:#b42318">📅 date moved after loading — check</div>`:''}
     ${st?`<div class="dstg s-${st}">${dStageLbl[st]}${dStageTime(o)?' '+dStageTime(o):''}${st==='deliv'&&o.delivBy?' — '+escA(o.delivBy):st==='load'&&o.ldBy?' — '+escA(o.ldBy):''}</div>`:''}
     ${isOnHold(o)?`<div class="rdy-tag" style="background:#fde8e8;color:#b42318" title="Step 12 in Cienapps — kept here because it's already loaded / on the road">⏸ ON HOLD in Cienapps</div>`:''}${rd?`<div class="rdy-tag">${RDY_LBL[rd.lvl]}</div>`:''}${(o.delMoves||[]).length?`<div class="dmoved" title="${escA(o.delMoves.map(m=>m.why+' — '+m.by).join(' | '))}">🔁 moved${o.delMoves.length>1?' ×'+o.delMoves.length:''}</div>`:''}
     ${showCust?`<div class="dchip-c">${escA(o.customer)}</div>`:''}
@@ -7012,6 +7019,7 @@ function renderDeliveries(app){
     dropTo(c,parts[0],parts[1]);
   });
   document.querySelectorAll('[data-dinfo]').forEach(b=>b.onclick=e=>{e.stopPropagation();showReadiness([b.dataset.dinfo],b.dataset.dinfo,true);});
+  dmBindChips(app); /*dates: due date on a card → Change dates*/
   bindMissWhy();
   // Tap-to-place: select chips, then tap a day cell — works with gloves/touch and keyboards, no dragging needed
   document.querySelectorAll('[data-place]').forEach(b=>b.onclick=()=>{
@@ -8585,6 +8593,118 @@ function moveDates(jobs,change,reason,by,opts){
     return res;
   };
   return{rows,apply,change,reason,opts};
+}
+
+/*dates: ---------- Change-dates dialog: one job (tap its due date) or several (group / selection). Office + Production Manager. ---------- */
+function dateCanMove(){return ROLE==='office'||ROLE==='prod'||!ROLE;}
+function dmDay(iso){if(!iso)return'—';const d=new Date(String(iso).slice(0,10)+'T12:00:00');if(isNaN(d))return String(iso);return d.toLocaleDateString('en-IE',{weekday:'short',day:'numeric',month:'short'})+' (Wk '+wkNum(String(iso).slice(0,10))+')';}
+function dmHistHTML(o){
+  const h=(o&&o.dueHist)||[];if(!h.length)return'<div style="font-size:12px;color:var(--t3)">No date changes yet.</div>';
+  return h.slice().reverse().map(x=>`<div style="font-size:12px;padding:3px 0;border-bottom:1px solid var(--border)"><b>${escA(x.from?fmt(x.from):'—')} → ${escA(fmt(x.to))}</b> · ${escA(x.why||'')}${x.note?' — '+escA(x.note):''} <span style="color:var(--t3)">· ${escA(x.by||'')} ${x.at?escA(new Date(x.at).toLocaleString('en-IE',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})):''}${x.src==='cienapps'?' · Cienapps import':x.src==='group'?' · group move':''}</span></div>`).join('');
+}
+function dmHistDlg(wo){
+  const o=findDel(wo);if(!o)return;
+  const ov=document.createElement('div');ov.className='pod-ovl';
+  ov.innerHTML=`<div class="pod-in" style="min-width:min(460px,92vw)"><div style="font-weight:800;color:#14335c;font-size:16px;margin-bottom:6px">Date history — ${escA(o.wo)}</div>
+    <div style="font-size:12px;color:var(--t2);margin-bottom:8px">Original due date: <b>${escA(dmDay(o.origDueDate||o.dueDate))}</b> · now <b>${escA(dmDay(o.dueDate))}</b></div>${dmHistHTML(o)}
+    <div style="margin-top:10px;text-align:right"><button class="btn btn-s" id="pod-x">Close</button></div></div>`;
+  document.body.appendChild(ov);ov.onclick=e=>{if(e.target===ov||e.target.id==='pod-x')ov.remove();};
+}
+// "📅 due moved — check week" (cut job, week kept) / "programmed" / "moved after loading": tap → move to the due week or keep
+function dmCheckDlg(wo){
+  const o=DB.orders.find(x=>x.wo===wo);if(!o||!o.dueMv)return;
+  if(!dateCanMove()){toast('Only the office or the Production Manager can change this');return;}
+  const wk=dueWeekFor(o.dueDate),mv=o.dueMv;
+  const ov=document.createElement('div');ov.className='pod-ovl';
+  ov.innerHTML=`<div class="pod-in" style="min-width:min(460px,92vw)"><div style="font-weight:800;color:#14335c;font-size:16px;margin-bottom:4px">${escA(o.wo)} — due date moved</div>
+    <div style="font-size:13px;color:var(--t2);margin-bottom:10px">Due ${escA(mv.from?fmt(mv.from):'—')} → <b>${escA(fmt(o.dueDate))}</b>${mv.by?' by '+escA(mv.by):''}. Build week now: <b>${o.plannedWeek?escA(wkLbl(o.plannedWeek)):'Unscheduled'}</b>.
+      ${mv.prog?'<br><b style="color:#b42318">It was already programmed (step 5) — take it out of the nest.</b>':mv.loaded?'<br><b style="color:#b42318">It was already loaded on a van — check the delivery.</b>':'<br>It was already cut, so the build week was not moved.'}</div>
+    ${!mv.prog&&wk!==(o.plannedWeek||'')?`<button class="rbtn" id="dmc-move" style="justify-content:center">Move to the due week — ${wk?escA(wkLbl(wk)):'Unscheduled'}</button>`:''}
+    <button class="rbtn" id="dmc-keep" style="justify-content:center">${mv.prog?'Done — taken out of the nest':'Keep it, it\'s fine'}</button>
+    <div style="margin-top:6px;text-align:right"><button class="btn btn-s" id="pod-x">Cancel</button></div></div>`;
+  document.body.appendChild(ov);ov.onclick=e=>{if(e.target===ov||e.target.id==='pod-x')ov.remove();};
+  const go=mvWk=>officeWho(by=>{const x=DB.orders.find(y=>y.wo===wo);ov.remove();if(!x)return;
+    if(mvWk){const was=x.plannedWeek||'';x.plannedWeek=wk;logEdit(x,'Build week '+(was?wkLbl(was):'unscheduled')+' → '+(wk?wkLbl(wk):'unscheduled')+' (due date moved)',by);}
+    else logEdit(x,mv.prog?'Programmed job — taken out of the nest after the date move':'Due date moved — build week checked, kept',by);
+    delete x.dueMv;sched();render();},()=>{});
+  const m=ov.querySelector('#dmc-move');if(m)m.onclick=()=>go(true);
+  ov.querySelector('#dmc-keep').onclick=()=>go(false);
+}
+// Board chips for one job: moved N× (tap → history) and the "check" chip
+function dmChips(o){
+  const n=(o.dueHist||[]).length,mv=o.dueMv;
+  return (n?`<button class="dm-chip" data-duehist="${escA(o.wo)}" title="Due date changed ${n} time${n!==1?'s':''} — tap for the history">🔁 moved ${n}×</button>`:'')
+    +(mv?`<button class="dm-chip${mv.prog||mv.loaded?' red':' amber'}" data-duemv="${escA(o.wo)}" title="Tap to sort it out">📅 ${mv.prog?'programmed — take it out of the nest':mv.loaded?'date moved after loading — check':'due moved — check week'}</button>`:'');
+}
+function dmBindChips(root){
+  (root||document).querySelectorAll('[data-duehist]').forEach(b=>b.onclick=e=>{e.stopPropagation();dmHistDlg(b.dataset.duehist);});
+  (root||document).querySelectorAll('[data-duemv]').forEach(b=>b.onclick=e=>{e.stopPropagation();dmCheckDlg(b.dataset.duemv);});
+  (root||document).querySelectorAll('[data-duedlg]').forEach(b=>b.onclick=e=>{e.stopPropagation();dateDlg([b.dataset.duedlg]);});
+}
+function dateDlg(wos){
+  wos=[...new Set((wos||[]).filter(Boolean))];
+  const js=wos.map(w=>DB.orders.find(o=>o.wo===w)).filter(Boolean);
+  if(!js.length){toast('That job is not on the planner (a job added only on Deliveries has no due date to move)');return;}
+  if(!dateCanMove()){toast('Only the office or the Production Manager can move due dates');return;}
+  officeWho(by=>dateDlgOpen(js.map(o=>o.wo),by),()=>{});
+}
+function dateDlgOpen(wos,by){
+  const many=wos.length>1,one=many?null:DB.orders.find(o=>o.wo===wos[0]);if(!many&&!one)return;
+  let why='',mode='set';
+  const ov=document.createElement('div');ov.className='pod-ovl';ov.id='date-dlg';
+  const head=many?`Change dates — ${wos.length} jobs`:`Change dates — ${escA(one.wo)}${fuLbl(one)?' · '+escA(fuLbl(one)):''}${one.title?' · '+escA(one.title):''}`;
+  ov.innerHTML=`<div class="pod-in" style="width:min(640px,96vw)">
+    <div style="font-weight:800;color:#14335c;font-size:16px;margin-bottom:8px">${head}</div>
+    ${many?`<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px;font-size:14px">
+      <label><input type="radio" name="dmm" value="set" checked> Set all to <input type="date" id="dm-date" style="padding:6px;font-size:14px"></label>
+      <label><input type="radio" name="dmm" value="shift"> Move all by <input type="number" id="dm-n" value="1" step="1" style="width:64px;padding:6px;font-size:14px">
+        <select id="dm-u" style="padding:6px;font-size:14px"><option value="wk">weeks</option><option value="wd">working days</option></select> <span style="font-size:12px;color:var(--t3)">(minus = earlier)</span></label></div>`
+    :`<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px;font-size:14px"><b>Due (build) date</b> <input type="date" id="dm-date" value="${escA(one.dueDate||'')}" style="padding:6px;font-size:14px"> <span style="color:var(--t3);font-size:12px">was ${escA(dmDay(one.dueDate))}</span></div>`}
+    <div style="font-size:13px;font-weight:700;margin:6px 0 4px">Why?</div>
+    <div class="why-grid">${DATE_WHY.map(w=>`<button class="rbtn" data-dmwhy="${escA(w)}" style="justify-content:center">${escA(w)}</button>`).join('')}</div>
+    <input id="dm-note" placeholder="Note (optional — needed for Other)" maxlength="200" style="width:100%;margin-top:6px;padding:9px;border:1px solid var(--b2);border-radius:8px;font-size:14px">
+    <div style="font-size:13px;font-weight:700;margin:10px 0 4px">What will happen</div>
+    <div id="dm-prev" style="font-size:12px;background:#f7f9fc;border:1px solid var(--border);border-radius:8px;padding:8px 10px;max-height:38vh;overflow:auto"></div>
+    ${!many?`<div style="font-size:12px;color:var(--t3);margin-top:6px">Original date: ${escA(dmDay(one.origDueDate||one.dueDate))}${(one.dueHist||[]).length?' · moved '+one.dueHist.length+'× before':''} <details style="display:inline"><summary style="cursor:pointer;display:inline">History ▾</summary>${dmHistHTML(one)}</details></div>`:''}
+    <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:12px"><button class="btn btn-s" id="pod-x" style="min-height:44px">Cancel — change nothing</button><button class="btn btn-g" id="dm-ok" style="min-height:44px" disabled>✓ Move date${many?'s':''}</button></div></div>`;
+  document.body.appendChild(ov);
+  const $=s=>ov.querySelector(s);
+  ov.onclick=e=>{if(e.target===ov||e.target.id==='pod-x')ov.remove();};
+  const change=()=>{
+    if(many&&mode==='shift'){const n=Math.round(+$('#dm-n').value||0);return n?{shift:{n,unit:$('#dm-u').value==='wd'?'wd':'wk'}}:{};}
+    const d=$('#dm-date').value;return d?{due:d}:{};
+  };
+  const prev=()=>{
+    const ch=change(),mv=moveDates(wos,ch,{why},by,{src:many?'group':'planner'}),rs=mv.rows;
+    const ok=rs.filter(r=>!r.skipped),sk=rs.filter(r=>r.skipped);
+    const line=r=>{
+      const wk=r.weekKept?`build week stays ${r.wkFrom?escA(wkLbl(r.wkFrom)):'Unscheduled'} ⚠`:r.wkTo!==r.wkFrom?`build week ${r.wkFrom?escA(wkLbl(r.wkFrom)):'Unscheduled'} → <b>${r.wkTo?escA(wkLbl(r.wkTo)):'Unscheduled'}</b>`:`build week stays ${r.wkFrom?escA(wkLbl(r.wkFrom)):'Unscheduled'}`;
+      const van=r.vanPulled?` · <b style="color:#b45309">off ${escA(r.slot)} → To Plan ("rebook")</b>`:'';
+      const fl=r.flags.map(f=>`<div style="color:#b42318">⚠ ${escA(dmFlagTxt(f,r))}${f==='bank-hol'&&!many?` <button class="btn btn-s" id="dm-prevwd" style="padding:2px 8px;font-size:11px">Use ${escA(fmt(prevWorkDay(r.to)))}</button>`:''}</div>`).join('');
+      return `<div style="padding:3px 0;border-bottom:1px solid var(--border)">${many?`<b style="font-family:monospace">${escA(r.wo)}</b> · `:''}${escA(r.from?fmt(r.from):'—')} → <b>${escA(fmt(r.to))}</b> · ${wk}${van}${fl}</div>`;
+    };
+    $('#dm-prev').innerHTML=(ok.length?ok.slice(0,50).map(line).join('')+(ok.length>50?`<div style="color:var(--t3)">…and ${ok.length-50} more</div>`:''):'<div style="color:var(--t3)">'+(ch.due||ch.shift?'Nothing to move.':'Pick the new date.')+'</div>')
+      +(!many&&ok.length?'<div style="color:var(--t3);margin-top:3px">Saw cut-by, stores pick-by and the cutting-list due date follow the new date.</div>':'')
+      +(sk.length&&(ch.due||ch.shift)?`<div style="margin-top:6px;color:var(--t3)">Not moved: ${sk.slice(0,30).map(r=>escA(r.wo)+' ('+escA(r.skipped)+')').join(' · ')}${sk.length>30?' …':''}</div>`:'');
+    const pw=$('#dm-prevwd');if(pw)pw.onclick=()=>{const r=ok[0];$('#dm-date').value=prevWorkDay(r.to);prev();};
+    const note=$('#dm-note').value.trim();
+    $('#dm-ok').disabled=!ok.length||!why||(why==='Other'&&!note);
+    $('#dm-ok').textContent='✓ Move date'+(ok.length>1?'s ('+ok.length+')':'');
+  };
+  ov.querySelectorAll('[data-dmwhy]').forEach(b=>b.onclick=()=>{why=b.dataset.dmwhy;ov.querySelectorAll('[data-dmwhy]').forEach(x=>{const on=x===b;x.style.background=on?'#eaf2ff':'';x.style.borderColor=on?'#1a56db':'';});prev();});
+  const setMode=m=>{mode=m;const r=ov.querySelector('[name="dmm"][value="'+m+'"]');if(r)r.checked=true;};
+  ov.querySelectorAll('input,select').forEach(i=>['input','change'].forEach(ev=>i.addEventListener(ev,()=>{
+    if(i.name==='dmm')mode=i.value;else if(many&&i.id==='dm-date')setMode('set');else if(i.id==='dm-n'||i.id==='dm-u')setMode('shift');
+    prev();})));
+  $('#dm-ok').onclick=()=>{
+    const note=$('#dm-note').value.trim();if(!why||(why==='Other'&&!note))return;
+    const res=moveDates(wos,change(),{why,note},by,{src:many?'group':'planner'}).apply();
+    ov.remove();render();
+    if(many)dateSummaryDlg(res);
+    else if(res.moved){const r=res.rows.find(x=>!x.skipped)||{};toast(r.wo+' now due '+fmt(r.to)+(r.vanPulled?' — taken off the van, rebook it':'')+(r.weekKept?' — already cut, build week kept: check it':''),!!(r.vanPulled||r.weekKept||r.vanKept));}
+    else toast('Nothing moved'+(res.skipped[0]?' — '+res.skipped[0].why:''));
+  };
+  prev();
 }
 
 /* ---------- Delivery moves: first placement is stamped; every later move needs a name AND a reason ---------- */
