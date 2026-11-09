@@ -2347,7 +2347,7 @@ function jobInfoSet(o,k,v){
 }
 // The Floor / Unit / Title / Customer boxes beside the work-order picker in the cutting-list window — editable there
 function woInfoEdHTML(o){if(!o)return woInfoHTML(o);
-  const b=(cls,k)=>{const l=POV_F[k],v=povVal(o,k),pv=o.pov&&o.pov[k];
+  const b=(cls,k)=>{const l=POV_F[k],v=povVal(o,k),pv0=o.pov&&o.pov[k],pv=pv0&&typeof pv0==='object'&&String(pv0.cien==null?'':pv0.cien).trim()!==v?pv0:null;
     return `<div class="${cls}"><label>${l}</label><input class="wo-ed${pv?' wo-ov':''}" data-woi="${l}" data-woe="${k}" value="${escA(v)}" title="${escA(v)}${pv?' — changed in the planner (Cienapps: '+escA(pv.cien||'(blank)')+')':''}" autocomplete="off">${pv?`<div class="wo-ovn" title="Cienapps says ${escA(pv.cien||'(blank)')}">Cienapps: ${escA(pv.cien||'(blank)')} <button data-woundo="${k}" title="Put the Cienapps value back">↺</button></div>`:''}</div>`;};
   return b('wf','floor')+b('wf','unit')+b('wt','title')+b('wc','customer');}
 function woInfoBind(root,o){if(!root||!o)return;
