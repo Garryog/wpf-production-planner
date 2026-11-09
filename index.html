@@ -3480,7 +3480,7 @@ function lsHomeHTML(){
       ${sel('lh-rev',LH.rev,[['','Any revision'],['revised','Revised (rev 2+)']])}
       ${sel('lh-state',LH.state,[['','Not archived'],['draft','Draft'],['live','Live (with the saw)'],['done','Done'],['archived','Archived']])}
       ${LH.q||LH.proj||LH.type||LH.kind!=='live'||LH.rev||LH.state?'<button class="btn btn-s" id="lh-x" style="font-size:12px">✕ Clear</button>':''}
-      <span style="flex:1"></span>${LH.kind==='tpl'?`<button class="btn btn-s" id="lh-copy"${LH.proj?'':' disabled title="Pick the project first"'}>⧉ Copy from another project</button><button class="btn btn-g" id="lh-newtpl"${LH.proj?'':' disabled title="Pick the project first"'}>＋ New template</button>`:''}<button class="btn btn-s" id="lh-projs">🏗 Projects</button><button class="btn btn-s dk-gate" id="lh-sent"${dkVis()?'':' hidden'} title="Everything sent to a project's site between two dates — print or Excel">📦 Items sent</button><button class="btn btn-g" id="lh-new" title="Opens the standard layout: the house heading and the sub-headings Fillers and Kickers, Worktops, Stores items, ready to fill">＋ New list</button><details class="me-more lh-more" id="lh-more"><summary class="btn btn-s">More ▾</summary><div class="me-morep"><button class="btn btn-s" id="lh-blank" title="An empty list with no headings">Blank list</button></div></details>
+      <span style="flex:1"></span>${LH.kind==='tpl'?`<button class="btn btn-s" id="lh-copy"${LH.proj?'':' disabled title="Pick the project first"'}>⧉ Copy from another project</button><button class="btn btn-g" id="lh-newtpl"${LH.proj?'':' disabled title="Pick the project first"'}>＋ New template</button>`:''}<button class="btn btn-s" id="lh-projs">🏗 Projects</button><button class="btn btn-s dk-gate" id="lh-sent"${dkVis()?'':' hidden'} title="Everything sent to a project's site between two dates — print or Excel">📦 Items sent</button><button class="btn btn-s" id="lh-imp" title="Import a cutting-list workbook — one sheet per house, each sheet becomes a list. You see a preview first; nothing is saved until you press Save">📥 Import Excel</button><button class="btn btn-g" id="lh-new" title="Opens the standard layout: the house heading and the sub-headings Fillers and Kickers, Worktops, Stores items, ready to fill">＋ New list</button><details class="me-more lh-more" id="lh-more"><summary class="btn btn-s">More ▾</summary><div class="me-morep"><button class="btn btn-s" id="lh-blank" title="An empty list with no headings">Blank list</button><a class="btn btn-s" id="lh-xltpl" href="${LS_XL_TPL}" download="WPF-Cutting-List-Template.xlsx" title="The Excel template to fill in and import — send it to anyone who types cutting lists">⬇ Excel template</a></div></details>
     </div>
     <input type="file" id="lh-file" accept=".xlsx,.xls" style="display:none"><div id="lh-upmsg" style="font-size:12px;margin-bottom:6px"></div>
     ${keys.length?keys.map(k=>{const a=grp.get(k);return `<div class="lh-grp" style="margin-bottom:12px"><div style="background:#14335c;color:#fff;border-radius:6px 6px 0 0;padding:7px 10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -3491,6 +3491,7 @@ function lsHomeHTML(){
   </div>`;
 }
 let lhImpPid='';
+const LS_XL_TPL='templates/WPF-Cutting-List-Template.xlsx'; // (9 Nov) the circulated Excel template — the import reads it exactly
 function lsHomeBind(){
   const re=id=>{render();const n=document.getElementById(id);if(n&&n.focus){n.focus();if(n.setSelectionRange)n.setSelectionRange(n.value.length,n.value.length);}};
   const q=document.getElementById('lh-q');if(q)q.oninput=()=>{LH.q=q.value;re('lh-q');};
@@ -3508,6 +3509,7 @@ function lsHomeBind(){
   document.querySelectorAll('[data-lhnew]').forEach(b=>b.onclick=()=>lsNewStd('',b.dataset.lhnew)); // the standard layout, like ＋ New list
   const fi=document.getElementById('lh-file');
   document.querySelectorAll('[data-lhimp]').forEach(b=>b.onclick=()=>{lhImpPid=b.dataset.lhimp;if(fi)fi.click();});
+  const li=document.getElementById('lh-imp');if(li)li.onclick=()=>{lhImpPid=LH.proj||'';if(fi)fi.click();}; // (9 Nov) the project picked above, else the workbook's Project cell / file name
   if(fi)fi.onchange=()=>{const f=fi.files[0];if(f)lsUpload(f,lhImpPid);fi.value='';};
   document.querySelectorAll('[data-lhedit]').forEach(b=>b.onclick=()=>openListEditor(b.dataset.lhedit));
   document.querySelectorAll('[data-lhastpl]').forEach(b=>b.onclick=()=>lsSaveAsTpl({id:b.dataset.lhastpl}));
@@ -4179,12 +4181,14 @@ function openListEditor2(listId,presetWo,presetPid,opt){
         <button class="btn btn-g me-big" id="me-addhdr" title="A heading (e.g. House nr 103) or a sub-heading under it (Fillers and Kickers, ISLAND, Utility, Doors FU)">＋ Heading</button>
         <button class="btn btn-s me-big" id="me-addsaw" title="Adds a row under the one you are on">＋ Row</button>
         <button class="btn btn-s me-big" id="me-instpl" title="Adds the rows of one of the project's templates (a house type) — change anything for this house">📐 Insert from template…</button>
+        <button class="btn btn-s me-big" id="me-impxl" title="Fill this list from one sheet of an Excel cutting list (the WPF template or your own layout). Check the rows, then Save">📥 Import from Excel…</button><input type="file" id="me-xlfile" accept=".xlsx,.xls" style="display:none">
         <details class="me-more" id="me-more"${st.moreOpen?' open':''}><summary class="btn btn-s me-big">More ▾</summary><div class="me-morep">
           ${st.undo.length?'<button class="btn btn-s" id="me-undo" title="Ctrl+Z">↶ Undo</button>':''}
           <label class="me-flag"><input type="checkbox" id="me-nocut"${st.noCut?' checked':''}> No cutting on this job</label>
           <label class="me-flag"><input type="checkbox" id="me-nofit"${st.noFit?' checked':''}> No fittings on this job</label>
           <label class="me-flag" title="${hasUnits()?'This list has unit blocks, so they are shown':'Robe jobs: a unit heading with the number of units, then the parts for ONE unit'}"><input type="checkbox" id="me-units"${st.unitsOn?' checked':''}${hasUnits()?' disabled':''}> Unit blocks (robe jobs)</label>
           <button class="btn btn-s" id="me-addunit" title="A unit heading with the number of units, then the parts for ONE unit"${st.unitsOn?'':' hidden'}>＋ Unit block</button>
+          <a class="btn btn-s" href="${LS_XL_TPL}" download="WPF-Cutting-List-Template.xlsx" title="The Excel template to fill in and import">⬇ Download Excel template</a>
           <div class="me-defc"><div><label>Carcass material</label>${matSel({mat:st.carcass},0,'me-carc')}</div><div><label>Door material</label>${matSel({mat:st.door},0,'me-door')}</div></div>
         </div></details>
         <span style="flex:1"></span>
@@ -4248,6 +4252,8 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     on('me-astpl',()=>{keep();lsSaveAsTpl({pid:st.pid,name:st.name,ltype:st.ltype,tname:st.tname,lines:lsEdLines(R().filter(r=>!lsEmptyRow(r)).map(r=>{const x={...noAutoStores(r)};delete x.lid;return x;}))});});
     on('me-hist',()=>{if(ex)lsTplHistory(ex.id);});
     on('me-instpl',()=>{keep();insTpl();});
+    on('me-impxl',()=>{keep();const fx=g('me-xlfile');if(fx){fx.value='';fx.click();}});
+    const xf=g('me-xlfile');if(xf)xf.onchange=()=>{const f=xf.files[0];if(f)impXl(f);};
     ov.querySelectorAll('[data-mecopy]').forEach(b=>b.onclick=()=>copyToNew());
     g('me-nocut').onchange=e=>{keep();st.noCut=e.target.checked;draw();};
     g('me-nofit').onchange=e=>{keep();st.noFit=e.target.checked;draw();};
@@ -4281,6 +4287,43 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     st.focus=R().length?Math.min(i,R().length-1)+'|item':'';draw();};
   // "Insert unit from template…": pick a template of this project, then one of its unit blocks (or the whole template as
   // one unit), then how many units. The block goes in after the row you were on (after its block). Nothing is linked.
+  // (9 Nov) 📥 Import from Excel: one sheet of a cutting-list workbook fills THIS list (same reader as the Lists import and paste).
+  // A new list that has no parts typed yet is replaced by the sheet; otherwise the rows are added at the bottom. Nothing is saved
+  // until Save; Ctrl+Z undoes it. A workbook with several house sheets asks which one.
+  const impXl=f=>{
+    const err=t=>{const e=ov.querySelector('#me-err');if(e)e.textContent=t;};
+    const rd=new FileReader();
+    rd.onload=()=>{
+      let sheets=[];
+      try{const wb=XLSX.read(rd.result,{type:'array',cellDates:true,sheetStubs:true});
+        wb.SheetNames.forEach(sn=>{if(lsSkipSheet(sn))return;const gr=lsSheetAoa(wb.Sheets[sn]),p=lsParseGrid(gr.v,{formulas:gr.f,sheet:sn});
+          if(p.rows.some(r=>r.k==='part'))sheets.push({name:String(sn).trim(),p});});
+      }catch(e){err('Could not read '+f.name+' — is it an Excel workbook (.xlsx)?');return;}
+      if(!sheets.length){err('No cutting list found in '+f.name+' — expected columns: Description | Qty | Length | Width | Material | Edging 1 | Edging 2 | Note.');return;}
+      const use=sh=>{
+        const add=sh.p.rows.filter(r=>!r.info).map(r=>{const x={...r};delete x.src;delete x.total;delete x.bu;delete x.qtyErr;
+          if(x.k==='part'){x.qty=x.qty===''||x.qty==null?'':String(x.qty);x.L=x.L===''?'':String(x.L);x.W=x.W===''?'':String(x.W);}return x;});
+        snap();
+        const typed=R().some(r=>r.k==='part'&&!lsEmptyRow(r));
+        if(typed)R().push(...add);else R().splice(0,R().length,...add);
+        if(add.some(r=>r.k==='hdr'&&r.units!=null))st.unitsOn=true;
+        if(!String(st.name||'').trim())st.name=sh.name;
+        const m=sh.p.meta;if(!st.carcass&&m.carcass)st.carcass=m.carcass;if(!st.door&&m.door)st.door=m.door;
+        const np=add.filter(r=>r.k==='part').length,nh=add.length-np,nw=sh.p.warn.length;
+        draw();
+        if(nw)err('⚠ Check these rows: '+sh.p.warn.slice(0,4).join(' · ')+(nw>4?' …and '+(nw-4)+' more':''));
+        toast('Imported '+np+' row'+(np!==1?'s':'')+(nh?' and '+nh+' heading'+(nh!==1?'s':''):'')+' from "'+sh.name+'"'+(typed?' (added at the bottom)':'')+' — check them, then Save. Ctrl+Z undoes it.');
+      };
+      if(sheets.length===1){use(sheets[0]);return;}
+      const dl=lsDlg('<div id="ix-body"></div>',520),body=dl.querySelector('#ix-body');
+      body.innerHTML=`<div style="font-weight:800;color:#14335c;font-size:16px;margin-bottom:4px">📥 Which sheet?</div><div style="font-size:12px;color:var(--t3);margin-bottom:10px">${escA(f.name)} has ${sheets.length} lists. Pick the one for this list — to bring in every sheet as its own list, use 📥 Import Excel on the Cutting Lists page.</div>`
+        +sheets.map((sh,i)=>`<button class="btn btn-s" data-ixs="${i}" style="display:block;width:100%;text-align:left;margin-bottom:6px">${escA(sh.name)} <span style="color:var(--t3);font-size:12px">— ${sh.p.rows.filter(r=>r.k==='part').length} rows</span></button>`).join('')
+        ;
+      dl.onclick=e=>{if(e.target===dl||e.target.id==='pod-x')dl.remove();};
+      body.querySelectorAll('[data-ixs]').forEach(b=>b.onclick=()=>{dl.remove();use(sheets[+b.dataset.ixs]);});
+    };
+    rd.readAsArrayBuffer(f);
+  };
   const insTpl=()=>{
     if(!st.pid){ov.querySelector('#me-err').textContent='Pick the project first — templates belong to a project.';return;}
     const tps=lsTemplatesFor(st.pid).filter(t=>!ex||t.id!==ex.id);
@@ -5000,9 +5043,9 @@ function lsParseGrid(aoa,opt){
     if(m){c0=m[1];r0=m[2];k=m[3];}else{m=/^(\d+(?:\.\d+)?)\*\$?([A-Z]{1,3})\$?(\d+)$/i.exec(s);if(!m)return null;k=m[1];c0=m[2];r0=m[3];}
     return col(c0)===u.c&&+r0-1===u.r?+k:null;};
   const str=v=>v==null?'':v instanceof Date?v.toISOString().slice(0,10):String(v).trim();
-  const isoDate=v=>{if(v instanceof Date&&!isNaN(v))return v.toISOString().slice(0,10);const s=str(v);let m=/^(\d{4})-(\d{2})-(\d{2})/.exec(s);if(m)return m[0];
+  const isoDate=v=>{if(v instanceof Date&&!isNaN(v)){const x=new Date(v.getTime()+12*3600e3);return x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0');}/* (9 Nov) an Excel date is local midnight (± a few seconds from the reader): take the nearest local day — toISOString gave the day before in Irish summer time */const s=str(v);let m=/^(\d{4})-(\d{2})-(\d{2})/.exec(s);if(m)return m[0];
     m=/^(\d{1,2})[\/.](\d{1,2})[\/.](\d{2,4})$/.exec(s);if(m){const y=m[3].length===2?'20'+m[3]:m[3];return y+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0');}return'';};
-  const LBL=/^(project( name)?|title|date|carcass colou?r|door colou?r|(nr|no\.?|number) of units)\s*:?$/i;
+  const LBL=/^(project( name)?|title|date|carcass (colou?r|material)|door (colou?r|material)|(nr|no\.?|number) of units)\s*:?$/i; // (9 Nov) "Carcass material" / "Door material" — the circulated Excel template's labels
   const UNITS=/total\s*(nr|no\.?|number)\s*(of)?\s*units?/i;
   let cur=null; // the current heading row; cur.u = {r,c} of its units cell once it is a unit block
   const startUnits=(n,r,c)=>{
@@ -5047,7 +5090,8 @@ function lsParseGrid(aoa,opt){
     // 4. the legacy project row: the very first row, one name in A (and maybe the date in F)
     if(r===0&&!opt.paste&&A&&cells.slice(1).every((v,c)=>v==null||(c===4&&(v instanceof Date||isoDate(v))))){meta.project=A;if(cells[5]!=null)meta.date=isoDate(cells[5]);continue;}
     const qv=cells[1]==null?NaN:typeof cells[1]==='number'?cells[1]:parseFloat(texts[1]);
-    const L=num(cells[2]),W=num(cells[3]),mat=texts[4],edging=texts[5],sz=!isNaN(L)||!isNaN(W),e2=sz&&!BOUGHT.test(texts[6])&&(e2col||lsLooksEdge(texts[6]))?texts[6]:'',note=e2||(e2col&&sz)?texts[7]:texts[6];
+    const L=num(cells[2]),W=num(cells[3]),mat=texts[4],edging=texts[5],sz=!isNaN(L)||!isNaN(W),e2=sz&&!BOUGHT.test(texts[6])&&(e2col||lsLooksEdge(texts[6]))?texts[6]:'',
+      note=e2col?(sz?texts[7]:[texts[6],texts[7]].filter(Boolean).join(' · ')):e2?texts[7]:texts[6]; // (9 Nov) with an "Edging 2" column the note is column H on every row — a Stores row's "Bought in" in H was being missed
     if(!isNaN(qv)||(!isNaN(L)&&!isNaN(W)&&(A||mat))){
       const sized=!isNaN(L)||!isNaN(W);
       // a door row with no description under "Doors FU" takes the heading's name (4 Nov)
@@ -5115,7 +5159,7 @@ function lsPasteAoa(text){
 }
 // Sheets that are never cutting lists (Garry, 3 Nov): the unit library, the index and the stock sheets
 // sheets that are never a cutting list — also Excel's copies of them: "Blank (2)", "Index 2", "Stock (3)", "Door Stock - Copy"
-function lsSkipSheet(name){return /^\s*(blank|index|stock|door\s*stock)(\s*(\(\s*\d+\s*\)|\d+|-?\s*copy(\s*\(?\d+\)?)?))?\s*$/i.test(String(name||''));}
+function lsSkipSheet(name){return /^\s*(blank|index|stock|door\s*stock|example|read\s*me|instructions)(\s*(\(\s*\d+\s*\)|\d+|-?\s*copy(\s*\(?\d+\)?)?))?\s*$/i.test(String(name||''));}
 // per-unit × units = the total to cut ("2x2" or a blank stays as typed — the editor's check asks for a number)
 /* A part in a unit block — ONE rule, used on reload (lsEditRows), template insert, save (lsEdLines / lsBlockTotals):
    unit_qty = a number → per unit (total = per unit × Units); unit_qty = 'fixed' → a FIXED total (Units never change it);
