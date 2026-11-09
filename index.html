@@ -7462,26 +7462,7 @@ function autoSchedule(newOrders){
   newOrders.sort((a,b)=>(a.dueDate||'9999').localeCompare(b.dueDate||'9999'));
   newOrders.forEach(o=>{
     if(o.plannedWeek)return;
-    let assigned=null;
-    if(!o.dueDate){
-      assigned=currentWeek;
-    } else {
-      const due=o.dueDate;
-      if(due<currentWeek){
-        // Overdue — put in current week
-        assigned=currentWeek;
-      } else if(due>=windowEnd){
-        assigned=''; // beyond the 8 weeks — unscheduled
-      } else {
-        // Match to the exact week the due date falls in
-        for(let i=0;i<weeks.length;i++){
-          const wkStart=weeks[i];
-          const wkEnd=i<weeks.length-1?weeks[i+1]:null;
-          if(due>=wkStart&&(!wkEnd||due<wkEnd)){assigned=wkStart;break;}
-        }
-        if(!assigned)assigned=weeks[weeks.length-1];
-      }
-    }
+    const assigned=dueWeekFor(o.dueDate); /*dates: same rule, shared with moveDates*/
     o.plannedWeek=assigned;
     if(assigned)wkLoad[assigned]=(wkLoad[assigned]||0)+(+o.hours||0);
   });
@@ -8462,12 +8443,13 @@ function logEdit(o,what,by,why){
   if(o.log.length>40)o.log=o.log.slice(-40);
 }
 /* Reason picker — one tap. "Other" asks for a few words. */
-function pickReason(title,sub,cb,onCancel){
+function pickReason(title,sub,cb,onCancel,list){ /*dates: list = which reasons to offer (default MOVE_WHY)*/
+  list=Array.isArray(list)&&list.length?list:MOVE_WHY;
   const ov=document.createElement('div');ov.className='pod-ovl';
   ov.innerHTML=`<div class="pod-in" style="min-width:min(460px,92vw)">
     <div style="font-weight:800;color:#14335c;font-size:16px;margin-bottom:2px">${escA(title)}</div>
     <div style="font-size:12px;color:var(--t3);margin-bottom:12px">${sub}</div>
-    <div class="why-grid">${MOVE_WHY.map(w=>`<button class="rbtn" data-why="${escA(w)}" style="justify-content:center">${escA(w)}</button>`).join('')}</div>
+    <div class="why-grid">${list.map(w=>`<button class="rbtn" data-why="${escA(w)}" style="justify-content:center">${escA(w)}</button>`).join('')}</div>
     <div style="margin-top:10px;text-align:right"><button class="btn btn-s" id="pod-x">Cancel — change nothing</button></div></div>`;
   document.body.appendChild(ov);
   ov.onclick=e=>{if(e.target===ov||e.target.id==='pod-x'){ov.remove();if(onCancel)onCancel();}};
@@ -8477,6 +8459,34 @@ function pickReason(title,sub,cb,onCancel){
     ov.remove();cb(w);
   });
 }
+
+/*dates: ---------- Dates & deliveries (Job A) — local-date helpers. Week keys are Monday ISO dates (same shape as wkKey),
+   worked out from the LOCAL calendar date at noon, so a clock change or Monday 00:30 never lands in the wrong week. ---------- */
+const DATE_WHY=['Customer delay','Site not ready','Production','Materials','Design/drawings','Other'];
+function wkOf(iso){if(!iso)return'';const d=new Date(String(iso).slice(0,10)+'T12:00:00');if(isNaN(d))return'';d.setDate(d.getDate()-((d.getDay()+6)%7));return isoOf(d);}
+function thisWk(){return wkOf(todayLocal());}
+function wkPlus(wk,n){return wk?wkOf(addDayISO(wk,7*(+n||0))):'';}
+// the week a delivery booking belongs to: its own week, else the week every pre-week-tabs booking was given, else this week
+function slotWk(o){return (o&&o.delWk)||DB.delLegacyWk||thisWk();}
+function slotDate(o){if(!o||!o.delDay)return'';const i=DEL_DAYS.indexOf(o.delDay);return i<0?'':addDayISO(slotWk(o),i);}
+// The build week a due date belongs on — exactly autoSchedule's rule: no date or overdue → this week; past the
+// 8 board weeks → '' (Unscheduled); otherwise the week the due date falls in.
+function dueWeekFor(due){
+  const weeks=get8Wks(),cur=weeks[0];
+  if(!due||due<cur)return cur;
+  const endD=new Date(weeks[weeks.length-1]+'T00:00:00Z');endD.setUTCDate(endD.getUTCDate()+7);
+  if(due>=wkKey(endD))return'';
+  for(let i=0;i<weeks.length;i++){const s=weeks[i],e=i<weeks.length-1?weeks[i+1]:null;if(due>=s&&(!e||due<e))return s;}
+  return weeks[weeks.length-1];
+}
+// "Already cut": step 6 or later (up to 11), or the saw has ticked a line on any of its lists, or its photo list is cut
+function woCut(o){
+  if(!o)return false;const n=stepNo(o.step);if(n!=null&&n>=6&&n<=11)return true;
+  try{if(phDone(o,'saw'))return true;
+    if(lists().some(l=>(l.wos||[]).includes(o.wo)&&(listDone(l.id).saw||Object.values(rowTicks(l.id)||{}).some(t=>t&&t.m==='saw'))))return true;}catch(e){}
+  return false;
+}
+function woProgrammed(o){return stepNo(o&&o.step)===5;}
 
 /* ---------- Delivery moves: first placement is stamped; every later move needs a name AND a reason ---------- */
 function slotLbl(v,d){return d?((vehLbl(v)||v)+' '+d):'the pool';}
