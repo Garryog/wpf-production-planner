@@ -282,6 +282,14 @@ details.lti-other{margin-bottom:14px}details.lti-other>summary{cursor:pointer;fo
 .dcell{border:1px solid var(--border);padding:4px;min-height:56px;vertical-align:top}
 .dcell.dragover{background:#eaf2ff;outline:2px dashed #7ba7e0;outline-offset:-2px}
 .del-pool{border:2px dashed #cfd6df;border-radius:8px;padding:10px;min-height:46px;background:#fafbfc}
+/*dates: week tabs — one sideways-scrolling strip on a phone */
+.del-tabs{display:flex;gap:6px;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch;padding:2px 0 8px;margin-bottom:6px}
+.del-tab{flex:0 0 auto;border:1px solid var(--b2);background:#fff;border-radius:16px;padding:7px 12px;font-size:13px;font-weight:600;color:var(--t2);cursor:pointer;min-height:36px}
+.del-tab.on{background:#14335c;border-color:#14335c;color:#fff}
+.del-tab.past{border-color:#d4880f;color:#8a5a00}
+.del-tab .n{font-weight:400;opacity:.8;margin-left:4px}
+.del-grid th.hol,.del-grid td.hol{background:repeating-linear-gradient(45deg,#f3f0ea,#f3f0ea 6px,#ebe6dc 6px,#ebe6dc 12px)}
+.dwk-h{font-size:12px;font-weight:800;color:#14335c;margin:12px 0 2px;border-bottom:1px solid var(--border);padding-bottom:2px}
 .del-pool.dragover{background:#eaf2ff;border-color:#7ba7e0}
 .dtot{font-size:11px;color:var(--t2);text-align:center;padding:6px;border:1px solid var(--border);background:#fafbfc;font-weight:600;line-height:1.5}
 .dnote{width:100%;border:1px solid var(--b2);border-radius:4px;padding:5px 7px;font-size:11px;background:#fffdf2;}
@@ -6848,37 +6856,57 @@ function dchip(o,showCust){
 function renderDeliveries(app){
   const tagged=delAll();
   const catchUp=DB.orders.filter(delvAutoOk); // go-live gap: jobs already at 7/8 before the auto-tag rule existed
-  const pool=tagged.filter(o=>!o.delDay);
   const done=tagged.filter(o=>o.delDone).length;
-  const wk=delTabWk()||thisWk(); /*dates: the week this page shows*/
-  const wkTot=tagged.filter(o=>slotIn(o,wk)).reduce((a,o)=>a+(+o.value||0),0);
+  /*dates: week tabs. Past weeks still holding bookings (not closed yet) and any week booked beyond +3 get their own tab.*/
+  const W0=thisWk(),W3=wkPlus(W0,3);
+  const offOf=w=>String(Math.round((new Date(w+'T12:00:00')-new Date(W0+'T12:00:00'))/604800000));
+  const bookedWks=[...new Set(tagged.filter(o=>o.delDay).map(slotWk))];
+  const tabs=[...new Set(['0','1','2','3',...bookedWks.map(offOf)])].sort((a,b)=>+a-+b).concat('later');
+  if(!tabs.includes(delTab))delTab='0';
+  const later=delTab==='later',wk=later?'':delTabWk(),past=!later&&wk<W0;
+  // the pool: each job sits in its due week; overdue, no date and manual jobs sit in This week; past W+3 = Later
+  const poolWk=o=>{const w=!o.manual&&o.dueDate?wkOf(o.dueDate):'';return !w||w<W0?W0:w;};
+  const poolAll=tagged.filter(o=>!o.delDay);
+  const poolOf=t=>t==='later'?poolAll.filter(o=>poolWk(o)>W3):(w=>w<W0?[]:poolAll.filter(o=>poolWk(o)===w))(delTabWk(t));
+  const pool=poolOf(delTab);
+  const wkTot=later?0:tagged.filter(o=>slotIn(o,wk)).reduce((a,o)=>a+(+o.value||0),0);
   const legacy=ROLE==='office'?delLegacyJobs():[];
-  // pool grouped by customer, WO-number numeric order inside each group
-  const grps={};pool.forEach(o=>{const c=o.customer||'(no customer)';(grps[c]=grps[c]||[]).push(o);});
+  const tabLbl=t=>{if(t==='later')return'Later';const w=delTabWk(t);return (t==='0'?'This week · ':t==='1'?'Next week · ':'')+'Wk '+wkNum(w)+(w<W0?' (past)':'');};
+  const tabN=t=>t==='later'?poolOf(t).length:tagged.filter(o=>slotIn(o,delTabWk(t))).length+poolOf(t).length;
+  // pool groups: "date moved — rebook" first, then by customer (Later: by due week), WO-number order inside each
+  const rebook=pool.filter(o=>o.delRebook).sort(woCmp),rest=pool.filter(o=>!o.delRebook);
+  const grps={};rest.forEach(o=>{const c=later?poolWk(o):(o.customer||'(no customer)');(grps[c]=grps[c]||[]).push(o);});
   const gkeys=Object.keys(grps).sort((a,b)=>a.localeCompare(b));
-  gkeys.forEach(k=>grps[k].sort(woCmp));
+  gkeys.forEach(k=>grps[k].sort(later?((a,b)=>(a.customer||'').localeCompare(b.customer||'')||woCmp(a,b)):woCmp));
+  const gName=k=>later?'Wk '+wkNum(k)+' — due from '+dShort(k):k;
+  const gHTML=(k,lbl,list,sty)=>`<div class="dgrp">
+        <div class="dgrp-h" data-grp="${escA(k)}"${sty?` style="${sty}"`:''}>${escA(lbl)}<span class="gcnt">${list.length} job${list.length!==1?'s':''} · €${Math.round(list.reduce((a,o)=>a+(+o.value||0),0)).toLocaleString()} · click to select all</span></div>
+        <div class="dpool-chips">${list.map(o=>dchip(o,later||k==='__rebook')).join('')}</div>
+      </div>`;
+  const nOrd=[...delSel].filter(w=>DB.orders.some(o=>o.wo===w)).length;
 
   app.innerHTML=`<div class="pg">
-  ${missPanelHTML()}
+  ${later?'':missPanelHTML()}
   ${legacy.length?`<div class="exp-panel" id="del-legacy" style="border:2px solid #d4880f;background:#fff8e6">
     <div style="font-size:14px;font-weight:700;color:#8a5a00;margin-bottom:4px">⚠ ${legacy.length} booking${legacy.length!==1?'s':''} from before the week tabs — which week are they for?</div>
     <p style="font-size:12px;color:#8a5a00;margin-bottom:8px">They were put on a van and day before the board knew about weeks. Until you answer they show under This week. Asked once.</p>
     <button class="btn btn-s" data-legwk="0">This week — Wk ${wkNum(thisWk())}</button> <button class="btn btn-s" data-legwk="1">Next week — Wk ${wkNum(wkPlus(thisWk(),1))}</button></div>`:''}
   <div class="del-panel">
+    <div class="del-tabs" id="del-tabs">${tabs.map(t=>`<button class="del-tab${t===delTab?' on':''}${t!=='later'&&delTabWk(t)<W0?' past':''}" data-deltab="${escA(t)}">${escA(tabLbl(t))}<span class="n">(${tabN(t)})</span></button>`).join('')}</div>
     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px">
-      <div style="font-size:14px;font-weight:600">Delivery Board — Week of ${fmt(wkKey(new Date()))}</div>
-      <span style="font-size:12px;color:var(--t2)">${tagged.length} tagged · ${tagged.filter(o=>slotIn(o,wk)).length} planned this week · ${done} delivered</span>
+      <div style="font-size:14px;font-weight:600" id="del-wkh">${later?'Later — jobs due after Wk '+wkNum(W3)+' (pool only)':'Delivery Board — Wk '+wkNum(wk)+' · Mon '+dShort(wk)+' – Sat '+dShort(addDayISO(wk,5))+(past?' (past week — close it when it is done)':'')}</div>
+      <span style="font-size:12px;color:var(--t2)">${tagged.length} tagged · ${later?pool.length+' due later':tagged.filter(o=>slotIn(o,wk)).length+' booked this week'} · ${done} delivered</span>
       <span style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-s" id="btn-addjob">＋ Add Job</button>
-        <button class="btn btn-s" id="btn-runsheets" title="Printable A4 docket per vehicle per day — tick boxes and signature lines for the loader">📋 Run Sheets</button>
+        ${later?'':`<button class="btn btn-s" id="btn-runsheets" title="Printable A4 docket per vehicle per day — tick boxes and signature lines for the loader">📋 Run Sheets</button>
         <button class="btn btn-blue" id="btn-delprint">🖨 Print A3 Poster</button>
-        <button class="btn btn-g" id="btn-delexp">⬇ Export Delivery Plan</button>
-        <button class="btn btn-s" id="btn-delarch" title="Archived delivery weeks — every cleared week is kept here with all stamps and names">📚 Past weeks</button>
+        <button class="btn btn-g" id="btn-delexp">⬇ Export Delivery Plan</button>`}
+        <button class="btn btn-s" id="btn-delarch" title="Closed delivery weeks — every closed week is kept here with all stamps and names">📚 Past weeks</button>
         ${ROLE==='office'&&catchUp.length?`<button class="btn btn-s" id="btn-deltag" title="One-off: tick for delivery every job already at 7 ASSEMBLY COMPLETE or 8 PALLETED that is not on the board yet">Tag assembled/palleted jobs for delivery (${catchUp.length})</button>`:''}
-        <button class="btn btn-s" id="btn-delreset" style="border-color:var(--red);color:var(--red)">Clear Week — Start Fresh</button>
+        ${!later&&wk<=W0?`<button class="btn btn-s" id="btn-delreset" style="border-color:var(--red);color:var(--red)">Clear Week — Start Fresh</button>`:''}
       </span>
     </div>
-    <p style="font-size:12px;color:var(--t3);margin-bottom:8px">Tag jobs on the Capacity Board with 🚚, or add one manually. Click cards to select several, then drag (or tap ⤵ Place) onto a vehicle and day. Card colour = readiness: <b style="color:#0d6e46">green ready</b> · <b style="color:#8a5a00">amber part ready / waiting on material</b> · <b style="color:#b42318">red not ready or no list</b> — ⓘ shows why. Moving a planned job asks why, and records who.</p>
+    <p style="font-size:12px;color:var(--t3);margin-bottom:8px">Tag jobs on the Capacity Board with 🚚, or add one manually. Click cards to select several, then drag (or tap ⤵ Place) onto a vehicle and day. Card colour = readiness: <b style="color:#0d6e46">green ready</b> · <b style="color:#8a5a00">amber part ready / waiting on material</b> · <b style="color:#b42318">red not ready or no list</b> — ⓘ shows why. Moving a planned job asks why, and records who — moving it to another week too (select it, open that week's tab, tap ⤵ Place).</p>
     <div class="addjob-row" id="ajform">
       <input id="aj-wo" placeholder="WO / ref (optional)" style="width:140px">
       <input id="aj-title" placeholder="Description *" style="flex:1;min-width:180px">
@@ -6886,25 +6914,24 @@ function renderDeliveries(app){
       <input id="aj-val" type="number" min="0" placeholder="€ value" style="width:100px">
       <button class="btn btn-g" id="aj-add">Add to pool</button>
     </div>
-    ${delSel.size?`<div class="selbar" style="margin-top:10px"><b>${delSel.size} selected</b> — drag any selected card onto a day to move them all <button id="selclr">clear selection</button>${[...delSel].some(w=>DB.orders.some(o=>o.wo===w))?` <button id="seldates" title="Change the due date of the selected jobs together, with one reason">📅 Move dates</button>`:''}</div>`:''}
+    ${delSel.size?`<div class="selbar" style="margin-top:10px;flex-wrap:wrap"><b>${delSel.size} selected</b> — ${later?'open a week tab and tap ⤵ Place':'drag any selected card onto a day to move them all'} <button id="selclr">clear selection</button>${nOrd?` <button id="seldates" title="Change the due date of the selected jobs together, with one reason">📅 Move dates (${nOrd})</button>`:''}</div>`:''}
     <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin:10px 0 5px">
-      <span style="font-size:11px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.4px">To plan — ${pool.length} job${pool.length!==1?'s':''}</span>
+      <span style="font-size:11px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.4px">To plan — ${later?'due after Wk '+wkNum(W3):delTab==='0'?'due this week, overdue or no date':'due Wk '+wkNum(wk)} — ${pool.length} job${pool.length!==1?'s':''}</span>
       <input class="dsrch" id="dsrch" placeholder="🔍 Filter jobs — WO, customer, floor, unit, title…" value="${escA(delFilter)}">
     </div>
     <div class="del-pool" id="dpool">
-      ${pool.length?gkeys.map(c=>`<div class="dgrp">
-        <div class="dgrp-h" data-grp="${escA(c)}">${escA(c)}<span class="gcnt">${grps[c].length} job${grps[c].length!==1?'s':''} · €${Math.round(grps[c].reduce((a,o)=>a+(+o.value||0),0)).toLocaleString()} · click to select all</span></div>
-        <div class="dpool-chips">${grps[c].map(o=>dchip(o,false)).join('')}</div>
-      </div>`).join(''):'<span style="font-size:12px;color:var(--t3)">Nothing waiting. Tag jobs on the Capacity Board with the 🚚 button, or use ＋ Add Job.</span>'}
+      ${past?'<span style="font-size:12px;color:var(--t3)">A past week has no pool — jobs still to plan are on the This week tab. Drop a card here to take it off its van.</span>':''}
+      ${rebook.length?gHTML('__rebook','📅 Date moved / not delivered — rebook',rebook,'color:#b42318'):''}
+      ${pool.length?gkeys.map(k=>gHTML(k,gName(k),grps[k])).join(''):past?'':'<span style="font-size:12px;color:var(--t3)">Nothing waiting'+(delTab==='0'?'':' for this week')+'. Tag jobs on the Capacity Board with the 🚚 button, or use ＋ Add Job.</span>'}
     </div>
   </div>
-  <div class="del-panel" style="overflow-x:auto">
+  ${later?'':`<div class="del-panel" style="overflow-x:auto">
     <table class="del-grid">
-      <thead><tr><th>Vehicle</th>${DEL_DAYS.map(d=>`<th>${d}</th>`).join('')}</tr></thead>
+      <thead><tr><th>Vehicle</th>${DEL_DAYS.map((d,i)=>{const dt=addDayISO(wk,i),h=!isWorkDay(dt)&&i<5;return `<th${h?' class="hol" title="Bank holiday"':''}>${d} <span style="font-weight:400">${dShort(dt)}</span>${h?'<br><span style="color:#b42318">bank holiday</span>':''}</th>`;}).join('')}</tr></thead>
       <tbody>
         ${DEL_VEH.map((v,i)=>{const vc=tagged.filter(o=>o.delVeh===v.k&&slotIn(o,wk)).length;return `<tr${i===1?' style="border-top:3px double var(--border)"':''}>
           <td class="dveh">${v.n}<span class="dsub">${v.cat}${v.sub?' · '+v.sub:''} · ${vc} job${vc!==1?'s':''}</span></td>
-          ${DEL_DAYS.map(d=>{const cj=tagged.filter(o=>o.delVeh===v.k&&slotIn(o,wk,d)).sort(woCmp);const ppk0=podKey(v.k,d,wk);const ppk=(DB.pod&&DB.pod[ppk0]&&(DB.pod[ppk0].photos||[]).length)?ppk0:null;const allDlv=cj.length&&cj.every(o=>dStage(o)==='deliv');return `<td class="dcell${allDlv?' cell-done':''}" data-cell="${v.k}|${d}|${wk}">${allDlv?'<div style="font-size:10px;font-weight:800;color:#0d6e46;padding:2px 0">✓ COMPLETE DELIVERY</div>':''}${cj.map(o=>dchip(o,true)).join('')}${cj.length&&cj.some(o=>!o.delDispAt&&!o.delDelivAt&&!o.delDone)?`<button class="cell-disp" data-cdisp="${v.k}|${d}|${wk}" title="Mark this whole van load as dispatched (left the factory) — runs the part-load check first">🚚→ Dispatch van</button>`:''}${ppk?`<button class="cell-disp" style="background:#eef6ff;border-color:#9cbce8;color:#1450a8" data-pod="${escA(ppk)}" title="Proof-of-delivery photos taken by the driver on site">📷 ${DB.pod[ppk].photos.length} proof photo${DB.pod[ppk].photos.length!==1?'s':''}</button>`:''}${delSel.size?`<button class="cell-disp" style="background:#eaf2ff;border-color:#1a56db;color:#1a56db" data-place="${v.k}|${d}|${wk}">⤵ Place ${delSel.size} here</button>`:''}</td>`;}).join('')}
+          ${DEL_DAYS.map(d=>{const cj=tagged.filter(o=>o.delVeh===v.k&&slotIn(o,wk,d)).sort(woCmp);const ppk0=podKey(v.k,d,wk);const ppk=(DB.pod&&DB.pod[ppk0]&&(DB.pod[ppk0].photos||[]).length)?ppk0:null;const allDlv=cj.length&&cj.every(o=>dStage(o)==='deliv');const hol=!isWorkDay(addDayISO(wk,DEL_DAYS.indexOf(d)))&&d!=='Sat';return `<td class="dcell${allDlv?' cell-done':''}${hol?' hol':''}" data-cell="${v.k}|${d}|${wk}">${allDlv?'<div style="font-size:10px;font-weight:800;color:#0d6e46;padding:2px 0">✓ COMPLETE DELIVERY</div>':''}${cj.map(o=>dchip(o,true)).join('')}${cj.length&&cj.some(o=>!o.delDispAt&&!o.delDelivAt&&!o.delDone)?`<button class="cell-disp" data-cdisp="${v.k}|${d}|${wk}" title="Mark this whole van load as dispatched (left the factory) — runs the part-load check first">🚚→ Dispatch van</button>`:''}${ppk?`<button class="cell-disp" style="background:#eef6ff;border-color:#9cbce8;color:#1450a8" data-pod="${escA(ppk)}" title="Proof-of-delivery photos taken by the driver on site">📷 ${DB.pod[ppk].photos.length} proof photo${DB.pod[ppk].photos.length!==1?'s':''}</button>`:''}${delSel.size?`<button class="cell-disp" style="background:#eaf2ff;border-color:#1a56db;color:#1a56db" data-place="${v.k}|${d}|${wk}">⤵ Place ${delSel.size} here</button>`:''}</td>`;}).join('')}
         </tr>`;}).join('')}
         <tr><td class="dveh">Notes</td>${DEL_DAYS.map((d,i)=>{const dt=addDayISO(wk,i);return `<td style="border:1px solid var(--border);padding:4px;background:#fffef7"><input class="dnote" data-dnote="${dt}" value="${escA(delNoteGet(dt))}" placeholder="${d} ${dShort(dt)} note…"></td>`;}).join('')}</tr>
         <tr><td class="dtot" style="text-align:left">Value / day<br><span style="color:#0d6e46">Week: €${Math.round(wkTot).toLocaleString()}</span></td>
@@ -6912,10 +6939,11 @@ function renderDeliveries(app){
         </tr>
       </tbody>
     </table>
-  </div>
+  </div>`}
   </div>`;
 
   // ----- bindings -----
+  document.querySelectorAll('[data-deltab]').forEach(b=>b.onclick=()=>{delTab=b.dataset.deltab;render();}); /*dates: week tabs*/
   document.querySelectorAll('.dchip').forEach(ch=>{
     ch.onclick=e=>{
       if(e.target.closest('button'))return;
