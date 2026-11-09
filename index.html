@@ -2050,7 +2050,7 @@ function renderBoard(app){
     if(this.value==='__MIX')return;
     const ms=grpMembers(this.dataset.gwsel),v=this.value;
     officeWho(by=>{
-      ms.forEach(o=>{logEdit(o,'Build week '+(o.plannedWeek?wkLbl(o.plannedWeek):'unscheduled')+' → '+(v?wkLbl(v):'unscheduled')+' (group)',by);o.plannedWeek=v;});
+      ms.forEach(o=>{logEdit(o,'Build week '+(o.plannedWeek?wkLbl(o.plannedWeek):'unscheduled')+' → '+(v?wkLbl(v):'unscheduled')+' (group)',by);o.plannedWeek=v;if(o.dueMv&&!o.dueMv.prog&&!o.dueMv.loaded)delete o.dueMv;/*dates*/});
       sched();render();
       toast(ms.length+' work orders moved to '+(v?wkLbl(v):'Unscheduled'));
     },()=>render());
@@ -2082,7 +2082,7 @@ function renderBoard(app){
   };
   document.querySelectorAll('[data-s]').forEach(th=>th.onclick=()=>{const s=th.dataset.s;if(sortCol===s)sortDir*=-1;else{sortCol=s;sortDir=1;}render();});
   // Every board edit is stamped with the person at this machine (asked once per tab)
-  document.querySelectorAll('[data-wsel]').forEach(sel=>sel.onchange=function(){const o=DB.orders.find(x=>x.wo===this.dataset.wsel);const v=this.value;if(o)officeWho(by=>{const was=o.plannedWeek||'';o.plannedWeek=v;delete o.dueMv;/*dates: week checked by hand*/logEdit(o,'Build week '+(was?wkLbl(was):'unscheduled')+' → '+(v?wkLbl(v):'unscheduled'),by);sched();render();},()=>render());});
+  document.querySelectorAll('[data-wsel]').forEach(sel=>sel.onchange=function(){const o=DB.orders.find(x=>x.wo===this.dataset.wsel);const v=this.value;if(o)officeWho(by=>{const was=o.plannedWeek||'';o.plannedWeek=v;if(o.dueMv&&!o.dueMv.prog&&!o.dueMv.loaded)delete o.dueMv;/*dates: week checked by hand (programmed / loaded chips stay until tapped)*/logEdit(o,'Build week '+(was?wkLbl(was):'unscheduled')+' → '+(v?wkLbl(v):'unscheduled'),by);sched();render();},()=>render());});
   document.querySelectorAll('[data-stepsel]').forEach(sel=>sel.onchange=function(){const o=DB.orders.find(x=>x.wo===this.dataset.stepsel);const v=this.value;if(o)officeWho(by=>{logEdit(o,'Step '+(o.step||'—')+' → '+v,by);o.step=v;const tg=delvAuto(o,by);if(tg)updDelBadge();sched();render();toast(tg?'Step updated — ticked for delivery':'Step updated');},()=>render());});
   document.querySelectorAll('[data-hl]').forEach(el=>el.onclick=function(){const o=DB.orders.find(x=>x.wo===this.dataset.hl);if(o){o.hl=!o.hl;sched();render();}});
   document.querySelectorAll('[data-hi]').forEach(inp=>inp.onchange=function(){const o=DB.orders.find(x=>x.wo===this.dataset.hi);const v=parseFloat(this.value)||0;if(o)officeWho(by=>{logEdit(o,'Hours '+o.hours+' → '+v,by);o.hours=v;o.hoursEstimated=false;o.hoursSrc='hand';sched();render();},()=>render());});
