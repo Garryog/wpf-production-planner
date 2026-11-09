@@ -8128,7 +8128,9 @@ function renderImportPreview(plan){
   const nChg=c.added+c.updated+plan.shipped.length;
   // switch on: work orders this import moves to 5. WORK ORDER PROCESSED - 8. PALLETED that have no cutting list yet
   const nProc=V2()?(()=>{const tg=new Set();lists().forEach(l=>(l.wos||[]).forEach(w=>tg.add(woKey(w))));
-    return plan.newOrders.filter(o=>lsProcessed(o)&&!o.cienHold).length+plan.updates.filter(u=>u.set&&u.set.step&&lsProcessed({step:u.set.step})&&!lsProcessed({step:(DB.orders.find(x=>woKey(x.wo)===u.key)||{}).step})&&!tg.has(u.key)).length;})():0;
+    // (10 Nov) with "Only jobs ticked for delivery need a list" on, count only jobs that are (or come in) ticked for delivery
+    const dOnly=DB.listDelOnly===true,delvOf=u=>{const ex=DB.orders.find(x=>woKey(x.wo)===u.key);return !!((u.set&&u.set.delv)||(ex&&ex.delv));};
+    return plan.newOrders.filter(o=>lsProcessed(o)&&!o.cienHold&&(!dOnly||o.delv)).length+plan.updates.filter(u=>u.set&&u.set.step&&lsProcessed({step:u.set.step})&&!lsProcessed({step:(DB.orders.find(x=>woKey(x.wo)===u.key)||{}).step})&&!tg.has(u.key)&&(!dOnly||delvOf(u))).length;})():0;
   el.innerHTML=`<div style="margin-top:14px">
     <div style="background:#eaf2ff;border:2px solid #1a56db;border-radius:8px;padding:12px 15px;margin-bottom:12px">
       <div style="font-size:14px;font-weight:800;color:#14335c;margin-bottom:4px">Import preview — nothing has changed yet</div>
