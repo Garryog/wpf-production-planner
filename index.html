@@ -7075,7 +7075,7 @@ function renderDeliveries(app){
       while(ks.length>26)delete DB.delArchive[ks.shift()]; // keep half a year of history
       DB.pod={}; // the week's proof photos move into the archive with it — a fresh board shows no stale 📷
     }
-    DB.orders.forEach(o=>{const wasDeliv=!!(o.delDelivAt||o.delDone);delete o.delv;delete o.delVeh;delete o.delDay;delete o.delLoadedAt;delete o.delDispAt;delete o.delDelivAt;delete o.ldBy;delete o.delivBy;delete o.delMoves;delete o.delFirst;delete o.missWhy;delete o.delPlacedBy;delete o.delPlacedAt;if(wasDeliv)o.delDone=true;else delete o.delDone;});
+    DB.orders.forEach(o=>{const wasDeliv=!!(o.delDelivAt||o.delDone);delete o.delv;delete o.delVeh;delete o.delDay;delete o.delLoadedAt;delete o.delDispAt;delete o.delDelivAt;delete o.ldBy;delete o.delivBy;delete o.delMoves;delete o.delFirst;delete o.missWhy;delete o.delPlacedBy;delete o.delPlacedAt;delete o.delRebook;delete o.delWk;/*dates*/if(wasDeliv)o.delDone=true;else delete o.delDone;});
     DB.delx=[];DB.delNotes={};delSel.clear();
     sched();render();toast('Week archived to 📚 Past weeks — board cleared for next week');
   };
