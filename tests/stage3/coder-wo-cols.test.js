@@ -33,7 +33,7 @@ const LONG = 'Job – Kitchen and utility fit-out, Type B 3-bed end of terrace w
     const s = document.getElementById('me-wo'), f = () => Object.fromEntries([...document.querySelectorAll('#me-woinfo [data-woi]')].map(e => [e.dataset.woi, e.textContent.trim()]));
     const r = { sel: s.options[s.selectedIndex].textContent, opts: [...s.options].map(o => o.textContent), info: f(), tt: document.querySelector('[data-woi="Title"]').title };
     s.value = 'WO-1'; s.onchange(); r.info2 = f(); s.value = 'WO-3'; s.onchange(); return r; });
-  rec('editor: the picked WO shows just "WO-3 — Unit 31"', ed.sel === 'WO-3 — Unit 31', JSON.stringify(ed.sel));
+  rec('editor: the picked WO shows "WO-3 · Fl 2 · Unit 31 · due 28 Oct" — no title (Part 4 L12, Garry 10 Nov: due date on every line; was "WO-3 — Unit 31")', ed.sel === 'WO-3 · Fl 2 · Unit 31 · due 28 Oct', JSON.stringify(ed.sel));
   rec('editor: no drop-down option carries the title or customer', ed.opts.every(o => !/Aderrig|HOUSE 22|Kitchen/.test(o)), JSON.stringify(ed.opts));
   rec('editor: read-only Floor | Unit | Title | Customer filled from WO-3 (title shown as text, full title on hover)',
     ed.info.Floor === '2' && ed.info.Unit === '31' && ed.info.Title === LONG && ed.info.Customer === 'Aderrig Homes' && ed.tt === LONG, JSON.stringify(ed.info));
