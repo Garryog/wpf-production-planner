@@ -8744,7 +8744,7 @@ function dmTarget(o,ch){
 }
 const DM_FLAG={'cut-week-kept':'already cut — build week kept, check it','on-van-loaded':'already loaded — stays on the van, check it',
   'bank-hol':'not a working day','past':'date is in the past — build week is this week','beyond-8wks':'beyond the 8 board weeks — Unscheduled',
-  'programmed':'programmed (step 5) — take it out of the nest'};
+  'programmed':'programmed (step 5) — take it out of the nest','on-hold':'on hold in Cienapps (12) — moved anyway'};
 function dmFlagTxt(f,r){
   if(f==='bank-hol'&&r&&r.to){const d=new Date(r.to+'T12:00:00').getDay();return (d===0||d===6?'a '+(d===0?'Sunday':'Saturday'):'a bank holiday')+' — working day before is '+fmt(prevWorkDay(r.to));}
   return DM_FLAG[f]||f;
@@ -8767,6 +8767,7 @@ function dmRow(o,ch,opts){
   }
   if(!isWorkDay(to))r.flags.push('bank-hol');
   if(to<todayLocal())r.flags.push('past');
+  if(isOnHold(o))r.flags.push('on-hold'); /*dates: ASSUMED (Tester round 1) — flagged in the preview, still moved*/
   if((o.delVeh||o.delDay)&&dStage(o)!=='deliv'){
     if(dStage(o)){r.vanKept=true;r.flags.push('on-van-loaded');}
     else if(isShipped(o)||opts.shipped)r.vanKept=true; /*dates: shipped in Cienapps — Deliveries keeps it until the driver confirms*/
@@ -8791,8 +8792,11 @@ function moveDates(jobs,change,reason,by,opts){
       if(src==='cienapps')delete o.dueKeep;
       else if(!/^P-/i.test(String(o.wo))){if(!o.dueKeep&&r.from)o.dueKeep=r.from;if(o.dueKeep===r.to)delete o.dueKeep;}
       o.dueDate=r.to;
-      o.dueHist=(o.dueHist||[]).concat({at,by:by||'',f:'due',from:r.from,to:r.to,why,note,src}).slice(-100);
+      o.dueHist=(o.dueHist||[]).concat({at,by:by||'',f:'due',from:r.from,to:r.to,why,note,src}).slice(-DUE_HIST_MAX); /*dates: last 30 (Tester round 1 — save size)*/
       const what=['Due date '+(r.from?fmt(r.from):'—')+' → '+fmt(r.to)];
+      if(opts.keepWeek){ /*dates: import Take keeps the week (the Differs "Move to" decides) — a cut job whose due week changed still gets the "check week" chip*/
+        const nw=dueWeekFor(r.to);if(woCut(o)&&nw!==(o.plannedWeek||'')){o.dueMv={at,by:by||'',from:r.from,to:r.to};res.weeksKept++;}
+      }
       if(!opts.keepWeek){
         if(r.weekKept){o.dueMv={at,by:by||'',from:r.from,to:r.to};what.push('build week kept '+(r.wkFrom?wkLbl(r.wkFrom):'unscheduled')+' (already cut)');res.weeksKept++;}
         else{
@@ -8962,6 +8966,7 @@ function placeJobs(moved,veh,day,wk){
   const changing=moved.filter(o=>(o.delVeh||'')!==veh||(o.delDay||'')!==day||(!!day&&slotWk(o)!==wk));
   if(!changing.length){delSel.clear();render();return;}
   const reMoves=changing.filter(o=>o.delDay);
+  if(day){const dt=addDayISO(wk,DEL_DAYS.indexOf(day));if(day!=='Sat'&&!isWorkDay(dt)&&!confirm(day+' '+dShort(dt)+' is a bank holiday — book '+(changing.length===1?changing[0].wo:changing.length+' jobs')+' on it anyway?')){render();return;}} /*dates*/
   const apply=(by,why)=>{
     const at=nowISO(),to=day?veh+'|'+day+'|'+wk:'';
     changing.map(o=>findDel(o.wo)).filter(Boolean).forEach(o=>{
