@@ -6977,10 +6977,14 @@ function renderDeliveries(app){
   const bookedWks=[...new Set(tagged.filter(o=>o.delDay).map(slotWk))];
   const tabs0=[...new Set(['0','1','2','3',...bookedWks.map(offOf)])].sort((a,b)=>+a-+b);
   /*v-deliv D2: Prev / Next walk every week from the earliest open past week to +12; a week outside the strip gets a temporary tab*/
-  const steps=[...new Set([...tabs0.filter(t=>+t<0),...Array.from({length:13},(_,i)=>String(i))])].sort((a,b)=>+a-+b);
+  /*v-deliv attack4: the walk is earliest open past week … +12 → Later, and stops there (Next greyed on Later; Prev on Later = +12).
+    A booked week beyond +12 has its own tab: Prev = the booked week before it (or +12), Next = the booked week after it (or Later).*/
+  const steps=[...new Set([...tabs0.filter(t=>+t<0),...Array.from({length:13},(_,i)=>String(i))])].sort((a,b)=>+a-+b).concat('later');
+  const farT=tabs0.filter(t=>+t>12); // already sorted
   if(delTab!=='later'&&!tabs0.includes(delTab)&&!steps.includes(delTab))delTab='0';
   const tabs=[...new Set([...tabs0,...(delTab!=='later'?[delTab]:[])])].sort((a,b)=>+a-+b).concat('later');
-  const si=steps.indexOf(delTab),wkPrev=delTab==='later'?'3':si>0?steps[si-1]:null,wkNext=delTab==='later'?'4':si>=0&&si<steps.length-1?steps[si+1]:'later';
+  const fi=farT.indexOf(delTab),si=steps.indexOf(delTab);
+  const wkPrev=fi>=0?(fi>0?farT[fi-1]:'12'):si>0?steps[si-1]:null,wkNext=fi>=0?(fi<farT.length-1?farT[fi+1]:'later'):si>=0&&si<steps.length-1?steps[si+1]:null;
   const later=delTab==='later',wk=later?'':delTabWk(),past=!later&&wk<W0;
   // the pool: each job sits in its due week; overdue, no date and manual jobs sit in This week; past W+3 = Later
   const poolWk=delPoolWk;
@@ -7015,7 +7019,7 @@ function renderDeliveries(app){
   <div class="del-wkbar" id="del-wkbar">
     <button class="wkb-btn" id="wkb-prev"${wkPrev==null?' disabled':''} title="Previous week">◀<span class="wkb-t"> Prev</span></button>
     <div class="wkb-lbl" id="wkb-lbl">${later?`<b>Later</b> · due after Wk ${wkNum(W3)}`:`<b>Wk ${wkNum(wk)}</b> · Mon ${escA(dShort(wk))} – Sat ${escA(dShort(addDayISO(wk,5)))}${wk===W0?'<span class="wkb-cur">● this week</span>':past?'<span class="wkb-cur" style="color:#ffd27a">past week</span>':''}`}</div>
-    <button class="wkb-btn" id="wkb-next" title="Next week"><span class="wkb-t">Next </span>▶</button>
+    <button class="wkb-btn" id="wkb-next"${wkNext==null?' disabled':''} title="Next week"><span class="wkb-t">Next </span>▶</button>
     <button class="wkb-btn" id="wkb-today"${delTab==='0'?' disabled':''} title="Back to this week">This week</button>
   </div>
   <div class="del-panel">
