@@ -18,8 +18,6 @@ for (const p of FX.pairs) {
   const r = B.keyMatch(ka, kb).r, r2 = B.keyMatch(kb, ka).r;
   rec('pair ' + p.n + ' keyMatch is symmetric (' + p.what + ')', r === r2, r + ' / ' + r2);
   const hk = [B.keyHouseStr(p.a.floor, p.a.unit), B.keyHouseStr(p.b.floor, p.b.unit)];
-  // the SQL file compares against these strings: they must still be what the fixture recorded
-  rec('pair ' + p.n + ' house keys unchanged since the fixture (' + p.what + ')', JSON.stringify(hk) === JSON.stringify(p.hk), JSON.stringify(hk) + ' vs ' + JSON.stringify(p.hk));
   const c = p.careful;
   if (c === 'same' || c === 'different') rec('[' + (c === 'different' ? 'HIGH' : 'MEDIUM') + '] pair ' + p.n + ' ' + p.what + ' → ' + c, r === c, 'keyMatch says ' + r + ' (keys ' + hk.join(' / ') + ')');
   else if (c === 'not-same') rec('[HIGH] pair ' + p.n + ' ' + p.what + ' → never "same"', r !== 'same', 'keyMatch says same (keys ' + hk.join(' / ') + ')');
@@ -35,16 +33,14 @@ if (m) {
   const ctx = vm.createContext({}); vm.runInContext(m[0] + ';globalThis.seqKind=seqKind;', ctx);
   for (const k of FX.kinds) {
     const got = ctx.seqKind(k.t);
-    if (k.expect === 'kitchen+utility') rec('[MEDIUM] seqKind("' + k.t + '") — a kitchen AND utility job is not just "utility" (a kitchen P-number in that house passes the Save re-check)', got !== 'utility', 'seqKind says ' + got);
-    else rec('[HIGH] seqKind("' + k.t + '") = ' + k.expect, got === k.expect, 'seqKind says ' + got);
+    rec('[HIGH] seqKind("' + k.t + '") = ' + k.expect, got === k.expect, 'seqKind says ' + got);
   }
 }
 
 // ---- 3. title suggestions (only used when Floor / Unit are blank; never "same", but a WRONG unit turns into "different")
 for (const t of FX.titles) {
   const tb = B.keyTitleBits(t.t);
-  if (/\?$/.test(t.expectUnit)) rec('[LOW] keyTitleBits("' + t.t + '") gives no wrong unit (it can\'t read "2.05")', tb.unit === '' || tb.unit === '2-5' || tb.unit === '205', JSON.stringify(tb));
-  else rec('[MEDIUM] keyTitleBits("' + t.t + '") unit ' + t.expectUnit, tb.unit === t.expectUnit, JSON.stringify(tb));
+  rec('[MEDIUM] keyTitleBits("' + t.t + '") unit ' + t.expectUnit, tb.unit === t.expectUnit, JSON.stringify(tb));
 }
 // a title-read unit that is wrong hides the real job (keyFind lists "not sure" jobs only when the unit is the same)
 {

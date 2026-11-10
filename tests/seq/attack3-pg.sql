@@ -7,18 +7,16 @@ create temp table a3fx as select :'a3fx'::jsonb as j;
 create temp table a3res(n serial, ok boolean, what text);
 grant all on a3res to anon; grant all on sequence a3res_n_seq to anon; grant select on a3fx to anon;
 create or replace function pg_temp.rec(p_ok boolean, p_what text, p_detail text default null) returns void language plpgsql as $$
-begin insert into a3res(ok,what) values(p_ok,p_what);
+begin p_ok := coalesce(p_ok,false); insert into a3res(ok,what) values(p_ok,p_what); -- a null result counts as a failure
   raise notice '% % %', case when p_ok then 'PASS' else 'FAIL' end, p_what, case when p_ok or p_detail is null then '' else '  -> '||p_detail end; end $$;
 
--- ---- 1. JS = SQL on every attack pair (the strings the planner worked out, stored in the fixture)
+-- ---- 1. a pair a careful person would NOT call the same house never shares a database key (JS = SQL itself: attack4-jsvssql)
 do $$ declare c jsonb; ha text; hb text;
 begin
  for c in select * from jsonb_array_elements((select j from a3fx)->'pairs') loop
    ha := seq_house_key(c->'a'->>'floor',c->'a'->>'unit'); hb := seq_house_key(c->'b'->>'floor',c->'b'->>'unit');
-   perform pg_temp.rec(ha is not distinct from (c->'hk'->>0) and hb is not distinct from (c->'hk'->>1),
-     'JS = SQL house keys, pair '||(c->>'n')||' '||(c->>'what'), coalesce(ha,'null')||' / '||coalesce(hb,'null')||' vs JS '||(c->'hk')::text);
    if c->>'careful' in ('different','not-same','unsure') then
-     perform pg_temp.rec(not (ha is not null and ha=hb), '[HIGH] database never treats as the same house: pair '||(c->>'n')||' '||(c->>'what'), 'both '||coalesce(ha,'null'));
+     perform pg_temp.rec(coalesce(ha is null or hb is null or ha<>hb, true), '[HIGH] database never treats as the same house: pair '||(c->>'n')||' '||(c->>'what'), coalesce(ha,'null')||' / '||coalesce(hb,'null'));
    end if;
  end loop;
 end $$;
@@ -41,11 +39,11 @@ begin
  j := seq_insert('AP2','[{"id":"A2U","floor":"T09","unit":"TBC","product":"K8","name":"HOUSE TYPE C","kind":"kitchen","src":"upload","line_no":1}]'::jsonb,null,'John Burke');
  perform pg_temp.rec(j->'added'='["A2U"]'::jsonb, '[HIGH] unit "TBC" line is not silently claimed by another "TBC" Start row', j::text);
 
- -- c. "Start the sequence" stores kind = seqKind(title). A Cienapps kitchen titled "UNIT 22 TYPE B 3 BED SEMI - KITCHEN" is
- --    stored as robes (see attack3-key.test.js), so the upload's kitchen line for that house is ADDED: two rows for one kitchen
- j := seq_insert('AP3','[{"id":"A3S","wo":"AWO-3","floor":"T09","unit":"22","descr":"UNIT 22 TYPE B 3 BED SEMI - KITCHEN","kind":"robes","src":"start","match_how":"start"}]'::jsonb,null,'John Burke');
+ -- c. "Start the sequence" stores kind = seqKind(title). Round 4: the planner now sends 'kitchen' for "UNIT 22 TYPE B 3 BED SEMI -
+ --    KITCHEN" (attack3-key checks seqKind), so this sends what the planner sends: the kitchen line must claim the Start row
+ j := seq_insert('AP3','[{"id":"A3S","wo":"AWO-3","floor":"T09","unit":"22","descr":"UNIT 22 TYPE B 3 BED SEMI - KITCHEN","kind":"kitchen","src":"start","match_how":"start"}]'::jsonb,null,'John Burke');
  j := seq_insert('AP3','[{"id":"A3U","floor":"T09","unit":"22","product":"K8","name":"HOUSE TYPE B","kind":"kitchen","src":"upload","line_no":1}]'::jsonb,null,'John Burke');
- perform pg_temp.rec(jsonb_array_length(j->'added')=0, '[HIGH] (with the kind the planner sends today) the kitchen line of a house whose Cienapps kitchen says "3 BED" claims its Start row — no second kitchen row', j::text);
+ perform pg_temp.rec(jsonb_array_length(j->'added')=0, '[HIGH] the kitchen line of a house whose Cienapps kitchen says "3 BED" claims its Start row — no second kitchen row', j::text);
  -- a utility line never claims a kitchen Start row (passes)
  j := seq_insert('AP3','[{"id":"A3K","wo":"AWO-4","floor":"T09","unit":"23","descr":"HOUSE TYPE B","kind":"kitchen","src":"start","match_how":"start"}]'::jsonb,null,'John Burke');
  j := seq_insert('AP3','[{"id":"A3V","floor":"T09","unit":"23","product":"K2","name":"HOUSE TYPE B UTILITY","kind":"utility","src":"upload","line_no":1}]'::jsonb,null,'John Burke');
