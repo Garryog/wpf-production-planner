@@ -754,7 +754,7 @@ function settingsFrom(s,prev){
   const r={...prev};s=s||{};
   ['weekCaps','delx','delNotes','grps','pins','pod','lists','listWBs','listDone','delArchive','staff','listHold','holdLog','listRow','listStore','listStoreAt','saveIds'].forEach(k=>{if(s[k])r[k]=s[k];});
   if(s.hourScale&&s.hourScale.length)r.hourScale=s.hourScale;
-  ['wcap','vcap','listLead','listDue'].forEach(k=>{if(s[k]>0)r[k]=s[k];});
+  ['wcap','vcap','listLead','listDue','delivLead','siteDays','earlyDays'].forEach(k=>{if(s[k]>0)r[k]=s[k];}); /*dates phase 2: + delivery-date numbers*/
   if(typeof s.listChk==='boolean')r.listChk=s.listChk; // "Lists must be checked before the saw" (missing = keep what we had)
   if(typeof s.photoLists==='boolean')r.photoLists=s.photoLists; // "Photo lists allowed" (missing = ON)
   if(s.exportBase&&typeof s.exportBase==='object')r.exportBase=s.exportBase;
@@ -783,6 +783,7 @@ function applyPlan(p){
   ['delx','delNotes','grps','pins','pod','lists','listWBs','listDone','delArchive','staff','listHold','holdLog','listRow','listStore','listStoreAt','saveIds'].forEach(k=>{if(s[k])DB[k]=s[k];});
   if(s.listLead>0)DB.listLead=s.listLead;
   if(s.listDue>0)DB.listDue=s.listDue;
+  ['delivLead','siteDays','earlyDays'].forEach(k=>{if(s[k]>0)DB[k]=s[k];}); /*dates phase 2*/
   if(typeof s.listChk==='boolean')DB.listChk=s.listChk;
   if(typeof s.photoLists==='boolean')DB.photoLists=s.photoLists;
   if(typeof s.delLegacyWk==='string'&&s.delLegacyWk)DB.delLegacyWk=s.delLegacyWk; /*dates*/
@@ -1228,7 +1229,7 @@ async function saveDB(){
 }
 // Never let a tab close while an edit is unsaved, a save is in flight / being checked, or a retry is pending
 window.addEventListener('beforeunload',e=>{if(saveT||SAVING||DB.saveFailed||lqPending()){e.preventDefault();e.returnValue='';}});
-function fullSettings(){return{weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP,delx:DB.delx||[],delNotes:DB.delNotes||{},grps:DB.grps||{},pins:DB.pins||{},pod:DB.pod||{},lists:DB.lists||[],listWBs:DB.listWBs||{},listDone:DB.listDone||{},listLead:DB.listLead||5,delArchive:DB.delArchive||{},staff:DB.staff||[],listHold:DB.listHold||{},holdLog:DB.holdLog||[],listRow:DB.listRow||{},saveIds:DB.saveIds||[],exportBase:{wk:orig,st:origStep},...(DB.listDue>0?{listDue:DB.listDue}:{}),...(typeof DB.listChk==='boolean'?{listChk:DB.listChk}:{}),...(typeof DB.photoLists==='boolean'?{photoLists:DB.photoLists}:{}),...(DB.delLegacyWk?{delLegacyWk:DB.delLegacyWk}:{}),...(DB.delLegacyAt?{delLegacyAt:DB.delLegacyAt}:{}),...(DB.listStore?{listStore:DB.listStore,listStoreAt:DB.listStoreAt||''}:{})};}
+function fullSettings(){return{weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP,delx:DB.delx||[],delNotes:DB.delNotes||{},grps:DB.grps||{},pins:DB.pins||{},pod:DB.pod||{},lists:DB.lists||[],listWBs:DB.listWBs||{},listDone:DB.listDone||{},listLead:DB.listLead||5,delArchive:DB.delArchive||{},staff:DB.staff||[],listHold:DB.listHold||{},holdLog:DB.holdLog||[],listRow:DB.listRow||{},saveIds:DB.saveIds||[],exportBase:{wk:orig,st:origStep},...(DB.listDue>0?{listDue:DB.listDue}:{}),...['delivLead','siteDays','earlyDays'].reduce((a,k)=>{if(DB[k]>0)a[k]=DB[k];return a;},{}),...(typeof DB.listChk==='boolean'?{listChk:DB.listChk}:{}),...(typeof DB.photoLists==='boolean'?{photoLists:DB.photoLists}:{}),...(DB.delLegacyWk?{delLegacyWk:DB.delLegacyWk}:{}),...(DB.delLegacyAt?{delLegacyAt:DB.delLegacyAt}:{}),...(DB.listStore?{listStore:DB.listStore,listStoreAt:DB.listStoreAt||''}:{})};}
 /* Stage 3 switch: settings.listStore==='v2' → cutting lists live in their own tables (lists, list_lines…).
    Missing, blank or anything else (switch back writes 'v1') → today's lists in the planner record, untouched. */
 function V2(){return DB.listStore==='v2'||DB.listStore==='switching';} // 'switching' = a Switch back is rebuilding the old lists: screens still read the tables, the database takes no changes
@@ -1598,6 +1599,13 @@ function renderSettings(app){
     +'</div>'
     +'<button class="btn btn-g" id="btn-save-cap">Save Capacity</button>'
     +'</div>'
+    /*dates phase 2: the numbers behind delivery dates*/
+    +'<div class="exp-panel" id="set-dates">'
+    +'<div style="font-size:14px;font-weight:600;margin-bottom:6px">Delivery dates</div>'
+    +'<div style="display:flex;gap:20px;flex-wrap:wrap;margin-bottom:12px">'
+    +[['delivLead','Build this many working days before delivery (suggested)',delivLead()],['siteDays','Ask for "site ready" this many working days before a booked delivery',siteDays()],['earlyDays','Warn "don\'t cut early" when a job moves out by more than (days)',earlyDays()]]
+      .map(([k,l,v])=>'<div style="max-width:260px"><label style="font-size:12px;color:var(--t2);display:block;margin-bottom:4px">'+l+'</label><input type="number" id="s-'+k+'" value="'+v+'" min="1" max="60" step="1" style="padding:6px 10px;border:1px solid var(--b2);border-radius:6px;font-size:14px;width:100px;min-height:40px"></div>').join('')
+    +'</div><button class="btn btn-g" id="btn-save-dates">Save delivery-date settings</button></div>'
     +'<div class="exp-panel">'
     +'<div style="font-size:14px;font-weight:600;margin-bottom:6px">View PINs</div>'
     +'<p style="font-size:12px;color:var(--t3);margin-bottom:12px">Every view is locked by its own PIN, entered once per device. The <b>Admin PIN opens any view</b> and is required to save changes here. Changing a PIN signs every device out of that view until the new one is entered.</p>'
@@ -1710,6 +1718,10 @@ function renderSettings(app){
     if(newVcap>0)VCAP=newVcap;
     sched();
     toast('Capacity updated ✓');
+  });
+  document.getElementById('btn-save-dates')?.addEventListener('click',()=>{ /*dates phase 2*/
+    const bad=[];['delivLead','siteDays','earlyDays'].forEach(k=>{const v=parseInt(document.getElementById('s-'+k)?.value,10);if(v>0&&v<=60)DB[k]=v;else bad.push(k);});
+    sched();toast(bad.length?'Enter whole numbers from 1 to 60':'Delivery-date settings saved ✓');render();
   });
 }
 
@@ -8670,6 +8682,10 @@ function wkOf(iso){if(!iso)return'';const d=new Date(String(iso).slice(0,10)+'T1
 function thisWk(){return wkOf(todayLocal());}
 function wkPlus(wk,n){return wk?wkOf(addDayISO(wk,7*(+n||0))):'';}
 // the week a delivery booking belongs to: its own week, else the week every pre-week-tabs booking was given, else this week
+// dates phase 2: Settings numbers (missing = the default)
+function delivLead(){return DB.delivLead>0?DB.delivLead:3;}
+function siteDays(){return DB.siteDays>0?DB.siteDays:5;}
+function earlyDays(){return DB.earlyDays>0?DB.earlyDays:14;}
 function slotWk(o){
   if(o&&o.delWk)return o.delWk;
   /*dates: a booking with no week. The legacy week only applies to bookings made before the office answered the question;
