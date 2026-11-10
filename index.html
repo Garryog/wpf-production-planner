@@ -4579,6 +4579,10 @@ function lsStdRows(o){const e=()=>({k:'part',item:'',qty:'',L:'',W:'',mat:'',edg
   return[{k:'hdr',item:lsStdHouse(o),note:''},...LS_STD_SUBS.flatMap(s=>[{k:'hdr',item:s,note:'',sub:true},e(),e()])];}
 function lsNewStd(wo,pid){const o=wo?DB.orders.find(x=>x.wo===wo):null;
   openListEditor(null,wo||'',pid||(o&&(lsProjForCust(o.customer)||{}).id)||'',{std:true,rows:lsStdRows(o),note:'Standard layout — fill in the rows under each heading. Empty rows, and headings with nothing under them, are left off the saw.'});}
+/*Part 4 L9: the WO's live cutting list (not a template, not archived) — one per WO; null when none. Lists switch ON only.*/
+function lsLiveListOf(wo){return V2()&&wo?lsCache().all.find(l=>!l.tpl&&!l.archived&&(l.wos||[]).includes(wo))||null:null;}
+/*Part 4 L9: delivery cards offer "＋ Add cutting list" / "Open list" — lists switch ON, office / Production Manager / Drawing office / Pre-production*/
+function l9Ok(){return V2()&&['office','prod','design','pre'].includes(ROLE);}
 function lsListName(o){return o?(fuU(o)||o.title||o.wo):'';}
 async function confirmList(wo,tid,by){
   const o=DB.orders.find(x=>x.wo===wo);if(!o)throw new Error(wo+' is no longer on the planner');
@@ -5161,7 +5165,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
   // "Not this one"); several / not sure → a short pick list; a blank floor or unit → no search. A WO typed by hand must exist.
   let KM=null;const kmap=()=>KM||(KM=keyJobs());
   const jbOn=()=>!ex&&!st.tpl&&!st.newWO;
-  const jbLive=wo=>lsCache().all.find(l=>!l.tpl&&!l.archived&&(l.wos||[]).includes(wo));
+  const jbLive=wo=>lsLiveListOf(wo); /*L9: lifted out so the delivery card uses the same rule*/
   const jbChoose=(wo,how)=>{
     const o=DB.orders.find(x=>x.wo===wo);if(!o)return;
     const l=jbLive(wo);
