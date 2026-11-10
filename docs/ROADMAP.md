@@ -171,6 +171,14 @@ Garry's words: "cutting list need to break out floor, unit and title into their 
 - **L4 — P-number only as a last resort:** no Cienapps job found → say so plainly and make a new P-number only after the person confirms. It is flagged (purple, "not from Cienapps"), and when a later Cienapps import brings a job with the same project + floor + unit the list moves onto the Cienapps WO and the P-number job is merged into it — NEVER two jobs for one unit (Garry: "the most important thing is to avoid duplication's"). One-list-per-WO rule unchanged.
 - Architect: confirm with Garry before building — what happens when floor or unit is blank on either side (default: no automatic match, person picks), and whether Title takes part in the match (default: no, it is only shown).
 
+### Delivery page usability — TOP PRIORITY for buy-in (10 Nov 2026, Garry, go-live day)
+Garry's words: "for the delivery planner due date of jobs need to be edit able in the pool of jobs down for delivery. i need very clear week navigation between week in the delivery page. make it very easy for job in the delivery pool to be moved to other weeks. the easy usability of this page is very important for buy in of the whole planner system wit hthe production manager".
+- Job A (A1 weeks, A2 due date on card/pool, A11 group move) already covers the function. Before it is released, Architect + Tester review the Deliveries page as the Production Manager would use it, and the Coder closes any gap:
+  - **D1** due date editable straight on every To Plan pool card (one tap → date → reason), not only inside a dialog.
+  - **D2** week navigation impossible to miss: big ◀ Prev / Next ▶ plus the week tabs, the week number and Monday date always visible ("Wk 46 · 9 Nov"), "This week" button, the current week highlighted, job count per week on each tab.
+  - **D3** moving a pool job to another week in one or two taps: "→ Next week" / "Move to week…" on each card, tick several + "Move ticked to week…", and drag onto a week tab on a PC. Same A3–A7 rules and reason.
+- Test with the Production Manager's real use in mind (PC first, then phone). This page decides whether he adopts the planner.
+
 ## Progress log
 ### 2 Nov 2026 (scheduled run)
 - Architect confirmed the cutting-list plan against the code; build notes and build order added to docs/PLAN-cutting-lists-stage3.md (fixed garbled characters in both plan files).
