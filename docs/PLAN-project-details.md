@@ -484,3 +484,111 @@ saw and stores follow the new date like any other date change.
 - **Full suite** at 599e991 (220 files): **4,013 pass / 32 fail** — all on ACCEPTED-FAILURES (t17 and e7 are the timing ones).
 - **Not yet done:** Tester attack + Manager verdict on this date batch. Still to build: change requests (a PM's change inside the 14 days is
   only listed today, not sent), upload + matching, Johnny's pool page, B11 d/e/f/g (offsets, dates follow order, paste, week view).
+
+
+---
+
+# Part 3 — the matching key (B0), upload + matching (B10), cutting-list job boxes (L1–L4), late steps (S1–S2)
+*(Architect, scheduled run 10 Nov 2026 13:00 UTC)*
+
+**Plain English for Garry.** Today each screen decides for itself whether two lines are "the same house" (PM sequence, Cienapps
+upload, WO import, cutting-list window). Part 3 gives the whole planner **one rule**: same project + same floor + same unit is the
+same house. It is written once, used everywhere, and the database checks it the same way. Three answers: **Same** — the planner
+acts on its own; **Different** — left alone; **Not sure** — a person taps once to confirm. The planner never guesses. On top of
+that: cutting lists always find their Cienapps WO by floor and unit; a P-number is made only when no WO can be found and is folded
+into the real WO when Cienapps sends it; the board gets Shipped / Installed / Completed; the Shipped tab gets Project and PM filters.
+
+## Key questions — ASSUMED (recommended answer used; Garry to confirm)
+1. Floor "G" on its own — Ground or Block G? (a) ask a person ("not sure") **[rec]** (b) always Ground.
+2. "L1" / "F1" — Level 1 or a block called L1/F1? (a) not sure, a person taps **[rec]** (b) always Level 1.
+3. A floor number on one side and a block code on the other, same unit ("0 / 22" vs "T09 / 22"): (a) not sure, one tap **[rec]** (b) different.
+4. Floor/unit read only from the WO title ("BLOCK T09 APT 12"): (a) never automatic, shown as a suggestion **[rec]** (b) automatic.
+5. Blank floor or unit on either side: no automatic match; a person picks **[rec]**.
+6. Title takes part in the match? No, only shown **[rec]**.
+7. Does a WO made from an upload line carry the block (T09) in Cienapps Floor / Reference? Garry to send 5 real WOs + the upload
+   lines they came from + one real 27-column upload file. **Needed before steps 7–8.**
+8. Merging a P-number into a WO: (a) a tick in the import preview, pre-ticked when certain **[rec]** (b) fully automatic.
+9. P-job's hand-typed due date differs from Cienapps' at the merge: (a) keep the planner's date, list Cienapps' under "Dates to
+   change in Cienapps" (A6) **[rec]** (b) take Cienapps'.
+10. S1 wording: store Cienapps' text "9. JOB SHIPPED", "10. INSTALLED TO BE INVOICE", "11. COMPLETED AND INVOICED", show "Job
+    shipped / Installed / Completed"; Completed also ticks "Installation complete". (a) yes **[rec]** (b) Completed = installation complete only.
+11. Shipped tab PM filter starts on this device's PM: (a) yes **[rec]** (b) always "All".
+12. Release L1–L4 before the rest of Job B (staff are typing lists now; no new SQL): (a) yes, after their own Tester + Manager GO **[rec]** (b) wait.
+13. WO lookup (L3) includes shipped jobs? (a) no, live jobs only **[rec]** (b) yes.
+
+## B0 — the matching key (one family, pure JS, between `/* b0key:start */ … /* b0key:end */`)
+- `keyTxt(s)`: NFKC → drop zero-width chars → `[^A-Za-z0-9]+` → one space (BEFORE upper-casing, so JS and Postgres agree) → trim → upper.
+- `keyCode(t)`: letter and digit runs, leading zeros dropped per digit run (lone "0" kept), tokens joined with "-": "T 09" = "T09" = "T9".
+- `keyFloor(s)` → `{k,t}` with t = `lvl` | `code` | `amb` (with `.lvl`) | blank. Leading FLOOR/FLR/LEVEL/LVL/STOREY/BLOCK/BLK dropped.
+  GF, G F, GRD, GROUND, GROUND FLOOR, 0, 00 → 0 lvl. Digits → lvl. 1ST/2ND…, FIRST…NINTH, LEVEL n → lvl. BASEMENT → -1 lvl.
+  "G" alone → amb(0). Ln / Fn / FLn → amb(n). Else → code via keyCode.
+- `keyUnit(s)`: drop leading APT/APARTMENT/UNIT/NO/NR/NUMBER/HOUSE/HSE/PLOT/POS/POSITION (also glued: "APT07");
+  `^0*(\d+) ?([A-Z]{0,2})$` → "7A"; else keyCode.
+- `keyTitleBits(title)`: BLOCK x, FLOOR/LEVEL n, GF, APT/UNIT/HOUSE/NO/PLOT n; skips "TYPE x"; only when Floor/Unit blank; source 'title'.
+- `keyProj(o)`: `o.pid` → `lsProjForCust(o.customer).id` → ''. `jobKey(o)` uses the planner's current values (B2 overrides count); `rowKey(r)` for sequence/upload rows.
+- `keyMatch(a,b)` → `{r:'same'|'different'|'unsure', why}`: project differs → different; project unknown → unsure; floor and unit
+  both present and either differs → different (lvl/lvl, code/code by k; amb vs code/amb by k; amb vs lvl → unsure if equal number
+  else different; lvl vs code → unsure); any blank / amb / title-sourced → unsure; else same. Different beats unsure.
+- `keyHouseStr(f,u)` = floorK|unitK (null if either blank); `keyLineStr(f,u,p,n)` = f|u|keyTxt(p)|keyTxt(n) (null if p and n blank).
+  These must equal the SQL results. `woKey`/`woNorm` unchanged (they identify the WO; B0 identifies the house).
+- **Database: the same normalising is ported into SQL** (`seq_key_txt`, `seq_key_code`, `seq_floor_key`, `seq_unit_key`,
+  `seq_house_key`, `seq_line_key` rewritten), new column `project_seq.house_key` set by `ps_rules`. The DB recomputes keys on every
+  write so an old screen can't leave a stale key. SQL never reads titles and never answers "unsure".
+- **Proof JS = SQL:** one fixture `tests/seq/b0-pairs.json`; `tests/seq/b0-key.test.js` (node + the loaded app); `pg-check.sql`
+  reads the same file and checks the SQL strings, and that an unsure/different pair never gets equal non-null keys.
+- Example pairs (34) are in the fixture: T09/12 vs "t09 "/"12 " same; T09 vs T9 same; "Block T09" same; full-width "１２" same;
+  Apt 7 / APT07 / Apartment 7 / No. 7 / Unit 007 / House 7 / Plot 07 all same; 7A vs 7 different; "7 a" vs 7A same; T09 vs T10
+  different; other project different; GF = 0 = 00 = Ground = GRD same; G vs 0 unsure; G vs Block G same; 1st = First floor =
+  Level 1 = 01 same; L1 vs 1 unsure; L1 vs L01 same; blank floor unsure; blank floor + different unit different; 0/22 vs T09/22
+  unsure; B vs Basement unsure; 12-14 vs 12 different; from title unsure; customer not linked unsure.
+
+## What changes
+**B10a upload (step 7):** `seqReadUpload(aoa)` finds the header by content (≥4 of qty/floor/unit/product/name/description/price);
+no header → fixed 27-column layout; CHILDREN 1–4 info only. Preview groups: Will be added · Skipped — already in the sequence ·
+❓ Might already be there ([Skip] default / [Add anyway]). Nothing saved before [Save N rows]. Same claim rule in JS and in
+`seq_insert`: lines in file order each claim the first unclaimed live row with the same line_key, else the first unclaimed row with
+null line_key and the same house_key + kind (Start-the-sequence rows — Manager condition 1). Same file twice adds 0; two identical lines kept.
+**B10b matching (step 8):** `seqReconcile(pids)` after `applyImport` and when a sequence opens. Candidates = waiting rows with
+keyMatch ≠ different and same `seqKind`. Certain = exactly one "same" (or identical lines → first by position), no "unsure", not
+wanted by another WO in the same import → `seq_match(…'auto')` + date hand-over. Otherwise "To place / confirm" one tap; none →
+🆕 at the bottom. Never a second row for a WO (unique index + functions refuse). Waiting rows older than seqWaitWks → "⏳ not in Cienapps yet?".
+**L1** (`openListEditor2`; V1 editor untouched): new list with no WO and Copy-to-new get Floor | Unit | Title boxes + "🔎 Find the
+Cienapps WO" (also on Unit blur); WO picked → existing B2 boxes; P-number panel filled from the boxes; Excel import / Lists preview:
+`lsParseGrid` meta gains floor, unit, wo (labels Floor / Unit / WO / Work order), old template still reads.
+**L2:** WO chip on every list surface; P-number shows purple "P-1004 · not from Cienapps".
+**L3** `keyFind(pid,floor,unit)` over live jobs (key map built once per redraw): one same, no unsure → filled, green "Matched
+WO-… · Floor T09 · Unit 12 · title" [Not this one]; several / unsure → short pick list; floor or unit blank → no search; found WO
+already has a live list → "Open it instead?"; hand-typed WO must exist.
+**L4:** none found → plain message + [Make a P-number instead…] with confirm; lookup re-run on Save; second P for the same house +
+kind refused; P-jobs store `pid`. Merge: `analyzeImport` gains `plan.pMerge`; preview section "P-numbers that now have a Cienapps WO"
+pre-ticked only when certain and one-to-one. `pMerge(P,W,by)` at Apply: W survives, Cienapps fields win, higher step; lists move
+(both live lists → refused "archive one first"); planner fields copied only where W has none (both booked → keep W's, flag, log;
+P already cut → keep P's week); due date per Q9; logs merged; sequence row handed over (keeps position + Johnny's tick); P leaves
+DB.orders like Delete, full snapshot kept in settings `pMerged` (last 300).
+**S1:** MANUAL_STEPS += the three Cienapps texts; setting one: confirm, `shippedAt`, `shippedStep`, `stepHand{from,to,at,by}`;
+10/11 → installedAt; 11 → completeAt/By; on a van stays on Deliveries until delivered. Next import: steps only move forward, so the
+planner's 9 holds against Cienapps' 8 and shows in Export Changes. "↩ Bring back to board" restores `stepHand.from`.
+**S2:** `renderShipped` Project + PM filters (both lists), remembered on the device, PM defaults to this device's PM; hidden with lists off / SEQP not ok; 360 px.
+
+**Data:** orders `pid`, `pNotSame[]`, `stepHand`; settings `pMerged`. Pending SQL block (unrun): key functions, `house_key` + index,
+claim rule in `seq_insert`, GRANT execute.
+
+## What must NOT change
+Lists switch OFF = today's app; V1 editor; woKey/woNorm; import counts; no import removes a job; renumberP; one live list per WO;
+B2 overrides and Export Changes; Job A date rules (moveDates only); steps only move forward; shipped jobs and rows never deleted.
+
+## Risks
+Wrong merge (mitigated: tick, kind must agree, refused with two lists, snapshot kept) · floor aliases too loose/strict (Q1–Q3
+default to not sure) · JS/SQL drift (one fixture) · upload layout differs (Q7 sample, preview) · two PCs importing (re-look-up,
+unique index) · old screens (close every screen on go-live day) · speed (key map once per redraw).
+
+## Acceptance checks
+1 b0-key pairs pass in node and app; pg-check twice. 2 Find the WO (Block T09 / Apt 012; G vs 0 asks; blank unit no search; two WOs pick).
+3 P-number confirm, purple, second refused. 4 Merge moves list/booking/sequence, P gone, snapshot kept, date kept; two PCs once; two lists refused.
+5 Upload: 1 row per line, same file 0, two W2 BED 2 → 2, no header same, after Start not doubled. 6 WO import matching cases.
+7 S1 steps and import. 8 S2 filters. 9 Full suite: nothing new outside ACCEPTED-FAILURES.
+
+## Build steps (small commits)
+1 B0 functions + `b0-pairs.json` + `b0-key.test.js`. 2 SQL key functions + house_key + claim rule; pg-check twice. 3 L1 + L3.
+4 L4a (confirmed P, pid, duplicate-P refusal, purple chip). 5 L1b Excel job-info fields. 6 L4b merge. 7 B10a upload (needs Q7
+sample). 8 B10b matching. 9 S1. 10 S2. 11 Full suite → Tester → Manager (steps 3–6 can go first as their own batch if Q12 = yes).
