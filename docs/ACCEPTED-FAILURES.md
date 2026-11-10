@@ -3,6 +3,8 @@
 
 Removed this round: stage3 attack3-switch R1b "re-migration keeps the tick" — passes now (round 10 and again 3 Nov).
 
+Removed 10 Nov (night, Job A merged into Job B): the two dates attack4-usability "L12" rows. The checks ran with the lists switch OFF, where the OLD list window is shown and must stay unchanged; L12 is a NEW-window feature, tested in tests/seq/l5-l12-window.test.js. The two attack4 checks now assert the switch-OFF window is unchanged, and pass.
+
 Timing note: the 2,500-row timing tests can fail when many tests run at once; they pass when run alone.
 
 | Test | Why it fails (plain English) | Fixed in | Accepted? |

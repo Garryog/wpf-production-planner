@@ -85,14 +85,14 @@ const w = ms => new Promise(r => setTimeout(r, ms));
     return out;
   });
   rec('year end: tabs This week Wk 52 · Next week Wk 53 · Wk 1 · Wk 2 · Later (+ a past Wk 51 tab with an open booking)',
-    A.wk.n.join() === '52,53,1,2' && A.tabs.some(x => /^-1=Wk 51 \(past\)/.test(x)) && A.tabs.some(x => /^0=This week · Wk 52/.test(x)) && A.tabs.some(x => /^1=Next week · Wk 53/.test(x)) && A.tabs.some(x => /^2=Wk 1/.test(x)) && A.tabs.some(x => /^3=Wk 2/.test(x)) && A.tabs.some(x => /^later=Later/.test(x)), A.tabs.join(' | '));
+    A.wk.n.join() === '52,53,1,2' && A.tabs.some(x => /^-1=Wk 51 · 14 Dec \(past\)/.test(x)) /*v-deliv: tab labels carry the Monday date*/ && A.tabs.some(x => /^0=This week · Wk 52/.test(x)) && A.tabs.some(x => /^1=Next week · Wk 53/.test(x)) && A.tabs.some(x => /^2=Wk 1/.test(x)) && A.tabs.some(x => /^3=Wk 2/.test(x)) && A.tabs.some(x => /^later=Later/.test(x)), A.tabs.join(' | '));
   rec('week keys: 21 Dec, 28 Dec, 4 Jan 2027, 11 Jan 2027', A.wk.tw === '2026-12-21' && A.wk.w1 === '2026-12-28' && A.wk.w2 === '2027-01-04' && A.wk.w3 === '2027-01-11', JSON.stringify(A.wk));
   rec('This week pool = due this week + overdue + no date + manual (not next week / later)', ['WO-1', 'WO-2', 'WO-8', 'JOB-M1'].every(x => A.pool0.includes(x)) && !['WO-3', 'WO-4', 'WO-6', 'WO-7'].some(x => A.pool0.includes(x)), A.pool0.join());
   rec('Next week pool = due Wk 53, "rebook" group first', A.pool1.join() === 'WO-7,WO-3' && /rebook/i.test(A.grp1[0]), A.pool1.join() + ' / ' + A.grp1.join(' | '));
   rec('Wk 1 / Wk 2 pools by due week; header shows Wk 1 · Mon 4 Jan', A.pool2.join() === 'WO-4' && A.pool3.join() === 'WO-5' && /Wk 1 · Mon 4 Jan/.test(A.hdr2), A.pool2 + ' / ' + A.pool3 + ' / ' + A.hdr2);
   rec('Later tab = pool only (no van grid), grouped by week', A.poolL.join() === 'WO-6' && !A.gridL && /Wk 7/.test(A.grpL[0] || ''), A.poolL + ' / ' + A.grpL);
   rec('bank-holiday columns shaded: Fri 25 Dec (Wk 52), Mon 28 Dec (Wk 53)', /hol:Fri 25 Dec/.test(A.hol0.join('|')) && !/hol:Thu/.test(A.hol0.join('|')) && A.hol1[1] === 'hol', A.hol0.join(' | '));
-  rec('past week with an open booking: own tab, its grid shows the booking; Close only on This week / past', A.pastGrid.join() === 'WO-9@ARTIC|Fri|2026-12-14' && A.closeP && A.close0 && !A.close1 && A.poolP.length === 0, JSON.stringify([A.pastGrid, A.closeP, A.close0, A.close1]));
+  rec('past week with an open booking: own tab, its grid shows the booking; Close only on a This week / past week that has something to close', A.pastGrid.join() === 'WO-9@ARTIC|Fri|2026-12-14' && A.closeP && !A.close0 && !A.close1 /*v-deliv: Close Wk N hidden when the week has nothing to close (This week here has no bookings)*/ && A.poolP.length === 0, JSON.stringify([A.pastGrid, A.closeP, A.close0, A.close1]));
   rec('missed: last week\'s open booking counts (date gone)', /— 1$/.test(A.miss0), A.miss0);
   rec('selection bar shows "📅 Move dates (1)"', /Move dates \(1\)/.test(A.selbar), A.selbar);
   rec('booking on the Next week tab writes delWk 28 Dec + Tue, first placement stamped, no move', A.b3.veh === 'VOLVO' && A.b3.day === 'Tue' && A.b3.wk === '2026-12-28' && A.b3.mv === 0 && /2026-12-28/.test(A.b3.first), JSON.stringify(A.b3));

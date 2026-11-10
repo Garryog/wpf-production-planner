@@ -83,8 +83,20 @@ button,input,select{font-family:inherit;cursor:pointer}
 /*dates*/.dm-due{cursor:pointer}.dm-due:hover .due-badge{outline:2px solid #1a56db}
 .dm-chip{display:inline-block;margin:2px 0 0 4px;font-size:10px;font-weight:700;border-radius:4px;padding:1px 5px;background:#eef3fb;color:#14418f;border:1px solid #b9cdec;cursor:pointer;white-space:nowrap;font-family:inherit}
 .dm-chip.amber{background:#fff4d6;color:#7a4a00;border-color:#e0a43a}.dm-chip.red{background:#fde8e8;color:#b42318;border-color:#e57368}
-.dchip-due{display:inline-block;border:none;background:none;padding:0;margin-top:2px;font-size:11px;color:var(--t2);text-decoration:underline dotted;cursor:pointer;font-family:inherit}
 .dm-moved{margin-top:2px;font-size:10px;font-weight:700;color:#b45309}
+/*v-deliv D1/DD1: one due-date tag everywhere — "Due Mon 16 Nov · Wk 47". Red = before today, amber = this week, grey = later*/
+.due-tags{display:inline-flex;flex-wrap:wrap;gap:4px;align-items:center;max-width:100%;vertical-align:middle}
+.due-tag{display:inline-block;font-family:inherit;font-size:11px;font-weight:700;border-radius:5px;padding:2px 7px;border:1px solid;white-space:nowrap;line-height:1.4;max-width:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}
+.due-tag.red{background:#fde8e8;color:#b42318;border-color:#e57368}
+.due-tag.amber{background:#fff4d6;color:#7a4a00;border-color:#e0a43a}
+.due-tag.grey{background:#f1f4f8;color:#3b4c63;border-color:#cdd5e0}
+button.due-tag{cursor:pointer;min-height:26px}button.due-tag:hover{outline:2px solid #1a56db;outline-offset:1px}
+.due-orig{font-size:10px;color:var(--t3)}
+.dq-w{position:relative;display:inline-block;max-width:100%}
+.dq-in{position:absolute;left:0;bottom:0;width:1px;height:1px;opacity:0;border:0;padding:0;margin:0;pointer-events:none}
+.dq-more{font-family:inherit;font-size:13px;font-weight:700;line-height:1;border:1px solid #cdd5e0;background:#fff;color:#3b4c63;border-radius:5px;padding:3px 7px;min-height:26px;cursor:pointer;vertical-align:middle}
+.dq-more:hover{border-color:#1a56db;color:#1a56db}
+@media(max-width:700px){button.due-tag,.dq-more{min-height:34px;font-size:12px}}
 .due-late{background:var(--rl);color:var(--red)}.due-soon{background:var(--al);color:var(--amber)}.due-ok{background:var(--gl);color:var(--green)}
 .step-badge{font-size:10px;padding:2px 6px;border-radius:3px;background:var(--bl);color:var(--blue);white-space:nowrap}
 .week-sel{padding:4px 8px;border:1px solid var(--b2);border-radius:5px;font-size:12px;background:#fff;width:120px}
@@ -258,19 +270,35 @@ details.lti-other{margin-bottom:14px}details.lti-other>summary{cursor:pointer;fo
 .dgrp-h:hover{color:#1a56db}
 .dgrp-h .gcnt{font-weight:400;color:var(--t3);text-transform:none;letter-spacing:0;font-size:10px}
 .dpool-chips{display:flex;flex-wrap:wrap;gap:6px}
-.dchip{width:216px;background:#fff;border:1px solid #cfd6df;border-radius:7px;padding:6px 8px;font-size:11px;cursor:grab;user-select:none;box-shadow:0 1px 2px rgba(15,25,40,.06)}
+.dchip{width:216px;box-sizing:border-box;min-width:0;overflow:hidden;background:#fff;border:1px solid #cfd6df;border-radius:7px;padding:6px 8px;font-size:11px;cursor:grab;user-select:none;box-shadow:0 1px 2px rgba(15,25,40,.06)}
 .dcell .dchip{width:100%;margin:0 0 4px;box-shadow:none}
-.dchip-top{display:flex;align-items:center;gap:6px}
-.dchip-top b{font-family:monospace;font-size:12px;font-weight:700;color:#14335c;white-space:nowrap}
+.dchip-top{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0}
+.dchip-top b{font-family:monospace;font-size:12px;font-weight:700;color:#14335c;min-width:0;flex:1 1 80px;overflow-wrap:anywhere}
+/*v-deliv D4: card rows — WO + buttons · Floor / Unit · title · dates · chips. Nothing may spill out of the card.*/
+.dchip-fu{display:flex;flex-wrap:wrap;gap:4px;margin-top:2px;min-width:0}
+.dchip-fu .dfu{display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;box-sizing:border-box}
+.dchip-fu .fu-fl+.fu-un{margin-left:0}
+.dchip-dates{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:4px;min-width:0}
+.dchip-dates .dm-chip,.dchip-wkb .dm-chip{margin:0}
+.dchip .dm-chip,.dchip .rdy-tag{max-width:100%;overflow:hidden;text-overflow:ellipsis;box-sizing:border-box}
+.dchip-wkb{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
+.dwk-btn{font-family:inherit;font-size:12px;font-weight:700;border:1px solid #9cbce8;background:#eef4fd;color:#14418f;border-radius:6px;padding:4px 9px;min-height:30px;cursor:pointer;white-space:nowrap}
+.dwk-btn:hover{background:#dbe8fb;border-color:#1a56db}
+@media(max-width:700px){.dwk-btn{min-height:38px;font-size:13px;padding:6px 11px}}
+.wkp-list{display:flex;flex-direction:column;gap:5px;max-height:58vh;overflow:auto;margin-bottom:6px}
+.wkp-list .rbtn{margin:0;padding:10px 12px;font-size:14px;justify-content:space-between;min-height:44px}
+.wkp-list .rbtn.cur{border-color:#0d6e46}
+.wkp-list .rbtn.pre{border:2px solid #1a56db;background:#eaf2ff}
+.wkp-list .wkp-n{font-weight:400;color:var(--t3);font-size:12px}
+.dgrp-f{font-size:12px;font-weight:700;color:#0d6e46;margin:6px 0 2px;padding-top:4px;border-top:1px solid #e3e8ef}
 .dfu{font-size:10px;font-weight:700;background:#eef2f7;border:1px solid #d8dfe8;border-radius:4px;padding:1px 5px;color:#3b4c63;white-space:nowrap}
 .fu-fl+.fu-un{margin-left:4px}
 .fu-badge{font-family:monospace;font-size:11px;font-weight:600;background:#f2f5f9;border:1px solid #e0e5ec;border-radius:4px;padding:1px 6px;color:var(--t2);white-space:nowrap}
 .dsrch{width:100%;max-width:420px;padding:7px 11px;border:1px solid var(--b2);border-radius:6px;font-size:12px;margin-bottom:8px}
 .dsrch:focus{border-color:#7ba7e0}
-.dcv{margin-left:auto;font-weight:600;color:#0d6e46;font-size:11px;white-space:nowrap}
-.dchip-btns{display:flex;gap:1px}
-.dchip button{background:none;border:none;cursor:pointer;font-size:15px;line-height:1;padding:7px 8px;min-width:32px;min-height:32px;border-radius:5px;color:#4a5568}
-.dchip button:hover{background:#dde3ea;color:var(--text)}
+.dchip-btns{display:flex;gap:1px;margin-left:auto;flex:0 0 auto}
+.dchip .dchip-btns button{background:none;border:none;cursor:pointer;font-size:15px;line-height:1;padding:7px 8px;min-width:32px;min-height:32px;border-radius:5px;color:#4a5568}
+.dchip .dchip-btns button:hover{background:#dde3ea;color:var(--text)}
 .dchip .dchk.on{color:#0b7e44;font-weight:700}
 .dchip-t{font-size:11px;color:var(--text);line-height:1.35;margin-top:3px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .dchip-c{font-size:10px;color:var(--t3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -302,7 +330,20 @@ details.lti-other{margin-bottom:14px}details.lti-other>summary{cursor:pointer;fo
 .del-tab{flex:0 0 auto;border:1px solid var(--b2);background:#fff;border-radius:16px;padding:7px 12px;font-size:13px;font-weight:600;color:var(--t2);cursor:pointer;min-height:36px}
 .del-tab.on{background:#14335c;border-color:#14335c;color:#fff}
 .del-tab.past{border-color:#d4880f;color:#8a5a00}
+/*v-deliv D2: the week bar — always on screen (sticky under the main tabs). Current week = green ● + underline; selected = dark.*/
+.del-tab.cur{box-shadow:inset 0 -3px 0 #16a34a}
+.del-tab.cur::before{content:'● ';color:#16a34a}
+.del-wkbar{position:sticky;top:0;z-index:60;display:flex;align-items:center;gap:8px;background:#14335c;color:#fff;border-radius:10px;padding:6px 8px;margin-bottom:10px;box-shadow:0 2px 8px rgba(15,25,40,.18)}
+.wkb-btn{flex:0 0 auto;min-height:44px;min-width:44px;font-family:inherit;font-size:14px;font-weight:700;border:1px solid rgba(255,255,255,.45);background:rgba(255,255,255,.12);color:#fff;border-radius:8px;padding:0 14px;cursor:pointer}
+.wkb-btn:hover:not(:disabled){background:rgba(255,255,255,.25)}
+.wkb-btn:disabled{opacity:.35;cursor:default}
+.wkb-lbl{flex:1 1 auto;min-width:0;text-align:center;font-size:16px;line-height:1.25}
+.wkb-lbl b{font-size:18px}
+.wkb-cur{display:inline-block;font-size:12px;font-weight:700;color:#7ee2a8;margin-left:6px}
+@media(max-width:700px){.wkb-t{display:none}.wkb-lbl{font-size:13px}.wkb-lbl b{font-size:15px}.wkb-btn{padding:0 10px}.del-wkbar{gap:5px;padding:5px}}
 .del-tab .n{font-weight:400;opacity:.8;margin-left:4px}
+body.del-dragging .del-tab[data-deltab]:not(.past){outline:2px dashed #7ba7e0;outline-offset:2px}
+.del-tab.dragover{background:#1a56db!important;border-color:#1a56db!important;color:#fff!important}
 .del-grid th.hol,.del-grid td.hol{background:repeating-linear-gradient(45deg,#f3f0ea,#f3f0ea 6px,#ebe6dc 6px,#ebe6dc 12px)}
 .dwk-h{font-size:12px;font-weight:800;color:#14335c;margin:12px 0 2px;border-bottom:1px solid var(--border);padding-bottom:2px}
 .del-pool.dragover{background:#eaf2ff;border-color:#7ba7e0}
@@ -1940,7 +1981,7 @@ function renderBoard(app){
           <td><span class="wo-title" title="${escA(o.title)}">${escA(o.title)}</span></td>
           <td><span class="wo-cust" title="${escA(o.customer)}">${escA(o.customer)}</span></td>
           <td style="text-align:right"><input type="number" step="0.5" min="0" style="width:52px;text-align:right;border:1px solid ${o.hoursEstimated?'#f59e0b':'var(--b2)'};border-radius:4px;padding:2px 4px;font-size:12px;font-weight:600;background:${o.hoursEstimated?'#fffbeb':'#fff'}" title="${o.hoursEstimated?'Estimated from value — verify':'Actual hours from Cienapps'}" data-hi="${escA(o.wo)}" value="${+o.hours||0}"></td>
-          <td><span class="dm-due" data-duedlg="${escA(o.wo)}" title="Tap to change the due date">${dueBadge(o.dueDate,o.plannedWeek,o.origDueDate)}</span>${dmChips(o)}</td>
+          <td>${dueTag(o,{late:true})}${dateCanMove()?`<button class="dq-more" data-duedlg="${escA(o.wo)}" title="All date options — due and delivery dates, history">⋯</button>`:''}${dmChips(o)}</td>
           <td style="text-align:right;font-size:12px;color:var(--t2)">€${Math.round(o.value||0).toLocaleString()}</td>
           <td><select class="step-sel" data-stepsel="${escA(o.wo)}" style="font-size:11px;padding:3px 4px;border-radius:6px;border:1px solid var(--b2);background:#fff;color:var(--text);max-width:120px">
             ${getSteps().map(s=>`<option value="${escA(s)}"${(o.step||'')===s?' selected':''}>${escA(s.replace(/^\d+\.\s*/,''))}</option>`).join('')}
@@ -2385,7 +2426,7 @@ const escA=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').
 const fuF=o=>{const v=o?(o.floor!=null&&o.floor!==''?o.floor:o.f):'';return String(v==null?'':v).trim();};
 const fuU=o=>{const v=o?(o.unit!=null&&o.unit!==''?o.unit:o.u):'';return String(v==null?'':v).trim();};
 function fuHTML(o,cls,sty){const f=fuF(o),u=fuU(o),a=k=>` class="${cls||'fu-badge'} ${k}"${sty?' style="'+sty+'"':''}`;
-  return [f?`<span${a('fu-fl')} title="Floor">Floor ${escA(f)}</span>`:'',u?`<span${a('fu-un')} title="Unit">Unit ${escA(u)}</span>`:''].filter(Boolean).join(' ');}
+  return [f?`<span${a('fu-fl')} title="Floor ${escA(f)}">Floor ${escA(f)}</span>`:'',u?`<span${a('fu-un')} title="Unit ${escA(u)}">Unit ${escA(u)}</span>`:''].filter(Boolean).join(' ');} /*v-deliv attack4: full text in the tooltip when a badge is cut off*/
 function lsFuOf(l){const os=((l&&l.wos)||[]).map(w=>DB.orders.find(x=>x.wo===w)).filter(Boolean),j=f=>[...new Set(os.map(f).filter(Boolean))].join(', ');return{f:j(fuF),u:j(fuU)};} // a list's tagged jobs
 function fuSpans(x,E){return (x.f?`<span class="fu-p">FLOOR <b>${E(x.f)}</b></span>`:'')+(x.u?`<span class="fu-p">UNIT <b>${E(x.u)}</b></span>`:'');} // prints and labels
 function fuLbl(o){const f=fuF(o),u=fuU(o);return[f?'Floor '+f:'',u?'Unit '+u:''].filter(Boolean).join(' · ');}
@@ -8065,13 +8106,15 @@ function dchip(o,showCust){
   const st=dStage(o);
   const rd=(!st&&!o.manual)?woReady(o.wo):null; // one colour per job until it's loaded — detail behind the ⓘ button
   return `<div class="dchip${rd?' rdy-'+rd.lvl:''}${st==='deliv'?' done':''}${st==='disp'?' dispd':''}${st==='load'?' loadd':''}${o.manual?' manual':''}${delSel.has(o.wo)?' sel':''}" draggable="true" data-dw="${escA(o.wo)}" title="Click to select · drag onto a day${o.manual?' · added manually':''}">
-    <div class="dchip-top"><b>${escA(o.wo)}</b>${fuHTML(o,'dfu')}<span class="dcv">€${Math.round(o.value||0).toLocaleString()}</span>
+    <div class="dchip-top"><b>${escA(o.wo)}</b>
       <span class="dchip-btns">${rd?`<button class="dinfo" data-dinfo="${escA(o.wo)}" title="${escA(RDY_LBL[rd.lvl]+(rd.why.length?' — '+rd.why.join(' · '):''))} — tap for detail">ⓘ</button>`:''}<button class="dchk${st?' on':''}" data-dd="${escA(o.wo)}" title="Status: ${dStageLbl[st]||'planned'} — tap to update (opens a menu)">${st==='deliv'?'✓':st==='disp'?'D':st==='load'?'L':'·'}</button><button data-dx="${escA(o.wo)}" title="${o.delDay?'Return to pool':(o.manual?'Delete this manual job':'Remove from delivery plan')}">×</button></span>
     </div>
-    <div class="dchip-t">${escA(o.title)||'—'}</div>
-    ${!o.manual?`<div><button class="dchip-due" data-duedlg="${escA(o.wo)}" title="Tap to change the due or delivery date">due ${o.dueDate?escA(fmt(o.dueDate))+' Wk'+wkNum(o.dueDate):'—'}${o.delivDate?' · deliv '+escA(fmt(o.delivDate)):''}</button>${(o.dueHist||[]).length?`<button class="dm-chip" data-duehist="${escA(o.wo)}" title="Due date changed — tap for the history">🔁 date ×${o.dueHist.length}</button>`:''}</div>`:''}${o.delRebook&&!o.delDay?`<div class="dm-moved" title="${escA('Taken off '+(o.delRebook.was||'').split('|').slice(0,2).join(' ')+' by '+(o.delRebook.by||'')+(o.delRebook.why?' — '+o.delRebook.why:''))}">${o.delRebook.nd?'🚚 not delivered Wk '+escA(o.delRebook.nd)+' — rebook':'📅 date moved — rebook'}</div>`:''}${o.dueMv&&o.dueMv.loaded&&dStage(o)&&dStage(o)!=='deliv'?`<div class="dm-moved" style="color:#b42318">📅 date moved after loading — check</div>`:''}
+    ${fuF(o)||fuU(o)?`<div class="dchip-fu">${fuHTML(o,'dfu')}</div>`:''}
+    <div class="dchip-t" title="${escA(o.title)}">${escA(o.title)||'—'}</div>
+    <div class="dchip-dates">${dueTag(o)}${!o.manual&&dateCanMove()?`<button class="dq-more" data-duedlg="${escA(o.wo)}" title="All date options — due and delivery dates, history">⋯</button>`:''}${o.manual?'':movedTag(o)}</div>
+    ${wkBtnsOk(o)?(nw=>`<div class="dchip-wkb"><button class="dwk-btn" data-wknext="${escA(o.wo)}" data-wk="${escA(nw)}" title="Move the due date${o.delivDate?' and the delivery date':''} one week on — asks why">→ Wk ${wkNum(nw)}</button><button class="dwk-btn" data-wkpick="${escA(o.wo)}" title="Pick any week — asks why">Move to week…</button></div>`)(wkPlus(delPoolWk(o),1)):''}${o.delRebook&&!o.delDay?`<div class="dm-moved" title="${escA('Taken off '+(o.delRebook.was||'').split('|').slice(0,2).join(' ')+' by '+(o.delRebook.by||'')+(o.delRebook.why?' — '+o.delRebook.why:''))}">${o.delRebook.nd?'🚚 not delivered Wk '+escA(o.delRebook.nd)+' — rebook':'📅 date moved — rebook'}</div>`:''}${o.dueMv&&o.dueMv.loaded&&dStage(o)&&dStage(o)!=='deliv'?`<div class="dm-moved" style="color:#b42318">📅 date moved after loading — check</div>`:''}
     ${st?`<div class="dstg s-${st}">${dStageLbl[st]}${dStageTime(o)?' '+dStageTime(o):''}${st==='deliv'&&o.delivBy?' — '+escA(o.delivBy):st==='load'&&o.ldBy?' — '+escA(o.ldBy):''}</div>`:''}
-    ${isOnHold(o)?`<div class="rdy-tag" style="background:#fde8e8;color:#b42318" title="Step 12 in Cienapps — kept here because it's already loaded / on the road">⏸ ON HOLD in Cienapps</div>`:''}${rd?`<div class="rdy-tag">${RDY_LBL[rd.lvl]}</div>`:''}${(o.delMoves||[]).length?`<div class="dmoved" title="${escA(o.delMoves.map(m=>m.why+' — '+m.by).join(' | '))}">🔁 moved${o.delMoves.length>1?' ×'+o.delMoves.length:''}</div>`:''}
+    ${isOnHold(o)?`<div class="rdy-tag" style="background:#fde8e8;color:#b42318" title="Step 12 in Cienapps — kept here because it's already loaded / on the road">⏸ ON HOLD in Cienapps</div>`:''}${rd?`<div class="rdy-tag">${RDY_LBL[rd.lvl]}</div>`:''}${(o.delMoves||[]).length?`<div class="dmoved" title="${escA(o.delMoves.map(m=>m.why+' — '+m.by).join(' | '))}">🚚 rebooked ×${o.delMoves.length}</div>`:''}
     ${!o.manual&&(afterDelivOn(o)||delivMvOn(o))?`<div>${delivFlagChips(o)}</div>`:''}${siteChip(o)}${showCust?`<div class="dchip-c">${escA(o.customer)}</div>`:''}
   </div>`;
 }
@@ -8084,8 +8127,16 @@ function renderDeliveries(app){
   const W0=thisWk(),W3=wkPlus(W0,3);
   const offOf=w=>String(Math.round((new Date(w+'T12:00:00')-new Date(W0+'T12:00:00'))/604800000));
   const bookedWks=[...new Set(tagged.filter(o=>o.delDay).map(slotWk))];
-  const tabs=[...new Set(['0','1','2','3',...bookedWks.map(offOf)])].sort((a,b)=>+a-+b).concat('later');
-  if(!tabs.includes(delTab))delTab='0';
+  const tabs0=[...new Set(['0','1','2','3',...bookedWks.map(offOf)])].sort((a,b)=>+a-+b);
+  /*v-deliv D2: Prev / Next walk every week from the earliest open past week to +12; a week outside the strip gets a temporary tab*/
+  /*v-deliv attack4: the walk is earliest open past week … +12 → Later, and stops there (Next greyed on Later; Prev on Later = +12).
+    A booked week beyond +12 has its own tab: Prev = the booked week before it (or +12), Next = the booked week after it (or Later).*/
+  const steps=[...new Set([...tabs0.filter(t=>+t<0),...Array.from({length:13},(_,i)=>String(i))])].sort((a,b)=>+a-+b).concat('later');
+  const farT=tabs0.filter(t=>+t>12); // already sorted
+  if(delTab!=='later'&&!tabs0.includes(delTab)&&!steps.includes(delTab))delTab='0';
+  const tabs=[...new Set([...tabs0,...(delTab!=='later'?[delTab]:[])])].sort((a,b)=>+a-+b).concat('later');
+  const fi=farT.indexOf(delTab),si=steps.indexOf(delTab);
+  const wkPrev=fi>=0?(fi>0?farT[fi-1]:'12'):si>0?steps[si-1]:null,wkNext=fi>=0?(fi<farT.length-1?farT[fi+1]:'later'):si>=0&&si<steps.length-1?steps[si+1]:null;
   const later=delTab==='later',wk=later?'':delTabWk(),past=!later&&wk<W0;
   // the pool: each job sits in its due week; overdue, no date and manual jobs sit in This week; past W+3 = Later
   const poolWk=delPoolWk;
@@ -8094,7 +8145,7 @@ function renderDeliveries(app){
   const pool=poolOf(delTab);
   const wkTot=later?0:tagged.filter(o=>slotIn(o,wk)).reduce((a,o)=>a+(+o.value||0),0);
   const legacy=ROLE==='office'?delLegacyJobs():[];
-  const tabLbl=t=>{if(t==='later')return'Later';const w=delTabWk(t);return (t==='0'?'This week · ':t==='1'?'Next week · ':'')+'Wk '+wkNum(w)+(w<W0?' (past)':'');};
+  const tabLbl=t=>{if(t==='later')return'Later';const w=delTabWk(t);return (t==='0'?'This week · ':t==='1'?'Next week · ':'')+'Wk '+wkNum(w)+' · '+dShort(w)+(w<W0?' (past)':'');};
   const tabN=t=>t==='later'?poolOf(t).length:tagged.filter(o=>slotIn(o,delTabWk(t))).length+poolOf(t).length;
   // pool groups: "date moved — rebook" first, then by customer (Later: by due week), WO-number order inside each
   const rebook=pool.filter(o=>o.delRebook).sort(woCmp),rest=pool.filter(o=>!o.delRebook);
@@ -8103,10 +8154,12 @@ function renderDeliveries(app){
   gkeys.forEach(k=>grps[k].sort(later?((a,b)=>(a.customer||'').localeCompare(b.customer||'')||woCmp(a,b)):woCmp));
   const gName=k=>later?'Wk '+wkNum(k)+' — due from '+dShort(k):k;
   const gHTML=(k,lbl,list,sty)=>`<div class="dgrp">
-        <div class="dgrp-h" data-grp="${escA(k)}"${sty?` style="${sty}"`:''}>${escA(lbl)}<span class="gcnt">${list.length} job${list.length!==1?'s':''} · €${Math.round(list.reduce((a,o)=>a+(+o.value||0),0)).toLocaleString()} · click to select all</span></div>
+        <div class="dgrp-h" data-grp="${escA(k)}"${sty?` style="${sty}"`:''}>${escA(lbl)}<span class="gcnt">${list.length} job${list.length!==1?'s':''} · click to select all</span></div>
         <div class="dpool-chips">${list.map(o=>dchip(o,later||k==='__rebook')).join('')}</div>
+        <div class="dgrp-f">${list.length} job${list.length!==1?'s':''} · €${Math.round(list.reduce((a,o)=>a+(+o.value||0),0)).toLocaleString()}</div>
       </div>`;
   const nOrd=[...delSel].filter(w=>DB.orders.some(o=>o.wo===w)).length;
+  const nMv=[...delSel].map(findDel).filter(o=>o&&!o.delDone&&dStage(o)!=='deliv'&&(!o.manual||wkManOk())).length; /*v-deliv D3*/
   const store=inStoreJobs(),storeOld=store.filter(x=>x.n!=null&&x.n>14).length;
 
   app.innerHTML=`<div class="pg">
@@ -8115,8 +8168,14 @@ function renderDeliveries(app){
     <div style="font-size:14px;font-weight:700;color:#8a5a00;margin-bottom:4px">⚠ ${legacy.length} booking${legacy.length!==1?'s':''} from before the week tabs — which week are they for?</div>
     <p style="font-size:12px;color:#8a5a00;margin-bottom:8px">They were put on a van and day before the board knew about weeks. Until you answer they show under This week. Asked once.</p>
     <button class="btn btn-s" data-legwk="0">This week — Wk ${wkNum(thisWk())}</button> <button class="btn btn-s" data-legwk="1">Next week — Wk ${wkNum(wkPlus(thisWk(),1))}</button></div>`:''}
+  <div class="del-wkbar" id="del-wkbar">
+    <button class="wkb-btn" id="wkb-prev"${wkPrev==null?' disabled':''} title="Previous week">◀<span class="wkb-t"> Prev</span></button>
+    <div class="wkb-lbl" id="wkb-lbl">${later?`<b>Later</b> · due after Wk ${wkNum(W3)}`:`<b>Wk ${wkNum(wk)}</b> · Mon ${escA(dShort(wk))} – Sat ${escA(dShort(addDayISO(wk,5)))}${wk===W0?'<span class="wkb-cur">● this week</span>':past?'<span class="wkb-cur" style="color:#ffd27a">past week</span>':''}`}</div>
+    <button class="wkb-btn" id="wkb-next"${wkNext==null?' disabled':''} title="Next week"><span class="wkb-t">Next </span>▶</button>
+    <button class="wkb-btn" id="wkb-today"${delTab==='0'?' disabled':''} title="Back to this week">This week</button>
+  </div>
   <div class="del-panel">
-    <div class="del-tabs" id="del-tabs">${tabs.map(t=>`<button class="del-tab${t===delTab?' on':''}${t!=='later'&&delTabWk(t)<W0?' past':''}" data-deltab="${escA(t)}">${escA(tabLbl(t))}<span class="n">(${tabN(t)})</span></button>`).join('')}<button class="del-tab" id="btn-instore" style="${delStoreOpen?'background:#0e7490;color:#fff;border-color:#0e7490':storeOld?'border-color:#d4880f;color:#8a5a00':''}" title="Built jobs (7 / 8) sitting in store with no van booked">🏬 In store ${store.length}${storeOld?` <span class="n">(${storeOld} &gt; 14 days)</span>`:''}</button></div>
+    <div class="del-tabs" id="del-tabs">${tabs.map(t=>`<button class="del-tab${t===delTab?' on':''}${t==='0'?' cur':''}${t!=='later'&&delTabWk(t)<W0?' past':''}" data-deltab="${escA(t)}">${escA(tabLbl(t))}<span class="n">(${tabN(t)})</span></button>`).join('')}<button class="del-tab" id="btn-instore" style="${delStoreOpen?'background:#0e7490;color:#fff;border-color:#0e7490':storeOld?'border-color:#d4880f;color:#8a5a00':''}" title="Built jobs (7 / 8) sitting in store with no van booked">🏬 In store ${store.length}${storeOld?` <span class="n">(${storeOld} &gt; 14 days)</span>`:''}</button></div>
     ${delStoreOpen?inStoreHTML(store):''}
     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px">
       <div style="font-size:14px;font-weight:600" id="del-wkh">${later?'Later — jobs due after Wk '+wkNum(W3)+' (pool only)':'Delivery Board — Wk '+wkNum(wk)+' · Mon '+dShort(wk)+' – Sat '+dShort(addDayISO(wk,5))+(past?' (past week — close it when it is done)':'')}</div>
@@ -8129,10 +8188,10 @@ function renderDeliveries(app){
         <button class="btn btn-s seq-gate" data-seqpick="1"${seqVis()?'':' hidden'} title="A project's sequence — every work order in the order the site needs them (look; the office and Production Manager can reorder)">🔢 Sequence</button>
         <button class="btn btn-s" id="btn-delarch" title="Closed delivery weeks — every closed week is kept here with all stamps and names">📚 Past weeks</button>
         ${ROLE==='office'&&catchUp.length?`<button class="btn btn-s" id="btn-deltag" title="One-off: tick for delivery every job already at 7 ASSEMBLY COMPLETE or 8 PALLETED, due from ${fmt(DELV_CATCHUP_FROM)} on, that is not on the board yet (older ones are left — they are delivered)">Tag assembled/palleted jobs due from ${fmt(DELV_CATCHUP_FROM)} for delivery (${catchUp.length})</button>`:''}
-        ${!later&&wk<=W0?`<button class="btn btn-s" id="btn-delreset" style="border-color:var(--red);color:var(--red)" title="Archive Wk ${wkNum(wk)} to 📚 Past weeks — delivered jobs leave the board, anything not delivered goes back to To plan to rebook. Other weeks are not touched.">🔒 Close Wk ${wkNum(wk)}</button>`:''}
+        ${!later&&wk<=W0&&closeWeekJobs(wk).length?`<button class="btn btn-s" id="btn-delreset" style="border-color:var(--red);color:var(--red)" title="Archive Wk ${wkNum(wk)} to 📚 Past weeks — delivered jobs leave the board, anything not delivered goes back to To plan to rebook. Other weeks are not touched.">🔒 Close Wk ${wkNum(wk)}</button>`:''}
       </span>
     </div>
-    <p style="font-size:12px;color:var(--t3);margin-bottom:8px">Tag jobs on the Capacity Board with 🚚, or add one manually. Click cards to select several, then drag (or tap ⤵ Place) onto a vehicle and day. Card colour = readiness: <b style="color:#0d6e46">green ready</b> · <b style="color:#8a5a00">amber part ready / waiting on material</b> · <b style="color:#b42318">red not ready or no list</b> — ⓘ shows why. Moving a planned job asks why, and records who — moving it to another week too (select it, open that week's tab, tap ⤵ Place).</p>
+    <p style="font-size:12px;color:var(--t3);margin-bottom:8px">Tag jobs on the Capacity Board with 🚚, or add one manually. Click cards to select several, then drag (or tap ⤵ Place) onto a vehicle and day. Card colour = readiness: <b style="color:#0d6e46">green ready</b> · <b style="color:#8a5a00">amber part ready / waiting on material</b> · <b style="color:#b42318">red not ready or no list</b> — ⓘ shows why. Moving a planned job asks why, and records who — moving it to another week too (select it, open that week's tab, tap ⤵ Place). <b>Due date:</b> tap the date on a card to change it. <b>Another week:</b> tap → Wk / Move to week… on the card, tick several and use Move ticked to week…, or drag cards onto a week tab.</p>
     <div class="addjob-row" id="ajform">
       <input id="aj-wo" placeholder="WO / ref (optional)" style="width:140px">
       <input id="aj-title" placeholder="Description *" style="flex:1;min-width:180px">
@@ -8140,7 +8199,7 @@ function renderDeliveries(app){
       <input id="aj-val" type="number" min="0" placeholder="€ value" style="width:100px">
       <button class="btn btn-g" id="aj-add">Add to pool</button>
     </div>
-    ${delSel.size?`<div class="selbar" style="margin-top:10px;flex-wrap:wrap"><b>${delSel.size} selected</b> — ${later?'open a week tab and tap ⤵ Place':'drag any selected card onto a day to move them all'} <button id="selclr">clear selection</button>${nOrd?` <button id="seldates" title="Change the due date of the selected jobs together, with one reason">📅 Move dates (${nOrd})</button>`:''}</div>`:''}
+    ${delSel.size?`<div class="selbar" style="margin-top:10px;flex-wrap:wrap"><b>${delSel.size} selected</b> — ${later?'open a week tab and tap ⤵ Place':'drag any selected card onto a day to move them all'} <button id="selclr">clear selection</button>${dateCanMove()&&nMv?` <button id="selwk" style="font-weight:700" title="Move the ticked jobs to another week together, with one reason">📅 Move ticked to week… (${nMv})</button>`:''}${nOrd?` <button id="seldates" title="Change the due date of the selected jobs together, with one reason">📅 Move dates (${nOrd})</button>`:''}</div>`:''}
     <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin:10px 0 5px">
       <span style="font-size:11px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.4px">To plan — ${later?'due after Wk '+wkNum(W3):delTab==='0'?'due this week, overdue or no date':'due Wk '+wkNum(wk)} — ${pool.length} job${pool.length!==1?'s':''}</span>
       <input class="dsrch" id="dsrch" placeholder="🔍 Filter jobs — WO, customer, floor, unit, title…" value="${escA(delFilter)}">
@@ -8169,7 +8228,29 @@ function renderDeliveries(app){
   </div>`;
 
   // ----- bindings -----
+  /*v-deliv D2: week bar — Prev / Next / This week; sticks under the main tabs; the selected tab scrolled into view*/
+  const wbGo=t=>{if(t==null)return;delTab=t;render();};
+  const wbp=document.getElementById('wkb-prev');if(wbp)wbp.onclick=()=>wbGo(wkPrev);
+  const wbn=document.getElementById('wkb-next');if(wbn)wbn.onclick=()=>wbGo(wkNext);
+  const wbt=document.getElementById('wkb-today');if(wbt)wbt.onclick=()=>wbGo('0');
+  try{const tb=document.querySelector('.tabs'),wb=document.getElementById('del-wkbar');if(wb)wb.style.top=(tb&&getComputedStyle(tb).position==='sticky'?tb.offsetHeight:0)+'px';
+    const st=document.getElementById('del-tabs'),on=st&&st.querySelector('.del-tab.on');
+    if(st&&on){const a=st.getBoundingClientRect(),b=on.getBoundingClientRect();if(b.left<a.left||b.right>a.right)st.scrollLeft+=(b.left-a.left)-(a.width-b.width)/2;}}catch(e){}
   document.querySelectorAll('[data-deltab]').forEach(b=>b.onclick=()=>{delTab=b.dataset.deltab;render();}); /*dates: week tabs*/
+  /*v-deliv D3: drop cards on a week tab (PC) = move their dates to that week (asks why). Later → the week picker at +4.*/
+  document.querySelectorAll('[data-deltab]').forEach(b=>{
+    b.ondragover=e=>{if(!delDragList||!dateCanMove())return;e.preventDefault();b.classList.add('dragover');};
+    b.ondragleave=()=>b.classList.remove('dragover');
+    b.ondrop=e=>{
+      e.preventDefault();b.classList.remove('dragover');document.body.classList.remove('del-dragging');
+      const list=(delDragList||[]).filter(w=>{const o=findDel(w);return o&&!o.delDone&&dStage(o)!=='deliv';});delDragList=null;
+      if(!list.length)return;
+      const t=b.dataset.deltab;
+      if(t==='later'){wkPickDlg(list,4);return;}
+      const w=delTabWk(t);if(w<thisWk()){toast('Wk '+wkNum(w)+' has gone — drop on This week or later');return;}
+      wkMoveDo(list,w);
+    };
+  });
   const isb=document.getElementById('btn-instore');if(isb)isb.onclick=()=>{delStoreOpen=!delStoreOpen;render();};
   document.querySelectorAll('[data-storebook]').forEach(b=>b.onclick=()=>{ // ⤵ Book: tick it for delivery if it isn't, select it, open its week
     const o=DB.orders.find(x=>x.wo===b.dataset.storebook);if(!o)return;
@@ -8191,10 +8272,10 @@ function renderDeliveries(app){
     ch.ondragstart=e=>{
       const wo=ch.dataset.dw;
       delDragList=delSel.has(wo)?[...delSel]:[wo];
-      ch.classList.add('dragging');
+      ch.classList.add('dragging');document.body.classList.add('del-dragging'); /*v-deliv D3: week tabs light up as drop targets*/
       e.dataTransfer.effectAllowed='move';
     };
-    ch.ondragend=()=>ch.classList.remove('dragging');
+    ch.ondragend=()=>{ch.classList.remove('dragging');document.body.classList.remove('del-dragging');delDragList=null;}; /*v-deliv attack4: an abandoned drag leaves nothing "in hand" (dragend comes after any drop)*/
   });
   // Live pool filter — hides cards in place (no re-render, keeps focus while typing)
   const applyDelFilter=()=>{
@@ -8221,6 +8302,9 @@ function renderDeliveries(app){
   });
   const sc=document.getElementById('selclr');if(sc)sc.onclick=()=>{delSel.clear();render();};
   const sdt=document.getElementById('seldates');if(sdt)sdt.onclick=()=>dateDlg([...delSel]); /*dates: group move from ticked cards*/
+  const swk=document.getElementById('selwk');if(swk)swk.onclick=()=>wkPickDlg([...delSel].filter(w=>{const o=findDel(w);return o&&!o.delDone&&dStage(o)!=='deliv'&&(!o.manual||wkManOk());})); /*v-deliv D3*/
+  document.querySelectorAll('[data-wknext]').forEach(b=>b.onclick=e=>{e.stopPropagation();wkMoveDo([b.dataset.wknext],b.dataset.wk);});
+  document.querySelectorAll('[data-wkpick]').forEach(b=>b.onclick=e=>{e.stopPropagation();wkPickDlg([b.dataset.wkpick]);});
   // Status menu: plain-words choices instead of a cryptic cycle — no more silent mis-click to DELIVERED
   document.querySelectorAll('[data-dd]').forEach(b=>b.onclick=()=>{
     const o=findDel(b.dataset.dd);if(!o)return;
@@ -8345,6 +8429,79 @@ function renderDeliveries(app){
   };
   const rs=document.getElementById('btn-delreset');
   if(rs)rs.onclick=()=>closeWeek(wk); /*dates: Close week replaces "Clear Week — Start Fresh"*/
+}
+
+/*v-deliv D3: week moves from the pool. "→ Wk N" (the card's week + 1) and "Move to week…" on every card still to plan (not booked,
+  not delivered / shipped); "Move ticked to week…" for the selection; drop on a week tab (PC). Every move goes through
+  moveDates(…, {toWk}) — same rules, history, reason. One preview + one reason per move; the preview only shows first when
+  something needs a look (flagged / not moved / off a van), otherwise it is the reason picker alone (2 taps). */
+function wkBtnsOk(o){return !!o&&dateCanMove()&&!o.delDay&&!o.delDone&&dStage(o)!=='deliv'&&!isShipped(o)&&(o.manual?wkManOk():true);}
+function wkManOk(){return true;} // manual jobs (Add Job, no due date): "Move to week…" sets planWk on the delx entry
+function wkCountIn(w){return delAll().filter(o=>o.delDay?slotIn(o,w):delPoolWk(o)===w).length;}
+function wkPickDlg(wos,pre){
+  wos=[...new Set(wos||[])].filter(w=>findDel(w));if(!wos.length){toast('Nothing to move');return;}
+  if(!dateCanMove()){toast('Only the office or the Production Manager can move due dates');return;}
+  const W0=thisWk(),one=wos.length===1?findDel(wos[0]):null,ords=wos.filter(w=>DB.orders.some(o=>o.wo===w));
+  const ov=document.createElement('div');ov.className='pod-ovl';ov.id='wkpick-dlg';
+  ov.innerHTML=`<div class="pod-in" style="width:min(460px,94vw)">
+    <div style="font-weight:800;color:#14335c;font-size:16px;margin-bottom:2px">Move ${one?escA(one.wo):wos.length+' jobs'} to week…</div>
+    <div style="font-size:12px;color:var(--t3);margin-bottom:10px">${one&&!one.manual&&one.dueDate?'Due now '+escA(dTagTxt(one.dueDate))+(one.delivDate?' · delivery '+escA(dTagTxt(one.delivDate)):'')+'. ':''}Keeps the weekday${one&&one.delivDate?' and the gap to the delivery date':''}. Asks why.</div>
+    <div class="wkp-list">${Array.from({length:13},(_,i)=>{const w=wkPlus(W0,i);return `<button class="rbtn${i===0?' cur':''}${pre===i?' pre':''}" data-wkp="${escA(w)}"><span>${i===0?'This week · ':i===1?'Next week · ':''}<b>Wk ${wkNum(w)}</b> · Mon ${escA(dShort(w))}</span><span class="wkp-n">${one&&!one.delDay&&delPoolWk(one)===w?'<b style="color:#1a56db">it is here now</b> · ':''}${wkCountIn(w)} job${wkCountIn(w)!==1?'s':''}</span></button>`;}).join('')}</div>
+    ${ords.length?`<button class="btn btn-s" id="wkp-date" style="min-height:40px">or a date… (full date dialog)</button>`:''}
+    <div style="text-align:right;margin-top:8px"><button class="btn btn-s" id="pod-x" style="min-height:40px">Cancel — change nothing</button></div></div>`;
+  document.body.appendChild(ov);
+  ov.onclick=e=>{if(e.target===ov||e.target.id==='pod-x')ov.remove();};
+  ov.querySelectorAll('[data-wkp]').forEach(b=>b.onclick=()=>{ov.remove();wkMoveDo(wos,b.dataset.wkp);});
+  const dd=ov.querySelector('#wkp-date');if(dd)dd.onclick=()=>{ov.remove();dateDlg(ords);};
+  const pb=ov.querySelector('.rbtn.pre');if(pb&&pb.scrollIntoView)pb.scrollIntoView({block:'nearest'});
+}
+function wkMoveDo(wos,W){
+  if(!dateCanMove()){toast('Only the office or the Production Manager can move due dates');return;}
+  W=wkOf(W);if(!W)return;
+  if(W<thisWk()){toast('Wk '+wkNum(W)+' has gone — pick this week or later');return;}
+  wos=[...new Set(wos||[])];
+  const ords=wos.filter(w=>DB.orders.some(o=>o.wo===w)),man=wkManJobs(wos,W);
+  officeWho(by=>{
+    const n=wos.length,src=n>1?'group':'planner';
+    const rows=moveDates(ords,{toWk:W},{},by,{src}).rows,ok=rows.filter(r=>!r.skipped);
+    const skM=wos.filter(w=>!ords.includes(w)&&!man.some(o=>o.wo===w)).map(w=>({wo:w,skipped:'already in Wk '+wkNum(W)+' or not movable',flags:[]}));
+    if(!ok.length&&!man.length){toast('Nothing moved — '+((rows[0]||skM[0]||{}).skipped||'nothing to move'));return;}
+    const wl='Wk '+wkNum(W)+' (Mon '+dShort(W)+')';
+    const ask=()=>pickReason('Move '+(n===1?wos[0]:n+' jobs')+' to '+wl+' — why?',
+      n===1&&ok.length?dqSub(ok[0]):`${ok.length+man.length} job${ok.length+man.length!==1?'s':''} → <b>${escA(wl)}</b>${ok.filter(r=>r.vanPulled).length?' · <b style="color:#b45309">'+ok.filter(r=>r.vanPulled).length+' off a van → rebook</b>':''}. Recorded with your name (${escA(by)}).`,
+      why=>{
+        const res=moveDates(ords,{toWk:W},dqWhy(why),by,{src}).apply();
+        res.moved+=wkManApply(man,W,by,why);
+        wos.forEach(w=>delSel.delete(w));render();
+        if(n>1||(res.rows||[]).some(r=>!r.skipped&&((r.flags||[]).length||r.vanPulled))||res.skipped.length)dateSummaryDlg(res);
+        else if(res.moved){const r=(res.rows||[]).find(x=>!x.skipped),o=findDel(wos[0]),wh=dqWhere(o);
+          toast(r?'Due now '+dTagTxt(r.to)+(r.dTo?', delivery '+dTagTxt(r.dTo):'')+(wh?' — '+wh:'')+(r.weekKept?' — already cut, build week kept: check it':''):wos[0]+' planned for Wk '+wkNum(W)+(wh?' — '+wh:''),!!(r&&(r.weekKept||r.vanKept)));}
+        else toast('Nothing moved');
+      },null,DATE_WHY);
+    if(rows.some(r=>r.skipped||(r.flags||[]).length||r.vanPulled||r.vanKept)||skM.length)wkPrevDlg(rows.concat(skM),man,wl,ask);else ask();
+  },()=>{});
+}
+/*v-deliv D3 (step 7): a manual job has no Cienapps date, so a week move only sets its planned week (planWk = Monday) — never a
+  due date, never in "Dates to change in Cienapps". Reason asked and logged. Two PCs: last save wins (ASSUMED in the plan).*/
+function wkManJobs(wos,W){return (wos||[]).map(w=>(DB.delx||[]).find(x=>x.wo===w)).filter(o=>o&&o.manual&&!o.delDay&&!o.delDone&&dStage(o)!=='deliv'&&delPoolWk(o)!==W);}
+function wkManApply(man,W,by,why){let n=0;
+  man.forEach(m=>{const o=(DB.delx||[]).find(x=>x.wo===m.wo);if(!o||o.delDay||o.delDone)return;const was=delPoolWk(o);
+    o.planWk=W;logEdit(o,'Planned for Wk '+wkNum(W)+' (was Wk '+wkNum(was)+')',by,why);n++;});
+  if(n){sched();if(typeof updDelBadge==='function')updDelBadge();}return n;}
+function wkPrevDlg(rows,man,wl,next){
+  const ok=rows.filter(r=>!r.skipped),sk=rows.filter(r=>r.skipped);
+  const ov=document.createElement('div');ov.className='pod-ovl';ov.id='wkprev-dlg';
+  ov.innerHTML=`<div class="pod-in" style="width:min(600px,96vw)">
+    <div style="font-weight:800;color:#14335c;font-size:16px;margin-bottom:6px">Move to ${escA(wl)} — check first</div>
+    <div style="font-size:12px;background:#f7f9fc;border:1px solid var(--border);border-radius:8px;padding:8px 10px;max-height:46vh;overflow:auto">
+      ${ok.slice(0,60).map(r=>`<div style="padding:4px 0;border-bottom:1px solid var(--border)"><b style="font-family:monospace">${escA(r.wo)}</b> · ${dqSub(r)}</div>`).join('')}${ok.length>60?`<div style="color:var(--t3)">…and ${ok.length-60} more</div>`:''}
+      ${man.map(o=>`<div style="padding:4px 0;border-bottom:1px solid var(--border)"><b style="font-family:monospace">${escA(o.wo)}</b> · added by hand — planned for <b>${escA(wl)}</b></div>`).join('')}
+      ${sk.length?`<div style="margin-top:6px;color:var(--t3)">Not moved: ${sk.slice(0,40).map(r=>escA(r.wo)+' ('+escA(r.skipped)+')').join(' · ')}${sk.length>40?' …':''}</div>`:''}
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:12px"><button class="btn btn-s" id="pod-x" style="min-height:44px">Cancel — change nothing</button>${ok.length+man.length?`<button class="btn btn-g" id="wkp-go" style="min-height:44px">Continue — pick why (${ok.length+man.length})</button>`:''}</div></div>`;
+  document.body.appendChild(ov);
+  ov.onclick=e=>{if(e.target===ov||e.target.id==='pod-x')ov.remove();};
+  const g=ov.querySelector('#wkp-go');if(g)g.onclick=()=>{ov.remove();next();};
 }
 
 /*dates: Close week (Garry, 9 Nov — replaces "Clear Week — Start Fresh"). Only that week (this week or a past one):
@@ -9958,12 +10115,12 @@ function inStoreJobs(){return DB.orders.filter(o=>stepForDelivery(o.step)&&!o.de
   .map(o=>({o,n:storeDays(o)})).sort((a,b)=>(b.n==null?-1:b.n)-(a.n==null?-1:a.n)||woCmp(a.o,b.o));}
 let delStoreOpen=false;
 // the week a job still to plan belongs to: its due week; overdue, no date and manual jobs → this week
-function delPoolWk(o){const W0=thisWk(),d=o&&!o.manual?(o.delivDate||o.dueDate):'',w=d?wkOf(d):'';return !w||w<W0?W0:w;} /*dates phase 2: the delivery date's week when there is one*/
+function delPoolWk(o){const W0=thisWk(),d=o?(o.manual?(dmIsDate(String(o.planWk||''))?o.planWk:''):(o.delivDate||o.dueDate)):'',w=d?wkOf(d):'';return !w||w<W0?W0:w;} /*v-deliv: manual jobs → their planned week (planWk)*/ /*dates phase 2: the delivery date's week when there is one*/
 function inStoreHTML(rows){
   return `<div class="del-panel" id="del-store" style="border:2px solid #0e7490">
     <div style="font-size:14px;font-weight:700;color:#0e7490;margin-bottom:4px">🏬 In store — built (7 / 8), not on a van · ${rows.length} job${rows.length!==1?'s':''}</div>
     <p style="font-size:12px;color:var(--t3);margin-bottom:6px">Oldest first. Amber = more than 14 days in store. ⤵ Book selects it — then tap ⤵ Place on a van and day.</p>
-    ${rows.length?rows.map(({o,n})=>`<div class="dsh-row" style="flex-wrap:wrap${n!=null&&n>14?';background:#fff3d6':''}"><b>${escA(o.wo)}</b>${fuHTML(o,'flr-fu','font-size:12px')}<span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-c">${escA(o.customer||'')}</span><span class="dsh-x">${escA(String(o.step||'').replace(/^\d+\.\s*/,''))} · ${n==null?'<i>date unknown</i>':'<b'+(n>14?' style="color:#8a5a00"':'')+'>'+n+' day'+(n!==1?'s':'')+' in store</b>'}${o.dueDate?' · due '+escA(fmt(o.dueDate)):''}</span><button class="btn btn-s" data-storebook="${escA(o.wo)}" style="min-height:36px">⤵ Book</button></div>`).join(''):'<div style="font-size:12px;color:var(--t3)">Nothing sitting in store ✓</div>'}
+    ${rows.length?rows.map(({o,n})=>`<div class="dsh-row" style="flex-wrap:wrap${n!=null&&n>14?';background:#fff3d6':''}"><b>${escA(o.wo)}</b>${fuHTML(o,'flr-fu','font-size:12px')}<span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-c">${escA(o.customer||'')}</span><span class="dsh-x">${escA(String(o.step||'').replace(/^\d+\.\s*/,''))} · ${n==null?'<i>date unknown</i>':'<b'+(n>14?' style="color:#8a5a00"':'')+'>'+n+' day'+(n!==1?'s':'')+' in store</b>'}</span>${dueTag(o)}${movedTag(o)}<button class="btn btn-s" data-storebook="${escA(o.wo)}" style="min-height:36px">⤵ Book</button></div>`).join(''):'<div style="font-size:12px;color:var(--t3)">Nothing sitting in store ✓</div>'}
   </div>`;
 }
 // The build week a due date belongs on — exactly autoSchedule's rule: no date or overdue → this week; past the
@@ -10001,8 +10158,38 @@ function dmFind(j){
   return wo==null?null:(DB.orders.find(o=>o.wo===wo)||null);
 }
 function dmShiftWd(iso,n){let d=iso;n=Math.round(+n||0);for(let i=0;i<Math.abs(n);i++)d=n>0?nextWorkDay(d):prevWorkDay(d);return d;}
+/*v-deliv D3: move a job to week W (its Monday). Anchor = the delivery date if there is one, else the due date; both move by the
+  same whole number of weeks (the gap is kept). A non-working day → the working day before it in the same week, else after it in
+  the same week, else kept (bank-holiday flag). Earlier than today → today / the next working day; none left in the week → err
+  (nothing moves). A Cienapps job with no date → the last working day of W. Returns {due, deliv, err} ('' = unchanged). */
+/*v-deliv attack4 (ASSUMED, Garry to confirm): a DELIVERY date may be a Saturday (the van grid has a Sat column), so a week move
+  keeps a Saturday delivery on Saturday; Sundays and bank holidays still move. The DUE (build) date stays Mon–Fri working days.*/
+function isDelivDay(iso){return new Date(iso+'T12:00:00').getDay()!==0&&!IE_BANK_HOLS.includes(iso);}
+function wkFit(d,W,tod,dv){
+  const ok=dv?isDelivDay:isWorkDay;
+  if(!ok(d)){let x='';for(let y=addDayISO(d,-1);y>=W;y=addDayISO(y,-1))if(ok(y)){x=y;break;}
+    if(!x)for(let y=addDayISO(d,1);y<addDayISO(W,7);y=addDayISO(y,1))if(ok(y)){x=y;break;}
+    if(x)d=x;}
+  if(d<tod){const x=isWorkDay(tod)?tod:nextWorkDay(tod);if(x>=addDayISO(W,7))return{d:'',none:true};d=x;}
+  return{d};
+}
+function wkMoveTo(o,W){
+  W=wkOf(W);const tod=todayLocal(),out={due:'',deliv:'',err:''};
+  if(!o||!W){out.err='no week picked';return out;}
+  const due=dmIsDate(String(o.dueDate||''))?String(o.dueDate):'',dv=dmIsDate(String(o.delivDate||''))?String(o.delivDate):'';
+  const none='No working days left in Wk '+wkNum(W)+' — pick Next week';
+  if(!due&&!dv){let x='';for(let y=addDayISO(W,6);y>=W;y=addDayISO(y,-1))if(isWorkDay(y)){x=y;break;}
+    if(!x)x=addDayISO(W,4);if(x<tod){out.err=none;return out;}out.due=x;return out;}
+  const an=dv||due,k=Math.round(dmDays(wkOf(an),W)/7);
+  const fa=wkFit(addDayISO(an,7*k),W,tod,!!dv);if(fa.none){out.err=none;return out;}
+  if(dv){out.deliv=fa.d;
+    if(due){const x=addDayISO(due,7*k),f=wkFit(x,wkOf(x),tod);out.due=f.none?(isWorkDay(tod)?tod:nextWorkDay(tod)):f.d;}}
+  else out.due=fa.d;
+  return out;
+}
 function dmTarget(o,ch){
   if(ch&&ch.per){const p=ch.per[o.wo];return p&&p.due?String(p.due).slice(0,10):'';} /*seq: per-job targets (PM sequence tools)*/
+  if(ch&&ch.toWk)return wkMoveTo(o,ch.toWk).due||''; /*v-deliv D3*/
   if(ch&&ch.due)return String(ch.due).slice(0,10);
   if(ch&&ch.shift&&o.dueDate&&+ch.shift.n){const n=+ch.shift.n;return ch.shift.unit==='wd'?dmShiftWd(o.dueDate,n):addDayISO(o.dueDate,7*n);}
   return'';
@@ -10010,7 +10197,7 @@ function dmTarget(o,ch){
 const DM_FLAG={'cut-week-kept':'already cut — build week kept, check it','on-van-loaded':'already loaded — stays on the van, check it',
   'bank-hol':'not a working day','past':'date is in the past — build week is this week','beyond-8wks':'beyond the 8 board weeks — Unscheduled',
   'programmed':'programmed (step 5) — take it out of the nest','on-hold':'on hold in Cienapps (12) — moved anyway',
-  'after-delivery':'build date is after the delivery date','fixed':'inside the fixed window — needs the Production Manager','moved-out':'moved out a long way — "don\'t cut early" shows on the saw, stores, board and lists','deliv-bank-hol':'delivery date is not a working day','deliv-past':'delivery date is in the past'};
+  'after-delivery':'build date is after the delivery date','fixed':'inside the fixed window — needs the Production Manager','moved-out':'moved out a long way — "don\'t cut early" shows on the saw, stores, board and lists','deliv-bank-hol':'delivery date is a Sunday or bank holiday','deliv-past':'delivery date is in the past'};
 /*seq: the fixed window (Key questions 3/4): the job's build OR delivery date, or a date it is being moved to, within `days`
   calendar days of today (overdue included)*/
 function dmFixedAt(o,tos,days){const ds=[o&&o.dueDate,o&&(o.delivDate||o.dueDate)].concat(tos||[]).filter(d=>/^\d{4}-\d{2}-\d{2}/.test(String(d||''))).map(d=>String(d).slice(0,10));
@@ -10024,6 +10211,7 @@ function dmFlagTxt(f,r){
 // dates phase 2: the new delivery date ('' = unchanged). A group shift moves it by the same amount as the due date.
 function dmDelivTarget(o,ch){
   if(ch&&ch.per){const p=ch.per[o.wo];return p&&p.deliv?String(p.deliv).slice(0,10):'';} /*seq*/
+  if(ch&&ch.toWk)return wkMoveTo(o,ch.toWk).deliv||''; /*v-deliv D3*/
   if(ch&&ch.deliv)return String(ch.deliv).slice(0,10);
   if(ch&&ch.shift&&o.delivDate&&+ch.shift.n){const n=+ch.shift.n;return ch.shift.unit==='wd'?dmShiftWd(o.delivDate,n):addDayISO(o.delivDate,7*n);}
   return'';
@@ -10033,6 +10221,7 @@ function dmRow(o,ch,opts){
   opts=opts||{};
   const from=o.dueDate||'',dFrom=o.delivDate||'';let to=dmTarget(o,ch),dTo=dmDelivTarget(o,ch);if(dTo===dFrom)dTo='';
   const r={wo:o.wo,from,to,dFrom,dTo,dueCh:false,wkFrom:o.plannedWeek||'',wkTo:o.plannedWeek||'',weekKept:false,vanPulled:false,vanKept:false,skipped:'',flags:[],slot:''};
+  if(ch&&ch.toWk){const m=wkMoveTo(o,ch.toWk);if(m.err){r.skipped=m.err;return r;}} /*v-deliv D3: "no working days left" = not moved*/
   if(ch&&(ch.delivClear||(ch.per&&ch.per[o.wo]&&ch.per[o.wo].delivClear))&&dFrom){r.dClear=true;dTo='';r.dTo='';} /*dates round 2: remove the delivery date (seq: per job, for Undo)*/
   if(!to&&!dTo&&!r.dClear){r.skipped=ch&&ch.shift&&!from?'no due date to move from':'no new date';return r;}
   if(!to)to=r.to=from;
@@ -10050,7 +10239,7 @@ function dmRow(o,ch,opts){
   }
   if(r.dueCh&&!isWorkDay(to))r.flags.push('bank-hol');
   if(r.dueCh&&to<todayLocal())r.flags.push('past');
-  if(dTo&&!isWorkDay(dTo))r.flags.push('deliv-bank-hol');
+  if(dTo&&!isDelivDay(dTo))r.flags.push('deliv-bank-hol'); /*v-deliv attack4 (ASSUMED): Saturday deliveries are fine*/
   if(dTo&&dTo<todayLocal())r.flags.push('deliv-past');
   const D=r.dClear?'':(dTo||dFrom);if(D&&to&&to>D)r.flags.push('after-delivery'); /*dates phase 2: build date after the delivery date*/
   /*dates phase 2 (A9), round 2: measured from the job's original due date — or, after an "OK to cut", from the due date then
@@ -10228,9 +10417,35 @@ function afterDelivOn(o){return !!(o&&o.dueAfterDeliv&&o.delivDate&&o.dueDate&&o
 function delivMvOn(o){return !!(o&&o.delivMv&&o.delDay&&o.delivDate&&slotDate(o)!==o.delivDate&&dStage(o)!=='deliv');}
 function delivFlagChips(o){return (afterDelivOn(o)?`<span class="dm-chip red" title="Build date ${escA(fmt(o.dueDate))} is after the delivery date ${escA(fmt(o.delivDate))}">⚠ build after delivery — check</span>`:'')
   +(delivMvOn(o)?`<span class="dm-chip red" title="Cienapps moved the delivery date after it was booked">⚠ booked ${escA(dShort(slotDate(o)))} — delivery date now ${escA(dShort(o.delivDate))} — check</span>`:'');}
+/*v-deliv DD1: the due-date tag — one style on every screen. opts: {late:true} (board: also red when the planned week ends after the
+  due date, keeps "(orig …)"), {noDeliv:true}, {ro:true} (never a button). Office / Production Manager get a button that opens the
+  quick date picker (data-dqb → the hidden data-dq input); everyone else sees the same tag, not tappable. Manual jobs have no date. */
+function dTagTxt(iso){iso=String(iso||'').slice(0,10);const d=new Date(iso+'T12:00:00');if(!iso||isNaN(d))return String(iso||'');
+  const y=d.getFullYear()!==new Date(todayLocal()+'T12:00:00').getFullYear();
+  return d.toLocaleDateString('en-IE',{weekday:'short',day:'numeric',month:'short'}).replace(/,/g,'')+(y?' '+d.getFullYear():'')+' · Wk '+wkNum(iso);}
+function dTagCls(iso){iso=String(iso||'').slice(0,10);if(!iso)return'grey';return iso<todayLocal()?'red':wkOf(iso)===thisWk()?'amber':'grey';}
+function dueTag(o,opts){
+  opts=opts||{};if(!o)return'';
+  if(o.manual)return `<span class="due-tags"><span class="due-tag grey" title="Added by hand on Deliveries — no Cienapps due date">${o.planWk&&dmIsDate(String(o.planWk))&&wkOf(o.planWk)>thisWk()?'planned Wk '+wkNum(o.planWk):'manual — no date'}</span></span>`;
+  const ed=!opts.ro&&dateCanMove();
+  const one=(f,iso,txt,cls,ttl)=>ed?`<span class="dq-w"><button class="due-tag ${cls}" data-dqb="${escA(o.wo)}" data-f="${f}" title="${escA(ttl+' — tap to change')}">${escA(txt)}</button><input type="date" class="dq-in" tabindex="-1" aria-hidden="true" data-dq="${escA(o.wo)}" data-f="${f}" value="${escA(iso||'')}"></span>`
+    :`<span class="due-tag ${cls}" title="${escA(ttl)}">${escA(txt)}</span>`;
+  const due=dmIsDate(String(o.dueDate||'').slice(0,10))?String(o.dueDate).slice(0,10):'';
+  let h;
+  if(!due)h=one('due','','no due date','grey','No due date');
+  else{let c=dTagCls(due),ttl=c==='red'?'Overdue — was due '+fmt(due):c==='amber'?'Due this week':'Due date';
+    if(opts.late&&c!=='red'&&o.plannedWeek&&dmIsDate(String(o.plannedWeek))&&addDayISO(o.plannedWeek,4)>due){c='red';ttl='Planned build week ends after the due date';}
+    h=one('due',due,'Due '+dTagTxt(due),c,ttl);}
+  const dv=!opts.noDeliv&&dmIsDate(String(o.delivDate||'').slice(0,10))?String(o.delivDate).slice(0,10):'';
+  if(dv)h+=one('deliv',dv,'🚚 '+dTagTxt(dv),dTagCls(dv),'Delivery date');
+  if(opts.late&&due&&o.origDueDate&&o.origDueDate!==due)h+=`<span class="due-orig">(orig ${escA(dShort(o.origDueDate))} Wk ${wkNum(String(o.origDueDate).slice(0,10))})</span>`;
+  return `<span class="due-tags">${h}</span>`;
+}
+// "🔁 moved N×" — how many times the dates were changed (dueHist); tap → history. One copy, used by the board and the cards.
+function movedTag(o){const n=((o&&o.dueHist)||[]).length;return n?`<button class="dm-chip" data-duehist="${escA(o.wo)}" title="Dates changed ${n} time${n!==1?'s':''} — tap for the history">🔁 moved ${n}×</button>`:'';}
 function dmChips(o){
   const n=(o.dueHist||[]).length,mv=o.dueMv;
-  return delivFlagChips(o)+dueHoldChip(o)+(n?`<button class="dm-chip" data-duehist="${escA(o.wo)}" title="Due date changed ${n} time${n!==1?'s':''} — tap for the history">🔁 moved ${n}×</button>`:'')
+  return delivFlagChips(o)+dueHoldChip(o)+movedTag(o)
     +(mv?`<button class="dm-chip${mv.prog||mv.loaded?' red':' amber'}" data-duemv="${escA(o.wo)}" title="Tap to sort it out">📅 ${mv.prog?'programmed — take it out of the nest':mv.loaded?'date moved after loading — check':'due moved — check week'}</button>`:'');
 }
 function dmBindChips(root){
@@ -10238,6 +10453,57 @@ function dmBindChips(root){
   (root||document).querySelectorAll('[data-duemv]').forEach(b=>b.onclick=e=>{e.stopPropagation();dmCheckDlg(b.dataset.duemv);});
   (root||document).querySelectorAll('[data-duedlg]').forEach(b=>b.onclick=e=>{e.stopPropagation();dateDlg([b.dataset.duedlg]);});
   (root||document).querySelectorAll('[data-dhold]').forEach(b=>b.onclick=e=>{e.stopPropagation();dueHoldDlg(b.dataset.dhold);}); /*dates phase 2*/
+  /*v-deliv D1: tap the due / delivery tag → the phone's or PC's date picker (hidden input) → why → done*/
+  (root||document).querySelectorAll('[data-dqb]').forEach(b=>b.onclick=e=>{e.stopPropagation();e.preventDefault();dqOpen(b);});
+  (root||document).querySelectorAll('.dq-in[data-dq]').forEach(i=>{i.onchange=()=>dqChange(i.dataset.dq,i.dataset.f,i.value,i);i.onclick=e=>e.stopPropagation();});
+}
+/*v-deliv D1: quick date change from a tag. showPicker (Chrome 99+), else focus the input; the ⋯ button always opens the full dialog.*/
+function dqOpen(b){
+  if(!dateCanMove()){toast('Only the office or the Production Manager can move due dates');return;}
+  const i=b.parentElement&&b.parentElement.querySelector('.dq-in');if(!i)return;
+  try{if(typeof i.showPicker==='function'){i.showPicker();return;}}catch(x){}
+  try{i.style.pointerEvents='auto';i.focus();i.click();}catch(x){}
+}
+function dqWkTxt(w){return w?'Wk '+wkNum(w):'Unscheduled';}
+// the line under the reason picker: what will happen (same rules as the full dialog — the engine's preview row)
+function dqSub(r){
+  const a=[];
+  if(r.dueCh)a.push('Due <b>'+escA(r.from?dTagTxt(r.from):'none')+'</b> → <b>'+escA(dTagTxt(r.to))+'</b>');
+  if(r.dTo)a.push('Delivery <b>'+escA(r.dFrom?dTagTxt(r.dFrom):'none')+'</b> → <b>'+escA(dTagTxt(r.dTo))+'</b>');
+  if(r.dueCh)a.push(r.weekKept?'build week stays '+escA(dqWkTxt(r.wkFrom))+' (already cut — check it)':r.wkTo!==r.wkFrom?'build week '+escA(dqWkTxt(r.wkFrom))+' → <b>'+escA(dqWkTxt(r.wkTo))+'</b>':'build week stays '+escA(dqWkTxt(r.wkFrom)));
+  let h=a.join(' · ');
+  if(r.vanPulled)h+='<br><b style="color:#b45309">Comes off '+escA(r.slot)+' → To Plan ("rebook")</b>';
+  if(r.vanKept)h+='<br><b style="color:#b45309">Stays on its van — check it</b>';
+  (r.flags||[]).filter(f=>f!=='on-van-loaded'&&f!=='cut-week-kept').forEach(f=>{h+='<br><span style="color:#b42318">⚠ '+escA(dmFlagTxt(f,r))+'</span>';});
+  return h;
+}
+function dqWhy(w){w=String(w||'');return /^Other: /.test(w)?{why:'Other',note:w.slice(7)}:{why:w};}
+// where the card is now, in words: "card is on the Wk 47 tab" / "still booked on Volvo Tue 17 Nov"
+function dqWhere(o){
+  if(!o)return'';if(o.delDay)return 'still booked on '+slotLblO(o);if(!o.delv&&!o.manual)return'';
+  const w=delPoolWk(o),W0=thisWk();return 'card is on the '+(w===W0?'This week':w>wkPlus(W0,3)?'Later':'Wk '+wkNum(w))+' tab';
+}
+function dqDone(res,label){
+  if(!res||!res.moved){toast('Nothing moved'+(res&&res.skipped&&res.skipped[0]?' — '+res.skipped[0].why:''));return;}
+  const r=res.rows.find(x=>!x.skipped)||{},o=findDel(r.wo),wh=dqWhere(o);
+  toast(label+' now '+dTagTxt(label==='Delivery'?r.dTo:r.to)+(wh?' — '+wh:'')+(r.vanPulled?' — taken off the van, rebook it':'')+(r.weekKept?' — already cut, build week kept: check it':''),!!(r.vanPulled||r.weekKept||r.vanKept));
+  if((r.flags||[]).length||r.vanPulled)dateSummaryDlg(res);
+}
+function dqChange(wo,f,v,inp){
+  const o=DB.orders.find(x=>x.wo===wo);f=f==='deliv'?'deliv':'due';
+  const reset=()=>{if(inp)inp.value=(o&&(f==='deliv'?o.delivDate:o.dueDate))||'';};
+  if(!o){reset();return;}
+  if(!dateCanMove()){reset();toast('Only the office or the Production Manager can move due dates');return;}
+  if(!v||!dmIsDate(v)){reset();if(!v&&f==='deliv'&&o.delivDate)dateDlg([wo]);return;} // removing a delivery date: the full dialog
+  const ch=f==='deliv'?{deliv:v}:{due:v},label=f==='deliv'?'Delivery':'Due';
+  officeWho(by=>{
+    const r=moveDates([o],ch,{},by,{src:'planner'}).rows[0];
+    if(!r||r.skipped){reset();toast('Nothing moved — '+(r?r.skipped:'not found'));return;}
+    pickReason(o.wo+' — why is the '+(f==='deliv'?'delivery':'due')+' date moving?',dqSub(r),why=>{
+      const res=moveDates([wo],ch,dqWhy(why),by,{src:'planner'}).apply();
+      render();dqDone(res,label);
+    },()=>reset(),DATE_WHY);
+  },()=>reset());
 }
 // Saw / stores: "this job has moved" on the card from the date change until the end of the next working day (A7)
 function movedBanner(o,today){

@@ -59,8 +59,8 @@ const w = ms => new Promise(r => setTimeout(r, ms));
   rec('Export Changes shows Due (E) / Delivery (L) rows; Dates sheet has "Which Date" at the end', /Delivery \(L\)/.test(X.txt) && /Due \(E\)/.test(X.txt) && X.hdr && X.hdr[12] === 'Which Date' && X.last.includes('WO-1:Delivery date (L)'), JSON.stringify([X.hdr, X.last]));
   // pool by delivery week
   const P = await p.evaluate(async () => { showTab('d'); await new Promise(r => setTimeout(r, 120)); const pool = t => { document.querySelector('[data-deltab="' + t + '"]').click(); return [...document.querySelectorAll('#dpool .dchip')].map(c => c.dataset.dw); };
-    const out = { p0: pool('0'), p4: pool('later') }; out.chip = (document.querySelector('.dchip[data-dw="WO-7"] .dchip-due') || {}).textContent; return out; });
-  rec('pool groups by the delivery week (due Wk 46 but delivery Wk 50 → Later, not This week)', !P.p0.includes('WO-7') && P.p4.includes('WO-7') && /deliv 9 Dec/.test(P.chip || ''), JSON.stringify(P));
+    const out = { p0: pool('0'), p4: pool('later') }; out.chip = (document.querySelector('.dchip[data-dw="WO-7"] .dchip-dates') || {}).textContent; /*v-deliv: due + delivery tags (was .dchip-due "deliv …")*/ return out; });
+  rec('pool groups by the delivery week (due Wk 46 but delivery Wk 50 → Later, not This week)', !P.p0.includes('WO-7') && P.p4.includes('WO-7') && /🚚 Wed 9 Dec · Wk 50/.test(P.chip || ''), JSON.stringify(P));
   rec('no page errors', !(t.server.errors || []).length, (t.server.errors || []).join(' | '));
   await t.close();
   await browser.close();
