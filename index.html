@@ -6678,7 +6678,7 @@ function renderPM(app){
     if(!sched.length&&!delivWk.length&&!past.length&&!coming.length)return'';
         return `<div class="dsh-p" style="margin-bottom:14px">
       <div class="dsh-ph" style="background:#14335c;font-size:15px">👤 ${escA(c)} — ${sched.length} scheduled · ${delivWk.length} delivered this week · ${past.length?past.length+' past':'no earlier deliveries'} · ${coming.length} coming up</div>
-      ${sched.length?`<div class="pm-sec">🚚 SCHEDULED — on a van</div>`+sched.map(o=>row(`<b>${escA(o.wo)}</b>${fuHTML(o,'flr-fu','font-size:12px')}<span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-x">${escA(slotLblO(o))}${slotWk(o)!==thisWk()?' (Wk '+wkNum(slotWk(o))+')':''} · ${stageLbl(o)}</span>`)).join(''):''}
+      ${sched.length?`<div class="pm-sec">🚚 SCHEDULED — on a van${sched.some(siteNotOk)&&siteCanOk()?` <button class="btn btn-s" data-sitecust="${escA(c)}" style="margin-left:8px;min-height:36px">✓ Site ready for all ${sched.filter(siteNotOk).length}</button>`:''}</div>`+sched.map(o=>row(`<b>${escA(o.wo)}</b>${fuHTML(o,'flr-fu','font-size:12px')}<span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-x">${escA(slotLblO(o))}${slotWk(o)!==thisWk()?' (Wk '+wkNum(slotWk(o))+')':''} · ${stageLbl(o)}</span>${siteChip(o)}`)).join(''):''}
       ${delivWk.length?`<div class="pm-sec" style="color:#0d6e46">✓ DELIVERED THIS WEEK</div>`+delivWk.map(o=>row(`<b>${escA(o.wo)}</b>${fuHTML(o,'flr-fu','font-size:12px')}<span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-x" style="color:#0d6e46">${o.delDelivAt?new Date(o.delDelivAt).toLocaleDateString('en-IE',{weekday:'short',day:'numeric',month:'short'})+' '+dStageTime(o):''}${o.delivBy?' · '+escA(o.delivBy):''}</span>`)).join(''):''}
       ${past.length?`<div class="pm-sec" style="color:var(--t3)">📚 DELIVERED — PAST WEEKS</div>`+past.map(j=>row(`<b>${escA(j.wo)}</b>${fuHTML(j,'flr-fu','font-size:12px')}<span class="dsh-t">${escA(j.t||'')}</span><span class="dsh-x">${new Date(j._at).toLocaleDateString('en-IE',{day:'numeric',month:'short'})}${j.vBy?' · '+escA(j.vBy):''}</span>`)).join(''):''}
       ${coming.length?`<div class="pm-sec" style="color:#8a6d00">📅 COMING UP — due, not yet on the delivery board</div>`+coming.map(o=>row(`<b>${escA(o.wo)}</b>${fuHTML(o,'flr-fu','font-size:12px')}<span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-x">due ${fmt(o.dueDate)}${o.plannedWeek?' · build '+wkLbl(o.plannedWeek):''}</span>`)).join(''):''}
@@ -6695,6 +6695,7 @@ function renderPM(app){
     ${sel.map(block).join('')||'<div class="flr-none">Nothing to show yet.</div>'}
     <div class="flr-ft">Live — refreshes automatically · Last update ${hhmm(new Date().toISOString())}</div>
   </div>`;
+  bindSiteOk(app); /*dates phase 2*/
   const pc=document.getElementById('pm-cust');if(pc)pc.onchange=()=>{pmCust=pc.value;render();};
 }
 
@@ -6902,7 +6903,7 @@ function dchip(o,showCust){
     ${!o.manual?`<div><button class="dchip-due" data-duedlg="${escA(o.wo)}" title="Tap to change the due or delivery date">due ${o.dueDate?escA(fmt(o.dueDate))+' Wk'+wkNum(o.dueDate):'—'}${o.delivDate?' · deliv '+escA(fmt(o.delivDate)):''}</button>${(o.dueHist||[]).length?`<button class="dm-chip" data-duehist="${escA(o.wo)}" title="Due date changed — tap for the history">🔁 date ×${o.dueHist.length}</button>`:''}</div>`:''}${o.delRebook&&!o.delDay?`<div class="dm-moved" title="${escA('Taken off '+(o.delRebook.was||'').split('|').slice(0,2).join(' ')+' by '+(o.delRebook.by||'')+(o.delRebook.why?' — '+o.delRebook.why:''))}">${o.delRebook.nd?'🚚 not delivered Wk '+escA(o.delRebook.nd)+' — rebook':'📅 date moved — rebook'}</div>`:''}${o.dueMv&&o.dueMv.loaded&&dStage(o)&&dStage(o)!=='deliv'?`<div class="dm-moved" style="color:#b42318">📅 date moved after loading — check</div>`:''}
     ${st?`<div class="dstg s-${st}">${dStageLbl[st]}${dStageTime(o)?' '+dStageTime(o):''}${st==='deliv'&&o.delivBy?' — '+escA(o.delivBy):st==='load'&&o.ldBy?' — '+escA(o.ldBy):''}</div>`:''}
     ${isOnHold(o)?`<div class="rdy-tag" style="background:#fde8e8;color:#b42318" title="Step 12 in Cienapps — kept here because it's already loaded / on the road">⏸ ON HOLD in Cienapps</div>`:''}${rd?`<div class="rdy-tag">${RDY_LBL[rd.lvl]}</div>`:''}${(o.delMoves||[]).length?`<div class="dmoved" title="${escA(o.delMoves.map(m=>m.why+' — '+m.by).join(' | '))}">🔁 moved${o.delMoves.length>1?' ×'+o.delMoves.length:''}</div>`:''}
-    ${showCust?`<div class="dchip-c">${escA(o.customer)}</div>`:''}
+    ${siteChip(o)}${showCust?`<div class="dchip-c">${escA(o.customer)}</div>`:''}
   </div>`;
 }
 
@@ -7132,6 +7133,7 @@ function renderDeliveries(app){
   });
   document.querySelectorAll('[data-dinfo]').forEach(b=>b.onclick=e=>{e.stopPropagation();showReadiness([b.dataset.dinfo],b.dataset.dinfo,true);});
   dmBindChips(app); /*dates: due date on a card → Change dates*/
+  bindSiteOk(app); /*dates phase 2: site ready*/
   bindMissWhy();
   // Tap-to-place: select chips, then tap a day cell — works with gloves/touch and keyboards, no dragging needed
   document.querySelectorAll('[data-place]').forEach(b=>b.onclick=()=>{
@@ -8931,6 +8933,31 @@ function dmCheckDlg(wo){
   ov.querySelector('#dmc-keep').onclick=()=>go(false);
 }
 // Board chips for one job: moved N× (tap → history) and the "check" chip
+/*dates phase 2 (A10): site ready — confirmed per job for the date it is booked on. A booking within siteDays working days
+  with no confirmation shows amber "site not confirmed"; a confirmation for another date (the booking moved) shows
+  "confirmed for <date> — confirm again". Office, Production Manager and PMs confirm; who / when is logged. */
+function siteCanOk(){return ROLE==='office'||ROLE==='prod'||ROLE==='pm'||!ROLE;}
+function wdUntil(d){let n=0,x=todayLocal();if(!d||d<=x)return 0;for(let i=0;i<400&&x<d;i++){x=nextWorkDay(x);n++;}return n;}
+function siteState(o){
+  if(!o||!o.delDay||o.manual||dStage(o)==='deliv')return null;
+  const d=slotDate(o),s=o.siteOk;
+  if(s&&s.for===d)return{k:'ok',d,s};
+  if(s&&s.for)return{k:'again',d,s};
+  return wdUntil(d)<=siteDays()?{k:'need',d}:null;
+}
+function siteChip(o){const st=siteState(o);if(!st)return'';
+  if(st.k==='ok')return `<div class="rdy-tag" style="background:#e6f4ec;color:#0d6e46" title="${escA('Confirmed by '+(st.s.by||'')+' '+(st.s.at?new Date(st.s.at).toLocaleString('en-IE'):''))}">✓ site ready${st.s.by?' — '+escA(st.s.by):''}</div>`;
+  return `<button class="dm-chip amber" data-siteok="${escA(o.wo)}" title="Tap when the site has confirmed it can take the delivery">${st.k==='again'?'↻ site confirmed for '+escA(dShort(st.s.for))+' — confirm again':'⚠ site not confirmed'}</button>`;}
+function siteOkDo(wos,done){
+  if(!siteCanOk()){toast('Only the office, the Production Manager or a PM can confirm a site');return;}
+  const js=wos.map(findDel).filter(o=>o&&o.delDay&&!o.manual&&dStage(o)!=='deliv');if(!js.length){toast('Nothing booked to confirm');return;}
+  if(!confirm('Site ready for '+(js.length===1?js[0].wo+' on '+slotLblO(js[0]):js.length+' booked deliveries')+'?\n\nRecorded with your name and the time.'))return;
+  officeWho(by=>{const at=nowISO();js.forEach(o=>{const d=slotDate(o);o.siteOk={at,by,for:d};logEdit(o,'Site ready confirmed for '+fmt(d)+' ('+slotLblO(o)+')',by);});
+    sched();render();toast('Site ready — '+js.length+' deliver'+(js.length!==1?'ies':'y')+' confirmed');if(done)done();});
+}
+function bindSiteOk(root){(root||document).querySelectorAll('[data-siteok]').forEach(b=>b.onclick=e=>{e.stopPropagation();siteOkDo([b.dataset.siteok]);});
+  (root||document).querySelectorAll('[data-sitecust]').forEach(b=>b.onclick=e=>{e.stopPropagation();const c=b.dataset.sitecust;siteOkDo(delAll().filter(o=>(o.customer||'')===c&&siteNotOk(o)).map(o=>o.wo));});}
+function siteNotOk(o){if(!o||!o.delDay||o.manual||dStage(o)==='deliv')return false;const s=siteState(o);return !(s&&s.k==='ok');}
 /*dates phase 2 (A9): "⏳ moved out — don't cut early". On while the job is not cut, not dismissed and its due date is still
   more than earlyDays away. Cleared by cutting, by "OK to cut" (office / PM) or by the date coming within range. */
 function dueHoldOn(o){const h=o&&o.dueHold;return !!(h&&!h.off&&!woCut(o)&&o.dueDate&&dmDays(todayLocal(),o.dueDate)>earlyDays());}
