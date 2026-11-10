@@ -37,8 +37,32 @@ const ed = p => p.evaluate(() => !!document.querySelector('.me-ed'));
     rec('L8: click outside the window → the window stays open', await ed(p));
     await closeAll(p);
 
+    // ---- L7: Qty shows "Qty" in the empty box like L and W; L6 wording
+    await p.evaluate(() => openListEditor(null, 'WO-2')); await sleep(300);
+    let w = await p.evaluate(() => { const q = s => document.querySelector('.me-ed ' + s); return { qty: q('[data-mr="0|qty"]').placeholder, L: q('[data-mr="0|L"]').placeholder, mats: q('#me-mats').textContent, dis: q('#me-mats').disabled }; });
+    rec('L7: PC grid — the Qty box says "Qty" like "L" and "W"', w.qty === 'Qty' && w.L === 'L', JSON.stringify(w));
+    rec('L6: "🧱 Project materials (add / edit)" beside the project, not greyed', /Project materials \(add \/ edit\)/.test(w.mats) && !w.dis, JSON.stringify(w));
+    await closeAll(p);
+    await p.evaluate(() => openListEditor(null, '', '')); await sleep(300);
+    rec('L6: Project materials button not greyed with no project either', await p.evaluate(() => !document.getElementById('me-mats').disabled));
+    await closeAll(p);
+    await p.evaluate(() => { showTab('l'); }); await sleep(500);
+    rec('L6: Lists home — the same "Project materials (add / edit)" wording', await p.evaluate(() => [...document.querySelectorAll('[data-lhmat]')].every(b => /Project materials \(add \/ edit\)/.test(b.textContent)) && document.querySelectorAll('[data-lhmat]').length > 0));
+    // a project with no materials: "Set up project materials now" opens the materials window
+    await p.evaluate(() => openListEditor(null, '', 'P2')); await sleep(300);
+    rec('L6: no materials yet → "Set up project materials now" button', await p.evaluate(() => /This project has no materials yet/.test(document.querySelector('.me-ed').innerText) && !!document.getElementById('me-matsnow')));
+    const nOv = await p.evaluate(() => document.querySelectorAll('.pod-ovl').length);
+    await p.evaluate(() => document.getElementById('me-matsnow').click()); await sleep(300);
+    rec('L6: the button opens the project materials window over the list', await p.evaluate(n => document.querySelectorAll('.pod-ovl').length === n + 1 && /Lucan/.test(document.querySelector('.pod-ovl:last-of-type').innerText), nOv));
+    await closeAll(p);
+
     rec('no page errors', !(S.errors || []).length, JSON.stringify(S.errors));
     await t.close();
+    // phone 360 px: the Qty card box has the placeholder too
+    const ph = await X.dev(browser, S, 'office', { viewport: { width: 360, height: 740 } });
+    await ph.page.evaluate(() => openListEditor(null, 'WO-2')); await sleep(300);
+    rec('L7: phone card — the Qty box says "Qty"', await ph.page.evaluate(() => { const q = [...document.querySelectorAll('.me-ed .me-card [data-mr$="|qty"]')]; return q.length > 0 && q.every(e => e.placeholder === 'Qty'); }));
+    await ph.close();
   } finally { await browser.close(); }
   X.finish();
 })().catch(e => { console.error(e); process.exit(1); });
