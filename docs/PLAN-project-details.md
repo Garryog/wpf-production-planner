@@ -461,3 +461,11 @@ saw and stores follow the new date like any other date change.
      request row so the scorecard counts them.
 - **Next run:** Manager conditions 1, 3, 4 → steps 5–10 (engine, row dates, upload + matching, requests, Johnny's pool) → Tester → full
   suite → Manager. B11 tools only after Garry's yes.
+
+### 10 Nov 2026 (later, Garry live) — several PMs per project
+- Garry: a project can have two or three PMs; all share everything; one sequence per project; a request answer goes to the PM who asked;
+  only office + Production Manager add/remove PMs (ROADMAP). Replaces Key question 1/2's single PM.
+- Built (21b1f56 SQL `projects.pms text[]`, history on `pms`, old `pm` column kept unused; c1342bd app tick-list "Save PMs", version-checked;
+  31c7b1d tests incl. new tests/seq/s5-multi-pm). SQL re-run twice on the throwaway Postgres: ALL SEQ PG CHECKS PASSED, project-details check passes.
+- tests/seq + tests/project-details all pass except the 3 accepted (attack1-oldtab ×2, attack1-merge 1c). **Full suite NOT re-run after this
+  change — next run does it.** ASSUMED: no upper limit on the number of PMs.
