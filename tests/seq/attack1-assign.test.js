@@ -15,11 +15,11 @@ const NAMES = [{ id: 'S1', n: "Seán O'Grady", r: ['pm'] }, { id: 'S2', n: 'Mary
     const S = X.makeServer(X.v2Row({ staff: NAMES }));
     const of = await X.dev(browser, S, 'office');
     await of.page.evaluate(() => { showTab('l'); lsProjectsDlg(); }); await sleep(300);
-    const opts = await of.page.evaluate(() => [...document.querySelector('[data-seqpm="P1"]').options].map(o => o.value));
-    rec('A1 PM ▾ offers the names exactly (apostrophe, HTML as text, emoji)', JSON.stringify(opts) === JSON.stringify(['', "Seán O'Grady", 'Mary <b>Kelly</b> 🏗']), JSON.stringify(opts));
-    await of.page.evaluate(() => { const s = document.querySelector('[data-seqpm="P1"]'); s.value = "Seán O'Grady"; s.onchange(); }); await sleep(500);
-    await of.page.evaluate(() => { const s = document.querySelector('[data-seqpm="P2"]'); s.value = 'Mary <b>Kelly</b> 🏗'; s.onchange(); }); await sleep(500);
-    rec('A2 saved as typed in Staff', X.D.find(S.db, 'projects', 'P1').pm === "Seán O'Grady" && X.D.find(S.db, 'projects', 'P2').pm === 'Mary <b>Kelly</b> 🏗', JSON.stringify([X.D.find(S.db, 'projects', 'P1').pm, X.D.find(S.db, 'projects', 'P2').pm]));
+    const opts = await X.pmOpts(of.page, 'P1');
+    rec('A1 PM tick list offers the names exactly (apostrophe, HTML as text, emoji)', JSON.stringify(opts) === JSON.stringify(["Seán O'Grady", 'Mary <b>Kelly</b> 🏗']), JSON.stringify(opts));
+    await X.tickPMs(of.page, 'P1', ["Seán O'Grady"]); await sleep(500);
+    await X.tickPMs(of.page, 'P2', ['Mary <b>Kelly</b> 🏗']); await sleep(500);
+    rec('A2 saved as typed in Staff', JSON.stringify(X.D.find(S.db, 'projects', 'P1').pms) === JSON.stringify(["Seán O'Grady"]) && JSON.stringify(X.D.find(S.db, 'projects', 'P2').pms) === JSON.stringify(['Mary <b>Kelly</b> 🏗']), JSON.stringify([X.D.find(S.db, 'projects', 'P1').pms, X.D.find(S.db, 'projects', 'P2').pms]));
     const html = await of.page.evaluate(() => ({ b: !!document.querySelector('#pj-body b b, #pj-body .seq-pm b'), t: document.getElementById('pj-body').innerText }));
     rec('A3 the Projects window shows the HTML name as text (no bold made)', !html.b, JSON.stringify(html.b));
     await of.close();
@@ -42,15 +42,15 @@ const NAMES = [{ id: 'S1', n: "Seán O'Grady", r: ['pm'] }, { id: 'S2', n: 'Mary
     const S = X.makeServer();
     const a = await X.dev(browser, S, 'office'), b = await X.dev(browser, S, 'prod');
     for (const t of [a, b]) { await t.page.evaluate(() => lsProjectsDlg()); } await sleep(300);
-    await a.page.evaluate(() => { const s = document.querySelector('[data-seqpm="P1"]'); s.value = 'John Burke'; s.onchange(); }); await sleep(500);
-    await b.page.evaluate(() => { const s = document.querySelector('[data-seqpm="P1"]'); s.value = 'Mary Kelly'; s.onchange(); }); await sleep(600);
-    const tb = await toastOf(b.page), vb = await b.page.evaluate(() => { const s = document.querySelector('[data-seqpm="P1"]'); return s ? s.value : null; });
-    rec('B1 two PCs: the second is refused (version check) — John Burke kept', X.D.find(S.db, 'projects', 'P1').pm === 'John Burke' && /another screen/.test(tb), X.D.find(S.db, 'projects', 'P1').pm + ' | ' + tb);
-    rec('B2 … and the second PC now shows John Burke in the PM ▾', vb === 'John Burke', String(vb));
+    await X.tickPMs(a.page, 'P1', ['John Burke']); await sleep(500);
+    await X.tickPMs(b.page, 'P1', ['Mary Kelly']); await sleep(600);
+    const tb = await toastOf(b.page), vb = await X.pmTicked(b.page, 'P1');
+    rec('B1 two PCs: the second is refused (version check) — John Burke kept', JSON.stringify(X.D.find(S.db, 'projects', 'P1').pms) === '["John Burke"]' && /someone else changed the PMs/.test(tb) && /Now: John Burke/.test(tb), JSON.stringify(X.D.find(S.db, 'projects', 'P1').pms) + ' | ' + tb);
+    rec('B2 … and the second PC now shows John Burke ticked (list left open to tick again)', JSON.stringify(vb) === '["John Burke"]' && await b.page.evaluate(() => document.querySelector('[data-seqpmd="P1"]').open), JSON.stringify(vb));
     rec('B3 history: one PM event (John Burke)', S.db.t.project_events.filter(e => e.act === 'pm').length === 1);
     await a.close(); await b.close();
     // the PM acts on another PM's project — straight through the functions, as a curious PM could from the console or a stale screen
-    X.D.update(S.db, 'projects', X.D.find(S.db, 'projects', 'P2'), { pm: 'Mary Kelly' });
+    X.D.update(S.db, 'projects', X.D.find(S.db, 'projects', 'P2'), { pms: ['Mary Kelly'] });
     X.seqRow(S, 'L1', 'P2', { wo: 'WO-6' }); X.seqRow(S, 'L2', 'P2', { floor: 'A1', unit: '5', product: 'K1', name: 'TYPE B' });
     const jb = await X.dev(browser, S, 'pm', { me: { pm: 'John Burke' } });
     const n0 = (S.rpcCalls || []).length;
@@ -60,7 +60,7 @@ const NAMES = [{ id: 'S1', n: "Seán O'Grady", r: ['pm'] }, { id: 'S2', n: 'Mary
     // John's screen is open on Aderrig; the office moves Aderrig to Mary. Before his next poll John presses ▲.
     X.seqRow(S, 'A1', 'P1', { floor: 'T09', unit: '20', product: 'K1', name: 'H20' }); X.seqRow(S, 'A2', 'P1', { floor: 'T09', unit: '21', product: 'K1', name: 'H21' });
     await jb.page.evaluate(async () => { await lsPoll(); pmTab = 'seq'; SEQV.pid = 'P1'; render(); }); await sleep(300);
-    X.D.update(S.db, 'projects', X.D.find(S.db, 'projects', 'P1'), { pm: 'Mary Kelly', updated_by: 'Ann Office' });
+    X.D.update(S.db, 'projects', X.D.find(S.db, 'projects', 'P1'), { pms: ['Mary Kelly'], updated_by: 'Ann Office' });
     await jb.page.evaluate(() => document.querySelector('[data-sequp="A2"]').click()); await sleep(600);
     rec('B5 (information) John reassigned off Aderrig a moment ago, screen not yet polled: his ▲ still goes through — the database does not check who the PM is', true, 'order ' + X.order(S, 'P1').join() + (X.order(S, 'P1').join() === 'A2,A1' ? ' — MOVED by the old PM' : ' — refused'));
     await jb.page.evaluate(async () => { await lsPoll(); render(); }); await sleep(300);
@@ -74,7 +74,7 @@ const NAMES = [{ id: 'S1', n: "Seán O'Grady", r: ['pm'] }, { id: 'S2', n: 'Mary
     const row = X.v2Row();
     row.orders.push(H.order({ wo: 'WO-90', customer: 'Brand New Builders', floor: 'G', unit: '1', title: 'NEW CUSTOMER JOB', dueDate: '2026-10-29', origDueDate: '2026-10-29', delDay: 'Thu', delVeh: 'VOLVO', delv: true }));
     const S = X.makeServer(row);
-    X.D.update(S.db, 'projects', X.D.find(S.db, 'projects', 'P1'), { pm: 'John Burke' });
+    X.D.update(S.db, 'projects', X.D.find(S.db, 'projects', 'P1'), { pms: ['John Burke'] });
     const pm = await X.dev(browser, S, 'pm', { me: { pm: 'John Burke' } });
     const c = await pm.page.evaluate(() => [...document.querySelectorAll('#pm-cust option')].map(o => o.value));
     rec('C1 (information) PM Deliveries with his filter on: a job for a customer not linked to ANY project ("Brand New Builders") — shown to no PM unless he ticks All projects', true, JSON.stringify(c) + (c.includes('Brand New Builders') ? '' : ' — HIDDEN from every PM who has a project'));
@@ -134,7 +134,7 @@ const NAMES = [{ id: 'S1', n: "Seán O'Grady", r: ['pm'] }, { id: 'S2', n: 'Mary
     await a.page.evaluate(() => { SEQP.st = 'ok'; seqShow(); });
     await a.close();
     // a PM on the Sequence tab when the office switches the lists back off ('switching', then v1)
-    X.D.update(S.db, 'projects', X.D.find(S.db, 'projects', 'P1'), { pm: 'John Burke' });
+    X.D.update(S.db, 'projects', X.D.find(S.db, 'projects', 'P1'), { pms: ['John Burke'] });
     X.seqRow(S, 'Z1', 'P1', { wo: 'WO-3' });
     const pm = await X.dev(browser, S, 'pm', { me: { pm: 'John Burke' } });
     await pm.page.evaluate(() => { pmTab = 'seq'; render(); }); await sleep(300);
@@ -151,7 +151,7 @@ const NAMES = [{ id: 'S1', n: "Seán O'Grady", r: ['pm'] }, { id: 'S2', n: 'Mary
     await pm.close();
     // probe fails on the network: hidden, no errors, then shows once the network is back (after the 60 s wait)
     const N = X.makeServer(); N.offlineS = true;
-    X.D.update(N.db, 'projects', X.D.find(N.db, 'projects', 'P1'), { pm: 'John Burke' });
+    X.D.update(N.db, 'projects', X.D.find(N.db, 'projects', 'P1'), { pms: ['John Burke'] });
     const p2 = await X.dev(browser, N, 'pm', { me: { pm: 'John Burke' } });
     // (the harness answers every table before the fake is attached, so redo the first probe with the network down)
     await p2.page.evaluate(async () => { SEQP.st = ''; lsReset(); await lsLoad(); render(); }); await sleep(200);

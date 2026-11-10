@@ -23,7 +23,7 @@ function extraOrders(row) {
   // ================= A. the 🔒 fixed edge (today Wed 21 Oct 2026: 4 Nov fixed, 5 Nov free)
   {
     const S = X.makeServer(extraOrders(X.v2Row()));
-    X.D.update(S.db, 'projects', X.D.find(S.db, 'projects', 'P1'), { pm: 'John Burke' });
+    X.D.update(S.db, 'projects', X.D.find(S.db, 'projects', 'P1'), { pms: ['John Burke'] });
     [['F14', 'WO-E14'], ['F15', 'WO-E15'], ['FOD', 'WO-OD'], ['FDV', 'WO-DV'], ['FDV15', 'WO-DV15']].forEach(([id, wo]) => X.seqRow(S, id, 'P1', { wo }));
     X.seqRow(S, 'FW', 'P1', { floor: 'T01', unit: '9', product: 'K1', name: 'WAITING SOON', req_date: '2026-10-22' });
     const fx = async t => t.page.evaluate(() => Object.fromEntries([...document.querySelectorAll('tr.seq-r')].map(tr => [tr.dataset.seqr, tr.classList.contains('seq-fixed') && /🔒/.test(tr.innerText)])));
@@ -57,7 +57,7 @@ function extraOrders(row) {
   // ================= B. a FREE row put ABOVE fixed rows (plan "How a sequence-row date edit flows" step 6)
   {
     const S = X.makeServer();
-    X.D.update(S.db, 'projects', X.D.find(S.db, 'projects', 'P1'), { pm: 'John Burke' });
+    X.D.update(S.db, 'projects', X.D.find(S.db, 'projects', 'P1'), { pms: ['John Burke'] });
     // WO-1 / WO-2 due tomorrow (fixed), WO-3 due 3 Dec (free)
     X.seqRow(S, 'QA', 'P1', { wo: 'WO-1' }); X.seqRow(S, 'QB', 'P1', { wo: 'WO-2' }); X.seqRow(S, 'QC', 'P1', { wo: 'WO-3' });
     const pm = await X.dev(browser, S, 'pm', { me: { pm: 'John Burke' } });
@@ -90,7 +90,7 @@ function extraOrders(row) {
   {
     const mk = () => {
       const S = X.makeServer();
-      X.D.update(S.db, 'projects', X.D.find(S.db, 'projects', 'P1'), { pm: 'John Burke' });
+      X.D.update(S.db, 'projects', X.D.find(S.db, 'projects', 'P1'), { pms: ['John Burke'] });
       'ABCDEFG'.split('').forEach((c, i) => X.seqRow(S, 'Q' + c, 'P1', { floor: 'T20', unit: String(i + 1), product: 'K1', name: 'HOUSE ' + c }));
       return S;
     };
@@ -129,7 +129,7 @@ function extraOrders(row) {
   // ================= D. lost reply: the database moved the row but the answer never arrived
   {
     const S = X.makeServer();
-    X.D.update(S.db, 'projects', X.D.find(S.db, 'projects', 'P1'), { pm: 'John Burke' });
+    X.D.update(S.db, 'projects', X.D.find(S.db, 'projects', 'P1'), { pms: ['John Burke'] });
     'ABCD'.split('').forEach((c, i) => X.seqRow(S, 'Q' + c, 'P1', { floor: 'T30', unit: String(i + 1), product: 'K1', name: 'HOUSE ' + c }));
     const pm = await X.dev(browser, S, 'pm', { me: { pm: 'John Burke' } });
     await pm.page.evaluate(() => { pmTab = 'seq'; render(); }); await sleep(400);
@@ -144,7 +144,7 @@ function extraOrders(row) {
   // ================= E. Whole house with the house's rows NOT next to each other; junk in "Move to…"
   {
     const S = X.makeServer();
-    X.D.update(S.db, 'projects', X.D.find(S.db, 'projects', 'P1'), { pm: 'John Burke' });
+    X.D.update(S.db, 'projects', X.D.find(S.db, 'projects', 'P1'), { pms: ['John Burke'] });
     [['H1', 'T40', '1', 'KITCHEN'], ['QX', 'T40', '2', 'KITCHEN'], ['QY', 'T40', '3', 'KITCHEN'], ['H2', 'T40', '1', 'UTILITY'], ['QZ', 'T40', '4', 'KITCHEN']]
       .forEach(([id, f, u, n]) => X.seqRow(S, id, 'P1', { floor: f, unit: u, product: 'K1', name: n }));
     const pm = await X.dev(browser, S, 'pm', { me: { pm: 'John Burke' } });
@@ -175,7 +175,7 @@ function extraOrders(row) {
   // ================= F. drag interrupted by the poll redraw; then a stray drop (text dragged from elsewhere)
   {
     const S = X.makeServer();
-    X.D.update(S.db, 'projects', X.D.find(S.db, 'projects', 'P1'), { pm: 'John Burke' });
+    X.D.update(S.db, 'projects', X.D.find(S.db, 'projects', 'P1'), { pms: ['John Burke'] });
     'ABCD'.split('').forEach((c, i) => X.seqRow(S, 'Q' + c, 'P1', { floor: 'T50', unit: String(i + 1), product: 'K1', name: 'HOUSE ' + c }));
     const pm = await X.dev(browser, S, 'pm', { me: { pm: 'John Burke' } });
     await pm.page.evaluate(() => { pmTab = 'seq'; render(); }); await sleep(400);

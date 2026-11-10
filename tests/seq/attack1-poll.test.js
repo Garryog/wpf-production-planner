@@ -11,7 +11,7 @@ const toastOf = p => p.evaluate(() => (document.getElementById('toast') || {}).t
   // ================= A. seq_pre empty at load, then a row arrives (Johnny's first tick / the CNC sheet)
   {
     const S = X.makeServer();
-    X.D.update(S.db, 'projects', X.D.find(S.db, 'projects', 'P1'), { pm: 'John Burke' });
+    X.D.update(S.db, 'projects', X.D.find(S.db, 'projects', 'P1'), { pms: ['John Burke'] });
     X.seqRow(S, 'P1A', 'P1', { wo: 'WO-3' });
     const pm = await X.dev(browser, S, 'pm', { me: { pm: 'John Burke' } });
     await pm.page.evaluate(() => { pmTab = 'seq'; render(); }); await sleep(300);
@@ -33,7 +33,7 @@ const toastOf = p => p.evaluate(() => (document.getElementById('toast') || {}).t
   // when it is empty (42703 "column seq_pre.id does not exist") — so at go-live (seq_pre empty) every poll would fail
   {
     const S = X.makeServer();
-    X.D.update(S.db, 'projects', X.D.find(S.db, 'projects', 'P1'), { pm: 'John Burke' });
+    X.D.update(S.db, 'projects', X.D.find(S.db, 'projects', 'P1'), { pms: ['John Burke'] });
     X.seqRow(S, 'P1A', 'P1', { wo: 'WO-3' });
     const pm = await X.dev(browser, S, 'pm', { me: { pm: 'John Burke' } });
     await pm.page.route('**/rest/v1/seq_pre?*', route => /order=id\./.test(route.request().url())
@@ -50,7 +50,7 @@ const toastOf = p => p.evaluate(() => (document.getElementById('toast') || {}).t
   // ================= B. Start the sequence: two PCs at the same moment, twice on one PC, cancelled
   {
     const S = X.makeServer();
-    X.D.update(S.db, 'projects', X.D.find(S.db, 'projects', 'P1'), { pm: 'John Burke' });
+    X.D.update(S.db, 'projects', X.D.find(S.db, 'projects', 'P1'), { pms: ['John Burke'] });
     const pm = await X.dev(browser, S, 'pm', { me: { pm: 'John Burke' } });
     const of = await X.dev(browser, S, 'office');
     await pm.page.evaluate(() => { pmTab = 'seq'; render(); }); await sleep(300);
@@ -87,7 +87,7 @@ const toastOf = p => p.evaluate(() => (document.getElementById('toast') || {}).t
   // ================= C. 360 px phone: 40 rows, long names and WO numbers, History with a long reason
   {
     const S = X.makeServer();
-    X.D.update(S.db, 'projects', X.D.find(S.db, 'projects', 'P1'), { pm: 'John Burke', name: 'Aderrig Phase 2 Block C North — Apartments and Duplexes (Contract 2026/114)' });
+    X.D.update(S.db, 'projects', X.D.find(S.db, 'projects', 'P1'), { pms: ['John Burke'], name: 'Aderrig Phase 2 Block C North — Apartments and Duplexes (Contract 2026/114)' });
     for (let i = 0; i < 40; i++) X.seqRow(S, 'R' + i, 'P1', { floor: 'T' + String(i).padStart(2, '0'), unit: 'UNIT-' + i + '-LONGLONGLONG', product: 'K8-SPECIAL-EXTRA', name: 'HOUSE TYPE C END OF TERRACE WITH ISLAND AND UTILITY AND PANTRY ' + 'X'.repeat(i % 3 ? 5 : 60), req_date: '2026-12-0' + (1 + (i % 9)) });
     for (let i = 0; i < 12; i++) S.db.t.project_events.push({ id: S.db.seq.project_events++, project_id: 'P1', entity: 'seq', entity_id: 'R' + i, act: 'move', old: { pos: i + 2 }, new: { pos: i + 1, why: 'Site not ready because the contractor\'s programme slipped again — ' + 'very long reason '.repeat(6) }, by: 'Someone With A Very Long Name Indeed', at: new Date().toISOString() });
     const ph = await X.dev(browser, S, 'pm', { viewport: { width: 360, height: 740 }, me: { pm: 'John Burke' } });

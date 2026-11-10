@@ -23,7 +23,7 @@ const { H, rec, sleep } = X;
 
   // ---- with the SQL: six rows on Aderrig, John Burke is the PM
   const S = X.makeServer();
-  X.D.update(S.db, 'projects', X.D.find(S.db, 'projects', 'P1'), { pm: 'John Burke' });
+  X.D.update(S.db, 'projects', X.D.find(S.db, 'projects', 'P1'), { pms: ['John Burke'] });
   const seed = [['QA', { wo: 'WO-1' }], ['QB', { wo: 'WO-2' }], ['QC', { wo: 'WO-4' }], ['QD', { wo: 'WO-3' }],
     ['QE', { floor: 'T09', unit: '15', product: 'K8', name: 'HOUSE TYPE E' }], ['QF', { floor: 'T09', unit: '16', product: 'K8', name: 'HOUSE TYPE F' }]];
   seed.forEach(([id, f]) => { const o = S.row.orders.find(x => x.wo === f.wo); X.seqRow(S, id, 'P1', Object.assign(o ? { floor: o.floor, unit: o.unit, descr: o.title } : {}, f)); });

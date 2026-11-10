@@ -39,8 +39,18 @@ async function dev(browser, S, role, extra = {}) {
 }
 // sequence rows straight into the fake database (as if another PC had saved them)
 function seqRow(S, id, pid, f) { S.db.listStore = 'v2'; return DS.seqInsert(S.db, Object.assign({ id, project_id: pid, updated_by: 'Seed', src: 'manual' }, f || {})); }
+// office / Production Manager: tick exactly these PMs on a project (Projects window or hub) and press Save PMs
+const tickPMs = (p, pid, names) => p.evaluate(({ pid, names }) => {
+  const d = document.querySelector('[data-seqpmd="' + pid + '"]'); if (!d) return 'no control'; d.open = true;
+  const bs = [...document.querySelectorAll('[data-seqpmc]')].filter(x => x.dataset.seqpmc === pid);
+  bs.forEach(x => { x.checked = names.includes(x.value); });
+  const missing = names.filter(n => !bs.some(x => x.value === n)); if (missing.length) return 'missing ' + missing.join();
+  document.querySelector('[data-seqpmsave="' + pid + '"]').click(); return 'ok';
+}, { pid, names });
+const pmOpts = (p, pid) => p.evaluate(pid => [...document.querySelectorAll('[data-seqpmc]')].filter(x => x.dataset.seqpmc === pid).map(x => x.value), pid);
+const pmTicked = (p, pid) => p.evaluate(pid => [...document.querySelectorAll('[data-seqpmc]')].filter(x => x.dataset.seqpmc === pid && x.checked).map(x => x.value), pid);
 const order = (S, pid) => DS.liveOf(S.db, pid).map(r => r.id);
 const noScroll = p => p.evaluate(() => ({ sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth }));
 const res = []; const rec = (n, ok, d) => { res.push(ok); console.log((ok ? 'PASS ' : 'FAIL ') + n + (d ? '  -> ' + String(d).slice(0, 300) : '')); };
 function finish() { const f = res.filter(x => !x).length; console.log(f + ' failed of ' + res.length); process.exit(f ? 1 : 0); }
-module.exports = { H, D, DP, DS, SS, F3, NOW, sleep, STAFF, v2Row, v1Row, makeServer, dev, seqRow, order, noScroll, rec, finish };
+module.exports = { H, D, DP, DS, SS, F3, NOW, sleep, STAFF, v2Row, v1Row, makeServer, dev, seqRow, order, tickPMs, pmOpts, pmTicked, noScroll, rec, finish };

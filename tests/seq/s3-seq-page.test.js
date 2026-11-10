@@ -4,7 +4,7 @@
 // and with the switch off. Fake Supabase only. Run: node tests/seq/s3-seq-page.test.js
 const X = require('./fixs.js');
 const { H, rec, sleep } = X;
-const assign = (S, pid, pm) => X.D.update(S.db, 'projects', X.D.find(S.db, 'projects', pid), { pm });
+const assign = (S, pid, pm) => X.D.update(S.db, 'projects', X.D.find(S.db, 'projects', pid), { pms: [pm] });
 (async () => {
   const browser = await H.chromium.launch();
   // ---- before the SQL / switch off: no Sequence tab, no buttons
