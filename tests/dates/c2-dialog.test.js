@@ -67,7 +67,7 @@ const w = ms => new Promise(r => setTimeout(r, ms));
     const wk = delPoolWk(DB.orders.find(o => o.wo === 'WO-2')), t = ['0', '1', '2', '3'].find(x => delTabWk(x) === wk) || 'later';
     const b = document.querySelector('[data-deltab="' + t + '"]'); if (b) b.click(); }); await w(200);
   const card = await p.evaluate(() => { const c = document.querySelector('.dchip[data-dw="WO-2"]'); return c ? c.innerText : ''; });
-  rec('delivery card shows "date moved — rebook" and its due date', /rebook/.test(card) && /due 4 Dec/.test(card), card.replace(/\n/g, ' '));
+  rec('delivery card shows "date moved — rebook" and its due date', /rebook/.test(card) && /Due Fri 4 Dec · Wk 49/.test(card) /*v-deliv: due tag text (was "due 4 Dec")*/, card.replace(/\n/g, ' '));
   await p.click('.dchip[data-dw="WO-2"] [data-duedlg]'); await w(100);
   const dd = await p.evaluate(() => !!document.getElementById('date-dlg') && !delSel.has('WO-2'));
   rec('tapping the due date on a delivery card opens the dialog (does not select the card)', dd);
