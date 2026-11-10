@@ -394,3 +394,15 @@ showPicker needs Chrome 99+. Two PCs moving one job → newer wins, both in hist
 1 dueTag, movedTag, CSS, "rebooked" chip · 2 new dchip layout, € to group footer, 360 px · 3 board row + In store · 4 D1 quick edit ·
 5 wkMoveTo + toWk + engine tests · 6 card buttons + wkPickDlg + selection bar · 7 manual planWk · 8 tab drop targets ·
 9 week bar, labels, cur, Prev/Next fix, Close hidden · 10 update old tests, full suite, screenshots.
+
+### 10 Nov 2026 (night) — Tester attack4 + Manager verdict on the Deliveries usability addendum
+- Tester (5b8ed94, tests/dates/attack4-usability, 45 checks): no Blocker/Critical. Found: Prev/Next walk at the ends (Medium), Saturday
+  delivery moved to Friday (Low–Medium), abandoned drag left a job "in hand" (Low), cut-off Floor/Unit/title not readable (Low), L12 not on
+  this branch (it is on feature/project-details-v2 cd7163a), Production Manager role has no Deliveries tab (question for Garry).
+- Coder fixed all four (ab6192f, 84462fc, 22443be, 82dd4db, log 2e60789). The 2 L12 checks are on ACCEPTED-FAILURES until Job A is merged
+  into Job B (4368393). Full suite: 3,708 pass / 30 fail = 2 L12 + 28 already accepted.
+- **Manager: GO WITH CONDITIONS.** Conditions: Garry answers A (how the Production Manager reaches Deliveries), B (Saturday deliveries,
+  ASSUMED yes) and C (release day — the go-live rule is Mon–Wed, the addendum was aimed at Thursday); merge Job A into Job B and re-run
+  attack4 there; spot-check with the Production Manager on his own PC and an Android phone in Chrome; add to "Who to tell": "Tap the due
+  date on a card to change it; → Wk N moves it a week; ◀ Prev / Next ▶ at the top." Not yet checked on a real phone/PC: the date picker,
+  real mouse drag, sticky week bar, real long titles.
