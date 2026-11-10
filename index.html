@@ -3779,7 +3779,7 @@ function lsStdHouse(o){const u=fuU(o);return !u?'':/^\d+[a-z]?$/i.test(u)?'House
 function lsStdRows(o){const e=()=>({k:'part',item:'',qty:'',L:'',W:'',mat:'',edging:'',edging2:'',note:''});
   return[{k:'hdr',item:lsStdHouse(o),note:''},...LS_STD_SUBS.flatMap(s=>[{k:'hdr',item:s,note:'',sub:true},e(),e()])];}
 function lsNewStd(wo,pid){const o=wo?DB.orders.find(x=>x.wo===wo):null;
-  openListEditor(null,wo||'',pid||(o&&(lsProjForCust(o.customer)||{}).id)||'',{std:true,rows:lsStdRows(o),note:'Standard layout — fill in the rows under each heading. Empty rows, and headings with nothing under them, are left off the saw.'});}
+  openListEditor(null,wo||'',pid||(o&&lsProjAutoId(o.customer))||'',{std:true,rows:lsStdRows(o),note:'Standard layout — fill in the rows under each heading. Empty rows, and headings with nothing under them, are left off the saw.'});}
 function lsListName(o){return o?(fuU(o)||o.title||o.wo):'';}
 async function confirmList(wo,tid,by){
   const o=DB.orders.find(x=>x.wo===wo);if(!o)throw new Error(wo+' is no longer on the planner');
@@ -3894,7 +3894,7 @@ function ltiBind(){
   q('[data-ltistd]',b=>b.onclick=()=>lsNewStd(b.dataset.ltistd));
   q('[data-ltichg]',b=>b.onclick=()=>{LTI.open=LTI.open===b.dataset.ltichg?'':b.dataset.ltichg;ltiAfter();});
   q('[data-ltisel]',e=>e.onchange=()=>{const w=e.dataset.ltisel;
-    if(e.value==='__type'){const o=DB.orders.find(x=>x.wo===w);LTI.open='';openListEditor(null,w,(lsProjForCust(o&&o.customer)||{}).id||'');return;}
+    if(e.value==='__type'){const o=DB.orders.find(x=>x.wo===w);LTI.open='';openListEditor(null,w,lsProjAutoId(o&&o.customer));return;}
     if(e.value)LTI.pick[w]=e.value;else delete LTI.pick[w];LTI.open='';ltiAfter();});
   q('[data-ltina]',b=>b.onclick=()=>{const[w,k]=b.dataset.ltina.split('|'),o=DB.orders.find(x=>x.wo===w);if(!o)return;
     if(k!=='none')return; // "No list needed" is the only option ("Paper list issued" removed, Garry 4 Nov)
@@ -3932,14 +3932,36 @@ async function ltiLink(o,pid){ // add the customer heading to the project's Cien
    refusing a duplicate name (two PCs at once) → read again and use that one. Two projects fitting the customer equally →
    {st:'many'} (a person picks — never guessed); no customer → {st:'nocust'}. opt.make: skip the "fits" look (the
    "＋ New project" button on Lists: the person asked for that project). */
+/* (Tester round 5) the list window links a customer to a project BY ITSELF only when the customer IS the project's name, customer
+   or one of its Cienapps spellings (case, spaces and punctuation ignored). A "contains" / builder-only fit is asked
+   ({st:'ask'}). Projects whose names are the same once normalised ("Race Homes" / "Race Homes." / "RACE HOMES") are one
+   customer: the OLDEST is used (created_at if there is one, else the time inside the id; a hand-made id like "P1" counts as
+   older) — never a second project made, and an extra one that slipped in is left alone (never deleted). */
+function lsProjAge(p){if(p&&p.created_at)return Date.parse(p.created_at)||0;const m=/^P([0-9a-z]{8})/.exec(String(p&&p.id||''));return m?parseInt(m[1],36)||0:0;}
+function lsProjOldest(a){return a.slice().sort((x,y)=>lsProjAge(x)-lsProjAge(y)||String(x.id).localeCompare(String(y.id)))[0]||null;}
+function lsProjTwins(c,all){const h=sgNorm(c);return h?lsProjects(all).filter(p=>sgNorm(p.name)===h):[];}
+function lsProjExact(c){const h=sgPh(sgNorm(c));if(!h)return[];return lsProjects().filter(p=>[p.name,p.customer,...(p.cien_names||[])].some(n=>n&&sgPh(sgNorm(n))===h));}
+function lsProjAuto(c){ // {p} certain | {many:[…]} pick one | {ask:p} "Is this project …?" | {} none
+  const ex=lsProjExact(c);
+  if(ex.length===1)return{p:ex[0]};
+  if(ex.length>1){const h=sgNorm(ex[0].name);return ex.every(p=>sgNorm(p.name)===h)?{p:lsProjOldest(ex)}:{many:ex};}
+  const many=[],f=projForCust(c,lsProjects(),many);
+  if(f)return{ask:f};if(many.length>1)return{many};return{};
+}
+function lsProjAutoId(c){return(lsProjAuto(c).p||{}).id||'';}
 async function lsEnsureCustProj(o,opt){
   opt=opt||{};const c=String(o&&o.customer||'').trim();if(!c)return{st:'nocust'};
-  lsPut('projects',await lsGet('projects?select=*'));
-  if(!opt.make){const many=[],p0=projForCust(c,lsProjects(),many);if(p0)return{st:'ok',p:p0};if(many.length>1)return{st:'many',ps:many};}
-  const ex=lsProjFind(c); // already a project of that name (maybe inactive, maybe made on another PC a moment ago): link to it
-  if(ex)return{st:'ok',p:await ltiLink(o,ex.id)};
-  try{return{st:'ok',p:await lsWrite('projects',{id:uid('P'),name:c,customer:c,cien_names:[c]}),made:true};}
-  catch(x){lsPut('projects',await lsGet('projects?select=*'));const p=lsProjFind(c);if(p)return{st:'ok',p:await ltiLink(o,p.id)};throw x;}
+  const reload=async()=>lsPut('projects',await lsGet('projects?select=*'));
+  await reload();
+  if(!opt.make){const a=lsProjAuto(c);if(a.p)return{st:'ok',p:a.p};if(a.many)return{st:'many',ps:a.many};if(a.ask&&!opt.noAsk)return{st:'ask',p:a.ask,c};}
+  const tw=lsProjTwins(c,true); // already a project of that name (any case / punctuation, maybe inactive, maybe made on another PC a moment ago): link to it
+  if(tw.length)return{st:'ok',p:await ltiLink(o,lsProjOldest(tw).id)};
+  let made;const nm=c.replace(/\s+/g,' ').replace(/[\s.,;:]+$/,'')||c; // "Race Homes." is made as "Race Homes": the database's one-name rule then stops a twin made at the same moment
+  try{made=await lsWrite('projects',{id:uid('P'),name:nm,customer:c,cien_names:[c]});}
+  catch(x){await reload();const t2=lsProjTwins(c,true);if(t2.length)return{st:'ok',p:await ltiLink(o,lsProjOldest(t2).id)};throw x;}
+  await reload();const old=lsProjOldest(lsProjTwins(c,true))||made; // another PC made a twin at the same moment ("Race Homes."): both use the oldest
+  if(old.id!==made.id)return{st:'ok',p:await ltiLink(o,old.id)};
+  return{st:'ok',p:LST.p.get(made.id)||made,made:true};
 }
 function ltiLinkBind(){
   // Garry (3 Nov, answer 9): anyone in the office links a customer to a project — no PIN. A failure's ↻ Retry does the same link again.
@@ -4301,7 +4323,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
   const toRow=r=>{const x={...r};if(x.k==='buy')x.buy=true;if(x.k!=='hdr')x.k='part';return x;};
   const fresh=r=>{const x=toRow(r);['lid','sig','opened','ids','src','keep','info','total','u0','qtyErr','bu'].forEach(k=>delete x[k]);return x;};
   const st={rows:ex?lsEditRows(ex.id).map(toRow):opt.rows?opt.rows.map(fresh):[{k:'part',item:'',qty:'',L:'',W:'',mat:'',edging:'',edging2:'',note:''}],
-    wo:ex?((ex.wos||[])[0]||''):(presetWo||''),name:ex?ex.name:(opt.name||''),pid:ex?ex.pid:(presetPid||((lsProjForCust(o0&&o0.customer)||{}).id)||''),
+    wo:ex?((ex.wos||[])[0]||''):(presetWo||''),name:ex?ex.name:(opt.name||''),pid:ex?ex.pid:(presetPid||(o0&&lsProjAutoId(o0.customer))||''),
     ltype:ex?(ex.ltype||'house'):(opt.ltype||(opt.tpl?'kitchen':'house')),tname:ex?ex.typeName:(opt.tname||''),tpl:ex?ex.tpl:!!opt.tpl,noCut:ex?!!ex.noCut:false,noFit:ex?!!ex.noFit:false,newWO:false,pw:{title:'',cust:'',floor:'',unit:'',due:'',val:'',hrs:''},
     carcass:'',door:'',undo:[],cur:'',focus:'',snapKey:'',note:opt.note||'',from:!ex&&opt.from&&opt.from.id?opt.from:null,
     newId:ex?'':opt.pendId||uid('L'),landed:!!opt.landed,unitsOn:!!opt.unitsOn,moreOpen:false,help:false,
@@ -4318,8 +4340,14 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     const pc=new Map(),kp=o=>{if(o.pid)return String(o.pid);const c=String(o.customer||'');if(!pc.has(c))pc.set(c,((c&&lsProjForCust(c))||{}).id||'');return pc.get(c);};
     const hasL=new Set(lsCache().all.filter(l=>!l.tpl&&!l.archived).flatMap(l=>l.wos||[]));
     const js=st.pid?DB.orders.filter(o=>kp(o)===st.pid&&!isShipped(o)&&!isOnHold(o)&&!o.delDone&&!o.delDelivAt):[];
-    js.sort((a,b)=>String(a.dueDate||'9999').localeCompare(String(b.dueDate||'9999'))||woCmp(a,b));
-    const line=o=>[o.wo,fuF(o)?'Fl '+fuF(o):'',fuU(o)?'Unit '+fuU(o):'',o.dueDate?'due '+dShort(o.dueDate):'no due date'].filter(Boolean).join(' · ')+(hasL.has(o.wo)?' · has a list':'');
+    // (round 5) the due date is read as a real date: "TBC", "10/11/2026", "2026-02-30", " 2026-11-14" (spaces trimmed) — anything not a real
+    // YYYY-MM-DD counts as no date (sorted last) and shows "due ?"
+    const dk=o=>{const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(String(o.dueDate==null?'':o.dueDate).trim());if(!m)return'';const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3]));
+      return d.getUTCFullYear()===+m[1]&&d.getUTCMonth()===+m[2]-1&&d.getUTCDate()===+m[3]?m[1]+'-'+m[2]+'-'+m[3]:'';};
+    const DK=new Map(js.map(o=>[o,dk(o)]));
+    js.sort((a,b)=>(DK.get(a)||'9999').localeCompare(DK.get(b)||'9999')||woCmp(a,b));
+    const dueTxt=o=>{const k=DK.has(o)?DK.get(o):dk(o);return k?'due '+dShort(k):String(o.dueDate==null?'':o.dueDate).trim()?'due ?':'no due date';};
+    const line=o=>[o.wo,fuF(o)?'Fl '+fuF(o):'',fuU(o)?'Unit '+fuU(o):'',dueTxt(o)].filter(Boolean).join(' · ')+(hasL.has(o.wo)?' · has a list':'');
     const opt=(o,mark)=>`<option value="${escA(o.wo)}"${o.wo===st.wo?' selected':''} title="${escA([fuLbl(o),o.title,o.customer].filter(Boolean).join(' · '))}">${escA(line(o)+(mark?' '+mark:''))}</option>`;
     let cur='';if(st.wo&&!js.some(o=>o.wo===st.wo)){const o=DB.orders.find(x=>x.wo===st.wo);
       cur=o?opt(o,isShipped(o)?'(shipped)':o.delDone||o.delDelivAt?'(delivered)':isOnHold(o)?'(on hold)':st.pid&&kp(o)&&kp(o)!==st.pid?'(other project)':!kp(o)?'(customer not linked to a project)':''):`<option value="${escA(st.wo)}" selected>${escA(st.wo)} (not in the planner)</option>`;}
@@ -4338,36 +4366,41 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     if(l){if(confirm(wo+' already has a cutting list: "'+l.name+'".\n\nOpen it instead?\n\nOK = open "'+l.name+'" (this new list is closed — nothing in it is saved)\nCancel = stay here (a work order has only one live list)')){ov.remove();openListEditor(l.id);return;}
       st.jb.res={st:'haslist',wo,name:l.name};draw();return;}
     st.wo=wo;st.jm={wo,how};st.jb.res=null; // (10 Nov) the list name is not pre-filled — a free name; blank = the WO number
-    if(!st.pid){const p=lsProjForCust(o.customer);if(p){st.pid=p.id;st.pauto=true;edges=lsProjEdges(p.id);}}
+    if(!st.pid){const p=lsProjAuto(o.customer).p;if(p){st.pid=p.id;st.pauto=true;edges=lsProjEdges(p.id);}}
     draw();autoProj();
   };
   // ---- L5 (Garry 10 Nov: customer = project, always): a WO is known and no project yet → the project is found or made from the
   //      WO's customer straight away (no PIN). Two projects fit → the person picks; no customer → said plainly. then(): carry on
   //      (e.g. the new material that was asked for).
-  const autoProj=then=>{
+  const autoProj=(then,run)=>{ // run: what to do instead of the normal look (the "Is this project …?" answers)
     if(st.pid||!st.wo||st.tpl||st.newWO||(st.pmsg&&st.pmsg.st==='busy'))return;
     const o=DB.orders.find(x=>x.wo===st.wo);if(!o)return;
     const c=String(o.customer||'').trim(),wo0=st.wo;
     if(!c){st.pmsg={st:'nocust'};keep();draw();return;}
     st.pmsg={st:'busy',c};keep();draw();
-    lsEnsureCustProj(o).then(r=>{
+    (run?run(o):lsEnsureCustProj(o)).then(r=>{
       if(!document.body.contains(ov)||ov.classList.contains('me-dov'))return;
       keep();const clean=sig()===st.sig0;st.pmsg=null;
       if(st.pid){draw();return;} // a project was picked meanwhile: theirs stands
       if(st.wo!==wo0){draw();autoProj(then);return;} // another WO was picked meanwhile: its customer
       if(r.st==='many'){st.pmsg={st:'many',c,ps:r.ps};draw();return;}
+      if(r.st==='ask'){st.pmsg={st:'ask',c,p:r.p,then};draw();return;} // a "contains" fit: asked, never linked by itself
       if(r.st!=='ok'){st.pmsg={st:'nocust'};draw();return;}
       st.pid=r.p.id;st.pauto=true;edges=lsProjEdges(st.pid);draw();if(clean)st.sig0=sig(); // set by the app, not typed: closing doesn't ask
       if(r.made)toast('Project "'+r.p.name+'" set up from the WO\'s customer ✓');
       if(then)then();projSet();
-    }).catch(x=>{if(!document.body.contains(ov))return;keep();st.pmsg={st:'err',c,m:x.message};draw();});
+    }).catch(x=>{if(!document.body.contains(ov))return;keep();
+      const off=(typeof navigator!=='undefined'&&navigator.onLine===false)||x instanceof TypeError||/failed to fetch|networkerror|network request failed|load failed/i.test(String(x&&x.message||''));
+      st.pmsg=off?{st:'off',c}:{st:'err',c,m:x.message};draw();});
   };
   const projSet=()=>{if(st.pid&&st.matAfter!=null){const j=st.matAfter;st.matAfter=null;if(R()[j])setTimeout(()=>{if(document.body.contains(ov)&&st.pid)addMat(j);},0);}}; // (L6) the new material asked for before the project was set
   const pmsgHTML=()=>{
     if(st.tpl)return'';const pm=st.pmsg,E=escA,o=st.wo?DB.orders.find(x=>x.wo===st.wo):null,pick='Pick the project — or ＋ New project… at the bottom of the list';
     const box=(t,warn)=>`<div class="me-pm" id="me-pm" style="font-size:12px;margin-top:3px;max-width:420px;${warn?'color:#8a5a00;font-weight:700':'color:var(--t3)'}">${t}</div>`;
     if(pm&&pm.st==='busy')return box('Setting up project \''+E(pm.c)+'\'…');
-    if(!st.pid&&st.matAfter!=null&&!(pm&&(pm.st==='busy'||pm.st==='many')))return box('Pick the project — then the new material is added. (Or ＋ New project… at the bottom of the list.)',true);
+    if(!st.pid&&pm&&pm.st==='ask')return box('Is this project \''+E(pm.p.name)+'\'? <span style="font-weight:400">(the WO\'s customer is \''+E(pm.c)+'\')</span><br><button class="btn btn-s" id="me-pyes" style="font-size:12px;padding:3px 10px;margin:3px 4px 0 0">Yes, use it</button><button class="btn btn-s" id="me-pno" style="font-size:12px;padding:3px 10px;margin-top:3px">No — make project \''+E(pm.c)+'\'</button>',true);
+    if(!st.pid&&pm&&pm.st==='off')return box('No connection — the project couldn\'t be set up. Check the internet and try again; you can still type the list. <button class="btn btn-s" id="me-pretry" style="font-size:12px;padding:2px 9px">Try again</button>',true);
+    if(!st.pid&&st.matAfter!=null&&!(pm&&['busy','many','ask','off'].includes(pm.st)))return box('Pick the project — then the new material is added. (Or ＋ New project… at the bottom of the list.)',true);
     if(st.pid)return st.pauto&&o?box('Project: <b>'+E(lsProjName(st.pid))+'</b> — from the WO\'s customer'):'';
     if(pm&&pm.st==='many')return box('\''+E(pm.c)+'\' fits more than one project — pick one: '+pm.ps.map(p=>`<button class="btn btn-s" data-mepp="${E(p.id)}" style="font-size:12px;padding:2px 9px;margin:2px 4px 0 0">${E(p.name)}</button>`).join(''),true);
     if(pm&&pm.st==='err')return box('Project \''+E(pm.c)+'\' could not be set up ('+E(pm.m)+') — '+pick+'.',true);
@@ -4588,7 +4621,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     const r=R()[i],pname=lsProjName(st.pid)||'this project',kind=lsNum(r.L)>0||lsNum(r.W)>0||!String(r.item||'').trim()?'sheet':'other';
     if(!st.pid){ // (L6) lead the person through the project, then carry on with the new material — never just refused
       keep();st.matAfter=i;const o=st.wo?DB.orders.find(x=>x.wo===st.wo):null;
-      if(o&&String(o.customer||'').trim()&&!st.tpl&&!st.newWO&&!(st.pmsg&&st.pmsg.st==='many')){autoProj();return;}
+      if(o&&String(o.customer||'').trim()&&!st.tpl&&!st.newWO&&!(st.pmsg&&['many','ask'].includes(st.pmsg.st))){autoProj();return;}
       draw();const s=ov.querySelector('#me-pid');if(s)s.focus();return;}
     st.matAfter=null;
     const n0=prompt('New material for '+pname+' (e.g. W/W, UD96, WHB):','');
@@ -4665,6 +4698,9 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     g('me-mats').onclick=()=>{keep();if(st.pid)return lsMaterialsDlg(st.pid,()=>draw()); /*L6: never greyed — with a WO the project is set up first (L5)*/
       if(st.wo&&!st.tpl&&!st.newWO&&String((DB.orders.find(x=>x.wo===st.wo)||{}).customer||'').trim())return autoProj(()=>lsMaterialsDlg(st.pid,()=>draw()));
       const e=g('me-err');if(e)e.textContent='Pick the project first — materials belong to a project.';const s=g('me-pid');if(s)s.focus();};
+    on('me-pyes',()=>{const pm=st.pmsg;if(!pm||pm.st!=='ask')return;keep();st.pmsg=null;autoProj(pm.then,o=>ltiLink(o,pm.p.id).then(p=>({st:'ok',p})));}); // the customer is added to that project's Cienapps names: certain next time
+    on('me-pno',()=>{const pm=st.pmsg;if(!pm||pm.st!=='ask')return;keep();st.pmsg=null;autoProj(pm.then,o=>lsEnsureCustProj(o,{noAsk:true}));});
+    on('me-pretry',()=>{keep();st.pmsg=null;autoProj();});
     ov.querySelectorAll('[data-mepp]').forEach(b=>b.onclick=()=>{keep();st.pid=b.dataset.mepp;st.pauto=false;st.pmsg=null;edges=lsProjEdges(st.pid);draw();projSet();});
     on('me-matsnow',()=>{keep();if(st.pid)lsMaterialsDlg(st.pid,()=>draw());});
     g('me-pid').onchange=e=>{keep();
@@ -4680,7 +4716,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     const w=g('me-wo');if(w)w.onchange=()=>{const prev=st.wo;st.wo=w.value;if(st.pmsg&&st.pmsg.st!=='busy')st.pmsg=null;const wi=g('me-woinfo');if(wi)wi.innerHTML=woInfoHTML(DB.orders.find(x=>x.wo===st.wo));
       const h0=R()[0];if(opt.std&&h0&&h0.k==='hdr'&&!h0.sub&&(!String(h0.item||'').trim()||h0.item===lsStdHouse(DB.orders.find(x=>x.wo===prev)))){ // standard layout: the house heading follows the work order
         h0.item=lsStdHouse(DB.orders.find(x=>x.wo===st.wo));const hi=ov.querySelector('[data-mr="0|item"]');if(hi)hi.value=h0.item;}
-      const o=DB.orders.find(x=>x.wo===st.wo),p=o&&lsProjForCust(o.customer);if(!st.pid&&p){keep();st.pid=p.id;st.pauto=true;edges=lsProjEdges(p.id);draw();}
+      const o=DB.orders.find(x=>x.wo===st.wo),p=o&&lsProjAuto(o.customer).p;if(!st.pid&&p){keep();st.pid=p.id;st.pauto=true;edges=lsProjEdges(p.id);draw();}
       else if(!st.pid&&o){st.pmsg=null;keep();draw();autoProj();}
       else if(jbOn()&&(!st.wo||!prev||(st.jm&&st.jm.wo!==st.wo))){if(st.jm&&st.jm.wo!==st.wo)st.jm=null;keep();draw();}}; // the job boxes come and go with the WO
     g('me-save').onclick=()=>save();
@@ -4993,7 +5029,10 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     ov.querySelector('#me-dagain').onclick=()=>{ov.remove();openListEditor(l.id);};
   };
   const escH=e=>{if(!document.body.contains(ov)){document.removeEventListener('keydown',escH);return;}
-    if(e.key!=='Escape')return;const top=[...document.querySelectorAll('.pod-ovl')].pop();if(top!==ov)return; // another window on top gets its own Esc
+    if(e.key!=='Escape')return;const all=[...document.querySelectorAll('.pod-ovl')],top=all.pop();
+    if(top!==ov){ // (round 5) a window opened over the list (materials, insert from template, which sheet…): Esc closes THAT one only
+      if(all.filter(o=>o.querySelector('.me-ed')).pop()!==ov||top.querySelector('.me-ed')||top.classList.contains('me-dov'))return; // not ours / another list window
+      const x=top.querySelector('#pod-x');if(x){e.preventDefault();x.click();}return;}
     e.preventDefault();if(ov.classList.contains('me-dov'))ov.remove();else closeEd();};
   document.addEventListener('keydown',escH);
   document.querySelectorAll('.pod-ovl.me-dov').forEach(x=>x.remove()); // a "Saved ✓" panel still open: that list is saved — it goes

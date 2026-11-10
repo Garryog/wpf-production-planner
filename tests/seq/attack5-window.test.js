@@ -93,7 +93,7 @@ function row() {
       S.offline3 = true;
       await pcs[0].page.evaluate(() => openListEditor(null, 'WO-48')); await sleep(900);
       w = await pst(pcs[0].page);
-      rec('L5 offline: "Project \'Offline Homes\' could not be set up (…) — Pick the project…", window still open, nothing made', w.open && /Project 'Offline Homes' could not be set up/.test(w.pm) && !projsNamed(S, /offline homes/i).length, JSON.stringify(w));
+      rec('L5 offline: "No connection — the project couldn\'t be set up. Check the internet and try again; you can still type the list.", window still open, nothing made', w.open && /No connection — the project couldn't be set up\. Check the internet and try again; you can still type the list\./.test(w.pm) && !projsNamed(S, /offline homes/i).length, JSON.stringify(w));
       rec('[LOW] L5 offline: the reason shown is plain English (not "Failed to fetch" / "TypeError")', !/Failed to fetch|TypeError|NetworkError/i.test(w.pm), w.pm);
       S.offline3 = false;
       await closeAll(pcs[0].page);
