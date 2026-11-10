@@ -1,6 +1,6 @@
 // Editor step 5: the columns of WPF's sheets (Description | Qty | Length | Width | Colour | Edging | Note), no Saw/Fit
 // column (a row with a length or width goes to the Saw, without to Stores), Colour dropdown of the project's materials with
-// "+ Add new material…" (PIN rules; without the PIN: this row only, flagged), Edging suggestions, new rows take the colour
+// "+ Add new material…" (9 Nov: office/PM/Production Manager/Drawing office add with no PIN; Management needs the PIN, else this row only, flagged), Edging suggestions, new rows take the colour
 // of the row above, header carcass/door colour as an optional default. Fake Supabase only.
 // Run: node tests/editor/e5-columns.test.js
 const F = require('../stage3/fix3.js');
@@ -37,19 +37,20 @@ const S_ = (k, v) => `(()=>{const e=document.querySelector('.pod-ovl [data-mr="$
   const c = await pg.evaluate(() => { const ov = document.querySelector('.pod-ovl'); const cc = ov.querySelector('#me-carc'); cc.value = 'MFC White'; cc.onchange({ target: cc });
     const r = [...ov.querySelectorAll('#me-carc option')].map(x => x.value).join('|'); return r; });
   rec('header Carcass colour: a dropdown of the project\'s boards (optional)', c === '|MFC White|W/W', c);
-  // + Add new material… with the PIN → on the project's list and picked
-  await pg.evaluate(() => { window.__ans = ['UD96', '7777']; });
+  // + Add new material… — 9 Nov rule (Garry): the office adds project materials with NO PIN (rewritten by the Tester 10 Nov)
+  await pg.evaluate(() => { localStorage.removeItem('wpfEditPin'); window.__ans = ['UD96', '7777']; window.__n0 = window.__prompts.length; });
   await pg.evaluate(S_('0|mat', '__add'));
   await F.sleep(500);
-  const d = await pg.evaluate(() => ({ v: document.querySelector('[data-mr="0|mat"]').value, prompts: window.__prompts.slice(-2) }));
-  rec('＋ Add new material… with the PIN: added to the project\'s materials and selected', d.v === 'UD96' && S.db.t.project_materials.some(m => m.project_id === 'P1' && m.name === 'UD96' && m.kind === 'sheet'), JSON.stringify(d));
-  rec('… the PIN question says what it is for, in plain English', /needs the Production Manager, Drawing office or Admin PIN/.test(d.prompts[1] || ''), d.prompts[1]);
-  // without the PIN (Cancel) → this row only, flagged amber, saved flagged
+  const d = await pg.evaluate(() => ({ v: document.querySelector('[data-mr="0|mat"]').value, prompts: window.__prompts.slice(window.__n0) }));
+  rec('＋ Add new material… (office): added to the project\'s materials and selected', d.v === 'UD96' && S.db.t.project_materials.some(m => m.project_id === 'P1' && m.name === 'UD96' && m.kind === 'sheet'), JSON.stringify(d));
+  rec('… the office is asked only for the name — no PIN question (9 Nov rule)', d.prompts.length === 1 && /New material/.test(d.prompts[0]) && !d.prompts.some(m => /PIN/.test(m)), JSON.stringify(d.prompts));
+  // a second new one: also straight on the project's list, not amber (the old "Cancel → this row only, flagged" now only
+  // applies to Management, checked at the end)
   await pg.evaluate(() => { localStorage.removeItem('wpfEditPin'); window.__ans = ['Oak Mystery', null]; document.getElementById('toast').textContent = ''; });
   await pg.evaluate(S_('1|mat', '__add'));
   await F.sleep(300);
   const e = await pg.evaluate(() => { const s = document.querySelector('[data-mr="1|mat"]'); return { v: s.value, txt: s.options[s.selectedIndex].text, amber: /fff4d6/.test(s.getAttribute('style')), toast: document.getElementById('toast').textContent }; });
-  rec('no PIN: the colour is used on this row only, amber, and the person is told it is flagged', e.v === 'Oak Mystery' && /⚠ Oak Mystery/.test(e.txt) && e.amber && /used on this row only and flagged/.test(e.toast) && !S.db.t.project_materials.some(m => m.name === 'Oak Mystery'), JSON.stringify(e));
+  rec('office, no PIN: the new colour goes on the project\'s list, not amber, and the person is told it was added', e.v === 'Oak Mystery' && !/⚠/.test(e.txt) && !e.amber && /added to the/.test(e.toast) && S.db.t.project_materials.some(m => m.project_id === 'P1' && m.name === 'Oak Mystery' && m.kind === 'other'), JSON.stringify(e));
   // an existing material typed again is just picked
   await pg.evaluate(() => { window.__ans = ['w/w']; });
   await pg.evaluate(S_('1|mat', '__add'));
@@ -69,7 +70,7 @@ const S_ = (k, v) => `(()=>{const e=document.querySelector('.pod-ovl [data-mr="$
   for (let i = 0; i < 30 && !S.db.t.lists.some(l => l.name === 'House 9'); i++) await F.sleep(100);
   const l = S.db.t.lists.find(x => x.name === 'House 9'), ln = l ? S.db.t.list_lines.filter(x => x.list_id === l.id).sort((x, y) => x.seq - y.seq) : [];
   const br = ln.map(x => [x.kind, x.part, x.qty, x.material, x.material_other ? 'FLAG' : '', x.section || ''].join('|'));
-  rec('saved: length/width → Saw, none → Stores, heading kept, empty row left out', br.join(';') === 'saw|Side panel|2|UD96||;fit|Hanging rail|1|Oak Mystery|FLAG|;hdr|Road 1 No 1 extras||||;saw|Kicker|7|UD96||Road 1 No 1 extras', br.join(';'));
+  rec('saved: length/width → Saw, none → Stores, heading kept, empty row left out', br.join(';') === 'saw|Side panel|2|UD96||;fit|Hanging rail|1|Oak Mystery||;hdr|Road 1 No 1 extras||||;saw|Kicker|7|UD96||Road 1 No 1 extras', br.join(';'));
   // validation messages, plain English
   const v = await pg.evaluate(() => { openListEditor(null, 'WO-2'); const ov = document.querySelector('.pod-ovl'); const set = (k, v) => { const e = ov.querySelector('[data-mr="' + k + '"]'); e.value = v; (e.tagName === 'SELECT' ? e.onchange : e.oninput)(); };
     set('0|item', 'Gable'); set('0|qty', '2'); set('0|L', '900'); ov.querySelector('[data-mr="0|mat"]').value = ''; ov.querySelector('[data-mr="0|mat"]').onchange();
@@ -78,6 +79,14 @@ const S_ = (k, v) => `(()=>{const e=document.querySelector('.pod-ovl [data-mr="$
     document.getElementById('me-save').click(); const e2 = document.getElementById('me-err').textContent; document.querySelector('.pod-ovl').remove(); return [e1, e2]; });
   rec('a saw row with no colour: "Pick the material for every saw row ("Gable" (row 1))"', /Pick the material for every saw row \("Gable" \(row 1\)\)/.test(v[0]), v[0]);
   rec('a row with no quantity is refused in plain English', /needs a quantity/.test(v[1]), v[1]);
+  // Management keeps the PIN: Cancel → this row only, amber, told it is flagged, nothing added to the project list
+  const mg = await F.dev(browser, S, 'dash');
+  await mg.page.evaluate(() => { localStorage.removeItem('wpfEditPin'); window.__prompts = []; window.__ans = ['Walnut Mystery', null]; window.prompt = m => { window.__prompts.push(m); return window.__ans.length ? window.__ans.shift() : null; }; window.confirm = () => true; openListEditor(null, 'WO-1'); });
+  await mg.page.evaluate(S_('0|item', 'Shelf')); await mg.page.evaluate(S_('0|qty', '1')); await mg.page.evaluate(S_('0|mat', '__add'));
+  await F.sleep(300);
+  const m = await mg.page.evaluate(() => { const s = document.querySelector('.pod-ovl [data-mr="0|mat"]'); return { v: s.value, amber: /fff4d6/.test(s.getAttribute('style') || ''), toast: document.getElementById('toast').textContent, pin: window.__prompts[1] || '' }; });
+  rec('Management: still asked for the PIN, in plain English; Cancel → this row only, amber, flagged, not on the project list', m.v === 'Walnut Mystery' && m.amber && /used on this row only and flagged/.test(m.toast) && /needs the Production Manager, Drawing office or Admin PIN/.test(m.pin) && !S.db.t.project_materials.some(x => x.name === 'Walnut Mystery'), JSON.stringify(m));
+  await mg.close();
   rec('no page errors', !(S.errors || []).length, (S.errors || []).join(' | '));
   await o.close(); await browser.close();
   const pass = res.filter(Boolean).length;

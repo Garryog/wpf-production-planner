@@ -1,5 +1,6 @@
 // Coder checks for Garry's 4 Nov request "work order is too long. title needs to be separated" (switch ON, fake Supabase only):
-//  - list editor: the Work order drop-down shows only "WO-3 — Unit 31"; read-only Floor | Unit | Title | Customer boxes beside it
+//  - list editor: the Work order drop-down shows only "WO-3 — Unit 31"; Floor | Unit | Title | Customer boxes beside it (EDITABLE
+//    since Garry's 9 Nov rule — Project details item 2; rewritten by the Tester 10 Nov, they were read-only text)
 //    fill in from the chosen WO (and change when another WO is picked); they wrap on a 360 px phone
 //  - "Cutting lists to issue": WO | Floor | Unit | Title | Customer as separate cells, title cut short with the full text on hover
 //  - Lists home: its own Title column; template dialog: the same separate cells; saw card: WO chip, Floor, Unit, then the title
@@ -30,13 +31,14 @@ const LONG = 'Job – Kitchen and utility fit-out, Type B 3-bed end of terrace w
   const p = off.page;
   // ---- editor
   const ed = await p.evaluate(async () => { showTab('l'); openListEditor(null, 'WO-3', 'P1'); await new Promise(r => setTimeout(r, 120));
-    const s = document.getElementById('me-wo'), f = () => Object.fromEntries([...document.querySelectorAll('#me-woinfo [data-woi]')].map(e => [e.dataset.woi, e.textContent.trim()]));
-    const r = { sel: s.options[s.selectedIndex].textContent, opts: [...s.options].map(o => o.textContent), info: f(), tt: document.querySelector('[data-woi="Title"]').title };
+    const s = document.getElementById('me-wo'), f = () => Object.fromEntries([...document.querySelectorAll('#me-woinfo [data-woi]')].map(e => [e.dataset.woi, (e.tagName === 'INPUT' ? e.value : e.textContent).trim()]));
+    const ed = [...document.querySelectorAll('#me-woinfo [data-woi]')].map(e => e.tagName + (e.readOnly || e.disabled ? ':ro' : ''));
+    const r = { sel: s.options[s.selectedIndex].textContent, opts: [...s.options].map(o => o.textContent), info: f(), ed, tags: !!document.querySelector('#me-woinfo b b, #me-woinfo [data-woi] b'), tt: document.querySelector('[data-woi="Title"]').title };
     s.value = 'WO-1'; s.onchange(); r.info2 = f(); s.value = 'WO-3'; s.onchange(); return r; });
   rec('editor: the picked WO shows just "WO-3 — Unit 31"', ed.sel === 'WO-3 — Unit 31', JSON.stringify(ed.sel));
   rec('editor: no drop-down option carries the title or customer', ed.opts.every(o => !/Aderrig|HOUSE 22|Kitchen/.test(o)), JSON.stringify(ed.opts));
-  rec('editor: read-only Floor | Unit | Title | Customer filled from WO-3 (title shown as text, full title on hover)',
-    ed.info.Floor === '2' && ed.info.Unit === '31' && ed.info.Title === LONG && ed.info.Customer === 'Aderrig Homes' && ed.tt === LONG, JSON.stringify(ed.info));
+  rec('editor: EDITABLE Floor | Unit | Title | Customer boxes (9 Nov rule) filled from WO-3 (HTML in the title is text, full title on hover)',
+    ed.ed.join() === 'INPUT,INPUT,INPUT,INPUT' && !ed.tags && ed.info.Floor === '2' && ed.info.Unit === '31' && ed.info.Title === LONG && ed.info.Customer === 'Aderrig Homes' && ed.tt.startsWith(LONG), JSON.stringify({ info: ed.info, ed: ed.ed, tt: ed.tt }));
   rec('editor: picking WO-1 changes the boxes to 1 / 22 / HOUSE 22 TYPE B', ed.info2.Floor === '1' && ed.info2.Unit === '22' && ed.info2.Title === 'HOUSE 22 TYPE B', JSON.stringify(ed.info2));
   if (SHOTS) { const r = await p.evaluate(() => { const b = document.querySelector('.me-ed').getBoundingClientRect(); return { x: Math.max(0, b.x - 10), y: Math.max(0, b.y - 10), width: Math.min(1400, b.width + 20), height: 260 }; }); await p.screenshot({ path: SHOTS + '/editor-header-1400.png', clip: r }); }
   await p.evaluate(() => { const o = document.querySelector('.pod-ovl'); if (o) o.remove(); });

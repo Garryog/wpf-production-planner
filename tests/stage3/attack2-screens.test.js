@@ -25,7 +25,23 @@ const pinAsked = p => p.evaluate(() => window.__p.filter(m => /PIN/.test(m)).len
   const off = await office(browser, S, '2468'); // office PIN typed at the prompt
   await off.page.evaluate(() => { lsMaterialsDlg('P1'); document.getElementById('mt-new-n').value = 'Sneaky board'; document.getElementById('mt-add').click(); });
   await F.sleep(300);
-  rec('G1 office PIN cannot add a project material', !S.db.t.project_materials.some(m => m.name === 'Sneaky board') && (await pinAsked(off.page)) === 1);
+  // 9 Nov rule (Garry): Office / PM / Production Manager / Drawing office add materials with NO PIN; Saw / Stores / Drivers /
+  // Floor read-only; Management keeps the PIN. Rewritten by the Tester 10 Nov (old G1 expected the office to be refused).
+  rec('G1 office adds a project material with no PIN question (9 Nov rule)', S.db.t.project_materials.some(m => m.name === 'Sneaky board') && (await pinAsked(off.page)) === 0, 'PIN prompts=' + (await pinAsked(off.page)));
+  for (const r of ['saw', 'stores', 'driver', 'floor']) {
+    const t = await F.dev(browser, S, r);
+    const st = await t.page.evaluate(nm => { window.__p = []; window.prompt = m => { window.__p.push(m); return '8888'; }; lsMaterialsDlg('P1'); const n = document.getElementById('mt-new-n'), b = document.getElementById('mt-add'); if (!n || !b) return 'no add box'; n.value = nm; b.click(); return 'clicked'; }, 'RO ' + r);
+    await F.sleep(300);
+    rec('G1-' + r + ' still cannot add a project material (even with the Design PIN to hand)', !S.db.t.project_materials.some(m => m.name === 'RO ' + r), st);
+    await t.close();
+  }
+  {
+    const t = await F.dev(browser, S, 'dash');
+    await t.page.evaluate(() => { localStorage.removeItem('wpfEditPin'); window.__p = []; window.prompt = m => { window.__p.push(m); return null; }; lsMaterialsDlg('P1'); document.getElementById('mt-new-n').value = 'Mgmt board'; document.getElementById('mt-add').click(); });
+    await F.sleep(300);
+    rec('G1m Management still asked for the PIN (cancel = nothing added)', !S.db.t.project_materials.some(m => m.name === 'Mgmt board') && (await pinAsked(t.page)) === 1);
+    await t.close();
+  }
   await off.page.evaluate(() => document.querySelectorAll('.pod-ovl').forEach(o => o.remove()));
   await off.page.evaluate(() => { lsProjectsDlg(); document.querySelector('[data-pjn="P1"]').value = 'Renamed by office'; document.querySelector('[data-pjs="P1"]').click(); });
   await F.sleep(300);
@@ -48,7 +64,11 @@ const pinAsked = p => p.evaluate(() => window.__p.filter(m => /PIN/.test(m)).len
   const off2 = await office(browser, S, '8888');
   await off2.page.evaluate(() => { lsMaterialsDlg('P1'); document.getElementById('mt-new-n').value = 'MFC Oak'; document.getElementById('mt-add').click(); });
   await F.sleep(300);
-  rec('G7 Design PIN once → material added and the PIN remembered', S.db.t.project_materials.some(m => m.name === 'MFC Oak') && (await off2.page.evaluate(() => localStorage.getItem('wpfEditPin'))) === '8888');
+  // 9 Nov rule: the material goes in with no PIN at all; the Design PIN is still asked once (and remembered) for the things
+  // that still need it (templates / projects) — lsEditOk().
+  const g7a = S.db.t.project_materials.some(m => m.name === 'MFC Oak') && (await pinAsked(off2.page)) === 0;
+  const g7b = await off2.page.evaluate(() => [lsEditOk(), lsEditOk()]);
+  rec('G7 office: material added with no PIN; Design PIN asked once for template/project edits and remembered', g7a && g7b.join() === 'true,true' && (await pinAsked(off2.page)) === 1 && (await off2.page.evaluate(() => localStorage.getItem('wpfEditPin'))) === '8888', JSON.stringify({ g7a, g7b, asked: await pinAsked(off2.page) }));
   await off2.page.evaluate(() => { DB.pins = Object.assign({}, DB.pins, { design: '1234' }); window.__p = []; });
   const ok2 = await off2.page.evaluate(() => { window.prompt = m => { window.__p.push(m); return null; }; return lsEditOk(); });
   rec('G8 after the Design PIN is changed, the remembered old PIN no longer works', ok2 === false && (await pinAsked(off2.page)) === 1);
