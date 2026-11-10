@@ -450,6 +450,9 @@ details.lti-other{margin-bottom:14px}details.lti-other>summary{cursor:pointer;fo
 .me-c3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}.me-c2{display:grid;grid-template-columns:1fr 1fr;gap:6px}.me-card .me-tot{display:block;margin:2px 0 0}
 @media(max-width:699px){.wo-info .wt,.wo-info .wc{width:100%}.wo-info .wf{flex:1 1 0}.wo-info .wt,.wo-info .wc{flex:1 1 100%}.me-ed .me-top{flex-direction:column;align-items:stretch}.me-ed .me-top select,.me-ed .me-top input{max-width:none!important;width:100%!important}.me-ed .btn{min-height:40px}}.me-grid tr:focus-within td{background:#fffbe6}
 .me-flag input{width:18px;height:18px}
+/* L8 (10 Nov): the list window's top bar stays in view — title left, ✕ Close right; after Save a plain "Saved ✓" panel */
+.me-tb{position:sticky;top:-18px;z-index:7;background:#fff;display:flex;align-items:center;gap:8px;margin:-18px -18px 6px;padding:10px 18px 8px;border-bottom:1px solid var(--border)}.me-tb .me-x0{font-size:15px;font-weight:700;min-height:40px;min-width:44px;padding:6px 14px;white-space:nowrap}
+.me-done{text-align:center;min-width:min(520px,92vw)}.me-done .me-dok{font-size:20px;font-weight:800;color:#0d6e46;margin:6px 0 8px}.me-done .me-dok.me-dw{color:#8a5a00}.me-done .me-dl{font-size:14px;color:var(--t2);margin-bottom:14px}.me-done .btn{font-size:16px;padding:10px 22px;min-height:44px;margin:4px}
 /* Simple lists (Garry, 4 Nov): headings first, fewer buttons (the rest under More), bigger type, Bought in */
 .me-ed .me-grid,.me-ed .me-grid input,.me-ed .me-grid select{font-size:15px}.me-ed .me-grid input,.me-ed .me-grid select{min-height:34px}
 .me-bar{display:flex;gap:8px;margin:10px 0 6px;flex-wrap:wrap;align-items:flex-start}.me-big{font-size:15px;padding:8px 16px;min-height:38px}
@@ -4428,7 +4431,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     if(hasUnits())st.unitsOn=true; // a list that has unit blocks always shows them
     const tbc=lsTbc(R()),chk=ex&&!ex.tpl?lsCheckInfo(ex):null;
     ov.innerHTML=`<div class="pod-in me-ed" style="min-width:min(1180px,97vw)">
-      <div style="font-weight:800;color:#14335c;font-size:17px;margin-bottom:2px">✍ ${ex?'Edit':'New'} ${st.tpl?'template':'cutting list'}${ex&&(+ex.rev||1)>1?' · Rev '+(+ex.rev):''}</div>
+      <div class="me-tb"><div style="font-weight:800;color:#14335c;font-size:17px;flex:1;min-width:0">✍ ${ex?'Edit':'New'} ${st.tpl?'template':'cutting list'}${ex&&(+ex.rev||1)>1?' · Rev '+(+ex.rev):''}</div><button class="btn btn-s me-x0" id="me-x0" title="Close this window (asks first if anything is not saved)">✕ Close</button></div>
       ${ex&&ex.templateId?`<div style="font-size:12px;color:#5b21b6;font-weight:700;margin-bottom:4px">📐 ${escA(lsTplInfo(ex))}</div>`:''}
       ${st.note?`<div style="font-size:12px;color:#1a56db;font-weight:700;margin-bottom:4px">${escA(st.note)}</div>`:''}
       ${ex&&lsLocked(ex)?'<div style="font-size:13px;color:#8a5a00;font-weight:700;margin-bottom:4px">The saw already has this list — saving makes a new revision.</div>':''}
@@ -4474,7 +4477,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       </div>
       <div class="me-keys"${st.help?'':' hidden'}>Rows with a length or width go to the <b>Saw</b>; rows without go to <b>Stores</b>; <b>Bought in</b> rows are never cut or picked. Materials come from the project's list — pick <b>＋ Add new material…</b> if one is missing. A new row starts with the material of the saw row above.<br>Works like Excel: <b>Tab</b> / <b>Shift+Tab</b> across · <b>Enter</b> down (a new row at the bottom) · arrow keys · <b>Ctrl+D</b> copies the cell above · <b>Insert</b> adds a row · <b>Ctrl+Delete</b> deletes the row · <b>Ctrl+Z</b> undo · paste rows straight from Excel</div>
       <div id="me-err" style="color:#b42318;font-weight:700;font-size:13px;min-height:18px"></div>
-      <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">${ex&&st.tpl?'<button class="btn btn-s" id="me-hist">🕘 History</button>':''}${st.tpl?'':'<button class="btn btn-s" id="me-astpl" title="Save these rows as a template of the project (unsaved changes included)">📐 Save as template</button>'}<span style="flex:1"></span><button class="btn btn-s" id="pod-x">Cancel</button><button class="btn btn-g" id="me-save" style="font-size:14px;padding:9px 20px">${ex?'Save changes':st.tpl?'Save template':'Save list → Saw & Stores'}</button></div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">${ex&&st.tpl?'<button class="btn btn-s" id="me-hist">🕘 History</button>':''}${st.tpl?'':'<button class="btn btn-s" id="me-astpl" title="Save these rows as a template of the project (unsaved changes included)">📐 Save as template</button>'}<span style="flex:1"></span><button class="btn btn-s" id="pod-x" title="Close this window (asks first if anything is not saved)">Close</button><button class="btn btn-g" id="me-save" style="font-size:14px;padding:9px 20px">${ex?'Save changes':st.tpl?'Save template':'Save list → Saw & Stores'}</button></div>
     </div>`;
     bind();
     const g=ov.querySelector('#me-grid');if(g&&sc)g.scrollTop=sc;
@@ -4568,6 +4571,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       const o=DB.orders.find(x=>x.wo===st.wo),p=o&&lsProjForCust(o.customer);if(!st.pid&&p){keep();st.pid=p.id;edges=lsProjEdges(p.id);draw();}
       else if(jbOn()&&(!st.wo||!prev||(st.jm&&st.jm.wo!==st.wo))){if(st.jm&&st.jm.wo!==st.wo)st.jm=null;keep();draw();}}; // the job boxes come and go with the WO
     g('me-save').onclick=()=>save();
+    on('me-x0',()=>closeEd());on('pod-x',()=>closeEd());
   };
   const addRow=(at)=>{keep();snap();const c=curRow();const i=at!=null?at:c<0?R().length:R()[c].k==='hdr'?c+1:c+1;R().splice(i,0,blank(i));st.focus=i+'|item';draw();};
   const addHdr=unit=>{keep();snap();const c=curRow();let i=c<0?R().length:endOfBlock(c);
@@ -4748,10 +4752,10 @@ function openListEditor2(listId,presetWo,presetPid,opt){
         if(st.chkFail){st.pUnchecked=pwo;st.chkFail=false;} // (round 3) made without the database check: checked again on the next Save
       }
       const sb=g('me-save');if(sb)sb.disabled=true;err('Saving…');
-      lsSaveManual(d,by,ex).then(async l=>{ov.remove();sched();render();if(d.newId)lsPendDrop(d.newId);setTimeout(()=>pMineFix(),0);
+      lsSaveManual(d,by,ex).then(async l=>{sched();render();if(d.newId)lsPendDrop(d.newId);setTimeout(()=>pMineFix(),0);
         let t=(ex?'List updated':'List saved')+' — '+l.name+' → '+(l.saw?l.saw+' saw row'+(l.saw!==1?'s':''):'no cutting')+' · '+(l.fit?l.fit+' Stores':'no Stores')+(d.wo&&!st.tpl?' · tagged '+d.wo:'');
         if(d.retiredMsg)t+='.'+d.retiredMsg; // the database archived the old list in the same step as the save
-        toast(t);})
+        toast(t);done(l,d);})
         .catch(x=>{if(sb)sb.disabled=false;if(/already been replaced/.test(x.message))toast(x.message,true);
           if(x.message===LS_LOCK_MSG&&ex&&!ex.tpl&&!sawStarted){sawStarted=true;draw();} // lock the Units box now and offer "Make new list from this"
           if(ex||st.tpl||!d.newId||!lsLost(x))return err('Not saved — '+x.message);
@@ -4854,8 +4858,27 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     st.focus=m;draw();
     toast('Pasted '+n+' cell'+(n!==1?'s':'')+' from '+aoa.length+' row'+(aoa.length!==1?'s':'')+'. Ctrl+Z undoes it.');
   });
-  ov.onclick=e=>{if(e.target===ov||e.target.id==='pod-x')ov.remove();};
-  document.body.appendChild(ov);draw();
+  // ---- L8 (10 Nov): ✕ Close (top right, always in view), Close (bottom) and Esc close the window — asking first only if something
+  //      was typed since it opened. A click on the grey area outside does nothing. After Save the window says plainly what happened.
+  const sig=()=>JSON.stringify([R(),st.name,st.wo,st.pid,st.ltype,st.tname,st.noCut,st.noFit,st.jb.floor,st.jb.unit,st.jb.title,st.jb.wo,st.pw,st.newWO]);
+  const dirty=()=>{if(ov.classList.contains('me-dov'))return false;keep();return sig()!==st.sig0;};
+  const closeEd=()=>{if(!document.body.contains(ov))return;if(dirty()&&!confirm('Close without saving?\n\nWhat you typed in this list is lost.\n\nOK = close without saving\nCancel = stay and Save'))return;ov.remove();};
+  const done=(l,d)=>{ // the finish panel: matches what happened, [Close] (big, focused) and [Edit it again]
+    const lv=lsList(l.id)||l,wait=!st.tpl&&lsWaitCheck(lv),rev=+lv.rev||1,wo=d.wo&&!st.tpl&&d.wo!=='__NEW__'?d.wo:'';
+    const h=st.tpl?'Template saved ✓':wait?'Saved ✓ — waiting to be checked before the saw sees it':ex&&rev>(+ex.rev||1)?'Saved ✓ — Rev '+rev+' is with the Saw &amp; Stores':'Saved ✓ — list is with the Saw &amp; Stores';
+    const cnt=st.tpl?'':[(+l.saw?l.saw+' saw row'+(+l.saw!==1?'s':''):'no cutting'),(+l.fit?l.fit+' Stores row'+(+l.fit!==1?'s':''):'no Stores'),wo?escA(wo):''].filter(Boolean).join(' · ');
+    ov.classList.add('me-dov');
+    ov.innerHTML=`<div class="pod-in me-done"><div class="me-dok${wait?' me-dw':''}" id="me-dok">${h}</div><div class="me-dl"><b>${escA(l.name||'')}</b>${cnt?'<br>'+cnt:''}${d.retiredMsg?'<br>'+escA(d.retiredMsg):''}</div>
+      <button class="btn btn-g" id="me-dclose">Close</button><button class="btn btn-s" id="me-dagain">Edit it again</button></div>`;
+    const c=ov.querySelector('#me-dclose');c.onclick=()=>ov.remove();c.focus();
+    ov.querySelector('#me-dagain').onclick=()=>{ov.remove();openListEditor(l.id);};
+  };
+  const escH=e=>{if(!document.body.contains(ov)){document.removeEventListener('keydown',escH);return;}
+    if(e.key!=='Escape')return;const top=[...document.querySelectorAll('.pod-ovl')].pop();if(top!==ov)return; // another window on top gets its own Esc
+    e.preventDefault();if(ov.classList.contains('me-dov'))ov.remove();else closeEd();};
+  document.addEventListener('keydown',escH);
+  document.querySelectorAll('.pod-ovl.me-dov').forEach(x=>x.remove()); // a "Saved ✓" panel still open: that list is saved — it goes
+  document.body.appendChild(ov);draw();st.sig0=sig();
   return{st,draw};
 }
 /* ---------- Save as template / Update template / History (V2; Production Manager, Drawing office or Admin PIN) ----------
