@@ -62,7 +62,10 @@ const w = ms => new Promise(r => setTimeout(r, ms));
   rec('group row due date moves every member', gr.every(x => x === '2026-12-01'), JSON.stringify(gr));
   await p.click('#date-sum #pod-x').catch(() => {}); await w(50);
   // 5. delivery card due date
-  await p.evaluate(() => { showTab('d'); }); await w(200);
+  // (Tester, 10 Nov — week tabs, Garry 9 Nov: a "rebook" job sits in the pool of its DUE week's tab, so open that tab first)
+  await p.evaluate(async () => { showTab('d'); await new Promise(r => setTimeout(r, 150));
+    const wk = delPoolWk(DB.orders.find(o => o.wo === 'WO-2')), t = ['0', '1', '2', '3'].find(x => delTabWk(x) === wk) || 'later';
+    const b = document.querySelector('[data-deltab="' + t + '"]'); if (b) b.click(); }); await w(200);
   const card = await p.evaluate(() => { const c = document.querySelector('.dchip[data-dw="WO-2"]'); return c ? c.innerText : ''; });
   rec('delivery card shows "date moved — rebook" and its due date', /rebook/.test(card) && /due 4 Dec/.test(card), card.replace(/\n/g, ' '));
   await p.click('.dchip[data-dw="WO-2"] [data-duedlg]'); await w(100);

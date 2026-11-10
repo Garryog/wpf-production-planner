@@ -15,6 +15,15 @@ function row() {
   return r;
 }
 const norm = s => String(s).replace(/\d{1,2}:\d{2}(:\d{2})?/g, 'HH:MM').replace(/\s+/g, ' ').trim();
+// ALLOWED DIFFERENCE (Tester, 10 Nov — dates & deliveries, Garry 9 Nov): van bookings now belong to a real week, so a
+// booking label carries its date ("Volvo Thu 12 Nov", the board's "(Volvo Thu 12 Nov)" for stage2's "(Thu)"), and the
+// dashboard's missed count reads "planned for a day already gone" (missed = by real date, any open week) for stage2's
+// "planned earlier this week", and the scorecard note says weeks are stored "when a week is closed" (Close week). Only these exact shapes are folded back, on both sides; everything else must still match.
+const DAYS = '(Mon|Tue|Wed|Thu|Fri|Sat)', MON = '(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)', VANS = '(?:Artic|Volvo|Renault|Iveco|Crafter|Smart Movers)';
+const normDates = s => norm(s).replace(new RegExp('\\b' + DAYS + ' \\d{1,2} ' + MON + '\\b', 'g'), '$1')
+  .replace(new RegExp('\\(' + VANS + ' ' + DAYS + '\\)', 'g'), '($1)')
+  .replace(/planned for a day already gone, not delivered|planned earlier this week, not delivered/g, '«missed»')
+  .replace(/Weeks are stored when (?:a week is closed|the board is cleared) \(/g, 'Weeks are stored «close week» (');
 (async () => {
   if (!OLD) { rec('origin/feature/stage2-imports index.html readable from git (run git fetch)', false); done(); process.exit(1); }
   const browser = await H.chromium.launch();
@@ -52,7 +61,7 @@ const norm = s => String(s).replace(/\d{1,2}:\d{2}(:\d{2})?/g, 'HH:MM').replace(
   rec('switch off — the only extra: one docket button row, on the Stores screen only, reading exactly "' + DK_BAR + '"',
     Object.entries(bars).every(([k, v]) => k === 'stores/-' ? v.n === 1 && (norm(v.bar) === DK_BAR || norm(v.bar) === '') : v.n === 0), JSON.stringify(bars));
   for (const k of Object.keys(a.out)) {
-    const x = norm(a.out[k]), y = norm(b.out[k]);
+    const x = normDates(a.out[k]), y = normDates(b.out[k]);
     let i = 0; while (i < x.length && x[i] === y[i]) i++;
     rec('switch off — ' + k + ': same screen as feature/stage2-imports', x === y, 'first difference at ' + i + ': stage2 "' + x.slice(Math.max(0, i - 40), i + 80) + '" vs this branch "' + y.slice(Math.max(0, i - 40), i + 80) + '"');
   }
