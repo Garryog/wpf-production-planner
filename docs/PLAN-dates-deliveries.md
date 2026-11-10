@@ -149,6 +149,40 @@ Phase 2: 17 column L · 18 settings numbers · 19 delivery date in dialog/engine
 **Note for Job B:** `moveDates(jobs, change, reason, by, {src:'pmseq', frozenDays:14, requestOnly:true})` → store `rows` as a change request; `apply()` later.
 
 ---
+## Go-live checklist (dates & deliveries) — Manager's conditions, 10 Nov 2026
+
+**Before**
+1. The 10 Nov release is live and has settled first (its own checklist, docs/GO-LIVE-2026-11-10.md, done; no open problems).
+2. Go live on a **Monday, Tuesday or Wednesday** — never Thursday/Friday (Close week, run sheets and the weekend need watching).
+3. Every PC's clock is set automatically (Windows: Settings → Time → "Set time automatically" ON). Week tabs and "this week" come
+   from the PC's own date.
+4. Old-screen guard v2 (SUPABASE_CHANGES.md, top block) — only if Garry says yes. It is run AFTER deploy (step 7).
+
+**Go-live**
+5. Deploy. Check in an **incognito** window: Deliveries shows the week tabs (This week · Next week · +2 · +3 · Later); move one test
+   job's due date and move it back (tap the due date, pick a reason); the dot says **Synced**; Settings → Delivery dates shows **3 / 5 / 14**.
+6. Close and reopen, **in person**, every office PC, the saw and stores screens, the floor screen, and **every driver's phone**.
+   A screen left open on the old version can still "Clear Week" every week's bookings and its driver screen shows next week's Tuesday
+   as this Tuesday.
+7. (If approved) make one normal save from the new screen, then run old-screen guard v2.
+8. The person who plans the vans answers the one-time question on Deliveries: bookings from before the week tabs are for
+   **This week** or **Next week**.
+
+**Rollback**
+9. FIRST undo guard v2 (re-run the 3 Nov guard SQL), THEN put the older code back.
+10. Before going back, check the **Next week / +2 / +3** tabs: the older code has no weeks and shows every booking on this week's days.
+    Write those bookings down (or Export each week) so they can be re-booked.
+
+**Who to tell**
+- **Office:** "Clear Week" is now **Close week** (one week at a time; not-delivered jobs come back to To plan marked "rebook").
+  To change a date, **tap the due date** (board row or delivery card) and pick a reason. **Dates to change in Cienapps** (Export
+  Changes) lists every due / delivery date to **type into Cienapps by hand** — it stays until an import shows Cienapps has it.
+- **Drivers:** run sheets and the driver screen are now **dated** (pick the day from the list; next week's days are marked).
+- **Saw / stores:** a card can show "this job has moved" and "⏳ moved out — don't cut early".
+- **PMs:** booked deliveries within 5 working days show **"site not confirmed"** — tap to confirm the site is ready
+  (or "Site ready for all" per customer).
+
+---
 ## Progress log
 
 ### 10 Nov 2026 — Coder, steps 10–15 (scheduled run)
