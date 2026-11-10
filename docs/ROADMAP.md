@@ -199,6 +199,11 @@ Garry's words: "we only need to see the work orders that are linked to that proj
 - **L11** — once a project is picked (customer = project), the Work order drop-down lists ONLY that project's work orders (same customer / linked Cienapps names), in WO order, showing WO · floor · unit · title; shipped and on-hold jobs left out; jobs that already have a live list marked. With no project picked it stays empty with "pick the project first" (or a search box) — never all 650. Picking a WO first still sets the project.
 - Live note: on 10 Nov one project per customer (40) was added to the live database for Garry (name = customer, cien_names = [customer], updated_by "Claude (go-live 10 Nov, for Garry)") so every WO has a project.
 
+### Due dates prominent everywhere + WO drop-down in due-date order (10 Nov 2026, 16:27, Garry)
+Garry's words: "the work order due date are not prominent in all screens. the work orders should appear in order of due date in the work order drop down".
+- **L12** — the Work order drop-down in the list window (L11) is sorted by DUE DATE, earliest first (no date last), and each line shows the due date: "WO-2617-4 · Fl 7 · Unit 231 · due 14 Nov". (Supersedes "in WO order" in L11.)
+- **DD1** — audit EVERY screen that shows a work order (Capacity Board, Deliveries pool/cards/weeks, Shipped, Cutting Lists home + lists needed + list window header, Saw, Stores, dockets, PM views, prints) and make the due date prominent and in ONE consistent style everywhere: same badge, same format ("Fri 14 Nov · Wk 46"), red when overdue, amber when due this week, "moved N×" where it applies. Architect lists the screens where it is missing or small today; Tester checks each one at PC and phone width.
+
 ## Progress log
 ### 2 Nov 2026 (scheduled run)
 - Architect confirmed the cutting-list plan against the code; build notes and build order added to docs/PLAN-cutting-lists-stage3.md (fixed garbled characters in both plan files).
