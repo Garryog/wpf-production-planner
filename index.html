@@ -3787,7 +3787,7 @@ function ltiInner(){
     const when=r.onDel?`<span class="lti-b" style="background:#c0392b;color:#fff">🚚 ${escA(slotLblO(o))}</span>`:'';
     const due=r.due?`<span class="lti-b" style="${r.late?'background:#c0392b;color:#fff':'background:#eef1f5;color:#14335c'}">${r.late?'LATE · was due '+fmt(r.due):'list due by '+fmt(r.due)}</span>`:'';
     return `<div class="lti-row" data-ltirow="${escA(w)}" style="border-left:5px solid ${bd}">
-      <div class="lti-top">${woColsHTML(o)}${when}${due}</div>
+      <div class="lti-top">${woColsHTML(o)}${when}${due}${dueHoldOn(o)?`<span class="lti-b" style="background:#fff3d6;color:#6b4400">⏳ moved out — don't cut early</span>`:''}</div>
       <div class="lti-sug"><span class="lti-chip" data-ltilvl="${r.lvl}" style="background:${bg};color:${c};border-color:${bd}">${lbl}${r.tid?': <b>'+escA(ltiTplName(r.tid))+'</b>':''}</span><span class="lti-why">${escA(r.lvl==='pick'?'picked by hand':r.s.why)}</span></div>
       ${busy?'<div class="lti-msg" style="color:#14335c">Saving…</div>':`<div class="lti-act">
         ${r.tid?`<button class="btn btn-g" data-lticonf="${escA(w)}" style="${btn}">✓ Confirm</button>`:''}
@@ -8785,8 +8785,10 @@ function dmTarget(o,ch){
 const DM_FLAG={'cut-week-kept':'already cut — build week kept, check it','on-van-loaded':'already loaded — stays on the van, check it',
   'bank-hol':'not a working day','past':'date is in the past — build week is this week','beyond-8wks':'beyond the 8 board weeks — Unscheduled',
   'programmed':'programmed (step 5) — take it out of the nest','on-hold':'on hold in Cienapps (12) — moved anyway',
-  'after-delivery':'build date is after the delivery date','deliv-bank-hol':'delivery date is not a working day','deliv-past':'delivery date is in the past'};
+  'after-delivery':'build date is after the delivery date','moved-out':'moved out a long way — "don\'t cut early" shows on the saw, stores, board and lists','deliv-bank-hol':'delivery date is not a working day','deliv-past':'delivery date is in the past'};
+function dmDays(a,b){return Math.round((new Date(b+'T12:00:00')-new Date(a+'T12:00:00'))/86400000);}
 function dmFlagTxt(f,r){
+  if(f==='moved-out'&&r&&r.outDays)return 'moved out '+r.outDays+' days, not cut yet — "don\'t cut early" shows on the saw, stores, board and lists';
   if(f==='bank-hol'&&r&&r.to){const d=new Date(r.to+'T12:00:00').getDay();return (d===0||d===6?'a '+(d===0?'Sunday':'Saturday'):'a bank holiday')+' — working day before is '+fmt(prevWorkDay(r.to));}
   return DM_FLAG[f]||f;
 }
@@ -8820,6 +8822,7 @@ function dmRow(o,ch,opts){
   if(dTo&&!isWorkDay(dTo))r.flags.push('deliv-bank-hol');
   if(dTo&&dTo<todayLocal())r.flags.push('deliv-past');
   const D=dTo||dFrom;if(D&&to&&to>D)r.flags.push('after-delivery'); /*dates phase 2: build date after the delivery date*/
+  if(r.dueCh&&from&&!woCut(o)){const n=dmDays(from,to);if(n>earlyDays()){r.flags.push('moved-out');r.outDays=n;}} /*dates phase 2 (A9): don't cut early*/
   if(isOnHold(o))r.flags.push('on-hold'); /*dates: ASSUMED (Tester round 1) — flagged in the preview, still moved*/
   // A4: a van booking follows the delivery date when the job has one, else the due date
   if((D?!!dTo:r.dueCh)&&(o.delVeh||o.delDay)&&dStage(o)!=='deliv'){
@@ -8850,6 +8853,9 @@ function moveDates(jobs,change,reason,by,opts){
       o.dueDate=r.to;
       o.dueHist=(o.dueHist||[]).concat({at,by:by||'',f:'due',from:r.from,to:r.to,why,note,src}).slice(-DUE_HIST_MAX); /*dates: last 30 (Tester round 1 — save size)*/
       what.push('Due date '+(r.from?fmt(r.from):'—')+' → '+fmt(r.to));
+      /*dates phase 2 (A9): a job not cut yet that moved out by more than earlyDays — "don't cut early" until cut, dismissed or close again*/
+      if(r.flags.includes('moved-out')){o.dueHold={at,by:by||'',days:r.outDays,from:r.from,to:r.to};what.push('moved out '+r.outDays+' days — don\'t cut early');}
+      else if(o.dueHold&&o.dueHold.from&&dmDays(o.dueHold.from,r.to)<=earlyDays())delete o.dueHold; // moved back within range
       }
       if(r.dTo){ /*dates phase 2: delivery date — delivKeep = what Cienapps column L had ('-' = nothing), cleared when back on it*/
         if(!o.origDelivDate&&r.dFrom)o.origDelivDate=r.dFrom;
@@ -8925,19 +8931,44 @@ function dmCheckDlg(wo){
   ov.querySelector('#dmc-keep').onclick=()=>go(false);
 }
 // Board chips for one job: moved N× (tap → history) and the "check" chip
+/*dates phase 2 (A9): "⏳ moved out — don't cut early". On while the job is not cut, not dismissed and its due date is still
+  more than earlyDays away. Cleared by cutting, by "OK to cut" (office / PM) or by the date coming within range. */
+function dueHoldOn(o){const h=o&&o.dueHold;return !!(h&&!h.off&&!woCut(o)&&o.dueDate&&dmDays(todayLocal(),o.dueDate)>earlyDays());}
+function dueHoldBanner(o){if(!dueHoldOn(o))return'';const h=o.dueHold;
+  return `<div class="moved-note" style="background:#fff3d6;border-color:#d4880f;color:#6b4400">⏳ ${escA(o.wo)} MOVED OUT — DON'T CUT EARLY · now due ${escA(fmt(o.dueDate))} (moved ${escA(h.days)} days${h.by?' by '+escA(h.by):''})</div>`;}
+function dueHoldChip(o){if(!dueHoldOn(o))return'';const nw=dueWeekFor(o.dueDate);
+  return `<button class="dm-chip amber" data-dhold="${escA(o.wo)}" title="Not cut yet and moved out ${escA(o.dueHold.days)} days — tap: move the build week out, or OK to cut">⏳ moved out — don't cut early${nw&&nw!==(o.plannedWeek||'')?' · build '+escA(wkLbl(nw))+'?':''}</button>`;}
+function dueHoldDlg(wo){
+  const o=DB.orders.find(x=>x.wo===wo);if(!o||!dueHoldOn(o))return;
+  if(!dateCanMove()){toast('Only the office or the Production Manager can change this');return;}
+  const nw=dueWeekFor(o.dueDate),h=o.dueHold;
+  const ov=document.createElement('div');ov.className='pod-ovl';ov.id='dhold-dlg';
+  ov.innerHTML=`<div class="pod-in" style="min-width:min(460px,92vw)"><div style="font-weight:800;color:#14335c;font-size:16px;margin-bottom:6px">⏳ ${escA(o.wo)} moved out — don't cut early</div>
+    <div style="font-size:13px;margin-bottom:10px">Due ${escA(fmt(h.from))} → <b>${escA(fmt(o.dueDate))}</b> (${escA(h.days)} days) and not cut yet. Build week now: <b>${o.plannedWeek?escA(wkLbl(o.plannedWeek)):'Unscheduled'}</b>.</div>
+    ${nw!==(o.plannedWeek||'')?`<button class="rbtn" id="dh-wk" style="justify-content:center">Move the build week to ${nw?escA(wkLbl(nw)):'Unscheduled'}</button>`:''}
+    <button class="rbtn" id="dh-ok" style="justify-content:center">✓ OK to cut — remove the warning</button>
+    <div style="text-align:right;margin-top:6px"><button class="btn btn-s" id="pod-x">Cancel</button></div></div>`;
+  document.body.appendChild(ov);ov.onclick=e=>{if(e.target===ov||e.target.id==='pod-x')ov.remove();};
+  const wb=ov.querySelector('#dh-wk');if(wb)wb.onclick=()=>officeWho(by=>{logEdit(o,'Build week '+(o.plannedWeek?wkLbl(o.plannedWeek):'unscheduled')+' → '+(nw?wkLbl(nw):'unscheduled')+' (moved out — don\'t cut early)',by);o.plannedWeek=nw;ov.remove();sched();render();});
+  ov.querySelector('#dh-ok').onclick=()=>officeWho(by=>{o.dueHold={...o.dueHold,off:{at:nowISO(),by}};logEdit(o,'"Don\'t cut early" removed — OK to cut',by);ov.remove();sched();render();});
+}
 function dmChips(o){
   const n=(o.dueHist||[]).length,mv=o.dueMv;
-  return (n?`<button class="dm-chip" data-duehist="${escA(o.wo)}" title="Due date changed ${n} time${n!==1?'s':''} — tap for the history">🔁 moved ${n}×</button>`:'')
+  return dueHoldChip(o)+(n?`<button class="dm-chip" data-duehist="${escA(o.wo)}" title="Due date changed ${n} time${n!==1?'s':''} — tap for the history">🔁 moved ${n}×</button>`:'')
     +(mv?`<button class="dm-chip${mv.prog||mv.loaded?' red':' amber'}" data-duemv="${escA(o.wo)}" title="Tap to sort it out">📅 ${mv.prog?'programmed — take it out of the nest':mv.loaded?'date moved after loading — check':'due moved — check week'}</button>`:'');
 }
 function dmBindChips(root){
   (root||document).querySelectorAll('[data-duehist]').forEach(b=>b.onclick=e=>{e.stopPropagation();dmHistDlg(b.dataset.duehist);});
   (root||document).querySelectorAll('[data-duemv]').forEach(b=>b.onclick=e=>{e.stopPropagation();dmCheckDlg(b.dataset.duemv);});
   (root||document).querySelectorAll('[data-duedlg]').forEach(b=>b.onclick=e=>{e.stopPropagation();dateDlg([b.dataset.duedlg]);});
+  (root||document).querySelectorAll('[data-dhold]').forEach(b=>b.onclick=e=>{e.stopPropagation();dueHoldDlg(b.dataset.dhold);}); /*dates phase 2*/
 }
 // Saw / stores: "this job has moved" on the card from the date change until the end of the next working day (A7)
 function movedBanner(o,today){
-  const h=(o&&o.dueHist)||[],x=h[h.length-1];if(!x||!x.at)return'';
+  return dueHoldBanner(o)+movedBanner1(o,today); /*dates phase 2: + "don't cut early"*/
+}
+function movedBanner1(o,today){
+  const h=((o&&o.dueHist)||[]).filter(x=>(x.f||'due')==='due'),x=h[h.length-1];if(!x||!x.at)return'';
   const d=new Date(x.at);if(isNaN(d))return'';
   if((today||todayLocal())>nextWorkDay(isoOf(d)))return'';
   return `<div class="moved-note">📅 ${escA(o.wo)} HAS MOVED — now due ${escA(fmt(x.to))} (was ${escA(x.from?fmt(x.from):'—')})${x.why?' · '+escA(x.why):''}${x.src!=='cienapps'&&x.by?' · '+escA(x.by):''}</div>`;
