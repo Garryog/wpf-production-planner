@@ -14,6 +14,8 @@ function row() {
     H.order({ wo: 'WO-24', customer: 'Aderrig Homes', floor: 'T09', unit: '30', title: 'ON HOLD <b>x</b>', dueDate: '2026-11-05', origDueDate: '2026-11-05', cienHold: true }),
     H.order({ wo: 'WO-25', customer: 'Aderrig Homes', floor: 'T09', unit: '31', title: 'NO DUE', dueDate: '', origDueDate: '' }),
     H.order({ wo: 'WO-27', customer: 'Mat Homes', floor: '3', unit: '1', title: 'MATERIAL FIRST', dueDate: '2026-11-30', origDueDate: '2026-11-30' }),
+    H.order({ wo: 'WO-28', customer: 'Park Homes', floor: '1', unit: '8', title: 'CONTAINS', dueDate: '2026-11-30', origDueDate: '2026-11-30' }),
+    H.order({ wo: 'WO-29', customer: 'Glen Homes', floor: '1', unit: '9', title: 'CONTAINS 2', dueDate: '2026-11-30', origDueDate: '2026-11-30' }),
     H.order({ wo: 'WO-26', customer: 'Race Homes', floor: '2', unit: '9', title: 'TWO PCS', dueDate: '2026-11-30', origDueDate: '2026-11-30' }));
   return r;
 }
@@ -30,6 +32,8 @@ const donep = p => p.evaluate(() => { const d = document.querySelector('.me-dov'
     const S = X.makeServer(row());
     D.insert(S.db, 'projects', { id: 'P3', name: 'Twin North', customer: 'Twin Homes', cien_names: [] });
     D.insert(S.db, 'projects', { id: 'P4', name: 'Twin South', customer: 'Twin Homes', cien_names: [] });
+    D.insert(S.db, 'projects', { id: 'P7', name: 'Kilcock Park', customer: 'Kilcock Park Developments', cien_names: [] });
+    D.insert(S.db, 'projects', { id: 'P8', name: 'Glen Court', customer: 'Glen Court Developments', cien_names: [] });
     ['Type A', 'Type B', 'Type C', 'Type D', 'Type E', 'Type F', 'Larch Type Q'].forEach((n, i) => X.F3.seedList(S, 'T' + (i + 1), { wos: [], name: n, list: { is_template: true, type_name: n, list_type: 'kitchen' } }));
     const t = await X.dev(browser, S, 'office'), p = t.page;
     let w;
@@ -179,6 +183,25 @@ const donep = p => p.evaluate(() => { const d = document.querySelector('.me-dov'
     await p.evaluate(() => { window.prompt = window.__pr0; });
     await closeAll(p);
 
+
+    // ---- (round 5) a "contains" / builder-only fit is ASKED, never linked by itself
+    await p.evaluate(() => openListEditor(null, 'WO-28')); await sleep(900);
+    w = await pst();
+    rec('round 5: customer "Park Homes" vs project "Kilcock Park" → asked "Is this project \'Kilcock Park\'? [Yes, use it] [No — make project \'Park Homes\']", not linked', !w.pid && /Is this project 'Kilcock Park'\?/.test(w.pm) && /No — make project 'Park Homes'/.test(w.pm) && !projs('Park Homes').length, JSON.stringify(w));
+    await p.evaluate(() => document.getElementById('me-pyes').click()); await sleep(900);
+    w = await pst();
+    rec('round 5: [Yes, use it] → Kilcock Park picked, "Park Homes" added to its Cienapps names (certain next time)', w.pid === 'P7' && (D.find(S.db, 'projects', 'P7').cien_names || []).includes('Park Homes'), JSON.stringify([w, D.find(S.db, 'projects', 'P7').cien_names]));
+    await closeAll(p);
+    await p.evaluate(() => openListEditor(null, 'WO-28')); await sleep(900);
+    rec('round 5: …the next "Park Homes" WO gets Kilcock Park by itself', (await pst()).pid === 'P7');
+    await closeAll(p);
+    await p.evaluate(() => openListEditor(null, 'WO-29')); await sleep(900);
+    rec('round 5: "Glen Homes" vs "Glen Court" → asked', /Is this project 'Glen Court'\?/.test((await pst()).pm));
+    await p.evaluate(() => document.getElementById('me-pno').click()); await sleep(900);
+    w = await pst();
+    const gh = projs('Glen Homes');
+    rec('round 5: [No — make project \'Glen Homes\'] → a new project "Glen Homes", picked', gh.length === 1 && w.pid === gh[0].id && !(D.find(S.db, 'projects', 'P8').cien_names || []).includes('Glen Homes'), JSON.stringify(w));
+    await closeAll(p);
     // ---- L6: "＋ Add new material…" with no project yet → led through, asked once, saved on the project and picked
     const addAsk = (k, name) => p.evaluate(({ k, name }) => { window.__mq = []; window.__pr1 = window.prompt; window.prompt = (m, d) => { window.__mq.push(m); return /New material/.test(m) ? name : null; };
       const s = document.querySelector('.me-ed [data-mr="' + k + '"]'); s.value = '__add'; s.dispatchEvent(new Event('input')); s.dispatchEvent(new Event('change')); }, { k, name });
@@ -337,6 +360,27 @@ const donep = p => p.evaluate(() => { const d = document.querySelector('.me-dov'
     rec('switch OFF: the old list window — no ✕ Close bar, no project message, old name pre-fill and "Cancel"', await o0.page.evaluate(() => !document.getElementById('me-x0') && !document.getElementById('me-pm') && /Cancel/.test((document.getElementById('pod-x') || {}).textContent || '')));
     rec('switch OFF: no page errors', !(S0.errors || []).length, JSON.stringify(S0.errors));
     await o0.close();
+
+    // ---- (round 5) two P-numbers for one house: flagged on the saw and stores cards and in either P-job's list window
+    {
+      const r2 = X.v2Row(); const pj = wo => H.order({ wo, customer: 'Aderrig Homes', pid: 'P1', floor: 'T09', unit: '77', title: 'HOUSE TYPE K', step: 'Planner WO', dueDate: '2026-10-22', origDueDate: '2026-10-22', log: [{ at: '2026-10-21T08:00:00Z', by: 'Op', what: 'Work order created with a typed cutting list' }] });
+      r2.orders.push(pj('P-1001'), pj('P-1002'));
+      const S2 = X.makeServer(r2);
+      X.F3.seedList(S2, 'LP1', { wos: ['P-1001'], name: 'House 77 A' }); X.F3.seedList(S2, 'LP2', { wos: ['P-1002'], name: 'House 77 B' });
+      for (const role of ['saw', 'stores']) {
+        const sv = await X.dev(browser, S2, role); await sleep(400);
+        const n = await sv.page.evaluate(() => [...document.querySelectorAll('.wl-card .p-twin')].filter(e => /Two P-numbers for one house — P-1001 \/ P-1002/.test(e.textContent)).length);
+        rec('round 5: ' + role + ' — both P-job list cards carry "⚠ Two P-numbers for one house — P-1001 / P-1002"', n === 2, n);
+        await sv.close();
+      }
+      const ofc = await X.dev(browser, S2, 'office');
+      for (const id of ['LP1', 'LP2']) { await ofc.page.evaluate(id => openListEditor(id), id); await sleep(500);
+        rec('round 5: list window of ' + id + ' shows the two-P-numbers warning', await ofc.page.evaluate(() => /Two P-numbers for one house — P-1001 \/ P-1002/.test((document.querySelector('.me-ed .p-twin') || {}).textContent || '')));
+        await closeAll(ofc.page); }
+      await ofc.page.evaluate(() => openListEditor(null, 'WO-2')); await sleep(400);
+      rec('round 5: an ordinary WO has no such warning', await ofc.page.evaluate(() => !document.querySelector('.me-ed .p-twin')));
+      await ofc.close();
+    }
     // phone 360 px: the Qty card box has the placeholder too
     const ph = await X.dev(browser, S, 'office', { viewport: { width: 360, height: 740 } });
     await ph.page.evaluate(() => openListEditor(null, 'WO-2')); await sleep(300);
