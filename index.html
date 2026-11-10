@@ -316,6 +316,8 @@ details.lti-other{margin-bottom:14px}details.lti-other>summary{cursor:pointer;fo
 .del-tab.on{background:#14335c;border-color:#14335c;color:#fff}
 .del-tab.past{border-color:#d4880f;color:#8a5a00}
 .del-tab .n{font-weight:400;opacity:.8;margin-left:4px}
+body.del-dragging .del-tab[data-deltab]:not(.past){outline:2px dashed #7ba7e0;outline-offset:2px}
+.del-tab.dragover{background:#1a56db!important;border-color:#1a56db!important;color:#fff!important}
 .del-grid th.hol,.del-grid td.hol{background:repeating-linear-gradient(45deg,#f3f0ea,#f3f0ea 6px,#ebe6dc 6px,#ebe6dc 12px)}
 .dwk-h{font-size:12px;font-weight:800;color:#14335c;margin:12px 0 2px;border-bottom:1px solid var(--border);padding-bottom:2px}
 .del-pool.dragover{background:#eaf2ff;border-color:#7ba7e0}
@@ -7049,6 +7051,20 @@ function renderDeliveries(app){
 
   // ----- bindings -----
   document.querySelectorAll('[data-deltab]').forEach(b=>b.onclick=()=>{delTab=b.dataset.deltab;render();}); /*dates: week tabs*/
+  /*v-deliv D3: drop cards on a week tab (PC) = move their dates to that week (asks why). Later → the week picker at +4.*/
+  document.querySelectorAll('[data-deltab]').forEach(b=>{
+    b.ondragover=e=>{if(!delDragList||!dateCanMove())return;e.preventDefault();b.classList.add('dragover');};
+    b.ondragleave=()=>b.classList.remove('dragover');
+    b.ondrop=e=>{
+      e.preventDefault();b.classList.remove('dragover');document.body.classList.remove('del-dragging');
+      const list=(delDragList||[]).filter(w=>{const o=findDel(w);return o&&!o.delDone&&dStage(o)!=='deliv';});delDragList=null;
+      if(!list.length)return;
+      const t=b.dataset.deltab;
+      if(t==='later'){wkPickDlg(list,4);return;}
+      const w=delTabWk(t);if(w<thisWk()){toast('Wk '+wkNum(w)+' has gone — drop on This week or later');return;}
+      wkMoveDo(list,w);
+    };
+  });
   const isb=document.getElementById('btn-instore');if(isb)isb.onclick=()=>{delStoreOpen=!delStoreOpen;render();};
   document.querySelectorAll('[data-storebook]').forEach(b=>b.onclick=()=>{ // ⤵ Book: tick it for delivery if it isn't, select it, open its week
     const o=DB.orders.find(x=>x.wo===b.dataset.storebook);if(!o)return;
@@ -7070,10 +7086,10 @@ function renderDeliveries(app){
     ch.ondragstart=e=>{
       const wo=ch.dataset.dw;
       delDragList=delSel.has(wo)?[...delSel]:[wo];
-      ch.classList.add('dragging');
+      ch.classList.add('dragging');document.body.classList.add('del-dragging'); /*v-deliv D3: week tabs light up as drop targets*/
       e.dataTransfer.effectAllowed='move';
     };
-    ch.ondragend=()=>ch.classList.remove('dragging');
+    ch.ondragend=()=>{ch.classList.remove('dragging');document.body.classList.remove('del-dragging');};
   });
   // Live pool filter — hides cards in place (no re-render, keeps focus while typing)
   const applyDelFilter=()=>{
