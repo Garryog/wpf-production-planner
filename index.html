@@ -464,6 +464,7 @@ body.del-dragging .del-tab[data-deltab]:not(.past){outline:2px dashed #7ba7e0;ou
 .rdy-green .rdy-tag{background:#0d6e46;color:#fff}.rdy-amber .rdy-tag{background:#8a5a00;color:#fff}.rdy-red .rdy-tag{background:#b42318;color:#fff}
 .dmoved{display:inline-block;margin:3px 0 0 4px;font-size:10px;font-weight:700;color:#4a5568}
 .dchip .dinfo{font-size:14px;color:#14335c}
+.l9-btn{min-height:36px;white-space:nowrap}@media(max-width:600px){.l9-btn{min-height:44px}} /*Part 4 L9*/
 .rdy-dot{display:inline-block;width:12px;height:12px;border-radius:50%;vertical-align:middle;flex:0 0 12px}
 .rdy-dot.rdy-green{background:#0d6e46}.rdy-dot.rdy-amber{background:#c27803}.rdy-dot.rdy-red{background:#b42318}
 .rdy-pill{font-size:12px;font-weight:800;padding:3px 8px;border-radius:5px;color:#fff}
@@ -7960,11 +7961,13 @@ function showReadiness(wos,ctx,always){
   const chip=(ok,txtOk,txtNo)=>ok?`<span class="ls-ok" style="font-size:13px">${txtOk}</span>`:`<span class="ls-no" style="font-size:13px">${txtNo}</span>`;
   const rowH=i=>{
     const o=i.o,s=i.s;
+    const l9=l9Ok()&&!o.manual&&DB.orders.some(x=>x.wo===o.wo),live=l9?lsLiveListOf(o.wo):null; /*Part 4 L9*/
     return `<div style="display:flex;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);flex-wrap:wrap">
       <b style="font-family:monospace;color:#14335c">${escA(o.wo)}</b>
       <span style="flex:1;min-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escA(o.title||'')}</span>
-      ${!s?`<span class="ls-no" style="font-size:13px">📋 NO LIST ISSUED — upload/attach one in 📋 Cutting Lists</span>`
-        :`<span class="rdy-pill rdy-${s.lvl}">${RDY_LBL[s.lvl]}</span>${sideChipHTML('saw',s.saw,s.sawAt,true)}${sideChipHTML('fit',s.fit,s.fitAt,true)}`}
+      ${!s?(l9&&!live?`<span class="ls-no" style="font-size:13px">📋 NO LIST YET</span>`:`<span class="ls-no" style="font-size:13px">📋 NO LIST ISSUED — upload/attach one in 📋 Cutting Lists</span>`)
+        :`<span class="rdy-pill rdy-${s.lvl}">${RDY_LBL[s.lvl]}</span>${sideChipHTML('saw',s.saw,s.sawAt,true)}${sideChipHTML('fit',s.fit,s.fitAt,true)}`}${l9?(live?`<button class="btn btn-s l9-btn" data-l9open="${escA(live.id)}" title="${escA('Open the cutting list "'+(live.name||o.wo)+'"')}">📂 Open list</button>`
+        :`<button class="btn btn-s l9-btn" data-l9add="${escA(o.wo)}" title="Start a cutting list for ${escA(o.wo)} — work order, floor, unit and title filled in">＋ Add cutting list</button>`):''}
     </div>`;
   };
   const ov=document.createElement('div');ov.className='pod-ovl';
@@ -7975,6 +7978,10 @@ function showReadiness(wos,ctx,always){
     <div style="margin-top:12px;text-align:right"><button class="wl-btn" id="pod-x" style="padding:10px 22px;font-size:14px">OK — understood</button></div></div>`;
   document.body.appendChild(ov);
   ov.onclick=e=>{if(e.target===ov||e.target.id==='pod-x')ov.remove();};
+  /*Part 4 L9: add / open the cutting list from here. Checked again on the tap — another PC may have made the list meanwhile.*/
+  ov.querySelectorAll('[data-l9add]').forEach(b=>b.onclick=e=>{e.stopPropagation();ov.remove();const wo=b.dataset.l9add,l=lsLiveListOf(wo);
+    if(l){toast(wo+' already has a cutting list — opening it');openListEditor(l.id);}else lsNewStd(wo);});
+  ov.querySelectorAll('[data-l9open]').forEach(b=>b.onclick=e=>{e.stopPropagation();ov.remove();openListEditor(b.dataset.l9open);});
 }
 let drvUploading=false;
 function podKey(veh,day,wk){return veh+'|'+day+'|'+(wk||thisWk());} /*dates: the booking's own week*/
@@ -8109,9 +8116,10 @@ async function addPodPhotos(files,pk){
 function dchip(o,showCust){
   const st=dStage(o);
   const rd=(!st&&!o.manual)?woReady(o.wo):null; // one colour per job until it's loaded — detail behind the ⓘ button
+  const l9c=!o.manual&&l9Ok(); /*Part 4 L9: ⓘ on every non-manual card (lists ON + allowed role) — the cutting-list window starts from there*/
   return `<div class="dchip${rd?' rdy-'+rd.lvl:''}${st==='deliv'?' done':''}${st==='disp'?' dispd':''}${st==='load'?' loadd':''}${o.manual?' manual':''}${delSel.has(o.wo)?' sel':''}" draggable="true" data-dw="${escA(o.wo)}" title="Click to select · drag onto a day${o.manual?' · added manually':''}">
     <div class="dchip-top"><b>${escA(o.wo)}</b>
-      <span class="dchip-btns">${rd?`<button class="dinfo" data-dinfo="${escA(o.wo)}" title="${escA(RDY_LBL[rd.lvl]+(rd.why.length?' — '+rd.why.join(' · '):''))} — tap for detail">ⓘ</button>`:''}<button class="dchk${st?' on':''}" data-dd="${escA(o.wo)}" title="Status: ${dStageLbl[st]||'planned'} — tap to update (opens a menu)">${st==='deliv'?'✓':st==='disp'?'D':st==='load'?'L':'·'}</button><button data-dx="${escA(o.wo)}" title="${o.delDay?'Return to pool':(o.manual?'Delete this manual job':'Remove from delivery plan')}">×</button></span>
+      <span class="dchip-btns">${rd||l9c?`<button class="dinfo" data-dinfo="${escA(o.wo)}" title="${escA((l9c?'Cutting list / readiness'+(rd?' — ':''):'')+(rd?RDY_LBL[rd.lvl]+(rd.why.length?' — '+rd.why.join(' · '):''):''))} — tap for detail">ⓘ</button>`:''}<button class="dchk${st?' on':''}" data-dd="${escA(o.wo)}" title="Status: ${dStageLbl[st]||'planned'} — tap to update (opens a menu)">${st==='deliv'?'✓':st==='disp'?'D':st==='load'?'L':'·'}</button><button data-dx="${escA(o.wo)}" title="${o.delDay?'Return to pool':(o.manual?'Delete this manual job':'Remove from delivery plan')}">×</button></span>
     </div>
     ${fuF(o)||fuU(o)?`<div class="dchip-fu">${fuHTML(o,'dfu')}</div>`:''}
     <div class="dchip-t" title="${escA(o.title)}">${escA(o.title)||'—'}</div>
