@@ -44,7 +44,7 @@ const assign = (S, pid, pm) => X.D.update(S.db, 'projects', X.D.find(S.db, 'proj
   const wos = X.order(S, 'P1').map(id => X.D.find(S.db, 'project_seq', id).wo);
   rec('database: WO-1, WO-2, WO-4, WO-3 (due-date order), positions 1..4, matched', JSON.stringify(wos) === '["WO-1","WO-2","WO-4","WO-3"]' && S.db.t.project_seq.every(r => r.state === 'matched'), JSON.stringify(wos));
   rec('database history: 4 "add" rows by John Burke', S.db.t.project_events.filter(e => e.entity === 'seq' && e.act === 'add' && e.by === 'John Burke').length === 4);
-  const pg = await pc1.page.evaluate(() => ({ start: !!document.getElementById('seq-start'), rows: [...document.querySelectorAll('.seq-tbl tr.seq-r')].map(tr => tr.innerText.replace(/\s+/g, ' ').trim()) }));
+  const pg = await pc1.page.evaluate(() => ({ start: !!document.getElementById('seq-start'), rows: [...document.querySelectorAll('.seq-tbl tr.seq-r')].map(tr => tr.innerText.replace(/\s+/g, ' ').replace(/^⠿ /, '').trim()) }));
   rec('page: Start gone, 4 rows in order', !pg.start && pg.rows.length === 4 && /^1 .*WO-1/.test(pg.rows[0]) && /^4 .*WO-3/.test(pg.rows[3]), JSON.stringify(pg.rows));
   rec('WO-1 (due tomorrow) is 🔒 fixed and greyed', await pc1.page.evaluate(() => { const r = [...document.querySelectorAll('tr.seq-r')][0]; return r.classList.contains('seq-fixed') && /🔒/.test(r.innerText); }));
   rec('WO-4: required = delivery date 25 Nov, build 20 Nov, not fixed', /25 Nov/.test(pg.rows[2]) && /20 Nov/.test(pg.rows[2]) && !/🔒/.test(pg.rows[2]), pg.rows[2]);
