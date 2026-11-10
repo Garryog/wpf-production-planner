@@ -163,6 +163,14 @@ Garry's words: "i need a step in the capacity job shipped plus installed and com
 - **S2 — Shipped tab filters:** Project filter and PM filter (PM comes from the project → PM assignment in Job B). Phone-first, same style as the other filters.
 - No duplicates rule unchanged: shipped jobs are kept, never deleted.
 
+### Cutting list job boxes + Cienapps WO number always (10 Nov 2026, Garry, go-live day) — add to Job B, do EARLY (staff are entering real lists now)
+Garry's words: "cutting list need to break out floor, unit and title into their own boxes. use cienapps work order number at all times. could we look for cienapps number if it not pre-populated. If cienapps wo number cannot be found force new p-number as a last resort".
+- **L1 — Separate boxes:** in the cutting list window (new list, Import Excel preview, Find old list / copy, Edit job info) Floor, Unit and Title are each their own box — never one combined text. Excel template + import: keep reading the current template; if the job info block gains Floor / Unit / Title cells, accept both layouts.
+- **L2 — Cienapps WO number at all times:** a list is always tied to the Cienapps work order number and shows it everywhere (lists home, saw, stores, dockets, prints). Pre-populate it when the list is started from a job.
+- **L3 — Look it up when it is blank:** search the planner's jobs by the matching key from B0 — project (customer name) + floor + unit (trimmed, case-insensitive). Exactly one match → fill it in and show what was matched. Several → the person picks from the short list. Typing a WO number by hand is still allowed but must exist in the planner.
+- **L4 — P-number only as a last resort:** no Cienapps job found → say so plainly and make a new P-number only after the person confirms. It is flagged (purple, "not from Cienapps"), and when a later Cienapps import brings a job with the same project + floor + unit the list moves onto the Cienapps WO and the P-number job is merged into it — NEVER two jobs for one unit (Garry: "the most important thing is to avoid duplication's"). One-list-per-WO rule unchanged.
+- Architect: confirm with Garry before building — what happens when floor or unit is blank on either side (default: no automatic match, person picks), and whether Title takes part in the match (default: no, it is only shown).
+
 ## Progress log
 ### 2 Nov 2026 (scheduled run)
 - Architect confirmed the cutting-list plan against the code; build notes and build order added to docs/PLAN-cutting-lists-stage3.md (fixed garbled characters in both plan files).
