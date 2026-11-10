@@ -744,3 +744,34 @@ insTpl filter · 7 L9 (after D4 is merged) · 8 L10 · 9 full suite → Tester �
   → one-tap buttons as well as the drop-down; the native WO drop-down can't be photographed open, so the screenshot shows it as a list box.
 - Screenshots (fake database, ×2): /tmp/claude-0/shots/b-list-window-wo.png, b-saved.png, b-storage.png, b-list-window-phone.png.
 - Next: step 7 (L9) after D4 is merged → Tester → Manager.
+
+### 10 Nov 2026 (night) — Job A merged in, L9 built
+- bf37ca9 merge of feature/dates-deliveries (Job A, d9d59bc: Deliveries D1–D4, DD1, attack4 fixes). Four conflicts, all in the date-move engine
+  (`dmTarget`, `DM_FLAG`, `dmDelivTarget`, `dmRow`), each kept both sides: Job B's per-job sequence targets (`ch.per`, per-job delivClear for Undo),
+  the fixed window (`dmFixedAt`, the 'fixed' flag) and Job A's week moves (`ch.toWk` → `wkMoveTo`, "no working days left" = skipped) and its
+  wording "delivery date is a Sunday or bank holiday" (Saturday deliveries allowed, ASSUMED by Job A). Settings keys: Job A added none, so
+  fullSettings / settingsFrom / applyPlan are Job B's unchanged. Card layout (D4) and week bar came in with no conflict.
+- **Deviation:** the two dates attack4-usability "L12" checks still failed after the merge — they open the list window with the lists switch
+  OFF, which shows the OLD window (L12 is a new-window feature and must not change the old one). They were rewritten (same place) to check the
+  switch-OFF window is unchanged, and pass; L12 itself is covered by tests/seq/l5-l12-window. Their two ACCEPTED-FAILURES rows removed.
+- 8c5903b L9 a: `lsLiveListOf(wo)` (lifted from the list window's `jbLive`, which now calls it) and `l9Ok()` = lists switch ON + office /
+  Production Manager / Drawing office / Pre-production.
+- d23371e L9 b: ⓘ on every non-manual delivery card when `l9Ok()` (also loaded / on-the-road cards, which had none), tooltip "Cutting list /
+  readiness — <readiness>". The readiness window ("Cutting & fittings check", from ⓘ and when jobs are put on the board) shows, per WO:
+  no live list → "📋 NO LIST YET" + [＋ Add cutting list] (`lsNewStd(wo)`: WO, project from the customer, House heading); live list →
+  [📂 Open list]. The tap re-checks: if another PC made the list meanwhile, it opens that one ("already has a cutting list — opening it").
+  Buttons 36 px tall on PC, 44 px on phones. Tapping the card itself still selects it. Switch OFF: nothing changes (same ⓘ, tooltip and
+  "NO LIST ISSUED — upload/attach…" text). Manual jobs: no buttons.
+- 1199eb2 L9 c: tests/seq/l9-deliv-card.test.js — 29 checks (cards, Add, Open, selecting, two PCs, roles, switch OFF, 360 + 1366 px, an
+  `<img onerror>` title escaped), all pass. tests/harness.js gained an opt-in `H_DSF=2` env var for sharp screenshots (default unchanged).
+- **Full suite** (235 test files + the 4 probes, 3 at a time). After the merge (bf37ca9): 4,871 pass / 35 fail. After L9 (1199eb2):
+  **4,901 pass / 34 fail** = 31 on ACCEPTED-FAILURES (dates attack1-oldversion ×3, attack3-guard, project-details attack1-merge 1c, sawstores ×2,
+  seq attack1-oldtab ×2, stage1 t13 ×4, t14 ×3, t16 ×2, t17 ×10, t3, stage3 attack-poll P5, c4-queue A5) + editor e7 redraw timing (passes alone,
+  87 / 510 ms) + the 2 pre-existing Job B checks NOT on the list (seq attack3-editor and attack4-fold "two PCs, the same house: ONE P-job").
+  dates attack1-perf "other PC (B) save landed" failed once in the merge run and passes alone (11/11). header-late-probe still crashes on the
+  import mapping screen (pre-existing, untouched).
+- ASSUMED (from the plan): the list buttons live in the ⓘ readiness window, not on the card face (tapping the card must keep selecting it).
+  The Deliveries tab is only shown to the office today, so in practice only the office sees L9; the other three roles are allowed if they ever do.
+- Screenshots (fake database, ×2): /tmp/claude-0/-home-claude/c3803803-dab5-550b-80e7-23e78ca71940/scratchpad/shots/l9-pool-card-1366.png,
+  l9-readiness-add-1366.png, l9-readiness-open-1366.png.
+- Next: Tester (L9 + the merge) → Manager.
