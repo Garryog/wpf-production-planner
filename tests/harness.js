@@ -2,7 +2,45 @@
 // Nothing ever reaches the live Supabase project — every request is intercepted.
 const path = require('path');
 const fs = require('fs');
-const { chromium } = require('/opt/node22/lib/node_modules/playwright');
+const { chromium: realChromium } = require('/opt/node22/lib/node_modules/playwright');
+
+// NETWORK GUARD — every browser the tests launch goes through here. Each context gets a catch-all route underneath the
+// pages' own fake servers: a request no fake server answered (a page opened with ctx.newPage() before its routes were
+// attached, a request fired while a page closes, a service worker…) is aborted here and never leaves the machine.
+// Anything aimed at Supabase that gets this far is printed, so a leaking test shows up in its log.
+const NET_LEAKS = [];
+function guardContext(ctx) {
+  return ctx.route(() => true, route => {
+    const u = route.request().url();
+    if (/supabase\.co/.test(u)) { NET_LEAKS.push(u); console.error('NETWORK GUARD: blocked a real request to ' + u.slice(0, 160)); }
+    return route.abort('blockedbyclient').catch(() => {});
+  }).then(() => ctx);
+}
+function guardBrowser(b) {
+  const nc = b.newContext.bind(b);
+  b.newContext = async (o = {}) => guardContext(await nc({ serviceWorkers: 'block', ...o }));
+  b.newPage = async (o = {}) => { const ctx = await b.newContext(o); const p = await ctx.newPage(); p.on('close', () => ctx.close().catch(() => {})); return p; };
+  return b;
+}
+// Second wall: the browser's only way out is a dead-end proxy inside this test process. Anything that slips past
+// Playwright's interception (a request released while its page closes, a speculative connection…) arrives here, is
+// printed with the host it wanted, and is refused — it never reaches the real network.
+const http = require('http');
+const SINK = { port: 0, hits: [] };
+const sinkReady = new Promise(res => {
+  const srv = http.createServer((req, resp) => { SINK.hits.push(req.url); console.error('NETWORK GUARD: browser tried to reach ' + String(req.url).slice(0, 160)); resp.writeHead(502); resp.end(); });
+  srv.on('connect', (req, sock) => { SINK.hits.push(req.url); console.error('NETWORK GUARD: browser tried to connect to ' + req.url); sock.destroy(); });
+  srv.listen(0, '127.0.0.1', () => { SINK.port = srv.address().port; srv.unref(); res(); });
+});
+async function launch(o = {}) {
+  await sinkReady;
+  return guardBrowser(await realChromium.launch({ ...o, proxy: { server: 'http://127.0.0.1:' + SINK.port, bypass: '<-loopback>' } }));
+}
+const chromium = Object.assign(Object.create(realChromium), { launch });
+process.on('exit', () => {
+  if (NET_LEAKS.length) console.error('NETWORK GUARD: ' + NET_LEAKS.length + ' request(s) to Supabase were stopped by the catch-all route');
+  if (SINK.hits.length) console.error('NETWORK GUARD: ' + SINK.hits.length + ' connection(s) stopped at the dead-end proxy: ' + [...new Set(SINK.hits)].join(', '));
+});
 
 const ROOT = path.resolve(__dirname, '..');
 const HTML = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
@@ -11,8 +49,9 @@ const XLSXJS = fs.readFileSync(path.join(ROOT, 'xlsx.full.min.js'), 'utf8');
 // row: the production_planner 'main' row the fake server returns
 async function open(opts = {}) {
   const row = opts.row || { id: 'main', orders: [], nid: 1, settings: {} };
-  const server = { row: JSON.parse(JSON.stringify(row)), patches: [], posts: [], deletes: [], other: [], failSaves: opts.failSaves || false, failLoad: opts.failLoad || false };
-  const browser = opts.browser || await chromium.launch();
+  // opts.server: share one fake database between two pages ("two PCs").
+  const server = opts.server || { row: JSON.parse(JSON.stringify(row)), patches: [], posts: [], deletes: [], other: [], failSaves: opts.failSaves || false, failLoad: opts.failLoad || false };
+  const browser = opts.browser || await launch();
   const ctx = await browser.newContext({ viewport: opts.viewport || { width: 1400, height: 900 }, timezoneId: opts.tz || 'Europe/Dublin', acceptDownloads: true });
   if (opts.now) await ctx.addInitScript(`(()=>{const T=${+new Date(opts.now)};const R=Date;const off=T-R.now();class D extends R{constructor(...a){if(a.length===0){super(R.now()+off);}else super(...a);}static now(){return R.now()+off;}}D.UTC=R.UTC;D.parse=R.parse;window.Date=D;})();`);
   await ctx.addInitScript(() => {
@@ -44,7 +83,16 @@ async function open(opts = {}) {
         const body = JSON.parse(req.postData() || '{}');
         server.patches.push(body);
         if (server.failSaves) return route.fulfill({ status: 500, body: 'err' });
-        Object.assign(server.row, body);
+        // Row has a version column (Stage 1 SQL run): behave like PostgREST + the production_planner_bump trigger.
+        if (server.row && server.row.version !== undefined) {
+          const v = url.match(/version=eq\.(\d+)/);
+          if (v && +v[1] !== +server.row.version) { server.conflicts = (server.conflicts || 0) + 1; return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }); }
+          const before = +server.row.version || 1;
+          Object.assign(server.row, body);
+          server.row.version = before + 1; server.row.updated_at = new Date().toISOString();
+          return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([server.row]) });
+        }
+        Object.assign(server.row, body); // no version column: old plain overwrite
         return route.fulfill({ status: 204, body: '' });
       }
       if (m === 'POST') { server.posts.push(req.postData()); return route.fulfill({ status: 201, body: '' }); }

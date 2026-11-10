@@ -11,7 +11,7 @@ const HDR = ['WO #', 'Title', 'Customer', 'Due Date', 'Step', 'Sub-Total', 'Refe
 
   // 1. Messy headers: trailing spaces, odd case, reordered, extra columns
   t = await fresh();
-  let r = await H.importAoa(t.page, [['Cienapps export'], [], ['  Due Date ', 'EXTRA', 'wo #  ', 'TITLE', 'customer ', 'Step', 'SUB-TOTAL '], [46330, 'x', 'WO-2604-1', 'Kitchen A', 'Acme', '3. In production', 5000]]);
+  let r = await H.importAoa(t.page, [['Cienapps export'], [], ['  Due Date ', 'EXTRA', 'wo #  ', 'TITLE', 'customer ', 'Step', 'SUB-TOTAL '], [46331, 'x', 'WO-2604-1', 'Kitchen A', 'Acme', '3. In production', 5000]]);
   rec('Messy/reordered headers map correctly', r.plan && r.plan.newOrders[0] && r.plan.newOrders[0].dueDate === '2026-11-05' && r.plan.newOrders[0].customer === 'Acme', JSON.stringify(r.plan && r.plan.newOrders[0]));
   await t.close();
 
@@ -49,7 +49,7 @@ const HDR = ['WO #', 'Title', 'Customer', 'Due Date', 'Step', 'Sub-Total', 'Refe
   t = await fresh();
   r = await H.importAoa(t.page, [HDR, ['WO-2604-1', 'K1', 'Acme', 46330, '3. In production', '€12,500.00', ''], ['WO-2604-2', 'K2', 'Acme', 46330, '3. In production', '12,500', '']]);
   const v6 = r.plan && r.plan.newOrders.map(o => o.wo + ' value=' + o.value + ' hours=' + o.hours).join(' | ');
-  rec('Value "€12,500.00" / "12,500" read as 12500 (14h)', r.plan && r.plan.newOrders.every(o => o.value === 12500 && o.hours === 14), v6);
+  rec('Value "€12,500.00" / "12,500" read as 12500 (16h on the default scale: 12,001–15,000 = 16h)', r.plan && r.plan.newOrders.every(o => o.value === 12500 && o.hours === 16), v6);
   await t.close();
 
   // 7. Hours column present but value column blank -> real hours should be used

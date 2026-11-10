@@ -18,3 +18,10 @@ Loop: if Tester or Manager finds Critical/Blocker issues → back to Coder (or A
 - Chrome is the supported phone browser (Safari on iPhone has blocked Supabase calls).
 - Cienapps export headers can have trailing spaces — always trim.
 - Never delete production data.
+
+## Where things are written down
+- `docs/ROADMAP.md` — build order, every decision Garry has made, open questions. Read it before planning or building.
+- `docs/ACCEPTED-FAILURES.md` — failing tests Garry has knowingly accepted, with reason and the stage that fixes them. A failing test not on this list is a bug.
+- `docs/CODE-HEALTH.md` — Coder's code audit.
+- Coder runs the FULL test suite before handing back to the Tester.
+- Every new Supabase table needs its own GRANT lines in the same SQL block (Supabase change from 30 Oct 2026).

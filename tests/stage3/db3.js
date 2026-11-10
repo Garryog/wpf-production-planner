@@ -1,0 +1,314 @@
+// Stage 3 fake database: the new tables and the five database functions from SUPABASE_CHANGES.md (2026-11-02 block),
+// written in JS so the tests can run without Supabase. Rules mirror the SQL line by line — the Manager checks the two
+// side by side. Never touches the network.
+const TABLES = ['projects', 'project_materials', 'lists', 'list_lines', 'list_revisions', 'list_events', 'snags'];
+const TOUCHED = { projects: 1, project_materials: 1, lists: 1, list_lines: 1, snags: 1 }; // lists_touch trigger
+const now = () => new Date().toISOString();
+const clone = x => x === undefined ? undefined : JSON.parse(JSON.stringify(x));
+
+function defaults(t, r) {
+  const n = now();
+  const base = {
+    projects: { customer: null, list_owner: null, active: true, project_type: 'kitchens', pm: null, cien_names: [], order_nos: [], setup_done: false, version: 1, updated_at: n, updated_by: null },
+    project_materials: { aliases: [], active: true, sort: 0, version: 1, updated_at: n, updated_by: null },
+    lists: { project_id: null, list_type: 'house', type_name: null, is_template: false, template_id: null, template_rev: null, rev: 1, locked: false, sent_at: null,
+      wos: [], no_cut: false, no_fit: false, saw_done_at: null, saw_done_by: null, fit_done_at: null, fit_done_by: null, source: 'manual', sdate: null,
+      deliver_by: null, archived: false, log: [], n_saw: 0, n_fit: 0, check_req: false, checked_by: null, checked_at: null, version: 1, created_at: n, created_by: null, updated_at: n, updated_by: null },
+    list_lines: { section: null, part: null, length_mm: null, width_mm: null, qty: null, unit_qty: null, material: null, material_other: false, edging: null, edging2: null, note: null,
+      status: 'todo', status_by: null, status_at: null, released_at: null, released_by: null, added_rev: null, changed_rev: null, removed_rev: null,
+      src_line_id: null, snag_id: null, mig_sig: null, version: 1, updated_at: n },
+    list_revisions: { meta: null, reason: null, made_by: null, made_at: n },
+    list_events: { from_status: null, to_status: null, n: 1, by: null, at: n, client_at: null, note: null, cid: null, line_id: null, v_after: null },
+    snags: { location_id: null, where_text: null, raised_at: n, material_id: null, material_text: null, qty: 1, length_mm: null, width_mm: null, edging: null, note: null,
+      status: 'raised', status_by: null, status_at: null, list_id: null, list_line_id: null, delivery_item_id: null, photo_path: null, handed_to: null,
+      couldnt_reason: null, cien_wo: null, version: 1, updated_at: n, updated_by: null },
+  }[t];
+  return Object.assign({}, clone(base), clone(r));
+}
+const CHECKS = {
+  project_materials: r => ['sheet', 'other'].includes(r.kind),
+  lists: r => ['kitchen', 'house', 'room', 'other', 'snag'].includes(r.list_type) && ['excel', 'manual', 'template', 'migrated'].includes(r.source),
+  list_lines: r => ['saw', 'fit', 'hdr', 'buy'].includes(r.kind) && ['todo', 'cut', 'got-out', 'waiting', 'na'].includes(r.status),
+  snags: r => ['saw', 'fit'].includes(r.kind) && ['raised', 'on-list', 'cut', 'on-van', 'delivered', 'placed', 'couldnt-place', 'closed', 'cancelled'].includes(r.status),
+};
+class DbError extends Error { constructor(m, code, detail, hint) { super(m); this.code = code || 'P0001'; this.detail = detail == null ? null : detail; this.hint = hint == null ? null : hint; } }
+// Postgres column types: '' or rubbish in a date / number column is an error, not a blank (the SQL casts with ::date / ::numeric)
+const DATES = ['sdate', 'deliver_by', 'sent_at', 'checked_at', 'saw_done_at', 'fit_done_at', 'status_at', 'released_at', 'raised_at'], NUMS = ['length_mm', 'width_mm', 'seq', 'template_rev', 'rev', 'added_rev', 'changed_rev', 'removed_rev', 'n_saw', 'n_fit', 'sort'];
+function typeCheck(t, r) {
+  DATES.forEach(k => { if (k in r && r[k] != null && (r[k] === '' || isNaN(Date.parse(r[k])))) throw new DbError('invalid input syntax for type date/timestamp: "' + r[k] + '"', '22007'); });
+  NUMS.forEach(k => { if (k in r && r[k] != null && (r[k] === '' || typeof r[k] === 'boolean' || isNaN(+r[k]))) throw new DbError('invalid input syntax for type numeric: "' + r[k] + '"', '22P02'); });
+  if (t === 'snags' && 'qty' in r && r.qty != null && (r.qty === '' || isNaN(+r.qty))) throw new DbError('invalid input syntax for type numeric: "' + r.qty + '"', '22P02');
+}
+
+function makeDb() { const d = { t: {}, seq: { list_revisions: 1, list_events: 1 } }; TABLES.forEach(t => { d.t[t] = []; }); return d; }
+function uniq(d, t, row) {
+  const lo = v => String(v == null ? '' : v).toLowerCase();
+  if (t === 'projects' && d.t[t].some(x => x !== row && x.id !== row.id && lo(x.name) === lo(row.name))) throw new DbError('duplicate key value violates unique constraint "projects_name_uq"', '23505');
+  if (t === 'project_materials' && d.t[t].some(x => x !== row && x.id !== row.id && x.project_id === row.project_id && lo(x.name) === lo(row.name))) throw new DbError('duplicate key value violates unique constraint "pm_uq"', '23505');
+  if (t === 'project_materials') { // pm_no_clash trigger: a name or other spelling belongs to one material per project
+    const k = v => String(v == null ? '' : v).normalize('NFKC').replace(/\s+/g, ' ').trim().toLowerCase();
+    const mine = new Set([row.name, ...(row.aliases || [])].map(k).filter(Boolean));
+    if (d.t[t].some(x => x !== row && x.id !== row.id && x.project_id === row.project_id && [x.name, ...(x.aliases || [])].some(y => mine.has(k(y)))))
+      throw new DbError('that material name or other spelling is already used on this project', '23505');
+  }
+}
+function find(d, t, id) { return d.t[t].find(r => r.id === id); }
+function insert(d, t, r) {
+  const row = defaults(t, r);
+  typeCheck(t, row);
+  if (t === 'list_revisions' || t === 'list_events') row.id = d.seq[t]++;
+  else if (row.id == null || row.id === '') throw new DbError('null value in column "id"', '23502');
+  if (row.id != null && d.t[t].some(x => x.id === row.id)) throw new DbError('duplicate key value violates unique constraint "' + t + '_pkey"', '23505');
+  if (t === 'list_events' && row.cid != null && d.t[t].some(x => x.cid === row.cid)) throw new DbError('duplicate key value violates unique constraint "le_cid"', '23505');
+  uniq(d, t, row);
+  if (CHECKS[t] && !CHECKS[t](row)) throw new DbError('new row violates check constraint', '23514');
+  d.t[t].push(row); return row;
+}
+// UPDATE … — the lists_touch trigger bumps version and updated_at; the snag trigger runs after a line's status changes
+function update(d, t, row, patch) {
+  typeCheck(t, patch);
+  const old = clone(row);
+  Object.assign(row, clone(patch));
+  if (CHECKS[t] && !CHECKS[t](row)) { Object.keys(row).forEach(k => delete row[k]); Object.assign(row, old); throw new DbError('new row violates check constraint', '23514'); }
+  try { uniq(d, t, row); } catch (e) { Object.keys(row).forEach(k => delete row[k]); Object.assign(row, old); throw e; }
+  if (TOUCHED[t]) { row.version = old.version + 1; row.updated_at = now(); }
+  if (t === 'list_lines' && 'status' in patch) snagLineDone(d, old, row);
+  return row;
+}
+function snagLineDone(d, old, nw) {
+  if (nw.snag_id != null && ['cut', 'got-out'].includes(nw.status) && old.status !== nw.status) {
+    const s = find(d, 'snags', nw.snag_id);
+    if (s && s.status === 'on-list') update(d, 'snags', s, { status: 'cut', status_by: nw.status_by, status_at: now() });
+  } else if (nw.snag_id != null && ['cut', 'got-out'].includes(old.status) && !['cut', 'got-out'].includes(nw.status)) {
+    const s = find(d, 'snags', nw.snag_id);
+    if (s && s.status === 'cut') update(d, 'snags', s, { status: 'on-list', status_by: nw.status_by, status_at: now() });
+  }
+}
+const logAdd = (r, e) => (r.log || []).concat([e]);
+
+// ---- apply_line_changes(p_changes jsonb, p_by text)
+// Lock order in the SQL: every list in the batch (id order), then each line — the same order as save_list_revision, so no
+// deadlock. The fake database runs one call at a time, so there is nothing to lock here.
+function applyLineChanges(d, changes, by) {
+  const res = [];
+  for (const c of changes || []) {
+    if (c.cid != null && d.t.list_events.some(e => e.cid === c.cid)) {
+      const l = find(d, 'list_lines', c.id) || {}, ev = d.t.list_events.find(e => e.cid === c.cid);
+      res.push({ id: c.id, cid: c.cid, ok: true, dup: true, va: ev ? ev.v_after : null, status: l.status, v: l.version, by: l.status_by, at: l.status_at, rel: l.released_at, relby: l.released_by });
+      continue;
+    }
+    let l = find(d, 'list_lines', c.id);
+    if (!l) { res.push({ id: c.id, cid: c.cid, ok: false, why: 'missing' }); continue; }
+    const a = c.act || 'status', w = c.status; let ok = false, noop = false, why = null;
+    if (l.removed_rev != null) why = 'removed';
+    else if (a === 'release') {
+      // still the same wait the screen saw: status_at / released_at unchanged (an office note or order edit doesn't count)
+      const same = (x, y) => (x == null && y == null) || (x != null && y != null && Date.parse(x) === Date.parse(y));
+      const fresh = 'sa' in c ? same(l.status_at, c.sa) && (!('ra' in c) || same(l.released_at, c.ra)) : (c.v == null || l.version === +c.v);
+      if (l.status === 'waiting' && fresh) ok = true;
+      else if (l.status === 'waiting') why = 'stale'; // changed since the screen saw it (e.g. released and parked again)
+      else if (['cut', 'got-out'].includes(l.status)) { ok = true; noop = true; }
+      else why = 'not-waiting';
+    } else if (w === 'cut' || w === 'got-out') {
+      if (l.kind !== (w === 'cut' ? 'saw' : 'fit')) why = 'wrong-kind';
+      else if (l.status === 'na') why = 'not-needed';
+      else if ((l.changed_rev || 0) > (c.rev == null ? 0 : +c.rev)) why = 'changed';
+      else if (l.status === w) { ok = true; noop = true; }
+      else ok = true;
+    } else if (w === 'waiting') {
+      if (l.status === 'todo') ok = true;
+      else if (l.status === 'waiting') { ok = true; noop = true; }
+      else if (['cut', 'got-out'].includes(l.status)) why = 'done';
+      else why = 'not-needed';
+    } else if (w === 'todo') {
+      if (c.v != null && l.version === +c.v) { ok = true; noop = l.status === 'todo'; } else why = 'stale';
+    } else if (w === 'na') {
+      if (['todo', 'waiting'].includes(l.status)) ok = true; else why = 'done';
+    } else why = 'bad';
+    if (ok && !noop) {
+      if (a === 'release') update(d, 'list_lines', l, { status: 'todo', released_at: now(), released_by: by });
+      else update(d, 'list_lines', l, { status: w, status_by: by, status_at: now(), released_at: w === 'todo' ? null : l.released_at });
+      const li = find(d, 'lists', l.list_id);
+      if (li && !li.locked) update(d, 'lists', li, { locked: true, updated_by: by });
+    }
+    if (ok) insert(d, 'list_events', { list_id: l.list_id, line_id: l.id, act: a, from_status: c.from == null ? null : c.from, to_status: l.status, by, client_at: c.at || null, cid: c.cid == null ? null : c.cid, v_after: l.version });
+    res.push({ id: l.id, cid: c.cid, ok, why, status: l.status, v: l.version, by: l.status_by, at: l.status_at, rel: l.released_at, relby: l.released_by });
+  }
+  return res;
+}
+
+// ---- lists_one_per_wo(p_wos, p_skip) (3 Nov): one live list per WO for the cutting-list flow. The SQL takes a lock per WO
+// first; here every function runs to the end before the next starts, so the check alone is the same rule.
+function onePerWo(d, wos, skip) {
+  [...new Set((wos || []).filter(w => w != null && w !== ''))].sort().forEach(w => {
+    const x = d.t.lists.filter(l => (l.wos || []).includes(w) && !l.archived && !l.is_template && !(skip || []).includes(l.id))
+      .sort((a, b) => a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : a.id < b.id ? -1 : 1)[0];
+    if (x) throw new DbError('one list per WO: ' + w + ' already has the live list "' + x.name + '"', 'P0001', x.id, w);
+  });
+}
+// ---- lists_one_replacement(p_old, p_wo): only one live replacement of an old list ("Make new list from this")
+function oneReplacement(d, old, wo) {
+  const x = d.t.lists.find(l => !l.archived && !l.is_template && (l.log || []).some(e => e && e.replaces === old));
+  if (x) throw new DbError('one list per WO: the old list ' + old + ' has already been replaced by "' + x.name + '"', 'P0001', x.id, wo == null ? '' : wo);
+}
+// ---- list_attach(p_list, p_wo, p_on, p_by, p_cid, p_one)
+function listAttach(d, id, wo, on, by, cid, one) {
+  const r = find(d, 'lists', id); if (!r) throw new DbError('missing list ' + id);
+  if (cid != null && d.t.list_events.some(e => e.cid === cid)) return clone(r); // the same tap resent
+  const had = r.wos.includes(wo);
+  if (on && !had && one) onePerWo(d, [wo], [id]);
+  if (on && !had) update(d, 'lists', r, { wos: r.wos.concat([wo]), updated_by: by, log: logAdd(r, { at: now(), by, what: 'Work order ' + wo + ' attached' }) });
+  else if (!on && had) update(d, 'lists', r, { wos: r.wos.filter(w => w !== wo), updated_by: by, log: logAdd(r, { at: now(), by, what: 'Work order ' + wo + ' taken off' }) });
+  if (!!on !== had) insert(d, 'list_events', { list_id: id, act: on ? 'attach' : 'detach', by, note: wo, cid: cid == null ? null : cid });
+  return clone(r);
+}
+
+// ---- list_set_done(p_list, p_mode, p_on, p_by, p_why)
+function listSetDone(d, id, mode, on, by, why, cid) {
+  const r = find(d, 'lists', id); if (!r) throw new DbError('missing list ' + id);
+  if (cid != null && d.t.list_events.some(e => e.cid === cid)) return clone(r); // the same tap resent
+  const dd = x => { const t = new Date(x); return String(t.getUTCDate()).padStart(2, '0') + '/' + String(t.getUTCMonth() + 1).padStart(2, '0') + '/' + t.getUTCFullYear(); };
+  why = why == null ? null : why;
+  if (mode === 'saw' || mode === 'fit') {
+    const at = mode + '_done_at', b = mode + '_done_by';
+    const what = on ? (mode === 'saw' ? 'Cut complete' : 'Fittings picked')
+      : (mode === 'saw' ? 'Sent back for re-cutting' : 'Sent back for re-picking') + (r[at] ? ' (was done ' + dd(r[at]) + (r[b] ? ' by ' + r[b] : '') + ')' : '');
+    update(d, 'lists', r, { [at]: on ? now() : null, [b]: on ? by : null, updated_by: by, log: logAdd(r, { at: now(), by, what, why }) });
+  } else if (mode === 'no_cut' || mode === 'no_fit') {
+    const f = mode;
+    update(d, 'lists', r, { [f]: !!on, updated_by: by, log: logAdd(r, { at: now(), by, what: (f === 'no_cut' ? 'No cutting' : 'No fittings') + (on ? ' ticked' : ' unticked'), why }) });
+  } else if (mode === 'send') {
+    update(d, 'lists', r, { sent_at: r.sent_at || now(), locked: true, updated_by: by, log: logAdd(r, { at: now(), by, what: 'Sent to the saw', why }) });
+  } else if (mode === 'check') { // (4 Nov) "Checked by": on = checked by p_by now; off = the check taken away
+    update(d, 'lists', r, { checked_by: on ? by : null, checked_at: on ? now() : null, updated_by: by, log: logAdd(r, { at: now(), by, what: on ? 'Checked' : 'Check taken away', why }) });
+  } else if (mode === 'archive') {
+    update(d, 'lists', r, { archived: !!on, updated_by: by, log: logAdd(r, { at: now(), by, what: on ? 'Archived' : 'Brought back from the archive', why }) });
+  } else throw new DbError('bad mode ' + mode);
+  insert(d, 'list_events', { list_id: id, act: mode + (on ? '-on' : '-off'), by, note: why, cid: cid == null ? null : cid });
+  return clone(r);
+}
+
+// ---- save_list_revision(p_list jsonb, p_lines jsonb, p_expect int, p_by, p_reason)
+const LINE_F = ['section', 'part', 'length_mm', 'width_mm', 'qty', 'unit_qty', 'material', 'edging', 'edging2', 'note'];
+function saveListRevision(d, pl, lines, expect, by, reason) {
+  let r = find(d, 'lists', pl.id), isnew = false, nrev;
+  const chk = pl.check_req != null && String(pl.check_req) === 'true'; // (4 Nov) the "checked before the saw" switch, as the app sent it
+  // validate everything first — the SQL runs in one transaction, so an error leaves nothing half-written
+  if (!r && expect != null) throw new DbError('stale: list ' + pl.id + ' is missing');
+  if (r && (expect == null || r.version !== +expect)) throw new DbError('stale: list ' + r.id + ' is at version ' + r.version + ', editor had ' + expect);
+  for (const e of lines || []) {
+    if (e.id == null || e.id === '') throw new DbError('null value in column "id" of relation "list_lines"', '23502');
+    const ex = find(d, 'list_lines', e.id);
+    if (ex && r && ex.list_id !== r.id) throw new DbError('duplicate key value violates unique constraint "list_lines_pkey"', '23505');
+    if (!ex && !['saw', 'fit', 'hdr', 'buy'].includes(e.kind)) throw new DbError('new row violates check constraint', '23514');
+  }
+  if (!r && pl.one_per_wo) onePerWo(d, pl.wos || [], [pl.id]);
+  let retired = null;
+  if (!r && pl.replaces) {
+    oneReplacement(d, pl.replaces, (pl.wos || [])[0]);
+    // (3 Nov, Manager review) the old list is archived in this same step — refused if it was edited since it was copied
+    const o = find(d, 'lists', pl.replaces);
+    if (!o) retired = 'missing';
+    else if (o.archived) retired = 'already';
+    else if (pl.replaces_keep) retired = 'kept';
+    else {
+      // the old list's live lines now vs as copied (content only; numbers compared as numbers, like jsonb)
+      const nv = v => v === undefined ? null : v, nn = v => v == null || v === '' ? nv(v) : +v;
+      const nowL = {}; d.t.list_lines.filter(x => x.list_id === o.id && x.removed_rev == null).forEach(x => { nowL[x.id] = [x.kind, x.section, x.part, nn(x.length_mm), nn(x.width_mm), x.qty, x.unit_qty, x.material, x.edging, x.note, x.edging2].map(nv); });
+      const was = pl.replaces_lines, same = () => { const a = Object.keys(nowL), b = Object.keys(was); return a.length === b.length && a.every(k => Array.isArray(was[k]) && JSON.stringify(nowL[k]) === JSON.stringify(was[k].map((v, i) => i === 3 || i === 4 ? nn(nv(v)) : nv(v)))); };
+      if (was && typeof was === 'object' && !Array.isArray(was) && !pl.replaces_force && !same())
+        throw new DbError('replaced list changed: "' + o.name + '" was changed on another screen after it was copied', 'P0001', o.id, 'replaced-changed');
+      const why = 'Replaced by "' + (pl.name || '(no name)') + '"';
+      update(d, 'lists', o, { archived: true, updated_by: by, log: logAdd(o, { at: now(), by, what: 'Archived', why }) });
+      insert(d, 'list_events', { list_id: o.id, act: 'archive-on', by, note: why });
+      retired = 'archived';
+    }
+  }
+  if (!r) {
+    // (4 Nov) with the check switched on (p_list.check_req true), a new list waits for its check; a copy of a CHECKED
+    // template at that template's revision is checked by its checker. Missing / false = no check needed.
+    const t = chk && pl.source === 'template' && pl.template_id ? d.t.lists.find(x => x.id === pl.template_id && x.is_template && x.checked_at != null && pl.template_rev != null && x.rev === +pl.template_rev) : null;
+    const log0 = [Object.assign({ at: now(), by, what: 'List created', why: reason == null ? null : reason }, pl.replaces ? { replaces: pl.replaces } : {})];
+    if (t) log0.push({ at: now(), by, what: 'Checked', why: 'from template "' + t.name + '" rev ' + t.rev + ', checked by ' + (t.checked_by == null ? '?' : t.checked_by) });
+    r = insert(d, 'lists', { id: pl.id, project_id: pl.project_id || null, name: pl.name || '(no name)', list_type: pl.list_type || 'house', type_name: pl.type_name || null,
+      is_template: !!pl.is_template, template_id: pl.template_id || null, template_rev: pl.template_rev == null ? null : +pl.template_rev, wos: pl.wos || [],
+      no_cut: !!pl.no_cut, no_fit: !!pl.no_fit, source: pl.source || 'manual', sdate: pl.sdate || null, created_by: by, updated_by: by,
+      check_req: chk, checked_by: t ? t.checked_by : null, checked_at: t ? now() : null, log: log0 });
+    isnew = true; nrev = 1;
+  } else {
+    nrev = r.rev;
+    if (r.locked || r.is_template || pl.lock) {
+      insert(d, 'list_revisions', { list_id: r.id, rev: r.rev, lines: clone(d.t.list_lines.filter(x => x.list_id === r.id && x.removed_rev == null).sort((a, b) => a.seq - b.seq)), meta: clone(r), reason, made_by: by });
+      nrev = r.rev + 1;
+    }
+  }
+  const ids = [];
+  for (const e of lines || []) {
+    ids.push(e.id);
+    const ex = d.t.list_lines.find(x => x.id === e.id && x.list_id === r.id);
+    if (ex) {
+      const p = { seq: e.seq != null ? +e.seq : ex.seq, kind: e.kind || ex.kind, material_other: !!e.material_other, snag_id: e.snag_id != null ? e.snag_id : ex.snag_id, removed_rev: null };
+      LINE_F.forEach(k => { p[k] = e[k] === undefined ? null : e[k]; });
+      if (e.reset) Object.assign(p, { status: 'todo', status_by: null, status_at: null, released_at: null, changed_rev: nrev });
+      const num = v => v == null || v === '' ? null : +v;
+      const diff = e.reset || ex.removed_rev != null || Object.keys(p).some(k => k !== 'removed_rev' && (['length_mm', 'width_mm'].includes(k) ? num(p[k]) !== num(ex[k]) : (p[k] == null ? null : p[k]) !== (ex[k] == null ? null : ex[k])));
+      if (diff) update(d, 'list_lines', ex, p); // an unchanged line is left alone (version and time don't move)
+    } else {
+      const p = { id: e.id, list_id: r.id, seq: e.seq != null ? +e.seq : 0, kind: e.kind, material_other: !!e.material_other, snag_id: e.snag_id || null, src_line_id: e.src_line_id || null, added_rev: nrev };
+      LINE_F.forEach(k => { p[k] = e[k] === undefined ? null : e[k]; });
+      insert(d, 'list_lines', p);
+    }
+  }
+  d.t.list_lines.filter(x => x.list_id === r.id && x.removed_rev == null && !ids.includes(x.id)).forEach(x => update(d, 'list_lines', x, { removed_rev: nrev }));
+  const live = d.t.list_lines.filter(x => x.list_id === r.id && x.removed_rev == null);
+  const patch = { rev: nrev, updated_by: by, locked: r.is_template ? r.locked : (r.locked || !!pl.lock), n_saw: live.filter(x => x.kind === 'saw').length, n_fit: live.filter(x => x.kind === 'fit').length };
+  ['name', 'list_type', 'source'].forEach(k => { if (pl[k] != null) patch[k] = pl[k]; });
+  ['project_id', 'type_name', 'sdate', 'deliver_by'].forEach(k => { if (k in pl) patch[k] = pl[k]; });
+  ['no_cut', 'no_fit'].forEach(k => { if (pl[k] != null) patch[k] = !!pl[k]; });
+  if (!isnew) Object.assign(patch, { check_req: chk, checked_by: null, checked_at: null }); // (4 Nov) an edit clears the check (switch ON: must be checked again)
+  if (!isnew) patch.log = logAdd(r, { at: now(), by, what: nrev > r.rev ? 'Revision ' + nrev : 'List edited', why: reason == null ? null : reason });
+  update(d, 'lists', r, patch);
+  return { list: clone(r), lines: clone(d.t.list_lines.filter(x => x.list_id === r.id).sort((a, b) => a.seq - b.seq)), retired };
+}
+
+// ---- snags_to_list(p_ids text[], p_deliver_by date, p_by)
+let lsN = 0;
+function snagsToList(d, ids, deliverBy, by) {
+  const ss = d.t.snags.filter(s => ids.includes(s.id));
+  const bad = ss.filter(s => s.status !== 'raised');
+  if (bad.length) throw new DbError('not raised: ' + bad.map(s => s.id + ' (' + s.status + ')').join(', '));
+  if (ss.length !== new Set(ids).size || ss.length !== ids.length) throw new DbError('missing snag');
+  const out = [];
+  const mon = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const dl = String(deliverBy).slice(8, 10) + ' ' + mon[+String(deliverBy).slice(5, 7) - 1];
+  [...new Set(ss.map(s => s.project_id))].sort().forEach(pid => {
+    const p = find(d, 'projects', pid);
+    const lid = 'LS' + Date.now().toString(16) + (++lsN);
+    const mine = ss.filter(s => s.project_id === pid).sort((a, b) => a.raised_at < b.raised_at ? -1 : a.raised_at > b.raised_at ? 1 : a.id < b.id ? -1 : 1);
+    insert(d, 'lists', { id: lid, project_id: pid, name: 'Snags ' + (p ? p.name : pid) + ' ' + dl, list_type: 'snag', source: 'manual', deliver_by: deliverBy, created_by: by, updated_by: by,
+      log: [{ at: now(), by, what: 'Snag list created from ' + mine.length + ' snags' }] });
+    mine.forEach((s, i) => {
+      const lnid = lid + ':' + (i + 1), m = s.material_id ? find(d, 'project_materials', s.material_id) : null;
+      insert(d, 'list_lines', { id: lnid, list_id: lid, seq: i + 1, kind: s.kind, part: s.item, length_mm: s.length_mm, width_mm: s.width_mm, qty: String(s.qty),
+        material: m ? m.name : s.material_text, material_other: !s.material_id && !!s.material_text, edging: s.edging,
+        note: [s.where_text, s.note].filter(x => x).join(' — ') || null, snag_id: s.id, added_rev: 1 });
+      update(d, 'snags', s, { status: 'on-list', status_by: by, status_at: now(), list_id: lid, list_line_id: lnid, updated_by: by });
+    });
+    const l = find(d, 'lists', lid), ll = d.t.list_lines.filter(x => x.list_id === lid);
+    update(d, 'lists', l, { n_saw: ll.filter(x => x.kind === 'saw').length, n_fit: ll.filter(x => x.kind === 'fit').length });
+    out.push(lid);
+  });
+  return out;
+}
+
+// Each database function runs in one transaction: an error part-way leaves nothing behind
+const txn = f => (d, a) => { const snap = clone(d.t), seq = clone(d.seq); try { return f(d, a); } catch (e) { d.t = snap; d.seq = seq; throw e; } };
+const RPC0 = {
+  apply_line_changes: (d, a) => applyLineChanges(d, a.p_changes, a.p_by),
+  list_attach: (d, a) => listAttach(d, a.p_list, a.p_wo, a.p_on, a.p_by, a.p_cid, a.p_one),
+  list_set_done: (d, a) => listSetDone(d, a.p_list, a.p_mode, a.p_on, a.p_by, a.p_why, a.p_cid),
+  save_list_revision: (d, a) => saveListRevision(d, a.p_list, a.p_lines, a.p_expect, a.p_by, a.p_reason),
+  snags_to_list: (d, a) => snagsToList(d, a.p_ids, a.p_deliver_by, a.p_by),
+};
+const RPC = {}; Object.keys(RPC0).forEach(k => { RPC[k] = txn(RPC0[k]); });
+module.exports = { makeDb, insert, update, find, applyLineChanges, listAttach, listSetDone, saveListRevision, snagsToList, RPC, TABLES, DbError, clone };
