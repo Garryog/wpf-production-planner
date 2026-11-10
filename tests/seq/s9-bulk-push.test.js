@@ -73,7 +73,24 @@ const tk = (p, k) => p.evaluate(k => document.querySelector('[data-seqtk="' + k 
   const sc2 = await X.noScroll(ph.page);
   rec('phone: push dialog fits', sc2.sw <= sc2.cw + 1, JSON.stringify(sc2));
   await ph.close();
-  rec('no page errors', !(S.errors || []).length, JSON.stringify(S.errors));
+  // ---- B11i nudges on the PM home screen (+ B11j progress chips still there)
+  const row = X.v2Row(); row.orders.find(o => o.wo === 'WO-2').dueDate = '2026-10-15';
+  const N = X.makeServer(row);
+  X.D.update(N.db, 'projects', X.D.find(N.db, 'projects', 'P1'), { pms: ['John Burke'] });
+  X.seqRow(N, 'QC', 'P1', { wo: 'WO-1' }); X.seqRow(N, 'QD', 'P1', { wo: 'WO-2' }); X.seqRow(N, 'QN', 'P1', { wo: 'WO-3', is_new: true });
+  X.seqRow(N, 'QW', 'P1', { floor: 'T09', unit: '15', product: 'K8', name: 'HOUSE E', req_date: '2026-11-30' });
+  const qx = X.seqRow(N, 'QX', 'P1', { floor: 'T09', unit: '16', product: 'K8', name: 'HOUSE F' }); qx.created_at = '2026-09-01T09:00:00Z';
+  const np = await X.dev(browser, N, 'pm', { me: { pm: 'John Burke' } });
+  await np.page.evaluate(() => { pmTab = ''; render(); }); await sleep(200);
+  const nb = await np.page.evaluate(() => (document.querySelector('.seq-nudge') || {}).innerText || '');
+  rec('nudges: "1 row with no date · 1 date passed · 2 waiting for a WO number (1 over 3 wks) · 1 new row to place"', /1 row with no date/.test(nb) && /1 date passed/.test(nb) && /2 waiting for a WO number \(1 over 3 wks\)/.test(nb) && /1 new row to place/.test(nb), nb);
+  await np.page.evaluate(() => document.querySelector('[data-seqnudge]').click()); await sleep(300);
+  rec('tap a nudge → the Sequence tab of that project, with progress chips (B11j)', await np.page.evaluate(() => pmTab === 'seq' && SEQV.pid === 'P1' && document.querySelectorAll('.seq-prog .seq-pg').length > 0));
+  await np.close();
+  const of2 = await X.dev(browser, N, 'office'); await of2.page.evaluate(() => showTab('d')); await sleep(200);
+  rec('nudges only on the PM screen', await of2.page.evaluate(() => !document.querySelector('.seq-nudge')));
+  await of2.close();
+  rec('no page errors', !(S.errors || []).length && !(N.errors || []).length, JSON.stringify([S.errors, N.errors]));
   await browser.close();
   X.finish();
 })().catch(e => { console.error(e); process.exit(1); });
