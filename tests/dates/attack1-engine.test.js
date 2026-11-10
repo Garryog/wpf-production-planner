@@ -64,6 +64,8 @@ const NOW = '2026-11-10T10:00:00Z', W = '2026-11-16', W2 = '2026-11-23';
     out.okOtherNoNote = !dl.querySelector('#dm-ok').disabled;
     const note = dl.querySelector('#dm-note'); note.value = '   '; note.dispatchEvent(new Event('input')); out.okSpaces = !dl.querySelector('#dm-ok').disabled;
     note.value = 'Developer phasing'; note.dispatchEvent(new Event('input')); out.okNote = !dl.querySelector('#dm-ok').disabled;
+    out.holdPrev = ([...dl.querySelectorAll('#dm-prev > div')].find(d => /G-HOLD/.test(d.textContent)) || {}).textContent || '(G-HOLD not in the first 50 preview rows)';
+    out.holdFlag = moveDates(['G-HOLD'], { shift: { n: 1, unit: 'wk' } }, {}, 'Ann').rows[0].flags;
     const pv = dl.querySelector('#dm-prev'); out.rows = pv.querySelectorAll(':scope > div').length; out.more = (pv.innerText.match(/…and \d+ more/) || [''])[0]; out.notMoved = (pv.innerText.match(/Not moved:[^\n]*/) || [''])[0];
     out.btn = dl.querySelector('#dm-ok').textContent;
     const t1 = performance.now(); dl.querySelector('#dm-ok').click(); out.applyMs = Math.round(performance.now() - t1);
@@ -85,7 +87,8 @@ const NOW = '2026-11-10T10:00:00Z', W = '2026-11-16', W2 = '2026-11-23';
   rec('group apply: summary counts "1 taken off vans" (G-BOOK) and lists G-LOAD / G-CUT / G-PROG to check', /1 taken off vans/.test(G.sum) && /G-LOAD/.test(G.sum) && /G-CUT/.test(G.sum) && /G-PROG/.test(G.sum), G.sum.slice(0, 600));
   rec('group apply: "Other" note kept in history (why Other, note, src group)', G.hist && G.hist.why === 'Other' && G.hist.note === 'Developer phasing' && G.hist.src === 'group', JSON.stringify(G.hist));
   rec('P- planner WOs move but never get a dueKeep / never on "Dates to change in Cienapps"', G.p1.due === '2026-11-25' && !G.p1.keep && !G.dates.length, JSON.stringify(G.p1));
-  rec('on-hold job in a group move: moved without any warning (is that wanted?)', G.hold.due === G.hold.was, JSON.stringify(G.hold) + ' — Cienapps on-hold job moved silently; plan lists no "on hold" skip or flag');
+  // (Tester round 2 — ASSUMED rule from 517f23b: an on-hold job is flagged "on hold" in the preview and still moved)
+  rec('on-hold job in a group move: flagged "on hold" in the preview, and moved', G.hold.due !== G.hold.was && G.hold.due === '2026-11-25' && G.holdFlag.includes('on-hold') && (/on hold/i.test(G.holdPrev) || /not in the first 50/.test(G.holdPrev)) && /G-HOLD[^—]*— on hold/i.test(G.sum), JSON.stringify({ hold: G.hold, flags: G.holdFlag, prev: G.holdPrev, sum: (G.sum.match(/G-HOLD[^G]*/) || [''])[0] }));
   rec('group apply time for 60 jobs < 2 s', G.applyMs < 2000, G.applyMs + ' ms');
 
   // ---- escaping ----

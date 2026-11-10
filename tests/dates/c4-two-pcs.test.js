@@ -13,7 +13,9 @@ const reload = p => p.evaluate(async () => { await loadDB(); });
   const O = (wo, x) => H.order(Object.assign({ wo, dueDate: '2026-11-20', origDueDate: '2026-11-20', plannedWeek: '2026-11-16', step: '8. PALLETED' }, x));
   {
     const S = makeServer({ id: 'main', version: 1, nid: 5, settings: {}, orders: [O('WO-1', { delv: true, delVeh: 'VOLVO', delDay: 'Thu' }), O('WO-2', { step: '3. In production' }), O('WO-3', { delv: true, delVeh: 'DAF', delDay: 'Fri' })] });
-    const A = await open(browser, S, { now: NOW }), B = await open(browser, S, { now: NOW });
+    // (Tester round 2, 10 Nov — rule changed in 286afae: both-PC date moves merge as one unit and the NEWER move wins, not the later save.
+    //  B's clock runs 2 minutes ahead so Bob's move is genuinely the newer one, whichever page saves last.)
+    const A = await open(browser, S, { now: NOW }), B = await open(browser, S, { now: '2026-11-10T10:02:00Z' });
     await A.page.evaluate(() => { moveDates(['WO-1'], { due: '2026-11-27' }, { why: 'Site not ready' }, 'Ann').apply(); });
     await B.page.evaluate(() => { const o = DB.orders.find(x => x.wo === 'WO-1'); o.delLoadedAt = new Date().toISOString(); o.ldBy = 'Driver'; sched(); });
     await A.page.evaluate(() => { const o = DB.orders.find(x => x.wo === 'WO-1'); return o.delDay; });
@@ -30,9 +32,9 @@ const reload = p => p.evaluate(async () => { await loadDB(); });
     // (2) two PCs move WO-2
     await A.page.evaluate(() => { moveDates(['WO-2'], { due: '2026-11-24' }, { why: 'Production' }, 'Ann').apply(); });
     await B.page.evaluate(() => { moveDates(['WO-2'], { due: '2026-11-26' }, { why: 'Materials' }, 'Bob').apply(); });
-    await save(A.page); await new Promise(r => setTimeout(r, 30)); await save(B.page); await reload(A.page);
-    const r2 = await A.page.evaluate(() => { const o = DB.orders.find(x => x.wo === 'WO-2'); return { due: o.dueDate, keep: o.dueKeep, hist: (o.dueHist || []).map(h => h.by + ':' + h.to).sort() }; });
-    rec('both move the same date: later save wins, both moves kept in history', r2.due === '2026-11-26' && r2.keep === '2026-11-20' && JSON.stringify(r2.hist) === '["Ann:2026-11-24","Bob:2026-11-26"]', JSON.stringify(r2));
+    await save(B.page); await new Promise(r => setTimeout(r, 30)); await save(A.page); await reload(A.page); // Ann's OLDER move saves last
+    const r2 = await A.page.evaluate(() => { const o = DB.orders.find(x => x.wo === 'WO-2'); return { due: o.dueDate, wk: o.plannedWeek, keep: o.dueKeep, hist: (o.dueHist || []).map(h => h.by + ':' + h.to).sort(), last: ((o.dueHist || []).slice(-1)[0] || {}).by }; });
+    rec('both move the same date: the newer move (Bob) wins as a unit even though Ann saved last; both moves kept in history, newest last', r2.due === '2026-11-26' && r2.wk === '2026-11-23' && r2.last === 'Bob' && r2.keep === '2026-11-20' && JSON.stringify(r2.hist) === '["Ann:2026-11-24","Bob:2026-11-26"]', JSON.stringify(r2));
     rec('no page errors', !(S.errors || []).length, (S.errors || []).join(' | '));
     await A.close(); await B.close();
   }
