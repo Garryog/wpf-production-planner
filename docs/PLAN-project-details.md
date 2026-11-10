@@ -608,3 +608,19 @@ sample). 8 B10b matching. 9 S1. 10 S2. 11 Full suite → Tester → Manager (ste
   second P refused, pid, purple "not from Cienapps"), b32232d L1b (Excel Floor / Unit / WO cells). Tests tests/seq/l3-find-wo, l4-pnumber, l1b-excel-job.
 - **Full suite** at b32232d (225 files): 4,290 pass / 32 fail — the same 32 as before (all on ACCEPTED-FAILURES or pre-existing at 7368d79; e7 redraw is timing).
 - Not built (as instructed): L4b merge, B10 upload/matching, S1/S2. Next: Tester on steps 1–5 → Manager.
+
+### 10 Nov 2026 (later) — Coder round 2 after Tester attack 3 (d55096f)
+- fde9ddf key round 2 (JS = SQL): basement "-1" kept apart from 1; placeholders (TBC/TBA/N/A/?/-, bare Apt/House/No/Unit/Block) = blank;
+  accents → base letters from one fixed list (no unaccent), ß → ss; dotted units ("2.05"); "7 (Type B)" → 7; "A Block" = "Block A";
+  "12.0"/"12", "7, 2nd floor"/"7", "Floor 1 Block A"/"Block A Floor 1" → unsure; superscripts kept apart ("7²" ≠ 72, Coder's call);
+  title units skip "n BED" / "n OF"; seqKind: KITCHEN wins, "n BED" not robes, ISLAND = other, seqKinds for the P check; claim rule:
+  island only claims island, a line with no product/name not added twice. New tests/seq/b0-fuzz.json (1,200 strings, JS = SQL; a
+  3,196-string run also 0 differences). SQL run twice on fresh throwaway Postgres: ALL SEQ PG CHECKS PASSED; attack3-pgrace 4/4.
+- eb9f773 lsParseGrid: "Unit | 2" / "Floor | 1" after the parts start are parts. 641b56b P-numbers on two PCs (lists follow the renumber
+  in the list tables; one job per house + kind — database checked before a P is made, a same-moment duplicate folded in); typed WO of
+  another project / house asked.
+- Tester checks that still fail by design: attack3-key / attack3-pg "house keys unchanged since the fixture" ×18 (the fixture recorded the
+  OLD keys — the Tester should refresh hk); attack3-key LOW "2.05" (Garry/coordinator asked for 2.05 kept); attack3-pg pair 6 (SQL null
+  handling in the check: one side is null, the check reads that as FAIL); attack3-pg (c) (sends kind 'robes' by hand — the planner now
+  sends 'kitchen' for that title, so the database must not second-guess the kind).
+- Full suite (229 files): 4,572 pass / 48 fail = the 29 known accepted + the 19 attack3-key above.
