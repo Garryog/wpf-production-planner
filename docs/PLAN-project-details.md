@@ -469,3 +469,18 @@ saw and stores follow the new date like any other date change.
   31c7b1d tests incl. new tests/seq/s5-multi-pm). SQL re-run twice on the throwaway Postgres: ALL SEQ PG CHECKS PASSED, project-details check passes.
 - tests/seq + tests/project-details all pass except the 3 accepted (attack1-oldtab ×2, attack1-merge 1c). **Full suite NOT re-run after this
   change — next run does it.** ASSUMED: no upper limit on the number of PMs.
+
+### 10 Nov 2026 (later, Garry live) — his answers built; row dates + first date tools
+- Garry's answers (ROADMAP): two identical lines in a house kept; Johnny edits materials + cutting lists; old screens accepted; YES to B11;
+  sequence view for office and despatch.
+- c6f5abe SQL: same-line index no longer unique, seq_insert counts (same file twice adds nothing, two identical lines kept), locks re-read
+  (Manager condition 4), switched-off checks for all six functions. 4a37411 Johnny = Drawing office rights + Cutting lists tab.
+  321a561 "🔢 Sequence" on Deliveries, Stores and the Driver's phone (stores/driver look-only). SQL re-run twice: ALL SEQ PG CHECKS PASSED.
+- Dates: 147806f WO→job lookup (Manager condition 3) · 9c53642 engine (change.per, fixed, requestOnly/needReq, fx) · e17ae45 required date on
+  a row · b671e36 bulk set (whole house / block / from here down) · a93e93f push/pull · adfa796 spread · 4f271c0 one-line preview + Undo
+  10 min · 599e991 PM nudges. Tests tests/seq/s8, s9, s10.
+- ASSUMED (Garry to confirm): "2 houses per week" = both houses on the same day, a week apart; a PM may Undo his own change even inside the
+  fixed window; push/pull of a job with no delivery date moves the build date only.
+- **Full suite** at 599e991 (220 files): **4,013 pass / 32 fail** — all on ACCEPTED-FAILURES (t17 and e7 are the timing ones).
+- **Not yet done:** Tester attack + Manager verdict on this date batch. Still to build: change requests (a PM's change inside the 14 days is
+  only listed today, not sent), upload + matching, Johnny's pool page, B11 d/e/f/g (offsets, dates follow order, paste, week view).
