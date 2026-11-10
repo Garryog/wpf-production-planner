@@ -7122,7 +7122,7 @@ function renderDeliveries(app){
       ch.classList.add('dragging');document.body.classList.add('del-dragging'); /*v-deliv D3: week tabs light up as drop targets*/
       e.dataTransfer.effectAllowed='move';
     };
-    ch.ondragend=()=>{ch.classList.remove('dragging');document.body.classList.remove('del-dragging');};
+    ch.ondragend=()=>{ch.classList.remove('dragging');document.body.classList.remove('del-dragging');delDragList=null;}; /*v-deliv attack4: an abandoned drag leaves nothing "in hand" (dragend comes after any drop)*/
   });
   // Live pool filter — hides cards in place (no re-render, keeps focus while typing)
   const applyDelFilter=()=>{
