@@ -68,7 +68,10 @@ const normDates = s => norm(s).replace(new RegExp('\\b' + DAYS + ' \\d{1,2} ' + 
   const ko = o => Object.keys(o).sort().join(',');
   const extraKeys = b.saved.orders.map((o, i) => ({ wo: o.wo, extra: Object.keys(o).filter(k => !(k in a.saved.orders[i])) })).filter(x => x.extra.length);
   rec('switch off: the saved jobs carry no new fields (e.g. procAt) that stage2 would not write', !extraKeys.length, JSON.stringify(extraKeys));
-  rec('switch off: saved settings have the same keys', ko(a.saved.settings || {}) === ko(b.saved.settings || {}), ko(a.saved.settings || {}) + ' vs ' + ko(b.saved.settings || {}));
+  // ALLOWED DIFFERENCE (Tester round 3, 10 Nov — old-screen guard v2, e510864): this branch writes ONE new settings key,
+  // appRel = 2, on every save (the database guard uses it to refuse older screens). Nothing else may be added or dropped.
+  const bKeys = Object.keys(b.saved.settings || {}).filter(k => k !== 'appRel').sort().join(',');
+  rec('switch off: saved settings have the same keys (plus only appRel = 2)', ko(a.saved.settings || {}) === bKeys && (b.saved.settings || {}).appRel === 2, ko(a.saved.settings || {}) + ' vs ' + ko(b.saved.settings || {}));
   rec('switch off: no calls to the new tables, no page errors', b.calls === 0 && !b.errs.length, JSON.stringify({ calls: b.calls, errs: b.errs }));
   await browser.close();
   done();
