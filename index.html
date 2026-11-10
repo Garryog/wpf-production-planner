@@ -831,7 +831,10 @@ function m3(b,m,t,path,N,o,u){
       if(hu)HRS_K.forEach(k=>{if(hu[k]!==undefined)r[k]=hu[k];});
       const dl=path[0]==='orders'&&path.length===2?mDel(bb,m,t,path,N,o,u):null;
       if(dl)DEL_K.forEach(k=>{if(dl[k]!==undefined)r[k]=dl[k];});
-      [...new Set([...Object.keys(m),...Object.keys(t)])].forEach(k=>{if(hu&&HRS_K.includes(k))return;if(dl&&DEL_K.includes(k))return;const v=m3(bb[k],m[k],t[k],path.concat(k),N,o,u.map(x=>isObj(x)?x[k]:NOU));if(v!==undefined)r[k]=v;});
+      const du=path[0]==='orders'&&path.length===2?mDue(bb,m,t,path,N):null;
+      if(du)DUE_K.forEach(k=>{if(du[k]!==undefined)r[k]=du[k];});
+      [...new Set([...Object.keys(m),...Object.keys(t)])].forEach(k=>{if(hu&&HRS_K.includes(k))return;if(dl&&DEL_K.includes(k))return;if(du&&DUE_K.includes(k))return;const v=m3(bb[k],m[k],t[k],path.concat(k),N,o,u.map(x=>isObj(x)?x[k]:NOU));if(v!==undefined)r[k]=v;});
+      if(path[0]==='orders'&&path.length===2&&Array.isArray(r.dueHist))r.dueHist=r.dueHist.slice().sort((x,y)=>String(x&&x.at||'').localeCompare(String(y&&y.at||''))).slice(-DUE_HIST_MAX); /*dates: oldest → newest*/
       return r;
     }
   }
@@ -841,6 +844,11 @@ function m3(b,m,t,path,N,o,u){
     return m===undefined?t:m;
   }
   if((m===true&&!t)||(t===true&&!m))return true; // done wins, silently
+  /*dates: the same day's delivery note typed on two screens — keep both texts*/
+  if(path[0]==='settings'&&path[1]==='delNotes'&&path.length===3&&typeof m==='string'&&typeof t==='string'){
+    const a=m.trim(),z=t.trim(),j=!a?t:!z?m:a.includes(z)?m:z.includes(a)?t:(o.theirsWins?z+' / '+a:a+' / '+z);
+    N.push({path,kept:j,lost:''});return j;
+  }
   const win=o.theirsWins?t:m;
   N.push({path,kept:win,lost:win===m?t:m});
   return win;
@@ -878,9 +886,37 @@ function mDel(b,m,t,path,N,o,u){
   if(same(M,B)&&!u.some(x=>x!==NOU&&x&&typeof x==='object'&&!same(pick(x),B)))return T; // else e.g. "delivered" sent then undone here
   const pulled=x=>!ts(x)&&!!x.delRebook&&!x.delDay; /*dates: taken off the van by a date move — loading on the other side beats it (loaded is never pulled)*/
   const win=ts(M)&&(untag(T)||pulled(T))?M:ts(T)&&(untag(M)||pulled(M))?T:null;
-  if(!win)return null;
-  N.push({path:path.concat('delivery'),kept:desc(win),lost:desc(win===M?T:M)});
-  return win;
+  if(win){N.push({path:path.concat('delivery'),kept:desc(win),lost:desc(win===M?T:M)});return win;}
+  /*dates: the booking (van, day, week, "rebook" flag) is ONE unit — never half of one side and half of the other (a pull-off
+    on one PC + a re-book on another must not give a job booked with no week but still flagged rebook). The other delivery
+    fields (tag, loaded / dispatched / delivered stamps…) still merge one by one, so a load and a day move both survive. */
+  const bk=x=>({v:x.delVeh||'',d:x.delDay||'',w:x.delDay?(x.delWk||''):'',r:x.delRebook||null});
+  const r={},bM=bk(M),bT=bk(T),bB=bk(B);
+  let src=same(bM,bT)||same(bT,bB)?M:same(bM,bB)?T:null;
+  if(!src){ // both changed the booking: the newer change wins as a whole
+    const at=x=>{const ms=(x.delMoves||[]).map(z=>z.at||'');return [x.delRebook&&!x.delDay?x.delRebook.at:'',x.delPlacedAt||'',...ms].sort().pop()||'';};
+    const am=at(m||{}),aT=at(t||{});src=am===aT?(o.theirsWins?T:M):(am>aT?M:T);
+    N.push({path:path.concat('booking'),kept:desc(src),lost:desc(src===M?T:M)});
+  }
+  BOOK_K.forEach(k=>{if(src[k]!==undefined)r[k]=src[k];});
+  DEL_K.filter(k=>!BOOK_K.includes(k)).forEach(k=>{
+    const v=same(M[k],B[k])?T[k]:same(T[k],B[k])?M[k]:(M[k]!=null&&M[k]!==''&&M[k]!==false?M[k]:T[k]);
+    if(v!==undefined)r[k]=v;
+  });
+  return r;
+}
+const BOOK_K=['delVeh','delDay','delWk','delRebook'];
+/*dates: a due-date move writes dueDate + build week + "check week" chip + the date Cienapps still holds together. When BOTH
+  screens moved the date, the newer move (latest dueHist entry) wins as a unit — never one PC's date with the other's week.
+  Any other case (e.g. a week drag here, a date move there) merges field by field as before. */
+const DUE_K=['dueDate','plannedWeek','dueMv','dueKeep'],DUE_HIST_MAX=30;
+function mDue(b,m,t,path,N){
+  if(same(m.dueDate,t.dueDate)||same(m.dueDate,b.dueDate)||same(t.dueDate,b.dueDate))return null;
+  const last=x=>((x.dueHist||[]).map(h=>h&&h.at||'').sort().pop())||'';
+  const win=last(m)>=last(t)?m:t,r={};
+  DUE_K.forEach(k=>{if(win[k]!==undefined)r[k]=win[k];});
+  N.push({path:path.concat('dueDate'),kept:win.dueDate,lost:(win===m?t:m).dueDate});
+  return r;
 }
 function mergePlan(base,mine,theirs,o){
   o=o||{};const N=[];base=base||{orders:[],settings:{}};
