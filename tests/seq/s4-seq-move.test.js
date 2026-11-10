@@ -44,43 +44,45 @@ const { H, rec, sleep } = X;
   // ▼ on C
   await pc1.page.evaluate(() => document.querySelector('[data-seqdn="QC"]').click()); await sleep(600);
   rec('▼ on C: A,B,E,C,D,F', ord() === 'QA,QB,QE,QC,QD,QF', ord());
-  // Move to 1 on F (a free row)
-  await pc1.page.evaluate(() => { window.__prompt = '1'; document.querySelector('[data-seqto="QF"]').click(); }); await sleep(600);
-  rec('# Move to… 1: F to the top', ord() === 'QF,QA,QB,QE,QC,QD' && await view(pc1.page) === 'QF,QA,QB,QE,QC,QD', ord());
+  // Move to 3 on F (a free row; 1 and 2 are 🔒 fixed)
+  await pc1.page.evaluate(() => { window.__prompt = '3'; document.querySelector('[data-seqto="QF"]').click(); }); await sleep(600);
+  rec('# Move to… 3: F to just under the fixed rows', ord() === 'QA,QB,QF,QE,QC,QD' && await view(pc1.page) === 'QA,QB,QF,QE,QC,QD', ord());
   // Whole house: D (T09 13) takes C (T09 13) with it, in their order
-  await pc1.page.evaluate(() => { const w = document.getElementById('seq-house'); w.checked = true; w.onchange(); window.__prompt = '1'; document.querySelector('[data-seqto="QD"]').click(); }); await sleep(600);
+  await pc1.page.evaluate(() => { const w = document.getElementById('seq-house'); w.checked = true; w.onchange(); window.__prompt = '3'; document.querySelector('[data-seqto="QD"]').click(); }); await sleep(600);
   const mv2 = (S.rpcCalls || []).filter(c => c.fn === 'seq_move').pop();
-  rec('Whole house ticked: Move D to 1 moves C + D (same floor + unit) as a block to the top', ord() === 'QC,QD,QF,QA,QB,QE' && JSON.stringify(mv2.args.p_ids) === '["QC","QD"]' && mv2.args.p_after === null, ord() + ' ' + JSON.stringify(mv2.args));
+  rec('Whole house ticked: Move D to 3 moves C + D (same floor + unit) as a block', ord() === 'QA,QB,QC,QD,QF,QE' && JSON.stringify(mv2.args.p_ids) === '["QC","QD"]' && mv2.args.p_after === 'QB', ord() + ' ' + JSON.stringify(mv2.args));
   await pc1.page.evaluate(() => { const w = document.getElementById('seq-house'); w.checked = false; w.onchange(); });
   // HTML5 drag on PC: E dropped onto F (E moves up to F's place)
   await pc1.page.dragAndDrop('tr[data-seqr="QE"] .seq-hd', 'tr[data-seqr="QF"]'); await sleep(700);
-  rec('PC drag: E dropped on F → C,D,E,F,A,B', ord() === 'QC,QD,QE,QF,QA,QB' && await view(pc1.page) === 'QC,QD,QE,QF,QA,QB', ord() + ' / ' + await view(pc1.page));
+  rec('PC drag: E dropped on F → A,B,C,D,E,F', ord() === 'QA,QB,QC,QD,QE,QF' && await view(pc1.page) === 'QA,QB,QC,QD,QE,QF', ord() + ' / ' + await view(pc1.page));
   await pc1.page.dragAndDrop('tr[data-seqr="QC"] .seq-hd', 'tr[data-seqr="QE"]'); await sleep(700);
-  rec('PC drag down: C dropped on E → D,E,C,F,A,B', ord() === 'QD,QE,QC,QF,QA,QB', ord());
+  rec('PC drag down: C dropped on E → A,B,D,E,C,F', ord() === 'QA,QB,QD,QE,QC,QF', ord());
   // a fixed row: the PM is told to ask, nothing moves
   const nMoves = (S.rpcCalls || []).filter(c => c.fn === 'seq_move').length;
-  await pc1.page.evaluate(() => document.querySelector('[data-sequp="QA"]').click()); await sleep(300);
+  await pc1.page.evaluate(() => document.querySelector('[data-seqdn="QA"]').click()); await sleep(300);
   const tf = await pc1.page.evaluate(() => (document.getElementById('toast') || {}).textContent || '');
-  rec('PM on a 🔒 fixed row: "✋ Request a change — coming soon", nothing sent', /Request a change — coming soon/.test(tf) && (S.rpcCalls || []).filter(c => c.fn === 'seq_move').length === nMoves && ord() === 'QD,QE,QC,QF,QA,QB', tf);
+  rec('PM on a 🔒 fixed row: "✋ Request a change — coming soon", nothing sent', /Request a change — coming soon/.test(tf) && (S.rpcCalls || []).filter(c => c.fn === 'seq_move').length === nMoves && ord() === 'QA,QB,QD,QE,QC,QF', tf);
   await pc1.page.dragAndDrop('tr[data-seqr="QB"] .seq-hd', 'tr[data-seqr="QD"]'); await sleep(400);
-  rec('PM dragging a fixed row: refused the same way', (S.rpcCalls || []).filter(c => c.fn === 'seq_move').length === nMoves && ord() === 'QD,QE,QC,QF,QA,QB', ord());
+  rec('PM dragging a fixed row: refused the same way', (S.rpcCalls || []).filter(c => c.fn === 'seq_move').length === nMoves && ord() === 'QA,QB,QD,QE,QC,QF', ord());
+  await pc1.page.evaluate(() => { window.__prompt = '1'; document.querySelector('[data-seqto="QF"]').click(); }); await sleep(400);
+  rec('PM putting a FREE row above 🔒 fixed rows: "Request a change — coming soon", nothing sent', /Request a change — coming soon/.test(await pc1.page.evaluate(() => document.getElementById('toast').textContent)) && (S.rpcCalls || []).filter(c => c.fn === 'seq_move').length === nMoves && ord() === 'QA,QB,QD,QE,QC,QF', ord());
 
   // ---- two PCs: the office window is open on the same list; the PM moves; the office's move is refused as stale
   const pc2 = await X.dev(browser, S, 'office');
   await pc2.page.evaluate(() => seqOpen('P1')); await sleep(500);
   rec('office window shows the same order', await pc2.page.evaluate(() => [...document.querySelectorAll('.seq-ovl tr.seq-r')].map(tr => tr.dataset.seqr).join(',')) === ord());
-  await pc1.page.evaluate(() => { window.__prompt = '1'; document.querySelector('[data-seqto="QF"]').click(); }); await sleep(600);
-  rec('PM moved F to the top meanwhile', ord() === 'QF,QD,QE,QC,QA,QB', ord());
+  await pc1.page.evaluate(() => { window.__prompt = '3'; document.querySelector('[data-seqto="QF"]').click(); }); await sleep(600);
+  rec('PM moved F to #3 meanwhile', ord() === 'QA,QB,QF,QD,QE,QC', ord());
   await pc2.page.evaluate(() => document.querySelector('.seq-ovl [data-seqdn="QD"]').click()); await sleep(700);
   const st = await pc2.page.evaluate(() => ({ t: (document.getElementById('toast') || {}).textContent || '', v: [...document.querySelectorAll('.seq-ovl tr.seq-r')].map(tr => tr.dataset.seqr).join(',') }));
   const last = (S.rpcCalls || []).filter(c => c.fn === 'seq_move').pop();
-  rec('office (stale screen) ▼: refused, nothing changed in the database', last.args.p_ids[0] === 'QD' && ord() === 'QF,QD,QE,QC,QA,QB', ord());
+  rec('office (stale screen) ▼: refused, nothing changed in the database', last.args.p_ids[0] === 'QD' && ord() === 'QA,QB,QF,QD,QE,QC', ord());
   rec('office told "someone else just changed this list — reloaded" and shows the new order', /someone else just changed this list — reloaded/i.test(st.t) && st.v === ord(), JSON.stringify(st));
   // the same race at the very last moment (another PC's move lands just before this one)
-  S.beforeRpc = (fn) => { if (fn === 'seq_move') { S.beforeRpc = null; X.DS.RPC.seq_move(S.db, { p_ids: ['QB'], p_after: null, p_expect: null, p_by: 'Other PC' }); } };
+  S.beforeRpc = (fn) => { if (fn === 'seq_move') { S.beforeRpc = null; X.DS.RPC.seq_move(S.db, { p_ids: ['QE'], p_after: null, p_expect: null, p_by: 'Other PC' }); } };
   await pc2.page.evaluate(() => document.querySelector('.seq-ovl [data-seqdn="QD"]').click()); await sleep(700);
   const st2 = await pc2.page.evaluate(() => ({ t: (document.getElementById('toast') || {}).textContent || '', v: [...document.querySelectorAll('.seq-ovl tr.seq-r')].map(tr => tr.dataset.seqr).join(',') }));
-  rec('another PC moves a split second earlier: stale, reloaded, screen = database', /reloaded/.test(st2.t) && st2.v === ord() && ord() === 'QB,QF,QD,QE,QC,QA', JSON.stringify(st2) + ' ' + ord());
+  rec('another PC moves a split second earlier: stale, reloaded, screen = database', /reloaded/.test(st2.t) && st2.v === ord() && ord() === 'QE,QA,QB,QF,QD,QC', JSON.stringify(st2) + ' ' + ord());
   // office moves a fixed row: reason asked, logged with it
   await pc2.page.evaluate(() => document.querySelector('.seq-ovl [data-seqdn="QB"]').click()); await sleep(300);
   const rs = await pc2.page.evaluate(() => [...document.querySelectorAll('[data-why]')].map(b => b.dataset.why));
@@ -88,12 +90,12 @@ const { H, rec, sleep } = X;
   await pc2.page.evaluate(() => document.querySelector('[data-why="Site not ready"]').click()); await sleep(700);
   const lm = (S.rpcCalls || []).filter(c => c.fn === 'seq_move').pop();
   const he = S.db.t.project_events.filter(e => e.act === 'move' && e.entity_id === 'QB').pop();
-  rec('fixed row moved by the office with the reason; history keeps the reason', ord() === 'QF,QB,QD,QE,QC,QA' && lm.args.p_why === 'Site not ready' && he && he.new.why === 'Site not ready' && he.by === 'Op', ord() + ' ' + JSON.stringify(he));
+  rec('fixed row moved by the office with the reason; history keeps the reason', ord() === 'QE,QA,QF,QB,QD,QC' && lm.args.p_why === 'Site not ready' && he && he.new.why === 'Site not ready' && he.by === 'Op', ord() + ' ' + JSON.stringify(he));
   // cancel the reason = nothing moves
   const nm2 = (S.rpcCalls || []).filter(c => c.fn === 'seq_move').length;
   await pc2.page.evaluate(() => document.querySelector('.seq-ovl [data-sequp="QB"]').click()); await sleep(300);
   await pc2.page.evaluate(() => document.querySelector('.pod-ovl:last-of-type #pod-x').click()); await sleep(300);
-  rec('reason cancelled: nothing moves', (S.rpcCalls || []).filter(c => c.fn === 'seq_move').length === nm2 && ord() === 'QF,QB,QD,QE,QC,QA', ord());
+  rec('reason cancelled: nothing moves', (S.rpcCalls || []).filter(c => c.fn === 'seq_move').length === nm2 && ord() === 'QE,QA,QF,QB,QD,QC', ord());
   // 📜 History
   S.db.t.project_events.push({ id: S.db.seq.project_events++, project_id: 'P1', entity: 'seq', entity_id: 'QE', act: 'move', old: { pos: 9 }, new: { pos: 8, why: '<b>x</b>' }, by: '<img src=x onerror="window.__h=1">', at: new Date(Date.now() + 60000).toISOString() });
   await pc1.page.evaluate(() => { render(); document.getElementById('seq-hist').click(); }); await sleep(600);
@@ -119,9 +121,9 @@ const { H, rec, sleep } = X;
   const ui = await ph.page.evaluate(() => { const b = document.querySelector('[data-seqdn="QD"]').getBoundingClientRect(); return { hd: getComputedStyle(document.querySelector('.seq-hd')).display, h: b.height, w: b.width }; });
   rec('phone 360 px: no sideways scroll, no drag handle, ▼ big enough to tap', sc.sw <= sc.cw + 1 && ui.hd === 'none' && ui.h >= 40 && ui.w >= 44, JSON.stringify([sc, ui]));
   await ph.page.click('[data-seqdn="QD"]'); await sleep(700);
-  rec('phone: ▼ on D moves it down one', ord() === 'QF,QB,QE,QD,QC,QA', ord());
+  rec('phone: ▼ on D moves it down one', ord() === 'QE,QA,QF,QB,QC,QD', ord());
   await ph.page.evaluate(() => { const w = document.getElementById('seq-house'); w.checked = true; w.onchange(); window.__prompt = '1'; }); await ph.page.click('[data-seqto="QD"]'); await sleep(700);
-  rec('phone: Whole house + Move to 1 → D and C (T09 13) to the top', ord() === 'QD,QC,QF,QB,QE,QA', ord());
+  rec('phone: Whole house + Move to 1 above 🔒 fixed rows → refused (request coming soon), nothing moves', ord() === 'QE,QA,QF,QB,QC,QD' && /Request a change/.test(await ph.page.evaluate(() => document.getElementById('toast').textContent)), ord());
   const sc2 = await X.noScroll(ph.page);
   rec('phone: still no sideways scroll after moving', sc2.sw <= sc2.cw + 1, JSON.stringify(sc2));
   await ph.page.evaluate(() => document.getElementById('seq-hist').click()); await sleep(500);

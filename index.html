@@ -3944,20 +3944,23 @@ function seqMoveReq(pid,id,how,redraw){
   const rows=seqRows(pid),me=rows.find(r=>r.id===id);if(!me)return;
   const hk=SEQV.house?seqHouseOf(me):'',ids=(hk?rows.filter(r=>seqHouseOf(r)===hk):[me]).map(r=>r.id);
   const rest=rows.filter(r=>!ids.includes(r.id)),i0=rows.findIndex(r=>ids.includes(r.id)),iL=rows.map(r=>ids.includes(r.id)).lastIndexOf(true);
-  let k;
-  if(how.up){if(i0<=0)return toast('Already at the top');k=rest.indexOf(rows[i0-1]);}
-  else if(how.down){if(iL>=rows.length-1)return toast('Already at the bottom');k=rest.indexOf(rows[iL+1])+1;}
+  let k;const ti0=rows.indexOf(me); // ▲ ▼ move the block one place relative to the row tapped (house-mates may be elsewhere)
+  if(how.up){let j=ti0-1;while(j>=0&&ids.includes(rows[j].id))j--;if(j<0)return toast('Already at the top');k=rest.indexOf(rows[j]);}
+  else if(how.down){let j=ti0+1;while(j<rows.length&&ids.includes(rows[j].id))j++;if(j>=rows.length)return toast('Already at the bottom');k=rest.indexOf(rows[j])+1;}
   else if(how.to)k=Math.max(0,Math.min(how.to-1,rest.length));
   else if(how.onto){if(ids.includes(how.onto))return;const ti=rows.findIndex(r=>r.id===how.onto);if(ti<0)return;k=rest.indexOf(rows[ti])+(ti>i0?1:0);}
   else return;
   const now=rows.map(r=>r.id).join(),then=rest.slice(0,k).concat(ids.map(x=>rows.find(r=>r.id===x)),rest.slice(k)).map(r=>r.id).join();
   if(now===then)return toast('Already there');
-  const after=k===0?null:rest[k-1].id,fixed=ids.filter(x=>seqFixedAt(seqJob(rows.find(r=>r.id===x))));
+  const after=k===0?null:rest[k-1].id,fx=x=>seqFixedAt(seqJob(rows.find(r=>r.id===x))),fixed=ids.filter(fx);
+  // plan rule 6: putting a row ABOVE a 🔒 fixed row it was below also changes the fixed window's order
+  const nw=then.split(','),jumped=rows.filter(r=>!ids.includes(r.id)&&fx(r.id)&&ids.some(m=>rows.indexOf(r)<rows.findIndex(x=>x.id===m)&&nw.indexOf(r.id)>nw.indexOf(m))).map(r=>r.id);
   const go=why=>seqMoveDo(pid,ids,after,why,k+1,redraw);
-  if(!fixed.length)return go(null);
+  if(!fixed.length&&!jumped.length)return go(null);
+  const wos=a=>a.map(x=>(rows.find(r=>r.id===x)||{}).wo||'').filter(Boolean).join(', ');
   // fixed rows (inside the window): a PM asks the Production Manager (requests come in a later step); the office / Production Manager move them with a reason
-  if(ROLE==='pm')return toast('✋ Request a change — coming soon. '+(fixed.length===1?'This job is':'These jobs are')+' inside the next '+seqFixedDays()+' days: ask the Production Manager.',true);
-  pickReason('Move a fixed job?','<b>'+escA(fixed.map(x=>(rows.find(r=>r.id===x)||{}).wo||'').join(', '))+'</b> '+(fixed.length===1?'is':'are')+' inside the next '+seqFixedDays()+' days. Why is the order changing?',why=>go(why),null,DATE_WHY);
+  if(ROLE==='pm')return toast('✋ Request a change — coming soon. '+(fixed.length?(fixed.length===1?'This job is':'These jobs are')+' inside the next '+seqFixedDays()+' days':'That puts it above '+wos(jumped)+' (inside the next '+seqFixedDays()+' days)')+': ask the Production Manager.',true);
+  pickReason('Change the order of fixed jobs?',fixed.length?'<b>'+escA(wos(fixed))+'</b> '+(fixed.length===1?'is':'are')+' inside the next '+seqFixedDays()+' days. Why is the order changing?':'This puts it above <b>'+escA(wos(jumped))+'</b> (inside the next '+seqFixedDays()+' days). Why is the order changing?',why=>go(why),null,DATE_WHY);
 }
 async function seqMoveDo(pid,ids,after,why,to,redraw){
   const exp=ids.map(x=>+((LST.sq.get(x)||{}).version)||1),av=after?(+((LST.sq.get(after)||{}).version)||1):null;SEQ_DLG.busy=true;
