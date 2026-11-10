@@ -85,6 +85,19 @@ button,input,select{font-family:inherit;cursor:pointer}
 .dm-chip.amber{background:#fff4d6;color:#7a4a00;border-color:#e0a43a}.dm-chip.red{background:#fde8e8;color:#b42318;border-color:#e57368}
 .dchip-due{display:inline-block;border:none;background:none;padding:0;margin-top:2px;font-size:11px;color:var(--t2);text-decoration:underline dotted;cursor:pointer;font-family:inherit}
 .dm-moved{margin-top:2px;font-size:10px;font-weight:700;color:#b45309}
+/*v-deliv D1/DD1: one due-date tag everywhere — "Due Mon 16 Nov · Wk 47". Red = before today, amber = this week, grey = later*/
+.due-tags{display:inline-flex;flex-wrap:wrap;gap:4px;align-items:center;max-width:100%;vertical-align:middle}
+.due-tag{display:inline-block;font-family:inherit;font-size:11px;font-weight:700;border-radius:5px;padding:2px 7px;border:1px solid;white-space:nowrap;line-height:1.4;max-width:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}
+.due-tag.red{background:#fde8e8;color:#b42318;border-color:#e57368}
+.due-tag.amber{background:#fff4d6;color:#7a4a00;border-color:#e0a43a}
+.due-tag.grey{background:#f1f4f8;color:#3b4c63;border-color:#cdd5e0}
+button.due-tag{cursor:pointer;min-height:26px}button.due-tag:hover{outline:2px solid #1a56db;outline-offset:1px}
+.due-orig{font-size:10px;color:var(--t3)}
+.dq-w{position:relative;display:inline-block;max-width:100%}
+.dq-in{position:absolute;left:0;bottom:0;width:1px;height:1px;opacity:0;border:0;padding:0;margin:0;pointer-events:none}
+.dq-more{font-family:inherit;font-size:13px;font-weight:700;line-height:1;border:1px solid #cdd5e0;background:#fff;color:#3b4c63;border-radius:5px;padding:3px 7px;min-height:26px;cursor:pointer;vertical-align:middle}
+.dq-more:hover{border-color:#1a56db;color:#1a56db}
+@media(max-width:700px){button.due-tag,.dq-more{min-height:34px;font-size:12px}}
 .due-late{background:var(--rl);color:var(--red)}.due-soon{background:var(--al);color:var(--amber)}.due-ok{background:var(--gl);color:var(--green)}
 .step-badge{font-size:10px;padding:2px 6px;border-radius:3px;background:var(--bl);color:var(--blue);white-space:nowrap}
 .week-sel{padding:4px 8px;border:1px solid var(--b2);border-radius:5px;font-size:12px;background:#fff;width:120px}
@@ -254,8 +267,8 @@ details.lti-other{margin-bottom:14px}details.lti-other>summary{cursor:pointer;fo
 .dsrch:focus{border-color:#7ba7e0}
 .dcv{margin-left:auto;font-weight:600;color:#0d6e46;font-size:11px;white-space:nowrap}
 .dchip-btns{display:flex;gap:1px}
-.dchip button{background:none;border:none;cursor:pointer;font-size:15px;line-height:1;padding:7px 8px;min-width:32px;min-height:32px;border-radius:5px;color:#4a5568}
-.dchip button:hover{background:#dde3ea;color:var(--text)}
+.dchip .dchip-btns button{background:none;border:none;cursor:pointer;font-size:15px;line-height:1;padding:7px 8px;min-width:32px;min-height:32px;border-radius:5px;color:#4a5568}
+.dchip .dchip-btns button:hover{background:#dde3ea;color:var(--text)}
 .dchip .dchk.on{color:#0b7e44;font-weight:700}
 .dchip-t{font-size:11px;color:var(--text);line-height:1.35;margin-top:3px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .dchip-c{font-size:10px;color:var(--t3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -6919,7 +6932,7 @@ function dchip(o,showCust){
     <div class="dchip-t">${escA(o.title)||'—'}</div>
     ${!o.manual?`<div><button class="dchip-due" data-duedlg="${escA(o.wo)}" title="Tap to change the due or delivery date">due ${o.dueDate?escA(fmt(o.dueDate))+' Wk'+wkNum(o.dueDate):'—'}${o.delivDate?' · deliv '+escA(fmt(o.delivDate)):''}</button>${(o.dueHist||[]).length?`<button class="dm-chip" data-duehist="${escA(o.wo)}" title="Due date changed — tap for the history">🔁 date ×${o.dueHist.length}</button>`:''}</div>`:''}${o.delRebook&&!o.delDay?`<div class="dm-moved" title="${escA('Taken off '+(o.delRebook.was||'').split('|').slice(0,2).join(' ')+' by '+(o.delRebook.by||'')+(o.delRebook.why?' — '+o.delRebook.why:''))}">${o.delRebook.nd?'🚚 not delivered Wk '+escA(o.delRebook.nd)+' — rebook':'📅 date moved — rebook'}</div>`:''}${o.dueMv&&o.dueMv.loaded&&dStage(o)&&dStage(o)!=='deliv'?`<div class="dm-moved" style="color:#b42318">📅 date moved after loading — check</div>`:''}
     ${st?`<div class="dstg s-${st}">${dStageLbl[st]}${dStageTime(o)?' '+dStageTime(o):''}${st==='deliv'&&o.delivBy?' — '+escA(o.delivBy):st==='load'&&o.ldBy?' — '+escA(o.ldBy):''}</div>`:''}
-    ${isOnHold(o)?`<div class="rdy-tag" style="background:#fde8e8;color:#b42318" title="Step 12 in Cienapps — kept here because it's already loaded / on the road">⏸ ON HOLD in Cienapps</div>`:''}${rd?`<div class="rdy-tag">${RDY_LBL[rd.lvl]}</div>`:''}${(o.delMoves||[]).length?`<div class="dmoved" title="${escA(o.delMoves.map(m=>m.why+' — '+m.by).join(' | '))}">🔁 moved${o.delMoves.length>1?' ×'+o.delMoves.length:''}</div>`:''}
+    ${isOnHold(o)?`<div class="rdy-tag" style="background:#fde8e8;color:#b42318" title="Step 12 in Cienapps — kept here because it's already loaded / on the road">⏸ ON HOLD in Cienapps</div>`:''}${rd?`<div class="rdy-tag">${RDY_LBL[rd.lvl]}</div>`:''}${(o.delMoves||[]).length?`<div class="dmoved" title="${escA(o.delMoves.map(m=>m.why+' — '+m.by).join(' | '))}">🚚 rebooked ×${o.delMoves.length}</div>`:''}
     ${!o.manual&&(afterDelivOn(o)||delivMvOn(o))?`<div>${delivFlagChips(o)}</div>`:''}${siteChip(o)}${showCust?`<div class="dchip-c">${escA(o.customer)}</div>`:''}
   </div>`;
 }
@@ -9036,9 +9049,35 @@ function afterDelivOn(o){return !!(o&&o.dueAfterDeliv&&o.delivDate&&o.dueDate&&o
 function delivMvOn(o){return !!(o&&o.delivMv&&o.delDay&&o.delivDate&&slotDate(o)!==o.delivDate&&dStage(o)!=='deliv');}
 function delivFlagChips(o){return (afterDelivOn(o)?`<span class="dm-chip red" title="Build date ${escA(fmt(o.dueDate))} is after the delivery date ${escA(fmt(o.delivDate))}">⚠ build after delivery — check</span>`:'')
   +(delivMvOn(o)?`<span class="dm-chip red" title="Cienapps moved the delivery date after it was booked">⚠ booked ${escA(dShort(slotDate(o)))} — delivery date now ${escA(dShort(o.delivDate))} — check</span>`:'');}
+/*v-deliv DD1: the due-date tag — one style on every screen. opts: {late:true} (board: also red when the planned week ends after the
+  due date, keeps "(orig …)"), {noDeliv:true}, {ro:true} (never a button). Office / Production Manager get a button that opens the
+  quick date picker (data-dqb → the hidden data-dq input); everyone else sees the same tag, not tappable. Manual jobs have no date. */
+function dTagTxt(iso){iso=String(iso||'').slice(0,10);const d=new Date(iso+'T12:00:00');if(!iso||isNaN(d))return String(iso||'');
+  const y=d.getFullYear()!==new Date(todayLocal()+'T12:00:00').getFullYear();
+  return d.toLocaleDateString('en-IE',{weekday:'short',day:'numeric',month:'short'})+(y?' '+d.getFullYear():'')+' · Wk '+wkNum(iso);}
+function dTagCls(iso){iso=String(iso||'').slice(0,10);if(!iso)return'grey';return iso<todayLocal()?'red':wkOf(iso)===thisWk()?'amber':'grey';}
+function dueTag(o,opts){
+  opts=opts||{};if(!o)return'';
+  if(o.manual)return `<span class="due-tags"><span class="due-tag grey" title="Added by hand on Deliveries — no Cienapps due date">${o.planWk&&dmIsDate(String(o.planWk))?'planned Wk '+wkNum(o.planWk):'manual — no date'}</span></span>`;
+  const ed=!opts.ro&&dateCanMove();
+  const one=(f,iso,txt,cls,ttl)=>ed?`<span class="dq-w"><button class="due-tag ${cls}" data-dqb="${escA(o.wo)}" data-f="${f}" title="${escA(ttl+' — tap to change')}">${escA(txt)}</button><input type="date" class="dq-in" tabindex="-1" aria-hidden="true" data-dq="${escA(o.wo)}" data-f="${f}" value="${escA(iso||'')}"></span>`
+    :`<span class="due-tag ${cls}" title="${escA(ttl)}">${escA(txt)}</span>`;
+  const due=dmIsDate(String(o.dueDate||'').slice(0,10))?String(o.dueDate).slice(0,10):'';
+  let h;
+  if(!due)h=one('due','','no due date','grey','No due date');
+  else{let c=dTagCls(due),ttl=c==='red'?'Overdue — was due '+fmt(due):c==='amber'?'Due this week':'Due date';
+    if(opts.late&&c!=='red'&&o.plannedWeek&&dmIsDate(String(o.plannedWeek))&&addDayISO(o.plannedWeek,4)>due){c='red';ttl='Planned build week ends after the due date';}
+    h=one('due',due,'Due '+dTagTxt(due),c,ttl);}
+  const dv=!opts.noDeliv&&dmIsDate(String(o.delivDate||'').slice(0,10))?String(o.delivDate).slice(0,10):'';
+  if(dv)h+=one('deliv',dv,'🚚 '+dTagTxt(dv),dTagCls(dv),'Delivery date');
+  if(opts.late&&due&&o.origDueDate&&o.origDueDate!==due)h+=`<span class="due-orig">(orig ${escA(dShort(o.origDueDate))} Wk ${wkNum(String(o.origDueDate).slice(0,10))})</span>`;
+  return `<span class="due-tags">${h}</span>`;
+}
+// "🔁 moved N×" — how many times the dates were changed (dueHist); tap → history. One copy, used by the board and the cards.
+function movedTag(o){const n=((o&&o.dueHist)||[]).length;return n?`<button class="dm-chip" data-duehist="${escA(o.wo)}" title="Dates changed ${n} time${n!==1?'s':''} — tap for the history">🔁 moved ${n}×</button>`:'';}
 function dmChips(o){
   const n=(o.dueHist||[]).length,mv=o.dueMv;
-  return delivFlagChips(o)+dueHoldChip(o)+(n?`<button class="dm-chip" data-duehist="${escA(o.wo)}" title="Due date changed ${n} time${n!==1?'s':''} — tap for the history">🔁 moved ${n}×</button>`:'')
+  return delivFlagChips(o)+dueHoldChip(o)+movedTag(o)
     +(mv?`<button class="dm-chip${mv.prog||mv.loaded?' red':' amber'}" data-duemv="${escA(o.wo)}" title="Tap to sort it out">📅 ${mv.prog?'programmed — take it out of the nest':mv.loaded?'date moved after loading — check':'due moved — check week'}</button>`:'');
 }
 function dmBindChips(root){
