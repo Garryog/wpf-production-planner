@@ -3683,7 +3683,7 @@ async function seqLoad(full){ // called by the list store's load and poll; probe
     let n=lsPut('project_seq',got[0].value);
     if(got[1].status==='fulfilled')n+=lsPut('seq_requests',got[1].value);else console.warn('Sequence requests: '+(got[1].reason&&got[1].reason.message));
     if(got[2].status==='fulfilled')n+=lsPut('seq_pre',got[2].value.map(r=>({...r,id:r.seq_id})));else console.warn('Pre-production ticks: '+(got[2].reason&&got[2].reason.message)); // seq_pre is keyed by seq_id
-    SEQP.st='ok';if(was!=='ok'){n++;seqShow();}return n;
+    SEQP.st='ok';if(n)seqMapsDrop();if(was!=='ok'){n++;seqShow();}return n;
   }catch(e){if(specMissing(e))SEQP.st='missing';else if(was!=='ok'){SEQP.st='net';SEQP.retry=Date.now()+60000;}seqShow();return 0;}
 }
 // The screens that want the 10-second poll (sequence page open, PM's Sequence tab, Pre-production)
@@ -3898,8 +3898,14 @@ function renderPre(app){
 const SEQV={pid:'',house:false,drag:'',pmOpen:''}; // the project open on the PM's Sequence tab
 function seqRows(pid){return[...LST.sq.values()].filter(r=>r.project_id===pid&&r.state!=='removed').sort((a,b)=>(a.pos||0)-(b.pos||0)||String(a.created_at||'').localeCompare(String(b.created_at||''))||String(a.id).localeCompare(String(b.id)));}
 const seqWoK=w=>String(w||'').normalize('NFKC').trim().toUpperCase();
-function seqJob(r){if(!r||!r.wo)return null;const k=seqWoK(r.wo);return DB.orders.find(o=>seqWoK(o.wo)===k)||null;}
-function seqWoRow(wo){const k=seqWoK(wo);for(const r of LST.sq.values())if(r.state!=='removed'&&r.wo&&seqWoK(r.wo)===k)return r;return null;}
+// (Manager condition 3) one WO → job map and one WO → live row map per redraw: built on first use, dropped at the end of the
+// current task, so a page of 300 rows never scans every job per row
+const SEQ_M={jobs:null,rows:null};
+function seqMaps(){if(!SEQ_M.jobs){SEQ_M.jobs=new Map();DB.orders.forEach(o=>{const k=seqWoK(o.wo);if(k&&!SEQ_M.jobs.has(k))SEQ_M.jobs.set(k,o);});
+  SEQ_M.rows=new Map();LST.sq.forEach(r=>{if(r.state!=='removed'&&r.wo)SEQ_M.rows.set(seqWoK(r.wo),r);});setTimeout(()=>{SEQ_M.jobs=SEQ_M.rows=null;},0);}return SEQ_M;}
+function seqMapsDrop(){SEQ_M.jobs=SEQ_M.rows=null;} // after this screen changed jobs or rows itself
+function seqJob(r){if(!r||!r.wo)return null;return seqMaps().jobs.get(seqWoK(r.wo))||null;}
+function seqWoRow(wo){return seqMaps().rows.get(seqWoK(wo))||null;}
 // Required date: the job's delivery date, else its build (due) date; a waiting row's own date
 function seqRowDate(r,o){o=o===undefined?seqJob(r):o;return o?(o.delivDate||o.dueDate||''):(r&&r.req_date||'');}
 // Fixed window (Key questions 3 / 4): the build OR delivery date (or the date it's being moved to) within seqFixedDays() calendar days, overdue included
@@ -3915,7 +3921,7 @@ function seqProgHTML(o,r){const p=seqProgress(o,r);if(!p.length)return'';return 
 function seqJobsToStart(pid){return DB.orders.filter(o=>!o.manual&&o.wo&&!isShipped(o)&&!o.delDone&&dStage(o)!=='deliv'&&specPidOfWO(o)===pid&&!seqWoRow(o.wo))
   .sort((a,b)=>String(a.dueDate||'9999').localeCompare(String(b.dueDate||'9999'))||woCmp(a,b));}
 // A project's rows straight from the database (after this screen changed them, or a refusal said "stale")
-async function seqFresh(pid){lsPut('project_seq',await lsGet('project_seq?select=*&project_id=eq.'+encodeURIComponent(pid)),true);}
+async function seqFresh(pid){const d=await lsGet('project_seq?select=*&project_id=eq.'+encodeURIComponent(pid));lsPut('project_seq',d,true);seqMapsDrop();}
 function seqTitleHTML(pid){const p=LST.p.get(pid)||{name:'?'};return `<span class="seq-h">🔢 ${escA(p.name)}</span>${seqPMs(p).length?`<span class="seq-pm">· ${escA(seqPMLbl(seqPMs(p)))}</span>`:'<span class="seq-pm seq-pm-none">· no PM yet</span>'}`;}
 function seqPageHTML(pid){
   if(!seqVis()||!LST.p.has(pid))return'<div class="exp-panel">Pick a project.</div>';
