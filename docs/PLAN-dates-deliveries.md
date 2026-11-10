@@ -297,6 +297,24 @@ Phase 2: 17 column L · 18 settings numbers · 19 delivery date in dialog/engine
 - ASSUMED (built as written): plan decisions 1–8. Also: a week move that flags "moved out — don't cut early" (> earlyDays) shows the preview
   first; a manual job's "planned Wk N" only shows for a future week; past-week tab drops are refused with a toast.
 
+### 10 Nov 2026 (evening) — Coder, Tester round 4 fixes (tests/dates/attack4-usability, 3cdd65d)
+- `77d1acd` [High] Production Manager: "🧭 Today · 🚚 Deliveries" buttons on his screen (Today stays his home; with lists on also
+  Lists / Snags / Items sent) — Deliveries is the full page with the rights dateCanMove already gives him (dates, week moves, van
+  booking). **ASSUMED, Garry to confirm: the Production Manager gets the full Deliveries page.** Test H now signs in to the prod view
+  (PIN) and taps the button — the old check set ROLE without a PIN, which only ever showed the PIN picker.
+- `bc814ba` [Medium] Move ticked to week…: hidden on-hold jobs are never moved and not counted; the count = ticked cards that can move;
+  a ticked booked manual job is listed in the summary "not moved (on a van — a job added by hand keeps its booking)".
+- `127e933` [Medium] the sticky week bar is a drop target (◀ Prev = shown week −1, Next ▶ = +1, the label = shown week) — chosen over a
+  second sticky strip to keep the phone screen free; past weeks never light up (a drop there gives the "has gone" message); a cancelled
+  drag clears the drag list; Next ▶ off on Later.
+- `da0f017` [Medium] one colour rule for the due tag everywhere (red overdue, amber this week, grey later); the board's "planned week
+  ends after the due date" warning is a separate small "⚠ built after due" chip. c10 board checks and the stage3 switch-off comparison
+  updated (chip and the Production Manager's two new buttons folded back as allowed differences).
+- `9f0c93b` [Lows] group heading wraps a long no-space customer at 360 px (no sideways scroll); Unit badges wrap instead of "…";
+  customer on a card wraps to 2 lines with the full name as a tooltip.
+- Tests: attack4-usability 94/94, c10 62/62, tests/dates all pass except the 4 accepted. Full suite (207 files): **3,759 pass / 28 fail**,
+  all on ACCEPTED-FAILURES (t17 A'1/A'2 are back in the run — they fail alone too and are on the list).
+
 ---
 ## Addendum, 10 Nov 2026 (evening run): Deliveries usability D1–D4 + DD1 (Garry 10 Nov, TOP PRIORITY before Thursday)
 Architect, unattended. Garry's words and items are in docs/ROADMAP.md ("Delivery page usability", "Due dates prominent everywhere",
