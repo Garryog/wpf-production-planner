@@ -168,6 +168,7 @@ button,input,select{font-family:inherit;cursor:pointer}
 .lst-tbl td{padding:6px 8px;border-bottom:1px solid var(--border);vertical-align:top}
 .lst-chip{display:inline-block;background:#eef2f8;border:1px solid var(--b2);border-radius:5px;padding:1px 7px;font-size:11px;font-family:monospace;margin:1px 3px 1px 0;white-space:nowrap}
 .lst-chip button{border:none;background:none;cursor:pointer;color:var(--t3);font-size:11px;padding:0 0 0 3px}
+.lst-chip.p-wo,.wl-h .lst-chip.p-wo{background:#f3e8ff;color:#5b21b6;border-color:#c4b5fd} /* a planner P-number: not from Cienapps */
 .lst-done{color:#0d6e46;font-weight:700;font-size:11px;white-space:nowrap}
 .wl{max-width:1100px;margin:0 auto;padding:14px 18px}
 .wl h1{font-size:26px;color:#14335c;border-bottom:4px solid #1a56db;padding-bottom:6px;margin-bottom:14px}
@@ -2257,6 +2258,11 @@ function fuHTML(o,cls,sty){const f=fuF(o),u=fuU(o),a=k=>` class="${cls||'fu-badg
 function lsFuOf(l){const os=((l&&l.wos)||[]).map(w=>DB.orders.find(x=>x.wo===w)).filter(Boolean),j=f=>[...new Set(os.map(f).filter(Boolean))].join(', ');return{f:j(fuF),u:j(fuU)};} // a list's tagged jobs
 function fuSpans(x,E){return (x.f?`<span class="fu-p">FLOOR <b>${E(x.f)}</b></span>`:'')+(x.u?`<span class="fu-p">UNIT <b>${E(x.u)}</b></span>`:'');} // prints and labels
 function fuLbl(o){const f=fuF(o),u=fuU(o);return[f?'Floor '+f:'',u?'Unit '+u:''].filter(Boolean).join(' · ');}
+/* L4a (Job B part 3): a planner P-number is never a Cienapps WO. With the lists switched on, list surfaces show it purple,
+   "P-1004 · not from Cienapps" (woChip); prints and dockets add "(not from Cienapps)" (woPTxt — display only, never stored). */
+function woIsP(w){return V2()&&/^P-\d+$/.test(String(w==null?'':w).trim());}
+function woChip(w,attr){const p=woIsP(w);return `<span class="lst-chip${p?' p-wo':''}"${attr||''}${p?' title="Made in the planner — not from Cienapps"':''}>${escA(w)}${p?' · not from Cienapps':''}</span>`;}
+function woPTxt(s){return String(s==null?'':s).split(', ').map(w=>woIsP(w)?w+' (not from Cienapps)':w).join(', ');}
 /* The WO number and the title are separate fields (Garry, 4 Nov): woShort = a short drop-down label ("WO-3 — Unit 31");
    woColsHTML = WO | Floor | Unit | Title | Customer as separate cells (title cut short, full text on hover);
    woInfoHTML = read-only Floor | Unit | Title | Customer boxes beside a work-order picker. */
@@ -3441,7 +3447,7 @@ function lsFindDlg(pid){
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px"><input id="fo-q" value="${escA(q)}" placeholder="e.g. House 18, Type B, Aderrig, WO-2557" style="${LS_INP};flex:1;min-width:200px">
         ${pid?`<label style="font-size:12px;white-space:nowrap"><input type="checkbox" id="fo-all"${all?' checked':''}> All projects</label>`:''}</div>
       <div style="max-height:56vh;overflow:auto"><table class="lst-tbl"><thead><tr><th>List</th><th>Project</th><th>Work orders</th><th>Type</th><th>State</th><th>Made</th><th></th></tr></thead><tbody>
-      ${ls.slice(0,80).map(l=>`<tr><td><b>${escA(l.name)}</b></td><td>${escA(lsProjName(l.pid))}</td><td>${(l.wos||[]).map(w=>`<span class="lst-chip">${escA(w)}</span>`).join('')||'—'}</td><td>${escA(l.typeName||LS_KINDS[l.ltype]||'')}</td>
+      ${ls.slice(0,80).map(l=>`<tr><td><b>${escA(l.name)}</b></td><td>${escA(lsProjName(l.pid))}</td><td>${(l.wos||[]).map(w=>woChip(w)).join('')||'—'}</td><td>${escA(l.typeName||LS_KINDS[l.ltype]||'')}</td>
         <td>${escA((LS_STATE[lsState(l)]||[''])[0])}</td><td style="white-space:nowrap">${l.created_at?fmt(String(l.created_at).slice(0,10)):'—'}</td>
         <td style="white-space:nowrap"><button class="btn btn-s" data-fov="${escA(l.id)}" style="padding:2px 8px;font-size:11px">View</button> <button class="btn btn-g" data-foc="${escA(l.id)}" style="padding:2px 8px;font-size:11px">⧉ Copy to new list</button></td></tr>`).join('')
         ||`<tr><td colspan="7" style="color:var(--t3)">${k?'No list matches "'+escA(q)+'"'+(pid&&!all?' on this project — tick All projects to search everywhere':''):'No lists yet.'}</td></tr>`}
@@ -3547,7 +3553,7 @@ function lsHomeHTML(){
   const sel=(id,v,opts)=>`<select id="${id}" style="${LS_INP};max-width:100%;min-width:0">${opts.map(([k,t])=>`<option value="${escA(k)}"${k===v?' selected':''}>${escA(t)}</option>`).join('')}</select>`;
   const prog=(l,m)=>{const n=m==='saw'?l.saw:l.fit;if(!n)return(m==='saw'?l.noCut:l.noFit)?'n/a':'—';if(listDone(l.id)[m])return'✓';const t=Object.values(rowTicks(l.id)).filter(x=>x.m===m).length;return t+'/'+n;};
   const row=l=>{const sup=lsSupersededBy(l);const[st,col]=sup?['Superseded (view only)','#8e99ab']:LS_STATE[lsState(l)];return `<tr data-lhrow="${escA(l.id)}"><td><b>${escA(l.name)}</b>${sup?`<div class="lh-sup" style="font-size:11px;color:#5b6b82">replaced by "${escA(sup.name)}"</div>`:''}${l.tpl?' <span class="lst-chip" style="background:#efe7ff;color:#5b21b6">TEMPLATE'+(l.typeName?' · '+escA(l.typeName):'')+'</span>':''}</td>
-    <td>${escA(LS_KINDS[l.ltype]||l.ltype||'')}${l.templateId?`<div style="font-size:11px;color:#5b21b6">${escA(lsTplInfo(l))}</div>`:''}</td><td>${(l.wos||[]).map(w=>`<span class="lst-chip">${escA(w)}</span>`).join('')||'<span style="color:var(--t3)">—</span>'}</td>${lsFuTds(l)}
+    <td>${escA(LS_KINDS[l.ltype]||l.ltype||'')}${l.templateId?`<div style="font-size:11px;color:#5b21b6">${escA(lsTplInfo(l))}</div>`:''}</td><td>${(l.wos||[]).map(w=>woChip(w)).join('')||'<span style="color:var(--t3)">—</span>'}</td>${lsFuTds(l)}
     <td>${(+l.rev||1)>1?`<span class="lst-chip" style="background:#fff4d6;color:#7a5200">Rev ${+l.rev}</span>`:'Rev 1'}</td><td><span style="color:${col};font-weight:700">${st}</span>${!l.archived&&!sup?'<div>'+(lsChkOn()&&l.tpl&&l.checkReq&&!l.checkedAt?'<span class="chk-wait">Not checked</span>':lsCheckChip(l))+'</div>':''}${(t=>t.length?'<div>'+lsTbcChip(t)+'</div>':'')(l.archived?[]:lsTbc(lsView(l.id).rows))}</td><td>🪚 ${prog(l,'saw')}</td><td>🧰 ${prog(l,'fit')}</td>
     <td class="lh-act">${!l.archived&&!sup&&lsChkOn()&&l.checkReq&&!l.checkedAt?`<button class="btn btn-g" data-lhchk="${escA(l.id)}" style="padding:2px 8px;font-size:11px" title="Drawing office / Production Manager / Admin PIN — the saw sees the list once it is checked">✓ Check</button> `:''}${sup?'':`<button class="btn btn-s" data-lhedit="${escA(l.id)}" style="padding:2px 8px;font-size:11px">✎ Edit</button> `}<button class="btn btn-s" data-lhview="${escA(l.id)}" style="padding:2px 8px;font-size:11px">View</button> <button class="btn btn-s" data-lhcopy="${escA(l.id)}" style="padding:2px 8px;font-size:11px" title="Start a NEW list from this one's rows — pick the work order and change anything. This list is not changed">⧉ Copy</button>${l.archived?'':` <button class="btn btn-s" data-lhastpl="${escA(l.id)}" style="padding:2px 8px;font-size:11px" title="Save this list as a template of the project (ticks are not copied)">📐 Save as template</button>`}${l.tpl?` <button class="btn btn-s" data-lhhist="${escA(l.id)}" style="padding:2px 8px;font-size:11px">🕘 History</button>`:''}${!l.tpl&&!l.archived&&lsState(l)==='draft'?` <button class="btn btn-s" data-lhsend="${escA(l.id)}" style="padding:2px 8px;font-size:11px">➜ Send to saw</button>`:''}${l.archived?'':` <button class="btn btn-s" data-lharc="${escA(l.id)}" style="padding:2px 8px;font-size:11px;color:var(--red);border-color:var(--red)">Archive</button>`}</td></tr>`;};
   return `<div class="exp-panel" id="lh">
@@ -4273,7 +4279,17 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     const r=keyFind(st.pid,b.floor,b.unit,kmap);
     if(r.st==='one'&&!b.not.includes(r.same[0].o.wo)){b.res=null;return jbChoose(r.same[0].o.wo,'auto');}
     if(r.st==='one')r.st='pick'; // "Not this one" was pressed for it: offer it, never fill it again by itself
-    b.res=r;draw();
+    b.res=r;b.pmsg=false;draw();
+  };
+  // L4a: a P-number only as the last resort — the lookup runs first (a job found → pick it), then the person confirms
+  const jbMakeP=force=>{ // force: 'none' (the search found nothing) or 'pick' (none of the jobs found is it) — no second look
+    keep();const b=st.jb,f=String(b.floor||'').trim(),u=String(b.unit||'').trim(),both=!!(keyTxt(f)&&keyTxt(u));
+    if(!force&&st.pid&&both){const r=keyFind(st.pid,f,u,kmap);
+      if(r.st!=='none'){if(r.st==='one')r.st='pick';b.res=r;b.pmsg=true;draw();return;}}
+    const where=both?'Floor '+f+' · Unit '+u+(st.pid?' on '+lsProjName(st.pid):''):'';
+    if(!confirm((force==='pick'?'You picked none of the work orders found for '+where+'.\n\n':where?'No Cienapps work order was found for '+where+'.\n\n':'No Floor and Unit typed — the planner can\'t look for the Cienapps WO, and can\'t match this P-number to it later.\n\n')
+      +'Make a new planner P-number instead?\n\nUse it only when Cienapps has no WO for this house yet. It shows purple, "not from Cienapps".\n\nOK = make a P-number\nCancel = go back'))return;
+    st.newWO=true;['floor','unit','title'].forEach(k=>{if(!String(st.pw[k]||'').trim())st.pw[k]=String(b[k]||'').trim();});draw();
   };
   const jbHTML=()=>{
     if(!jbOn())return'';
@@ -4286,12 +4302,14 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     const msg=!r?(blank?'Type the Floor and the Unit (both) — the Cienapps WO is looked up by project + floor + unit. No search while either is blank.':'Press 🔎 Find the Cienapps WO (or leave the Unit box).')
       :r.st==='noproj'?'<span class="me-jbw">Pick the project first — the work order is looked up inside the project.</span>'
       :r.st==='blank'?'<span class="me-jbw">Floor and Unit are both needed to look it up — no search was made.</span>'
-      :r.st==='none'?'<span class="me-jbw">No Cienapps work order found'+where+'.</span> Check the floor and unit — or Cienapps may not have it yet.'
+      :r.st==='none'?'<span class="me-jbw">No Cienapps work order found'+where+'.</span> Check the floor and unit — or Cienapps may not have it yet. <button class="btn btn-s" id="me-jmkp" style="font-size:12px;padding:2px 9px;color:#5b21b6">Make a P-number instead…</button>'
       :r.st==='nowo'?'<span class="me-jbw">'+E(r.wo)+' is not in the planner</span> — check the number (a new Cienapps WO arrives with the next import).'
       :r.st==='gone'?'<span class="me-jbw">'+E(r.wo)+' is shipped or delivered</span> — a cutting list needs a live job.'
       :r.st==='haslist'?'<span class="me-jbw">'+E(r.wo)+' already has a live cutting list "'+E(r.name)+'"</span> — open it from Lists, or pick another job.'
-      :`<span class="me-jbw">${(n=>n+' work order'+(n!==1?'s':'')+' could be this house')(r.same.length+r.unsure.length)}</span>${where} — pick ${r.same.length+r.unsure.length!==1?'one':'it if it is'}:`+[...r.same.map(x=>opt(x,true)),...r.unsure.map(x=>opt(x,false))].slice(0,8).join('')
-        +(r.same.length+r.unsure.length>8?`<div>…${r.same.length+r.unsure.length-8} more — type the WO number</div>`:'');
+      :(b.pmsg?'<div class="me-jbw">The planner already has work orders that could be this house — pick one. A P-number is only for when Cienapps has none.</div>':'')
+        +`<span class="me-jbw">${(n=>n+' work order'+(n!==1?'s':'')+' could be this house')(r.same.length+r.unsure.length)}</span>${where} — pick ${r.same.length+r.unsure.length!==1?'one':'it if it is'}:`+[...r.same.map(x=>opt(x,true)),...r.unsure.map(x=>opt(x,false))].slice(0,8).join('')
+        +(r.same.length+r.unsure.length>8?`<div>…${r.same.length+r.unsure.length-8} more — type the WO number</div>`:'')
+        +'<button class="btn btn-s" id="me-jnone" style="font-size:12px;padding:2px 9px;margin-top:6px;color:#5b21b6">None of these — make a P-number…</button>';
     return `<div class="me-jb" id="me-jb"><div class="me-jbt">This list's job — Floor, Unit and Title, each in its own box</div>
       <div class="me-jbr"><label>Floor<input id="me-jf" value="${E(b.floor)}" placeholder="e.g. T09" autocomplete="off"></label>
         <label>Unit<input id="me-ju" value="${E(b.unit)}" placeholder="e.g. 12" autocomplete="off"></label>
@@ -4494,7 +4512,8 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       const tr=e.closest('[data-row]');if(tr)tr.classList.toggle('me-buy',!!r.buy);updTag(i);});
     const g=id=>ov.querySelector('#'+id);
     const on=(id,fn)=>{const e=g(id);if(e)e.onclick=fn;};
-    on('me-new',()=>{keep();st.newWO=true;['floor','unit','title'].forEach(k=>{if(!String(st.pw[k]||'').trim())st.pw[k]=String(st.jb[k]||'').trim();});draw();}); // the P-number panel starts from the Floor / Unit / Title boxes
+    on('me-new',()=>jbMakeP(false)); // (L4a) looks for the Cienapps WO first, then asks; the P-number panel starts from the Floor / Unit / Title boxes
+    on('me-jmkp',()=>jbMakeP('none'));on('me-jnone',()=>jbMakeP('pick'));
     // L1 / L3: the job boxes
     [['me-jf','floor'],['me-ju','unit'],['me-jt','title'],['me-jwo','wo']].forEach(([id,k])=>{const e=g(id);if(e)e.oninput=()=>{st.jb[k]=e.value;};});
     on('me-find',()=>jbFind());
@@ -4672,6 +4691,15 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     for(const r of rows.filter(r=>r.k==='part'&&r.buy)){if(!String(r.item||'').trim())return err('Every Bought in row needs a description'+at(r)+'.');if(!(+totalOf(r,b[rows.indexOf(r)])>0))return err('Every Bought in row needs a quantity ("'+String(r.item).trim()+'"'+at(r)+').');}
     const onlyBuy=!chk.length&&rows.some(r=>r.k==='part'&&(r.buy||tbcHold(r)));
     const e=manualListValidate({...d,rows:onlyBuy?[{k:'saw',item:'x',qty:1,L:1,W:1}]:chk,noCut:onlyBuy?false:d.noCut,noFit:onlyBuy?false:d.noFit,wo:st.tpl?'(template)':d.wo});if(e)return err(e.replace(/saw row/g,'saw row (with a length or width)').replace(/fittings row/g,'Stores row (no length or width)'));
+    if(st.newWO){ // (L4a) looked up again on Save: another PC or an import may have brought the job meanwhile — never a second job for one house
+      const pf=g('me-pfloor').value,pu=g('me-punit').value,kind=seqKind(g('me-ptitle').value);
+      if(st.pid&&keyTxt(pf)&&keyTxt(pu)){const r=keyFind(st.pid,pf,pu,keyJobs()),fu='Floor '+String(pf).trim()+' · Unit '+String(pu).trim();
+        const dup=r.same.find(x=>seqKind(x.o.title)===kind);
+        if(dup){const w0=dup.o.wo,isP=/^P-\d+$/.test(w0),m=isP?w0+' already exists for '+fu+' ('+kind+') — use it':w0+' from Cienapps is in the planner for '+fu+' ('+kind+') — use it';
+          if(confirm(m+'.\n\nNo second job is made for one house.\n\nOK = use '+w0+' for this list\nCancel = go back')){st.newWO=false;jbChoose(w0,'picked');}else err('Not saved — '+m+'.');return;}
+        const un=r.unsure.filter(x=>seqKind(x.o.title)===kind);
+        if(un.length&&!confirm('These planner jobs might be the same house ('+fu+'):\n'+un.slice(0,6).map(x=>'• '+x.o.wo+' — '+[fuLbl(x.o),x.o.title].filter(Boolean).join(' · ')+' ('+x.why+')').join('\n')+'\n\nMake a new P-number anyway?\n\nOK = make it\nCancel = go back (pick the job instead)'))return;}
+    }
     if(ex&&ex.tpl){const w=prompt('What changed in this template? (optional — shown in its History; it becomes Rev '+((+ex.rev||1)+1)+')','');if(w===null)return;d.why=w.trim()?w.trim():'Template edited';}
     officeWho(by=>{
       if(st.newWO){
@@ -4679,7 +4707,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
         let hours=parseFloat(g('me-phrs').value),hoursEstimated=false;
         if(isNaN(hours)||hours<=0){hours=estimateHours(val);hoursEstimated=true;}
         const due=g('me-pdue').value;
-        DB.orders.push({wo:pwo,ref:'',floor:(g('me-pfloor').value||'').trim(),unit:(g('me-punit').value||'').trim(),title:g('me-ptitle').value.trim(),customer:(g('me-pcust').value||'').trim()||d.project,hours,hoursEstimated,
+        DB.orders.push({wo:pwo,pid:st.pid||undefined,ref:'',floor:(g('me-pfloor').value||'').trim(),unit:(g('me-punit').value||'').trim(),title:g('me-ptitle').value.trim(),customer:(g('me-pcust').value||'').trim()||d.project,hours,hoursEstimated,
           dueDate:due,origDueDate:due,step:'Planner WO',salesRep:'',orderNo:'',value:val,plannedWeek:wkKey(new Date(due)),notes:'',colour:'',log:[{at:nowISO(),by,what:'Work order created with a typed cutting list'}]});
         orig[pwo]='';origStep[pwo]='Planner WO';d.wo=pwo;st.newWO=false;st.wo=pwo; // a failed save tried again reuses this P-number
       }
@@ -5809,7 +5837,7 @@ function renderLists(app){
         <td style="font-weight:700">${escA(l.name)}${l.manual?' <span class="man-b" title="Typed in the planner">✍ typed</span>':''}${(h=>h.length?` <span class="ls-hold" style="font-size:10px;background:#fde8e8;color:#b42318;border-color:#e8a5a0" title="On hold in Cienapps (step 12): ${escA(h.join(', '))}${listParked(l)?' — off the Saw/Stores queues until a job comes back':''}">⏸ ON HOLD${listParked(l)?'':' ('+h.length+' of '+(l.wos||[]).length+' jobs)'}</span>`:'')((l.wos||[]).filter(w=>isOnHold(DB.orders.find(o=>o.wo===w))))}${(woRdy=>woRdy?` <span class="rdy-dot rdy-${woRdy}" title="${RDY_LBL[woRdy]}"></span>`:'')((l.wos||[]).length?woReady(l.wos[0]).lvl:'')}</td>
         <td>${l.saw||`<label class="na-flag" title="Tick when this job genuinely has no cutting — it then counts as ready on fittings alone"><input type="checkbox" data-lflag="${escA(l.id)}|noCut"${l.noCut?' checked':''}> no cutting</label>`}</td>
         <td>${l.fit||`<label class="na-flag" title="Tick when this job genuinely has no fittings — it then counts as ready on cutting alone"><input type="checkbox" data-lflag="${escA(l.id)}|noFit"${l.noFit?' checked':''}> no fittings</label>`}</td>
-        <td>${(l.wos||[]).map(w=>`<span class="lst-chip" title="${escA(woLbl(w))}${isOnHold(DB.orders.find(o=>o.wo===w))?' — ON HOLD in Cienapps':''}">${escA(w)}${isOnHold(DB.orders.find(o=>o.wo===w))?' ⏸':''}<button data-untag="${escA(l.id)}|${escA(w)}" title="Remove tag">×</button></span>`).join('')||'<span style="color:#c0392b;font-size:11px;font-weight:700">UNTAGGED</span>'}
+        <td>${(l.wos||[]).map(w=>`<span class="lst-chip${woIsP(w)?' p-wo':''}" title="${escA(woLbl(w))}${isOnHold(DB.orders.find(o=>o.wo===w))?' — ON HOLD in Cienapps':''}">${escA(w)}${woIsP(w)?' · not from Cienapps':''}${isOnHold(DB.orders.find(o=>o.wo===w))?' ⏸':''}<button data-untag="${escA(l.id)}|${escA(w)}" title="Remove tag">×</button></span>`).join('')||'<span style="color:#c0392b;font-size:11px;font-weight:700">UNTAGGED</span>'}
           <button class="btn btn-s" data-tag="${escA(l.id)}" style="padding:2px 8px;font-size:11px">✎ tag</button>
           ${lstTagOpen===l.id?`<div style="margin-top:6px;background:#f7f9fc;border:1px solid var(--b2);border-radius:6px;padding:8px">
             ${suggestWOs(l).filter(o=>!(l.wos||[]).includes(o.wo)).slice(0,8).map(o=>`<button class="btn btn-s" data-tagadd="${escA(l.id)}|${escA(o.wo)}" style="padding:2px 8px;font-size:11px;margin:2px" title="${escA(o.title)} — ${escA(o.customer)}">+ ${escA(o.wo)}${fuLbl(o)?' ('+escA(fuLbl(o))+')':''}</button>`).join('')||'<span style="font-size:11px;color:var(--t3)">No automatic matches — type a WO:</span>'}
@@ -6180,7 +6208,7 @@ function printLabels(lsArr,mode){
     <div class="lb-item">${E(r.item||r.mat||'')}</div>
     <div class="lb-mid"><span class="lb-qty">×${E(r.qty)}</span><span class="lb-dims">${saw&&(r.L||r.W)?E(r.L)+' × '+E(r.W):''}</span></div>
     <div class="lb-sub">${E(r.mat||'')}${r.note?' · '+E(r.note):''}</div>
-    <div class="lb-wos">${(l.wos||[]).map(E).join(' · ')}${fuSpans(lsFuOf(l),E)}</div></div>`;
+    <div class="lb-wos">${(l.wos||[]).map(w=>E(woPTxt(w))).join(' · ')}${fuSpans(lsFuOf(l),E)}</div></div>`;
   let labels='';
   lsArr.forEach(l=>{
     const rows=listRows(l).filter(r=>r.k===mode);path=lsHdrPath(listRows(l));
@@ -6190,7 +6218,7 @@ function printLabels(lsArr,mode){
       ${listCust(l)?`<div class="lb-cust">${E(listCust(l))}</div>`:''}
       <div class="lb-item">${saw?'CUT PACK':'FITTINGS BOX'}</div>
       <div class="lb-sub">${rows.length} line item${rows.length!==1?'s':''} · printed ${new Date().toLocaleDateString('en-IE')}</div>
-      <div class="lb-wos">${(l.wos||[]).map(E).join(' · ')}${fuSpans(lsFuOf(l),E)}</div></div>`;
+      <div class="lb-wos">${(l.wos||[]).map(w=>E(woPTxt(w))).join(' · ')}${fuSpans(lsFuOf(l),E)}</div></div>`;
     rows.forEach(r=>{labels+=one(l,r);});
   });
   const w=window.open('','_blank');
@@ -6248,7 +6276,7 @@ function renderWorkList(app,mode){
   const nNow=dueNow.length+phO.now.length,nOd=dueNow.filter(listOverdue).length+phO.now.filter(o=>listOverdue(phL(o))).length,nLater=upcoming.length+undated.length+phO.later.length;
   [...wlSel].forEach(id=>{if(!visible.some(l=>l.id===id))wlSel.delete(id);}); // selections only valid while visible in the queue
   const selLists=visible.filter(l=>wlSel.has(l.id));
-  const woChips=l=>(l.wos||[]).map(w=>{const o=DB.orders.find(x=>x.wo===w);return `<div class="wl-wo"><span class="lst-chip">${escA(w)}</span>${o&&fuLbl(o)?fuHTML(o,'lst-chip'):''}${o&&o.title?`<div class="wl-wt">${escA(o.title)}</div>`:''}</div>`;}).join('');
+  const woChips=l=>(l.wos||[]).map(w=>{const o=DB.orders.find(x=>x.wo===w);return `<div class="wl-wo">${woChip(w)}${o&&fuLbl(o)?fuHTML(o,'lst-chip'):''}${o&&o.title?`<div class="wl-wt">${escA(o.title)}</div>`:''}</div>`;}).join('');
   const card=(l,isDone)=>{const dn=listDone(l.id)[mode];const due=listDueKey(l);const relOnly=!isDone&&!!dn&&relOpen(l,mode);const nh=listHoldRows(l,mode,'hold').length;return `<div class="wl-card${isDone?' cdone':''}">
     <div class="wl-h"><div style="display:flex;gap:10px;align-items:flex-start">${!isDone?`<button class="wl-chk${wlSel.has(l.id)?' on':''}" data-wlsel="${escA(l.id)}" title="Select for batch cutting across houses">${wlSel.has(l.id)?'✓':''}</button>`:''}<div><span class="wn">${escA(l.name)}</span> <span class="wd">${escA(l.project||'')}${(c=>c&&c!==l.project?' · '+escA(c):'')(listCust(l))}</span><div>${woChips(l)}</div></div></div>
     ${due?(od=>`<span class="wl-due"${od?' style="background:#c0392b;color:#fff"':''}>${od?'⚠ OVERDUE — ':''}${mode==='saw'?'CUT':'PICK'} BY ${fmt(listDeadline(l))} · DELIVERS ${fmt(due)}</span>`)(!isDone&&listOverdue(l)):'<span class="wd">no delivery date yet</span>'}</div>
@@ -6444,7 +6472,7 @@ function dkDocketHTML(d){
     <div class="g2">${blk('Project',d.project_name)}${blk('Customer',d.customer)}</div>
     <div class="g2">${blk('Deliver to (site address)',d.site_address)}${blk('Delivery instructions',d.delivery_instructions)}</div>
     <table><thead><tr><th>WO</th><th>Floor</th><th>Unit</th><th>Item</th><th class="n">Qty</th><th>Spec</th></tr></thead><tbody>
-    ${its.map(i=>`<tr><td class="m">${E(i.wo)}</td><td>${E(i.floor)}</td><td>${E(i.unit)}</td><td><b>${E(i.item)}</b>${i.title?`<div class="ti">${E(i.title)}</div>`:''}</td><td class="n">${E(i.qty_text!=null&&i.qty_text!==''?i.qty_text:dkQ(i.qty))}</td><td>${E(i.spec)}</td></tr>`).join('')}
+    ${its.map(i=>`<tr><td class="m">${E(woPTxt(i.wo))}</td><td>${E(i.floor)}</td><td>${E(i.unit)}</td><td><b>${E(i.item)}</b>${i.title?`<div class="ti">${E(i.title)}</div>`:''}</td><td class="n">${E(i.qty_text!=null&&i.qty_text!==''?i.qty_text:dkQ(i.qty))}</td><td>${E(i.spec)}</td></tr>`).join('')}
     </tbody></table><div class="ct">${its.length} item line${its.length!==1?'s':''}</div>
     <div class="sb"><b>Sent by:</b> ${E(d.made_by)} &nbsp; ${E(dkDate(d.made_at))} ${E(hhmm(d.made_at))}</div>
     <div class="rc"><div class="rt">Received on site</div>
@@ -6493,7 +6521,7 @@ async function dkListDlg(){
     const card=d=>`<div class="dk-card${d.status==='cancelled'?' can':''}" data-dkcard="${E(d.id)}">
       <div class="dk-ch"><b class="dk-no">${E(d.docket_no)}</b><span>${E(dkDate(d.made_at))} ${E(hhmm(d.made_at))}</span><span class="dk-pj">${E(d.project_name)}</span><span class="dk-sm">${its(d).length} item${its(d).length!==1?'s':''} · sent by ${E(d.made_by)}</span></div>
       <div>${stHTML(d)}</div>
-      ${S.open.has(d.id)?`<table class="lst-tbl dk-tbl" style="margin-top:6px"><thead><tr><th>WO</th><th>Floor</th><th>Unit</th><th>Item</th><th>Qty</th><th>Spec</th></tr></thead><tbody>${its(d).map(i=>`<tr><td data-l="WO">${E(i.wo)}</td><td data-l="Floor">${E(i.floor)}</td><td data-l="Unit">${E(i.unit)}</td><td class="dk-it">${E(i.item)}</td><td data-l="Qty">${E(i.qty_text||dkQ(i.qty))}</td><td data-l="Spec">${E(i.spec)}</td></tr>`).join('')}</tbody></table>
+      ${S.open.has(d.id)?`<table class="lst-tbl dk-tbl" style="margin-top:6px"><thead><tr><th>WO</th><th>Floor</th><th>Unit</th><th>Item</th><th>Qty</th><th>Spec</th></tr></thead><tbody>${its(d).map(i=>`<tr><td data-l="WO">${E(woPTxt(i.wo))}</td><td data-l="Floor">${E(i.floor)}</td><td data-l="Unit">${E(i.unit)}</td><td class="dk-it">${E(i.item)}</td><td data-l="Qty">${E(i.qty_text||dkQ(i.qty))}</td><td data-l="Spec">${E(i.spec)}</td></tr>`).join('')}</tbody></table>
         ${d.site_address?`<div class="dk-sm" style="margin-top:4px"><b>Deliver to:</b> ${E(d.site_address)}</div>`:''}${d.delivery_instructions?`<div class="dk-sm"><b>Instructions:</b> ${E(d.delivery_instructions)}</div>`:''}`:''}
       ${S.deliv===d.id?`<div class="dk-dv"><label class="dk-f">Received by (print name)</label><input class="dk-in" id="dkv-by" placeholder="Name of the person on site">
         <div class="dk-two"><div><label class="dk-f">Date received</label><input class="dk-in" type="date" id="dkv-at" value="${E(today())}"></div><div><label class="dk-f">Signed as (if different)</label><input class="dk-in" id="dkv-sig" placeholder="optional"></div></div>
@@ -6665,7 +6693,7 @@ async function dkSendDlg(){
     const tick=S.rows.filter(o=>S.sel.has(o.x.id)).length,nf=S.free.filter(f=>f.item.trim()).length;
     const row=o=>{const x=o.x,s=S.sent[x.id],tot=dkNum(x.qty),lf=left(o),wait=o.st==='waiting',on=S.sel.has(x.id),spec=[x.material,lsEdgeTxt(x),x.note].map(v=>String(v||'').trim()).filter(Boolean).join(' · ');
       return `<tr class="${wait?'dk-wait':on?'dk-on':''}" data-dkrow="${E(x.id)}"><td class="dk-c">${wait?'':`<input type="checkbox" class="dk-chk" data-dksel="${E(x.id)}"${on?' checked':''} aria-label="Send">`}</td>
-        <td data-l="WO" class="dk-nw">${E(o.info.wo)||'—'}</td><td data-l="Floor">${E(o.info.floor)}</td><td data-l="Unit">${E(o.info.unit)}</td><td data-l="Title" class="dk-ti" title="${E(o.info.title)}">${E(o.info.title)}</td>
+        <td data-l="WO" class="dk-nw">${E(woPTxt(o.info.wo))||'—'}</td><td data-l="Floor">${E(o.info.floor)}</td><td data-l="Unit">${E(o.info.unit)}</td><td data-l="Title" class="dk-ti" title="${E(o.info.title)}">${E(o.info.title)}</td>
         <td class="dk-it">${E(x.part||'')}${x.kind==='buy'?' <span class="lst-chip" style="background:#e0f2fe;color:#075985">Bought in</span>':''}${S.bad[x.id]?`<div class="dk-bad">✕ ${E(S.bad[x.id])}</div>`:''}</td><td data-l="Spec">${E(spec)}</td>
         <td class="dk-q" data-l="Send">${wait?'<span class="dk-wt">⏸ Waiting — release first</span>':tot==null?`<b>${E(x.qty||'—')}</b> <span style="font-size:11px;color:var(--t3)">(whole line)</span>`:`<input inputmode="decimal" data-dkq="${E(x.id)}" value="${E(on?S.sel.get(x.id):dkQ(lf))}" aria-label="How many to send">`}</td>
         <td data-l="Sent" style="font-size:12px;color:var(--t3)">${tot!=null?(s&&s.n?`<b style="color:#14335c">${dkQ(s.n)} of ${dkQ(tot)} sent</b>${s.dk.length?' ('+E(s.dk.join(', '))+')':''}`:'of '+dkQ(tot)):''}</td></tr>`;};
@@ -9107,7 +9135,11 @@ function printWorkList(mode,days){
     const rows=V2()?lsHdrKeep(listRows(l),want):listRows(l).filter(want); // the headings print too (Garry, 4 Nov)
     return `<div class="blk"><div class="bh"><span class="hs">${E(l.name)}${V2()?' · Rev '+(+l.rev||1):''}</span><span>${E(l.project||'')}${listCust(l)&&listCust(l)!==l.project?' · '+E(listCust(l)):''}</span>
       <span class="dl">${listOverdue(l)?'OVERDUE · ':''}${saw?'CUT':'PICK'} BY ${E(fmt(listDeadline(l)))} · DELIVERS ${E(fmt(listDueKey(l)))}</span></div>
+<<<<<<< HEAD
       <div class="wos">${(l.wos||[]).map(E).join(' · ')}${fuSpans(lsFuOf(l),E)}${relOnly?' · <b>MATERIAL ARRIVED — these rows only</b>':''}</div>
+=======
+      <div class="wos">${(l.wos||[]).map(w=>E(woPTxt(w))).join(' · ')}${fuSpans(lsFuOf(l),E)}${relOnly?' · <b>MATERIAL ARRIVED — these rows only</b>':''}</div>
+>>>>>>> 39f230d (P-number only as the last resort; purple "not from Cienapps" on list surfaces (L4a))
       <table><thead><tr><th class="tk">✓</th><th>Item</th><th class="n">Qty</th>${saw?'<th class="n">Length</th><th class="n">Width</th><th>Material</th><th>Edging / note</th>':'<th>Spec</th><th>Note</th>'}<th class="in">Initials</th></tr></thead><tbody>
       ${rows.map(r=>{if(r.k==='hdr')return `<tr class="sec${r.sub?' sub':''}"><td colspan="${saw?8:6}">${E(r.item)}${r.note?' · '+E(r.note):''}</td></tr>`;const k=rowKey(r),held=heldRow(l,k),tkd=!held&&rowTicked(l.id,k);return `<tr${held?' class="held"':tkd?' class="done"':''}><td class="tk">${held?'⏸':tkd?'✓':'☐'}</td><td>${held?'<b>WAITING ON MATERIAL</b> — ':''}${E(r.item||'')}</td><td class="n">${E(r.qty)}</td>${saw?`<td class="n">${E(r.L)}</td><td class="n">${E(r.W)}</td><td>${E(r.mat)}</td><td>${E(r.note)}</td>`:`<td>${E(r.mat)}</td><td>${E(r.note)}</td>`}<td class="in"></td></tr>`;}).join('')}
       </tbody></table>
