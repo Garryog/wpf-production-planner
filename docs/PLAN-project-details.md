@@ -167,3 +167,263 @@ one (Q2); the SQL not yet run (sheet hidden, nothing breaks).
 - **Waiting on Garry:** Q1–Q5 above; yes/no on the 1c accepted-failure row.
 - **Next run:** Tester updates the 11 old checks + attacks the Materials window at 360 px; full suite; Manager final verdict;
   then screenshots and the final summary.
+
+---
+# Part 2 — PM sequence, change requests, Cienapps upload, Johnny's pool, date tools (B5–B11) — 10 Nov 2026
+
+Architect, unattended scheduled run, 10 Nov 2026. Garry's decisions B5–B11 of 9 Nov are recorded in docs/ROADMAP.md.
+Builds on `feature/project-details` (Part 1 B1–B4 built) rebased on `feature/dates-deliveries` (Job A built).
+Like Part 1 it is **Stage 3 only** (lists switch ON, `V2()`). With the switch off, or before the SQL below is run, none of
+it shows and the app is exactly as today. Open questions use the recommended answer, marked ASSUMED (Garry to confirm).
+**B11 date tools (step 12) are NOT built until Garry says yes to the wireframe at the end of this part.**
+
+## Goal
+Each project has a named Project Manager, and he keeps one list per project: every work order (kitchen, utility, quartz,
+robes) in the order the site needs them, each with its required (delivery) date. He can drag rows, set dates in bulk,
+spread them, paste the contractor's programme, or load the same Excel he uploads to Cienapps, on PC or phone. The next
+two weeks are fixed: changes there go to the Production Manager to approve. Johnny gets one list of everything due in
+the next three weeks or more, from every project, in order, and ticks each work order off as he processes it. The CNC
+plan built later will read this list.
+
+## Key questions — ASSUMED (recommended answer used; Garry to confirm)
+1. **The PM list** = Settings → Staff, people ticked "PM" (the tick box is already there). A PM picks his name once per
+   phone/PC and it is remembered until Stage 4 logins. Names are not typed freely (they must match the assignment).
+2. **Who assigns a PM to a project:** the office and the Production Manager. A PM cannot claim a project himself.
+3. **The fixed window is 14 CALENDAR days from today** (due today + 14 is fixed; today + 15 is free), moving forward
+   every day. Alternative: 14 working days (about 3 weeks). Settings number, default 14 (allowed 7–30).
+4. **Which date makes a job "fixed":** its build (due) date OR its delivery date falls within the window, overdue
+   included. Moving a job INTO the window from outside also needs a request.
+5. **Mixed changes** (e.g. "push from here down" over 3 fixed rows and 10 free ones): the 10 change now and the 3 go to
+   the Production Manager as one request. The preview says so before Save.
+6. **Who approves:** Production Manager only. The office and the Production Manager can still change fixed jobs
+   directly: reason required, logged and counted the same way.
+7. **Editing a required date sets the delivery date, and build date = delivery − 3 working days** (Job A `delivLead`).
+   Both shown in the preview. A job with no delivery date shows its build date in grey.
+8. **Waiting rows (no WO yet) are never "fixed".** One dated within 14 days shows red "due soon — no WO number".
+9. **Date on a waiting row vs Cienapps' date when the WO arrives:** the PM's date wins, goes through the date rules and
+   appears in "Dates to change in Cienapps". If it lands in the fixed window it becomes a change request automatically.
+10. **Bank holiday / weekend in a spread or paste** → next working day. A single typed date → Job A's warning.
+11. **Johnny's role:** new view "Pre-production", default PIN **1010**, changed by Admin like the others. He picks his
+    name once (Staff tick "Pre-production").
+12. **Pool horizon** = build due date within today + 7 × weeks (Settings, default 3, minimum 3): day 21 in, day 22 out.
+    Overdue unprocessed jobs always in. A row leaves the pool once cut (step 6+), shipped or on hold.
+    **Amber** = due within 21 days and not processed. **Red** = past cut-by and not processed.
+13. **Cut-by** (CNC) = due − 7 calendar days, moved to the working day before if not a working day.
+14. **Out of step:** a not-processed row is flagged when a row above it in Johnny's order has a cut-by more than 2 working
+    days LATER (Garry's colour window), or same project + same date in the reverse of the PM's sequence.
+15. **"Changed since you last looked"** is kept per person per device until Stage 4.
+16. **Cienapps WO titles:** matching assumes the WO title carries the upload line's Name (e.g. "HOUSE TYPE B QUARTZ").
+    **Garry: send 5 real WO titles + the upload lines they came from** so the matcher can be checked before go-live.
+17. **Old jobs at go-live:** nothing added automatically. On a project's first visit the PM (or office) taps "Start the
+    sequence from today's jobs (N)" — every live, not-shipped WO in due-date order. After that, new WOs are added on each import.
+18. **Undo** (10 minutes, this screen only) puts dates and positions back. Jobs taken off vans are NOT put back on — listed
+    "rebook these".
+
+## Data design — new tables (decided: tables, not the planner record)
+Why: rows, positions, requests and Johnny's ticks are edited by many people at once; projects already live in the Stage 3
+tables; the planner record is already large (Job A cut `dueHist` to 30 for save speed). Version-checked rows plus database
+rules, as for `project_spec_items`. **Dates of matched jobs stay where they are** (`o.dueDate`, `o.delivDate`, `o.dueHist` in
+`orders`, written only by `moveDates`). The tables never hold a second copy of a job's date.
+
+SQL: new PENDING block "PM sequence & pre-production" in SUPABASE_CHANGES.md, run AFTER Stage 3 and Part 1 (needs `projects`,
+`lists_touch`, `lists_writable`, `project_events`). Re-runnable, GRANT lines, no DELETE, checked twice on a throwaway Postgres
+(`tests/seq/pg-check.sql`).
+- `alter table projects add column if not exists pm text;` `… seq_rules jsonb not null default '{}'`
+  (`{follow:bool, offsets:{utility:int, quartz:int, robes:int, other:int}}` working days after the house's kitchen).
+  Trigger `projects_pm_log` (after update when `pm` changes) → `project_events(entity 'project', act 'pm')`.
+- **`project_seq`** (one row per future or actual WO): `id text pk` ('Q'+uid) · `project_id text not null references
+  projects(id)` · `pos int` (1..n per project, DATABASE-set) · `state text not null default 'waiting' check in
+  ('waiting','matched','removed')` · `wo text` · `floor, unit, product, name, descr text` · `kind text not null default
+  'kitchen' check in ('kitchen','utility','quartz','robes','other')` · `children jsonb not null default '[]'` (CHILDREN 1–4,
+  info only) · `line_key text` (DB-computed) · `req_date date` (waiting rows only) · `own_date boolean default false` ·
+  `is_new boolean default false` · `src text check in ('upload','import','manual')` · `upload_id text`, `line_no int` ·
+  `matched_at timestamptz, matched_by text, match_how text check in ('auto','confirmed','start')` · `why text` ·
+  `version int default 1`, `created_at`, `created_by`, `updated_at`, `updated_by`.
+  Indexes: unique `(upper(btrim(wo)))` where `wo is not null and state<>'removed'`; unique `(project_id, line_key)` where
+  `line_key is not null and state<>'removed'`; `(project_id,pos)`; `(updated_at)`.
+  Trigger `ps_rules` (before insert/update): NFKC + trim every text (trailing spaces). `line_key := upper(floor|unit|product|name)`
+  spaces collapsed, when product or name present. `wo` set → `state='matched'`. INSERT takes
+  `pg_advisory_xact_lock(hashtext('seq:'||project_id))` and sets `pos=max+1`. A change of `pos` is REFUSED unless
+  `current_setting('wpf.seq',true)='rpc'`. `state` cannot go back to 'waiting' except via `seq_unmatch`. Plus `project_seq_touch`.
+  Trigger `ps_log` (after): `project_events(entity 'seq')`, act add / match / unmatch / remove / restore / date / edit, old/new
+  jsonb incl. `why`. Pos-only changes not logged (the functions log moves).
+- Functions (security definer, `set search_path=public`, set `wpf.seq='rpc'` locally, project advisory lock, own
+  `project_events` row with `why`): `seq_move(p_ids text[], p_after text, p_expect int[], p_by text, p_why text)` — block
+  move under `p_after` (null = top), 'stale' if any version differs, renumber 1..n, clear `is_new`, log old→new pos.
+  `seq_insert(p_project text, p_rows jsonb, p_after text, p_by text) returns jsonb {added, skipped:[{line_no,line_key,existing_id,why}]}`.
+  `seq_match(p_id, p_wo, p_expect, p_how, p_by)` refuses if the WO is on another live row or the row is matched.
+  `seq_unmatch(p_id,p_expect,p_by,p_why)` · `seq_remove(…,p_why)` (state 'removed', never deleted) · `seq_restore(…)`.
+- **`seq_requests`**: `id text pk` · `project_id` · `kind check in ('date','move')` · `seq_ids text[] not null` · `wos text[]` ·
+  `change jsonb not null` · `preview jsonb` · `why text not null` · `note` · `status default 'open' check in
+  ('open','approved','refused','withdrawn','direct')` · `asked_by not null`, `asked_at default now()` · `decided_by`,
+  `decided_at`, `answer` · `applied jsonb`, `applied_at` · `seen_at` · `version`, `updated_at`, `updated_by`.
+  Trigger `sr_rules`: insert only 'open' or 'direct' (direct: decided_by = asked_by, decided_at = now()); `why` not blank;
+  open → approved / refused (`answer` required) / withdrawn; `decided_at` set by the database; once decided only
+  `applied`/`applied_at` (once) and `seen_at` change; insert refused 'open request exists' when `seq_ids` overlap another open
+  request. Trigger `sr_log` → `project_events(entity 'req')`.
+- **`seq_pre`** (Johnny): `seq_id text pk references project_seq(id)` · `wo` · `pre_key double precision` (null = default order)
+  · `processed_at`, `processed_by`, `processed_src check in ('tick','sheet')` · `note` · `version`, `updated_at`, `updated_by`.
+  Trigger stamps/clears processed_at; `pre_log` → `project_events(entity 'pre')`.
+- RLS on all three: read anon/authenticated; insert/update `with check (lists_writable())`. Grants: select, insert, update on
+  the three tables; execute on the six functions; all to service_role; revoke delete, truncate.
+- **Planner record** (no new column / top-level key): settings `seqFixedDays` (14), `preWks` (3, min 3), `seqWaitWks` (3) →
+  `fullSettings`, `settingsFrom`, `applyPlan`. `DB.pins.pre`. Staff role `'pre'`. `dueHist` entries gain optional `fx:1` and
+  `rq:'<request id>'`; `src` can be `'pmseq'` or `'undo'`.
+- **Browser**: `LS_T` += `project_seq:'sq'`, `seq_requests:'sr'`, `seq_pre:'sp'`; loaded/polled only when `SEQP.st==='ok'`.
+  Probe `SEQP` = copy of `SPECP`/`specLoad` (`project_seq?select=id&limit=1`). Probe with a table, never a column (`specMissing`
+  doesn't know 42703). `project_events` read only when History opens. Poll 10 s on sequence / pool / requests screens, else 60 s.
+  localStorage: `wpfMe_pm`, `wpfMe_pre`, `wpfSeen_<role>_<name>`.
+
+## How a sequence-row date edit flows (one path for every tool, B6/B7/B11)
+1. The tool builds per-job targets `change.per[wo]={deliv:X, due:dmShiftWd(X,-delivLead())}`; offsets (B11d) add the house's
+   other rows (not `own_date`). Waiting rows get `{req_date}` separately.
+2. Preview: `moveDates(wos, change, reason, me, {src:'pmseq', frozenDays:seqFixedDays(), requestOnly:ROLE==='pm'})`. `dmRow` adds
+   flags `'fixed'` (`seqFixedAt(o,to)`) and `'request-open'`. With `requestOnly`, `apply()` skips fixed rows into `res.needReq`.
+   One-line summary `seqPreviewLine()` (B11h).
+3. `pickReason(…, DATE_WHY)`, reason required. Save → `apply()` writes the free jobs exactly as Job A (week follows unless cut,
+   off the van "rebook" unless loaded, `dueHist` src 'pmseq', `origDueDate`, `dueKeep`/`delivKeep` → Dates to change in Cienapps,
+   saw/stores banner, A9 hold, `sched()`). Waiting rows: version-checked PATCH `req_date` + `why`.
+4. `res.needReq` → one `seq_requests` row (date, open). Office/Production Manager: fixed rows applied with `fx:1` + one 'direct' row.
+5. Approve: `seqDecide(id,'approved')` = version-checked PATCH `status=eq.open` (claim first; a second Production Manager is told
+   "already approved by X — nothing done"), then re-run `moveDates` on TODAY's data with `{src:'pmseq', reqId}` (by "PM (approved
+   by X)"), then PATCH `applied`. Preview shows "changed since asked" if the job moved meanwhile. A claim with no `applied` after
+   2 minutes shows "Approved — not applied yet [Apply now]". Refuse = `answer` required, nothing moves; PM nudged until `seen_at`.
+6. Reorders inside the window (fixed rows among themselves, or a row put above a fixed row) = a 'move' request; outside it
+   `seq_move` runs at once.
+7. Match hand-over (B10): after `seq_match`, if `row.req_date` ≠ the job's delivery date → steps 2–4 with reason
+   {why:'Sequence date', note:'set before the WO existed'}, `requestOnly:true`.
+
+## Screens (word wireframes)
+**PM view** (`renderPMV2`): name strip "👤 John Burke · [Not you?]" (`seqMe('pm')`). Nudge bar (`seqNudgesHTML`): "4 rows no date ·
+2 dates passed · 12 waiting for WO (3 over 3 wks) · 2 to place · 1 request answered". Tabs: 🚚 Deliveries · 🩹 Snags · 🏗 Projects ·
+**🔢 Sequence** — only his projects unless "☐ All projects" (others read-only).
+**Sequence page PC** (`seqPage(pid)`):
+```
+🔢 Aderrig Ph2 · PM John Burke   [⬆ Cienapps file] [📋 Paste programme] [🗓 Weeks] [⚙ Date rules] [📜 History] [↶ Undo 9 min]
+To place (2): WO-2611-3 T09 14 "HOUSE TYPE C BED 2" → [✓ T09·14 W2 BED 2] [Pick…] [＋ Add at bottom]
+Tick: [Whole house] [Whole block] [From here down]  3 ticked → [📅 Set date] [↔ Spread] [⏩ Push/pull] [# Move to…]
+⠿ ☐ #  WO              Flr Unit Prod Name                  Required        Build    Progress                 Moved
+⠿ ☐ 1  🔒 WO-2604-7    T09 12   K8   HOUSE TYPE B          Thu 19 Nov 🔒   16 Nov   list✓ proc✓ cut —        2×
+⠿ ☐ 2  WO-2604-8       T09 12   K2   HOUSE TYPE B UTILITY  [ 3 Dec 📅]     30 Nov   list — proc —
+⠿ ☐ 3  ⏳ no WO yet    T09 13   K8   HOUSE TYPE C          [10 Dec 📅]     —        waiting 1 wk
+⠿ ☐ 4  ✋ request sent  WO-2604-9 … "pull to 18 Nov — Site ready early" [Withdraw]
+⠿ ☐ 9  🆕 WO-2611-1 new — place in sequence  [▲][▼]
+```
+Fixed rows greyed; date and handle open "✋ Request a change". **Phone (360 px)**: one card per row with [▲][▼][# Move to][📅];
+tick mode = sticky bottom bar; no drag; no sideways scroll.
+**Cienapps file** (`seqUploadDlg(pid)`): project first → file → preview "18 lines → 16 new rows, 2 skipped (already in the
+sequence: …)", "Add: ◉ at the bottom ○ after row [#]". Children as grey text. Nothing saved until [Save 16 rows].
+**Production Manager**: tab **✋ Requests (N)** (`seqReqPage`) — cards with [✓ Approve] [✗ Refuse — reason], then last 30 decided.
+Today banners "🏗 3 projects have no PM — assign", "✋ 2 change requests waiting".
+**Office / Production Manager**: "PM ▾" per project in `lsProjectsDlg` / `lsProjHubHTML`, "Unassigned (N)" first, "🔢 Sequence".
+**Pre-production view** (`renderPre`, role `pre`):
+```
+🗂 Pre-production — due by Tue 1 Dec (3 wks) [weeks: 3 ▾]  Filters: PM ▾ Project ▾ Material ▾ [Not processed ▾]  [✓ Seen all]
+⠿ My# Due# WO          Project      PM      Flr Unit Title           Due     Cut-by  Sheets Material       Spec  List  Badges           ✓
+⠿ 1   2    WO-2604-7   Aderrig Ph2  J.Burke T09 12   HOUSE TYPE B   19 Nov  12 Nov  14     H1146 Grey Oak  ⚠     ✓     🔒 fixed · 2×     [☐]
+⠿ 2   1    WO-2603-2   Lucan        M.Kelly A1  4    TYPE A KITCHEN 18 Nov  11 Nov  12     W980 White      ✓     —     RED past cut-by  [☐]
+⠿ 3   5    ⏳ no WO yet Aderrig Ph2  J.Burke T09 13   HOUSE TYPE C   ~7 Dec  …                                         ↻ changed since you looked
+```
+"Due#" = default order (due date, then PM sequence) beside his own order. Phone: cards with [▲][▼][✓ Processed], filters in a drawer.
+**Week timeline** (`seqWeeksPage(pid|'mine')`): 8 board weeks + Later; header "Factory 340 / 350 h" (`wkHrs`/`wkCap`), red when
+over; chips drag between weeks (shift by whole weeks, same flow); fixed weeks grey, a fixed chip opens a request. Phone: stacked
+weeks, chip → "Move to week ▾".
+**Scorecard** (`scorecardHTML`): "Late changes" column — that week's requests "3 (2✓ 1✗) + 1 direct" (only when `SEQP` ok).
+**Export Changes**: "⚙ Processed by pre-production — set 5. WORK ORDER PROCESSED in Cienapps (N)" + Excel sheet "Processed";
+clears itself when an import brings step 5+.
+
+## What changes in code (names for the Coder)
+- Roles: `'pre'` in `ROLE_LBL`, `pins()` (default '1010'), URL/localStorage role list, `startAutoRefresh`, `rolePicker` (V2),
+  View PINs row (V2), staff role columns, `render()` → `renderPre` (the role list is copied in ~8 places — all of them).
+- `seqMe(role)` from `staffFor(role)` once per device → `setWho` (`officeWho` only lists admin/office/prod). `pmMine(pid)`.
+  `seqCanEdit(pid)`: pm + own project, office, prod. `seqFixedDays()`, `preWks()` (≥3), `seqWaitWks()`.
+- Engine (`moveDates`/`dmTarget`/`dmDelivTarget`/`dmRow`): `change.per`, flags `'fixed'`/`'request-open'`, `opts.frozenDays`,
+  `opts.requestOnly` → `res.needReq`, `opts.reqId` → `dueHist.rq`, `fx`. `dmHistHTML` labels. `woProgrammed(o)` = step 5 OR
+  processed in `seq_pre`. `seqFixedAt(o,to)` = `min(dueDate, delivDate||dueDate, to) <= addDayISO(todayLocal(), seqFixedDays())`.
+  `dateCanMove()` stays office/prod; PM edits go only through the sequence page.
+- Sequence: `SEQP`/`seqLoad`, `seqRows(pid)`, `seqRowDate(r)`, `seqPage`, `seqBind` (HTML5 drag on PC; ▲▼/Move to everywhere),
+  `seqMoveDo` → `lsRpc('seq_move')`, `seqStart(pid)`, `seqReconcile(pids)` after `applyImport` and on opening a sequence
+  (confident → `seq_match` + hand-over; ambiguous → "To place"; no waiting rows in that house → insert at bottom `is_new`;
+  23505 from another PC → reload silently).
+- Upload: `seqReadUpload(aoa)` (header by content: ≥4 of qty/floor/unit/product/name/description/price, trimmed; no header → fixed
+  27-column layout when column D looks like `^[A-Z]{1,2}\d{1,2}$` and column A is 1), `seqKind`, `seqLineKey`, `seqUploadDlg`.
+- Matching `seqMatchFind(o)`: same project (`lsProjForCust`), floor + unit equal after normalising (upper, no spaces/punctuation,
+  T09 = T9); score title words (product code +3, each non-generic name word +2; HOUSE/TYPE ignored); QUARTZ/UTILITY/BED/ROBE/KITCHEN
+  and the BED number must AGREE; confident = one best ≥ 3 and next ≤ best − 2.
+- Requests: `seqReqMake`, `seqDecide`, `seqReqPage`, `seqReqWithdraw`, `seqReqSeen`.
+- Pool: `preRows()`, `preDefKey(r)` (due day, project, pos), `preKey(r)` = `pre_key ?? preDefKey`; drag = midpoint of neighbours;
+  `preOutOfStep`, `preSeen`, `preTick(seqId)`, `preMaterial(o)`, `cncCutBy(o)`.
+- Date tools: `seqDateDlg(rowIds, mode)` set / spread / push / paste, `seqSpread`, `seqOffsets`, `seqFollowOrder`, `seqPaste`
+  (`parseDateIE`), `seqPreviewLine`, `SEQ_UNDO` (memory, 10 min, refused for a job changed since), `seqProgress(o)`.
+- `renderExport` + Changes Excel: Processed section. `scorecardHTML`: Late changes.
+
+## B8 — what the CNC view (built later) will read; design only, not built now
+Per WO: `project_seq.pos`, `seqRowDate` and `o.dueDate`, `cncCutBy(o)`, `seqFixedAt(o)`, Johnny's `preKey`, `seq_pre.processed_*`
+(+ step ≥ 5), `o.sheets` (Cienapps; m²/5.75 fallback), `preMaterial(o)`. **Phase 1 (linked):** the planner reads "CNC Schedule
+2025.xlsm" (machine, material, strike-through); a strike-through fills `seq_pre` with `processed_src:'sheet'` (never clears a hand
+tick); sequence + dates only set priority and flag "out of step". **Phase 2 (planner plans):** colour first within ±2 days, never
+later than cut-by + 2, 30 sheets/machine/day less colour changes, carry-over. **Rule: fixed-window jobs are never re-ordered or moved
+to another day by the auto-plan** — they keep Johnny's order and day as locked blocks placed first; only non-fixed jobs are grouped
+by colour around them. Johnny's `pre_key` is the tie-break.
+
+## What must NOT change
+Lists switch OFF = today's app. Before the SQL = today's Stage 3 screens. Job A rules and every date-change entry point,
+`dueKeep`/`delivKeep`, Export Changes date rows, "Mark as applied". Customer = project linking. Spec sheet, materials rights,
+PM Deliveries content (only filtered). Import preview/Apply counts. No planner field written by the pool or sequence except through
+`moveDates`. Never delete a row.
+
+## Risks
+Two PCs dragging (anchors), two Production Managers deciding (claim first), request vs direct change ("changed since asked"),
+upload twice / two PCs (database skips duplicates). Old-version office screen moving a fixed job: allowed, not counted — close every
+screen at go-live. Wrong auto-match (strict rule, Q16 sample, `seq_unmatch`). 300-row projects (previews capped 50, one `sched()`).
+Bank holidays known to 2028 only — flag spreads into 2029. 360 px phones. `projects.pm` read before the SQL → one table probe.
+
+## Acceptance checks
+1. Before SQL / switch off: nothing new, no errors. After: probe shows everything.
+2. Office assigns a PM; PM picks his name once; sees only his projects; "All projects" read-only; Unassigned listed.
+3. Start the sequence; drag, ▲▼, Move to 1, whole house to top on PC and 360 px; History who/when/old→new.
+4. Upload sample (27 cols, trailing spaces, C house with two W2): 1 row per line; again: 0 added, all skipped; no header: same.
+5. Import: confident matches take over (position, date, history; PM date → Dates to change in Cienapps); ambiguous → To place;
+   no waiting rows → bottom "new"; same import on two PCs → no duplicates.
+6. Fixed window (today Mon 16 Nov 2026): 30 Nov fixed, 1 Dec free; moving a free job to 25 Nov needs a request; mixed push splits.
+7. Approve applies with all Job A rules; two approvers → one applies, other told; refuse needs reason; scorecard counts.
+8. Office direct change in the window: reason required, `fx`, counted "direct".
+9. Pool: day 21 in, 22 out; weeks ≥ 3; amber/red/out-of-step; Johnny's drag leaves PM order; tick logged; import at step 5 =
+   processed; tick at step 4 in Export Changes; PM date change → "changed since you last looked".
+10. Tools a–j (after Garry's yes): spread "2 houses per week" from Tue 22 Dec 2026 skips 25–28 Dec; push 3 working days; offsets;
+    follow-the-order; paste with 2 unmatched; timeline red over 350 h; preview line; Undo 10 min; nudges; progress chips.
+11. Full suite: no new failures outside ACCEPTED-FAILURES. SQL twice on a throwaway Postgres: ALL PG CHECKS PASSED.
+
+## Build steps (small commits, in this order)
+1. SQL PENDING block + `tests/seq/pg-check.sql` + fake database routes. 2. B5: probe + load/poll, PM assignment, Unassigned list,
+`seqMe`, `pmMine`, role `pre` plumbing + PIN + staff column, settings keys. 3. B6a: sequence page read-only + `seqProgress` + `seqStart`.
+4. B6b: `seq_move` + History. 5. Engine: `change.per`, `fixed`, `requestOnly`/`needReq`, `reqId`/`fx`, `woProgrammed` (Job A tests
+still pass). 6. B6c: row date edit (single, whole house), waiting-row `req_date`. 7. B10a: upload + preview + `seq_insert`.
+8. B10b: `seqMatchFind` (tests first) + `seqReconcile` + To place + hand-over + "not in Cienapps yet?". 9. B7: requests, Production
+Manager tab, claim-approve-apply, refuse, 'direct', nudge, scorecard. 10. B9a: pool read-only. 11. B9b: tick + Export Changes,
+Johnny's order, out of step, changed-since. 12. B11 tools — ONLY after Garry's yes on the wireframe, one commit each.
+13. B8 design final, nothing built. Full suite → Tester → fixes → Manager.
+
+## B11 wireframe for Garry (sent 10 Nov for yes / no)
+```
+THE SEQUENCE TABLE (one per project, one row per work order, first to last)
+ #  WO / status      Floor Unit Product Name                 Required date   Progress
+ 1  🔒 WO-2604-7     T09   12   K8      HOUSE TYPE B         Thu 19 Nov 🔒   list ✓ · processed ✓
+ 2  WO-2604-8        T09   12   K2      HOUSE TYPE B UTILITY Thu 3 Dec       list —
+ 3  ⏳ no WO yet     T09   13   K8      HOUSE TYPE C         Thu 10 Dec      waiting 1 week
+ 9  🆕 WO-2611-1 — new, place it in the sequence
+ - PC: drag rows. Phone: ▲ ▼ and "Move to number…". Tick boxes for the tools below.
+ - 🔒 = inside the next 14 days: tap = "Request a change" to the Production Manager.
+a) BULK SET — tick rows, or "Whole house" / "Whole block" / "From here down", one date + one reason.
+b) SPREAD — rows, start date, pace ("2 houses a week", "1 a working day", "every Tuesday"); skips weekends/bank holidays; preview.
+c) PUSH / PULL — "everything from this row down: later by 3 working days" (or weeks); one reason; preview shows knock-ons.
+d) DATE RULES per project (optional) — robes = kitchen + 5 working days, quartz = kitchen + 10; any row can be set by hand.
+e) DATES FOLLOW THE ORDER (optional per project) — drag a row and it takes the date of the place it lands on.
+f) PASTE THE PROGRAMME — two columns from the contractor's Excel (plot or WO, date); unmatched listed.
+g) WEEK VIEW — weeks across the top, jobs as chips to drag; factory hours per week, red over 350 h; next 2 weeks grey.
+h) BEFORE SAVING one line ("3 jobs come off vans, 1 already cut — flagged, 2 cutting lists move"); AFTER: Undo for 10 minutes.
+i) PM HOME SCREEN — "4 rows with no date · 2 dates passed · 12 waiting for a WO number · 1 change request answered".
+j) PROGRESS ON EACH ROW (look only) — list ready · processed by Johnny · cut · assembled · in store · on a van · delivered.
+SAME RULES FOR EVERY TOOL: reason every time, full history, next 14 days need the Production Manager's OK, build week, van,
+saw and stores follow the new date like any other date change.
+```
