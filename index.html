@@ -759,6 +759,7 @@ function settingsFrom(s,prev){
   if(typeof s.photoLists==='boolean')r.photoLists=s.photoLists; // "Photo lists allowed" (missing = ON)
   if(s.exportBase&&typeof s.exportBase==='object')r.exportBase=s.exportBase;
   if(typeof s.delLegacyWk==='string'&&s.delLegacyWk)r.delLegacyWk=s.delLegacyWk; /*dates: week given to bookings made before week tabs*/
+  if(typeof s.delLegacyAt==='string'&&s.delLegacyAt)r.delLegacyAt=s.delLegacyAt; /*dates: when that was answered*/
   return r;
 }
 // The database row has no Export Changes baseline but this screen holds one: an old-version tab saved the whole
@@ -787,6 +788,9 @@ function applyPlan(p){
   if(typeof s.delLegacyWk==='string'&&s.delLegacyWk)DB.delLegacyWk=s.delLegacyWk; /*dates*/
   // Export Changes baseline: saved with the plan, so a refresh never resets it — only "Mark as applied" does
   if(s.exportBase){orig={...(s.exportBase.wk||{})};origStep={...(s.exportBase.st||{})};}
+  if(typeof s.delLegacyAt==='string'&&s.delLegacyAt)DB.delLegacyAt=s.delLegacyAt; /*dates*/
+  // dates: a job booked on an old screen while flagged "rebook" is on a van now — the flag is older than the booking
+  DB.orders.forEach(o=>{if(o&&o.delDay&&o.delRebook&&delBookAt(o)>String(o.delRebook.at||''))delete o.delRebook;});
 }
 /* 3-way merge: base = what both screens started from, mine = this screen, theirs = the database now.
    Changes made on only one side are kept. Both sides changed the same thing differently ("clash"):
@@ -1224,7 +1228,7 @@ async function saveDB(){
 }
 // Never let a tab close while an edit is unsaved, a save is in flight / being checked, or a retry is pending
 window.addEventListener('beforeunload',e=>{if(saveT||SAVING||DB.saveFailed||lqPending()){e.preventDefault();e.returnValue='';}});
-function fullSettings(){return{weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP,delx:DB.delx||[],delNotes:DB.delNotes||{},grps:DB.grps||{},pins:DB.pins||{},pod:DB.pod||{},lists:DB.lists||[],listWBs:DB.listWBs||{},listDone:DB.listDone||{},listLead:DB.listLead||5,delArchive:DB.delArchive||{},staff:DB.staff||[],listHold:DB.listHold||{},holdLog:DB.holdLog||[],listRow:DB.listRow||{},saveIds:DB.saveIds||[],exportBase:{wk:orig,st:origStep},...(DB.listDue>0?{listDue:DB.listDue}:{}),...(typeof DB.listChk==='boolean'?{listChk:DB.listChk}:{}),...(typeof DB.photoLists==='boolean'?{photoLists:DB.photoLists}:{}),...(DB.delLegacyWk?{delLegacyWk:DB.delLegacyWk}:{}),...(DB.listStore?{listStore:DB.listStore,listStoreAt:DB.listStoreAt||''}:{})};}
+function fullSettings(){return{weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP,delx:DB.delx||[],delNotes:DB.delNotes||{},grps:DB.grps||{},pins:DB.pins||{},pod:DB.pod||{},lists:DB.lists||[],listWBs:DB.listWBs||{},listDone:DB.listDone||{},listLead:DB.listLead||5,delArchive:DB.delArchive||{},staff:DB.staff||[],listHold:DB.listHold||{},holdLog:DB.holdLog||[],listRow:DB.listRow||{},saveIds:DB.saveIds||[],exportBase:{wk:orig,st:origStep},...(DB.listDue>0?{listDue:DB.listDue}:{}),...(typeof DB.listChk==='boolean'?{listChk:DB.listChk}:{}),...(typeof DB.photoLists==='boolean'?{photoLists:DB.photoLists}:{}),...(DB.delLegacyWk?{delLegacyWk:DB.delLegacyWk}:{}),...(DB.delLegacyAt?{delLegacyAt:DB.delLegacyAt}:{}),...(DB.listStore?{listStore:DB.listStore,listStoreAt:DB.listStoreAt||''}:{})};}
 /* Stage 3 switch: settings.listStore==='v2' → cutting lists live in their own tables (lists, list_lines…).
    Missing, blank or anything else (switch back writes 'v1') → today's lists in the planner record, untouched. */
 function V2(){return DB.listStore==='v2'||DB.listStore==='switching';} // 'switching' = a Switch back is rebuilding the old lists: screens still read the tables, the database takes no changes
@@ -8645,7 +8649,15 @@ function wkOf(iso){if(!iso)return'';const d=new Date(String(iso).slice(0,10)+'T1
 function thisWk(){return wkOf(todayLocal());}
 function wkPlus(wk,n){return wk?wkOf(addDayISO(wk,7*(+n||0))):'';}
 // the week a delivery booking belongs to: its own week, else the week every pre-week-tabs booking was given, else this week
-function slotWk(o){return (o&&o.delWk)||DB.delLegacyWk||thisWk();}
+function slotWk(o){
+  if(o&&o.delWk)return o.delWk;
+  /*dates: a booking with no week. The legacy week only applies to bookings made before the office answered the question;
+    one made later (on an old screen still open) was meant for the week it was made in → this week. */
+  if(DB.delLegacyWk){const t=delBookAt(o);if(!(t&&((DB.delLegacyAt&&t>DB.delLegacyAt)||wkOf(isoOf(new Date(t)))>DB.delLegacyWk)))return DB.delLegacyWk;}
+  return thisWk();
+}
+// when a booking was last made / moved (first placement stamp or the last van move)
+function delBookAt(o){if(!o)return'';return [String(o.delPlacedAt||''),...(o.delMoves||[]).map(m=>String(m&&m.at||''))].filter(x=>x&&!isNaN(new Date(x))).sort().pop()||'';}
 function slotDate(o){if(!o||!o.delDay)return'';const i=DEL_DAYS.indexOf(o.delDay);return i<0?'':addDayISO(slotWk(o),i);}
 /*dates: week-aware bookings. A job is booked when it has a day; its week is slotWk (a delWk with no delDay = not booked). */
 function slotIn(o,wk,d){return !!(o&&o.delDay)&&slotWk(o)===wk&&(d==null||o.delDay===d);}
@@ -8664,7 +8676,7 @@ function delNoteSet(date,v){const n=DB.delNotes=DB.delNotes||{};n[date]=v;const 
 // Bookings made before week tabs (a day, no week): until the office answers "This week / Next week" they show under This week
 function delLegacyJobs(){return DB.delLegacyWk?[]:delAll().filter(o=>o.delDay&&!o.delWk);}
 function setLegacyWk(wk,by){
-  DB.delLegacyWk=wk;const n=DB.delNotes=DB.delNotes||{};
+  DB.delLegacyWk=wk;DB.delLegacyAt=nowISO();const n=DB.delNotes=DB.delNotes||{};
   DEL_DAYS.forEach((d,i)=>{if(n[d]==null)return;const k=addDayISO(wk,i);if(n[k]==null||n[k]==='')n[k]=n[d];delete n[d];});
   toast('Bookings from before the week tabs are now in Wk '+wkNum(wk)+(by?' — '+by:''));sched();
 }
