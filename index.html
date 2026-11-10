@@ -3182,6 +3182,8 @@ function lsKeptRows(sh){
   });
   return out;
 }
+// (L1b) the job a sheet names in its job-info block (Floor / Unit / WO), shown in the import preview — information only
+function lsMetaJob(m){m=m||{};const a=[m.floor?'Floor '+m.floor:'',m.unit?'Unit '+m.unit:'',m.wo||''].filter(Boolean);return a.length?' <span class="imp-job" style="color:#5b6b82;font-size:12px">· '+escA(a.join(' · '))+'</span>':'';}
 function lsImpPreview(bk,fname,projName,done){
   const ov=document.createElement('div');ov.className='pod-ovl';
   const nOn=()=>bk.sheets.filter(s=>s.on).length;
@@ -3193,7 +3195,7 @@ function lsImpPreview(bk,fname,projName,done){
     ov.innerHTML=`<div class="pod-in" style="min-width:min(1000px,97vw)"><div style="font-weight:800;color:#14335c;font-size:17px;margin-bottom:2px">📥 Import preview — ${escA(fname)}</div>
       <div style="font-size:12px;color:var(--t3);margin-bottom:8px">Project: <b>${escA(projName)}</b>. Each ticked sheet becomes one cutting list. Rows with a length or width go to the <b>Saw</b>; rows without go to <b>Stores</b>. Untick anything you don't want. Nothing is saved until you press <b>Save</b>.${bk.skipped.length?'<br>Left out: '+bk.skipped.map(n=>'<b>'+escA(n)+'</b>').join(', ')+' (not cutting lists).':''}</div>
       <div style="max-height:58vh;overflow:auto">${bk.sheets.map((sh,si)=>{const parts=sh.rows.filter(r=>r.k==='part'),saw=parts.filter(r=>+r.L>0||+r.W>0).length,units=sh.rows.filter(r=>r.k==='hdr'&&r.units!=null).length;
-        return `<details class="imp-sh" style="border:1px solid var(--b2);border-radius:6px;margin-bottom:8px;${sh.on?'':'opacity:.55'}"${si===0?' open':''}><summary style="padding:7px 10px;cursor:pointer;font-size:13px"><label onclick="event.stopPropagation()"><input type="checkbox" data-ips="${si}"${sh.on?' checked':''}> <b>${escA(sh.name)}</b></label> — ${saw} saw part${saw!==1?'s':''} · ${parts.length-saw} Stores · ${units} unit block${units!==1?'s':''}${sh.warn.length?` · <span style="color:#8a5a00;font-weight:700">⚠ ${sh.warn.length} to check</span>`:''}</summary>
+        return `<details class="imp-sh" style="border:1px solid var(--b2);border-radius:6px;margin-bottom:8px;${sh.on?'':'opacity:.55'}"${si===0?' open':''}><summary style="padding:7px 10px;cursor:pointer;font-size:13px"><label onclick="event.stopPropagation()"><input type="checkbox" data-ips="${si}"${sh.on?' checked':''}> <b>${escA(sh.name)}</b></label>${lsMetaJob(sh.meta)} — ${saw} saw part${saw!==1?'s':''} · ${parts.length-saw} Stores · ${units} unit block${units!==1?'s':''}${sh.warn.length?` · <span style="color:#8a5a00;font-weight:700">⚠ ${sh.warn.length} to check</span>`:''}</summary>
         ${sh.warn.length?`<div style="color:#8a5a00;font-size:12px;padding:0 10px 6px">${sh.warn.map(w=>'⚠ '+escA(w)).join('<br>')}</div>`:''}
         <table class="me-tbl"><thead><tr><th></th><th>Description</th><th>Qty</th><th>Total</th><th>Length</th><th>Width</th><th>Material</th><th>Edging</th></tr></thead><tbody>${sh.rows.map((r,ri)=>{
           if(r.k==='hdr'&&r.info)return `<tr style="color:var(--t3)"><td>${tick(si,ri,r)}</td><td colspan="7"><i>${escA(r.item)} ${escA(r.note)}</i> — ${r.total?'a totals row, not a part — left out':'not a part (left out unless ticked)'}</td></tr>`;
@@ -5348,8 +5350,11 @@ function openListEditor2(listId,presetWo,presetPid,opt){
         if(add.some(r=>r.k==='hdr'&&r.units!=null))st.unitsOn=true;
         if(!String(st.name||'').trim())st.name=sh.name;
         const m=sh.p.meta;if(!st.carcass&&m.carcass)st.carcass=m.carcass;if(!st.door&&m.door)st.door=m.door;
+        // (L1b) a sheet's Floor / Unit / Title / WO cells fill the job boxes of a new list with no WO, then the WO is looked up
+        let look=false;if(jbOn()&&!st.wo)['floor','unit','title','wo'].forEach(k=>{const v=String(m[k]||'').trim();if(v&&!String(st.jb[k]||'').trim()){st.jb[k]=v;look=true;}});
         const np=add.filter(r=>r.k==='part').length,nh=add.length-np,nw=sh.p.warn.length;
         draw();
+        if(look&&((keyTxt(st.jb.floor)&&keyTxt(st.jb.unit))||String(st.jb.wo||'').trim()))jbFind();
         if(nw)err('⚠ Check these rows: '+sh.p.warn.slice(0,4).join(' · ')+(nw>4?' …and '+(nw-4)+' more':''));
         toast('Imported '+np+' row'+(np!==1?'s':'')+(nh?' and '+nh+' heading'+(nh!==1?'s':''):'')+' from "'+sh.name+'"'+(typed?' (added at the bottom)':'')+' — check them, then Save. Ctrl+Z undoes it.');
       };
@@ -6068,14 +6073,15 @@ function lsLooksEdge(s){s=String(s==null?'':s).trim();return !!s&&LS_EDGE_RE.tes
    aoa: the sheet's rows from A1 (cached values; null = empty). opt.formulas: the same grid with each cell's formula (or null).
    opt.sheet: the sheet name (a sheet-wide "Nr of units" makes a unit block with this name). opt.paste: no project row.
    Columns: Description | Qty | Length | Width | Colour | Edging (| Note).
-   Returns {meta:{project,title,date,carcass,door}, rows, warn}. Rows are the editor's rows:
+   Returns {meta:{project,title,date,carcass,door,floor,unit,wo}, rows, warn}. Rows are the editor's rows:
+   (L1b, Job B part 3) Floor / Unit / WO (or Work order) cells in the job-info block are read too; the old template still reads.
      {k:'hdr',item,note[,units]}  a heading; with units it is a unit heading ("900 Single Rail + 2 shelves", 3 units)
      {k:'part',item,qty,L,W,mat,edging,note[,total]}  inside a unit block qty is PER UNIT and total = qty × units
      {k:'hdr',info:true,item,note}  a line that isn't a part (e.g. a school's room breakdown "Science Lab 1 … 6")
    Every row carries src = its row number in the sheet. */
 function lsParseGrid(aoa,opt){
   opt=opt||{};aoa=aoa||[];const F=opt.formulas||[];
-  const meta={project:'',title:'',date:'',carcass:'',door:''},rows=[],warn=[];
+  const meta={project:'',title:'',date:'',carcass:'',door:'',floor:'',unit:'',wo:''},rows=[],warn=[];
   const isErr=v=>typeof v==='string'&&/^#(VALUE|REF|N\/A|NAME|DIV\/0|NUM|NULL)[!?]?/i.test(v.trim());
   const raw=(r,c)=>{const v=(aoa[r]||[])[c];return v==null||isErr(v)||(typeof v==='string'&&v.trim()==='')?null:v;};
   const fm=(r,c)=>{const f=(F[r]||[])[c];return f==null||String(f).trim()===''?null:String(f).trim().replace(/^=/,'');};
@@ -6102,6 +6108,10 @@ function lsParseGrid(aoa,opt){
     m=/^(\d{1,2})[\/.](\d{1,2})[\/.](\d{2,4})$/.exec(s);if(m){const y=m[3].length===2?'20'+m[3]:m[3];return y+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0');}return'';};
   const LBL=/^(project( name)?|title|date|carcass (colou?r|material)|door (colou?r|material)|(nr|no\.?|number) of units)\s*:?$/i; // (9 Nov) "Carcass material" / "Door material" — the circulated Excel template's labels
   const UNITS=/total\s*(nr|no\.?|number)\s*(of)?\s*units?/i;
+  // (L1b) the job's Floor / Unit / WO cells. Only a row made of label → value pairs counts ("Floor | T09 | Unit | 12 | WO | WO-2557"),
+  // so a part called "Unit" with a quantity and sizes is still a part.
+  const JOB=/^(floor|unit|wo|w\.?\s?o\.?\s*(no\.?|nr|number|#)|works?\s*order(\s*(no\.?|nr|number|#))?)\s*:?$/i,isLbl=t=>LBL.test(t)||JOB.test(t);
+  const pairsOnly=t=>{for(let c=0;c<t.length;c++){if(t[c]==='')continue;if(!isLbl(t[c]))return false;let v=c+1;while(v<t.length&&t[v]==='')v++;if(v<t.length&&!isLbl(t[v]))c=v;}return true;};
   let cur=null; // the current heading row; cur.u = {r,c} of its units cell once it is a unit block
   const startUnits=(n,r,c)=>{
     if(!cur||cur.info||cur.units!=null){cur={k:'hdr',item:opt.sheet?String(opt.sheet).trim():'Units',note:'',src:r+1};rows.push(cur);}
@@ -6121,10 +6131,11 @@ function lsParseGrid(aoa,opt){
     //    Several on one row ("Project | Customer B | | Date | 12/10/2026") are all read; so is "Project: X  Date: Y" in one cell.
     const pd=/^\s*project( name)?\s*:\s*(.+?)(?:\s+date\s*:\s*(.+))?$/i.exec(A);
     if(pd&&texts.slice(1).every(t=>t==='')){meta.project=pd[2].trim();if(pd[3])meta.date=isoDate(pd[3].trim());continue;}
-    if(LBL.test(A)){
-      for(let c0=0;c0<7;c0++){if(!LBL.test(texts[c0]))continue;
-        const k=texts[c0].toLowerCase(),vi=cells.findIndex((v,c)=>c>c0&&v!=null&&str(v)!=='');const v=vi>0&&!LBL.test(texts[vi])?cells[vi]:null;
-        if(/^project/.test(k))meta.project=str(v);else if(/^title/.test(k))meta.title=str(v);else if(/^date/.test(k))meta.date=isoDate(v);
+    if(LBL.test(A)||(JOB.test(A)&&pairsOnly(texts)&&texts.some(t=>t&&!isLbl(t)))){ // a lone "Unit" heading stays a heading
+      for(let c0=0;c0<7;c0++){if(!isLbl(texts[c0]))continue;
+        const k=texts[c0].toLowerCase(),vi=cells.findIndex((v,c)=>c>c0&&v!=null&&str(v)!=='');const v=vi>0&&!isLbl(texts[vi])?cells[vi]:null;
+        if(JOB.test(texts[c0])){const f=/^floor/.test(k)?'floor':/^unit/.test(k)?'unit':'wo';meta[f]=str(v);}
+        else if(/^project/.test(k))meta.project=str(v);else if(/^title/.test(k))meta.title=str(v);else if(/^date/.test(k))meta.date=isoDate(v);
         else if(/^carcass/.test(k))meta.carcass=str(v);else if(/^door/.test(k))meta.door=str(v);
         else if(!isNaN(num(v))&&num(v)>0)startUnits(num(v),r,vi);}
       continue;
