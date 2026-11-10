@@ -97,6 +97,13 @@ const closeEd = p => p.evaluate(() => document.querySelectorAll('.pod-ovl').forE
     await fill(p, '', '', ' wo-3 '); await find(p); s = await st(p);
     rec('typed " wo-3 ": found (trimmed, any case), filled', s.wo === 'WO-3' && /Matched WO-3/.test(s.ok), JSON.stringify(s));
     await p.evaluate(() => document.getElementById('me-jnot').click()); await sleep(100);
+    // (round 2) a typed WO of another project / another house: asked; Cancel = not used, said why
+    await p.evaluate(() => { window.__confirm = false; });
+    await fill(p, '', '', 'WO-6'); await find(p); s = await st(p);
+    rec('typed WO-6 (project Lucan) in an Aderrig list: asked, Cancel → not used, "belongs to project Lucan"', !s.wo && /WO-6 not used[\s\S]*belongs to project Lucan/.test(s.msg), JSON.stringify(s));
+    await fill(p, 'T09', '40', 'WO-3'); await find(p); s = await st(p);
+    rec('typed WO-3 (T09 / 13) with the boxes on T09 / 40: asked, Cancel → not used', !s.wo && /WO-3 not used[\s\S]*the boxes say Floor T09 · Unit 40/.test(s.msg), JSON.stringify(s));
+    await p.evaluate(() => { window.__confirm = undefined; }); await fill(p, '', '', '');
     // a WO that already has a live list → Open it instead?
     await p.evaluate(() => { window.__confirm = false; window.__asked = ''; const c = window.confirm; window.confirm = m => { window.__asked = m; return c(m); }; });
     await fill(p, 'GF', '12', ''); await find(p); s = await st(p);

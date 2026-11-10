@@ -993,6 +993,7 @@ function renumberP(base,mine,theirs,o){
 }
 function noteMerge(N,ren,by){
   const r=Object.keys(ren||{});
+  if(r.length&&V2()){let ch=false;r.forEach(w=>{const e=PMINE[w];if(e&&!e.to){e.to=ren[w];ch=true;}});if(ch){pMineSave();setTimeout(()=>pMineFix(),0);}} // our lists in the list tables follow (round 2)
   if(r.length){alert('Work order number changed: '+r.map(w=>w+' is now '+ren[w]).join(', ')+'.\n\nAnother screen created the same P-number at the same moment. Use the new number from now on (cutting lists were updated).');}
   if(!N||!N.length)return;
   const g=N.filter(n=>n.gone).map(n=>String(n.path[1]).replace(/^wo:/,''));
@@ -5056,6 +5057,13 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       const o=DB.orders.find(x=>woKey(x.wo)===woKey(typed))||DB.orders.find(x=>woKey(woNorm(x.wo))===woKey(woNorm(typed)));
       if(!o){b.res={st:'nowo',wo:typed};draw();return;}
       if(isShipped(o)||o.delDone||o.delDelivAt){b.res={st:'gone',wo:o.wo};draw();return;}
+      // (round 2) a typed WO from another project, or another house than the boxes say: told, and asked — never silent
+      const jk=jobKey(o),warn=[];
+      if(st.pid&&jk.p&&jk.p!==st.pid)warn.push(o.wo+' belongs to project '+(lsProjName(jk.p)||jk.p)+', not '+lsProjName(st.pid)+'.');
+      else if(st.pid&&!jk.p)warn.push(o.wo+'\'s customer "'+(o.customer||'')+'" is not linked to any project — check it is a '+lsProjName(st.pid)+' job.');
+      if(keyTxt(b.floor)||keyTxt(b.unit)){const t=keyOf(jk.p,b.floor,b.unit,'');
+        if(keyMatch(t,Object.assign({},jk,{p:jk.p})).r==='different')warn.push(o.wo+' is '+([fuLbl(o),o.title].filter(Boolean).join(' · ')||'(no floor / unit)')+' — the boxes say Floor '+String(b.floor).trim()+' · Unit '+String(b.unit).trim()+'.');}
+      if(warn.length&&!confirm(warn.join('\n\n')+'\n\nUse '+o.wo+' for this list anyway?\n\nOK = use '+o.wo+'\nCancel = go back')){b.res={st:'typedno',wo:o.wo,why:warn.join(' ')};draw();return;}
       return jbChoose(o.wo,'typed');}
     b.last=keyHouseStr(b.floor,b.unit)||'';
     if(!st.pid){b.res={st:'noproj'};draw();return;}
@@ -5088,6 +5096,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       :r.st==='none'?'<span class="me-jbw">No Cienapps work order found'+where+'.</span> Check the floor and unit — or Cienapps may not have it yet. <button class="btn btn-s" id="me-jmkp" style="font-size:12px;padding:2px 9px;color:#5b21b6">Make a P-number instead…</button>'
       :r.st==='nowo'?'<span class="me-jbw">'+E(r.wo)+' is not in the planner</span> — check the number (a new Cienapps WO arrives with the next import).'
       :r.st==='gone'?'<span class="me-jbw">'+E(r.wo)+' is shipped or delivered</span> — a cutting list needs a live job.'
+      :r.st==='typedno'?'<span class="me-jbw">'+E(r.wo)+' not used</span> — '+E(r.why)
       :r.st==='haslist'?'<span class="me-jbw">'+E(r.wo)+' already has a live cutting list "'+E(r.name)+'"</span> — open it from Lists, or pick another job.'
       :(b.pmsg?'<div class="me-jbw">The planner already has work orders that could be this house — pick one. A P-number is only for when Cienapps has none.</div>':'')
         +`<span class="me-jbw">${(n=>n+' work order'+(n!==1?'s':'')+' could be this house')(r.same.length+r.unsure.length)}</span>${where} — pick ${r.same.length+r.unsure.length!==1?'one':'it if it is'}:`+[...r.same.map(x=>opt(x,true)),...r.unsure.map(x=>opt(x,false))].slice(0,8).join('')
@@ -5496,6 +5505,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     }
     if(ex&&ex.tpl){const w=prompt('What changed in this template? (optional — shown in its History; it becomes Rev '+((+ex.rev||1)+1)+')','');if(w===null)return;d.why=w.trim()?w.trim():'Template edited';}
     officeWho(by=>{
+     const go=()=>{
       if(st.newWO){
         const pwo=nextPNumber(),val=parseFloat(g('me-pval').value)||0;
         let hours=parseFloat(g('me-phrs').value),hoursEstimated=false;
@@ -5504,9 +5514,10 @@ function openListEditor2(listId,presetWo,presetPid,opt){
         DB.orders.push({wo:pwo,pid:st.pid||undefined,ref:'',floor:(g('me-pfloor').value||'').trim(),unit:(g('me-punit').value||'').trim(),title:g('me-ptitle').value.trim(),customer:(g('me-pcust').value||'').trim()||d.project,hours,hoursEstimated,
           dueDate:due,origDueDate:due,step:'Planner WO',salesRep:'',orderNo:'',value:val,plannedWeek:wkKey(new Date(due)),notes:'',colour:'',log:[{at:nowISO(),by,what:'Work order created with a typed cutting list'}]});
         orig[pwo]='';origStep[pwo]='Planner WO';d.wo=pwo;st.newWO=false;st.wo=pwo; // a failed save tried again reuses this P-number
+        if(d.newId)pMineAdd(pwo,d.newId); // (round 2) this screen's list for this P-number — moved with it if a merge renumbers it
       }
       const sb=g('me-save');if(sb)sb.disabled=true;err('Saving…');
-      lsSaveManual(d,by,ex).then(async l=>{ov.remove();sched();render();if(d.newId)lsPendDrop(d.newId);
+      lsSaveManual(d,by,ex).then(async l=>{ov.remove();sched();render();if(d.newId)lsPendDrop(d.newId);setTimeout(()=>pMineFix(),0);
         let t=(ex?'List updated':'List saved')+' — '+l.name+' → '+(l.saw?l.saw+' saw row'+(l.saw!==1?'s':''):'no cutting')+' · '+(l.fit?l.fit+' Stores':'no Stores')+(d.wo&&!st.tpl?' · tagged '+d.wo:'');
         if(d.retiredMsg)t+='.'+d.retiredMsg; // the database archived the old list in the same step as the save
         toast(t);})
@@ -5525,6 +5536,19 @@ function openListEditor2(listId,presetWo,presetPid,opt){
               err('✓ Saved — the reply was lost, but '+nm+' is in the database.'+old+' Close this, or change rows and press Save again (it updates the same list — never a second one).');}
             else if(s==='not')err('Not saved — the connection failed ('+x.message+') and '+nm+' is not in the database. Press Save again.');
             else err('May have saved — the reply was lost ('+x.message+') and the database could not be checked. Press Save again when the connection is back: it saves to the same list, never a second one.');});});
+     };
+      if(st.newWO){ // (round 2) ask the database first: another screen may have made this house's job a moment ago
+        const pf=g('me-pfloor').value,pu=g('me-punit').value,pt=g('me-ptitle').value;
+        if(st.pid&&keyTxt(pf)&&keyTxt(pu)){const sb=g('me-save');if(sb)sb.disabled=true;err('Checking the planner for this house…');
+          pFreshDup(st.pid,pf,pu,pt).then(dup=>{if(sb)sb.disabled=false;err('');
+            if(dup){const m=dup.wo+(/^P-\d+$/.test(dup.wo)?' (made on another screen)':' from Cienapps')+' is in the planner now for Floor '+pf.trim()+' · Unit '+pu.trim()+' — use it';
+              if(!DB.orders.some(x=>x.wo===dup.wo))DB.orders.push(JSON.parse(JSON.stringify(dup))); // brought in now; the next refresh has it anyway
+              if(confirm(m+'.\n\nNo second job is made for one house.\n\nOK = use '+dup.wo+' for this list\nCancel = go back')){st.newWO=false;jbChoose(dup.wo,'picked');}else err('Not saved — '+m+'.');return;}
+            go();})
+          .catch(()=>{if(sb)sb.disabled=false;err('');go();}); // offline: the local check above stands
+          return;}
+      }
+      go();
     });
   };
   ov.addEventListener('focusin',e=>{const m=e.target&&e.target.dataset&&e.target.dataset.mr;if(m){st.cur=m;if(st.snapKey!==m)st.snapKey='';}});
@@ -10376,6 +10400,50 @@ function knownMaterials(){
   Object.values(DB.listWBs||{}).forEach(wb=>Object.values(wb.sheets||{}).forEach(rows=>rows.forEach(r=>{if(r.k==='saw'&&r.mat)s.add(String(r.mat).trim());})));
   return[...s].sort();
 }
+/* (Round 2, Tester attack 3) P-numbers made on two PCs at the same moment, with the lists switched on.
+   PMINE (this device, localStorage wpfPMine) remembers which NEW cutting lists this screen made for each P-number it created.
+   When a merge renumbers our P-number (renumberP — it only re-tags the old in-record lists), pMineFix moves OUR lists in the
+   list tables onto the new number (list_attach through the line queue, logged on the list and the job), never the other
+   screen's lists. If the other screen's job is for the SAME house and kind, there must be one job: ours is folded into
+   theirs — our list goes onto their number when they have no live list, otherwise (after a confirm) our list is archived
+   (never deleted) — and our just-made duplicate P-job is taken out, with a line in their job's log. */
+const PMINE=(()=>{try{const o=JSON.parse(localStorage.getItem('wpfPMine')||'{}');return o&&typeof o==='object'?o:{};}catch(e){return{};}})();
+function pMineSave(){const lim=Date.now()-3*864e5;Object.keys(PMINE).forEach(w=>{if(!(+PMINE[w].at>lim))delete PMINE[w];});try{localStorage.setItem('wpfPMine',JSON.stringify(PMINE));}catch(e){}}
+function pMineAdd(wo,listId){if(!wo)return;const e=PMINE[wo]&&!PMINE[wo].to?PMINE[wo]:(PMINE[wo]={lists:[],at:Date.now()});if(listId&&!e.lists.includes(listId))e.lists.push(listId);pMineSave();}
+function pKindsMeet(a,b){const ka=seqKinds(a),kb=seqKinds(b);if(!ka.size)ka.add('kitchen');if(!kb.size)kb.add('kitchen');return [...ka].some(x=>kb.has(x));}
+// another live job for the same house + kind as job o (same project, floor and unit — 'same' only)
+function pSameHouse(o,jobs){const k=jobKey(o);return (jobs||DB.orders).find(x=>x&&x.wo!==o.wo&&!isShipped(x)&&!x.delDone&&!x.delDelivAt&&keyMatch(k,jobKey(x)).r==='same'&&pKindsMeet(o.title,x.title))||null;}
+let PMFIX=null;
+function pMineFix(){if(!V2()||PMFIX)return PMFIX;PMFIX=(async()=>{await null;try{ // (await first: the finally must run AFTER PMFIX is set)
+  for(const [w,e] of Object.entries(PMINE)){
+    if(!e||!e.to||e.done)continue;
+    const nw=e.to,o=DB.orders.find(x=>x.wo===nw),by=lqBy('');
+    if(!o){e.done=1;continue;}
+    const ls=(e.lists||[]).map(id=>lsList(id)).filter(Boolean);
+    if(ls.length<(e.lists||[]).length)continue; // our list hasn't reached the database yet: done after its save
+    const names=ls.map(l=>'"'+l.name+'"').join(', ');
+    const dup=pSameHouse(o);
+    if(dup){
+      let other=[];try{other=(await lsLiveFor(dup.wo)).filter(l=>!(e.lists||[]).includes(l.id));}catch(x){continue;} // ask the database: the other screen's list may not be on this screen yet
+      if(other.length&&!confirm('Another screen made '+dup.wo+' for the same house ('+[fuLbl(dup),dup.title].filter(Boolean).join(' · ')+') at the same moment as your '+nw+', with its own cutting list "'+other[0].name+'".\n\nOne house = one job.\n\nOK = keep '+dup.wo+': your list '+(names||'(none)')+' is archived (not deleted — Find old list shows it) and '+nw+' is taken out\nCancel = keep both for now (two jobs for one house — sort it out)')){
+        ls.forEach(l=>{if((l.wos||[]).includes(w)&&!(l.wos||[]).includes(nw)){listTag(l,nw,true,by);listTag(l,w,false,by);}});
+        logEdit(o,'Made at the same moment as '+dup.wo+' for the same house — both kept (the person chose); its list '+names+' moved from '+w+' to '+nw,by);e.done=1;continue;}
+      ls.forEach(l=>{
+        if(other.length){if(!l.archived)listArchive(l,by);}
+        else{if(!(l.wos||[]).includes(dup.wo))listTag(l,dup.wo,true,by);(l.wos||[]).filter(x=>x!==dup.wo).forEach(x=>listTag(l,x,false,by));}});
+      const i=DB.orders.indexOf(o);if(i>=0)DB.orders.splice(i,1);
+      logEdit(dup,'Another screen made '+nw+' for this same house at the same moment — folded into '+dup.wo+(names?(other.length?' (its list '+names+' archived)':' (its list '+names+' moved here)'):''),by);
+      e.done=1;sched();toast(nw+' was a second job for the same house as '+dup.wo+' (made on another screen at the same moment) — kept '+dup.wo+(names?other.length?'; your list '+names+' is archived':'; your list '+names+' is now on '+dup.wo:''),true);
+      continue;}
+    ls.forEach(l=>{if((l.wos||[]).includes(w)&&!(l.wos||[]).includes(nw)){listTag(l,nw,true,by);listTag(l,w,false,by);}});
+    if(ls.length)logEdit(o,'Renumbered '+w+' → '+nw+': its cutting list '+names+' moved to '+nw,by);
+    e.done=1;
+  }}finally{pMineSave();PMFIX=null;try{render();}catch(x){}
+    if(Object.values(PMINE).some(e=>e&&e.to&&!e.done))setTimeout(()=>pMineFix(),2000);}})();return PMFIX;} // a list still on its way: look again shortly
+// (round 2) before a new P-number is made: the planner record in the database may already have the job (another screen)
+async function pFreshDup(pid,floor,unit,title){
+  const row=await fetchMain(),jobs=row&&Array.isArray(row.orders)?row.orders:[];
+  const me={wo:'(new)',pid,floor,unit,title};return pSameHouse(me,jobs.concat(DB.orders));}
 function nextPNumber(){
   let num=Math.max(1000,...DB.orders.map(o=>{const m=String(o.wo).match(/^P-(\d+)$/);return m?+m[1]:0;}))+1;
   while(DB.orders.some(o=>o.wo==='P-'+num))num++;
