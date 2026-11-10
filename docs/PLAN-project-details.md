@@ -592,3 +592,19 @@ unique index) · old screens (close every screen on go-live day) · speed (key m
 1 B0 functions + `b0-pairs.json` + `b0-key.test.js`. 2 SQL key functions + house_key + claim rule; pg-check twice. 3 L1 + L3.
 4 L4a (confirmed P, pid, duplicate-P refusal, purple chip). 5 L1b Excel job-info fields. 6 L4b merge. 7 B10a upload (needs Q7
 sample). 8 B10b matching. 9 S1. 10 S2. 11 Full suite → Tester → Manager (steps 3–6 can go first as their own batch if Q12 = yes).
+
+## Progress log — Part 3
+
+### 10 Nov 2026 (scheduled run, afternoon) — Coder: steps 1–5 built (B0, SQL, L1 + L3, L4a, L1b)
+- 7141f0f B0 key functions (b0key block) + tests/seq/b0-pairs.json (34 plan pairs + 26 extra + 8 line keys) + b0-key.test.js (node and in the app).
+  **Deviation:** the sequence-row key is `seqRowKey` — `rowKey` already exists (the saw/stores line key).
+  **Reading of the rules (Coder):** an ambiguous floor ("G", "L1") is "same" against the SAME code ("G" = "Block G", "L1" = "L01"),
+  "unsure" against a level with the same number, and "unsure" against another ambiguous code with the same number ("F1" vs "L1");
+  "Block x" is always a code ("Block 1" vs "1" = unsure). House key: a level is "#n" ("#0|22"), a code is its code ("T-9|12").
+- e5884f6 SQL (PENDING block): seq_key_* / seq_floor_key / seq_unit_key / seq_house_key, seq_line_key rewritten, project_seq.house_key + index,
+  claim rule in seq_insert (lines with a WO never claim by house). Run twice on fresh throwaway Postgres 16 (C.UTF-8): ALL SEQ PG CHECKS PASSED both
+  times; project-details pg-check passes; upgrade over the earlier block recomputes keys with no history rows. Fake database uses the same functions.
+- 3c29ded L1 + L3 (Floor / Unit / Title / WO number boxes, Find the Cienapps WO, keyFind), 39f230d L4a (P-number last resort, Save re-check,
+  second P refused, pid, purple "not from Cienapps"), b32232d L1b (Excel Floor / Unit / WO cells). Tests tests/seq/l3-find-wo, l4-pnumber, l1b-excel-job.
+- **Full suite** at b32232d (225 files): 4,290 pass / 32 fail — the same 32 as before (all on ACCEPTED-FAILURES or pre-existing at 7368d79; e7 redraw is timing).
+- Not built (as instructed): L4b merge, B10 upload/matching, S1/S2. Next: Tester on steps 1–5 → Manager.
