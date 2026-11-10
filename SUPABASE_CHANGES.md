@@ -157,8 +157,11 @@ begin
 end $$;
 
 -- Move a block of rows (in the order given) to just under p_after (null = to the top). Refused as 'stale' when any row
--- changed since the screen read it. Every move is logged with who, old position and new position.
-create or replace function seq_move(p_ids text[], p_after text, p_expect int[], p_by text, p_why text default null)
+-- changed since the screen read it — the anchor row too (p_after_ver = the anchor's version the screen read; null = not
+-- checked). Every move is logged with who, old position and new position.
+-- (10 Nov, Tester round 1: p_after_ver added. The old 5-argument version is dropped first so the block stays re-runnable.)
+drop function if exists seq_move(text[],text,int[],text,text);
+create or replace function seq_move(p_ids text[], p_after text, p_expect int[], p_after_ver int, p_by text, p_why text default null)
 returns jsonb language plpgsql security definer set search_path=public as $$
 declare pj text; x text; n int; ord text[]; rest text[]; i int; before jsonb; r record; moved jsonb := '[]'::jsonb;
 begin
@@ -177,6 +180,8 @@ begin
   end if;
   if p_after is not null and (p_after=any(p_ids) or not exists(select 1 from project_seq where id=p_after and project_id=pj and state<>'removed')) then
     return jsonb_build_object('ok',false,'err','bad anchor'); end if;
+  if p_after is not null and p_after_ver is not null and not exists(select 1 from project_seq where id=p_after and version=p_after_ver) then
+    return jsonb_build_object('ok',false,'err','stale'); end if;
   select jsonb_object_agg(id,pos) into before from project_seq where project_id=pj and state<>'removed';
   select array_agg(id order by pos,created_at,id) into rest from project_seq where project_id=pj and state<>'removed' and id<>all(p_ids);
   rest := coalesce(rest,'{}');
@@ -463,7 +468,7 @@ grant select, insert, update on project_seq, seq_requests, seq_pre to anon, auth
 revoke delete, truncate on project_seq, seq_requests, seq_pre from anon, authenticated;
 grant all on project_seq, seq_requests, seq_pre to service_role;
 grant execute on function seq_txt(text), seq_line_key(text,text,text,text) to anon, authenticated, service_role;
-grant execute on function seq_move(text[],text,int[],text,text), seq_insert(text,jsonb,text,text), seq_match(text,text,int,text,text),
+grant execute on function seq_move(text[],text,int[],int,text,text), seq_insert(text,jsonb,text,text), seq_match(text,text,int,text,text),
   seq_unmatch(text,int,text,text), seq_remove(text,int,text,text), seq_restore(text,int,text,text) to anon, authenticated, service_role;
 revoke execute on function seq_renumber(text,text[]) from public, anon, authenticated;
 ```

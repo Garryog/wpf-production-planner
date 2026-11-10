@@ -3960,10 +3960,11 @@ function seqMoveReq(pid,id,how,redraw){
   pickReason('Move a fixed job?','<b>'+escA(fixed.map(x=>(rows.find(r=>r.id===x)||{}).wo||'').join(', '))+'</b> '+(fixed.length===1?'is':'are')+' inside the next '+seqFixedDays()+' days. Why is the order changing?',why=>go(why),null,DATE_WHY);
 }
 async function seqMoveDo(pid,ids,after,why,to,redraw){
-  const exp=ids.map(x=>+((LST.sq.get(x)||{}).version)||1);SEQ_DLG.busy=true;
-  try{const r=await lsRpc('seq_move',{p_ids:ids,p_after:after,p_expect:exp,p_by:lqBy(''),p_why:why||null});
+  const exp=ids.map(x=>+((LST.sq.get(x)||{}).version)||1),av=after?(+((LST.sq.get(after)||{}).version)||1):null;SEQ_DLG.busy=true;
+  const at=()=>seqRows(pid).findIndex(r=>r.id===ids[0])+1; // the real position, as the database has it now
+  try{const r=await lsRpc('seq_move',{p_ids:ids,p_after:after,p_expect:exp,p_after_ver:av,p_by:lqBy(''),p_why:why||null}); // the anchor's version too: another PC moving it = stale
     await seqFresh(pid);
-    if(r&&r.ok)toast((ids.length>1?ids.length+' rows':'Row')+' moved to #'+to+(why?' — '+why:''));
+    if(r&&r.ok)toast((ids.length>1?ids.length+' rows':'Row')+' moved to #'+at()+(why?' — '+why:''));
     else if(r&&r.err==='stale')toast('Someone else just changed this list — reloaded. Check it and move again.',true);
     else toast('Not moved — '+((r&&r.err)||'no answer'),true);
   }catch(e){try{await seqFresh(pid);}catch(e2){}toast('Not moved — '+e.message,true);}

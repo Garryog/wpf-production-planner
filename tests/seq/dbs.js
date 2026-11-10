@@ -86,6 +86,7 @@ const RPC = {
     if (d.t.project_seq.filter(x => ids.includes(x.id) && x.project_id === pj && live(x)).length !== ids.length) return { ok: false, err: 'rows not in one project' };
     if (a.p_expect != null) for (let i = 0; i < ids.length; i++) { const r = find(d, 'project_seq', ids[i]); if (!r || r.version !== a.p_expect[i]) return { ok: false, err: 'stale' }; }
     if (a.p_after != null && (ids.includes(a.p_after) || !d.t.project_seq.some(x => x.id === a.p_after && x.project_id === pj && live(x)))) return { ok: false, err: 'bad anchor' };
+    if (a.p_after != null && a.p_after_ver != null && find(d, 'project_seq', a.p_after).version !== a.p_after_ver) return { ok: false, err: 'stale' }; // the anchor changed since the screen read it
     const before = {}; liveOf(d, pj).forEach(x => { before[x.id] = x.pos; });
     const rest = liveOf(d, pj).filter(x => !ids.includes(x.id)).map(x => x.id);
     let ord;

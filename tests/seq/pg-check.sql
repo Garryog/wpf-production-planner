@@ -46,22 +46,28 @@ begin
  begin update project_seq set state='removed' where id='Q1'; raise exception 'FAIL direct remove';
  exception when raise_exception then if sqlerrm like 'FAIL%' then raise; end if; end;
  -- move a whole house (Q3,Q4) to the top; stale versions refused
- j := seq_move(array['Q3','Q4'], null, array[1,99], 'John Burke', 'site order');
+ j := seq_move(array['Q3','Q4'], null, array[1,99], null, 'John Burke', 'site order');
  if (j->>'ok')::boolean then raise exception 'FAIL stale move accepted'; end if;
- j := seq_move(array['Q3','Q4'], null, (select array[(select version from project_seq where id='Q3'),(select version from project_seq where id='Q4')]), 'John Burke', 'site order');
+ j := seq_move(array['Q3','Q4'], null, (select array[(select version from project_seq where id='Q3'),(select version from project_seq where id='Q4')]), null, 'John Burke', 'site order');
  if not (j->>'ok')::boolean then raise exception 'FAIL move %',j; end if;
  select string_agg(id,',' order by pos) into o from project_seq where project_id='QP1' and state<>'removed';
  if o<>'Q3,Q4,Q1,Q6,Q2' then raise exception 'FAIL order %',o; end if;
  select count(*) into n from project_events where entity='seq' and act='move' and entity_id in('Q3','Q4') and by='John Burke' and new->>'why'='site order';
  if n<>2 then raise exception 'FAIL move log %',n; end if;
  -- move under a row; anchor inside the moved block refused
- j := seq_move(array['Q3'], 'Q2', null, 'John Burke', null);
+ -- a stale ANCHOR (the row it goes under changed since the screen read it) is refused, nothing moves (Tester round 1)
+ j := seq_move(array['Q3'], 'Q2', null, (select version from project_seq where id='Q2')-1, 'John Burke', null);
+ if (j->>'ok')::boolean or j->>'err'<>'stale' then raise exception 'FAIL stale anchor accepted %',j; end if;
+ select string_agg(id,',' order by pos) into o from project_seq where project_id='QP1' and state<>'removed';
+ if o<>'Q3,Q4,Q1,Q6,Q2' then raise exception 'FAIL stale anchor moved %',o; end if;
+ j := seq_move(array['Q3'], 'Q2', null, (select version from project_seq where id='Q2'), 'John Burke', null);
+ if not (j->>'ok')::boolean then raise exception 'FAIL fresh anchor refused %',j; end if;
  select string_agg(id,',' order by pos) into o from project_seq where project_id='QP1' and state<>'removed';
  if o<>'Q4,Q1,Q6,Q2,Q3' then raise exception 'FAIL move after %',o; end if;
- j := seq_move(array['Q3'], 'Q3', null, 'x', null); if (j->>'ok')::boolean then raise exception 'FAIL self anchor'; end if;
+ j := seq_move(array['Q3'], 'Q3', null, null, 'x', null); if (j->>'ok')::boolean then raise exception 'FAIL self anchor'; end if;
  -- a row from another project can't be dragged in
  perform seq_insert('QP2','[{"id":"QX","floor":"A1","unit":"4","product":"K8","name":"TYPE A"}]'::jsonb,null,'Mary');
- j := seq_move(array['Q1','QX'], null, null, 'x', null); if (j->>'ok')::boolean then raise exception 'FAIL cross-project move'; end if;
+ j := seq_move(array['Q1','QX'], null, null, null, 'x', null); if (j->>'ok')::boolean then raise exception 'FAIL cross-project move'; end if;
  select pos into n from project_seq where id='QX'; if n<>1 then raise exception 'FAIL other project pos %',n; end if;
 
  -- dates on waiting rows are history
@@ -82,7 +88,7 @@ begin
  j := seq_insert('QP2','[{"id":"Q8","wo":"WO-2611-1","src":"import"}]'::jsonb,null,'Import');
  if jsonb_array_length(j->'added')<>0 then raise exception 'FAIL WO in two projects'; end if;
  -- placing a new row clears "new"
- j := seq_move(array['Q7'],'Q4',null,'John Burke','placed');
+ j := seq_move(array['Q7'],'Q4',null,null,'John Burke','placed');
  select is_new into r from project_seq where id='Q7'; if r.is_new then raise exception 'FAIL is_new kept'; end if;
  -- unmatch needs a reason; remove keeps the row and renumbers; restore goes to the bottom
  j := seq_unmatch('Q2',null,'Mary',' '); if (j->>'ok')::boolean then raise exception 'FAIL unmatch without reason'; end if;
@@ -151,7 +157,7 @@ update production_planner set settings=jsonb_build_object('listStore','v1') wher
 do $$ begin if lists_writable() then raise exception 'FAIL setup: lists still on'; end if; end $$;
 set role anon;
 do $$ declare j jsonb; begin
- begin j := seq_move(array['Q1'], null, null, 'x', null); raise exception 'FAIL move while switched off';
+ begin j := seq_move(array['Q1'], null, null, null, 'x', null); raise exception 'FAIL move while switched off';
  exception when raise_exception then if sqlerrm like 'FAIL%' then raise; end if; end;
  begin insert into project_seq(id,project_id,name) values('QZ','QP1','Z'); raise exception 'FAIL insert while switched off';
  exception when insufficient_privilege then null; end;
