@@ -7234,7 +7234,7 @@ function renderDeliveries(app){
   moveDates(…, {toWk}) — same rules, history, reason. One preview + one reason per move; the preview only shows first when
   something needs a look (flagged / not moved / off a van), otherwise it is the reason picker alone (2 taps). */
 function wkBtnsOk(o){return !!o&&dateCanMove()&&!o.delDay&&!o.delDone&&dStage(o)!=='deliv'&&!isShipped(o)&&(o.manual?wkManOk():true);}
-function wkManOk(){return false;} // step 7: manual jobs (Add Job) get a planned week
+function wkManOk(){return true;} // manual jobs (Add Job, no due date): "Move to week…" sets planWk on the delx entry
 function wkCountIn(w){return delAll().filter(o=>o.delDay?slotIn(o,w):delPoolWk(o)===w).length;}
 function wkPickDlg(wos,pre){
   wos=[...new Set(wos||[])].filter(w=>findDel(w));if(!wos.length){toast('Nothing to move');return;}
@@ -7279,8 +7279,13 @@ function wkMoveDo(wos,W){
     if(rows.some(r=>r.skipped||(r.flags||[]).length||r.vanPulled||r.vanKept)||skM.length)wkPrevDlg(rows.concat(skM),man,wl,ask);else ask();
   },()=>{});
 }
-function wkManJobs(wos,W){return [];} // step 7
-function wkManApply(man,W,by,why){return 0;} // step 7
+/*v-deliv D3 (step 7): a manual job has no Cienapps date, so a week move only sets its planned week (planWk = Monday) — never a
+  due date, never in "Dates to change in Cienapps". Reason asked and logged. Two PCs: last save wins (ASSUMED in the plan).*/
+function wkManJobs(wos,W){return (wos||[]).map(w=>(DB.delx||[]).find(x=>x.wo===w)).filter(o=>o&&o.manual&&!o.delDay&&!o.delDone&&dStage(o)!=='deliv'&&delPoolWk(o)!==W);}
+function wkManApply(man,W,by,why){let n=0;
+  man.forEach(m=>{const o=(DB.delx||[]).find(x=>x.wo===m.wo);if(!o||o.delDay||o.delDone)return;const was=delPoolWk(o);
+    o.planWk=W;logEdit(o,'Planned for Wk '+wkNum(W)+' (was Wk '+wkNum(was)+')',by,why);n++;});
+  if(n){sched();if(typeof updDelBadge==='function')updDelBadge();}return n;}
 function wkPrevDlg(rows,man,wl,next){
   const ok=rows.filter(r=>!r.skipped),sk=rows.filter(r=>r.skipped);
   const ov=document.createElement('div');ov.className='pod-ovl';ov.id='wkprev-dlg';
@@ -8877,7 +8882,7 @@ function inStoreJobs(){return DB.orders.filter(o=>stepForDelivery(o.step)&&!o.de
   .map(o=>({o,n:storeDays(o)})).sort((a,b)=>(b.n==null?-1:b.n)-(a.n==null?-1:a.n)||woCmp(a.o,b.o));}
 let delStoreOpen=false;
 // the week a job still to plan belongs to: its due week; overdue, no date and manual jobs → this week
-function delPoolWk(o){const W0=thisWk(),d=o&&!o.manual?(o.delivDate||o.dueDate):'',w=d?wkOf(d):'';return !w||w<W0?W0:w;} /*dates phase 2: the delivery date's week when there is one*/
+function delPoolWk(o){const W0=thisWk(),d=o?(o.manual?(dmIsDate(String(o.planWk||''))?o.planWk:''):(o.delivDate||o.dueDate)):'',w=d?wkOf(d):'';return !w||w<W0?W0:w;} /*v-deliv: manual jobs → their planned week (planWk)*/ /*dates phase 2: the delivery date's week when there is one*/
 function inStoreHTML(rows){
   return `<div class="del-panel" id="del-store" style="border:2px solid #0e7490">
     <div style="font-size:14px;font-weight:700;color:#0e7490;margin-bottom:4px">🏬 In store — built (7 / 8), not on a van · ${rows.length} job${rows.length!==1?'s':''}</div>
@@ -9176,7 +9181,7 @@ function dTagTxt(iso){iso=String(iso||'').slice(0,10);const d=new Date(iso+'T12:
 function dTagCls(iso){iso=String(iso||'').slice(0,10);if(!iso)return'grey';return iso<todayLocal()?'red':wkOf(iso)===thisWk()?'amber':'grey';}
 function dueTag(o,opts){
   opts=opts||{};if(!o)return'';
-  if(o.manual)return `<span class="due-tags"><span class="due-tag grey" title="Added by hand on Deliveries — no Cienapps due date">${o.planWk&&dmIsDate(String(o.planWk))?'planned Wk '+wkNum(o.planWk):'manual — no date'}</span></span>`;
+  if(o.manual)return `<span class="due-tags"><span class="due-tag grey" title="Added by hand on Deliveries — no Cienapps due date">${o.planWk&&dmIsDate(String(o.planWk))&&wkOf(o.planWk)>thisWk()?'planned Wk '+wkNum(o.planWk):'manual — no date'}</span></span>`;
   const ed=!opts.ro&&dateCanMove();
   const one=(f,iso,txt,cls,ttl)=>ed?`<span class="dq-w"><button class="due-tag ${cls}" data-dqb="${escA(o.wo)}" data-f="${f}" title="${escA(ttl+' — tap to change')}">${escA(txt)}</button><input type="date" class="dq-in" tabindex="-1" aria-hidden="true" data-dq="${escA(o.wo)}" data-f="${f}" value="${escA(iso||'')}"></span>`
     :`<span class="due-tag ${cls}" title="${escA(ttl)}">${escA(txt)}</span>`;
