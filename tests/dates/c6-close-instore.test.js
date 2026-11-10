@@ -166,6 +166,15 @@ const res = []; const rec = (n, ok, d) => { res.push(ok); console.log((ok ? 'PAS
   rec('no page errors (C)', !(t3.server.errors || []).length, (t3.server.errors || []).join(' | '));
   await t3.close();
 
+  // ---------- D. a Cienapps date change on a job Cienapps also says is SHIPPED never takes it off its van ----------
+  const t4 = await H.open({ browser, now: '2026-10-19T10:00:00Z', row: { id: 'main', nid: 3, settings: {}, orders: [
+    O('WO-5-1', { step: '8. PALLETED', dueDate: '2026-11-02', origDueDate: '2026-11-02', delVeh: 'IVECO', delDay: 'Tue', delWk: '2026-10-19' }),
+    O('WO-5-3', { step: '8. PALLETED', dueDate: '2026-11-02', origDueDate: '2026-11-02', delVeh: 'IVECO', delDay: 'Wed', delWk: '2026-10-19' }) ] } });
+  await H.importAoa(t4.page, [['WO #', 'Title', 'Customer', 'Due Date', 'Step', 'Sub-Total'], ['WO-5-1', 'House WO-5-1', 'CAIRN', 46331, '9. JOB SHIPPED', 4000], ['WO-5-3', 'House WO-5-3', 'CAIRN', 46331, '8. PALLETED', 4000]]);
+  const D = await t4.page.evaluate(() => { applyImport(IMPPLAN); const g = w => DB.orders.find(x => x.wo === w); return { s: { due: g('WO-5-1').dueDate, day: g('WO-5-1').delDay, rb: g('WO-5-1').delRebook, sh: !!g('WO-5-1').shippedAt, log: g('WO-5-1').log.map(l => l.what).join(' | ') }, n: { due: g('WO-5-3').dueDate, day: g('WO-5-3').delDay, rb: !!g('WO-5-3').delRebook } }; });
+  rec('import: a shipped job keeps its van when Cienapps also changes its date; a not-shipped one comes off to rebook', D.s.due === '2026-11-05' && D.s.day === 'Tue' && !D.s.rb && D.s.sh && /left on the van/.test(D.s.log) && D.n.due === '2026-11-05' && D.n.day === '' && D.n.rb, JSON.stringify(D));
+  await t4.close();
+
   await browser.close();
   console.log('\n' + res.filter(x => x).length + ' passed, ' + res.filter(x => !x).length + ' failed');
 })().catch(e => { console.error(e); process.exit(1); });

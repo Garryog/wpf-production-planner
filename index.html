@@ -8396,7 +8396,7 @@ function applyImport(plan){
       if('dueDate' in s){
         if(dec[u.wo]==='keep')ex.dueKeep=s.dueDate; // planner date kept; this Cienapps date won't be asked about again
         else{ /*dates: Take goes through the date engine — history, off the van, saw/stores banner. The build week is left to the "Move to" choice above (an import never moves the week by itself).*/
-          const mr=moveDates([ex],{due:s.dueDate},{why:'Cienapps import'},'(import)',{src:'cienapps',keepWeek:true}).apply();
+          const mr=moveDates([ex],{due:s.dueDate},{why:'Cienapps import'},'(import)',{src:'cienapps',keepWeek:true,shipped:(plan.shipped||[]).some(x=>x.key===u.key)}).apply();
           if(!mr.moved){if(!ex.origDueDate)ex.origDueDate=ex.dueDate||'';ex.dueDate=s.dueDate;delete ex.dueKeep;}
         }
       }
@@ -8717,6 +8717,7 @@ function dmRow(o,ch,opts){
   if(to<todayLocal())r.flags.push('past');
   if((o.delVeh||o.delDay)&&dStage(o)!=='deliv'){
     if(dStage(o)){r.vanKept=true;r.flags.push('on-van-loaded');}
+    else if(isShipped(o)||opts.shipped)r.vanKept=true; /*dates: shipped in Cienapps — Deliveries keeps it until the driver confirms*/
     else{r.vanPulled=true;r.slot=slotLblO(o);}
   }
   return r;
@@ -8755,7 +8756,8 @@ function moveDates(jobs,change,reason,by,opts){
         what.push('taken off '+r.slot+' — rebook');
         o.delVeh='';o.delDay='';delete o.delWk;res.pulled++;
       }
-      if(r.vanKept){o.dueMv={...(o.dueMv||{at,by:by||'',from:r.from,to:r.to}),loaded:true};what.push('already loaded — left on the van, check');}
+      if(r.vanKept&&dStage(o)){o.dueMv={...(o.dueMv||{at,by:by||'',from:r.from,to:r.to}),loaded:true};what.push('already loaded — left on the van, check');}
+      else if(r.vanKept)what.push('shipped in Cienapps — left on the van');
       logEdit(o,what.join(' · ')+(src==='cienapps'?' (Cienapps import)':src==='group'?' (group move)':''),by||'',[why,note].filter(Boolean).join(': '));
       res.moved++;if(r.flags.length)res.flagged++;
     });
