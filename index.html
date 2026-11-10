@@ -315,6 +315,17 @@ details.lti-other{margin-bottom:14px}details.lti-other>summary{cursor:pointer;fo
 .del-tab{flex:0 0 auto;border:1px solid var(--b2);background:#fff;border-radius:16px;padding:7px 12px;font-size:13px;font-weight:600;color:var(--t2);cursor:pointer;min-height:36px}
 .del-tab.on{background:#14335c;border-color:#14335c;color:#fff}
 .del-tab.past{border-color:#d4880f;color:#8a5a00}
+/*v-deliv D2: the week bar — always on screen (sticky under the main tabs). Current week = green ● + underline; selected = dark.*/
+.del-tab.cur{box-shadow:inset 0 -3px 0 #16a34a}
+.del-tab.cur::before{content:'● ';color:#16a34a}
+.del-wkbar{position:sticky;top:0;z-index:60;display:flex;align-items:center;gap:8px;background:#14335c;color:#fff;border-radius:10px;padding:6px 8px;margin-bottom:10px;box-shadow:0 2px 8px rgba(15,25,40,.18)}
+.wkb-btn{flex:0 0 auto;min-height:44px;min-width:44px;font-family:inherit;font-size:14px;font-weight:700;border:1px solid rgba(255,255,255,.45);background:rgba(255,255,255,.12);color:#fff;border-radius:8px;padding:0 14px;cursor:pointer}
+.wkb-btn:hover:not(:disabled){background:rgba(255,255,255,.25)}
+.wkb-btn:disabled{opacity:.35;cursor:default}
+.wkb-lbl{flex:1 1 auto;min-width:0;text-align:center;font-size:16px;line-height:1.25}
+.wkb-lbl b{font-size:18px}
+.wkb-cur{display:inline-block;font-size:12px;font-weight:700;color:#7ee2a8;margin-left:6px}
+@media(max-width:700px){.wkb-t{display:none}.wkb-lbl{font-size:13px}.wkb-lbl b{font-size:15px}.wkb-btn{padding:0 10px}.del-wkbar{gap:5px;padding:5px}}
 .del-tab .n{font-weight:400;opacity:.8;margin-left:4px}
 body.del-dragging .del-tab[data-deltab]:not(.past){outline:2px dashed #7ba7e0;outline-offset:2px}
 .del-tab.dragover{background:#1a56db!important;border-color:#1a56db!important;color:#fff!important}
@@ -6964,8 +6975,12 @@ function renderDeliveries(app){
   const W0=thisWk(),W3=wkPlus(W0,3);
   const offOf=w=>String(Math.round((new Date(w+'T12:00:00')-new Date(W0+'T12:00:00'))/604800000));
   const bookedWks=[...new Set(tagged.filter(o=>o.delDay).map(slotWk))];
-  const tabs=[...new Set(['0','1','2','3',...bookedWks.map(offOf)])].sort((a,b)=>+a-+b).concat('later');
-  if(!tabs.includes(delTab))delTab='0';
+  const tabs0=[...new Set(['0','1','2','3',...bookedWks.map(offOf)])].sort((a,b)=>+a-+b);
+  /*v-deliv D2: Prev / Next walk every week from the earliest open past week to +12; a week outside the strip gets a temporary tab*/
+  const steps=[...new Set([...tabs0.filter(t=>+t<0),...Array.from({length:13},(_,i)=>String(i))])].sort((a,b)=>+a-+b);
+  if(delTab!=='later'&&!tabs0.includes(delTab)&&!steps.includes(delTab))delTab='0';
+  const tabs=[...new Set([...tabs0,...(delTab!=='later'?[delTab]:[])])].sort((a,b)=>+a-+b).concat('later');
+  const si=steps.indexOf(delTab),wkPrev=delTab==='later'?'3':si>0?steps[si-1]:null,wkNext=delTab==='later'?'4':si>=0&&si<steps.length-1?steps[si+1]:'later';
   const later=delTab==='later',wk=later?'':delTabWk(),past=!later&&wk<W0;
   // the pool: each job sits in its due week; overdue, no date and manual jobs sit in This week; past W+3 = Later
   const poolWk=delPoolWk;
@@ -6974,7 +6989,7 @@ function renderDeliveries(app){
   const pool=poolOf(delTab);
   const wkTot=later?0:tagged.filter(o=>slotIn(o,wk)).reduce((a,o)=>a+(+o.value||0),0);
   const legacy=ROLE==='office'?delLegacyJobs():[];
-  const tabLbl=t=>{if(t==='later')return'Later';const w=delTabWk(t);return (t==='0'?'This week · ':t==='1'?'Next week · ':'')+'Wk '+wkNum(w)+(w<W0?' (past)':'');};
+  const tabLbl=t=>{if(t==='later')return'Later';const w=delTabWk(t);return (t==='0'?'This week · ':t==='1'?'Next week · ':'')+'Wk '+wkNum(w)+' · '+dShort(w)+(w<W0?' (past)':'');};
   const tabN=t=>t==='later'?poolOf(t).length:tagged.filter(o=>slotIn(o,delTabWk(t))).length+poolOf(t).length;
   // pool groups: "date moved — rebook" first, then by customer (Later: by due week), WO-number order inside each
   const rebook=pool.filter(o=>o.delRebook).sort(woCmp),rest=pool.filter(o=>!o.delRebook);
@@ -6997,8 +7012,14 @@ function renderDeliveries(app){
     <div style="font-size:14px;font-weight:700;color:#8a5a00;margin-bottom:4px">⚠ ${legacy.length} booking${legacy.length!==1?'s':''} from before the week tabs — which week are they for?</div>
     <p style="font-size:12px;color:#8a5a00;margin-bottom:8px">They were put on a van and day before the board knew about weeks. Until you answer they show under This week. Asked once.</p>
     <button class="btn btn-s" data-legwk="0">This week — Wk ${wkNum(thisWk())}</button> <button class="btn btn-s" data-legwk="1">Next week — Wk ${wkNum(wkPlus(thisWk(),1))}</button></div>`:''}
+  <div class="del-wkbar" id="del-wkbar">
+    <button class="wkb-btn" id="wkb-prev"${wkPrev==null?' disabled':''} title="Previous week">◀<span class="wkb-t"> Prev</span></button>
+    <div class="wkb-lbl" id="wkb-lbl">${later?`<b>Later</b> · due after Wk ${wkNum(W3)}`:`<b>Wk ${wkNum(wk)}</b> · Mon ${escA(dShort(wk))} – Sat ${escA(dShort(addDayISO(wk,5)))}${wk===W0?'<span class="wkb-cur">● this week</span>':past?'<span class="wkb-cur" style="color:#ffd27a">past week</span>':''}`}</div>
+    <button class="wkb-btn" id="wkb-next" title="Next week"><span class="wkb-t">Next </span>▶</button>
+    <button class="wkb-btn" id="wkb-today"${delTab==='0'?' disabled':''} title="Back to this week">This week</button>
+  </div>
   <div class="del-panel">
-    <div class="del-tabs" id="del-tabs">${tabs.map(t=>`<button class="del-tab${t===delTab?' on':''}${t!=='later'&&delTabWk(t)<W0?' past':''}" data-deltab="${escA(t)}">${escA(tabLbl(t))}<span class="n">(${tabN(t)})</span></button>`).join('')}<button class="del-tab" id="btn-instore" style="${delStoreOpen?'background:#0e7490;color:#fff;border-color:#0e7490':storeOld?'border-color:#d4880f;color:#8a5a00':''}" title="Built jobs (7 / 8) sitting in store with no van booked">🏬 In store ${store.length}${storeOld?` <span class="n">(${storeOld} &gt; 14 days)</span>`:''}</button></div>
+    <div class="del-tabs" id="del-tabs">${tabs.map(t=>`<button class="del-tab${t===delTab?' on':''}${t==='0'?' cur':''}${t!=='later'&&delTabWk(t)<W0?' past':''}" data-deltab="${escA(t)}">${escA(tabLbl(t))}<span class="n">(${tabN(t)})</span></button>`).join('')}<button class="del-tab" id="btn-instore" style="${delStoreOpen?'background:#0e7490;color:#fff;border-color:#0e7490':storeOld?'border-color:#d4880f;color:#8a5a00':''}" title="Built jobs (7 / 8) sitting in store with no van booked">🏬 In store ${store.length}${storeOld?` <span class="n">(${storeOld} &gt; 14 days)</span>`:''}</button></div>
     ${delStoreOpen?inStoreHTML(store):''}
     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px">
       <div style="font-size:14px;font-weight:600" id="del-wkh">${later?'Later — jobs due after Wk '+wkNum(W3)+' (pool only)':'Delivery Board — Wk '+wkNum(wk)+' · Mon '+dShort(wk)+' – Sat '+dShort(addDayISO(wk,5))+(past?' (past week — close it when it is done)':'')}</div>
@@ -7010,10 +7031,10 @@ function renderDeliveries(app){
         <button class="btn btn-g" id="btn-delexp">⬇ Export Delivery Plan</button>`}
         <button class="btn btn-s" id="btn-delarch" title="Closed delivery weeks — every closed week is kept here with all stamps and names">📚 Past weeks</button>
         ${ROLE==='office'&&catchUp.length?`<button class="btn btn-s" id="btn-deltag" title="One-off: tick for delivery every job already at 7 ASSEMBLY COMPLETE or 8 PALLETED, due from ${fmt(DELV_CATCHUP_FROM)} on, that is not on the board yet (older ones are left — they are delivered)">Tag assembled/palleted jobs due from ${fmt(DELV_CATCHUP_FROM)} for delivery (${catchUp.length})</button>`:''}
-        ${!later&&wk<=W0?`<button class="btn btn-s" id="btn-delreset" style="border-color:var(--red);color:var(--red)" title="Archive Wk ${wkNum(wk)} to 📚 Past weeks — delivered jobs leave the board, anything not delivered goes back to To plan to rebook. Other weeks are not touched.">🔒 Close Wk ${wkNum(wk)}</button>`:''}
+        ${!later&&wk<=W0&&closeWeekJobs(wk).length?`<button class="btn btn-s" id="btn-delreset" style="border-color:var(--red);color:var(--red)" title="Archive Wk ${wkNum(wk)} to 📚 Past weeks — delivered jobs leave the board, anything not delivered goes back to To plan to rebook. Other weeks are not touched.">🔒 Close Wk ${wkNum(wk)}</button>`:''}
       </span>
     </div>
-    <p style="font-size:12px;color:var(--t3);margin-bottom:8px">Tag jobs on the Capacity Board with 🚚, or add one manually. Click cards to select several, then drag (or tap ⤵ Place) onto a vehicle and day. Card colour = readiness: <b style="color:#0d6e46">green ready</b> · <b style="color:#8a5a00">amber part ready / waiting on material</b> · <b style="color:#b42318">red not ready or no list</b> — ⓘ shows why. Moving a planned job asks why, and records who — moving it to another week too (select it, open that week's tab, tap ⤵ Place).</p>
+    <p style="font-size:12px;color:var(--t3);margin-bottom:8px">Tag jobs on the Capacity Board with 🚚, or add one manually. Click cards to select several, then drag (or tap ⤵ Place) onto a vehicle and day. Card colour = readiness: <b style="color:#0d6e46">green ready</b> · <b style="color:#8a5a00">amber part ready / waiting on material</b> · <b style="color:#b42318">red not ready or no list</b> — ⓘ shows why. Moving a planned job asks why, and records who — moving it to another week too (select it, open that week's tab, tap ⤵ Place). <b>Due date:</b> tap the date on a card to change it. <b>Another week:</b> tap → Wk / Move to week… on the card, tick several and use Move ticked to week…, or drag cards onto a week tab.</p>
     <div class="addjob-row" id="ajform">
       <input id="aj-wo" placeholder="WO / ref (optional)" style="width:140px">
       <input id="aj-title" placeholder="Description *" style="flex:1;min-width:180px">
@@ -7050,6 +7071,14 @@ function renderDeliveries(app){
   </div>`;
 
   // ----- bindings -----
+  /*v-deliv D2: week bar — Prev / Next / This week; sticks under the main tabs; the selected tab scrolled into view*/
+  const wbGo=t=>{if(t==null)return;delTab=t;render();};
+  const wbp=document.getElementById('wkb-prev');if(wbp)wbp.onclick=()=>wbGo(wkPrev);
+  const wbn=document.getElementById('wkb-next');if(wbn)wbn.onclick=()=>wbGo(wkNext);
+  const wbt=document.getElementById('wkb-today');if(wbt)wbt.onclick=()=>wbGo('0');
+  try{const tb=document.querySelector('.tabs'),wb=document.getElementById('del-wkbar');if(wb)wb.style.top=(tb&&getComputedStyle(tb).position==='sticky'?tb.offsetHeight:0)+'px';
+    const st=document.getElementById('del-tabs'),on=st&&st.querySelector('.del-tab.on');
+    if(st&&on){const a=st.getBoundingClientRect(),b=on.getBoundingClientRect();if(b.left<a.left||b.right>a.right)st.scrollLeft+=(b.left-a.left)-(a.width-b.width)/2;}}catch(e){}
   document.querySelectorAll('[data-deltab]').forEach(b=>b.onclick=()=>{delTab=b.dataset.deltab;render();}); /*dates: week tabs*/
   /*v-deliv D3: drop cards on a week tab (PC) = move their dates to that week (asks why). Later → the week picker at +4.*/
   document.querySelectorAll('[data-deltab]').forEach(b=>{
