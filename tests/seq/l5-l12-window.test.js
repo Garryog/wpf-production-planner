@@ -298,10 +298,53 @@ const donep = p => p.evaluate(() => { const d = document.querySelector('.me-dov'
     const pids = await Promise.all([a1, a2].map(a => a.page.evaluate(() => (document.getElementById('me-pid') || {}).value)));
     rec('L5: two PCs at once → ONE project "Race Homes", both windows on it', rh.length === 1 && pids.every(x => x === rh[0].id), JSON.stringify([rh.map(x => x.id), pids]));
     await a1.close(); await a2.close();
+
+    // ---- L10: "can't keep a backup copy" says why and how to fix it; Settings → 💾 Storage on this device; nothing removed
+    const big = 'x'.repeat(1024 * 1024); // 1 M characters = 2 MB as browsers count it
+    const st0 = await X.dev(browser, S, 'office'), sp = st0.page;
+    await sp.evaluate(b => { localStorage.setItem('wpf_quotes_backup', b); localStorage.setItem('wpf_doctor_backup', 'y'.repeat(1000)); localStorage.setItem('someOtherApp', 'z'); }, big);
+    const keys0 = await sp.evaluate(() => Object.keys(localStorage).sort());
+    await sp.evaluate(() => { const si = Storage.prototype.setItem; window.__si = si; Storage.prototype.setItem = function (k, v) { if (/^wpfPending/.test(k)) throw new DOMException('The quota has been exceeded.', 'QuotaExceededError'); return si.call(this, k, v); };
+      DB.orders.find(o => o.wo === 'WO-3').notes = 'changed here'; writePend(); });
+    await sleep(200);
+    w = await sp.evaluate(() => ({ fail: DB.pendFail, why: DB.pendWhy, txt: document.body.innerText }));
+    rec('L10: storage full → "This device\'s storage for the planner is full — old Quoting-tool copies use 2 MB … Fix: Settings → Storage on this device."', w.fail && w.why === 'full' && /This device's storage for the planner is full — old Quoting-tool copies use 2(\.\d+)? MB\. Your work still saves to the database while this page is open and online\. Fix: Settings → Storage on this device\./.test(w.txt), JSON.stringify({ why: w.why, t: (w.txt.match(/This device[^\n]*/) || [''])[0] }));
+    await sp.evaluate(() => showTab('s')); await sleep(500);
+    w = await sp.evaluate(() => { const p = document.getElementById('set-store'); if (!p) return null; const row = k => { const r = p.querySelector('[data-stg="' + k + '"]'); return r ? [...r.cells].map(c => c.textContent) : null; };
+      return { plan: row('plan'), quote: row('quote'), other: row('other'), dl: !!document.getElementById('btn-stg-dl'), txt: p.innerText, del: [...p.querySelectorAll('button')].filter(b => /delete|remove|clear/i.test(b.textContent)).length }; });
+    rec('L10: Settings "💾 Storage on this device": Planner / old Quoting tool (2 items, 2 MB) / Other, with sizes', w && w.quote && w.quote[1] === '2' && /^2(\.\d+)? MB$/.test(w.quote[2]) && w.plan && +w.plan[1] > 0 && w.other && w.other[1] === '1', JSON.stringify(w && { plan: w.plan, quote: w.quote, other: w.other }));
+    rec('L10: the full message shows there too, with fix steps; a Download button and NO delete button', w && /storage for the planner is full/.test(w.txt) && /Fix:/.test(w.txt) && /Nothing is deleted here/.test(w.txt) && w.dl && w.del === 0, JSON.stringify(w && { dl: w.dl, del: w.del }));
+    await sleep(500);
+    rec('L10: the browser\'s own estimate is shown', await sp.evaluate(() => /Browser storage for this address: .*(used|not known)/.test(document.getElementById('stg-est').textContent)), await sp.evaluate(() => document.getElementById('stg-est').textContent));
+    const [dl] = await Promise.all([sp.waitForEvent('download', { timeout: 5000 }).catch(() => null), sp.evaluate(() => document.getElementById('btn-stg-dl').click())]);
+    let dlOk = false; if (dl) { const fs = require('fs'); const pth = await dl.path(); const j = JSON.parse(fs.readFileSync(pth, 'utf8')); dlOk = Object.keys(j.items).sort().join() === 'wpf_doctor_backup,wpf_quotes_backup' && j.items.wpf_quotes_backup.length === big.length; }
+    rec('L10: Download = a copy of the two old Quoting-tool items (whole)', dlOk, dl ? dl.suggestedFilename() : 'no download');
+    const keys1 = await sp.evaluate(() => { Storage.prototype.setItem = window.__si; return Object.keys(localStorage).sort(); });
+    rec('L10: nothing removed from this device\'s storage', keys0.every(k => keys1.includes(k)) && await sp.evaluate(b => localStorage.getItem('wpf_quotes_backup') === b, big), JSON.stringify(keys0.filter(k => !keys1.includes(k))));
+    await sp.evaluate(() => { localStorage.removeItem('wpf_quotes_backup'); localStorage.removeItem('wpf_doctor_backup'); localStorage.removeItem('someOtherApp'); }); // the test's own items
+    await st0.close();
+    // blocked
+    const st1 = await X.dev(browser, S, 'office');
+    await st1.page.evaluate(() => { Storage.prototype.setItem = function () { throw new DOMException('Access is denied for this document.', 'SecurityError'); }; DB.orders.find(o => o.wo === 'WO-3').notes = 'again'; writePend(); }); await sleep(200);
+    rec('L10: storage blocked → "This browser is blocking storage (private window or a browser setting) — use a normal Chrome window."', await st1.page.evaluate(() => DB.pendWhy === 'blocked' && /This browser is blocking storage \(private window or a browser setting\) — use a normal Chrome window\./.test(document.body.innerText)));
+    await st1.close();
+    // lists switched off: the storage panel is there (the only Part 4 change with lists off), the list window is the old one
+    const S0 = X.makeServer(X.v1Row());
+    const o0 = await X.dev(browser, S0, 'office');
+    await o0.page.evaluate(() => showTab('s')); await sleep(300);
+    rec('switch OFF: Settings has "💾 Storage on this device"', await o0.page.evaluate(() => !!document.getElementById('set-store')));
+    await o0.page.evaluate(() => openListEditor(null, 'WO-2')); await sleep(200);
+    rec('switch OFF: the old list window — no ✕ Close bar, no project message, old name pre-fill and "Cancel"', await o0.page.evaluate(() => !document.getElementById('me-x0') && !document.getElementById('me-pm') && /Cancel/.test((document.getElementById('pod-x') || {}).textContent || '')));
+    rec('switch OFF: no page errors', !(S0.errors || []).length, JSON.stringify(S0.errors));
+    await o0.close();
     // phone 360 px: the Qty card box has the placeholder too
     const ph = await X.dev(browser, S, 'office', { viewport: { width: 360, height: 740 } });
     await ph.page.evaluate(() => openListEditor(null, 'WO-2')); await sleep(300);
     rec('L7: phone card — the Qty box says "Qty"', await ph.page.evaluate(() => { const q = [...document.querySelectorAll('.me-ed .me-card [data-mr$="|qty"]')]; return q.length > 0 && q.every(e => e.placeholder === 'Qty'); }));
+    w = await ph.page.evaluate(() => { const x = document.getElementById('me-x0').getBoundingClientRect(), o = document.querySelector('.me-ed'); return { r: Math.round(x.right), h: Math.round(x.height), w: Math.round(x.width), sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth, ow: o.scrollWidth, oc: o.clientWidth }; });
+    rec('phone 360 px: ✕ Close on screen, ≥ 40 px tall, no sideways scroll', w.r <= 360 && w.h >= 40 && w.w >= 44 && w.sw <= w.cw + 1 && w.ow <= w.oc + 1, JSON.stringify(w));
+    await ph.page.evaluate(() => { document.querySelector('.me-ed .pod-in, .me-ed').scrollTop = 600; }); await sleep(100);
+    rec('phone 360 px: scrolled down, ✕ Close still at the top of the window (sticky)', await ph.page.evaluate(() => { const x = document.getElementById('me-x0').getBoundingClientRect(), o = document.querySelector('.me-ed').getBoundingClientRect(); return x.top >= o.top - 1 && x.top < o.top + 30; }));
     await ph.close();
   } finally { await browser.close(); }
   X.finish();
