@@ -169,7 +169,7 @@ const res = []; const rec = (n, ok, d) => { res.push(ok); console.log((ok ? 'PAS
       out.store = (document.querySelector('#del-store .due-tag') || {}).className + ':' + (document.querySelector('#del-store .due-tag') || {}).textContent;
       showTab('b'); await w(150);
       const bt = wo => { const b = document.querySelector('tr[data-wo="' + wo + '"] .due-tag'); return b ? b.className.replace('due-tag', '').trim() + ':' + b.textContent : ''; };
-      out.b12 = bt('WO-12'); out.b12orig = (document.querySelector('tr[data-wo="WO-12"] .due-orig') || {}).textContent || '';
+      out.b12 = bt('WO-12'); out.b12late = ((document.querySelector('tr[data-wo="WO-12"]') || {}).textContent || '').includes('built after due'); out.b18late = ((document.querySelector('tr[data-wo="WO-18"]') || {}).textContent || '').includes('built after due'); out.b12orig = (document.querySelector('tr[data-wo="WO-12"] .due-orig') || {}).textContent || '';
       out.b11 = bt('WO-11'); out.b18 = bt('WO-18'); out.bMore = !!document.querySelector('tr[data-wo="WO-11"] [data-duedlg="WO-11"]');
       // 1: the board quick edit works too
       const bi = document.querySelector('tr[data-wo="WO-11"] .dq-in[data-f="due"]'); bi.value = '2026-11-26'; bi.dispatchEvent(new Event('change')); await w(80); await why('Materials');
@@ -211,8 +211,8 @@ const res = []; const rec = (n, ok, d) => { res.push(ok); console.log((ok ? 'PAS
     rec('9: Next ▶ ×5 → Wk 51 (temporary tab); This week returns to 0', A.walk.tab === '5' && /Wk 51 · Mon 14 Dec/.test(A.walk.lbl) && A.walk.tmp && A.back === '0', JSON.stringify(A.walk));
     rec('9: week bar sticks under the main tabs when scrolled; buttons ≥ 44 px', Math.abs(A.sticky.barTop - A.sticky.tabsBottom) <= 2 && A.sticky.btnH >= 44, JSON.stringify(A.sticky));
     rec('11: In store row has the same tag (yesterday = red)', /^due-tag red:Due Mon 9 Nov · Wk 46$/.test(A.store) || /red:Due Mon 9 Nov/.test(A.store), A.store);
-    rec('11: board row — same tag; red when the planned week (Wk 48) ends after the due date (Tue 17 Nov), "(orig …)" kept', /^red:Due Tue 17 Nov · Wk 47$/.test(A.b12) && /orig 11 Nov Wk 46/.test(A.b12orig), A.b12 + ' ' + A.b12orig);
-    rec('11: board row — due Wed 18 Nov planned Wk 47 is red (the week ends Fri 20 Nov, after the due date — the board\'s existing rule kept); due Wk 48 planned Wk 47 = grey; ⋯ opens the full dialog', /^red:Due Wed 18 Nov · Wk 47$/.test(A.b11) && /^grey:Due Wed 25 Nov · Wk 48$/.test(A.b18) && A.bMore, A.b11 + ' | ' + A.b18);
+    rec('11: board row — same tag, same colour as the cards (Tue 17 Nov next week = grey) + "⚠ built after due" chip when the planned week (Wk 48) ends after the due date; "(orig …)" kept', /^grey:Due Tue 17 Nov · Wk 47$/.test(A.b12) && A.b12late && /orig 11 Nov Wk 46/.test(A.b12orig), A.b12 + ' ' + A.b12orig + ' late chip ' + A.b12late);
+    rec('11: board row — due Wed 18 Nov (next week) = grey like the card; due Wk 48 planned Wk 47 = grey, no "built after due"; ⋯ opens the full dialog', /^grey:Due Wed 18 Nov · Wk 47$/.test(A.b11) && /^grey:Due Wed 25 Nov · Wk 48$/.test(A.b18) && !A.b18late && A.bMore, A.b11 + ' | ' + A.b18);
     rec('1: quick edit from the board row', A.b11m === '2026-11-26', A.b11m);
     rec('1/4: Dates to change in Cienapps lists the moved job, never the manual one', /WO-1\b/.test(A.cien) && !/JOB-M/.test(A.cien), A.cien.slice(0, 160));
     rec('12: saw / stores / driver / floor / PM see the tag but cannot edit or move weeks; office + Production Manager can', A.roles.join() === 'saw:view+tag,stores:view+tag,driver:view+tag,floor:view+tag,pm:view+tag,office:edit+tag+wk,prod:edit+tag+wk', A.roles.join());
