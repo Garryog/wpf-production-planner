@@ -150,6 +150,12 @@ Rules: rank by the leading number. "Shipped" = step 9 only (left the factory →
   change the whole project (work orders, sequence, dates); history shows who did what. Still ONE sequence table per project. A change-request
   answer is shown to the PM who asked (the others see it in the history). Only the office and the Production Manager add or remove PMs.
   "Unassigned" = a project with no PM at all. This replaces "an assigned Project Manager" (one) in B5.
+- **Garry's answers, 10 Nov 2026 (live):** (1) Two identical lines in one house in the Cienapps upload are KEPT as two rows (could be two
+  wardrobes). Loading the same file again still adds nothing. (2) Johnny (Pre-production) can add/edit project materials without a PIN and
+  will be doing some cutting lists — he gets the same list and materials rights as the Drawing office. (3) Old-version screens: Garry is not
+  worried about them — the "old screen drops the sequence settings" failure is accepted (close every screen on go-live day). (4) YES to the
+  PM date tools (B11 a–j) — "PMs need lots of date tools". (5) The project sequence view, per project, is also wanted for the office and
+  despatch (read it from the Deliveries page; ASSUMED look-only for stores and drivers, office can edit as already built).
 
 ## Progress log
 ### 2 Nov 2026 (scheduled run)
