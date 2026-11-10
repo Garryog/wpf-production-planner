@@ -4495,6 +4495,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       if(![p.prod,p.design,p.admin].includes(v.trim()))return flag('wrong PIN');
       ls.set('wpfEditPin',v.trim());
     }
+    st.addBusy=(st.addBusy||0)+1;{const sb=ov.querySelector('#me-save');if(sb)sb.disabled=true;} // Save waits for the new material (else the row saves with no material)
     (async()=>{
       try{await lsMatFresh(st.pid);const cl=lsMatClash(st.pid,n,'');
         if(cl){if(cl.active===false)await lsWrite('project_materials',cl,{active:true});snap();r.mat=cl.name;}
@@ -4502,9 +4503,11 @@ function openListEditor2(listId,presetWo,presetPid,opt){
         delete r.matAuto;
         st.focus=i+'|mat';draw();toast('"'+n+'" added to the '+pname+' materials ✓');
       }catch(e){flag('not added to the list ('+e.message+')');}
+      finally{st.addBusy--;const sb=ov.querySelector('#me-save');if(sb&&!st.addBusy)sb.disabled=false;}
     })();
   };
   const bind=()=>{
+    if(st.addBusy){const sb=ov.querySelector('#me-save');if(sb)sb.disabled=true;} // a redraw during the add keeps Save off
     ov.querySelectorAll('[data-mr]').forEach(el=>{
       const[i0,f]=el.dataset.mr.split('|'),i=+i0;
       if(el.tagName==='SELECT'&&(f==='edging'||f==='edging2')){el.onchange=el.oninput=()=>{const r=R()[i];if(!r||!ov.contains(el)||el.value===String(r[f]||''))return; // input + change both fire: act once
@@ -4676,6 +4679,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     [['me-jf','floor'],['me-ju','unit'],['me-jt','title'],['me-jwo','wo']].forEach(([id,k])=>{const e=g(id);if(e)st.jb[k]=e.value;});};
   const save=()=>{
     keep();const g=id=>ov.querySelector('#'+id),err=t=>{g('me-err').textContent=t+(st.chkNote&&t&&!/^Checking/.test(t)?' '+st.chkNote:'');}; // chkNote: the house check couldn't be made (round 3)
+    if(st.addBusy)return err('Wait a moment — the new material is still being added to the project.');
     if(!st.pid)return err('Pick the project.');
     let rows=R().filter(r=>!lsEmptyRow(r)); // empty rows (nothing typed) are left out, as in Excel
     const
