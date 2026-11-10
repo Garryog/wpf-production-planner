@@ -260,3 +260,79 @@ Phase 2: 17 column L · 18 settings numbers · 19 delivery date in dialog/engine
 - **Next run: Job B** — cut feature/project-details-v2 work from feature/dates-deliveries (rebase/merge the parked
   feature/project-details 9 Nov work onto it), write docs/PLAN-project-details.md B5–B11 (send Garry the B11 date-tools wireframe
   before building them), build B1–B4 fixes + B5–B10.
+
+---
+## Addendum, 10 Nov 2026 (evening run): Deliveries usability D1–D4 + DD1 (Garry 10 Nov, TOP PRIORITY before Thursday)
+Architect, unattended. Garry's words and items are in docs/ROADMAP.md ("Delivery page usability", "Due dates prominent everywhere",
+"Delivery pool cards are messy"). ASSUMED = Architect's call, Garry to confirm.
+
+### Exists vs missing
+- D1: `dchip()` has a "due … Wk46" link (`data-duedlg`) that opens the full `dateDlg`. Missing: quick tap → date picker → reason.
+- D2: tabs This week · Next · +2 · +3 · Later (+ open past weeks) with counts. Missing: ◀ Prev / Next ▶, "This week" button, Monday date
+  on tabs, current-week marker separate from selected tab, sticky heading.
+- D3: only "📅 Move dates (N)" in the selection bar. Missing: "→ Next week" / "Move to week…" per card, "Move ticked to week…", drag onto tab, target-day rule.
+- D4: `.dchip-top` one non-wrapping row; WO, Floor/Unit, € and three 32 px buttons are nowrap → spill past the 216 px card.
+- DD1: `dueBadge(due,pw,origDue)` exists (board row + group row) with different colours (amber = within 14 days).
+
+### Decisions (ASSUMED)
+1. New helper **`dueTag(o, opts)`** (name `dueBadge` is taken; old one stays on the board group row until Job B). `movedTag(o)` = "🔁 moved N×"
+   chip lifted out of `dmChips`, one copy.
+2. `dueTag` text "Fri 14 Nov · Wk 46" (year only if not current year). Red = before today; amber = this week (Mon–Sun); grey otherwise;
+   "no due date"; manual jobs "manual — no date" or "planned Wk N". Delivery date as second tag "🚚 Tue 18 Nov · Wk 47". A button only if
+   `dateCanMove()`. Board option `{late:true}`: also red when planned week ends after due; keeps "(orig …)". Board amber becomes "this week".
+3. moved N× = number of `dueHist` entries; tap opens history. The van-move chip (`delMoves`) becomes "🚚 rebooked ×N".
+4. **Week move target day**: engine change type `change.toWk = Monday`, per job `wkMoveTo(o,W)`: anchor = delivery date if any, else due date;
+   k = whole weeks anchor-week → W; due and delivery both move k×7 days (gap kept). Non-working day → working day before in the same week,
+   else after in the same week, else kept + bank-hol flag. Earlier than today → today / next working day; none left in the week → nothing moves,
+   toast "No working days left in Wk N — pick Next week". Cienapps job with no due date → last working day of W. Overdue jobs on This week:
+   "→ Next week" = shown tab week + 1.
+5. Every week move goes through `moveDates(jobs,{toWk:W},reason,by,{src:'planner'})` — A3–A9, dueHist, dueKeep, banner, Dates-to-Cienapps unchanged.
+6. Manual jobs (Add Job, no due date): "Move to week…" sets `planWk` (Monday) on the `delx` entry, reason asked, `logEdit`. `delPoolWk` reads it; past week → This week. No new top-level key.
+7. Booked cards get no week buttons; if ticked/dragged to a week the preview says "comes off its van → rebook" (loaded stay + flagged); confirm. Dropping on a van cell = booking only.
+8. Drop on "Later" → "Move to week…" with Wk +4 chosen. Prev/Next range: earliest open past week … +12; a week outside the strip gets a temporary tab.
+
+### What changes
+- **D1** `dchip` uses `dueTag`, hidden `<input type=date class=dq-in data-dq=WO data-f=due|deliv>`; tap → `showPicker()` (fallback focus);
+  change → `officeWho` → `pickReason(title, sub, cb, null, DATE_WHY)` with sub from the moveDates preview row ("Fri 14 Nov → Fri 21 Nov · build
+  week Wk46 → Wk47" + van line + `dmFlagTxt`) → apply → toast "Due now Fri 21 Nov · Wk 47 — card is on the Wk 47 tab"; flagged → `dateSummaryDlg`.
+  "⋯" on the card still opens full `dateDlg`. Same on the board row.
+- **D2** sticky `#del-wkbar` above the tabs: [◀ Prev] Wk 46 · Mon 9 Nov – Sat 14 Nov [Next ▶] [This week], ≥44 px; top = measured `.tabs` height.
+  Tab label "This week · Wk 46 · 9 Nov (12)"; class `cur` (green underline + ●) on the real current week, `on` = selected; scroll selected tab into view;
+  fix `if(!tabs.includes(delTab))delTab='0'` so Prev/Next weeks are added not reset; hide "Close Wk N" when nothing to close.
+- **D3** `wkMoveTo`; `dmTarget`/`dmDelivTarget` handle `toWk`; `dmRow` turns err into skipped. Pool cards (not booked): `→ Wk 47` + `Move to week…`.
+  `wkPickDlg(wos)`: This week … +12 "Wk N · Mon d Mmm (n jobs)" + "or a date… → dateDlg". Selection bar "📅 Move ticked to week… (N)".
+  Week tabs `ondragover/ondrop` via `delDragList` (PC), highlighted while dragging. One preview + one reason per drop/group; preview list first only
+  if anything is flagged/skipped/off a van, else reason picker alone (2 taps).
+- **D4** card: row 1 WO left, buttons right; row 2 Floor/Unit badges (wrap); title (2 lines max); dueTag (+ delivery tag) + movedTag; status /
+  readiness / flag chips + customer. `.dchip{box-sizing:border-box;min-width:0;overflow:hidden}`, `.dchip-top{flex-wrap:wrap;min-width:0}`, badges
+  `max-width:100%;overflow:hidden;text-overflow:ellipsis`. Remove `.dcv` € from cards (pool + grid); group header drops €; footer `.dgrp-f`
+  "6 jobs · €48,200" under every group (rebook and Later too). Grid Value/day row and week total stay.
+- **DD1** dueTag/movedTag on pool cards, grid cards, In store rows (`inStoreHTML`), board row due cell (`{late:true}`). Later (Job B): board group row,
+  Shipped, Cutting Lists, Saw, Stores, dockets/run sheets, A3 poster, Full Schedule export, floor and driver screens.
+- Data: only `planWk` on manual `delx` entries. No SQL.
+
+### Must NOT change
+Close week, legacy-week question / `slotWk`, Past weeks archive (with and without `w`); van placement = booking only; A3–A9, dueHist cap 30,
+dueKeep / import Keep-Take; auto-tag, never-untag, On hold, lists switch OFF / listDelOnly; board group-row badge; save/merge (DEL_K); esc on every value;
+Floor and Unit separate; saw/stores deadlines read dueDate.
+
+### Risks
+Old tests check old card text (due … Wk46, "🔁 date ×", € on card/header) → update as intended changes, list in the log. No drag on phones → buttons cover all;
+showPicker needs Chrome 99+. Two PCs moving one job → newer wins, both in history. Manual planWk on two PCs → last save wins.
+
+### Acceptance checks
+1 Tap due on pool card → Fri 21 Nov → reason → card on Wk 47 tab, history, moved 1×, Dates-to-Cienapps row; board/saw/stores new date; cancel = no change.
+2 → Next week: Wed 12 Nov → Wed 19 Nov; overdue Wed 4 Nov on This week → Wed 19 Nov; with delivery date both move, gap kept.
+3 Fri 18 Dec +1 → Thu 24 Dec; Mon 21 Dec +1 → Tue 29 Dec (Wk 53); Thu 31 Dec +1 → Thu 7 Jan 2027; Prev/Next walk Wk 52 → 53 → 1; Oct bank holiday.
+4 No-due-date Cienapps job → last working day of target week; manual job → Wk 48 pool, reason logged, never in Dates-to-Cienapps.
+5 Cut job → tab moves, build week kept, "due moved — check week". 6 Booked job ticked → preview off van → rebook in new week; LOADED stays, flagged.
+7 Tick 5 (cut, manual, booked) → Move ticked → one reason → summary right. 8 PC drag one / three onto tab; drop on Later → picker at +4; van cell = booking.
+9 Week bar sticky, labels "Wk N · d Mmm (count)", current week marked, Close hidden on empty past week.
+10 360 px and 1366 px, longest WO+Floor+Unit+title: no overlap pool or grid; no € on cards; group footer total correct.
+11 Colours: yesterday red, Fri this week amber, next week grey; board row same style + still red when planned week after due; In store same tag.
+12 Saw/stores/driver/floor see the tag but can't open the picker. Full suite with lists switch OFF and ON.
+
+### Build steps
+1 dueTag, movedTag, CSS, "rebooked" chip · 2 new dchip layout, € to group footer, 360 px · 3 board row + In store · 4 D1 quick edit ·
+5 wkMoveTo + toWk + engine tests · 6 card buttons + wkPickDlg + selection bar · 7 manual planWk · 8 tab drop targets ·
+9 week bar, labels, cur, Prev/Next fix, Close hidden · 10 update old tests, full suite, screenshots.

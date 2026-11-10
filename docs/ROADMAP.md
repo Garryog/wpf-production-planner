@@ -222,3 +222,22 @@ Rules: rank by the leading number. "Shipped" = step 9 only (left the factory →
 - Last full suite (feature/stores-dockets, 176 files): 3,163 pass / 27 fail — 23 on ACCEPTED-FAILURES, 4 timing-only (pass alone).
 - **Manager (4 Nov): stage2-imports go-live GO WITH CONDITIONS (same conditions as 3 Nov + press the catch-up delivery button once + tell drivers/office that step 7/8 jobs land in the delivery pool). Carry cutting-lists-flow + stores-dockets with the lists switch OFF: GO WITH CONDITIONS (run Stage 3 + dockets SQL before merging, or the docket buttons stay hidden). Switch lists ON: NO-GO until rehearsed on a Supabase test project with real data, real WO titles and real workbooks tested, real Android phone + saw PC.**
 - Waiting on Garry: sign off ACCEPTED-FAILURES; go-live date for stage2-imports; a Supabase test project; 50–100 real WO titles + 3–4 real workbooks; answer: can a delivered docket be cancelled / address editable after making (currently no).
+
+### Delivery page usability — TOP PRIORITY for buy-in (10 Nov 2026, Garry, go-live day)
+Garry's words: "for the delivery planner due date of jobs need to be edit able in the pool of jobs down for delivery. i need very clear week navigation between week in the delivery page. make it very easy for job in the delivery pool to be moved to other weeks. the easy usability of this page is very important for buy in of the whole planner system wit hthe production manager".
+- Job A (A1 weeks, A2 due date on card/pool, A11 group move) already covers the function. Before it is released, Architect + Tester review the Deliveries page as the Production Manager would use it, and the Coder closes any gap:
+  - **D1** due date editable straight on every To Plan pool card (one tap → date → reason), not only inside a dialog.
+  - **D2** week navigation impossible to miss: big ◀ Prev / Next ▶ plus the week tabs, the week number and Monday date always visible ("Wk 46 · 9 Nov"), "This week" button, the current week highlighted, job count per week on each tab.
+  - **D3** moving a pool job to another week in one or two taps: "→ Next week" / "Move to week…" on each card, tick several + "Move ticked to week…", and drag onto a week tab on a PC. Same A3–A7 rules and reason.
+- Test with the Production Manager's real use in mind (PC first, then phone). This page decides whether he adopts the planner.
+
+### Due dates prominent everywhere + WO drop-down in due-date order (10 Nov 2026, 16:27, Garry)
+Garry's words: "the work order due date are not prominent in all screens. the work orders should appear in order of due date in the work order drop down".
+- **L12** — the Work order drop-down in the list window (L11) is sorted by DUE DATE, earliest first (no date last), and each line shows the due date: "WO-2617-4 · Fl 7 · Unit 231 · due 14 Nov". (Supersedes "in WO order" in L11.)
+- **DD1** — audit EVERY screen that shows a work order (Capacity Board, Deliveries pool/cards/weeks, Shipped, Cutting Lists home + lists needed + list window header, Saw, Stores, dockets, PM views, prints) and make the due date prominent and in ONE consistent style everywhere: same badge, same format ("Fri 14 Nov · Wk 46"), red when overdue, amber when due this week, "moved N×" where it applies. Architect lists the screens where it is missing or small today; Tester checks each one at PC and phone width.
+
+### Delivery pool cards are messy (10 Nov 2026, 16:30, Garry — screenshot of the ASPECT ATHENRY group in the To Plan pool)
+Garry's words: "this is messy they are all over lapping, you can drop the value and just put a total down the bottom. add the dues date to these cards".
+- **D4** — pool cards must never overlap: WO, Floor and Unit badges fit inside the card (wrap or shrink), nothing spills into the next card, at PC and phone width. Drop the € value from each card; show the group total value once at the bottom of the group. Add the due date to every card in the DD1 style (red overdue, amber this week). Same fix on the cards in the week grids if they share the layout. Part of the Deliveries usability pass (D1–D3), before Thursday's release.
+
+
