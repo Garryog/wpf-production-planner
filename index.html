@@ -773,7 +773,7 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden&&pendT)writ
 // Server settings → a full settings object. Missing/empty keys keep what we had (same rules the old loader used).
 function settingsFrom(s,prev){
   const r={...prev};s=s||{};
-  ['weekCaps','delx','delNotes','grps','pins','pod','lists','listWBs','listDone','delArchive','staff','listHold','holdLog','listRow','listStore','listStoreAt','saveIds'].forEach(k=>{if(s[k])r[k]=s[k];});
+  ['weekCaps','delx','delNotes','grps','pins','pod','lists','listWBs','listDone','delArchive','staff','listHold','holdLog','listRow','listStore','listStoreAt','saveIds','pMerged'].forEach(k=>{if(s[k])r[k]=s[k];});
   if(s.hourScale&&s.hourScale.length)r.hourScale=s.hourScale;
   ['wcap','vcap','listLead','listDue'].forEach(k=>{if(s[k]>0)r[k]=s[k];});
   ['delivLead','siteDays','earlyDays'].forEach(k=>{if(dsOk(s[k]))r[k]=s[k];}); /*dates: delivery-date numbers — whole 1–60 only, else the default*/
@@ -804,7 +804,7 @@ function applyPlan(p){
   if(p.nid)DB.nid=p.nid;
   const s=p.settings||{};
   DB.weekCaps=s.weekCaps||{};if(s.hourScale&&s.hourScale.length)HOUR_SCALE=s.hourScale;if(s.wcap>0)WCAP=s.wcap;if(s.vcap>0)VCAP=s.vcap;
-  ['delx','delNotes','grps','pins','pod','lists','listWBs','listDone','delArchive','staff','listHold','holdLog','listRow','listStore','listStoreAt','saveIds'].forEach(k=>{if(s[k])DB[k]=s[k];});
+  ['delx','delNotes','grps','pins','pod','lists','listWBs','listDone','delArchive','staff','listHold','holdLog','listRow','listStore','listStoreAt','saveIds','pMerged'].forEach(k=>{if(s[k])DB[k]=s[k];}); // pMerged: copies of P-jobs dropped by "Keep one…" (round 3)
   if(s.listLead>0)DB.listLead=s.listLead;
   if(s.listDue>0)DB.listDue=s.listDue;
   ['delivLead','siteDays','earlyDays'].forEach(k=>{if(dsOk(s[k]))DB[k]=s[k];else delete DB[k];}); /*dates: out of range / text → default*/
@@ -1261,7 +1261,7 @@ window.addEventListener('beforeunload',e=>{if(saveT||SAVING||DB.saveFailed||lqPe
 /*dates: release marker for the old-screen guard v2 (SUPABASE_CHANGES.md, PENDING). Written on every save by this code; older
   code drops settings keys it doesn't know, so its saves can be told apart (and refused once the guard is on). */
 const APP_REL=2;
-function fullSettings(){return{appRel:APP_REL,weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP,delx:DB.delx||[],delNotes:DB.delNotes||{},grps:DB.grps||{},pins:DB.pins||{},pod:DB.pod||{},lists:DB.lists||[],listWBs:DB.listWBs||{},listDone:DB.listDone||{},listLead:DB.listLead||5,delArchive:DB.delArchive||{},staff:DB.staff||[],listHold:DB.listHold||{},holdLog:DB.holdLog||[],listRow:DB.listRow||{},saveIds:DB.saveIds||[],exportBase:{wk:orig,st:origStep},...(DB.listDue>0?{listDue:DB.listDue}:{}),...['delivLead','siteDays','earlyDays'].reduce((a,k)=>{if(dsOk(DB[k]))a[k]=DB[k];return a;},{}),...seqNumKeys().reduce((a,k)=>{if(seqNumOk(k,DB[k]))a[k]=DB[k];return a;},{}),...(typeof DB.listChk==='boolean'?{listChk:DB.listChk}:{}),...(typeof DB.photoLists==='boolean'?{photoLists:DB.photoLists}:{}),...(DB.delLegacyWk?{delLegacyWk:DB.delLegacyWk}:{}),...(DB.delLegacyAt?{delLegacyAt:DB.delLegacyAt}:{}),...(typeof DB.listDelOnly==='boolean'?{listDelOnly:DB.listDelOnly}:{}),...(DB.listStore?{listStore:DB.listStore,listStoreAt:DB.listStoreAt||''}:{})};}
+function fullSettings(){return{appRel:APP_REL,...(DB.pMerged&&DB.pMerged.length?{pMerged:DB.pMerged}:{}),weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP,delx:DB.delx||[],delNotes:DB.delNotes||{},grps:DB.grps||{},pins:DB.pins||{},pod:DB.pod||{},lists:DB.lists||[],listWBs:DB.listWBs||{},listDone:DB.listDone||{},listLead:DB.listLead||5,delArchive:DB.delArchive||{},staff:DB.staff||[],listHold:DB.listHold||{},holdLog:DB.holdLog||[],listRow:DB.listRow||{},saveIds:DB.saveIds||[],exportBase:{wk:orig,st:origStep},...(DB.listDue>0?{listDue:DB.listDue}:{}),...['delivLead','siteDays','earlyDays'].reduce((a,k)=>{if(dsOk(DB[k]))a[k]=DB[k];return a;},{}),...seqNumKeys().reduce((a,k)=>{if(seqNumOk(k,DB[k]))a[k]=DB[k];return a;},{}),...(typeof DB.listChk==='boolean'?{listChk:DB.listChk}:{}),...(typeof DB.photoLists==='boolean'?{photoLists:DB.photoLists}:{}),...(DB.delLegacyWk?{delLegacyWk:DB.delLegacyWk}:{}),...(DB.delLegacyAt?{delLegacyAt:DB.delLegacyAt}:{}),...(typeof DB.listDelOnly==='boolean'?{listDelOnly:DB.listDelOnly}:{}),...(DB.listStore?{listStore:DB.listStore,listStoreAt:DB.listStoreAt||''}:{})};}
 /* Stage 3 switch: settings.listStore==='v2' → cutting lists live in their own tables (lists, list_lines…).
    Missing, blank or anything else (switch back writes 'v1') → today's lists in the planner record, untouched. */
 function V2(){return DB.listStore==='v2'||DB.listStore==='switching';} // 'switching' = a Switch back is rebuilding the old lists: screens still read the tables, the database takes no changes
@@ -2478,7 +2478,7 @@ async function lsLoad(){
       const[p,m,l,sn]=await Promise.all([lsGet('projects?select=*'),lsGet('project_materials?select=*'),lsGet('lists?select=*'),lsGet('snags?select=*')]);
       lsPut('projects',p);lsPut('project_materials',m);lsPut('lists',l);lsPut('snags',sn);
       await lsLines(l.filter(x=>!lsFinishedRow(x)).map(x=>x.id)); // finished lists' lines load when someone opens them
-      LST.loaded=true;LST.err='';lsRescue();
+      LST.loaded=true;LST.err='';lsRescue();setTimeout(()=>pMineFix(),0); // (round 3) a P-number renumbered before a reload: our list still follows it
       await specLoad(true); // Project details (9 Nov): hidden quietly until its SQL is run
       await seqLoad(true); // PM sequence (Job B part 2): hidden quietly until its SQL is run
     }catch(e){LST.err=e.message;console.warn('Planner lists: '+e.message);}
@@ -4315,7 +4315,7 @@ function lsHomeHTML(){
     <td>${escA(LS_KINDS[l.ltype]||l.ltype||'')}${l.templateId?`<div style="font-size:11px;color:#5b21b6">${escA(lsTplInfo(l))}</div>`:''}</td><td>${(l.wos||[]).map(w=>woChip(w)).join('')||'<span style="color:var(--t3)">—</span>'}</td>${lsFuTds(l)}
     <td>${(+l.rev||1)>1?`<span class="lst-chip" style="background:#fff4d6;color:#7a5200">Rev ${+l.rev}</span>`:'Rev 1'}</td><td><span style="color:${col};font-weight:700">${st}</span>${!l.archived&&!sup?'<div>'+(lsChkOn()&&l.tpl&&l.checkReq&&!l.checkedAt?'<span class="chk-wait">Not checked</span>':lsCheckChip(l))+'</div>':''}${(t=>t.length?'<div>'+lsTbcChip(t)+'</div>':'')(l.archived?[]:lsTbc(lsView(l.id).rows))}</td><td>🪚 ${prog(l,'saw')}</td><td>🧰 ${prog(l,'fit')}</td>
     <td class="lh-act">${!l.archived&&!sup&&lsChkOn()&&l.checkReq&&!l.checkedAt?`<button class="btn btn-g" data-lhchk="${escA(l.id)}" style="padding:2px 8px;font-size:11px" title="Drawing office / Production Manager / Admin PIN — the saw sees the list once it is checked">✓ Check</button> `:''}${sup?'':`<button class="btn btn-s" data-lhedit="${escA(l.id)}" style="padding:2px 8px;font-size:11px">✎ Edit</button> `}<button class="btn btn-s" data-lhview="${escA(l.id)}" style="padding:2px 8px;font-size:11px">View</button> <button class="btn btn-s" data-lhcopy="${escA(l.id)}" style="padding:2px 8px;font-size:11px" title="Start a NEW list from this one's rows — pick the work order and change anything. This list is not changed">⧉ Copy</button>${l.archived?'':` <button class="btn btn-s" data-lhastpl="${escA(l.id)}" style="padding:2px 8px;font-size:11px" title="Save this list as a template of the project (ticks are not copied)">📐 Save as template</button>`}${l.tpl?` <button class="btn btn-s" data-lhhist="${escA(l.id)}" style="padding:2px 8px;font-size:11px">🕘 History</button>`:''}${!l.tpl&&!l.archived&&lsState(l)==='draft'?` <button class="btn btn-s" data-lhsend="${escA(l.id)}" style="padding:2px 8px;font-size:11px">➜ Send to saw</button>`:''}${l.archived?'':` <button class="btn btn-s" data-lharc="${escA(l.id)}" style="padding:2px 8px;font-size:11px;color:var(--red);border-color:var(--red)">Archive</button>`}</td></tr>`;};
-  return `<div class="exp-panel" id="lh">
+  return `<div class="exp-panel" id="lh">${pFlagsHTML()}
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
       <div style="font-size:15px;font-weight:700;color:#14335c">📋 Lists — ${ls0.length}</div>
       <input id="lh-q" value="${escA(LH.q)}" placeholder="🔍 Search name, house, WO, customer, type" style="${LS_INP};width:250px;max-width:100%">
@@ -5470,7 +5470,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     ['title','cust','floor','unit','due','val','hrs'].forEach(k=>{const e=g('me-p'+k);if(e)st.pw[k]=e.value;});
     [['me-jf','floor'],['me-ju','unit'],['me-jt','title'],['me-jwo','wo']].forEach(([id,k])=>{const e=g(id);if(e)st.jb[k]=e.value;});};
   const save=()=>{
-    keep();const g=id=>ov.querySelector('#'+id),err=t=>{g('me-err').textContent=t;};
+    keep();const g=id=>ov.querySelector('#'+id),err=t=>{g('me-err').textContent=t+(st.chkNote&&t&&!/^Checking/.test(t)?' '+st.chkNote:'');}; // chkNote: the house check couldn't be made (round 3)
     if(st.addBusy)return err('Wait a moment — the new material is still being added to the project.');
     if(!st.pid)return err('Pick the project.');
     let rows=R().filter(r=>!lsEmptyRow(r)); // empty rows (nothing typed) are left out, as in Excel
@@ -5512,6 +5512,20 @@ function openListEditor2(listId,presetWo,presetPid,opt){
         if(un.length&&!confirm('These planner jobs might be the same house ('+fu+'):\n'+un.slice(0,6).map(x=>'• '+x.o.wo+' — '+[fuLbl(x.o),x.o.title].filter(Boolean).join(' · ')+' ('+x.why+')').join('\n')+'\n\nMake a new P-number anyway?\n\nOK = make it\nCancel = go back (pick the job instead)'))return;}
     }
     if(ex&&ex.tpl){const w=prompt('What changed in this template? (optional — shown in its History; it becomes Rev '+((+ex.rev||1)+1)+')','');if(w===null)return;d.why=w.trim()?w.trim():'Template edited';}
+    // (round 3) our P-number was made while the database couldn't be asked: ask now, before this Save goes on
+    if(!ex&&!st.newWO&&st.pUnchecked&&st.wo===st.pUnchecked&&!st.reChk){const own=DB.orders.find(x=>x.wo===st.wo);
+      if(own){const sb=g('me-save');if(sb)sb.disabled=true;err('Checking the planner for this house…');
+        const again=()=>{st.reChk=true;try{save();}finally{st.reChk=false;}};
+        pFreshDup(st.pid,fuF(own),fuU(own),own.title,own.wo).then(async dup=>{if(sb)sb.disabled=false;st.pUnchecked='';st.chkNote='';err('');
+          if(!dup)return again();
+          if(!DB.orders.some(x=>x.wo===dup.wo))DB.orders.push(JSON.parse(JSON.stringify(dup)));
+          const why=await pBare(own);
+          if(why.length||!confirm(dup.wo+' is in the planner now for this house ('+[fuLbl(dup),dup.title].filter(Boolean).join(' · ')+') — made on another screen while yours could not be checked.\n\nUse '+dup.wo+' for this list?\n\nOK = use '+dup.wo+' ('+own.wo+', made here a moment ago with nothing on it, is dropped — a copy is kept)\nCancel = keep '+own.wo+' (two jobs for one house — Lists shows it)')){if(why.length)toast(own.wo+' and '+dup.wo+' are both for this house — '+own.wo+' already has '+why.join(', ')+', so both stay (Lists shows it)',true);return again();}
+          const by=lqBy('');DB.pMerged=(DB.pMerged||[]).concat([{at:nowISO(),by,wo:own.wo,into:dup.wo,why:'made offline; the house already had '+dup.wo,job:JSON.parse(JSON.stringify(own))}]).slice(-300);
+          const i=DB.orders.indexOf(own);if(i>=0)DB.orders.splice(i,1);sched();
+          st.wo='';st.jm=null;jbChoose(dup.wo,'picked');})
+        .catch(()=>{if(sb)sb.disabled=false;st.chkNote='⚠ This house could not be checked against the database (offline?) — it is checked again on the next Save.';again();});
+        return;}}
     officeWho(by=>{
      const go=()=>{
       if(st.newWO){
@@ -5523,6 +5537,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
           dueDate:due,origDueDate:due,step:'Planner WO',salesRep:'',orderNo:'',value:val,plannedWeek:wkKey(new Date(due)),notes:'',colour:'',log:[{at:nowISO(),by,what:'Work order created with a typed cutting list'}]});
         orig[pwo]='';origStep[pwo]='Planner WO';d.wo=pwo;st.newWO=false;st.wo=pwo; // a failed save tried again reuses this P-number
         if(d.newId)pMineAdd(pwo,d.newId); // (round 2) this screen's list for this P-number — moved with it if a merge renumbers it
+        if(st.chkFail){st.pUnchecked=pwo;st.chkFail=false;} // (round 3) made without the database check: checked again on the next Save
       }
       const sb=g('me-save');if(sb)sb.disabled=true;err('Saving…');
       lsSaveManual(d,by,ex).then(async l=>{ov.remove();sched();render();if(d.newId)lsPendDrop(d.newId);setTimeout(()=>pMineFix(),0);
@@ -5553,7 +5568,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
               if(!DB.orders.some(x=>x.wo===dup.wo))DB.orders.push(JSON.parse(JSON.stringify(dup))); // brought in now; the next refresh has it anyway
               if(confirm(m+'.\n\nNo second job is made for one house.\n\nOK = use '+dup.wo+' for this list\nCancel = go back')){st.newWO=false;jbChoose(dup.wo,'picked');}else err('Not saved — '+m+'.');return;}
             go();})
-          .catch(()=>{if(sb)sb.disabled=false;err('');go();}); // offline: the local check above stands
+          .catch(()=>{if(sb)sb.disabled=false;st.chkFail=true;st.chkNote='⚠ This house could not be checked against the database (offline?) — only this screen\'s jobs were checked; it is checked again on the next Save.';err('');go();}); // offline: the local check above stands
           return;}
       }
       go();
@@ -10408,50 +10423,85 @@ function knownMaterials(){
   Object.values(DB.listWBs||{}).forEach(wb=>Object.values(wb.sheets||{}).forEach(rows=>rows.forEach(r=>{if(r.k==='saw'&&r.mat)s.add(String(r.mat).trim());})));
   return[...s].sort();
 }
-/* (Round 2, Tester attack 3) P-numbers made on two PCs at the same moment, with the lists switched on.
-   PMINE (this device, localStorage wpfPMine) remembers which NEW cutting lists this screen made for each P-number it created.
-   When a merge renumbers our P-number (renumberP — it only re-tags the old in-record lists), pMineFix moves OUR lists in the
-   list tables onto the new number (list_attach through the line queue, logged on the list and the job), never the other
-   screen's lists. If the other screen's job is for the SAME house and kind, there must be one job: ours is folded into
-   theirs — our list goes onto their number when they have no live list, otherwise (after a confirm) our list is archived
-   (never deleted) — and our just-made duplicate P-job is taken out, with a line in their job's log. */
+/* (Round 2/3, Tester attacks 3-4) P-numbers made on two PCs at the same moment, with the lists switched on.
+   PMINE (this device, localStorage wpfPMine, kept 3 days) remembers which NEW cutting lists this screen made for each P-number
+   it created. When a merge renumbers our P-number (renumberP only re-tags the old in-record lists), pMineFix moves OUR lists in
+   the list tables onto our new number (list_attach through the line queue, logged on the job) — never another screen's list,
+   and only when the database (asked fresh) says no other live list is on that number. It runs after a merge, after a save and
+   at start-up (a reload in between doesn't lose it).
+   It NEVER removes or merges a job (project rule: never delete production data). Two P-jobs for one house + kind are only
+   FLAGGED (pTwins: Lists home "⚠ two P-numbers for one house" + "Keep one…", refused unless the job to drop is bare — see
+   pBare); a Cienapps WO for a P-job's house is only SHOWN (pCienFor) — folding it in is the L4b merge, not built yet. */
 const PMINE=(()=>{try{const o=JSON.parse(localStorage.getItem('wpfPMine')||'{}');return o&&typeof o==='object'?o:{};}catch(e){return{};}})();
 function pMineSave(){const lim=Date.now()-3*864e5;Object.keys(PMINE).forEach(w=>{if(!(+PMINE[w].at>lim))delete PMINE[w];});try{localStorage.setItem('wpfPMine',JSON.stringify(PMINE));}catch(e){}}
 function pMineAdd(wo,listId){if(!wo)return;const e=PMINE[wo]&&!PMINE[wo].to?PMINE[wo]:(PMINE[wo]={lists:[],at:Date.now()});if(listId&&!e.lists.includes(listId))e.lists.push(listId);pMineSave();}
 function pKindsMeet(a,b){const ka=seqKinds(a),kb=seqKinds(b);if(!ka.size)ka.add('kitchen');if(!kb.size)kb.add('kitchen');return [...ka].some(x=>kb.has(x));}
-// another live job for the same house + kind as job o (same project, floor and unit — 'same' only)
-function pSameHouse(o,jobs){const k=jobKey(o);return (jobs||DB.orders).find(x=>x&&x.wo!==o.wo&&!isShipped(x)&&!x.delDone&&!x.delDelivAt&&keyMatch(k,jobKey(x)).r==='same'&&pKindsMeet(o.title,x.title))||null;}
+const pIsP=w=>/^P-\d+$/.test(String(w||''));
+const pLive=x=>x&&!isShipped(x)&&!x.delDone&&!x.delDelivAt;
+// other live jobs for the same house + kind as job o (same project, floor and unit — 'same' only); P-jobs and Cienapps WOs
+function pSameHouseAll(o,jobs){const k=jobKey(o);return (jobs||DB.orders).filter(x=>pLive(x)&&x.wo!==o.wo&&keyMatch(k,jobKey(x)).r==='same'&&pKindsMeet(o.title,x.title));}
+function pSameHouse(o,jobs){return pSameHouseAll(o,jobs)[0]||null;}
+// pairs of live P-jobs for one house + kind (flagged on Lists home); a Cienapps WO that now exists for a P-job's house
+function pTwins(){const ps=DB.orders.filter(o=>pIsP(o.wo)&&pLive(o)),out=[],seen=new Set();
+  ps.forEach(o=>pSameHouseAll(o,ps).forEach(x=>{const k=[o.wo,x.wo].sort().join('|');if(!seen.has(k)){seen.add(k);out.push([o,x].sort((a,b)=>woCmp(a,b)));}}));return out;}
+function pCienFor(){const out=[];DB.orders.filter(o=>pIsP(o.wo)&&pLive(o)).forEach(o=>{const w=pSameHouseAll(o).filter(x=>!pIsP(x.wo));if(w.length)out.push({p:o,w});});return out;}
+// what is on a job that "Keep one…" would drop — anything at all and it is refused (left for the L4b merge)
+async function pBare(o){const why=[];
+  if(o.delv||o.delVeh||o.delDay||o.delWk||dStage(o))why.push('a van / delivery booking');
+  if((o.dueHist||[]).length||o.dueMv||o.dueKeep||o.delivDate)why.push('date changes');
+  if((o.log||[]).some(x=>x&&!/^(Work order created|Renumbered )/.test(String(x.what||''))))why.push('changes in its log');
+  if(!/^Planner WO$/.test(String(o.step||'Planner WO')))why.push('a production step ('+o.step+')');
+  if(lsCache().all.some(l=>(l.wos||[]).includes(o.wo)))why.push('a cutting list');
+  else{try{if((await lsLiveFor(o.wo)).length)why.push('a cutting list');}catch(e){why.push('(the lists could not be checked)');}}
+  const t0=Date.parse(((o.log||[])[0]||{}).at||'');if(!(t0>Date.now()-60*60e3))why.push('it is more than an hour old');
+  return why;}
 let PMFIX=null;
-function pMineFix(){if(!V2()||PMFIX)return PMFIX;PMFIX=(async()=>{await null;try{ // (await first: the finally must run AFTER PMFIX is set)
+function pMineFix(){if(!V2()||PMFIX)return PMFIX;PMFIX=(async()=>{await null;let wait=false;try{ // (await first: the finally must run AFTER PMFIX is set)
+  if(!DB.loaded||!LST.loaded){wait=true;return;}
   for(const [w,e] of Object.entries(PMINE)){
     if(!e||!e.to||e.done)continue;
     const nw=e.to,o=DB.orders.find(x=>x.wo===nw),by=lqBy('');
-    if(!o){e.done=1;continue;}
+    if(!o){e.done=1;continue;} // our job is gone from the planner (someone else's decision) — nothing of ours to move
     const ls=(e.lists||[]).map(id=>lsList(id)).filter(Boolean);
-    if(ls.length<(e.lists||[]).length)continue; // our list hasn't reached the database yet: done after its save
-    const names=ls.map(l=>'"'+l.name+'"').join(', ');
-    const dup=pSameHouse(o);
-    if(dup){
-      let other=[];try{other=(await lsLiveFor(dup.wo)).filter(l=>!(e.lists||[]).includes(l.id));}catch(x){continue;} // ask the database: the other screen's list may not be on this screen yet
-      if(other.length&&!confirm('Another screen made '+dup.wo+' for the same house ('+[fuLbl(dup),dup.title].filter(Boolean).join(' · ')+') at the same moment as your '+nw+', with its own cutting list "'+other[0].name+'".\n\nOne house = one job.\n\nOK = keep '+dup.wo+': your list '+(names||'(none)')+' is archived (not deleted — Find old list shows it) and '+nw+' is taken out\nCancel = keep both for now (two jobs for one house — sort it out)')){
-        ls.forEach(l=>{if((l.wos||[]).includes(w)&&!(l.wos||[]).includes(nw)){listTag(l,nw,true,by);listTag(l,w,false,by);}});
-        logEdit(o,'Made at the same moment as '+dup.wo+' for the same house — both kept (the person chose); its list '+names+' moved from '+w+' to '+nw,by);e.done=1;continue;}
-      ls.forEach(l=>{
-        if(other.length){if(!l.archived)listArchive(l,by);}
-        else{if(!(l.wos||[]).includes(dup.wo))listTag(l,dup.wo,true,by);(l.wos||[]).filter(x=>x!==dup.wo).forEach(x=>listTag(l,x,false,by));}});
-      const i=DB.orders.indexOf(o);if(i>=0)DB.orders.splice(i,1);
-      logEdit(dup,'Another screen made '+nw+' for this same house at the same moment — folded into '+dup.wo+(names?(other.length?' (its list '+names+' archived)':' (its list '+names+' moved here)'):''),by);
-      e.done=1;sched();toast(nw+' was a second job for the same house as '+dup.wo+' (made on another screen at the same moment) — kept '+dup.wo+(names?other.length?'; your list '+names+' is archived':'; your list '+names+' is now on '+dup.wo:''),true);
-      continue;}
-    ls.forEach(l=>{if((l.wos||[]).includes(w)&&!(l.wos||[]).includes(nw)){listTag(l,nw,true,by);listTag(l,w,false,by);}});
-    if(ls.length)logEdit(o,'Renumbered '+w+' → '+nw+': its cutting list '+names+' moved to '+nw,by);
+    if(ls.length<(e.lists||[]).length){wait=true;continue;} // our list hasn't reached this screen yet: again shortly
+    const mv=ls.filter(l=>!l.archived&&(l.wos||[]).includes(w)&&!(l.wos||[]).includes(nw));
+    if(mv.length){let other;
+      try{other=(await lsLiveFor(nw)).filter(l=>!(e.lists||[]).includes(l.id));}catch(x){wait=true;continue;} // can't ask the database: leave it, try again
+      if(other.length){if(!e.flagged){e.flagged=1;logEdit(o,'Renumbered '+w+' → '+nw+': its cutting list '+mv.map(l=>'"'+l.name+'"').join(', ')+' NOT moved — '+nw+' already has the live list "'+other[0].name+'" (sort it out: one live list per work order)',by);}
+        e.done=1;continue;}
+      mv.forEach(l=>{listTag(l,nw,true,by);listTag(l,w,false,by);});
+      logEdit(o,'Renumbered '+w+' → '+nw+': its cutting list '+mv.map(l=>'"'+l.name+'"').join(', ')+' moved to '+nw,by);sched();}
+    const tw=pSameHouseAll(o).filter(x=>pIsP(x.wo));
+    if(tw.length)toast('⚠ Two P-numbers for one house: '+[o.wo,...tw.map(x=>x.wo)].join(' / ')+' — made on two screens at the same moment. See Lists → "Keep one…".',true);
     e.done=1;
-  }}finally{pMineSave();PMFIX=null;try{render();}catch(x){}
+  }}finally{pMineSave();PMFIX=null;try{if(!wait)render();}catch(x){}
     if(Object.values(PMINE).some(e=>e&&e.to&&!e.done))setTimeout(()=>pMineFix(),2000);}})();return PMFIX;} // a list still on its way: look again shortly
-// (round 2) before a new P-number is made: the planner record in the database may already have the job (another screen)
-async function pFreshDup(pid,floor,unit,title){
+// "Keep one…": drop the other P-job ONLY when it is bare (nothing on it, made within the hour); its full copy goes into
+// settings pMerged (last 300) — never just spliced away. Anything on it → refused, both stay for the L4b merge.
+async function pKeepOne(keepWo,dropWo){
+  const k=DB.orders.find(x=>x.wo===keepWo),d=DB.orders.find(x=>x.wo===dropWo);if(!k||!d)return toast('That job is no longer there');
+  const why=await pBare(d);
+  if(why.length){alert(dropWo+' can\'t be dropped — it has '+why.join(', ')+'.\n\nBoth stay. Merging two jobs with things on them is a later step (L4b); until then tell the office which one to use.');return false;}
+  if(!confirm('Keep '+keepWo+' and drop '+dropWo+'?\n\n'+dropWo+' has nothing on it (no list, booking or date changes). A full copy is kept in the planner\'s settings.\n\nOK = drop '+dropWo))return false;
+  const by=lqBy(''),at=nowISO();
+  DB.pMerged=(DB.pMerged||[]).concat([{at,by,wo:dropWo,into:keepWo,why:'two P-numbers for one house',job:JSON.parse(JSON.stringify(d))}]).slice(-300);
+  const i=DB.orders.indexOf(d);if(i>=0)DB.orders.splice(i,1);
+  logEdit(k,dropWo+' (a second P-number for this house, made at the same moment on another screen, with nothing on it) dropped — kept '+keepWo+'; its copy is in settings pMerged',by);
+  sched();render();toast('Kept '+keepWo+' — '+dropWo+' dropped (a copy is kept)');return true;}
+function pFlagsHTML(){if(!V2())return'';const tw=pTwins(),cw=pCienFor();if(!tw.length&&!cw.length)return'';const E=escA,fu=o=>[fuLbl(o),o.title].filter(Boolean).join(' · ');
+  return `<div class="p-flags" style="margin-bottom:10px">${tw.map(([a,b])=>`<div class="p-flag" style="background:#fff4d6;border:1px solid #e0a43a;border-radius:6px;padding:6px 9px;margin-bottom:4px;font-size:13px">⚠ <b>Two P-numbers for one house</b> — ${woChip(a.wo)} / ${woChip(b.wo)} <span style="color:var(--t3)">${E(fu(a))}</span> <button class="btn btn-s" data-pkeep="${E(a.wo)}|${E(b.wo)}" style="font-size:12px;padding:2px 9px">Keep one…</button></div>`).join('')}
+    ${cw.map(x=>`<div class="p-flag" style="background:#eef6ff;border:1px solid #9cc3f0;border-radius:6px;padding:6px 9px;margin-bottom:4px;font-size:13px">ℹ A Cienapps WO now exists for the house of ${woChip(x.p.wo)}: ${x.w.map(w=>'<b>'+E(w.wo)+'</b>').join(', ')} <span style="color:var(--t3)">${E(fu(x.p))} — the P-number is folded into it later (nothing is moved now)</span></div>`).join('')}</div>`;}
+document.addEventListener('click',e=>{const b=e.target&&e.target.closest&&e.target.closest('[data-pkeep]');if(!b)return;e.preventDefault();const[a,c]=b.dataset.pkeep.split('|');
+  const dl=lsDlg('<div id="pk-body"></div>',460),body=dl.querySelector('#pk-body');
+  body.innerHTML=`<div style="font-weight:800;color:#14335c;font-size:16px;margin-bottom:6px">Keep one of two P-numbers</div><div style="font-size:12px;color:var(--t3);margin-bottom:10px">The one you drop must have nothing on it (no list, booking or date changes) — otherwise both stay.</div>
+    <button class="btn btn-g" data-pk="${escA(a)}|${escA(c)}" style="display:block;width:100%;margin-bottom:6px">Keep ${escA(a)} — drop ${escA(c)}</button><button class="btn btn-g" data-pk="${escA(c)}|${escA(a)}" style="display:block;width:100%">Keep ${escA(c)} — drop ${escA(a)}</button>`;
+  dl.onclick=ev=>{if(ev.target===dl||ev.target.id==='pod-x')dl.remove();};
+  body.querySelectorAll('[data-pk]').forEach(x=>x.onclick=async()=>{const[k,d]=x.dataset.pk.split('|');dl.remove();await pKeepOne(k,d);});});
+// (round 2) before a new P-number is made: the planner record in the database may already have the job (another screen).
+// skip = our own P-number (the check run again on a second Save after an offline one)
+async function pFreshDup(pid,floor,unit,title,skip){
   const row=await fetchMain(),jobs=row&&Array.isArray(row.orders)?row.orders:[];
-  const me={wo:'(new)',pid,floor,unit,title};return pSameHouse(me,jobs.concat(DB.orders));}
+  const me={wo:'(new)',pid,floor,unit,title};return pSameHouse(me,jobs.concat(DB.orders).filter(x=>x.wo!==skip));}
 function nextPNumber(){
   let num=Math.max(1000,...DB.orders.map(o=>{const m=String(o.wo).match(/^P-(\d+)$/);return m?+m[1]:0;}))+1;
   while(DB.orders.some(o=>o.wo==='P-'+num))num++;
