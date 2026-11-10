@@ -4698,7 +4698,9 @@ async function ltiLink(o,pid){ // add the customer heading to the project's Cien
 function lsProjAge(p){if(p&&p.created_at)return Date.parse(p.created_at)||0;const m=/^P([0-9a-z]{8})/.exec(String(p&&p.id||''));return m?parseInt(m[1],36)||0:0;}
 function lsProjOldest(a){return a.slice().sort((x,y)=>lsProjAge(x)-lsProjAge(y)||String(x.id).localeCompare(String(y.id)))[0]||null;}
 function lsProjTwins(c,all){const h=sgNorm(c);return h?lsProjects(all).filter(p=>sgNorm(p.name)===h):[];}
-function lsProjExact(c){const h=sgPh(sgNorm(c));if(!h)return[];return lsProjects().filter(p=>[p.name,p.customer,...(p.cien_names||[])].some(n=>n&&sgPh(sgNorm(n))===h));}
+function lsProjCore(s){return sgPh(sgNorm(s)).split(' ').filter(w=>w&&!SG_CO.has(w)).join(' ');} // "ADERRIG HOMES LTD" → "aderrig" (company words like Homes / Ltd / Developments left out)
+function lsProjExact(c){const h=sgPh(sgNorm(c)),k=lsProjCore(c);if(!h)return[]; // the same once case, spaces, punctuation and company words are ignored
+  return lsProjects().filter(p=>[p.name,p.customer,...(p.cien_names||[])].some(n=>n&&(sgPh(sgNorm(n))===h||(k&&lsProjCore(n)===k))));}
 function lsProjAuto(c){ // {p} certain | {many:[…]} pick one | {ask:p} "Is this project …?" | {} none
   const ex=lsProjExact(c);
   if(ex.length===1)return{p:ex[0]};
