@@ -4042,7 +4042,7 @@ function seqMv(t,reason,by){return moveDates(t.wos,{per:t.per},reason,by,{src:'p
 function seqTicks(pid){SEQV.ticks=SEQV.ticks||{};return SEQV.ticks[pid]=SEQV.ticks[pid]||new Set();}
 function seqTickBarHTML(pid,rows,tk){const n=rows.filter(r=>tk.has(r.id)).length;
   return `<div class="seq-tbar${n?' on':''}"><span class="seq-tbl-l">Tick:</span><button class="btn btn-s" data-seqtk="house" title="Every row of the same house (floor + unit) as a ticked row">Whole house</button><button class="btn btn-s" data-seqtk="block" title="Every row on the same floor / block as a ticked row">Whole block</button><button class="btn btn-s" data-seqtk="down" title="Every row from the first ticked row down">From here down</button>${n?`<button class="btn btn-s" data-seqtk="clear">✕ Clear</button><b>${n} ticked →</b>${SEQ_TOOLS.map(k=>`<button class="btn btn-g" data-seqtool="${k}">${escA(SEQ_DT_LBL[k])}</button>`).join('')}`:'<span class="seq-grey">tick rows, then pick a tool</span>'}</div>`;}
-const SEQ_TOOLS=['set'];
+const SEQ_TOOLS=['set','push'];
 const SEQ_DT_LBL={set:'📅 Set the required date',push:'⏩ Push / pull',spread:'↔ Spread'};
 function seqDateDlg(pid,ids,mode,redraw){
   if(!seqCanEdit(pid))return toast('Read-only — only the project\'s PM, the office or the Production Manager change dates here');
@@ -4086,14 +4086,22 @@ function seqDateDlg(pid,ids,mode,redraw){
 // the inputs per tool
 function seqDtInputs(mode,cur){
   if(mode==='set')return `<label>Required (delivery) date <input type="date" id="sd-date" value="${escA(cur||'')}" style="padding:6px;font-size:15px"></label><span id="sd-sug" style="font-size:12px;color:var(--t2)"></span>`;
+  if(mode==='push')return `<select id="sd-dir" style="padding:6px;font-size:15px"><option value="1">Later</option><option value="-1">Earlier</option></select> by <input type="number" id="sd-n" value="1" min="1" max="99" step="1" style="width:64px;padding:6px;font-size:15px"> <select id="sd-u" style="padding:6px;font-size:15px"><option value="wd">working days</option><option value="wk">weeks</option></select><span id="sd-sug" style="font-size:12px;color:var(--t2)">weekends and bank holidays are skipped</span>`;
   return '';
 }
+// a date moved by n working days, or n weeks (a week landing on a weekend / bank holiday → the next working day; earlier → the one before)
+function seqWd(d,fwd){return isWorkDay(d)?d:(fwd?nextWorkDay(d):prevWorkDay(d));}
+function seqShift(d,n,unit){if(!dmIsDate(d)||!n)return'';return unit==='wd'?dmShiftWd(d,n):seqWd(addDayISO(d,7*n),n>0);}
 // → {dateOf(r,o,i) → {job:{deliv,due}} | {req} | {none}} or {err}
 function seqDtCalc(mode,rows,ov){
   const $=s=>ov.querySelector(s);
   if(mode==='set'){const X=($('#sd-date')||{}).value||'';if(!dmIsDate(X))return{err:'Pick the required date.'};
     const s=$('#sd-sug');if(s)s.textContent='build '+dShort(dmShiftWd(X,-delivLead()))+(isWorkDay(X)?'':' · ⚠ '+dShort(X)+' is not a working day');
     return{dateOf:()=>({job:seqJobDates(X),req:X})};}
+  if(mode==='push'){const t=String(($('#sd-n')||{}).value||'').trim();if(!/^\d+$/.test(t)||+t<1||+t>99)return{err:'Type how many (a whole number, 1–99).'};
+    const n=+t*(+(($('#sd-dir')||{}).value)||1),u=(($('#sd-u')||{}).value)==='wk'?'wk':'wd';
+    return{dateOf:(r,o)=>{if(o){if(!o.dueDate)return{none:'no build date to move from'};return{job:{due:seqShift(o.dueDate,n,u),deliv:o.delivDate?seqShift(o.delivDate,n,u):''}};}
+      if(!r.req_date)return{none:'no date to move from'};return{req:seqShift(r.req_date,n,u)};}};}
   return{err:'Unknown tool.'};
 }
 // Save: the jobs through the engine (one sched()), then the waiting rows (version-checked)
