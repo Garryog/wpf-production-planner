@@ -30,7 +30,7 @@ async function dev(browser, S, role, extra = {}) {
   const t = await SS.open(browser, S, Object.assign({ now: NOW, role }, extra));
   await t.page.evaluate(async me => {
     localStorage.setItem('wpfOpName', 'Op'); sessionStorage.setItem('wpfWho', 'Op');
-    if (me) Object.entries(me).forEach(([k, v]) => localStorage.setItem('wpfMe_' + k, v));
+    if (me) { Object.entries(me).forEach(([k, v]) => localStorage.setItem('wpfMe_' + k, v)); document.querySelectorAll('.pod-ovl').forEach(x => x.remove()); } // the name was asked before it was set here
     window.alert = () => {}; window.prompt = (m, d) => (window.__prompt !== undefined ? window.__prompt : 'Op'); window.confirm = () => (window.__confirm !== undefined ? window.__confirm : true);
     if (typeof lsReset === 'function') { lsReset(); await lsLoad(); } render();
   }, extra.me || null);

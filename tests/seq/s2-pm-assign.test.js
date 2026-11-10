@@ -90,7 +90,7 @@ const { H, rec, sleep } = X;
 
   // ---- a name removed from Staff is not trusted
   const pm2 = await X.dev(browser, S, 'pm', { me: { pm: 'Someone Gone' } });
-  rec('a remembered name no longer ticked PM in Staff = asked again', await pm2.page.evaluate(() => seqMe('pm') === '' && /Which Project Manager/.test((document.querySelector('.pod-ovl') || {}).innerText || '')));
+  rec('a remembered name no longer ticked PM in Staff = asked again', await pm2.page.evaluate(() => { SEQ_ASKED.clear(); render(); return true; }) && await pm2.page.evaluate(() => seqMe('pm') === '' && /Which Project Manager/.test((document.querySelector('.pod-ovl') || {}).innerText || '')));
   await pm2.close();
 
   // ---- the Production Manager can assign too; Drawing office can't
