@@ -8125,7 +8125,7 @@ const addsSum=(a,k)=>Object.keys(a||{}).reduce((s,x)=>s+(+(a[x]||{})[k]||0),0);
 function analyzeImport(input,source){
     if(Array.isArray(input))input=prepImport(input);
     const board=boardMap(),recs=input.recs||[],skip=input.skip||{};
-    const dups=[],newOrders=[],updates=[],fills=[],synced=[],autoTag=[],shipped=[],inTransit=[],dispGaps=[],flagged=[],stepDiffs=[],exCounts={},marks=[],unsched=[],pre={},oldDates=[];
+    const dups=[],newOrders=[],updates=[],fills=[],synced=[],autoTag=[],shipped=[],inTransit=[],dispGaps=[],flagged=[],stepDiffs=[],exCounts={},marks=[],unsched=[],pre={},oldDates=[],delivQ=[];
     let unchanged=0,excluded=0;
     const sh=s=>String(s||'—').replace(/^\d+\.\s*/,'');
     recs.forEach(r=>{
@@ -8223,7 +8223,9 @@ function analyzeImport(input,source){
         A delivery date the planner moved (delivKeep = what Cienapps had) is kept until Cienapps has the planner's date. */
       if(r.has.delivDate&&r.delivDate!==(ex.delivDate||'')){
         if(ex.delivKeep&&ex.delivKeep===r.delivDate){} // Cienapps still has the old delivery date — the planner's stays
-        else if(ex.delivKeep){flags.push('Cienapps has delivery '+fmt(r.delivDate)+' — the planner\'s delivery date '+fmt(ex.delivDate)+' is kept');}
+        else if(ex.delivKeep){ /*dates round 2: a third delivery date gets the same Keep / Take choice as a due date (Keep by default)*/
+          set.delivDate=r.delivDate;delivQ.push({wo:ex.wo,key:r.key,from:ex.delivDate||'',to:r.delivDate,title:ex.title||''});
+          what.push('Cienapps delivery '+fmt(r.delivDate)+' (planner has '+(ex.delivDate?fmt(ex.delivDate):'none')+')');}
         else{set.delivDate=r.delivDate;what.push('delivery date: '+(ex.delivDate?fmt(ex.delivDate):'(none)')+' → '+fmt(r.delivDate));
           const bd=due?due.dueDate:(ex.dueDate||'');
           if(bd&&bd>r.delivDate)flags.push('build date '+fmt(bd)+' is after the delivery date '+fmt(r.delivDate)+' — check');
@@ -8259,7 +8261,7 @@ function analyzeImport(input,source){
       importError('None of the '+(input.rows||recs.length)+' rows had a usable WO number, so nothing was imported.','Check that the WO number column is mapped to the column holding values like WO-2604-7.');
       return null;
     }
-    return{source:source||'file',input,pre,oldDates,dups,skipped:input.skipped||[],marks,unsched,autoTag,newOrders,updates,fills,synced,shipped,inTransit,dispGaps,flagged,folds:input.folds||[],stepDiffs,exCounts,
+    return{source:source||'file',input,pre,oldDates,delivQ,dups,skipped:input.skipped||[],marks,unsched,autoTag,newOrders,updates,fills,synced,shipped,inTransit,dispGaps,flagged,folds:input.folds||[],stepDiffs,exCounts,
       removals:[],backfills:[],
       counts:{added,updated,skipped:unchanged,noWo:skip.noWo||0,totals:skip.totals||0,snag:skip.snag||0,excluded,shipped:shipped.length,folded:(input.folds||[]).length,rows:input.rows||recs.length}};
 }
@@ -8272,7 +8274,7 @@ function renderImportPreview(plan){
     ${items.length>(cap||12)?`<div style="font-size:11px;color:var(--t3);padding-top:4px">…and ${items.length-(cap||12)} more</div>`:''}
   </div>`:'';
   const sh=s=>String(s||'—').replace(/^\d+\.\s*/,'');
-  const dc=plan.updates.filter(u=>u.dateChanged),sd=plan.stepDiffs||[],skips=[];
+  const dc=plan.updates.filter(u=>u.dateChanged),sd=plan.stepDiffs||[],skips=[],dq=plan.delivQ||[];
   if(c.snag)skips.push(c.snag+' snag (WO-S) ignored');
   if(c.excluded)skips.push(c.excluded+' not added ('+Object.keys(plan.exCounts).map(k=>plan.exCounts[k]+' '+escA(k)).join(', ')+')');
   if(c.totals)skips.push(c.totals+' totals row'+(c.totals!==1?'s':'')+' skipped');
@@ -8300,6 +8302,12 @@ function renderImportPreview(plan){
       <div style="font-size:13px;font-weight:700;color:#8a1c10;margin-bottom:6px">⚠ CHECK THESE — Cienapps says shipped/invoiced, but the planner has NO dispatch record:</div>
       ${plan.dispGaps.map(g=>`<div style="font-size:12px;color:#8a1c10;padding:2px 0"><b style="font-family:monospace">${escA(g.wo)}</b>${fuLbl(g)?' · '+escA(fuLbl(g)):''} — ${escA(g.title)}${g.customer?' <span style="opacity:.75">('+escA(g.customer)+')</span>':''} <span style="font-weight:700">[${escA(g.reason)} in Cienapps]</span></div>`).join('')}
       <div style="font-size:11px;color:#8a1c10;margin-top:6px">If any of these are still in the factory, Cienapps is ahead of reality — fix the status there and get the job on a van.</div>
+    </div>`:''}
+    ${dq.length?`<div id="imp-dlv" style="background:#fffbeb;border:2px solid #e8b931;border-radius:8px;padding:12px 15px;margin-bottom:10px">
+      <div style="font-size:13px;font-weight:800;color:#8a6d00;margin-bottom:3px">⇄ Delivery dates — the planner moved these, and Cienapps now sends a different date again</div>
+      <div style="font-size:11px;color:#8a6d00;margin-bottom:8px"><b>Keep</b> (ticked): the planner's delivery date is kept, and the "Dates to change in Cienapps" list shows the date Cienapps now has. <b>Take</b>: use the Cienapps date.</div>
+      ${dq.map((q,i)=>`<div style="display:flex;gap:10px;align-items:center;padding:4px 0;border-bottom:1px solid #f1e3b8;font-size:12px;flex-wrap:wrap"><span style="font-family:monospace;font-weight:700;width:140px">${escA(q.wo)}</span><span style="flex:1;min-width:120px">${escA(q.title)}</span><span>planner ${q.from?escA(fmt(q.from)):'—'} · Cienapps <b>${escA(fmt(q.to))}</b></span>
+        <span style="white-space:nowrap"><label><input type="radio" name="dlk${i}" data-dlk="${escA(q.wo)}" value="keep" checked> Keep (planner's kept)</label> <label style="margin-left:6px"><input type="radio" name="dlk${i}" data-dlk="${escA(q.wo)}" value="take"> Take</label></span></div>`).join('')}
     </div>`:''}
     ${dc.length||sd.length?`<div id="imp-differs" style="background:#fffbeb;border:2px solid #e8b931;border-radius:8px;padding:12px 15px;margin-bottom:10px">
       <div style="font-size:13px;font-weight:800;color:#8a6d00;margin-bottom:3px">⇄ Differs — Cienapps and the planner disagree</div>
@@ -8344,9 +8352,10 @@ function renderImportPreview(plan){
   document.getElementById('imp-apply').onclick=async()=>{
     if(!IMPPLAN)return;
     // capture the decisions made in the preview before the DOM goes
-    const moves={},dueDec={};
+    const moves={},dueDec={},delivDec={};
     document.querySelectorAll('[data-rmv]').forEach(s=>{if(s.value)moves[s.dataset.rmv]=s.value;});
     document.querySelectorAll('[data-dk]').forEach(r=>{if(r.checked)dueDec[r.dataset.dk]=r.value;});
+    document.querySelectorAll('[data-dlk]').forEach(r=>{if(r.checked)delivDec[r.dataset.dlk]=r.value;}); /*dates round 2*/
     const ns=IMPPLAN.shipped.length;
     if(ns>20&&!await backupFirst('import moving '+ns+' work orders to Shipped'))return;
     if(!IMPPLAN)return;
@@ -8371,7 +8380,7 @@ function renderImportPreview(plan){
       return;
     }
     // Same or fewer changes: each dropped one was either already applied by another PC, or edited there (the planner's edit wins)
-    fresh.moves=moves;fresh.dueDec=dueDec;
+    fresh.moves=moves;fresh.dueDec=dueDec;fresh.delivDec=delivDec;
     applyImport(fresh);IMPPLAN=null;
   };
 }
@@ -8462,8 +8471,11 @@ function applyImport(plan){
     const dec=plan.dueDec||{},at=nowISO();
     (plan.updates||[]).forEach(u=>{
       const ex=get(u);if(!ex)return; // deleted on another screen meanwhile — nothing to update
-      const s=u.set||{},oldDeliv=ex.delivDate||'';
+      const s={...(u.set||{})},oldDeliv=ex.delivDate||'';
+      if('delivDate' in s&&(plan.delivQ||[]).some(q=>q.key===u.key)&&(plan.delivDec||{})[u.wo]!=='take'){ // Keep: the planner's date stays; Cienapps' real date is remembered
+        ex.delivKeep=s.delivDate;delete s.delivDate;}
       Object.keys(s).forEach(k=>{if(k!=='dueDate')ex[k]=s[k];});
+      if('delivDate' in s&&ex.delDay&&dStage(ex)!=='deliv'&&slotDate(ex)!==s.delivDate)ex.delivMv={at,was:slotDate(ex),to:s.delivDate}; /*dates round 2: booked, and Cienapps moved the delivery*/
       if('delivDate' in s){if(!ex.origDelivDate&&oldDeliv)ex.origDelivDate=oldDeliv;delete ex.delivKeep; /*dates phase 2: counts as a move, history kept*/
         if(oldDeliv)ex.dueHist=(ex.dueHist||[]).concat({at,by:'(import)',f:'deliv',from:oldDeliv,to:s.delivDate,why:'Cienapps import',note:'',src:'cienapps'}).slice(-DUE_HIST_MAX);}
       if('step' in s)storeStamp(ex,at); /*dates: first reached 7/8*/
@@ -8476,6 +8488,7 @@ function applyImport(plan){
         }
       }
       if('step' in s)origStep[ex.wo]=s.step; // the step came FROM Cienapps — nothing to send back
+      afterDelivSync(ex,at,'(import)'); /*dates round 2*/
       if(u.what)logEdit(ex,'Cienapps import: '+u.what+('dueDate' in s?(u.what?' · ':'')+'due '+(dec[u.wo]==='keep'?'kept '+(ex.dueDate||'—'):'→ '+s.dueDate):''),'(import)');
     });
     (plan.fills||[]).forEach(f=>{const ex=get(f);if(!ex)return;Object.keys(f.set).forEach(k=>{if(f.set[k]===undefined)delete ex[k];else ex[k]=f.set[k];});});
@@ -8495,6 +8508,7 @@ function applyImport(plan){
     fresh.forEach(o=>{
       if(o.cienHold)o.holdAt=at;
       storeStamp(o,at); /*dates: arrives at 7/8*/
+      afterDelivSync(o,at,'(import)');
       DB.orders.push(o);board.set(woKey(o.wo),o);
       orig[o.wo]=o.plannedWeek||'';origStep[o.wo]=o.step||''; // baseline AFTER auto-schedule so auto-assignments don't show as changes
     });
@@ -8523,7 +8537,8 @@ function applyImport(plan){
 function datesToCienRows(){ /*dates phase 2: one row per date to change — due (column E) and delivery (column L)*/
   const out=[];DB.orders.filter(o=>!/^P-/i.test(String(o.wo))).sort(woCmp).forEach(o=>{
     if(o.dueKeep&&o.dueDate&&o.dueKeep!==o.dueDate)out.push({o,f:'due',has:o.dueKeep,to:o.dueDate});
-    if(o.delivKeep&&o.delivDate&&o.delivKeep!==o.delivDate)out.push({o,f:'deliv',has:o.delivKeep==='-'?'':o.delivKeep,to:o.delivDate});
+    const dk=o.delivKeep,dd=o.delivDate||''; /*round 2: a removed delivery date is a row too ("Change to" blank = remove it in Cienapps)*/
+    if(dk&&!(dk==='-'&&!dd)&&dk!==dd)out.push({o,f:'deliv',has:dk==='-'?'':dk,to:dd});
   });return out;
 }
 function datesToCien(){return [...new Set(datesToCienRows().map(d=>d.o))];} // the jobs (as before)
@@ -8570,7 +8585,7 @@ function renderExport(app){
         <td>${escA(o.title)}</td><td style="color:var(--t2)">${escA(o.customer)}</td>
         <td style="font-size:12px">${d.f==='deliv'?'Delivery (L)':'Due (E)'}</td>
         <td style="color:var(--t3)">${d.has?escA(fmt(d.has))+' Wk'+wkNum(d.has):'(none)'}</td>
-        <td style="font-weight:700;color:var(--blue)">${escA(fmt(d.to))} Wk${wkNum(d.to)}</td>
+        <td style="font-weight:700;color:var(--blue)">${d.to?escA(fmt(d.to))+' Wk'+wkNum(d.to):'(remove it)'}</td>
         <td style="font-size:12px">${h?escA(h.why+(h.note?' — '+h.note:'')):''}</td>
         <td style="font-size:12px">${h?escA(h.by):''}</td>
         <td style="font-size:12px;color:var(--t3)">${h&&h.at?escA(new Date(h.at).toLocaleDateString('en-IE')):''}${(o.dueHist||[]).length>1?' · '+o.dueHist.length+'×':''}</td></tr>`;}).join('')}</tbody>
