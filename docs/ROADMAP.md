@@ -188,6 +188,12 @@ Garry's words: "i need to be able to click into delivery card and be able to add
 - **L9 — From the delivery card:** tapping a job's delivery card offers "＋ Add cutting list" (and "Open list" when it has one), opening the same window with the WO, floor, unit, title pre-filled.
 - **L10 — "can't keep a backup copy" bar on Garry's office PC:** find out why (likely this browser's storage for garryog.github.io is full — the quoting tool used to be hosted on the same address and kept large local copies). The planner should say how to fix it, and Settings should show how much device storage the planner is using. Never delete another app's stored copies without asking.
 
+### Decisions 10 Nov 2026, 16:18 (Garry, testing the live list window)
+Garry's words: "customer and project will always be the same. where do we pick and set up material. there is no need for number in house / list name this could be used for a name of the list only and also searchable again if the list was saved as a template. i need to test this out".
+- **Customer = project, always.** The Cienapps customer name IS the project. Nobody should have to pick or create a project by hand when a work order is known: the project is found or made from the customer automatically (supersedes the "pick the project" step in L5; a picker is only needed for a list with no work order).
+- **House / list name:** do NOT pre-fill it with the unit number. It is a free name for the list only, and it must be searchable — in Find old list and in the template list when the list was saved as a template.
+- **Materials:** make where to set up a project's materials obvious from the list window (see L6).
+
 ## Progress log
 ### 2 Nov 2026 (scheduled run)
 - Architect confirmed the cutting-list plan against the code; build notes and build order added to docs/PLAN-cutting-lists-stage3.md (fixed garbled characters in both plan files).
