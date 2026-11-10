@@ -3930,11 +3930,15 @@ function seqBind(root,pid,redraw){
   // PC: HTML5 drag (phones use ▲ ▼ / Move to)
   root.querySelectorAll('tr[data-seqr][draggable]').forEach(tr=>{
     tr.addEventListener('dragstart',e=>{SEQV.drag=tr.dataset.seqr;tr.classList.add('seq-drag');try{e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',tr.dataset.seqr);}catch(x){}});
-    tr.addEventListener('dragend',()=>{tr.classList.remove('seq-drag');root.querySelectorAll('.seq-over').forEach(x=>x.classList.remove('seq-over'));});
+    tr.addEventListener('dragend',()=>{SEQV.drag='';tr.classList.remove('seq-drag');root.querySelectorAll('.seq-over').forEach(x=>x.classList.remove('seq-over'));});
     tr.addEventListener('dragover',e=>{if(!SEQV.drag)return;e.preventDefault();tr.classList.add('seq-over');});
     tr.addEventListener('dragleave',()=>tr.classList.remove('seq-over'));
-    tr.addEventListener('drop',e=>{e.preventDefault();tr.classList.remove('seq-over');const id=SEQV.drag;SEQV.drag='';if(id&&id!==tr.dataset.seqr)seqMoveReq(pid,id,{onto:tr.dataset.seqr},redraw);});
+    tr.addEventListener('drop',e=>{e.preventDefault();tr.classList.remove('seq-over');const id=SEQV.drag;SEQV.drag='';
+      let got='';try{got=e.dataTransfer?e.dataTransfer.getData('text/plain'):'';}catch(x){}
+      if(!id||got!==id)return; // only the row this page started dragging (a stray drop of text from elsewhere does nothing)
+      if(id!==tr.dataset.seqr)seqMoveReq(pid,id,{onto:tr.dataset.seqr},redraw);});
   });
+  if(!SEQV.docBound){SEQV.docBound=true;document.addEventListener('dragend',()=>{SEQV.drag='';},true);} // a drag ended anywhere (even on a row a redraw removed) = nothing armed
 }
 /* ---------- Reorder (B6b): every move goes through seq_move — the database checks the versions this screen read, renumbers
    1..n and logs who moved what from where to where. "stale" = another PC changed the list since: reload and say so. ---------- */
@@ -3970,7 +3974,13 @@ async function seqMoveDo(pid,ids,after,why,to,redraw){
     if(r&&r.ok)toast((ids.length>1?ids.length+' rows':'Row')+' moved to #'+at()+(why?' — '+why:''));
     else if(r&&r.err==='stale')toast('Someone else just changed this list — reloaded. Check it and move again.',true);
     else toast('Not moved — '+((r&&r.err)||'no answer'),true);
-  }catch(e){try{await seqFresh(pid);}catch(e2){}toast('Not moved — '+e.message,true);}
+  }catch(e){
+    let fresh=false;try{await seqFresh(pid);fresh=true;}catch(e2){}
+    if(e&&e.status){toast('Not moved — '+e.message,true);} // the database answered: it refused
+    else{ // no answer (network): it may have landed — look at the list as the database has it now
+      const rs=seqRows(pid),i=rs.findIndex(r=>r.id===ids[0]),inPlace=fresh&&i>=0&&ids.every((x,j)=>rs[i+j]&&rs[i+j].id===x)&&(after?(i>0&&rs[i-1].id===after):i===0);
+      toast(inPlace?'Moved (#'+(i+1)+')':'Not sure it saved — check the list',!inPlace);}
+  }
   finally{SEQ_DLG.busy=false;if(redraw)redraw();}
 }
 // 📜 History: the database's own record (project_events, entity 'seq'), read when opened — who, when, what, old → new position
