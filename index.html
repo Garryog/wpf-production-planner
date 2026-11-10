@@ -2494,7 +2494,7 @@ async function lsPoll(){
   if(n&&SEQ_DLG.draw&&SEQ_DLG.el&&document.body.contains(SEQ_DLG.el)&&!SEQ_DLG.el.contains(document.activeElement)&&!SEQ_DLG.busy)SEQ_DLG.draw();
 }
 function lsRedraw(){mergedRender();} // the same rule as a merge: never redraw under someone's fingers or over an open dialog
-function lsWantMs(){return ROLE==='saw'||ROLE==='stores'||ROLE==='design'||(ROLE==='office'&&tab==='l')||(ROLE==='prod'&&prodTab==='lists')||seqBusyScreen()?10000:60000;}
+function lsWantMs(){return ROLE==='saw'||ROLE==='stores'||ROLE==='design'||(ROLE==='pre'&&preTab==='lists')||(ROLE==='office'&&tab==='l')||(ROLE==='prod'&&prodTab==='lists')||seqBusyScreen()?10000:60000;}
 function lsStart(){ // own timer, separate from the planner refresh; off (and silent) unless V2()
   if(!V2()){if(LST.timer){clearInterval(LST.timer);LST.timer=null;}if(LQ.q.length)lqFoldV1();return;}
   const ms=lsWantMs();
@@ -3514,7 +3514,7 @@ function lsBindPanel(){
 // Templates, projects and materials are edited by the Production Manager, Drawing office or Admin. From another view the
 // person enters one of those PINs once; this device remembers it (decision 11).
 function lsEditOk(){
-  if(['prod','design'].includes(ROLE))return true;
+  if(['prod','design','pre'].includes(ROLE))return true; /*pre = Drawing office rights (Garry 10 Nov)*/
   const p=pins(),ok=v=>!!v&&[p.prod,p.design,p.admin].includes(v);
   if(ok(ls.get('wpfEditPin')))return true;
   const v=prompt('Projects, materials and templates are edited by the Production Manager or Drawing office.\n\nEnter the Production Manager, Drawing office or Admin PIN:','');
@@ -3716,8 +3716,8 @@ function specPidOfWO(o){const p=o&&lsProjForCust(o.customer);return p?p.id:'';}
 document.addEventListener('click',e=>{const b=e.target&&e.target.closest&&e.target.closest('[data-specopen]');if(!b)return;e.preventDefault();e.stopPropagation();lsSpecDlg(b.dataset.specopen);},true);
 // Who may change values / sign off (Garry's answers 1 and 3 — recommended defaults, see the plan)
 function specRO(){return['saw','stores','driver','floor'].includes(ROLE);}
-function specEditOk(){if(['pm','office','prod','design'].includes(ROLE))return true;if(specRO()){toast('Project details are read-only on this screen');return false;}return lsEditOk();}
-function specSignOk(){if(['pm','prod','design'].includes(ROLE))return true;if(specRO()){toast('Project details are read-only on this screen');return false;}
+function specEditOk(){if(['pm','office','prod','design','pre'].includes(ROLE))return true;if(specRO()){toast('Project details are read-only on this screen');return false;}return lsEditOk();}
+function specSignOk(){if(['pm','prod','design','pre'].includes(ROLE))return true;if(specRO()){toast('Project details are read-only on this screen');return false;}
   const p=pins(),ok=v=>!!v&&[p.pm,p.prod,p.design,p.admin].includes(v);if(ok(ls.get('wpfSignPin'))||ok(ls.get('wpfEditPin')))return true;
   const v=prompt('Signing off the project details needs the Project Manager, Drawing office, Production Manager or Admin PIN.\n\nEnter the PIN:','');
   if(v===null)return false;if(!ok(v.trim())){toast('Wrong PIN — not signed off');return false;}ls.set('wpfSignPin',v.trim());return true;}
@@ -3815,8 +3815,8 @@ function specPrint(pid){const w=window.open('','_blank');if(!w){toast('Pop-up bl
   w.document.close();w.focus();setTimeout(()=>{try{w.print();}catch(e){}},300);}
 // Materials (Garry 9 Nov, item 4): Project Managers, Office, Production Manager and Drawing office add and edit without a PIN;
 // Saw, Stores, Drivers and the Floor screen are read-only; anything else (Management) keeps the PIN.
-function lsMatEditOk(){if(['pm','office','prod','design'].includes(ROLE))return true;if(['saw','stores','driver','floor'].includes(ROLE)){toast('Materials are read-only on this screen');return false;}return lsEditOk();}
-function lsMatCan(){return ['pm','office','prod','design'].includes(ROLE)||lsHasEditPin();}
+function lsMatEditOk(){if(['pm','office','prod','design','pre'].includes(ROLE))return true;if(['saw','stores','driver','floor'].includes(ROLE)){toast('Materials are read-only on this screen');return false;}return lsEditOk();}
+function lsMatCan(){return ['pm','office','prod','design','pre'].includes(ROLE)||lsHasEditPin();}
 // "Which project?" — for the Materials / Project details buttons when no project is picked yet
 function lsPickProj(title,cb){const ps=lsProjects();if(!ps.length){toast('No projects yet');return;}
   const ov=lsDlg(`<div style="font-weight:800;color:#14335c;font-size:16px;margin-bottom:8px">${escA(title)} — which project?</div><input id="pp-q" placeholder="🔍 Search" style="${LS_INP};width:100%;margin-bottom:8px"><div id="pp-l" class="pp-list"></div>`,460);
@@ -3872,7 +3872,7 @@ function seqMeStrip(role){if(!seqVis())return'';const me=seqMe(role);
 function seqMeBind(role){const b=document.getElementById('seq-me-x');if(b)b.onclick=()=>seqMeAsk(role);
   const me=seqMe(role);if(me&&whoNow()!==me)setWho(me);}
 // A PM's own project (by the assignment). PMALL = "All projects" ticked (others are read-only)
-let PMALL=false;const SEQ_ASKED=new Set(); // the name question pops up by itself once per page load
+let PMALL=false,preTab='';const SEQ_ASKED=new Set(); // the name question pops up by itself once per page load
 function pmOn(p,me){return !!me&&seqPMs(p).some(n=>seqKey(n)===seqKey(me));}
 function pmMine(pid){const me=seqMe('pm'),p=LST.p.get(pid);return !!(ROLE==='pm'&&p&&pmOn(p,me));} // any of the project's PMs
 function pmMineAny(){const me=seqMe('pm');return !!me&&lsProjects().some(p=>pmOn(p,me));}
@@ -3884,7 +3884,12 @@ function seqCanEdit(pid){return seqVis()&&DB.listStore==='v2'&&((ROLE==='pm'&&pm
 /* Pre-production view (B9) — the pool is built in a later step */
 function renderPre(app){
   if(!seqVis()){app.innerHTML=`<div class="pg"><div class="exp-panel" style="font-size:14px">${V2()&&!SEQP.st?'Loading…':'The Pre-production view opens once the PM sequence database update is installed and the new cutting lists are switched on.'}</div></div>`;if(V2()&&!SEQP.st)lsLoad().then(()=>{if(ROLE==='pre')mergedRender();});return;}
-  app.innerHTML=`<div class="pg">${seqMeStrip('pre')}<h1 style="font-size:22px;color:#14335c;margin:6px 0 10px">🗂 Pre-production</h1><div class="exp-panel" style="font-size:14px">Pre-production pool — coming in the next build.</div></div>`;
+  // (Garry 10 Nov) Johnny also does cutting lists and project materials — the Drawing office's Lists page, same rights
+  if(preTab==='lists')lsHomePage(app,'<h1 style="font-size:22px;color:#14335c;margin:0 0 10px">📋 Cutting lists, templates and materials</h1>');
+  else app.innerHTML=`<div class="pg"><h1 style="font-size:22px;color:#14335c;margin:6px 0 10px">🗂 Pre-production</h1><div class="exp-panel" style="font-size:14px">Pre-production pool — coming in the next build.</div></div>`;
+  const t=(k,l)=>`<button data-pretab="${k}" style="padding:9px 18px;border:none;border-radius:6px;font-size:15px;font-weight:700;cursor:pointer;${preTab===k?'background:#14335c;color:#fff':'background:#e6ebf2;color:#14335c'}">${l}</button>`;
+  app.insertAdjacentHTML('afterbegin',`<div id="pre-strip" style="max-width:1400px;margin:10px auto 0;padding:0 20px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">${t('','🗂 Pool')}${t('lists','📋 Cutting lists')}<span style="flex:1"></span>${seqMeStrip('pre')}</div>`);
+  app.querySelectorAll('[data-pretab]').forEach(b=>b.onclick=()=>{preTab=b.dataset.pretab;lsStart();render();});
   seqMeBind('pre');if(!seqMe('pre')&&staffFor('pre').length&&!document.querySelector('.pod-ovl')&&!SEQ_ASKED.has('pre')){SEQ_ASKED.add('pre');seqMeAsk('pre');}
 }
 /* ---------- The sequence page (B6): one list per project, every work order in the order the site needs them. ----------
@@ -4206,7 +4211,7 @@ function lsCheckChip(l){if(!lsChkOn()||!l)return'';const c=lsCheckInfo(l);
   return c.need?'<span class="chk-wait" title="The saw does not see this list until it is checked (Drawing office / Production Manager / Admin PIN)">Waiting for check</span>':'';}
 function lsIssuedHTML(l){if(!lsChkOn()||!l||!l.checkReq||!l.checkedAt)return'';return `<div class="chk-line">Issued by <b>${escA(l.createdBy||'?')}</b>, checked by <b>${escA(l.checkedBy||'?')}</b></div>`;}
 function lsPinOk(what){ // the Drawing office / Production Manager / Admin PIN (remembered on this device, like templates)
-  if(['prod','design'].includes(ROLE))return true;
+  if(['prod','design','pre'].includes(ROLE))return true; /*pre = Drawing office rights (Garry 10 Nov)*/
   const p=pins(),ok=v=>!!v&&[p.prod,p.design,p.admin].includes(v);
   if(ok(ls.get('wpfEditPin')))return true;
   const v=prompt(what+' needs the Drawing office, Production Manager or Admin PIN.\n\nEnter the PIN:','');
@@ -4606,7 +4611,7 @@ function lsProjEdges(pid){ // the standard edging codes plus any already used on
 }
 function lsAutoHidden(r){return !!r&&r.k==='part'&&!(lsNum(r.L)>0||lsNum(r.W)>0)&&!lsEmptyRow(r)&&!!r.matAuto&&String(r.mat||'')===String(r.matAuto);} // a typed Stores row with only the copied default colour (an empty new row still shows it)
 function lsTicked(id){return !!id&&Object.keys(lsView(id).ticks).length>0;} // the saw (or stores) has started: any line ticked
-function lsHasEditPin(){if(['prod','design'].includes(ROLE))return true;const p=pins(),v=ls.get('wpfEditPin');return !!v&&[p.prod,p.design,p.admin].includes(v);}
+function lsHasEditPin(){if(['prod','design','pre'].includes(ROLE))return true; /*pre = Drawing office rights (Garry 10 Nov)*/const p=pins(),v=ls.get('wpfEditPin');return !!v&&[p.prod,p.design,p.admin].includes(v);}
 const LS_LOCK_MSG='Saw has started — make a new list for a different number of units';
 /* lsTbc:start */
 /* "spec TBC" (Garry, 4 Nov): a line whose description or colour/spec says TBC / None chosen / To be confirmed — or a
