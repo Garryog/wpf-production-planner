@@ -697,3 +697,50 @@ chosen WO never vanishes. 9 name not pre-filled; blank → WO; typed name found 
 ## Build steps
 1 failing tests for the double prompt + outside-click close · 2 L7 + L6 wording · 3 L8 · 4 L5 · 5 L6 carry-on + double-fire fix · 6 L11 + L12 + names +
 insTpl filter · 7 L9 (after D4 is merged) · 8 L10 · 9 full suite → Tester → Manager.
+
+## Progress log — Part 4
+
+### 10 Nov 2026 (evening) — Coder: build steps 1–6 and 8 (L5, L6, L7, L8, L10, L11, L12 + names). Step 7 (L9 delivery-card buttons) NOT built — waits for Job A's D4 card redesign to be merged.
+- 7f46cbc step 1: failing tests first (New material asked twice; outside click closed the window) — tests/seq/l5-l12-window.test.js.
+- 7e47894 step 2 (L7 + L6 wording): Qty placeholder (PC + phone); "🧱 Project materials (add / edit)" in the window (never greyed) and on Lists home;
+  "This project has no materials yet — [Set up project materials now]".
+- 351eb55 step 3 (L8): sticky top bar with ✕ Close; bottom "Cancel" → "Close"; ✕ / Close / Esc ask "Close without saving?" only when something
+  changed since the window opened (snapshot after the first draw; a project set by the app re-bases it); Esc is ignored when another window is on top;
+  outside click does nothing. After Save: finish panel "Saved ✓ — list is with the Saw & Stores" / "…waiting to be checked…" / "Rev n is with…" /
+  "Template saved ✓", row counts + WO, [Close] (focused) and [Edit it again]. The toast is still shown. A finish panel left open goes when another
+  list window opens.
+- f2aaa48 step 4 (L5): `lsEnsureCustProj(o,opt)` — reload projects; fits one → use; fits two or more → {many} (projForCust gained an optional 3rd
+  argument that collects them); a project with the customer's name → `ltiLink`; else make {name = customer, cien_names [customer]}; duplicate refused
+  (two PCs) → reload and link. `ltiLinkBind` "＋ New project" uses it with {make:true} (its old behaviour). Window: on open / WO picked / WO found or
+  typed → "Setting up project '<customer>'…", then grey "Project: X — from the WO's customer"; two fit → buttons "pick one"; no customer / no WO →
+  the plain messages; "＋ New project…" in the window has no PIN (name box starts with the WO's customer).
+- fee4b2f step 5 (L6): "＋ Add new material…" with no project: WO known → L5 first, then the name is asked; no WO → "Pick the project — then the new
+  material is added" + project box focused, asked as soon as a project is picked (drop-down, "pick one" button or ＋ New project). Asked once: the
+  select's input + change both fired → per-element guard.
+- cd7163a step 6 (L11 + L12 + names): WO drop-down = the picked project's jobs (`keyProj` rule, customer→project worked out once per customer per
+  redraw), minus shipped / on hold / delivered, sorted due date (none last) then WO: "WO-2617-4 · Fl 7 · Unit 231 · due 14 Nov · has a list".
+  No project → one disabled line. The chosen WO always stays an option, marked (shipped) / (delivered) / (on hold) / (other project) / (customer not
+  linked to a project) / (not in the planner). New list + project changed → a WO of another project is taken off, said why; existing list keeps it.
+  List name not pre-filled (editor ×3, template dialog → template type name, ✓ Confirm → template type name); label "List name (optional)",
+  placeholder "e.g. Kitchen — Type B"; blank → the WO number (P-number: set when it is made); templates must have a name. "📐 Insert from template"
+  gets a find box when the project has more than 6 templates.
+- 871609e step 8 (L10): `writePend` records full (QuotaExceededError) vs blocked (SecurityError); the toast and the save bar say which, with the fix.
+  Settings "💾 Storage on this device" (Lists ON and OFF): Planner / old Quoting tool (wpf_…) / Other with item counts and sizes (characters × 2),
+  the biggest wpf_ items, `navigator.storage.estimate()`, fix steps, [⬇ Download a copy of the old Quoting-tool copies]. No delete button; nothing removed.
+- d744ca2 fixes found by the full suite: a "Saved ✓" panel arriving after a newer list window opened is dropped (the toast says it); the materials
+  button tooltip said "colours" (Garry's no-"Colour" rule); "Make new list from this" keeps a blank name blank (was " (new)").
+- Old checks updated as intended changes (2a2534e, 5d9ebc1): l3-find-wo "list name filled from the job (unit)" → not pre-filled; stage3/coder-fu-edge-std
+  "list name 31" → blank; stage3/coder-wo-cols "WO-3 — Unit 31" → "WO-3 · Fl 2 · Unit 31 · due 28 Oct"; stage3/flow3-confirm list name "14" →
+  "Type B 3-bed" (×2 checks); stage3/s5s6-templates dialog name "1" → "Type B 3-bed", and A8 "editor closed" now looks for the editor, not any window;
+  stage3/c6-write "editor closed" ×2 → editor gone, "Saved ✓" panel shown; stage3/s4-editor: after moving a NEW list to another project and back,
+  the test picks WO-1 again (L11 took it off).
+- New tests: tests/seq/l5-l12-window.test.js — 71 checks (acceptance 1–5, 7–9 + switch OFF + 360 px), all pass.
+- **Full suite.** Starting point 8dc7968 (232 files): 4,697 pass / 31 fail (the 19 attack3-key fixture checks were fixed by aa4e466; 29 on ACCEPTED-FAILURES
+  + attack3-editor and attack4-fold "two PCs, the same house: ONE P-job" — pre-existing, Job B). This branch (233 files): full run at 2a2534e, then the
+  159 list files again at 5d9ebc1: 4,765 pass / 34 fail = the same 31 as the start + 3 timing (e7 redraw, t17 A'1/A'2 — each passes / matches the
+  start when run alone; another coder was running tests at the same time).
+- ASSUMED (as written in the plan, decided for this run): no-PIN project from the WO's customer; outside click does nothing; blank name = WO number;
+  storage panel download only (no delete); new list loses another project's WO, existing list keeps it marked. Coder calls: two projects fitting
+  → one-tap buttons as well as the drop-down; the native WO drop-down can't be photographed open, so the screenshot shows it as a list box.
+- Screenshots (fake database, ×2): /tmp/claude-0/shots/b-list-window-wo.png, b-saved.png, b-storage.png, b-list-window-phone.png.
+- Next: step 7 (L9) after D4 is merged → Tester → Manager.
