@@ -235,6 +235,7 @@ details.lti-other{margin-bottom:14px}details.lti-other>summary{cursor:pointer;fo
 .wl-drow{display:flex;gap:10px;align-items:center;background:#fff;border:1px solid var(--border);border-radius:8px;padding:9px 12px;margin-bottom:6px;font-size:14px}
 .wl-drow>b{font-size:16px;color:#14335c}
 .sn-row,.wait-row{flex-wrap:wrap}.sn-row>.dsh-x,.wait-row>.dsh-x,.sn-row>.dsh-t{white-space:normal;min-width:0;overflow-wrap:anywhere} /* new-lists rows (switch on only) wrap on a phone */
+/*seq*/.seq-pm{display:inline-flex;gap:4px;align-items:center;font-size:12px;color:#14335c;font-weight:700;margin-left:6px}.seq-pm-none{color:#8a6d00}.seq-un{font-size:12px;font-weight:700;color:#7a5200;background:#fff4d6;border:1px solid #e0b04a;border-radius:6px;padding:3px 8px}.seq-me{font-size:13px;color:#14335c;display:inline-flex;gap:6px;align-items:center}.seq-all{font-size:13px;display:inline-flex;gap:4px;align-items:center;color:#14335c;font-weight:600}.seq-all small{font-weight:400;color:var(--t3)}
 @media(max-width:700px){#lh .lst-tbl,#lh .lst-tbl tbody,#lh .lst-tbl tr,#lh .lst-tbl td{display:block;width:auto}#lh .lst-tbl thead{display:none}#lh .lst-tbl tr{border-bottom:1px solid var(--border);padding:6px 4px}#lh .lst-tbl td{border:none;padding:2px 4px}#lh .lh-grp>div:first-child{flex-wrap:wrap}#sn-form input,#sn-form select{max-width:100%;min-width:0!important}}
 .hold-grp .wl-drow{flex-wrap:wrap}.hold-grp .wl-drow>.dsh-t{flex-basis:120px}.hold-grp .wl-drow>.wl-undo{margin-left:auto} /* phone: the Release button drops to its own line instead of pushing the page sideways */
 /* batch-cut selection + combined view + per-house splits */
@@ -766,6 +767,7 @@ function settingsFrom(s,prev){
   if(s.hourScale&&s.hourScale.length)r.hourScale=s.hourScale;
   ['wcap','vcap','listLead','listDue'].forEach(k=>{if(s[k]>0)r[k]=s[k];});
   ['delivLead','siteDays','earlyDays'].forEach(k=>{if(dsOk(s[k]))r[k]=s[k];}); /*dates: delivery-date numbers — whole 1–60 only, else the default*/
+  seqNumKeys().forEach(k=>{if(seqNumOk(k,s[k]))r[k]=s[k];}); /*seq: PM sequence numbers (fixed window, pool weeks, waiting weeks)*/
   if(typeof s.listChk==='boolean')r.listChk=s.listChk; // "Lists must be checked before the saw" (missing = keep what we had)
   if(typeof s.photoLists==='boolean')r.photoLists=s.photoLists; // "Photo lists allowed" (missing = ON)
   if(typeof s.listDelOnly==='boolean')r.listDelOnly=s.listDelOnly; // (10 Nov) "Only jobs ticked for delivery need a list" (missing = OFF)
@@ -796,6 +798,7 @@ function applyPlan(p){
   if(s.listLead>0)DB.listLead=s.listLead;
   if(s.listDue>0)DB.listDue=s.listDue;
   ['delivLead','siteDays','earlyDays'].forEach(k=>{if(dsOk(s[k]))DB[k]=s[k];else delete DB[k];}); /*dates: out of range / text → default*/
+  seqNumKeys().forEach(k=>{if(seqNumOk(k,s[k]))DB[k]=s[k];else delete DB[k];}); /*seq: out of range / text → default*/
   if(typeof s.listChk==='boolean')DB.listChk=s.listChk;
   if(typeof s.photoLists==='boolean')DB.photoLists=s.photoLists;
   if(typeof s.delLegacyWk==='string'&&s.delLegacyWk)DB.delLegacyWk=s.delLegacyWk; /*dates*/
@@ -1247,7 +1250,7 @@ window.addEventListener('beforeunload',e=>{if(saveT||SAVING||DB.saveFailed||lqPe
 /*dates: release marker for the old-screen guard v2 (SUPABASE_CHANGES.md, PENDING). Written on every save by this code; older
   code drops settings keys it doesn't know, so its saves can be told apart (and refused once the guard is on). */
 const APP_REL=2;
-function fullSettings(){return{appRel:APP_REL,weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP,delx:DB.delx||[],delNotes:DB.delNotes||{},grps:DB.grps||{},pins:DB.pins||{},pod:DB.pod||{},lists:DB.lists||[],listWBs:DB.listWBs||{},listDone:DB.listDone||{},listLead:DB.listLead||5,delArchive:DB.delArchive||{},staff:DB.staff||[],listHold:DB.listHold||{},holdLog:DB.holdLog||[],listRow:DB.listRow||{},saveIds:DB.saveIds||[],exportBase:{wk:orig,st:origStep},...(DB.listDue>0?{listDue:DB.listDue}:{}),...['delivLead','siteDays','earlyDays'].reduce((a,k)=>{if(dsOk(DB[k]))a[k]=DB[k];return a;},{}),...(typeof DB.listChk==='boolean'?{listChk:DB.listChk}:{}),...(typeof DB.photoLists==='boolean'?{photoLists:DB.photoLists}:{}),...(DB.delLegacyWk?{delLegacyWk:DB.delLegacyWk}:{}),...(DB.delLegacyAt?{delLegacyAt:DB.delLegacyAt}:{}),...(typeof DB.listDelOnly==='boolean'?{listDelOnly:DB.listDelOnly}:{}),...(DB.listStore?{listStore:DB.listStore,listStoreAt:DB.listStoreAt||''}:{})};}
+function fullSettings(){return{appRel:APP_REL,weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP,delx:DB.delx||[],delNotes:DB.delNotes||{},grps:DB.grps||{},pins:DB.pins||{},pod:DB.pod||{},lists:DB.lists||[],listWBs:DB.listWBs||{},listDone:DB.listDone||{},listLead:DB.listLead||5,delArchive:DB.delArchive||{},staff:DB.staff||[],listHold:DB.listHold||{},holdLog:DB.holdLog||[],listRow:DB.listRow||{},saveIds:DB.saveIds||[],exportBase:{wk:orig,st:origStep},...(DB.listDue>0?{listDue:DB.listDue}:{}),...['delivLead','siteDays','earlyDays'].reduce((a,k)=>{if(dsOk(DB[k]))a[k]=DB[k];return a;},{}),...seqNumKeys().reduce((a,k)=>{if(seqNumOk(k,DB[k]))a[k]=DB[k];return a;},{}),...(typeof DB.listChk==='boolean'?{listChk:DB.listChk}:{}),...(typeof DB.photoLists==='boolean'?{photoLists:DB.photoLists}:{}),...(DB.delLegacyWk?{delLegacyWk:DB.delLegacyWk}:{}),...(DB.delLegacyAt?{delLegacyAt:DB.delLegacyAt}:{}),...(typeof DB.listDelOnly==='boolean'?{listDelOnly:DB.listDelOnly}:{}),...(DB.listStore?{listStore:DB.listStore,listStoreAt:DB.listStoreAt||''}:{})};}
 /* Stage 3 switch: settings.listStore==='v2' → cutting lists live in their own tables (lists, list_lines…).
    Missing, blank or anything else (switch back writes 'v1') → today's lists in the planner record, untouched. */
 function V2(){return DB.listStore==='v2'||DB.listStore==='switching';} // 'switching' = a Switch back is rebuilding the old lists: screens still read the tables, the database takes no changes
@@ -1442,13 +1445,13 @@ function showTab(t){tab=t;if(V2())lsStart();['b','d','h','l','i','x','s'].forEac
 /* ---------- Role views: Office / Factory Floor / Driver (same live plan, a screen per job) ---------- */
 const ls={get:k=>{try{return localStorage.getItem(k)||'';}catch(e){return'';}},set:(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}}};
 // Every view has its own PIN; the ADMIN PIN opens any view and is the only one that can change PINs.
-const ROLE_LBL={office:'Office',floor:'Floor screen',saw:'Saw',stores:'Stores',driver:'Driver',dash:'Management',pm:'Project Managers',prod:'Production Manager',design:'Drawing office'};
-function pins(){const p=DB.pins||{};return{admin:p.admin||'9000',office:p.office||'2468',driver:p.driver||'1111',floor:p.floor||'2222',saw:p.saw||'3333',stores:p.stores||'4444',dash:p.dash||'5555',pm:p.pm||'6666',prod:p.prod||'7777',design:p.design||'8888'};}
+const ROLE_LBL={office:'Office',floor:'Floor screen',saw:'Saw',stores:'Stores',driver:'Driver',dash:'Management',pm:'Project Managers',prod:'Production Manager',design:'Drawing office',pre:'Pre-production'};
+function pins(){const p=DB.pins||{};return{admin:p.admin||'9000',office:p.office||'2468',driver:p.driver||'1111',floor:p.floor||'2222',saw:p.saw||'3333',stores:p.stores||'4444',dash:p.dash||'5555',pm:p.pm||'6666',prod:p.prod||'7777',design:p.design||'8888',pre:p.pre||'1010'};}
 let ROLE='';
 (function(){
   const q=(new URLSearchParams(location.search).get('view')||'').toLowerCase();
-  if(['office','floor','driver','saw','stores','dash','pm','prod','design'].includes(q))ROLE=q;
-  else{const s=ls.get('wpfRole');if(['office','floor','driver','saw','stores','dash','pm','prod','design'].includes(s))ROLE=s;}
+  if(['office','floor','driver','saw','stores','dash','pm','prod','design','pre'].includes(q))ROLE=q;
+  else{const s=ls.get('wpfRole');if(['office','floor','driver','saw','stores','dash','pm','prod','design','pre'].includes(s))ROLE=s;}
 })();
 function roleOk(r){ // has this device already entered the right PIN (or the admin PIN) for this view?
   const p=pins();if(!p[r])return false;
@@ -1475,7 +1478,7 @@ async function checkNewVersion(){
 function startAutoRefresh(){
   clearInterval(viewTimer);
   lsStart(); // V2 lists poll on their own timer; does nothing with the switch off
-  if(['floor','driver','saw','stores','office','dash','pm','prod','design'].includes(ROLE)){
+  if(['floor','driver','saw','stores','office','dash','pm','prod','design','pre'].includes(ROLE)){
     viewTimer=setInterval(()=>{
       checkNewVersion();
       if(drvUploading)return; // never interrupt a photo upload (unsaved edits are merged by loadDB, not skipped)
@@ -1498,6 +1501,7 @@ function rolePicker(pinFor){
     <button class="rbtn" data-role="dash"><span class="ri">📊</span><span>Management Dashboard<small>Live overview — cutting, stores, trucks out, delivered, missed. Read-only.</small></span></button>
     <button class="rbtn" data-role="prod"><span class="ri">🧭</span><span>Production Manager<small>What needs you today — loads at risk, material waiting, missed deliveries, the weekly scorecard.</small></span></button>
     ${V2()?`<button class="rbtn" data-role="design"><span class="ri">📐</span><span>Drawing office<small>Cutting lists, templates and project materials.</small></span></button>`:''}
+    <button class="rbtn seq-gate" data-role="pre"${seqVis()?'':' hidden'}><span class="ri">🗂</span><span>Pre-production<small>Everything due in the next weeks, from every project, in order — tick each work order off as it is processed.</small></span></button>
     <button class="rbtn" data-role="pm"><span class="ri">🏗</span><span>Project Managers<small>Deliveries per customer — delivered, on the road, scheduled, coming up.</small></span></button>
     <button class="rbtn" data-role="saw"><span class="ri">🪚</span><span>Saw / Cutting<small>Today's cutting lists — mark each list CUT COMPLETE.</small></span></button>
     <button class="rbtn" data-role="stores"><span class="ri">🧰</span><span>Stores / Fittings<small>Today's fittings lists — mark each list PICKED.</small></span></button>
@@ -1527,6 +1531,7 @@ function rolePicker(pinFor){
     }
   };
   if(pinFor)inEl.focus();
+  if(V2()&&!SEQP.st)lsLoad().then(seqShow); /*seq: the Pre-production button appears once the sequence tables are found*/
 }
 
 function render(){
@@ -1549,6 +1554,7 @@ function render(){
   if(ROLE==='pm'){if(V2())renderPMV2(app);else renderPM(app);return;}
   if(ROLE==='prod'){if(V2())renderProdV2(app);else renderProd(app);return;}
   if(ROLE==='design'){renderDesign(app);return;}
+  if(ROLE==='pre'){renderPre(app);return;}
   if(ROLE==='saw'){renderWorkList(app,'saw');return;}
   if(ROLE==='stores'){renderWorkList(app,'fit');return;}
   if(ROLE==='driver'){renderDriver(app);return;}
@@ -1624,11 +1630,18 @@ function renderSettings(app){
     +[['delivLead','Build this many working days before delivery (suggested)',delivLead()],['siteDays','Ask for "site ready" this many working days before a booked delivery',siteDays()],['earlyDays','Warn "don\'t cut early" when a job moves out by more than (days)',earlyDays()]]
       .map(([k,l,v])=>'<div style="max-width:260px"><label style="font-size:12px;color:var(--t2);display:block;margin-bottom:4px">'+l+'</label><input type="number" id="s-'+k+'" value="'+v+'" min="1" max="60" step="1" style="padding:6px 10px;border:1px solid var(--b2);border-radius:6px;font-size:14px;width:100px;min-height:40px"></div>').join('')
     +'</div><button class="btn btn-g" id="btn-save-dates">Save delivery-date settings</button></div>'
+    /*seq: PM sequence numbers — only once the sequence tables are there*/
+    +(seqVis()?'<div class="exp-panel" id="set-seq">'
+    +'<div style="font-size:14px;font-weight:600;margin-bottom:6px">PM sequence &amp; pre-production</div>'
+    +'<div style="display:flex;gap:20px;flex-wrap:wrap;margin-bottom:12px">'
+    +[['seqFixedDays','Fixed window — changes inside this many calendar days need the Production Manager (7–30)',seqFixedDays()],['preWks','Pre-production looks this many weeks ahead (3–12)',preWks()],['seqWaitWks','Flag a row "waiting for a WO number" after this many weeks (1–12)',seqWaitWks()]]
+      .map(([k,l,v])=>{const r=seqNumRange(k);return '<div style="max-width:260px"><label style="font-size:12px;color:var(--t2);display:block;margin-bottom:4px">'+l+'</label><input type="number" id="s-'+k+'" value="'+v+'" min="'+r[0]+'" max="'+r[1]+'" step="1" style="padding:6px 10px;border:1px solid var(--b2);border-radius:6px;font-size:14px;width:100px;min-height:40px"></div>';}).join('')
+    +'</div><button class="btn btn-g" id="btn-save-seq">Save sequence settings</button></div>':'')
     +'<div class="exp-panel">'
     +'<div style="font-size:14px;font-weight:600;margin-bottom:6px">View PINs</div>'
     +'<p style="font-size:12px;color:var(--t3);margin-bottom:12px">Every view is locked by its own PIN, entered once per device. The <b>Admin PIN opens any view</b> and is required to save changes here. Changing a PIN signs every device out of that view until the new one is entered.</p>'
     +'<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px">'
-    +[['admin','🔑 Admin'],['office','🗓 Office'],['floor','🏭 Floor'],['saw','🪚 Saw'],['stores','🧰 Stores'],['driver','🚚 Driver'],['dash','📊 Mgmt'],['pm','🏗 PM'],['prod','🧭 Production']].concat(V2()?[['design','📐 Drawing office']]:[]).map(([k,lbl])=>'<div><label style="font-size:12px;color:var(--t2);display:block;margin-bottom:4px">'+lbl+'</label>'
+    +[['admin','🔑 Admin'],['office','🗓 Office'],['floor','🏭 Floor'],['saw','🪚 Saw'],['stores','🧰 Stores'],['driver','🚚 Driver'],['dash','📊 Mgmt'],['pm','🏗 PM'],['prod','🧭 Production']].concat(V2()?[['design','📐 Drawing office']]:[]).concat(seqVis()?[['pre','🗂 Pre-production']]:[]).map(([k,lbl])=>'<div><label style="font-size:12px;color:var(--t2);display:block;margin-bottom:4px">'+lbl+'</label>'
       +'<input id="s-pin-'+k+'" type="'+(pinShow?'text':'password')+'" value="'+escA(pins()[k])+'" maxlength="8" autocomplete="off" style="padding:6px 10px;border:1px solid '+(k==='admin'?'#c0392b':'var(--b2)')+';border-radius:6px;font-size:16px;width:95px;letter-spacing:3px"></div>').join('')
     +'</div>'
     +'<button class="btn btn-g" id="btn-save-pins">Save PINs (Admin PIN required)</button> '+'<button class="btn btn-s" id="btn-show-pins">'+(pinShow?'🙈 Hide PINs':'👁 Show PINs (Admin PIN required)')+'</button>'
@@ -1636,14 +1649,14 @@ function renderSettings(app){
     +'<div class="exp-panel">'
     +'<div style="font-size:14px;font-weight:600;margin-bottom:6px">Staff</div>'
     +'<p style="font-size:12px;color:var(--t3);margin-bottom:10px">Everyone who uses the system, with a category per view — Admin is the system owner. Drivers pick their name from this list on the phone; the saw and stores tap their name when marking lists done. Removing someone does not touch past records — their name stays on everything they already signed.</p>'
-    +'<table class="lst-tbl" style="max-width:820px"><thead><tr><th>Name</th><th style="text-align:center">🔑 Admin</th><th style="text-align:center">🗓 Office</th><th style="text-align:center">🚚 Driver</th><th style="text-align:center">🪚 Saw</th><th style="text-align:center">🧰 Stores</th><th style="text-align:center">📊 Mgmt</th><th style="text-align:center">🏗 PM</th><th style="text-align:center">🧭 Prod</th><th></th></tr></thead><tbody>'
+    +'<table class="lst-tbl" style="max-width:820px"><thead><tr><th>Name</th><th style="text-align:center">🔑 Admin</th><th style="text-align:center">🗓 Office</th><th style="text-align:center">🚚 Driver</th><th style="text-align:center">🪚 Saw</th><th style="text-align:center">🧰 Stores</th><th style="text-align:center">📊 Mgmt</th><th style="text-align:center">🏗 PM</th><th style="text-align:center">🧭 Prod</th>'+(seqVis()?'<th style="text-align:center" title="Pre-production (processes work orders for the CNC)">🗂 Pre-prod</th>':'')+'<th></th></tr></thead><tbody>'
     +staff().map((s,i)=>'<tr>'
       +'<td><input data-stn="'+i+'" value="'+escA(s.n||'')+'" style="width:100%;padding:5px 8px;border:1px solid var(--b2);border-radius:5px;font-size:13px"></td>'
-      +['admin','office','driver','saw','stores','dash','pm','prod'].map(r=>'<td style="text-align:center"><input type="checkbox" data-str="'+i+'|'+r+'"'+((s.r||[]).includes(r)?' checked':'')+' style="width:16px;height:16px"></td>').join('')
+      +['admin','office','driver','saw','stores','dash','pm','prod'].concat(seqVis()?['pre']:[]).map(r=>'<td style="text-align:center"><input type="checkbox" data-str="'+i+'|'+r+'"'+((s.r||[]).includes(r)?' checked':'')+' style="width:16px;height:16px"></td>').join('')
       +'<td><button class="btn btn-s" data-stx="'+i+'" style="padding:2px 8px;font-size:11px;color:var(--red);border-color:var(--red)">✕</button></td>'
       +'</tr>').join('')
     +'<tr><td><input id="st-new" placeholder="Add a name…" style="width:100%;padding:5px 8px;border:1px dashed var(--b2);border-radius:5px;font-size:13px"></td>'
-    +'<td colspan="8" style="font-size:11px;color:var(--t3)">tick their views after adding</td>'
+    +'<td colspan="'+(seqVis()?9:8)+'" style="font-size:11px;color:var(--t3)">tick their views after adding</td>'
     +'<td><button class="btn btn-g" id="st-add" style="padding:3px 10px;font-size:12px">＋ Add</button></td></tr>'
     +'</tbody></table>'
     +'</div>'
@@ -1703,12 +1716,13 @@ function renderSettings(app){
     if(a===null)return;
     if(a.trim()!==pins().admin){toast('Wrong Admin PIN — PINs unchanged');return;}
     const np={};let bad=false;
-    ['admin','office','floor','saw','stores','driver','dash','pm','prod'].concat(V2()?['design']:[]).forEach(k=>{
+    ['admin','office','floor','saw','stores','driver','dash','pm','prod'].concat(V2()?['design']:[]).concat(seqVis()?['pre']:[]).forEach(k=>{
       const v=(document.getElementById('s-pin-'+k)?.value||'').trim();
       if(v.length<4)bad=true;np[k]=v;
     });
     if(bad){toast('Every PIN needs at least 4 characters');return;}
     if(!np.design&&DB.pins&&DB.pins.design)np.design=DB.pins.design;
+    if(!np.pre&&DB.pins&&DB.pins.pre)np.pre=DB.pins.pre; /*seq: kept when its box isn't shown*/
     DB.pins=np;
     ls.set('wpfPin_office',np.office); // this device stays signed in to Office
     sched();toast('PINs saved ✓ — other devices must enter the new PINs');
@@ -1740,6 +1754,10 @@ function renderSettings(app){
   document.getElementById('btn-save-dates')?.addEventListener('click',()=>{ /*dates phase 2*/
     const bad=[];['delivLead','siteDays','earlyDays'].forEach(k=>{const t=String(document.getElementById('s-'+k)?.value||'').trim(),v=/^\d+$/.test(t)?+t:NaN;if(dsOk(v))DB[k]=v;else bad.push(k);});
     sched();toast(bad.length?'Enter whole numbers from 1 to 60 (no decimals) — '+bad.length+' box'+(bad.length!==1?'es were':' was')+' not saved':'Delivery-date settings saved ✓');render();
+  });
+  document.getElementById('btn-save-seq')?.addEventListener('click',()=>{ /*seq*/
+    const bad=[];seqNumKeys().forEach(k=>{const t=String(document.getElementById('s-'+k)?.value||'').trim(),v=/^\d+$/.test(t)?+t:NaN;if(seqNumOk(k,v))DB[k]=v;else bad.push(seqNumRange(k)[0]+'–'+seqNumRange(k)[1]);});
+    sched();toast(bad.length?'Whole numbers only, in range ('+bad.join(', ')+') — '+bad.length+' box'+(bad.length!==1?'es were':' was')+' not saved':'Sequence settings saved ✓');render();
   });
 }
 
@@ -2395,8 +2413,8 @@ function confirmPartLoad(jobs){
    Lists, lines, projects and materials come from their own tables (SUPABASE_CHANGES.md, 2 Nov 2026) and are held here.
    LST holds exactly what the database last said; this device's unsent changes (LQ, the line queue) are laid over it
    when the screens read it, so a tick shows at once and the database still decides. */
-const LST={l:new Map(),ln:new Map(),full:new Set(),fetching:new Set(),p:new Map(),m:new Map(),s:new Map(),ps:new Map(),since:{},loaded:false,loading:null,polling:false,gen:0,err:'',timer:null,ms:0,ck:'',c:null};
-const LS_T={lists:'l',list_lines:'ln',projects:'p',project_materials:'m',snags:'s',project_spec_items:'ps'};
+const LST={l:new Map(),ln:new Map(),full:new Set(),fetching:new Set(),p:new Map(),m:new Map(),s:new Map(),ps:new Map(),sq:new Map(),sr:new Map(),sp:new Map(),since:{},loaded:false,loading:null,polling:false,gen:0,err:'',timer:null,ms:0,ck:'',c:null};
+const LS_T={lists:'l',list_lines:'ln',projects:'p',project_materials:'m',snags:'s',project_spec_items:'ps',project_seq:'sq',seq_requests:'sr',seq_pre:'sp'};
 async function lsGet1(q){
   const r=await fetch(SUPA_URL+'/'+q,{headers:SUPA_HDR});const d=await r.json().catch(()=>null);
   if(!r.ok||!Array.isArray(d))throw new Error('lists load failed: '+r.status+' '+JSON.stringify(d).slice(0,120));
@@ -2443,12 +2461,13 @@ async function lsLoad(){
       await lsLines(l.filter(x=>!lsFinishedRow(x)).map(x=>x.id)); // finished lists' lines load when someone opens them
       LST.loaded=true;LST.err='';lsRescue();
       await specLoad(true); // Project details (9 Nov): hidden quietly until its SQL is run
+      await seqLoad(true); // PM sequence (Job B part 2): hidden quietly until its SQL is run
     }catch(e){LST.err=e.message;console.warn('Planner lists: '+e.message);}
     finally{LST.loading=null;}
   })();
   return LST.loading;
 }
-function lsReset(){['l','ln','p','m','s','ps'].forEach(k=>LST[k].clear());LST.full.clear();LST.since={};LST.loaded=false;LST.gen++;}
+function lsReset(){['l','ln','p','m','s','ps','sq','sr','sp'].forEach(k=>LST[k].clear());LST.full.clear();LST.since={};LST.loaded=false;LST.gen++;}
 // "Changed since": newest database updated_at seen minus 30 s (catches stragglers); rows already held are skipped by version
 async function lsPoll(){
   if(!V2()||LST.polling)return;
@@ -2462,15 +2481,17 @@ async function lsPoll(){
     const need=[...LST.l.values()].filter(x=>!LST.full.has(x.id)&&!lsFinishedRow(x)).map(x=>x.id); // e.g. sent back for a re-cut
     if(need.length){await lsLines(need);n++;}
     n+=await specLoad(false);
+    n+=await seqLoad(false);
     LST.err='';
   }catch(e){LST.err=e.message;}
   finally{LST.polling=false;}
   lsRescue();
   if(n)lsRedraw();
   if(n&&SPEC_DLG.draw&&SPEC_DLG.el&&!SPEC_DLG.el.contains(document.activeElement))SPEC_DLG.draw();
+  if(n&&SEQ_DLG.draw&&SEQ_DLG.el&&document.body.contains(SEQ_DLG.el)&&!SEQ_DLG.el.contains(document.activeElement)&&!SEQ_DLG.busy)SEQ_DLG.draw();
 }
 function lsRedraw(){mergedRender();} // the same rule as a merge: never redraw under someone's fingers or over an open dialog
-function lsWantMs(){return ROLE==='saw'||ROLE==='stores'||ROLE==='design'||(ROLE==='office'&&tab==='l')||(ROLE==='prod'&&prodTab==='lists')?10000:60000;}
+function lsWantMs(){return ROLE==='saw'||ROLE==='stores'||ROLE==='design'||(ROLE==='office'&&tab==='l')||(ROLE==='prod'&&prodTab==='lists')||seqBusyScreen()?10000:60000;}
 function lsStart(){ // own timer, separate from the planner refresh; off (and silent) unless V2()
   if(!V2()){if(LST.timer){clearInterval(LST.timer);LST.timer=null;}if(LQ.q.length)lqFoldV1();return;}
   const ms=lsWantMs();
@@ -3552,14 +3573,15 @@ function lsFindDlg(pid){
 function lsProjectsDlg(){
   const ov=lsDlg('<div id="pj-body"></div>',860);
   const draw=()=>{
-    const ps=lsProjects(true);
+    const ps=seqProjOrder(lsProjects(true)),sv=seqVis(),un=sv?ps.filter(p=>p.active!==false&&!seqPM(p)).length:0;
     ov.querySelector('#pj-body').innerHTML=`<div style="font-weight:800;color:#14335c;font-size:17px;margin-bottom:2px">🏗 Projects</div>
       <div style="font-size:12px;color:var(--t3);margin-bottom:10px">Rename, change the customer or who owns the lists, set the site address (the default "deliver to" on stores dockets), or set a project inactive. Projects are never deleted.</div>
-      <table class="lst-tbl"><thead><tr><th>Project</th><th>Customer (Cienapps)</th><th>Lists owned by</th><th>Site address (dockets)</th><th>Active</th><th></th></tr></thead><tbody>
-      ${ps.map(p=>`<tr${p.active===false?' style="opacity:.6"':''}><td><input data-pjn="${escA(p.id)}" value="${escA(p.name)}" style="${LS_INP};width:100%"></td><td><input data-pjc="${escA(p.id)}" value="${escA(p.customer||'')}" style="${LS_INP};width:100%"></td>
+      ${un?`<div class="seq-un" style="margin-bottom:8px">Unassigned (${un}) — no Project Manager yet, listed first</div>`:''}
+      <table class="lst-tbl"><thead><tr><th>Project</th>${sv?'<th>PM</th>':''}<th>Customer (Cienapps)</th><th>Lists owned by</th><th>Site address (dockets)</th><th>Active</th><th></th></tr></thead><tbody>
+      ${ps.map(p=>`<tr${p.active===false?' style="opacity:.6"':''}><td><input data-pjn="${escA(p.id)}" value="${escA(p.name)}" style="${LS_INP};width:100%"></td>${sv?`<td>${seqPMHTML(p)}</td>`:''}<td><input data-pjc="${escA(p.id)}" value="${escA(p.customer||'')}" style="${LS_INP};width:100%"></td>
         <td><input data-pjo="${escA(p.id)}" value="${escA(p.list_owner||'')}" placeholder="Production Manager" style="${LS_INP};width:100%"></td><td><textarea data-pjsa="${escA(p.id)}" rows="1" placeholder="Default 'deliver to' on dockets" style="${LS_INP};width:100%;min-width:160px;font-family:inherit">${escA(p.site_address||'')}</textarea></td><td><input type="checkbox" data-pja="${escA(p.id)}"${p.active!==false?' checked':''}></td>
         <td style="white-space:nowrap"><button class="btn btn-g" data-pjs="${escA(p.id)}" style="font-size:12px;padding:4px 10px">Save</button> <button class="btn btn-s" data-pjm="${escA(p.id)}" style="font-size:12px;padding:4px 10px">Materials</button></td></tr>`).join('')}
-      <tr><td><input id="pj-new-n" placeholder="New project name" style="${LS_INP};width:100%"></td><td><input id="pj-new-c" placeholder="Customer" style="${LS_INP};width:100%"></td><td><input id="pj-new-o" placeholder="Production Manager" style="${LS_INP};width:100%"></td><td><textarea id="pj-new-sa" rows="1" placeholder="Site address" style="${LS_INP};width:100%;min-width:160px;font-family:inherit"></textarea></td><td></td>
+      <tr><td><input id="pj-new-n" placeholder="New project name" style="${LS_INP};width:100%"></td>${sv?'<td></td>':''}<td><input id="pj-new-c" placeholder="Customer" style="${LS_INP};width:100%"></td><td><input id="pj-new-o" placeholder="Production Manager" style="${LS_INP};width:100%"></td><td><textarea id="pj-new-sa" rows="1" placeholder="Site address" style="${LS_INP};width:100%;min-width:160px;font-family:inherit"></textarea></td><td></td>
         <td><button class="btn btn-g" id="pj-add" style="font-size:12px;padding:4px 10px">＋ Add</button></td></tr></tbody></table><div id="pj-msg" style="font-size:12px;color:#b42318;font-weight:700;margin-top:6px"></div>`;
     const msg=t=>{const e=ov.querySelector('#pj-msg');if(e)e.textContent=t;};
     const val=(a,id)=>(ov.querySelector('['+a+'="'+id+'"]')||{}).value||'';
@@ -3571,6 +3593,7 @@ function lsProjectsDlg(){
       lsWrite('projects',p,{name,customer:val('data-pjc',id).trim()||null,list_owner:val('data-pjo',id).trim()||null,active:ov.querySelector('[data-pja="'+id+'"]').checked,...saP})
         .then(()=>{toast('Project saved');draw();}).catch(e=>{draw();msg('Not saved — '+(/site_address/.test(e.message)?dkErr('404'):e.message));});});
     ov.querySelectorAll('[data-pjm]').forEach(b=>b.onclick=()=>{ov.remove();lsMaterialsDlg(b.dataset.pjm);});
+    seqPMBind(ov,draw);
     ov.querySelector('#pj-add').onclick=()=>{if(!lsEditOk())return;const name=ov.querySelector('#pj-new-n').value.trim();if(!name)return msg('Type the project name first.');
       if(lsProjFind(name))return msg('There is already a project called "'+name+'".');
       const sa=ov.querySelector('#pj-new-sa').value.trim();
@@ -3637,6 +3660,26 @@ async function specLoad(full){ // called by the list store's load and poll; one 
     const was=SPECP.st;SPECP.st='ok';return n+(was!=='ok'?1:0);}
   catch(e){if(specMissing(e))SPECP.st='missing';else if(SPECP.st!=='ok'){SPECP.st='net';SPECP.retry=Date.now()+60000;}return 0;}
 }
+/* ---------- PM sequence & pre-production (Job B part 2, docs/PLAN-project-details.md Part 2). V2 only. ----------
+   Three tables (project_seq, seq_requests, seq_pre — SUPABASE_CHANGES.md 10 Nov). Until that SQL is run the probe answers
+   "not found" once per page load and every sequence button, tab and the Pre-production view stay hidden. */
+const SEQP={st:'',retry:0}; // same states as SPECP
+function seqVis(){return V2()&&SEQP.st==='ok';}
+function seqShow(){const v=seqVis();document.querySelectorAll('.seq-gate').forEach(b=>{b.hidden=!v;});}
+async function seqLoad(full){ // called by the list store's load and poll; probes with a TABLE (never a column)
+  if(!V2()||SEQP.st==='missing'||(SEQP.st==='net'&&Date.now()<SEQP.retry))return 0;
+  const was=SEQP.st;
+  try{
+    if(was!=='ok'){await lsGet1('project_seq?select=id&limit=1');full=true;}
+    const q=(t,ord)=>{const s=!full&&LST.since[t];return t+'?select=*'+(s?'&updated_at=gt.'+encodeURIComponent(new Date(Date.parse(s)-30000).toISOString())+'&order=updated_at,'+ord:'');};
+    const[a,b,c]=await Promise.all([lsGet(q('project_seq','id')),lsGet(q('seq_requests','id')),lsGet(q('seq_pre','seq_id')+(full?'&order=seq_id.asc':''))]);
+    let n=lsPut('project_seq',a)+lsPut('seq_requests',b)+lsPut('seq_pre',c.map(r=>({...r,id:r.seq_id}))); // seq_pre is keyed by seq_id
+    SEQP.st='ok';if(was!=='ok'){n++;seqShow();}return n;
+  }catch(e){if(specMissing(e))SEQP.st='missing';else if(was!=='ok'){SEQP.st='net';SEQP.retry=Date.now()+60000;}seqShow();return 0;}
+}
+// The screens that want the 10-second poll (sequence page open, PM's Sequence tab, Pre-production)
+function seqBusyScreen(){return !!(SEQP.st==='ok'&&(ROLE==='pre'||(ROLE==='pm'&&pmTab==='seq')||(SEQ_DLG.el&&document.body.contains(SEQ_DLG.el))));}
+const SEQ_DLG={el:null,draw:null,busy:false};
 const SPEC_TBC=/^(t\.?\s*b\.?\s*c\.?|t\.?\s*b\.?\s*a\.?|to be (confirmed|advised))$/i; // all mean not signed off (the database says the same)
 const specNorm=s=>String(s==null?'':s).normalize('NFKC').replace(/\s+/g,' ').trim().toLowerCase();
 const specIsOther=item=>/^other\s*info/i.test(String(item||'').trim());
@@ -3772,13 +3815,55 @@ function lsPickProj(title,cb){const ps=lsProjects();if(!ps.length){toast('No pro
     ov.querySelectorAll('[data-pp]').forEach(b=>b.onclick=()=>{ov.remove();cb(b.dataset.pp);});};
   ov.querySelector('#pp-q').oninput=list;list();}
 // Project Managers' Projects tab (and the same list elsewhere): every active project with its details and materials
-function lsProjHubHTML(){const ps=lsProjects();
-  return `<div class="exp-panel" id="pjh"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px"><div style="font-size:15px;font-weight:700;color:#14335c">🏗 Projects — ${ps.length}</div><input id="pjh-q" value="${escA(PJH.q)}" placeholder="🔍 Search project or customer" style="${LS_INP};width:240px;max-width:100%"></div>
-    ${ps.filter(p=>!PJH.q||[p.name,p.customer].join(' ').toLowerCase().includes(PJH.q.toLowerCase())).map(p=>`<div class="pjh-row"><div class="pjh-n"><b>${escA(p.name)}</b>${p.customer&&p.customer!==p.name?`<span>${escA(p.customer)}</span>`:''}${specChip(p.id)}</div>
-      <div class="pjh-b">${specBtn(p.id)}<button class="btn btn-s" data-pjhm="${escA(p.id)}">🧱 Materials (${lsMats(p.id,'',false).length})</button></div></div>`).join('')||`<div style="color:var(--t3);padding:8px">${LST.loaded?'No projects yet.':'Loading…'}</div>`}</div>`;}
+function lsProjHubHTML(){const ps=seqProjOrder(lsProjects().filter(p=>pmShows(p.id))),un=seqVis()?ps.filter(p=>!seqPM(p)).length:0;
+  return `<div class="exp-panel" id="pjh"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px"><div style="font-size:15px;font-weight:700;color:#14335c">🏗 Projects — ${ps.length}</div><input id="pjh-q" value="${escA(PJH.q)}" placeholder="🔍 Search project or customer" style="${LS_INP};width:240px;max-width:100%">${un&&ROLE!=='pm'?`<span class="seq-un">Unassigned (${un}) — no Project Manager yet, listed first</span>`:''}</div>
+    ${ps.filter(p=>!PJH.q||[p.name,p.customer,seqPM(p)].join(' ').toLowerCase().includes(PJH.q.toLowerCase())).map(p=>`<div class="pjh-row"><div class="pjh-n"><b>${escA(p.name)}</b>${p.customer&&p.customer!==p.name?`<span>${escA(p.customer)}</span>`:''}${seqPMHTML(p)}${specChip(p.id)}</div>
+      <div class="pjh-b">${specBtn(p.id)}<button class="btn btn-s" data-pjhm="${escA(p.id)}">🧱 Materials (${lsMats(p.id,'',false).length})</button></div></div>`).join('')||`<div style="color:var(--t3);padding:8px">${LST.loaded?(ROLE==='pm'&&pmFilterOn()?'None of your projects match.':'No projects yet.'):'Loading…'}</div>`}</div>`;}
 const PJH={q:''};
 function lsProjHubBind(root){root=root||document;const q=root.querySelector('#pjh-q');if(q)q.oninput=()=>{PJH.q=q.value;const s=q.selectionStart;const el=root.querySelector('#pjh');if(el){el.outerHTML=lsProjHubHTML();lsProjHubBind(root);const n=root.querySelector('#pjh-q');if(n){n.focus();n.setSelectionRange(s,s);}}};
-  root.querySelectorAll('[data-pjhm]').forEach(b=>b.onclick=()=>lsMaterialsDlg(b.dataset.pjhm));}
+  root.querySelectorAll('[data-pjhm]').forEach(b=>b.onclick=()=>lsMaterialsDlg(b.dataset.pjhm));seqPMBind(root);}
+/* ---------- PM assignment (B5). The PM list = Settings → Staff people ticked PM. Assigned by the office and the Production
+   Manager only (a PM can't claim a project). Saved in projects.pm — the database writes the history (projects_pm_log). ---------- */
+function seqPM(p){return p?String(p.pm||'').trim():'';}
+function seqCanAssign(){return seqVis()&&(ROLE==='office'||ROLE==='prod');}
+const seqKey=s=>String(s||'').normalize('NFKC').replace(/\s+/g,' ').trim().toLowerCase();
+// Unassigned first, then by name
+function seqProjOrder(ps){return seqVis()&&ROLE!=='pm'?ps.slice().sort((a,b)=>(seqPM(a)?1:0)-(seqPM(b)?1:0)||String(a.name).localeCompare(String(b.name))):ps;}
+// "PM ▾" for the office / Production Manager; the name (or "no PM") for everyone else
+function seqPMHTML(p){if(!seqVis())return'';const cur=seqPM(p);
+  if(!seqCanAssign())return cur?`<span class="seq-pm">👤 PM ${escA(cur)}</span>`:`<span class="seq-pm seq-pm-none">no PM yet</span>`;
+  const names=staffFor('pm').map(s=>s.n.trim());if(cur&&!names.some(n=>seqKey(n)===seqKey(cur)))names.push(cur);
+  return `<label class="seq-pm" title="Project Manager for this project (Settings → Staff, ticked PM)">PM <select data-seqpm="${escA(p.id)}" style="${LS_INP};padding:3px 6px;max-width:160px"><option value="">— Unassigned —</option>${names.map(n=>`<option value="${escA(n)}"${seqKey(n)===seqKey(cur)?' selected':''}>${escA(n)}</option>`).join('')}</select></label>`;}
+function seqPMBind(root,after){(root||document).querySelectorAll('[data-seqpm]').forEach(s=>s.onchange=()=>{const p=LST.p.get(s.dataset.seqpm);if(!p||!seqCanAssign())return;
+  const v=s.value.trim()||null;s.disabled=true;
+  lsWrite('projects',p,{pm:v}).then(()=>{toast(v?v+' is now the PM for '+p.name:p.name+' has no PM now');}).catch(e=>toast('Not saved — '+e.message,true)).finally(()=>{if(after)after();else render();});});}
+/* Who am I (PM / Pre-production): picked once per phone/PC from Settings → Staff, remembered until Stage 4 logins. */
+function seqMe(role){const v=ls.get('wpfMe_'+role).trim();return v&&staffFor(role).some(s=>seqKey(s.n)===seqKey(v))?v:'';}
+function seqMeAsk(role,cb){
+  const ppl=staffFor(role),lbl=role==='pm'?'Project Manager':'Pre-production';
+  const ov=lsDlg(`<div style="font-weight:800;color:#14335c;font-size:16px;margin-bottom:2px">Which ${escA(lbl)} are you?</div>
+    <div style="font-size:12px;color:var(--t3);margin-bottom:12px">Asked once on this ${/Mobi/.test(navigator.userAgent)?'phone':'computer'}. Your name goes on everything you change here.</div>
+    ${ppl.map(s=>`<button class="rbtn" data-meis="${escA(s.n.trim())}" style="justify-content:center;font-size:16px">${escA(s.n.trim())}</button>`).join('')||`<div style="font-size:13px;color:#7a5200">Nobody is ticked "${role==='pm'?'🏗 PM':'🗂 Pre-prod'}" in Settings → Staff yet — ask the office to add you.</div>`}`,420);
+  ov.querySelectorAll('[data-meis]').forEach(b=>b.onclick=()=>{ls.set('wpfMe_'+role,b.dataset.meis);setWho(b.dataset.meis);ov.remove();if(cb)cb(b.dataset.meis);else render();});}
+function seqMeStrip(role){if(!seqVis())return'';const me=seqMe(role);
+  return `<div class="seq-me">👤 ${me?`<b>${escA(me)}</b>`:'<i>name not picked</i>'} <button class="btn btn-s" id="seq-me-x" style="padding:2px 10px;font-size:12px">${me?'Not you?':'Pick your name'}</button></div>`;}
+function seqMeBind(role){const b=document.getElementById('seq-me-x');if(b)b.onclick=()=>seqMeAsk(role);
+  const me=seqMe(role);if(me&&whoNow()!==me)setWho(me);}
+// A PM's own project (by the assignment). PMALL = "All projects" ticked (others are read-only)
+let PMALL=false;const SEQ_ASKED=new Set(); // the name question pops up by itself once per page load
+function pmMine(pid){const me=seqMe('pm'),p=LST.p.get(pid);return !!(ROLE==='pm'&&me&&p&&seqKey(seqPM(p))===seqKey(me));}
+function pmMineAny(){const me=seqMe('pm');return !!me&&lsProjects().some(p=>seqKey(seqPM(p))===seqKey(me));}
+function pmFilterOn(){return ROLE==='pm'&&seqVis()&&!PMALL&&pmMineAny();}
+function pmShows(pid){return !pmFilterOn()||pmMine(pid);}
+function pmCustOk(c){if(!pmFilterOn())return true;const p=lsProjForCust(c);return !!p&&pmMine(p.id);}
+// Who may change a project's sequence: its own PM, the office, the Production Manager — and only while the tables take changes
+function seqCanEdit(pid){return seqVis()&&DB.listStore==='v2'&&((ROLE==='pm'&&pmMine(pid))||ROLE==='office'||ROLE==='prod');}
+/* Pre-production view (B9) — the pool is built in a later step */
+function renderPre(app){
+  if(!seqVis()){app.innerHTML=`<div class="pg"><div class="exp-panel" style="font-size:14px">${V2()&&!SEQP.st?'Loading…':'The Pre-production view opens once the PM sequence database update is installed and the new cutting lists are switched on.'}</div></div>`;if(V2()&&!SEQP.st)lsLoad().then(()=>{if(ROLE==='pre')mergedRender();});return;}
+  app.innerHTML=`<div class="pg">${seqMeStrip('pre')}<h1 style="font-size:22px;color:#14335c;margin:6px 0 10px">🗂 Pre-production</h1><div class="exp-panel" style="font-size:14px">Pre-production pool — coming in the next build.</div></div>`;
+  seqMeBind('pre');if(!seqMe('pre')&&staffFor('pre').length&&!document.querySelector('.pod-ovl')&&!SEQ_ASKED.has('pre')){SEQ_ASKED.add('pre');seqMeAsk('pre');}
+}
 /* Lists home: search, filters, grouped by project. Shared by the office Lists tab, the Drawing office and the Production Manager. */
 const LH={q:'',proj:'',type:'',kind:'live',rev:'',state:''};
 // An archived list that another list replaced ("Make new list from this"): shown "Superseded (view only)" — no Edit
@@ -5233,9 +5318,12 @@ let pmTab='';
 function renderPMV2(app){
   if(pmTab==='snags')renderSnags(app);else if(pmTab==='projects'){app.innerHTML='<div class="pg">'+lsProjHubHTML()+'</div>';lsProjHubBind(app);}else renderPM(app);
   const t=(k,l)=>`<button data-pmtab="${k}" style="padding:9px 18px;border:none;border-radius:6px;font-size:15px;font-weight:700;cursor:pointer;${pmTab===k?'background:#14335c;color:#fff':'background:#e6ebf2;color:#14335c'}">${l}</button>`;
-  app.insertAdjacentHTML('afterbegin',`<div id="pm-strip" style="max-width:1400px;margin:10px auto 0;padding:0 20px;display:flex;gap:8px;flex-wrap:wrap">${t('','🚚 Deliveries')}${t('snags','🩹 Snags')}${t('projects','🏗 Projects')}<button id="pm-sent" class="dk-gate"${dkVis()?'':' hidden'} style="padding:9px 18px;border:none;border-radius:6px;font-size:15px;font-weight:700;cursor:pointer;background:#e6ebf2;color:#14335c">📦 Items sent</button></div>`);
+  const sv=seqVis(),mineAny=sv&&pmMineAny(); /*seq: name strip + "All projects" (B5)*/
+  app.insertAdjacentHTML('afterbegin',`<div id="pm-strip" style="max-width:1400px;margin:10px auto 0;padding:0 20px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">${t('','🚚 Deliveries')}${t('snags','🩹 Snags')}${t('projects','🏗 Projects')}<button id="pm-sent" class="dk-gate"${dkVis()?'':' hidden'} style="padding:9px 18px;border:none;border-radius:6px;font-size:15px;font-weight:700;cursor:pointer;background:#e6ebf2;color:#14335c">📦 Items sent</button>${sv?`<span style="flex:1"></span>${seqMeStrip('pm')}${mineAny?`<label class="seq-all"><input type="checkbox" id="pm-all"${PMALL?' checked':''}> All projects <small>(others read-only)</small></label>`:seqMe('pm')?'<span class="seq-un">No projects assigned to you yet — showing all</span>':''}`:''}</div>`);
   document.querySelectorAll('[data-pmtab]').forEach(b=>b.onclick=()=>{pmTab=b.dataset.pmtab;render();});
   document.getElementById('pm-sent').onclick=()=>dkReportDlg();dkShow();
+  if(sv){seqMeBind('pm');const pa=document.getElementById('pm-all');if(pa)pa.onchange=()=>{PMALL=pa.checked;render();};
+    if(!seqMe('pm')&&staffFor('pm').length&&!document.querySelector('.pod-ovl')&&!SEQ_ASKED.has('pm')){SEQ_ASKED.add('pm');seqMeAsk('pm');}}
 }
 /* ---------- S8 (V2 only): locking and revisions on screen ----------
    A live list locks when it's sent to the saw, when anything is ticked (the database), or when its cut-by date is today or
@@ -6896,7 +6984,7 @@ function renderPM(app){
   const all=delAll();
   const todayISO=todayLocal();
   // every customer seen on live orders or in the delivery archive
-  const custs=[...new Set([...DB.orders.map(o=>o.customer||''),...Object.values(DB.delArchive||{}).flatMap(a=>a.jobs.map(j=>j.c||''))].filter(Boolean))].sort();
+  const custs=[...new Set([...DB.orders.map(o=>o.customer||''),...Object.values(DB.delArchive||{}).flatMap(a=>a.jobs.map(j=>j.c||''))].filter(Boolean))].filter(pmCustOk).sort(); /*seq: a PM sees his own projects unless "All projects" is ticked*/
   const sel=pmCust&&custs.includes(pmCust)?[pmCust]:custs;
   const row=(cells)=>`<div class="dsh-row">${cells}</div>`;
   const stageLbl=o=>{const s=dStage(o);return s?dStageLbl[s]+(dStageTime(o)?' '+dStageTime(o):''):'PLANNED';};
@@ -8969,6 +9057,14 @@ function dsOk(v){return Number.isInteger(v)&&v>=1&&v<=60;}
 function delivLead(){return dsOk(DB.delivLead)?DB.delivLead:3;}
 function siteDays(){return dsOk(DB.siteDays)?DB.siteDays:5;}
 function earlyDays(){return dsOk(DB.earlyDays)?DB.earlyDays:14;}
+/*seq: PM sequence numbers — [lowest, highest, default]. Whole numbers only; anything else = the default (Job B part 2)*/
+function seqNumKeys(){return['seqFixedDays','preWks','seqWaitWks'];}
+function seqNumRange(k){return{seqFixedDays:[7,30,14],preWks:[3,12,3],seqWaitWks:[1,12,3]}[k];}
+function seqNumOk(k,v){const r=seqNumRange(k);return !!r&&Number.isInteger(v)&&v>=r[0]&&v<=r[1];}
+function seqNum(k){return seqNumOk(k,DB[k])?DB[k]:seqNumRange(k)[2];}
+function seqFixedDays(){return seqNum('seqFixedDays');}
+function preWks(){return seqNum('preWks');}
+function seqWaitWks(){return seqNum('seqWaitWks');}
 function slotWk(o){
   if(o&&o.delWk)return o.delWk;
   /*dates: a booking with no week. The legacy week only applies to bookings made before the office answered the question;
