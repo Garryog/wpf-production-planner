@@ -624,3 +624,76 @@ sample). 8 B10b matching. 9 S1. 10 S2. 11 Full suite → Tester → Manager (ste
   handling in the check: one side is null, the check reads that as FAIL); attack3-pg (c) (sends kind 'robes' by hand — the planner now
   sends 'kitchen' for that title, so the database must not second-guess the kind).
 - Full suite (229 files): 4,572 pass / 48 fail = the 29 known accepted + the 19 attack3-key above.
+
+---
+
+# Part 4 — the cutting-list window after Garry's first live use (L5–L12)
+*(Architect, scheduled run 10 Nov 2026 evening — ASSUMED calls can be changed by Garry. Decisions: ROADMAP 10 Nov 16:11–16:27.)*
+
+**Plain English for Garry.** The list window works first time: the project fills itself from the work order's customer, "＋ New material"
+always works, Qty looks like L and W, after Save it says "Saved ✓" and there is always a ✕ to get out, delivery cards can start or open a
+list, the WO drop-down shows only this project's jobs (soonest due first), the list name is yours to type, and the "can't keep a backup copy"
+message says what is wrong and how to fix it. No new SQL — all of it could go live before the pending SQL.
+
+## Key questions (ASSUMED)
+1. L5: WO's customer has no project → make it straight away when the window opens, no PIN (same as Garry's 3 Nov no-PIN link rule).
+2. L8: click on the grey area outside the window does nothing; only ✕ / Close / Esc close it, asking first if anything is unsaved.
+3. L12: list name left blank is saved as the WO number.
+4. L9: delivery-card list buttons for office, Production Manager, Drawing office, Pre-production only, lists switch ON only.
+5. L10: Settings shows storage used + can DOWNLOAD the old Quoting-tool copies; NO delete button yet (Garry to say yes first; then Admin PIN, `wpf_…` keys only).
+6. L11: changing the project on a NEW list clears a WO from another project (message); on an existing list the WO is kept, marked "(other project)".
+
+## What changes
+- **L5** new `lsEnsureCustProj(o)` (body taken from `ltiLinkBind` "＋ New project": reload projects; `lsProjFind(customer)` → `ltiLink`; else
+  `lsWrite('projects',{id,name:c,customer:c,cien_names:[c]})`; on duplicate refusal reload and use the existing). `ltiLinkBind` calls it (one copy).
+  Editor: whenever a WO is known and `st.pid` blank (open, `jbChoose`, `me-wo` change, typed WO) call it; "Setting up project '<customer>'…";
+  then grey "Project: X — from the WO's customer". Customer fits two projects → picker + "'<customer>' fits more than one project — pick one".
+  WO with no customer → "This WO has no customer in Cienapps — pick the project, or ＋ New project… at the bottom of the list". No-WO list keeps
+  the picker: "Pick the project — or ＋ New project… at the bottom of the list". "＋ New project…" in the window: no PIN.
+- **L6** `addMat`: no project + WO known → `lsEnsureCustProj` then carry on; no WO → `st.matAfter=i`, focus `#me-pid` "Pick the project — then the
+  new material is added", reopen the prompt after. Suspected bug: select has `onchange` AND `oninput` → name asked twice; fix (change only / `st.addBusy`).
+  `#me-mats` → "🧱 Project materials (add / edit)", never greyed (runs L5 first); same wording on Lists-home `data-lhmat`. "No materials yet" →
+  "This project has no materials yet — [Set up project materials now]" (opens `lsMaterialsDlg`).
+- **L7** `placeholder="Qty"` on PC and phone qty boxes.
+- **L8** sticky top bar: title left, **✕ Close** right. Bottom "Cancel" → "Close". `closeEd()` compares a snapshot of
+  `{rows,name,wo,pid,ltype,tname,noCut,noFit,jb,pw}` taken after the first draw (redraws from other screens' updates must not count) → confirm
+  "Close without saving? What you typed in this list is lost."; Esc same; `ov.onclick` no longer closes. After a successful save the window stays
+  with a finish panel matching what happened: "Saved ✓ — list is with the Saw & Stores" + saw/Stores row counts + WO; waiting check
+  (`lsWaitCheck`) "Saved ✓ — waiting to be checked before the saw sees it"; revision "Saved ✓ — Rev n is with the Saw & Stores"; template
+  "Template saved ✓". Buttons [Close] (big, focused) and [Edit it again]. `lsSavedYet` lost-reply messages unchanged.
+- **L9** (AFTER Job A's D4 card redesign is merged in) ⓘ on every non-manual delivery card (lists ON + allowed role), tooltip "Cutting list / readiness";
+  in `showReadiness` "NO LIST YET [＋ Add cutting list]" → `lsNewStd(wo)`; live list → [Open list]. New `lsLiveListOf(wo)` lifted from `jbLive`.
+- **L10** `devStore()`: every localStorage item grouped Planner (`wpf`+capital or `wpfPending:`) / old Quoting tool (`wpf_`) / Other, size = chars×2,
+  plus `navigator.storage.estimate()`. `writePend` records QuotaExceededError (full) vs SecurityError (blocked). Messages: full → "This device's storage
+  for the planner is full — old Quoting-tool copies use X MB. Your work still saves to the database while this page is open and online. Fix: Settings →
+  Storage on this device."; blocked → "This browser is blocking storage (private window or a browser setting) — use a normal Chrome window."
+  Settings panel "💾 Storage on this device" (table, estimate, fix steps, [⬇ Download a copy of the old Quoting-tool copies]). Nothing deleted.
+- **L11 + L12** `woOpts(pid)`: jobs with `keyProj(o)===pid`, minus shipped / on hold / delDone / delDelivAt; sorted due date (none last) then WO;
+  line "WO-2617-4 · Fl 7 · Unit 231 · due 14 Nov" + " · has a list"; customer→project worked out once per redraw. No project → one disabled line
+  "— pick the project first (or type the WO number below) —"; typed WO sets the project. The chosen WO ALWAYS stays an option (marked "(other
+  project)" / "(shipped)") so `keep()` never wipes `st.wo`. List name: stop pre-filling (`defName` ×3, `lsTplDlg` → template type name, `confirmList` →
+  template type name); label "List name (optional)", placeholder "e.g. Kitchen — Type B"; blank → WO number (P-number: set in `go()` after it's made).
+  Templates still need a name. `lsStdHouse` heading row stays. Filter box in "📐 Insert from template" when the project has > 6 templates.
+
+## Wireframe
+PC: `✍ New cutting list … ✕ Close` / Project [Aspect Athenry ▾] · "from the WO's customer" · [🧱 Project materials (add / edit)] · [✎ Project details] /
+Work order [WO-2617-4 · Fl 7 · Unit 231 · due 14 Nov ▾] + job boxes · List name (optional) · Type / grid with Qty · L · W placeholders /
+[Close] … [Save list → Saw & Stores] / after Save green panel + [Close] [Edit it again]. Phone 360 px: sticky ✕, one field per line, ≥44 px buttons.
+
+## Must NOT change
+Lists switch OFF = today's app (V1 editor, no L9 buttons; only the storage panel). One live list per WO. L1–L4, B0 key, woKey/woNorm, B2 overrides.
+Due dates only through moveDates. Tapping a delivery card still selects it. `lsProject` fallback in `lsSaveManual`. `matOther`. Nothing in localStorage deleted.
+
+## Risks
+Two PCs making the same project (reload + 409 path). "Contains" rule picks the wrong project (shown + changeable). Drop-down speed (once per redraw).
+Stale close-snapshot. Saw/stores must still show WO + Floor/Unit when the name no longer holds the house. Old tests expecting "House 18" names → update.
+
+## Acceptance checks
+1 project fills / made once / two PCs one project / two matches → pick / no customer → message. 2 New material with no project → led through, asked once,
+saved and picked. 3 Qty placeholder. 4 ✕/Close/Esc with and without changes; outside click nothing. 5 four finish messages. 6 delivery card add/open list;
+driver/stores no buttons; switch OFF none. 7 storage full message + Settings sizes, nothing removed. 8 drop-down filter/sort/format/has-a-list/empty/typed WO/
+chosen WO never vanishes. 9 name not pre-filled; blank → WO; typed name found in Find old list, Lists search, Insert-from-template. 10 full suite.
+
+## Build steps
+1 failing tests for the double prompt + outside-click close · 2 L7 + L6 wording · 3 L8 · 4 L5 · 5 L6 carry-on + double-fire fix · 6 L11 + L12 + names +
+insTpl filter · 7 L9 (after D4 is merged) · 8 L10 · 9 full suite → Tester → Manager.
