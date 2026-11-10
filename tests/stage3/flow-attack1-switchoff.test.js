@@ -23,7 +23,12 @@ const DAYS = '(Mon|Tue|Wed|Thu|Fri|Sat)', MON = '(Jan|Feb|Mar|Apr|May|Jun|Jul|Au
 const normDates = s => norm(s).replace(new RegExp('\\b' + DAYS + ' \\d{1,2} ' + MON + '\\b', 'g'), '$1')
   .replace(new RegExp('\\(' + VANS + ' ' + DAYS + '\\)', 'g'), '($1)')
   .replace(/planned for a day already gone, not delivered|planned earlier this week, not delivered/g, '«missed»')
-  .replace(/Weeks are stored when (?:a week is closed|the board is cleared) \(/g, 'Weeks are stored «close week» (');
+  .replace(/Weeks are stored when (?:a week is closed|the board is cleared) \(/g, 'Weeks are stored «close week» (')
+  // ALLOWED DIFFERENCE (Coder, 10 Nov evening — Deliveries usability DD1, Garry 10 Nov): the board's due cell is the one due tag
+  // "Due Wed 28 Oct · Wk 44" (+ "🚚 <delivery date>" tag, "(orig 21 Oct Wk 43)", the ⋯ full-dialog button) for stage2's
+  // "[OVERDUE ]28 Oct 26 Wk44[ (orig: 21 Oct 26 Wk43)]". Only these shapes are folded back to «due», on both sides.
+  .replace(new RegExp('Due ' + DAYS + '(?: \\d{4})? · Wk \\d+(?: 🚚 ' + DAYS + '(?: \\d{4})? · Wk \\d+)?(?: \\(orig \\d{1,2} ' + MON + ' Wk \\d+\\))?(?: ⋯)?', 'g'), '«due»')
+  .replace(new RegExp('(?:OVERDUE )?\\d{1,2} ' + MON + ' \\d{2} Wk\\d+(?: \\(orig: \\d{1,2} ' + MON + ' \\d{2} Wk\\d+\\))?', 'g'), '«due»');
 (async () => {
   if (!OLD) { rec('origin/feature/stage2-imports index.html readable from git (run git fetch)', false); done(); process.exit(1); }
   const browser = await H.chromium.launch();
