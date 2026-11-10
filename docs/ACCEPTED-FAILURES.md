@@ -9,6 +9,8 @@ Timing note: the 2,500-row timing tests can fail when many tests run at once; th
 
 | Test | Why it fails (plain English) | Fixed in | Accepted? |
 |---|---|---|---|
+| seq attack3-editor "two PCs, the same house: ONE P-job" | two office PCs making a P-number for the same house in the same second can still end with two P-jobs (the second is flagged, not folded in). Rare; nothing is lost. The fold-in step (L4b) is not built yet | Job B L4b (P-number fold-in) | pending |
+| seq attack4-fold "two PCs, the same house: ONE P-job" | same as above, seen through the fold-in test | Job B L4b | pending |
 | stage1 t3 duplicate-WO delete-vs-edit | the merge can't tell two lines with the same WO apart. Stage 2 stops imports creating them (stage1 t8 now passes: a WO twice in one file = one job); existing duplicate lines still hit this | line IDs (Stage 3 per-row tables) | pending |
 | stage1 t4 2,500-job merge >10 s | single-record size (passing on this run; may still be slow on a real PC) | Stage 3 | pending |
 | sawstores attack-devices identical lines share one record | ticks keyed by line content | line IDs (before snags) | pending |
