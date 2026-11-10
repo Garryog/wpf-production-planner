@@ -744,3 +744,30 @@ insTpl filter · 7 L9 (after D4 is merged) · 8 L10 · 9 full suite → Tester �
   → one-tap buttons as well as the drop-down; the native WO drop-down can't be photographed open, so the screenshot shows it as a list box.
 - Screenshots (fake database, ×2): /tmp/claude-0/shots/b-list-window-wo.png, b-saved.png, b-storage.png, b-list-window-phone.png.
 - Next: step 7 (L9) after D4 is merged → Tester → Manager.
+
+### 10 Nov 2026 (late) — Coder: fix round after Tester attack 5 (tests/seq/attack5-window.test.js, 63226eb)
+- e7323af fixes 1–3. **L5 linking:** the window links a customer to a project by itself only when they are the same once case, spaces and
+  punctuation are ignored (name, customer or a Cienapps spelling). A "contains" / builder-only fit is ASKED: "Is this project 'Kilcock Park'?
+  [Yes, use it] [No — make project 'Park Homes']" (Yes adds the customer to that project's Cienapps names, so it is certain next time). Same rule
+  for the window's first pick, a WO picked / found / typed, the standard-layout list and "type a new list" on Lists. **One project per customer
+  however spelled:** projects whose names match once normalised are one customer — the OLDEST is used (projects have no created_at, so the time
+  inside the id; hand-made ids like "P1" count as older); after making a project the app looks again and uses the oldest twin; nothing is deleted.
+  A new project's name loses a trailing full stop / comma so the database's one-name rule stops a same-moment twin ("Race Homes." → "Race
+  Homes"; the customer heading is kept as written in cien_names). **Esc** with a window opened over the list (materials, insert from template,
+  which sheet) closes that window only. **WO drop-down dates** are read as real dates: "TBC", "10/11/2026", "2026-02-30" = no date → last,
+  shown "due ?"; leading spaces trimmed. **Offline:** "No connection — the project couldn't be set up. Check the internet and try again; you can
+  still type the list." + [Try again]. The attack5 offline check was updated to this wording (it expected the old text).
+- 319a6cb (found by the full suite): "the same customer" also ignores company words (Homes, Ltd, Developments… — the existing SG_CO list), so
+  "ADERRIG HOMES" still goes to project "Aderrig" by itself (Garry's 3 Nov rule; dozens of tests rely on it). "Park Homes" vs "Kilcock Park" is
+  still asked. **Coder's call beyond the instruction** (which said case / spaces / punctuation only) — Garry/coordinator to confirm.
+- 1d17d08 fix 4 (flag only, no redesign): "⚠ Two P-numbers for one house — P-1001 / P-1002" also on the saw and stores list cards and in the list
+  window of either P-job. ACCEPTED-FAILURES: attack3-editor part 7 and attack4-fold part 1 "pending — Garry to decide (flag only vs Keep one
+  moves the list)"; attack5 has no separate twin check. The two attack5 Lows left as they are (inactive project, blocked-storage sign-in) are
+  listed there too as "pending — Garry to decide", so no failing test is unlisted.
+- New checks in tests/seq/l5-l12-window.test.js (now 81, all pass): contains fit asked, Yes / No, next WO certain; P-twin warning on saw,
+  stores and both list windows. attack5-window: 78 of 80 pass (the two Lows above).
+- **Full suite (234 files) at 319a6cb:** 4,854 pass / 35 fail = the 31 failing at the start (8dc7968) + attack5's 2 pending Lows + t17 A'1/A'2
+  (timing — alone it shows only the usual 8). attack3-pgrace / attack4-jsvssql skip without a throwaway Postgres, as before.
+- **Known risks left as they are (Garry to decide):** an inactive project is not looked at for its Cienapps spellings (a WO of that customer
+  gets a new project); when the browser blocks storage the sign-in comes back so Settings → Storage can't be reached (the plain message still
+  shows); the lsReset race (a list reload resetting while the window works out the project) is not handled beyond the existing reload.
