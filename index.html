@@ -83,7 +83,6 @@ button,input,select{font-family:inherit;cursor:pointer}
 /*dates*/.dm-due{cursor:pointer}.dm-due:hover .due-badge{outline:2px solid #1a56db}
 .dm-chip{display:inline-block;margin:2px 0 0 4px;font-size:10px;font-weight:700;border-radius:4px;padding:1px 5px;background:#eef3fb;color:#14418f;border:1px solid #b9cdec;cursor:pointer;white-space:nowrap;font-family:inherit}
 .dm-chip.amber{background:#fff4d6;color:#7a4a00;border-color:#e0a43a}.dm-chip.red{background:#fde8e8;color:#b42318;border-color:#e57368}
-.dchip-due{display:inline-block;border:none;background:none;padding:0;margin-top:2px;font-size:11px;color:var(--t2);text-decoration:underline dotted;cursor:pointer;font-family:inherit}
 .dm-moved{margin-top:2px;font-size:10px;font-weight:700;color:#b45309}
 /*v-deliv D1/DD1: one due-date tag everywhere — "Due Mon 16 Nov · Wk 47". Red = before today, amber = this week, grey = later*/
 .due-tags{display:inline-flex;flex-wrap:wrap;gap:4px;align-items:center;max-width:100%;vertical-align:middle}
@@ -256,17 +255,24 @@ details.lti-other{margin-bottom:14px}details.lti-other>summary{cursor:pointer;fo
 .dgrp-h:hover{color:#1a56db}
 .dgrp-h .gcnt{font-weight:400;color:var(--t3);text-transform:none;letter-spacing:0;font-size:10px}
 .dpool-chips{display:flex;flex-wrap:wrap;gap:6px}
-.dchip{width:216px;background:#fff;border:1px solid #cfd6df;border-radius:7px;padding:6px 8px;font-size:11px;cursor:grab;user-select:none;box-shadow:0 1px 2px rgba(15,25,40,.06)}
+.dchip{width:216px;box-sizing:border-box;min-width:0;overflow:hidden;background:#fff;border:1px solid #cfd6df;border-radius:7px;padding:6px 8px;font-size:11px;cursor:grab;user-select:none;box-shadow:0 1px 2px rgba(15,25,40,.06)}
 .dcell .dchip{width:100%;margin:0 0 4px;box-shadow:none}
-.dchip-top{display:flex;align-items:center;gap:6px}
-.dchip-top b{font-family:monospace;font-size:12px;font-weight:700;color:#14335c;white-space:nowrap}
+.dchip-top{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0}
+.dchip-top b{font-family:monospace;font-size:12px;font-weight:700;color:#14335c;min-width:0;flex:1 1 80px;overflow-wrap:anywhere}
+/*v-deliv D4: card rows — WO + buttons · Floor / Unit · title · dates · chips. Nothing may spill out of the card.*/
+.dchip-fu{display:flex;flex-wrap:wrap;gap:4px;margin-top:2px;min-width:0}
+.dchip-fu .dfu{display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;box-sizing:border-box}
+.dchip-fu .fu-fl+.fu-un{margin-left:0}
+.dchip-dates{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:4px;min-width:0}
+.dchip-dates .dm-chip,.dchip-wkb .dm-chip{margin:0}
+.dchip .dm-chip,.dchip .rdy-tag{max-width:100%;overflow:hidden;text-overflow:ellipsis;box-sizing:border-box}
+.dgrp-f{font-size:12px;font-weight:700;color:#0d6e46;margin:6px 0 2px;padding-top:4px;border-top:1px solid #e3e8ef}
 .dfu{font-size:10px;font-weight:700;background:#eef2f7;border:1px solid #d8dfe8;border-radius:4px;padding:1px 5px;color:#3b4c63;white-space:nowrap}
 .fu-fl+.fu-un{margin-left:4px}
 .fu-badge{font-family:monospace;font-size:11px;font-weight:600;background:#f2f5f9;border:1px solid #e0e5ec;border-radius:4px;padding:1px 6px;color:var(--t2);white-space:nowrap}
 .dsrch{width:100%;max-width:420px;padding:7px 11px;border:1px solid var(--b2);border-radius:6px;font-size:12px;margin-bottom:8px}
 .dsrch:focus{border-color:#7ba7e0}
-.dcv{margin-left:auto;font-weight:600;color:#0d6e46;font-size:11px;white-space:nowrap}
-.dchip-btns{display:flex;gap:1px}
+.dchip-btns{display:flex;gap:1px;margin-left:auto;flex:0 0 auto}
 .dchip .dchip-btns button{background:none;border:none;cursor:pointer;font-size:15px;line-height:1;padding:7px 8px;min-width:32px;min-height:32px;border-radius:5px;color:#4a5568}
 .dchip .dchip-btns button:hover{background:#dde3ea;color:var(--text)}
 .dchip .dchk.on{color:#0b7e44;font-weight:700}
@@ -6926,11 +6932,12 @@ function dchip(o,showCust){
   const st=dStage(o);
   const rd=(!st&&!o.manual)?woReady(o.wo):null; // one colour per job until it's loaded — detail behind the ⓘ button
   return `<div class="dchip${rd?' rdy-'+rd.lvl:''}${st==='deliv'?' done':''}${st==='disp'?' dispd':''}${st==='load'?' loadd':''}${o.manual?' manual':''}${delSel.has(o.wo)?' sel':''}" draggable="true" data-dw="${escA(o.wo)}" title="Click to select · drag onto a day${o.manual?' · added manually':''}">
-    <div class="dchip-top"><b>${escA(o.wo)}</b>${fuHTML(o,'dfu')}<span class="dcv">€${Math.round(o.value||0).toLocaleString()}</span>
+    <div class="dchip-top"><b>${escA(o.wo)}</b>
       <span class="dchip-btns">${rd?`<button class="dinfo" data-dinfo="${escA(o.wo)}" title="${escA(RDY_LBL[rd.lvl]+(rd.why.length?' — '+rd.why.join(' · '):''))} — tap for detail">ⓘ</button>`:''}<button class="dchk${st?' on':''}" data-dd="${escA(o.wo)}" title="Status: ${dStageLbl[st]||'planned'} — tap to update (opens a menu)">${st==='deliv'?'✓':st==='disp'?'D':st==='load'?'L':'·'}</button><button data-dx="${escA(o.wo)}" title="${o.delDay?'Return to pool':(o.manual?'Delete this manual job':'Remove from delivery plan')}">×</button></span>
     </div>
+    ${fuF(o)||fuU(o)?`<div class="dchip-fu">${fuHTML(o,'dfu')}</div>`:''}
     <div class="dchip-t">${escA(o.title)||'—'}</div>
-    ${!o.manual?`<div><button class="dchip-due" data-duedlg="${escA(o.wo)}" title="Tap to change the due or delivery date">due ${o.dueDate?escA(fmt(o.dueDate))+' Wk'+wkNum(o.dueDate):'—'}${o.delivDate?' · deliv '+escA(fmt(o.delivDate)):''}</button>${(o.dueHist||[]).length?`<button class="dm-chip" data-duehist="${escA(o.wo)}" title="Due date changed — tap for the history">🔁 date ×${o.dueHist.length}</button>`:''}</div>`:''}${o.delRebook&&!o.delDay?`<div class="dm-moved" title="${escA('Taken off '+(o.delRebook.was||'').split('|').slice(0,2).join(' ')+' by '+(o.delRebook.by||'')+(o.delRebook.why?' — '+o.delRebook.why:''))}">${o.delRebook.nd?'🚚 not delivered Wk '+escA(o.delRebook.nd)+' — rebook':'📅 date moved — rebook'}</div>`:''}${o.dueMv&&o.dueMv.loaded&&dStage(o)&&dStage(o)!=='deliv'?`<div class="dm-moved" style="color:#b42318">📅 date moved after loading — check</div>`:''}
+    <div class="dchip-dates">${dueTag(o)}${!o.manual&&dateCanMove()?`<button class="dq-more" data-duedlg="${escA(o.wo)}" title="All date options — due and delivery dates, history">⋯</button>`:''}${o.manual?'':movedTag(o)}</div>${o.delRebook&&!o.delDay?`<div class="dm-moved" title="${escA('Taken off '+(o.delRebook.was||'').split('|').slice(0,2).join(' ')+' by '+(o.delRebook.by||'')+(o.delRebook.why?' — '+o.delRebook.why:''))}">${o.delRebook.nd?'🚚 not delivered Wk '+escA(o.delRebook.nd)+' — rebook':'📅 date moved — rebook'}</div>`:''}${o.dueMv&&o.dueMv.loaded&&dStage(o)&&dStage(o)!=='deliv'?`<div class="dm-moved" style="color:#b42318">📅 date moved after loading — check</div>`:''}
     ${st?`<div class="dstg s-${st}">${dStageLbl[st]}${dStageTime(o)?' '+dStageTime(o):''}${st==='deliv'&&o.delivBy?' — '+escA(o.delivBy):st==='load'&&o.ldBy?' — '+escA(o.ldBy):''}</div>`:''}
     ${isOnHold(o)?`<div class="rdy-tag" style="background:#fde8e8;color:#b42318" title="Step 12 in Cienapps — kept here because it's already loaded / on the road">⏸ ON HOLD in Cienapps</div>`:''}${rd?`<div class="rdy-tag">${RDY_LBL[rd.lvl]}</div>`:''}${(o.delMoves||[]).length?`<div class="dmoved" title="${escA(o.delMoves.map(m=>m.why+' — '+m.by).join(' | '))}">🚚 rebooked ×${o.delMoves.length}</div>`:''}
     ${!o.manual&&(afterDelivOn(o)||delivMvOn(o))?`<div>${delivFlagChips(o)}</div>`:''}${siteChip(o)}${showCust?`<div class="dchip-c">${escA(o.customer)}</div>`:''}
@@ -6964,8 +6971,9 @@ function renderDeliveries(app){
   gkeys.forEach(k=>grps[k].sort(later?((a,b)=>(a.customer||'').localeCompare(b.customer||'')||woCmp(a,b)):woCmp));
   const gName=k=>later?'Wk '+wkNum(k)+' — due from '+dShort(k):k;
   const gHTML=(k,lbl,list,sty)=>`<div class="dgrp">
-        <div class="dgrp-h" data-grp="${escA(k)}"${sty?` style="${sty}"`:''}>${escA(lbl)}<span class="gcnt">${list.length} job${list.length!==1?'s':''} · €${Math.round(list.reduce((a,o)=>a+(+o.value||0),0)).toLocaleString()} · click to select all</span></div>
+        <div class="dgrp-h" data-grp="${escA(k)}"${sty?` style="${sty}"`:''}>${escA(lbl)}<span class="gcnt">${list.length} job${list.length!==1?'s':''} · click to select all</span></div>
         <div class="dpool-chips">${list.map(o=>dchip(o,later||k==='__rebook')).join('')}</div>
+        <div class="dgrp-f">${list.length} job${list.length!==1?'s':''} · €${Math.round(list.reduce((a,o)=>a+(+o.value||0),0)).toLocaleString()}</div>
       </div>`;
   const nOrd=[...delSel].filter(w=>DB.orders.some(o=>o.wo===w)).length;
   const store=inStoreJobs(),storeOld=store.filter(x=>x.n!=null&&x.n>14).length;
@@ -9054,7 +9062,7 @@ function delivFlagChips(o){return (afterDelivOn(o)?`<span class="dm-chip red" ti
   quick date picker (data-dqb → the hidden data-dq input); everyone else sees the same tag, not tappable. Manual jobs have no date. */
 function dTagTxt(iso){iso=String(iso||'').slice(0,10);const d=new Date(iso+'T12:00:00');if(!iso||isNaN(d))return String(iso||'');
   const y=d.getFullYear()!==new Date(todayLocal()+'T12:00:00').getFullYear();
-  return d.toLocaleDateString('en-IE',{weekday:'short',day:'numeric',month:'short'})+(y?' '+d.getFullYear():'')+' · Wk '+wkNum(iso);}
+  return d.toLocaleDateString('en-IE',{weekday:'short',day:'numeric',month:'short'}).replace(/,/g,'')+(y?' '+d.getFullYear():'')+' · Wk '+wkNum(iso);}
 function dTagCls(iso){iso=String(iso||'').slice(0,10);if(!iso)return'grey';return iso<todayLocal()?'red':wkOf(iso)===thisWk()?'amber':'grey';}
 function dueTag(o,opts){
   opts=opts||{};if(!o)return'';
