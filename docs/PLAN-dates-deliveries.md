@@ -247,3 +247,16 @@ Phase 2: 17 column L · 18 settings numbers · 19 delivery date in dialog/engine
 - Full suite (201 files): **3,582 pass / 28 fail**. New vs the last run: stage3/flow-attack1-switchoff "switch off: saved settings
   have the same keys" — the saved settings now include `appRel` (the guard-v2 marker, wanted on every save); the lists switch-off
   behaviour itself is unchanged. Everything else is the accepted list.
+
+### 10 Nov 2026 — end of run: Manager final verdict on Job A = **GO** (code complete)
+- Tester round 3 (3f5e835): switch-off settings check allows `appRel`; listDelOnly + date settings survive save/reload; guard v2 works
+  app-side (refused save kept on the device, 10-Nov screen refused once a new screen has saved, two new screens still merge).
+  One Medium — a refused 10-Nov screen says "will retry" — on ACCEPTED-FAILURES (ca3385f), go-live day: close every screen.
+- **Manager: GO.** Conditions are for go-live day and Garry only: 10 Nov release live and settled first; Garry signs off the ASSUMED
+  answers (Key questions 1–17 + phase 2 list) and the 4 new ACCEPTED-FAILURES rows; yes/no to guard v2 (try on a Supabase TEST project
+  first); go live Mon–Wed; follow the go-live checklist above.
+- Screenshots (fake database) sent to Garry: week tabs, next week, In store, board chips, one-job and group date dialogs, Dates to
+  change in Cienapps, phone 360 px.
+- **Next run: Job B** — cut feature/project-details-v2 work from feature/dates-deliveries (rebase/merge the parked
+  feature/project-details 9 Nov work onto it), write docs/PLAN-project-details.md B5–B11 (send Garry the B11 date-tools wireframe
+  before building them), build B1–B4 fixes + B5–B10.
