@@ -110,7 +110,7 @@ Phase 2: `IMP_FIELDS` `delivDate` (aliases 'delivery date','install date','insta
 
 ### Data (inside `orders` / `settings` JSON — no SQL, no new column, no new top-level save key)
 Job: `dueDate` (only via `moveDates` for moves), `origDueDate` (set once), `dueKeep` (set to old Cienapps date on first planner move;
-deleted when new date equals it; never for `P-` planner WOs), **`dueHist`** `[{at,by,f:'due'|'deliv',from,to,why,note,src}]` (last 100),
+deleted when new date equals it; never for `P-` planner WOs), **`dueHist`** `[{at,by,f:'due'|'deliv',from,to,why,note,src}]` (last **30** — lowered from 100 after Tester round 1: save of 2,500 jobs 9.2 s → 2.5 s),
 **`dueMv`** `{at,by,from}` (week kept because cut), `plannedWeek`, **`delWk`** (Monday ISO, in `DEL_K`), **`delRebook`** `{at,by,why,was}` (in `DEL_K`),
 `delMoves` (+ A4 entry), **`storeAt`** (first reached step 7/8; never written by a boot migration).
 Phase 2: `delivDate`, `delivKeep`, `origDelivDate`, `siteOk {at,by,for}`, `dueHold {at,by,days}`.
@@ -126,7 +126,7 @@ the save path (3-way merge, save tags, save check, `exportBase`); Floor/Unit sep
   Monday as this Monday. Mitigation: newer-version bar + close and reopen every device on go-live day; a `delWk` with no `delDay` = not booked.
 - Two PCs: both move a date → later wins `dueDate`, both kept in `dueHist`. Book vs move → delivery fields merge as one unit; `delRebook` shows.
 - Year end / wk 53 / bank holidays to 2028 / summer time — new code uses local-date helpers.
-- 360 px phones — sideways-scrolling tabs and grid. Big group moves — preview capped at 50 rows. `dueHist` capped 100.
+- 360 px phones — sideways-scrolling tabs and grid. Big group moves — preview capped at 50 rows. `dueHist` capped 30.
 
 ## Acceptance checks
 Phase 1: (1) one move updates board, delivery card, saw, stores, list-due; history; origDueDate kept. (2) not-cut job's week follows;
