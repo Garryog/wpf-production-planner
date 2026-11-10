@@ -3674,9 +3674,14 @@ async function seqLoad(full){ // called by the list store's load and poll; probe
   const was=SEQP.st;
   try{
     if(was!=='ok'){await lsGet1('project_seq?select=id&limit=1');full=true;}
-    const q=(t,ord)=>{const s=!full&&LST.since[t];return t+'?select=*'+(s?'&updated_at=gt.'+encodeURIComponent(new Date(Date.parse(s)-30000).toISOString())+'&order=updated_at,'+ord:'');};
-    const[a,b,c]=await Promise.all([lsGet(q('project_seq','id')),lsGet(q('seq_requests','id')),lsGet(q('seq_pre','seq_id')+(full?'&order=seq_id.asc':''))]);
-    let n=lsPut('project_seq',a)+lsPut('seq_requests',b)+lsPut('seq_pre',c.map(r=>({...r,id:r.seq_id}))); // seq_pre is keyed by seq_id
+    // every query names its own order: seq_pre has no id column (lsGet's default order=id would be refused, 42703)
+    const q=(t,ord)=>{const s=!full&&LST.since[t];return t+'?select=*'+(s?'&updated_at=gt.'+encodeURIComponent(new Date(Date.parse(s)-30000).toISOString())+'&order=updated_at,'+ord:'&order='+ord+'.asc');};
+    // the three tables load independently: one failing never throws away the others' news
+    const got=await Promise.allSettled([lsGet(q('project_seq','id')),lsGet(q('seq_requests','id')),lsGet(q('seq_pre','seq_id'))]);
+    if(got[0].status==='rejected')throw got[0].reason; // the main table: missing / no reply is decided below
+    let n=lsPut('project_seq',got[0].value);
+    if(got[1].status==='fulfilled')n+=lsPut('seq_requests',got[1].value);else console.warn('Sequence requests: '+(got[1].reason&&got[1].reason.message));
+    if(got[2].status==='fulfilled')n+=lsPut('seq_pre',got[2].value.map(r=>({...r,id:r.seq_id})));else console.warn('Pre-production ticks: '+(got[2].reason&&got[2].reason.message)); // seq_pre is keyed by seq_id
     SEQP.st='ok';if(was!=='ok'){n++;seqShow();}return n;
   }catch(e){if(specMissing(e))SEQP.st='missing';else if(was!=='ok'){SEQP.st='net';SEQP.retry=Date.now()+60000;}seqShow();return 0;}
 }
