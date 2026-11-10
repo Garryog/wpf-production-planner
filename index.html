@@ -3927,7 +3927,12 @@ function seqWoRow(wo){return seqMaps().rows.get(seqWoK(wo))||null;}
 function seqRowDate(r,o){o=o===undefined?seqJob(r):o;return o?(o.delivDate||o.dueDate||''):(r&&r.req_date||'');}
 // Fixed window (Key questions 3 / 4): the build OR delivery date (or the date it's being moved to) within seqFixedDays() calendar days, overdue included
 function seqFixedAt(o,to){return !!o&&dmFixedAt(o,[to],seqFixedDays());}
-function seqKind(t){const s=String(t||'').toUpperCase();return /QUARTZ/.test(s)?'quartz':/UTILITY/.test(s)?'utility':/\b(ROBES?|WARDROBES?|BED\s*\d*)\b/.test(s)?'robes':'kitchen';}
+/* The kind of a job / line from its title. (Round 2) KITCHEN wins: "3 BED SEMI - KITCHEN", "KITCHEN & UTILITY" are kitchens.
+   "n BED" is the size of a house, not a wardrobe: robes = ROBE(S) / WARDROBE(S), or "BED n" (bedroom n) not after a number.
+   ISLAND (without KITCHEN) = 'other', so an island line never takes the kitchen's place. seqKinds = every kind a title names
+   (the P-number duplicate check: a "KITCHEN & UTILITY" job blocks a kitchen AND a utility P-number). */
+function seqKind(t){const k=seqKinds(t);return k.has('quartz')?'quartz':k.has('kitchen')?'kitchen':k.has('other')?'other':k.has('utility')?'utility':k.has('robes')?'robes':'kitchen';function seqKinds(t){const s=String(t||'').toUpperCase(),w=s.split(/[^A-Z0-9]+/).filter(Boolean),k=new Set();if(/QUARTZ/.test(s))k.add('quartz');if(/KITCHEN/.test(s))k.add('kitchen');if(/UTILITY/.test(s))k.add('utility');if(/\b(ROBES?|WARDROBES?)\b/.test(s)||w.some((x,i)=>/^BED(ROOM)?$/.test(x)&&/^[0-9]+$/.test(w[i+1]||'')&&!/^[0-9]+$/.test(w[i-1]||'')))k.add('robes');if(/\bISLAND\b/.test(s))k.add('other');return k;}}
+function seqKinds(t){const k=new Set(),s=String(t||'').toUpperCase();['quartz','kitchen','utility','robes','other'].forEach(x=>{if(x===seqKind(s)||(x==='utility'&&/UTILITY/.test(s))||(x==='kitchen'&&/KITCHEN/.test(s)))k.add(x);});return k;}
 // Progress (look only): list ready · processed · cut · assembled · in store · on a van · delivered — from the planner's own fields
 function seqProgress(o,r){if(!o)return[];const n=stepNo(o.step),dl=dStage(o)==='deliv'||!!o.delDone||isShipped(o),pre=r&&LST.sp.get(r.id);
   let lst=false;try{lst=lists().some(l=>(l.wos||[]).includes(o.wo))||phHas(o);}catch(e){}
@@ -4835,24 +4840,40 @@ function lsProjForCust(c){return projForCust(c,lsProjects());}
 /* b0key:start */
 /* B0 — the matching key (Job B part 3). ONE rule for "the same house" everywhere in the planner: same project + same floor +
    same unit. keyMatch answers 'same' (act on its own), 'different' (leave alone) or 'unsure' (a person taps once) — never a
-   guess. The database has the same normalising in SQL (seq_key_txt / seq_key_code / seq_floor_key / seq_unit_key /
-   seq_house_key / seq_line_key): keyHouseStr and keyLineStr must give the SAME strings (tests/seq/b0-pairs.json checks both).
-   woKey / woNorm are separate: they identify a work order; this identifies a house. Pure (only keyProj/jobKey read the app). */
-const KEY_ZW=/[­᠎​-‏⁠﻿]/g;
-// NFKC → drop zero-width → every run of non A-Z/0-9 → one space (BEFORE upper-casing, so JS and Postgres agree) → trim → upper
-function keyTxt(s){return String(s==null?'':s).normalize('NFKC').replace(KEY_ZW,'').replace(/[^A-Za-z0-9]+/g,' ').trim().toUpperCase();}
-const keyZ=d=>d.replace(/^0+/,'')||'0'; // leading zeros off a digit run (a lone 0 stays)
-// letter runs and digit runs joined with "-": "T 09" = "T09" = "T9" → "T-9"
-function keyCode(t){return (keyTxt(t).match(/[A-Z]+|[0-9]+/g)||[]).map(x=>/^[0-9]/.test(x)?keyZ(x):x).join('-');}
+   guess. The database has the same normalising in SQL (seq_key_norm / seq_key_txt / seq_key_code / seq_floor_key /
+   seq_unit_key / seq_house_key / seq_line_key): keyHouseStr and keyLineStr must give the SAME strings (tests/seq/b0-pairs.json
+   checks both). woKey / woNorm are separate: they identify a work order; this identifies a house. Pure (only keyProj/jobKey
+   read the app).
+   Round 2 (Tester attack 3): accents → base letters (Á = A, ß = ss) from ONE fixed list (the database has the same list — no
+   unaccent needed); a minus in front of a level is kept ("-1" = basement ≠ 1); placeholders (TBC, N/A, TBA, a bare "Apt",
+   "Block", …) count as BLANK (so never 'same'); a dot between digits stays in a unit ("2.05"); "7 (Type B)" → 7; "A Block" =
+   "Block A"; superscript digits are kept apart ("7²" is not 72). */
+const KEY_ZW=/[­᠎​-‏⁠﻿]/g,KEY_SUP=/[²³¹⁰-⁹₀-₉]/g;
+const KEY_ACF='ÀÁÂÃÄÅàáâãäåÇçÈÉÊËèéêëÌÍÎÏìíîïÑñÒÓÔÕÖØòóôõöøÙÚÛÜùúûüÝýÿŸ',KEY_ACT='AAAAAAaaaaaaCcEEEEeeeeIIIIiiiiNnOOOOOOooooooUUUUuuuuYyyY';
+// superscripts apart → NFKC → zero-width out → accents to base letters (fixed list), ß → ss. Case and punctuation kept.
+function keyNorm(s){return String(s==null?'':s).replace(KEY_SUP,' $&').normalize('NFKC').replace(KEY_ZW,'').replace(/[^\x00-\x7F]/g,ch=>{const i=KEY_ACF.indexOf(ch);return i>=0?KEY_ACT[i]:ch==='ß'?'ss':ch;});}
+// every run of non A-Z/0-9 → one space (BEFORE upper-casing, so JS and Postgres agree) → trim → upper
+function keyTxt(s){return keyNorm(s).replace(/[^A-Za-z0-9]+/g,' ').trim().toUpperCase();}
+// the same, but a dot BETWEEN two digits is kept ("APT 2.05" → "APT 2.05"); used for units
+function keyTxtD(s){return keyNorm(s).replace(/#/g,' ').replace(/([0-9])\.(?=[0-9])/g,'$1#').replace(/[^A-Za-z0-9#]+/g,' ').trim().replace(/#/g,'.').toUpperCase();}
+const keyZ=d=>d.replace(/^0+(?=[0-9])/,''); // leading zeros off a digit run (a lone 0 stays; "007.5" → "7.5")
+// letter runs and digit runs (a dotted number is one run) joined with "-": "T 09" = "T09" = "T9" → "T-9"
+function keyCodeOf(x){return (String(x).match(/[A-Z]+|[0-9]+(?:\.[0-9]+)?/g)||[]).map(t=>/^[0-9]/.test(t)?keyZ(t):t).join('-');}
+function keyCode(t){return keyCodeOf(keyTxt(t));}
 const KEY_ORD={FIRST:'1',SECOND:'2',THIRD:'3',FOURTH:'4',FIFTH:'5',SIXTH:'6',SEVENTH:'7',EIGHTH:'8',NINTH:'9',TENTH:'10'};
+const KEY_NONE=/^(TBC|TBA|TBD|TO BE CONFIRMED|N A|NA|NONE|NIL|UNKNOWN)$/; // a placeholder is a blank, never a value
 // a floor → {k, t, lvl}: t 'lvl' (a level number), 'code' (a block / code), 'amb' ("G", "L1", "F1": a level OR a block — .lvl
-// is the level it could be), '' blank. BLOCK x is always a code.
+// is the level it could be), '' blank. BLOCK x / x BLOCK is always a code.
 function keyFloor(s){
-  let x=keyTxt(s),m;if(!x)return{k:'',t:''};
-  if((m=/^(BLOCK|BLK) (.+)$/.exec(x)||/^(BLOCK|BLK)([0-9].*)$/.exec(x)))return{k:keyCode(m[2]),t:'code'};
+  const lv=n=>({k:n,t:'lvl',lvl:n}),B={k:'',t:''};
+  let m=/^\s*(?:(?:LEVEL|FLOOR|LVL|FLR|STOREY)\s*)?[-−–]\s*([0-9]+)\s*$/i.exec(keyNorm(s)); // "-1", "Level -1": below ground
+  if(m){const n=keyZ(m[1]);return lv(n==='0'?'0':'-'+n);}
+  let x=keyTxt(s);if(!x||KEY_NONE.test(x)||/^(BLOCK|BLK|FLOOR|FLR|LEVEL|LVL|STOREY)$/.test(x))return B;
+  if((m=/^(BLOCK|BLK) (.+)$/.exec(x)||/^(BLOCK|BLK)([0-9].*)$/.exec(x)))return KEY_NONE.test(m[2])?B:{k:keyCode(m[2]),t:'code'};
+  if((m=/^(.+) (BLOCK|BLK)$/.exec(x)))return KEY_NONE.test(m[1])?B:{k:keyCode(m[1]),t:'code'}; // "A Block" = "Block A"
   for(let i=0;i<5;i++){const y=(m=/^(FLOOR|FLR|LEVEL|LVL|STOREY) (.+)$/.exec(x)||/^(FLOOR|FLR|LEVEL|LVL|STOREY)([0-9].*)$/.exec(x))?m[2]
     :(m=/^(.+) (FLOOR|FLR|LEVEL|LVL|STOREY)$/.exec(x))?m[1]:x;if(y===x)break;x=y;}
-  const lv=n=>({k:n,t:'lvl',lvl:n});
+  if(KEY_NONE.test(x))return B;
   if(/^(G ?F|GRD|GND|GRND|GROUND|0+)$/.test(x))return lv('0');
   if(/^[0-9]+$/.test(x))return lv(keyZ(x));
   if((m=/^([0-9]+) ?(ST|ND|RD|TH)$/.exec(x)))return lv(keyZ(m[1]));
@@ -4862,29 +4883,36 @@ function keyFloor(s){
   if((m=/^(L|F|FL) ?([0-9]+)$/.exec(x)))return{k:keyCode(x),t:'amb',lvl:keyZ(m[2])};
   return{k:keyCode(x),t:'code'};
 }
-// the floor part of a house / line key: a level is "#n"; a code (or an ambiguous "G" / "L1") is its code
+// the floor part of a house / line key: a level is "#n" ("#-1" below ground); a code (or an ambiguous "G" / "L1") is its code
 function keyFloorStr(f){return !f||!f.t?'':f.t==='lvl'?'#'+f.k:f.k;}
 const KEY_UPRE=/^(APARTMENT|APT|UNIT|NUMBER|NO|NR|HOUSE|HSE|PLOT|POSITION|POS) (.+)$/,KEY_UPRE2=/^(APARTMENT|APT|UNIT|NUMBER|NO|NR|HOUSE|HSE|PLOT|POSITION|POS)([0-9].*)$/;
-// a unit → its key: "Apt 7" = "APT07" = "No. 7" = "Unit 007" = "7"; "7 a" = "7A"; "12-14" → "12-14"; '' blank
+const KEY_UBARE=/^(APARTMENT|APT|UNIT|NUMBER|NO|NR|HOUSE|HSE|PLOT|POSITION|POS)$/;
+// a unit → its key: "Apt 7" = "APT07" = "No. 7" = "Unit 007" = "7" = "7 (Type B)"; "7 a" = "7A"; "2.05" kept; "12-14" → "12-14";
+// '' blank (also TBC / N/A / a bare "Apt")
 function keyUnit(s){
-  let x=keyTxt(s),m;
+  let x=keyTxtD(keyNorm(s).replace(/\(\s*TYPE[^)]*\)/gi,' ')),m;
   for(let i=0;i<5;i++){m=KEY_UPRE.exec(x)||KEY_UPRE2.exec(x);if(!m)break;x=m[2];}
-  if((m=/^([0-9]+) ?([A-Z]{0,2})$/.exec(x)))return keyZ(m[1])+m[2];
-  return keyCode(x);
+  if(!x||KEY_NONE.test(x)||KEY_UBARE.test(x))return'';
+  if((m=/^([0-9]+)(\.[0-9]+)? ?([A-Z]{0,2})$/.exec(x)))return keyZ(m[1])+(m[2]||'')+m[3];
+  return keyCodeOf(x);
 }
+// two different unit keys that might still be one house: "12.0" / "12", "7-TYPE-B" / "7", "7-2-ND-FLOOR" / "7" (the extra part
+// has letters in it) → 'unsure'. "7-8" / "7" and "7A" / "7" stay different.
+function keyUBase(u){return String(u||'').replace(/^([0-9]+)\.0+(?=[A-Z]*$)/,'$1').replace(/-(?=.*[A-Z]).*$/,'');}
 // floor / unit read from a WO title ("BLOCK T09 APT 12") — only used when the job's own Floor / Unit is blank, and a match
-// that needs them is never certain. "HOUSE TYPE B" is a house type, not a unit.
+// that needs them is never certain. "HOUSE TYPE B" is a house type, not a unit; "NO 2 BED" / "UNIT 2 OF 4" are not units.
 function keyTitleBits(title){
-  const w=keyTxt(title).split(' ').filter(Boolean),out={floor:'',unit:''};
-  const unitTok=t=>/^[0-9]+[A-Z]{0,2}$/.test(t),lvlTok=t=>/^[0-9]+$/.test(t)||/^[0-9]+(ST|ND|RD|TH)$/.test(t)||!!KEY_ORD[t];
+  const w=keyTxtD(title).split(' ').filter(Boolean),out={floor:'',unit:''};
+  const unitTok=t=>/^[0-9]+(\.[0-9]+)?[A-Z]{0,2}$/.test(t),lvlTok=t=>/^[0-9]+$/.test(t)||/^[0-9]+(ST|ND|RD|TH)$/.test(t)||!!KEY_ORD[t];
+  const notU=t=>/^(BED|BEDS|BEDROOM|BEDROOMS|B|OF)$/.test(t||''); // "NO 2 BED …", "UNIT 2 OF 4"
   for(let i=0;i<w.length;i++){const t=w[i],n=w[i+1]||'';let m;
     if(t==='TYPE'){i++;continue;}
     if(!out.floor&&(t==='BLOCK'||t==='BLK')&&n&&n!=='TYPE'){out.floor='BLOCK '+n;i++;continue;}
     if(!out.floor&&/^(FLOOR|FLR|LEVEL|LVL)$/.test(t)&&lvlTok(n)){out.floor=n;i++;continue;}
     if(!out.floor&&lvlTok(t)&&/^(FLOOR|FLR)$/.test(n)&&!/^[0-9]+$/.test(t)){out.floor=t;i++;continue;}
     if(!out.floor&&(t==='GF'||((t==='GROUND'||t==='GRD')&&/^(FLOOR|FLR)$/.test(n)))){out.floor='0';if(t!=='GF')i++;continue;}
-    if(!out.unit&&/^(APARTMENT|APT|UNIT|HOUSE|HSE|NO|NR|PLOT)$/.test(t)&&unitTok(n)){out.unit=n;i++;continue;}
-    if(!out.unit&&(m=/^(APT|UNIT|NO|PLOT)([0-9]+[A-Z]?)$/.exec(t))){out.unit=m[2];continue;}
+    if(!out.unit&&/^(APARTMENT|APT|UNIT|HOUSE|HSE|NO|NR|PLOT)$/.test(t)&&unitTok(n)){if(!notU(w[i+2]))out.unit=n;i++;continue;}
+    if(!out.unit&&(m=/^(APT|UNIT|NO|PLOT)([0-9]+(\.[0-9]+)?[A-Z]?)$/.exec(t))){if(!notU(n))out.unit=m[2];continue;}
   }
   return out;
 }
@@ -4902,19 +4930,21 @@ function keyOf(p,floor,unit,title){
 function jobKey(o){return keyOf(keyProj(o),typeof fuF==='function'?fuF(o):o&&o.floor,typeof fuU==='function'?fuU(o):o&&o.unit,o&&o.title);}
 // a sequence / upload row (seqRowKey: the name rowKey is the saw/stores line key) (never reads a title — the database can't either)
 function seqRowKey(r){return keyOf(r&&(r.project_id||r.pid),r&&r.floor,r&&r.unit,'');}
+const KEY_FW=/^(BLOCK|BLK|FLOOR|FLR|LEVEL|LVL|STOREY)$/,keyFTok=k=>k.split('-').filter(t=>t&&!KEY_FW.test(t)).sort().join('-');
 const keyFlr=(a,b)=>{ // two present floors → 'same' | 'different' | 'unsure'
   const ta=a.t,tb=b.t;
   if(ta==='lvl'&&tb==='lvl')return a.k===b.k?'same':'different';
   if(ta==='lvl'||tb==='lvl'){const o=ta==='lvl'?b:a,l=ta==='lvl'?a:b;return o.t==='code'?'unsure':o.lvl===l.k?'unsure':'different';}
   if(a.k===b.k)return'same';
-  return ta==='amb'&&tb==='amb'&&a.lvl===b.lvl?'unsure':'different';
+  if(ta==='amb'&&tb==='amb'&&a.lvl===b.lvl)return'unsure';
+  return ta==='code'&&tb==='code'&&keyFTok(a.k)===keyFTok(b.k)?'unsure':'different'; // "Floor 1 Block A" / "Block A Floor 1"
 };
 // same / different / unsure, and why. Different beats unsure. A blank, an ambiguous floor or a value read from a title is
 // never 'same'.
 function keyMatch(a,b){
   const un=[];
   if(a.p&&b.p&&a.p!==b.p)return{r:'different',why:'another project'};
-  if(a.u&&b.u&&a.u!==b.u)return{r:'different',why:'unit '+a.u+' ≠ '+b.u};
+  if(a.u&&b.u&&a.u!==b.u){if(keyUBase(a.u)!==keyUBase(b.u))return{r:'different',why:'unit '+a.u+' ≠ '+b.u};un.push('unit '+a.u+' or '+b.u);}
   if(a.f.t&&b.f.t){const c=keyFlr(a.f,b.f);if(c==='different')return{r:'different',why:'floor '+a.f.k+' ≠ '+b.f.k};if(c==='unsure')un.push('floor '+a.f.k+' or '+b.f.k+' — level or block?');}
   if(!a.p||!b.p)un.push('project not known');
   if(!a.f.t||!b.f.t)un.push('floor blank');
@@ -4930,13 +4960,13 @@ function keyLineStr(f,u,p,n){const pp=keyTxt(p),nn=keyTxt(n);return !pp&&!nn?nul
    keyJobs() works every job's key out once — the cutting-list window builds it once per redraw and passes it in (km = the
    list, or a function giving it: only called when a search is made).
    st: 'noproj' | 'blank' (no search) | 'none' | 'one' (exactly one same, nothing unsure) | 'pick'. Unsure jobs are listed
-   only when their unit is the same (a blank unit on a job is no reason to offer it). */
+   only when their unit is the same (or might be: keyUBase) — a blank unit on a job is no reason to offer it. */
 function keyJobs(){return DB.orders.filter(o=>o&&o.wo&&!isShipped(o)&&!o.delDone&&!o.delDelivAt).map(o=>({o,k:jobKey(o)}));}
 function keyFind(pid,floor,unit,km){
   const t=keyOf(pid,floor,unit,''),same=[],unsure=[];
   if(!t.p)return{st:'noproj',same,unsure};
   if(!t.f.t||!t.u)return{st:'blank',same,unsure};
-  (typeof km==='function'?km():km||keyJobs()).forEach(({o,k})=>{const m=keyMatch(t,k);if(m.r==='same')same.push({o,why:m.why});else if(m.r==='unsure'&&k.u&&k.u===t.u)unsure.push({o,why:m.why});});
+  (typeof km==='function'?km():km||keyJobs()).forEach(({o,k})=>{const m=keyMatch(t,k);if(m.r==='same')same.push({o,why:m.why});else if(m.r==='unsure'&&k.u&&keyUBase(k.u)===keyUBase(t.u))unsure.push({o,why:m.why});});
   const c=(a,b)=>woCmp(a.o,b.o);same.sort(c);unsure.sort(c);
   return{st:same.length===1&&!unsure.length?'one':same.length||unsure.length?'pick':'none',same,unsure};
 }
@@ -5455,12 +5485,13 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     const onlyBuy=!chk.length&&rows.some(r=>r.k==='part'&&(r.buy||tbcHold(r)));
     const e=manualListValidate({...d,rows:onlyBuy?[{k:'saw',item:'x',qty:1,L:1,W:1}]:chk,noCut:onlyBuy?false:d.noCut,noFit:onlyBuy?false:d.noFit,wo:st.tpl?'(template)':d.wo});if(e)return err(e.replace(/saw row/g,'saw row (with a length or width)').replace(/fittings row/g,'Stores row (no length or width)'));
     if(st.newWO){ // (L4a) looked up again on Save: another PC or an import may have brought the job meanwhile — never a second job for one house
-      const pf=g('me-pfloor').value,pu=g('me-punit').value,kind=seqKind(g('me-ptitle').value);
+      const pf=g('me-pfloor').value,pu=g('me-punit').value,kind=seqKind(g('me-ptitle').value),kinds=seqKinds(g('me-ptitle').value);if(!kinds.size)kinds.add('kitchen');
+      const sameKind=o=>{const k=seqKinds(o.title);if(!k.size)k.add('kitchen');return [...k].some(x=>kinds.has(x));}; // "KITCHEN & UTILITY" counts as both
       if(st.pid&&keyTxt(pf)&&keyTxt(pu)){const r=keyFind(st.pid,pf,pu,keyJobs()),fu='Floor '+String(pf).trim()+' · Unit '+String(pu).trim();
-        const dup=r.same.find(x=>seqKind(x.o.title)===kind);
+        const dup=r.same.find(x=>sameKind(x.o));
         if(dup){const w0=dup.o.wo,isP=/^P-\d+$/.test(w0),m=isP?w0+' already exists for '+fu+' ('+kind+') — use it':w0+' from Cienapps is in the planner for '+fu+' ('+kind+') — use it';
           if(confirm(m+'.\n\nNo second job is made for one house.\n\nOK = use '+w0+' for this list\nCancel = go back')){st.newWO=false;jbChoose(w0,'picked');}else err('Not saved — '+m+'.');return;}
-        const un=r.unsure.filter(x=>seqKind(x.o.title)===kind);
+        const un=r.unsure.filter(x=>sameKind(x.o));
         if(un.length&&!confirm('These planner jobs might be the same house ('+fu+'):\n'+un.slice(0,6).map(x=>'• '+x.o.wo+' — '+[fuLbl(x.o),x.o.title].filter(Boolean).join(' · ')+' ('+x.why+')').join('\n')+'\n\nMake a new P-number anyway?\n\nOK = make it\nCancel = go back (pick the job instead)'))return;}
     }
     if(ex&&ex.tpl){const w=prompt('What changed in this template? (optional — shown in its History; it becomes Rev '+((+ex.rev||1)+1)+')','');if(w===null)return;d.why=w.trim()?w.trim():'Template edited';}

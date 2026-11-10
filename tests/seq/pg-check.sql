@@ -8,6 +8,13 @@
 -- planner's own functions are checked against (tests/seq/b0-key.test.js) — and a pair that is not "same" never shares a key.
 \set b0fx `cat tests/seq/b0-pairs.json`
 create temp table b0fx as select :'b0fx'::jsonb as j;
+\set b0fz `cat tests/seq/b0-fuzz.json`
+create temp table b0fz as select :'b0fz'::jsonb as j;
+do $$ declare n int; t int; begin
+ select count(*) filter (where seq_floor_key(z->>'s')<>z->>'f' or seq_unit_key(z->>'s')<>z->>'u' or seq_key_txt(z->>'s')<>z->>'t' or seq_key_code(z->>'s')<>z->>'c'), count(*)
+   into n, t from jsonb_array_elements((select j from b0fz)) z;
+ if t<1000 or n>0 then raise exception 'FAIL B0 fuzz: % of % strings differ from the planner',n,t; end if;
+end $$;
 do $$ declare fx jsonb := (select j from b0fx); c jsonb; ha text; hb text; n int := 0;
 begin
  for c in select * from jsonb_array_elements(fx->'pairs') loop
@@ -20,14 +27,15 @@ begin
    end if;
    n := n+1;
  end loop;
- if n<60 then raise exception 'FAIL B0 fixture has only % pairs',n; end if;
+ if n<82 then raise exception 'FAIL B0 fixture has only % pairs',n; end if;
  for c in select * from jsonb_array_elements(fx->'lines') loop
    if seq_line_key(c->>'f',c->>'u',c->>'p',c->>'name') is distinct from (c->>'lk') then
      raise exception 'FAIL B0 line % (%) SQL % — fixture %',c->>'n',c->>'what',seq_line_key(c->>'f',c->>'u',c->>'p',c->>'name'),c->>'lk'; end if;
  end loop;
  -- the parts on their own
  if seq_key_txt(' ｔ'||chr(8203)||'09 -- apt.'||chr(160)||'7 ')<>'T09 APT 7' then raise exception 'FAIL seq_key_txt'; end if;
- if seq_key_txt('Ré-sidence ß')<>'R SIDENCE' then raise exception 'FAIL seq_key_txt accents %',seq_key_txt('Ré-sidence ß'); end if;
+ if seq_key_txt('Ré-sidence ß Ωx')<>'RE SIDENCE SS X' then raise exception 'FAIL seq_key_txt accents %',seq_key_txt('Ré-sidence ß Ωx'); end if;
+ if seq_key_txtd('Apt. 2.05 #3 1.2.3')<>'APT 2.05 3 1.2.3' then raise exception 'FAIL seq_key_txtd %',seq_key_txtd('Apt. 2.05 #3 1.2.3'); end if;
  if seq_key_code('T 09')<>'T-9' or seq_key_code('0')<>'0' or seq_key_code('A00')<>'A-0' or seq_key_code(' - ')<>'' or seq_key_code(null)<>'' then raise exception 'FAIL seq_key_code'; end if;
  if seq_unit_key('NORTH 7')<>'NORTH-7' or seq_unit_key('Unit No 007')<>'7' or seq_unit_key(null)<>'' then raise exception 'FAIL seq_unit_key'; end if;
  if seq_floor_key(null)<>'' or seq_floor_key('third floor')<>'#3' or seq_floor_key('000')<>'#0' then raise exception 'FAIL seq_floor_key'; end if;
@@ -226,8 +234,9 @@ begin
    {"id":"QU5","floor":"0","unit":"5","product":"K1","name":"HOUSE TYPE A","kind":"kitchen","line_no":5},
    {"id":"QU6","floor":"T09","unit":"12","product":"W2","name":"BED 2","kind":"robes","line_no":6},
    {"id":"QU7","floor":"T09","unit":"12","product":"W2","name":"BED 2","kind":"robes","line_no":7}]'::jsonb,null,'John Burke');
- if j->'added'<>'["QU2","QU4","QU5","QU6","QU7"]'::jsonb then raise exception 'FAIL claim added %',j; end if;
- if j->'skipped'->0->>'existing_id'<>'QC1' or j->'skipped'->0->>'by'<>'house' or j->'skipped'->1->>'existing_id'<>'QC3' or jsonb_array_length(j->'skipped')<>2
+ -- (round 2) the ISLAND line never claims a kitchen Start row, so the EXTRA kitchen line takes QC3
+ if j->'added'<>'["QU2","QU3","QU5","QU6","QU7"]'::jsonb then raise exception 'FAIL claim added %',j; end if;
+ if j->'skipped'->0->>'existing_id'<>'QC1' or j->'skipped'->0->>'by'<>'house' or j->'skipped'->1->>'existing_id'<>'QC3' or j->'skipped'->1->>'line_no'<>'4' or jsonb_array_length(j->'skipped')<>2
    then raise exception 'FAIL claim skipped %',j->'skipped'; end if;
  -- the same file again: 0 added (the line rows claim by line key first, the Start rows by house)
  j := seq_insert('QP3','[{"id":"QV1","floor":"T09","unit":"12","product":"K8","name":"HOUSE TYPE B","kind":"kitchen","line_no":1},
@@ -242,6 +251,17 @@ begin
  -- a line WITH a WO never claims a Start row by house (it is its own work order)
  j := seq_insert('QP3','[{"id":"QW1","wo":"QWO-9","floor":"G","unit":"5","product":"K1","name":"HOUSE TYPE A","kind":"kitchen"}]'::jsonb,null,'Import');
  if j->'added'<>'["QW1"]'::jsonb then raise exception 'FAIL WO line claimed by house %',j; end if;
+ -- (round 2) a line with no product / name: the same file twice adds 0; an island line claims an island Start row
+ j := seq_insert('QP3','[{"id":"QN1","floor":"T09","unit":"50","kind":"kitchen","descr":"KITCHEN","line_no":1}]'::jsonb,null,'x');
+ j := seq_insert('QP3','[{"id":"QN2","floor":"T09","unit":"50","kind":"kitchen","descr":"KITCHEN","line_no":1}]'::jsonb,null,'x');
+ if jsonb_array_length(j->'added')<>0 then raise exception 'FAIL no-name line added twice %',j; end if;
+ j := seq_insert('QP3','[{"id":"QI0","wo":"QWO-I","floor":"T09","unit":"60","descr":"HOUSE TYPE B ISLAND","kind":"kitchen","src":"start","match_how":"start"}]'::jsonb,null,'x');
+ j := seq_insert('QP3','[{"id":"QI1","floor":"T09","unit":"60","product":"K9","name":"HOUSE TYPE B ISLAND","kind":"kitchen","line_no":1}]'::jsonb,null,'x');
+ if jsonb_array_length(j->'added')<>0 or j->'skipped'->0->>'existing_id'<>'QI0' then raise exception 'FAIL island claims island %',j; end if;
+ -- basement "-1" is not floor 1; a "TBC" unit is never claimed
+ j := seq_insert('QP3','[{"id":"QB0","wo":"QWO-B","floor":"-1","unit":"7","descr":"HOUSE","kind":"kitchen","src":"start","match_how":"start"}]'::jsonb,null,'x');
+ j := seq_insert('QP3','[{"id":"QB1","floor":"1","unit":"7","product":"K1","name":"HOUSE","kind":"kitchen"},{"id":"QB2","floor":"Basement","unit":"Apt 7","product":"K1","name":"HOUSE","kind":"kitchen"}]'::jsonb,null,'x');
+ if j->'added'<>'["QB1"]'::jsonb or j->'skipped'->0->>'existing_id'<>'QB0' then raise exception 'FAIL basement claim %',j; end if;
  -- an old key (an earlier run of the block) is put right by any write
  update project_seq set line_key='OLD', house_key='OLD', updated_by='x' where id='QU2';
  select line_key, house_key into r from project_seq where id='QU2'; if r.line_key<>'T-9|12|K2|HOUSE TYPE B UTILITY' or r.house_key<>'T-9|12' then raise exception 'FAIL keys not recomputed %',row_to_json(r); end if;

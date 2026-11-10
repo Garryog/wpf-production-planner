@@ -112,12 +112,11 @@ const RPC = {
       const k = lineKey(e.floor, e.unit, e.product, e.name), w = e.wo == null ? null : ((txt(e.wo) || '').toUpperCase() || null);
       const hk = houseKey(e.floor, e.unit), kd = e.kind || 'kitchen';
       let ex = null, how = 'line';
-      if (k != null) { // the claim rule: the first unclaimed live row with this line key; else (no WO) the first unclaimed row with
-        // no line key in the same house and of the same kind ("Start the sequence" rows)
-        const free = x => !added.includes(x.id) && !claimed.includes(x.id);
-        ex = liveOf(d, a.p_project).find(x => x.line_key === k && free(x)) || null;
-        if (!ex && w == null && hk != null) { how = 'house'; ex = liveOf(d, a.p_project).find(x => x.line_key == null && x.house_key === hk && x.kind === kd && free(x)) || null; }
-      }
+      // the claim rule: the first unclaimed live row with this line key; else (no WO) the first unclaimed row with no line key in
+      // the same house, of the same kind, an island only an island ("Start the sequence" rows, or a line with no product / name)
+      const free = x => !added.includes(x.id) && !claimed.includes(x.id), isl = (...v) => / ISLAND /.test(' ' + B0.keyTxt(v.filter(z => z != null).join(' ')) + ' ');
+      if (k != null) ex = liveOf(d, a.p_project).find(x => x.line_key === k && free(x)) || null;
+      if (!ex && w == null && hk != null) { how = 'house'; ex = liveOf(d, a.p_project).find(x => x.line_key == null && x.house_key === hk && x.kind === kd && isl(x.descr, x.name, x.product) === isl(e.name, e.product, e.descr) && free(x)) || null; }
       if (ex) { claimed.push(ex.id); skipped.push({ line_no: e.line_no == null ? null : e.line_no, line_key: k, existing_id: ex.id, why: 'already in the sequence', by: how }); continue; }
       ex = w != null ? d.t.project_seq.find(x => x.wo != null && x.wo.toUpperCase() === w && live(x)) : null;
       if (ex) { skipped.push({ line_no: e.line_no == null ? null : e.line_no, wo: w, existing_id: ex.id, why: 'WO already in a sequence' }); continue; }
