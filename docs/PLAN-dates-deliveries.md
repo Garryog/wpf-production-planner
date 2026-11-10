@@ -261,6 +261,42 @@ Phase 2: 17 column L · 18 settings numbers · 19 delivery date in dialog/engine
   feature/project-details 9 Nov work onto it), write docs/PLAN-project-details.md B5–B11 (send Garry the B11 date-tools wireframe
   before building them), build B1–B4 fixes + B5–B10.
 
+### 10 Nov 2026 (evening) — Coder, Deliveries usability D1–D4 + DD1 (addendum steps 1–10)
+- **1** `7b71bd6` `dueTag(o,opts)` — one due tag "Due Fri 13 Nov · Wk 46" (year only if not this year): red = before today, amber = this
+  week, grey = later; delivery date as a second tag "🚚 Mon 16 Nov · Wk 47"; manual jobs "manual — no date" / "planned Wk N"; a button only
+  when `dateCanMove()`. `movedTag(o)` "🔁 moved N×" (one copy, used by `dmChips` and the cards). Van-move chip now "🚚 rebooked ×N".
+- **2** `0f62e48` card layout: WO + buttons · Floor / Unit badges (wrap) · title (2 lines) · due tag + ⋯ + moved N× · chips · customer;
+  `.dchip` box-sizing / min-width 0 / overflow hidden; € gone from cards and the group header; footer "N jobs · €total" under every group
+  (rebook and Later too). Grid Value/day row and week total unchanged.
+- **3** `f583917` Capacity Board row due cell = `dueTag(o,{late:true})` + ⋯ (full dialog); In store rows use the tag + moved N×.
+- **4** `b469487` D1 quick edit: tap the tag → hidden `<input type=date>` `showPicker()` (fallback focus) → `officeWho` → `pickReason` with
+  the engine's preview line → `moveDates(...).apply()` → toast "Due now Fri 20 Nov · Wk 47 — card is on the Wk 47 tab"; flagged / off a
+  van → `dateSummaryDlg`. Cancel resets the box. Same on the board row. Emptying a delivery date opens the full dialog.
+- **5** `a802be9` `wkMoveTo(o,W)` + `change.toWk` in `dmTarget` / `dmDelivTarget`; `dmRow` turns its err into "skipped".
+- **6** `70d210a` "→ Wk N" + "Move to week…" on pool cards (not booked / delivered / shipped), `wkPickDlg` (This week … +12, Monday date,
+  job count, "it is here now", "or a date…" → `dateDlg`), "📅 Move ticked to week… (N)" in the selection bar (old "Move dates (N)" kept).
+  `wkMoveDo` = one preview (only when flagged / skipped / off a van / kept on a van) + one reason.
+- **7** `2e89fb1` manual jobs: `planWk` (Monday) on the delx entry, `logEdit` with the reason, `delPoolWk` reads it (gone → This week).
+- **8** `6f22a09` drop on a week tab (PC; tabs outlined while dragging); Later → week picker with +4 chosen; past tab refused; van cell unchanged.
+- **9** `6433f26` sticky week bar `#del-wkbar` (◀ Prev · Wk 46 · Mon 9 Nov – Sat 14 Nov ● this week · Next ▶ · This week, 44 px buttons;
+  arrows only on a phone), top = measured `.tabs` height; tab labels "Wk N · d Mmm (n)"; `cur` (green ● + underline) on this week; Prev/Next
+  over earliest open past week … +12 with a temporary tab (the reset-to-This-week bug fixed); selected tab scrolled into view; "Close Wk N"
+  hidden when `closeWeekJobs(wk)` is empty; help line says how to change a date / move a week.
+- **10** `4197d7f` tests/dates/c10-deliv-usability (62 checks, acceptance 1–12, all pass) + old checks updated as intended changes:
+  c2-dialog card text ("due 4 Dec" → "Due Fri 4 Dec · Wk 49"), c5-weeks tab label ("Wk 51 (past)" → "Wk 51 · 14 Dec (past)") and Close
+  hidden on an empty This week, c8-deliv-engine delivery tag (`.dchip-due` "deliv 9 Dec" → `.dchip-dates` "🚚 Wed 9 Dec · Wk 50");
+  `eded1c4` stage3/flow-attack1-switchoff: board due tag folded back to the old due text (allowed difference, like the earlier date ones).
+- Tests: tests/dates all pass except the 4 accepted (attack1-oldversion ×3, attack3-guard "will retry"). Full suite (206 files incl. the
+  4 probes): **3,667 pass / 26 fail**, every one on ACCEPTED-FAILURES (t13 ×4, t14 ×3, t16 ×2, t17 ×8, t3, attack-poll P5, c4-queue A5,
+  sawstores ×2, attack1-oldversion ×3, attack3-guard). e7 redraw timing failed in the full run (machine shared with another coder) and
+  passes alone (598 ms); header-late-probe crashes on the import mapping screen (pre-existing, untouched area).
+- Deviations: the tag text starts with "Due" ("Due Fri 13 Nov · Wk 46") so it can't be mistaken for the 🚚 delivery tag. The plan's example
+  dates use 2025 weekdays (e.g. "Wed 12 Nov"); tests use the real 2026 calendar — the rule gives overdue Wed 4 Nov → Next week = **Wed 18 Nov**
+  (plan text said 19). The board's red rule is the old dueBadge one kept as is: red when the planned week's Friday is after the due date,
+  so a job due Wed in its own planned week is red on the board (amber/grey on the cards). PM role sees the tag but can't edit (as dateCanMove).
+- ASSUMED (built as written): plan decisions 1–8. Also: a week move that flags "moved out — don't cut early" (> earlyDays) shows the preview
+  first; a manual job's "planned Wk N" only shows for a future week; past-week tab drops are refused with a toast.
+
 ---
 ## Addendum, 10 Nov 2026 (evening run): Deliveries usability D1–D4 + DD1 (Garry 10 Nov, TOP PRIORITY before Thursday)
 Architect, unattended. Garry's words and items are in docs/ROADMAP.md ("Delivery page usability", "Due dates prominent everywhere",
