@@ -771,3 +771,15 @@ insTpl filter · 7 L9 (after D4 is merged) · 8 L10 · 9 full suite → Tester �
 - **Known risks left as they are (Garry to decide):** an inactive project is not looked at for its Cienapps spellings (a WO of that customer
   gets a new project); when the browser blocks storage the sign-in comes back so Settings → Storage can't be reached (the plain message still
   shows); the lsReset race (a list reload resetting while the window works out the project) is not handled beyond the existing reload.
+
+### 10 Nov 2026, 23:30 UTC — run started 19:03 stopped early: another run was working on Job A at the same time
+- This run (19:03) pushed D1–D4 + DD1 to feature/dates-deliveries at 20:44. A second run (session …6KJgyRq2ks8b8ntT) then attacked and fixed
+  it on that branch (pushed 22:59, Manager GO WITH CONDITIONS). This run's own Tester round 4 + fixes were NOT pushed onto it, to avoid a clash;
+  they are parked on **`parked/job-a-fixes-run-2026-11-10-1903`** (7 commits on top of acddf20). Next run: compare and carry over what the
+  other run did not cover — above all **77d1acd: the Production Manager's screen has no way into Deliveries** (High; Garry's buy-in goal),
+  bc814ba (hidden on-hold ticked jobs moved by "Move ticked to week"), 127e933 (week bar as drop target at 1366×768), da0f017 (one due-tag
+  colour rule + "⚠ built after due" chip), and tests/dates/attack4-usability.test.js from 3cdd65d (name clash: the other run also has an attack4 file).
+- Part 4 (L5–L12) above is complete apart from L9, Tester attack 5 fixed (e7323af, 1d17d08, 319a6cb), full suite 4,854 / 35 (31 as at start +
+  2 pending Lows + 2 timing). Not yet done: Manager verdict on Part 4, L9 (after the D4 cards are merged in), merge of feature/dates-deliveries.
+- Decisions for Garry from this batch: P-number twins (flag only vs "Keep one" moves the list), company words ignored when matching a customer
+  to a project (319a6cb), inactive project reuse, Production Manager gets the full Deliveries page.
