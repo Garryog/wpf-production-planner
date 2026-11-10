@@ -2309,6 +2309,9 @@ function ovrHolds(ov,cs){if(!ov)return false;const a=stepRank(cs),b=stepRank(ov)
    (pool, no van/day). Never untags; a job already tagged keeps its van/day; a hand-untag at this step or later is
    respected (same rule as the import); shipped jobs are left alone. On hold still hides it from the board (delHidden). */
 function delvAutoOk(o){const n=stepNo(o&&o.step);return !!o&&(n===7||n===8)&&!o.delv&&!o.shippedAt&&!ovrHolds(o.delvOverride,o.step);}
+// (10 Nov) the one-off catch-up skips old jobs: only those due on/after the cut-off (default 1 Nov 2026) — older 7/8 jobs are delivered, Cienapps just never moved them to Shipped
+const DELV_CATCHUP_FROM='2026-11-01';
+function delvCatchUpOk(o,from){return delvAutoOk(o)&&!!o.dueDate&&o.dueDate>=(from||DELV_CATCHUP_FROM);}
 function delvAuto(o,by,what){if(!delvAutoOk(o))return false;o.delv=true;delete o.delvOverride;
   logEdit(o,(what||'Auto-tagged for delivery — step changed to '+o.step)+' by '+(by||'—'),by);return true;}
 function delAll(){return[...DB.orders.filter(o=>o.delv&&!delHidden(o)),...(DB.delx||[])];}
@@ -7634,7 +7637,7 @@ function dchip(o,showCust){
 
 function renderDeliveries(app){
   const tagged=delAll();
-  const catchUp=DB.orders.filter(delvAutoOk); // go-live gap: jobs already at 7/8 before the auto-tag rule existed
+  const catchUp=DB.orders.filter(o=>delvCatchUpOk(o)); // go-live gap: jobs already at 7/8 before the auto-tag rule existed (due from the cut-off only)
   const done=tagged.filter(o=>o.delDone).length;
   /*dates: week tabs. Past weeks still holding bookings (not closed yet) and any week booked beyond +3 get their own tab.*/
   const W0=thisWk(),W3=wkPlus(W0,3);
@@ -7684,7 +7687,7 @@ function renderDeliveries(app){
         <button class="btn btn-g" id="btn-delexp">⬇ Export Delivery Plan</button>`}
         <button class="btn btn-s seq-gate" data-seqpick="1"${seqVis()?'':' hidden'} title="A project's sequence — every work order in the order the site needs them (look; the office and Production Manager can reorder)">🔢 Sequence</button>
         <button class="btn btn-s" id="btn-delarch" title="Closed delivery weeks — every closed week is kept here with all stamps and names">📚 Past weeks</button>
-        ${ROLE==='office'&&catchUp.length?`<button class="btn btn-s" id="btn-deltag" title="One-off: tick for delivery every job already at 7 ASSEMBLY COMPLETE or 8 PALLETED that is not on the board yet">Tag assembled/palleted jobs for delivery (${catchUp.length})</button>`:''}
+        ${ROLE==='office'&&catchUp.length?`<button class="btn btn-s" id="btn-deltag" title="One-off: tick for delivery every job already at 7 ASSEMBLY COMPLETE or 8 PALLETED, due from ${fmt(DELV_CATCHUP_FROM)} on, that is not on the board yet (older ones are left — they are delivered)">Tag assembled/palleted jobs due from ${fmt(DELV_CATCHUP_FROM)} for delivery (${catchUp.length})</button>`:''}
         ${!later&&wk<=W0?`<button class="btn btn-s" id="btn-delreset" style="border-color:var(--red);color:var(--red)" title="Archive Wk ${wkNum(wk)} to 📚 Past weeks — delivered jobs leave the board, anything not delivered goes back to To plan to rebook. Other weeks are not touched.">🔒 Close Wk ${wkNum(wk)}</button>`:''}
       </span>
     </div>
@@ -7891,9 +7894,12 @@ function renderDeliveries(app){
   const ab=document.getElementById('btn-delarch');if(ab)ab.onclick=()=>openDelArchive();
   const dt8=document.getElementById('btn-deltag');
   if(dt8)dt8.onclick=()=>{
-    const js=DB.orders.filter(delvAutoOk);if(!js.length){toast('Nothing to tag');render();return;}
-    if(!confirm('Tick '+js.length+' job'+(js.length===1?'':'s')+' at 7 ASSEMBLY COMPLETE / 8 PALLETED for delivery?\n\nThey go into the pool (no van or day). Jobs already on the board, shipped, or untagged by hand are left as they are.'))return;
-    officeWho(by=>{let n=0;DB.orders.filter(delvAutoOk).forEach(o=>{if(delvAuto(o,by,'Tagged for delivery — already at '+o.step+' (one-off catch-up)'))n++;});
+    const from=prompt('Only tick jobs due on or after this date (older assembled/palleted jobs are already delivered):',DELV_CATCHUP_FROM);
+    if(from===null)return;if(!/^\d{4}-\d{2}-\d{2}$/.test(from.trim())){toast('Type the date as YYYY-MM-DD, e.g. 2026-11-01');return;}
+    const js=DB.orders.filter(o=>delvCatchUpOk(o,from.trim()));if(!js.length){toast('Nothing to tag');render();return;}
+    const older=DB.orders.filter(delvAutoOk).length-js.length;
+    if(!confirm('Tick '+js.length+' job'+(js.length===1?'':'s')+' at 7 ASSEMBLY COMPLETE / 8 PALLETED, due from '+fmt(from.trim())+', for delivery?'+(older?'\n\n'+older+' older job'+(older===1?'':'s')+' at 7/8 are left alone (already delivered).':'')+'\n\nThey go into the pool (no van or day). Jobs already on the board, shipped, or untagged by hand are left as they are.'))return;
+    officeWho(by=>{let n=0;DB.orders.filter(o=>delvCatchUpOk(o,from.trim())).forEach(o=>{if(delvAuto(o,by,'Tagged for delivery — already at '+o.step+' (one-off catch-up)'))n++;});
       updDelBadge();sched();render();toast(n+' job'+(n===1?'':'s')+' ticked for delivery');});
   };
   const rs=document.getElementById('btn-delreset');
