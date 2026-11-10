@@ -8978,9 +8978,13 @@ function dmShiftWd(iso,n){let d=iso;n=Math.round(+n||0);for(let i=0;i<Math.abs(n
   same whole number of weeks (the gap is kept). A non-working day → the working day before it in the same week, else after it in
   the same week, else kept (bank-holiday flag). Earlier than today → today / the next working day; none left in the week → err
   (nothing moves). A Cienapps job with no date → the last working day of W. Returns {due, deliv, err} ('' = unchanged). */
-function wkFit(d,W,tod){
-  if(!isWorkDay(d)){let x='';for(let y=addDayISO(d,-1);y>=W;y=addDayISO(y,-1))if(isWorkDay(y)){x=y;break;}
-    if(!x)for(let y=addDayISO(d,1);y<addDayISO(W,7);y=addDayISO(y,1))if(isWorkDay(y)){x=y;break;}
+/*v-deliv attack4 (ASSUMED, Garry to confirm): a DELIVERY date may be a Saturday (the van grid has a Sat column), so a week move
+  keeps a Saturday delivery on Saturday; Sundays and bank holidays still move. The DUE (build) date stays Mon–Fri working days.*/
+function isDelivDay(iso){return new Date(iso+'T12:00:00').getDay()!==0&&!IE_BANK_HOLS.includes(iso);}
+function wkFit(d,W,tod,dv){
+  const ok=dv?isDelivDay:isWorkDay;
+  if(!ok(d)){let x='';for(let y=addDayISO(d,-1);y>=W;y=addDayISO(y,-1))if(ok(y)){x=y;break;}
+    if(!x)for(let y=addDayISO(d,1);y<addDayISO(W,7);y=addDayISO(y,1))if(ok(y)){x=y;break;}
     if(x)d=x;}
   if(d<tod){const x=isWorkDay(tod)?tod:nextWorkDay(tod);if(x>=addDayISO(W,7))return{d:'',none:true};d=x;}
   return{d};
@@ -8993,7 +8997,7 @@ function wkMoveTo(o,W){
   if(!due&&!dv){let x='';for(let y=addDayISO(W,6);y>=W;y=addDayISO(y,-1))if(isWorkDay(y)){x=y;break;}
     if(!x)x=addDayISO(W,4);if(x<tod){out.err=none;return out;}out.due=x;return out;}
   const an=dv||due,k=Math.round(dmDays(wkOf(an),W)/7);
-  const fa=wkFit(addDayISO(an,7*k),W,tod);if(fa.none){out.err=none;return out;}
+  const fa=wkFit(addDayISO(an,7*k),W,tod,!!dv);if(fa.none){out.err=none;return out;}
   if(dv){out.deliv=fa.d;
     if(due){const x=addDayISO(due,7*k),f=wkFit(x,wkOf(x),tod);out.due=f.none?(isWorkDay(tod)?tod:nextWorkDay(tod)):f.d;}}
   else out.due=fa.d;
@@ -9008,7 +9012,7 @@ function dmTarget(o,ch){
 const DM_FLAG={'cut-week-kept':'already cut — build week kept, check it','on-van-loaded':'already loaded — stays on the van, check it',
   'bank-hol':'not a working day','past':'date is in the past — build week is this week','beyond-8wks':'beyond the 8 board weeks — Unscheduled',
   'programmed':'programmed (step 5) — take it out of the nest','on-hold':'on hold in Cienapps (12) — moved anyway',
-  'after-delivery':'build date is after the delivery date','moved-out':'moved out a long way — "don\'t cut early" shows on the saw, stores, board and lists','deliv-bank-hol':'delivery date is not a working day','deliv-past':'delivery date is in the past'};
+  'after-delivery':'build date is after the delivery date','moved-out':'moved out a long way — "don\'t cut early" shows on the saw, stores, board and lists','deliv-bank-hol':'delivery date is a Sunday or bank holiday','deliv-past':'delivery date is in the past'};
 function dmDays(a,b){return Math.round((new Date(b+'T12:00:00')-new Date(a+'T12:00:00'))/86400000);}
 function dmFlagTxt(f,r){
   if(f==='moved-out'&&r&&r.outDays)return 'moved out '+r.outDays+' days, not cut yet — "don\'t cut early" shows on the saw, stores, board and lists';
@@ -9045,7 +9049,7 @@ function dmRow(o,ch,opts){
   }
   if(r.dueCh&&!isWorkDay(to))r.flags.push('bank-hol');
   if(r.dueCh&&to<todayLocal())r.flags.push('past');
-  if(dTo&&!isWorkDay(dTo))r.flags.push('deliv-bank-hol');
+  if(dTo&&!isDelivDay(dTo))r.flags.push('deliv-bank-hol'); /*v-deliv attack4 (ASSUMED): Saturday deliveries are fine*/
   if(dTo&&dTo<todayLocal())r.flags.push('deliv-past');
   const D=r.dClear?'':(dTo||dFrom);if(D&&to&&to>D)r.flags.push('after-delivery'); /*dates phase 2: build date after the delivery date*/
   /*dates phase 2 (A9), round 2: measured from the job's original due date — or, after an "OK to cut", from the due date then

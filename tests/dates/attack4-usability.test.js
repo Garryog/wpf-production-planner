@@ -170,7 +170,9 @@ const XSS = '<img src=x onerror="window.__xss=(window.__xss||0)+1">';
     rec('U9: dispatched (on the road) job ticked + moved → stays on its van, flagged; delivered job is not counted or moved', /\(2\)/.test(A.selTxt) && A.D.day === 'Tue' && A.D.mv && A.DONE === '2026-11-12', JSON.stringify({ sel: A.selTxt, D: A.D, DONE: A.DONE, prev: A.prevD.slice(0, 200) }));
     rec('U10: Next ▶ walks This week … +12, then Later, and STOPS (or is disabled) — it must not jump back to Wk +4', /^0,1,2,3,4,5,6,7,8,9,10,11,12,later,later$/.test(A.walkN) || /^0,1,2,3,4,5,6,7,8,9,10,11,12,later$/.test(A.walkN.split(',').slice(0, 14).join(',')) && A.walkN.split(',')[14] !== '4', A.walkN);
     rec('U11: Prev ◀ from Later goes back to the last week walked (+12), not +3', A.walkP.split(',')[0] === '12' || A.walkP.split(',')[0] === '11', A.walkP);
-    rec('U12: a week booked beyond +12 (Wk 9 2027) has a tab; on it Prev is not dead and Next does not skip to Later', !A.far || (!A.farPrevDis && A.farNext !== 'later'), JSON.stringify({ far: A.far, prevDis: A.farPrevDis, next: A.farNext, lbl: A.farLbl }));
+    // Coder 10 Nov (night): rule set by the lead — a booked week beyond +12 walks Prev to the booked week before it (or +12) and Next to the
+    // booked week after it, or Later when it is the last one (here it is the only one, so Next = Later). Was: Next must not be Later.
+    rec('U12: a week booked beyond +12 (Wk 9 2027) has a tab; on it Prev is not dead and Next goes on to Later (the last booked week)', !A.far || (!A.farPrevDis && A.farNext === 'later'), JSON.stringify({ far: A.far, prevDis: A.farPrevDis, next: A.farNext, lbl: A.farLbl }));
     rec('U13: Close Wk 46 shown (this week has bookings); hidden on Next week', A.close0 && !A.close1, JSON.stringify([A.close0, A.close1]));
     rec('U14: rebook group footer and Later group footers add up (rounded total of the group)', A.footRb.length === 1 && A.footRb.every(f => f.ok) && A.footL.length >= 1 && A.footL.every(f => f.ok), JSON.stringify([A.footRb, A.footL]));
     rec('U15: the selected week tab stays selected after a sync from another PC', A.afterSync === '2', A.afterSync);
