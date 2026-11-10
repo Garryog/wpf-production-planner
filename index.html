@@ -9093,6 +9093,57 @@ function dmBindChips(root){
   (root||document).querySelectorAll('[data-duemv]').forEach(b=>b.onclick=e=>{e.stopPropagation();dmCheckDlg(b.dataset.duemv);});
   (root||document).querySelectorAll('[data-duedlg]').forEach(b=>b.onclick=e=>{e.stopPropagation();dateDlg([b.dataset.duedlg]);});
   (root||document).querySelectorAll('[data-dhold]').forEach(b=>b.onclick=e=>{e.stopPropagation();dueHoldDlg(b.dataset.dhold);}); /*dates phase 2*/
+  /*v-deliv D1: tap the due / delivery tag → the phone's or PC's date picker (hidden input) → why → done*/
+  (root||document).querySelectorAll('[data-dqb]').forEach(b=>b.onclick=e=>{e.stopPropagation();e.preventDefault();dqOpen(b);});
+  (root||document).querySelectorAll('.dq-in[data-dq]').forEach(i=>{i.onchange=()=>dqChange(i.dataset.dq,i.dataset.f,i.value,i);i.onclick=e=>e.stopPropagation();});
+}
+/*v-deliv D1: quick date change from a tag. showPicker (Chrome 99+), else focus the input; the ⋯ button always opens the full dialog.*/
+function dqOpen(b){
+  if(!dateCanMove()){toast('Only the office or the Production Manager can move due dates');return;}
+  const i=b.parentElement&&b.parentElement.querySelector('.dq-in');if(!i)return;
+  try{if(typeof i.showPicker==='function'){i.showPicker();return;}}catch(x){}
+  try{i.style.pointerEvents='auto';i.focus();i.click();}catch(x){}
+}
+function dqWkTxt(w){return w?'Wk '+wkNum(w):'Unscheduled';}
+// the line under the reason picker: what will happen (same rules as the full dialog — the engine's preview row)
+function dqSub(r){
+  const a=[];
+  if(r.dueCh)a.push('Due <b>'+escA(r.from?dTagTxt(r.from):'none')+'</b> → <b>'+escA(dTagTxt(r.to))+'</b>');
+  if(r.dTo)a.push('Delivery <b>'+escA(r.dFrom?dTagTxt(r.dFrom):'none')+'</b> → <b>'+escA(dTagTxt(r.dTo))+'</b>');
+  if(r.dueCh)a.push(r.weekKept?'build week stays '+escA(dqWkTxt(r.wkFrom))+' (already cut — check it)':r.wkTo!==r.wkFrom?'build week '+escA(dqWkTxt(r.wkFrom))+' → <b>'+escA(dqWkTxt(r.wkTo))+'</b>':'build week stays '+escA(dqWkTxt(r.wkFrom)));
+  let h=a.join(' · ');
+  if(r.vanPulled)h+='<br><b style="color:#b45309">Comes off '+escA(r.slot)+' → To Plan ("rebook")</b>';
+  if(r.vanKept)h+='<br><b style="color:#b45309">Stays on its van — check it</b>';
+  (r.flags||[]).filter(f=>f!=='on-van-loaded'&&f!=='cut-week-kept').forEach(f=>{h+='<br><span style="color:#b42318">⚠ '+escA(dmFlagTxt(f,r))+'</span>';});
+  return h;
+}
+function dqWhy(w){w=String(w||'');return /^Other: /.test(w)?{why:'Other',note:w.slice(7)}:{why:w};}
+// where the card is now, in words: "card is on the Wk 47 tab" / "still booked on Volvo Tue 17 Nov"
+function dqWhere(o){
+  if(!o)return'';if(o.delDay)return 'still booked on '+slotLblO(o);if(!o.delv&&!o.manual)return'';
+  const w=delPoolWk(o),W0=thisWk();return 'card is on the '+(w===W0?'This week':w>wkPlus(W0,3)?'Later':'Wk '+wkNum(w))+' tab';
+}
+function dqDone(res,label){
+  if(!res||!res.moved){toast('Nothing moved'+(res&&res.skipped&&res.skipped[0]?' — '+res.skipped[0].why:''));return;}
+  const r=res.rows.find(x=>!x.skipped)||{},o=findDel(r.wo),wh=dqWhere(o);
+  toast(label+' now '+dTagTxt(label==='Delivery'?r.dTo:r.to)+(wh?' — '+wh:'')+(r.vanPulled?' — taken off the van, rebook it':'')+(r.weekKept?' — already cut, build week kept: check it':''),!!(r.vanPulled||r.weekKept||r.vanKept));
+  if((r.flags||[]).length||r.vanPulled)dateSummaryDlg(res);
+}
+function dqChange(wo,f,v,inp){
+  const o=DB.orders.find(x=>x.wo===wo);f=f==='deliv'?'deliv':'due';
+  const reset=()=>{if(inp)inp.value=(o&&(f==='deliv'?o.delivDate:o.dueDate))||'';};
+  if(!o){reset();return;}
+  if(!dateCanMove()){reset();toast('Only the office or the Production Manager can move due dates');return;}
+  if(!v||!dmIsDate(v)){reset();if(!v&&f==='deliv'&&o.delivDate)dateDlg([wo]);return;} // removing a delivery date: the full dialog
+  const ch=f==='deliv'?{deliv:v}:{due:v},label=f==='deliv'?'Delivery':'Due';
+  officeWho(by=>{
+    const r=moveDates([o],ch,{},by,{src:'planner'}).rows[0];
+    if(!r||r.skipped){reset();toast('Nothing moved — '+(r?r.skipped:'not found'));return;}
+    pickReason(o.wo+' — why is the '+(f==='deliv'?'delivery':'due')+' date moving?',dqSub(r),why=>{
+      const res=moveDates([wo],ch,dqWhy(why),by,{src:'planner'}).apply();
+      render();dqDone(res,label);
+    },()=>reset(),DATE_WHY);
+  },()=>reset());
 }
 // Saw / stores: "this job has moved" on the card from the date change until the end of the next working day (A7)
 function movedBanner(o,today){
