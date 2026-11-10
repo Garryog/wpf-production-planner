@@ -179,7 +179,7 @@ Phase 2: 17 column L · 18 settings numbers · 19 delivery date in dialog/engine
   the answer (`settings.delLegacyAt`; a booking placed/moved later or in a later week = this week); stale "rebook" on a booked job
   dropped on load · `b1c7e56` Close week reloads from the database first; loaded / on-the-road jobs stay on their van ·
   `517f23b` dueHist cap **30**, import Take on a cut job sets the "check week" chip, bank-holiday booking asks, on-hold jobs flagged
-  in the preview and still moved (ASSUMED) · `57db…` docs (ACCEPTED-FAILURES rows: old-screen Clear Week ×2, old-screen legacy-week drop).
+  in the preview and still moved (ASSUMED) · `0686193` docs (ACCEPTED-FAILURES rows: old-screen Clear Week ×2, old-screen legacy-week drop).
 - Phase 2: **17** `26d0f0a` column L delivery date (aliases as planned; delivKeep; flags only) · **18** `33cd40f` Settings delivLead 3 /
   siteDays 5 / earlyDays 14 · **19** `56b914b` delivery date in the dialog (suggests build = delivery − delivLead working days, editable)
   and engine; A4 follows the delivery date when there is one; Dates list rows for Due (E) and Delivery (L); pool by delivery week ·
