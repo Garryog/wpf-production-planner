@@ -7167,16 +7167,20 @@ function renderDeliveries(app){
 function delArcRow(o){return{wo:o.wo,t:o.title||'',c:o.customer||'',f:o.floor||'',u:o.unit||'',v:o.delVeh||'',d:o.delDay||'',dt:slotDate(o),val:Math.round(o.value||0),lAt:o.delLoadedAt||'',dAt:o.delDispAt||'',vAt:o.delDelivAt||'',lBy:o.ldBy||'',vBy:o.delivBy||'',mv:(o.delMoves||[]).map(m=>({at:m.at,by:m.by,why:m.why,from:m.from,to:m.to})),fd:o.delFirst||'',mw:o.missWhy||null};}
 function closeWeekJobs(wk){
   // the week's bookings + delivered cards left in the pool (delivered in or before that week)
-  return delAll().filter(o=>o.delDay?slotWk(o)===wk:(dStage(o)==='deliv'&&(!o.delDelivAt||wkOf(isoOf(new Date(o.delDelivAt)))<=wk)));
+  // loaded / on the road but not confirmed delivered: physically on a van — they stay on it until the driver confirms (Tester round 1)
+  return delAll().filter(o=>o.delDay?slotWk(o)===wk&&!(dStage(o)==='load'||dStage(o)==='disp'):(dStage(o)==='deliv'&&(!o.delDelivAt||wkOf(isoOf(new Date(o.delDelivAt)))<=wk)));
 }
+function closeWeekOnVan(wk){return delAll().filter(o=>o.delDay&&slotWk(o)===wk&&(dStage(o)==='load'||dStage(o)==='disp'));}
 function closeWeek(wk){
   wk=wk||thisWk();
   if(wk>thisWk()){toast('Only this week or a week already gone can be closed');return;}
   const N=wkNum(wk),jobs=closeWeekJobs(wk);
-  const nD=jobs.filter(o=>dStage(o)==='deliv').length,nU=jobs.length-nD;
-  if(!confirm('Close Wk '+N+' (Mon '+dShort(wk)+' – Sat '+dShort(addDayISO(wk,5))+')?\n\nA safety backup of the whole plan is saved to the database first, and the week is ARCHIVED (📚 Past weeks keeps every job, timestamp, name and note).\n\n• '+nD+' delivered — off the board\n• '+nU+' booked but not delivered — back to To plan, marked "not delivered Wk '+N+' — rebook"\n\nOther weeks, the jobs still to plan and their notes are not touched.'))return;
+  const nD=jobs.filter(o=>dStage(o)==='deliv').length,nU=jobs.length-nD,nV=closeWeekOnVan(wk).length;
+  if(!confirm('Close Wk '+N+' (Mon '+dShort(wk)+' – Sat '+dShort(addDayISO(wk,5))+')?\n\nA safety backup of the whole plan is saved to the database first, and the week is ARCHIVED (📚 Past weeks keeps every job, timestamp, name and note).\n\n• '+nD+' delivered — off the board\n• '+nU+' booked but not delivered — back to To plan, marked "not delivered Wk '+N+' — rebook"'+(nV?'\n• '+nV+' loaded / on the road, not confirmed delivered — stay on their van (close the week again once the driver confirms)':'')+'\n\nOther weeks, the jobs still to plan and their notes are not touched.'))return;
   officeWho(async by=>{
     if(!await backupFirst('Close week Wk '+N))return;
+    // work on the latest database copy — a driver may have confirmed a delivery on his phone a moment ago
+    if(!await freshForImport()){toast('⚠ Could not get the latest plan from the database — Wk '+N+' was NOT closed. Try again when the connection is back.',true);return;}
     const js=closeWeekJobs(wk),at=nowISO(),dates=DEL_DAYS.map((d,i)=>addDayISO(wk,i)),isLeg=wk===(DB.delLegacyWk||thisWk());
     const notes={};DEL_DAYS.forEach((d,i)=>{const v=delNoteGet(dates[i]);if(String(v).trim())notes[d]=v;});
     const podKs=Object.keys(DB.pod||{}).filter(k=>String(k).split('|')[2]===wk);
