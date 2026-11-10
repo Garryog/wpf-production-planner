@@ -2341,7 +2341,7 @@ const escA=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').
 const fuF=o=>{const v=o?(o.floor!=null&&o.floor!==''?o.floor:o.f):'';return String(v==null?'':v).trim();};
 const fuU=o=>{const v=o?(o.unit!=null&&o.unit!==''?o.unit:o.u):'';return String(v==null?'':v).trim();};
 function fuHTML(o,cls,sty){const f=fuF(o),u=fuU(o),a=k=>` class="${cls||'fu-badge'} ${k}"${sty?' style="'+sty+'"':''}`;
-  return [f?`<span${a('fu-fl')} title="Floor">Floor ${escA(f)}</span>`:'',u?`<span${a('fu-un')} title="Unit">Unit ${escA(u)}</span>`:''].filter(Boolean).join(' ');}
+  return [f?`<span${a('fu-fl')} title="Floor ${escA(f)}">Floor ${escA(f)}</span>`:'',u?`<span${a('fu-un')} title="Unit ${escA(u)}">Unit ${escA(u)}</span>`:''].filter(Boolean).join(' ');} /*v-deliv attack4: full text in the tooltip when a badge is cut off*/
 function lsFuOf(l){const os=((l&&l.wos)||[]).map(w=>DB.orders.find(x=>x.wo===w)).filter(Boolean),j=f=>[...new Set(os.map(f).filter(Boolean))].join(', ');return{f:j(fuF),u:j(fuU)};} // a list's tagged jobs
 function fuSpans(x,E){return (x.f?`<span class="fu-p">FLOOR <b>${E(x.f)}</b></span>`:'')+(x.u?`<span class="fu-p">UNIT <b>${E(x.u)}</b></span>`:'');} // prints and labels
 function fuLbl(o){const f=fuF(o),u=fuU(o);return[f?'Floor '+f:'',u?'Unit '+u:''].filter(Boolean).join(' · ');}
@@ -6958,7 +6958,7 @@ function dchip(o,showCust){
       <span class="dchip-btns">${rd?`<button class="dinfo" data-dinfo="${escA(o.wo)}" title="${escA(RDY_LBL[rd.lvl]+(rd.why.length?' — '+rd.why.join(' · '):''))} — tap for detail">ⓘ</button>`:''}<button class="dchk${st?' on':''}" data-dd="${escA(o.wo)}" title="Status: ${dStageLbl[st]||'planned'} — tap to update (opens a menu)">${st==='deliv'?'✓':st==='disp'?'D':st==='load'?'L':'·'}</button><button data-dx="${escA(o.wo)}" title="${o.delDay?'Return to pool':(o.manual?'Delete this manual job':'Remove from delivery plan')}">×</button></span>
     </div>
     ${fuF(o)||fuU(o)?`<div class="dchip-fu">${fuHTML(o,'dfu')}</div>`:''}
-    <div class="dchip-t">${escA(o.title)||'—'}</div>
+    <div class="dchip-t" title="${escA(o.title)}">${escA(o.title)||'—'}</div>
     <div class="dchip-dates">${dueTag(o)}${!o.manual&&dateCanMove()?`<button class="dq-more" data-duedlg="${escA(o.wo)}" title="All date options — due and delivery dates, history">⋯</button>`:''}${o.manual?'':movedTag(o)}</div>
     ${wkBtnsOk(o)?(nw=>`<div class="dchip-wkb"><button class="dwk-btn" data-wknext="${escA(o.wo)}" data-wk="${escA(nw)}" title="Move the due date${o.delivDate?' and the delivery date':''} one week on — asks why">→ Wk ${wkNum(nw)}</button><button class="dwk-btn" data-wkpick="${escA(o.wo)}" title="Pick any week — asks why">Move to week…</button></div>`)(wkPlus(delPoolWk(o),1)):''}${o.delRebook&&!o.delDay?`<div class="dm-moved" title="${escA('Taken off '+(o.delRebook.was||'').split('|').slice(0,2).join(' ')+' by '+(o.delRebook.by||'')+(o.delRebook.why?' — '+o.delRebook.why:''))}">${o.delRebook.nd?'🚚 not delivered Wk '+escA(o.delRebook.nd)+' — rebook':'📅 date moved — rebook'}</div>`:''}${o.dueMv&&o.dueMv.loaded&&dStage(o)&&dStage(o)!=='deliv'?`<div class="dm-moved" style="color:#b42318">📅 date moved after loading — check</div>`:''}
     ${st?`<div class="dstg s-${st}">${dStageLbl[st]}${dStageTime(o)?' '+dStageTime(o):''}${st==='deliv'&&o.delivBy?' — '+escA(o.delivBy):st==='load'&&o.ldBy?' — '+escA(o.ldBy):''}</div>`:''}
