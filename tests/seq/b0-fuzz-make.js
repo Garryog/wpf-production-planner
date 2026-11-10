@@ -4,7 +4,7 @@
 // PURPOSE — then re-run both checks.
 const fs = require('fs'), path = require('path'), B = require('./b0lib.js');
 const parts = ['T09', 't9 ', 'Block', 'BLK', 'A', 'É', 'ß', '-1', '−2', 'Level', 'Floor', '1st', 'G', 'GF', 'L1', 'F01', 'Apt', 'No.', '7', '07', '2.05', '12.0', '(Type B)', 'TBC', 'N/A', '?', '²', '½', 'Ⅶ', '⑦',
-  '​', ' ', '12-14', '7a', 'ISLAND', 'Basement', '0', '00', 'Unit', 'x', '.', '#', 'Ø', 'ñ', 'Ground Floor', 'A Block', '7 (type c)', 'APT07', 'ﬁrst', 'Ｔ０９', 'TBA', 'Second', '–3'];
+  '​', ' ', '12-14', '7a', 'ISLAND', 'Basement', '0', '00', 'Unit', 'x', '.', '#', 'Ø', 'ñ', 'Ground Floor', 'A Block', '7 (type c)', 'APT07', 'ﬁrst', 'Ｔ０９', 'TBA', 'Second', '–3', '\u20141', '\u20101', 'Block -1', 'T.B.C.', 'TBC 2', 'Not known', 'XX', 'Ł', 'Œ', 'İ'];
 let seed = 7; const rnd = n => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed % n; };
 const r = [];
 for (let i = 0; i < 1200; i++) { let s = ''; const k = 1 + rnd(4); for (let j = 0; j < k; j++) s += (j ? (rnd(3) ? ' ' : '') : '') + parts[rnd(parts.length)]; r.push(s); }

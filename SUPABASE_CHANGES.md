@@ -85,9 +85,15 @@ $$;
 -- Text: superscript digits kept apart ("7²" ≠ 72), NFKC, zero-width characters out, accented letters → base letters from a
 -- fixed list (no extension needed), ß → ss. Case and punctuation are kept here.
 create or replace function seq_key_norm(s text) returns text language sql immutable as $$
- select replace(translate(regexp_replace(normalize(regexp_replace(coalesce(s,''),'[²³¹⁰-⁹₀-₉]',' \&','g'),NFKC),
-   '[­᠎​-‏⁠﻿]','','g'),
-   'ÀÁÂÃÄÅàáâãäåÇçÈÉÊËèéêëÌÍÎÏìíîïÑñÒÓÔÕÖØòóôõöøÙÚÛÜùúûüÝýÿŸ','AAAAAAaaaaaaCcEEEEeeeeIIIIiiiiNnOOOOOOooooooUUUUuuuuYyyY'),'ß','ss')
+ select replace(translate(regexp_replace(normalize(regexp_replace(coalesce(s,''),'[\u00B2\u00B3\u00B9\u2070-\u2079\u2080-\u2089]',' \&','g'),NFKC),
+   '[\u00AD\u180E\u200B-\u200F\u2060\uFEFF]','','g'),
+   'ÀÁÂÃÄÅàáâãäåÇçÈÉÊËèéêëÌÍÎÏìíîïÑñÒÓÔÕÖØòóôõöøÙÚÛÜùúûüÝýÿŸ'||U&'\2010\2011\2012\2013\2014\2015\2212\FE58',
+   'AAAAAAaaaaaaCcEEEEeeeeIIIIiiiiNnOOOOOOooooooUUUUuuuuYyyY--------'),'ß','ss')
+$$;
+-- (round 3) a floor / unit holding a superscript ("7²") or a letter outside the fixed accent list (Ł, Œ, İ …) can't be keyed
+-- safely: it counts as blank, so the database never treats it as the same house as anything.
+create or replace function seq_key_odd(s text) returns boolean language sql immutable as $$
+ select coalesce(s,'') ~ '[\u00B2\u00B3\u00B9\u2070-\u2079\u2080-\u2089]' or seq_key_norm(s) ~ '[^\x01-\x7F]'
 $$;
 -- Every run of anything but A-Z / 0-9 → one space, trimmed, upper case.
 create or replace function seq_key_txt(s text) returns text language sql immutable as $$
@@ -109,10 +115,13 @@ create or replace function seq_key_code(t text) returns text language sql immuta
 -- level). '' = blank (also TBC / N/A / a bare "Block").
 create or replace function seq_floor_key(s text) returns text language plpgsql immutable as $$
 declare x text; y text; m text[]; i int;
-  nn text := '^(TBC|TBA|TBD|TO BE CONFIRMED|N A|NA|NONE|NIL|UNKNOWN)$';
+  nn text := '^(T ?B ?[CAD]( .*)?|TO BE (CONFIRMED|ADVISED|DECIDED)( .*)?|N ?A|NONE|NIL|UNKNOWN|NOT KNOWN|XX+)$';
 begin
-  m := regexp_match(seq_key_norm(s),'^\s*(?:(?:LEVEL|FLOOR|LVL|FLR|STOREY)\s*)?[-−–]\s*([0-9]+)\s*$','i');
+  if seq_key_odd(s) then return ''; end if;
+  m := regexp_match(seq_key_norm(s),'^\s*(?:(?:LEVEL|FLOOR|LVL|FLR|STOREY)\s*)?-\s*([0-9]+)\s*$','i'); -- -1, —1, Level -1: below ground
   if m is not null then y := regexp_replace(m[1],'^0+(?=[0-9])',''); return '#'||case when y='0' then '0' else '-'||y end; end if;
+  m := regexp_match(seq_key_norm(s),'^\s*(?:BLOCK|BLK)\s*-\s*([0-9]+)\s*$','i'); -- "Block -1" is not "Block 1"
+  if m is not null then return '-'||regexp_replace(m[1],'^0+(?=[0-9])',''); end if;
   x := seq_key_txt(s);
   if x='' or x ~ nn or x ~ '^(BLOCK|BLK|FLOOR|FLR|LEVEL|LVL|STOREY)$' then return ''; end if;
   m := regexp_match(x,'^(BLOCK|BLK) (.+)$'); if m is null then m := regexp_match(x,'^(BLOCK|BLK)([0-9].*)$'); end if;
@@ -141,12 +150,13 @@ end $$;
 create or replace function seq_unit_key(s text) returns text language plpgsql immutable as $$
 declare x text := seq_key_txtd(regexp_replace(seq_key_norm(s),'\(\s*TYPE[^)]*\)',' ','gi')); m text[]; i int;
 begin
+  if seq_key_odd(s) then return ''; end if;
   for i in 1..5 loop
     m := regexp_match(x,'^(APARTMENT|APT|UNIT|NUMBER|NO|NR|HOUSE|HSE|PLOT|POSITION|POS) (.+)$');
     if m is null then m := regexp_match(x,'^(APARTMENT|APT|UNIT|NUMBER|NO|NR|HOUSE|HSE|PLOT|POSITION|POS)([0-9].*)$'); end if;
     exit when m is null; x := m[2];
   end loop;
-  if x='' or x ~ '^(TBC|TBA|TBD|TO BE CONFIRMED|N A|NA|NONE|NIL|UNKNOWN)$' or x ~ '^(APARTMENT|APT|UNIT|NUMBER|NO|NR|HOUSE|HSE|PLOT|POSITION|POS)$' then return ''; end if;
+  if x='' or x ~ '^(T ?B ?[CAD]( .*)?|TO BE (CONFIRMED|ADVISED|DECIDED)( .*)?|N ?A|NONE|NIL|UNKNOWN|NOT KNOWN|XX+)$' or x ~ '^(APARTMENT|APT|UNIT|NUMBER|NO|NR|HOUSE|HSE|PLOT|POSITION|POS)$' then return ''; end if;
   m := regexp_match(x,'^([0-9]+)(\.[0-9]+)? ?([A-Z]{0,2})$');
   if m is not null then return regexp_replace(m[1],'^0+(?=[0-9])','')||coalesce(m[2],'')||coalesce(m[3],''); end if;
   return seq_key_code2(x);
@@ -593,7 +603,7 @@ create policy "seq_pre edit" on seq_pre for update to anon, authenticated using 
 grant select, insert, update on project_seq, seq_requests, seq_pre to anon, authenticated;
 revoke delete, truncate on project_seq, seq_requests, seq_pre from anon, authenticated;
 grant all on project_seq, seq_requests, seq_pre to service_role;
-grant execute on function seq_txt(text), seq_line_key(text,text,text,text), seq_key_norm(text), seq_key_txt(text), seq_key_txtd(text),
+grant execute on function seq_txt(text), seq_line_key(text,text,text,text), seq_key_norm(text), seq_key_odd(text), seq_key_txt(text), seq_key_txtd(text),
   seq_key_code2(text), seq_key_code(text), seq_floor_key(text), seq_unit_key(text), seq_house_key(text,text) to anon, authenticated, service_role;
 grant execute on function seq_move(text[],text,int[],int,text,text), seq_insert(text,jsonb,text,text), seq_match(text,text,int,text,text),
   seq_unmatch(text,int,text,text), seq_remove(text,int,text,text), seq_restore(text,int,text,text) to anon, authenticated, service_role;

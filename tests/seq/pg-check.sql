@@ -27,7 +27,7 @@ begin
    end if;
    n := n+1;
  end loop;
- if n<82 then raise exception 'FAIL B0 fixture has only % pairs',n; end if;
+ if n<92 then raise exception 'FAIL B0 fixture has only % pairs',n; end if;
  for c in select * from jsonb_array_elements(fx->'lines') loop
    if seq_line_key(c->>'f',c->>'u',c->>'p',c->>'name') is distinct from (c->>'lk') then
      raise exception 'FAIL B0 line % (%) SQL % — fixture %',c->>'n',c->>'what',seq_line_key(c->>'f',c->>'u',c->>'p',c->>'name'),c->>'lk'; end if;
