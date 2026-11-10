@@ -189,3 +189,15 @@ Phase 2: 17 column L · 18 settings numbers · 19 delivery date in dialog/engine
   group move sets the due date only ("Move all by" moves delivery dates too); "within range" for A9 = moved back to within earlyDays
   of the date it moved from, or the due date now within earlyDays of today; "site ready for all" confirms every booked, not-yet-
   confirmed delivery of that customer, each for its own date.
+
+### 10 Nov 2026 — Coder, Tester round 2 fixes
+- `6974f96` engine + dialog: delivery date set to the booked day keeps the van booking; lasting "build after delivery — check"
+  flag (dueAfterDeliv) on board row + delivery card; a typed build date is never overwritten (suggestion + "Use <date>");
+  empty delivery box removes the date (reason, history, Dates-list row); **A9 measured from origDueDate, or from the due date at
+  the last "OK to cut" — ASSUMED, Garry to confirm**.
+- `4aa59af` import: Cienapps moving a booked job's delivery date leaves a lasting "booked … — delivery date now … — check" chip
+  (delivMv, clears on rebook / match); a third Cienapps delivery date has Keep / Take in the preview (Keep default), Keep sets
+  delivKeep to the real Cienapps date.
+- `c927f78` Settings delivLead / siteDays / earlyDays: whole numbers 1–60 only, on screen and when loaded.
+- tests/dates: all pass except the 3 accepted attack1-oldversion checks. Full suite (199 files): **3,571 pass / 27 fail** — the 3
+  accepted old-screen checks plus the baseline accepted list (t17 A'1/A'2 timing checks are back in it this run).
