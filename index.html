@@ -6153,7 +6153,7 @@ function lsParseGrid(aoa,opt){
   const HOUSE=/^\s*(house|block|apt\.?|apartment|plot)\b|\bhouse\s*(nr|no\.?|number)\b/i;let seenHouse=false;
   const heading=(item,note,r)=>{const h={k:'hdr',item,note,src:r+1};if(HOUSE.test(item)){seenHouse=true;}else if(seenHouse)h.sub=true;return h;};
   const BOUGHT=/^\s*bought[\s-]*in\s*\.?\s*$/i,TBCW=/(^|[^a-z0-9])(t\.?\s?b\.?\s?c\.?|to be confirmed|none chosen|not chosen)(?=$|[^a-z0-9])/i; // TBCW: the same words as lsTbc // the whole Edging or Note cell says "Bought in" (never a note like "Cut down bought in doors")
-  const nRows=aoa.length;let e2col=false; // a column-header row with "Edging 2" in G: G is always Edging 2, H the note
+  const nRows=aoa.length;let e2col=false,hdrSeen=false; // a column-header row with "Edging 2" in G: G is always Edging 2, H the note
   for(let r=0;r<nRows;r++){
     const cells=[0,1,2,3,4,5,6,7].map(c=>val(r,c));
     if(cells.every(v=>v==null||str(v)===''))continue;
@@ -6162,7 +6162,7 @@ function lsParseGrid(aoa,opt){
     //    Several on one row ("Project | Customer B | | Date | 12/10/2026") are all read; so is "Project: X  Date: Y" in one cell.
     const pd=/^\s*project( name)?\s*:\s*(.+?)(?:\s+date\s*:\s*(.+))?$/i.exec(A);
     if(pd&&texts.slice(1).every(t=>t==='')){meta.project=pd[2].trim();if(pd[3])meta.date=isoDate(pd[3].trim());continue;}
-    if(LBL.test(A)||(JOB.test(A)&&pairsOnly(texts)&&texts.some(t=>t&&!isLbl(t)))){ // a lone "Unit" heading stays a heading
+    if(LBL.test(A)||(JOB.test(A)&&!hdrSeen&&!rows.some(x=>x.k==='part')&&pairsOnly(texts)&&texts.some(t=>t&&!isLbl(t)))){ // (round 2) once the parts have started, "Unit | 2" / "Floor | 1" is a part // a lone "Unit" heading stays a heading
       for(let c0=0;c0<7;c0++){if(!isLbl(texts[c0]))continue;
         const k=texts[c0].toLowerCase(),vi=cells.findIndex((v,c)=>c>c0&&v!=null&&str(v)!=='');const v=vi>0&&!isLbl(texts[vi])?cells[vi]:null;
         if(JOB.test(texts[c0])){const f=/^floor/.test(k)?'floor':/^unit/.test(k)?'unit':'wo';meta[f]=str(v);}
@@ -6173,7 +6173,7 @@ function lsParseGrid(aoa,opt){
     }
     // 2. the column-header row ("Description | Qty | Length …") is labels, not a part
     // ("Description:", "Item Description", " DESCRIPTION " too)
-    if(/^(item\s+)?(description|item|part( name)?)\s*:?$/i.test(A)&&texts.slice(1).some(t=>/^(qty|nr|no\.?|quantity|length|width|dimension|colou?r|material)\s*:?$/i.test(t))){e2col=/edg/i.test(texts[6]);continue;}
+    if(/^(item\s+)?(description|item|part( name)?)\s*:?$/i.test(A)&&texts.slice(1).some(t=>/^(qty|nr|no\.?|quantity|length|width|dimension|colou?r|material)\s*:?$/i.test(t))){e2col=/edg/i.test(texts[6]);hdrSeen=true;continue;}
     // 3. "2 | total nr of units" sets the units of the block above
     const ui=texts.findIndex(t=>UNITS.test(t));
     if(ui>=0){
