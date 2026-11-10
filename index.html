@@ -5356,6 +5356,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       <div class="me-tb"><div style="font-weight:800;color:#14335c;font-size:17px;flex:1;min-width:0">✍ ${ex?'Edit':'New'} ${st.tpl?'template':'cutting list'}${ex&&(+ex.rev||1)>1?' · Rev '+(+ex.rev):''}</div><button class="btn btn-s me-x0" id="me-x0" title="Close this window (asks first if anything is not saved)">✕ Close</button></div>
       ${ex&&ex.templateId?`<div style="font-size:12px;color:#5b21b6;font-weight:700;margin-bottom:4px">📐 ${escA(lsTplInfo(ex))}</div>`:''}
       ${st.note?`<div style="font-size:12px;color:#1a56db;font-weight:700;margin-bottom:4px">${escA(st.note)}</div>`:''}
+      ${!st.tpl&&st.wo&&!st.newWO?pTwinWarn([st.wo]):''}
       ${ex&&lsLocked(ex)?'<div style="font-size:13px;color:#8a5a00;font-weight:700;margin-bottom:4px">The saw already has this list — saving makes a new revision.</div>':''}
       ${chk&&chk.ok?`<div style="font-size:13px;color:#0d6e46;font-weight:700;margin-bottom:4px">✓ Checked by ${escA(chk.by)} — saving a change takes the check away: it must be checked again before the saw sees it.</div>`:''}
       ${tbc.length?`<div style="margin-bottom:6px">${lsTbcChip(tbc,true)}</div>`:''}
@@ -7314,7 +7315,7 @@ function renderWorkList(app,mode){
   const card=(l,isDone)=>{const dn=listDone(l.id)[mode];const due=listDueKey(l);const relOnly=!isDone&&!!dn&&relOpen(l,mode);const nh=listHoldRows(l,mode,'hold').length;return `<div class="wl-card${isDone?' cdone':''}">
     <div class="wl-h"><div style="display:flex;gap:10px;align-items:flex-start">${!isDone?`<button class="wl-chk${wlSel.has(l.id)?' on':''}" data-wlsel="${escA(l.id)}" title="Select for batch cutting across houses">${wlSel.has(l.id)?'✓':''}</button>`:''}<div><span class="wn">${escA(l.name)}</span> <span class="wd">${escA(l.project||'')}${(c=>c&&c!==l.project?' · '+escA(c):'')(listCust(l))}</span><div>${woChips(l)}</div></div></div>
     ${due?(od=>`<span class="wl-due"${od?' style="background:#c0392b;color:#fff"':''}>${od?'⚠ OVERDUE — ':''}${mode==='saw'?'CUT':'PICK'} BY ${fmt(listDeadline(l))} · DELIVERS ${fmt(due)}</span>`)(!isDone&&listOverdue(l)):'<span class="wd">no delivery date yet</span>'}</div>
-    ${movedBanners(l.wos)}${relOnly?`<div class="rel-note">▶ MATERIAL HAS ARRIVED — ${relRows(l)} row${relRows(l)!==1?'s':''} released from the waiting list. The rest of this house was done ${new Date(dn.at).toLocaleDateString('en-IE')}${dn.by?' by '+escA(dn.by):''}.</div>`:''}
+    ${movedBanners(l.wos)}${pTwinWarn(l.wos)}${relOnly?`<div class="rel-note">▶ MATERIAL HAS ARRIVED — ${relRows(l)} row${relRows(l)!==1?'s':''} released from the waiting list. The rest of this house was done ${new Date(dn.at).toLocaleDateString('en-IE')}${dn.by?' by '+escA(dn.by):''}.</div>`:''}
     ${lsRevBannerBoth(l)}${lsRevBanner(l,mode)}${V2()?((t,sc)=>t.length||sc||lsIssuedHTML(l)?`<div class="chk-bar">${lsIssuedHTML(l)}${sc}${lsTbcChip(t,true)}</div>`:'')(lsTbc(lsView(l.id).rows),specChip(l.pid,true)):''}
     ${nh?`<div class="hold-note">⏸ ${nh} row${nh!==1?'s':''} waiting on ${mode==='saw'?'material':'stock'} — ${mode==='saw'?'cut':'pick'} the rest and tap ${cfg.done}; the waiting rows come back when released.</div>`:''}
     ${listTableHTML(l,mode,{relOnly,tick:!isDone})}
@@ -10670,6 +10671,12 @@ async function pKeepOne(keepWo,dropWo){
   const i=DB.orders.indexOf(d);if(i>=0)DB.orders.splice(i,1);
   logEdit(k,dropWo+' (a second P-number for this house, made at the same moment on another screen, with nothing on it) dropped — kept '+keepWo+'; its copy is in settings pMerged',by);
   sched();render();toast('Kept '+keepWo+' — '+dropWo+' dropped (a copy is kept)');return true;}
+// (round 5, High finding — flag only; what to do with the twins is Garry's decision) the same "Two P-numbers for one house" warning on the
+// saw and stores list cards and in the list window of either P-job, so the house can't be cut twice without anyone noticing
+function pTwinWarn(wos){if(!V2())return'';const pr=[],seen=new Set();
+  (wos||[]).forEach(w=>{if(!pIsP(w))return;const o=DB.orders.find(x=>x.wo===w);if(!pLive(o))return;
+    pSameHouseAll(o).filter(x=>pIsP(x.wo)).forEach(x=>{const k=[w,x.wo].sort().join(' / ');if(!seen.has(k)){seen.add(k);pr.push({k,o});}});});
+  return pr.map(x=>`<div class="p-flag p-twin" style="background:#fff4d6;border:1px solid #e0a43a;border-radius:6px;padding:6px 9px;margin:4px 0;font-size:13px;color:#6b3f00">⚠ <b>Two P-numbers for one house — ${escA(x.k)}</b>${(f=>f?' · '+escA(f):'')([fuLbl(x.o),x.o.title].filter(Boolean).join(' · '))} — this house may have two cutting lists. Check with the office before cutting or picking.</div>`).join('');}
 function pFlagsHTML(){if(!V2())return'';const tw=pTwins(),cw=pCienFor();if(!tw.length&&!cw.length)return'';const E=escA,fu=o=>[fuLbl(o),o.title].filter(Boolean).join(' · ');
   return `<div class="p-flags" style="margin-bottom:10px">${tw.map(([a,b])=>`<div class="p-flag" style="background:#fff4d6;border:1px solid #e0a43a;border-radius:6px;padding:6px 9px;margin-bottom:4px;font-size:13px">⚠ <b>Two P-numbers for one house</b> — ${woChip(a.wo)} / ${woChip(b.wo)} <span style="color:var(--t3)">${E(fu(a))}</span> <button class="btn btn-s" data-pkeep="${E(a.wo)}|${E(b.wo)}" style="font-size:12px;padding:2px 9px">Keep one…</button></div>`).join('')}
     ${cw.map(x=>`<div class="p-flag" style="background:#eef6ff;border:1px solid #9cc3f0;border-radius:6px;padding:6px 9px;margin-bottom:4px;font-size:13px">ℹ A Cienapps WO now exists for the house of ${woChip(x.p.wo)}: ${x.w.map(w=>'<b>'+E(w.wo)+'</b>').join(', ')} <span style="color:var(--t3)">${E(fu(x.p))} — the P-number is folded into it later (nothing is moved now)</span></div>`).join('')}</div>`;}
