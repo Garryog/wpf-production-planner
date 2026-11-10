@@ -172,3 +172,20 @@ Phase 2: 17 column L · 18 settings numbers · 19 delivery date in dialog/engine
   AC18 (Full Schedule's last two columns are now Orig due / Moved ×); stage2/autotag-delivery "WO-800-1 … in the pool" (due Wk 45, so it is
   in the Wk 45 tab's pool, not This week's); stage3/flow-attack1-switchoff dash/office-l/prod "same screen as stage2" (dates added to van
   labels, dashboard "missed" wording).
+
+### 10 Nov 2026 — Coder, Tester round 1 fixes + phase 2 (steps 17–21)
+- Round 1 fixes: `286afae` booking merges as one unit (van/day/week/rebook), both-PC date moves merge as a unit (newer move wins),
+  dueHist sorted by time, same-day notes keep both texts · `4656789` old-screen bookings: legacy week only for bookings made before
+  the answer (`settings.delLegacyAt`; a booking placed/moved later or in a later week = this week); stale "rebook" on a booked job
+  dropped on load · `b1c7e56` Close week reloads from the database first; loaded / on-the-road jobs stay on their van ·
+  `517f23b` dueHist cap **30**, import Take on a cut job sets the "check week" chip, bank-holiday booking asks, on-hold jobs flagged
+  in the preview and still moved (ASSUMED) · `57db…` docs (ACCEPTED-FAILURES rows: old-screen Clear Week ×2, old-screen legacy-week drop).
+- Phase 2: **17** `26d0f0a` column L delivery date (aliases as planned; delivKeep; flags only) · **18** `33cd40f` Settings delivLead 3 /
+  siteDays 5 / earlyDays 14 · **19** `56b914b` delivery date in the dialog (suggests build = delivery − delivLead working days, editable)
+  and engine; A4 follows the delivery date when there is one; Dates list rows for Due (E) and Delivery (L); pool by delivery week ·
+  **20** `c59a7c0` A9 dueHold "⏳ moved out — don't cut early" · **21** `afcc378` A10 siteOk · tests `7f6b427` (c8-deliv-import,
+  c8-deliv-engine, c8-hold-site).
+- ASSUMED in phase 2: an import that changes the delivery date does not take a job off its van (it is flagged); "Set all to" in a
+  group move sets the due date only ("Move all by" moves delivery dates too); "within range" for A9 = moved back to within earlyDays
+  of the date it moved from, or the due date now within earlyDays of today; "site ready for all" confirms every booked, not-yet-
+  confirmed delivery of that customer, each for its own date.
