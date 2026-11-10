@@ -235,3 +235,15 @@ Phase 2: 17 column L · 18 settings numbers · 19 delivery date in dialog/engine
 - `c927f78` Settings delivLead / siteDays / earlyDays: whole numbers 1–60 only, on screen and when loaded.
 - tests/dates: all pass except the 3 accepted attack1-oldversion checks. Full suite (199 files): **3,571 pass / 27 fail** — the 3
   accepted old-screen checks plus the baseline accepted list (t17 A'1/A'2 timing checks are back in it this run).
+
+### 10 Nov 2026 — Coder, Manager's conditions
+- `2e19002` merged origin/release/2026-11-10 (new key wpf_apps_nov26 = the release's SUPA_KEY, listDelOnly switch, GO-LIVE doc);
+  clashes in applyPlan / fullSettings resolved keeping both sets of keys. tests/stage3/x3-deliv-only 8/8, all tests/dates pass
+  except the 3 accepted attack1-oldversion checks.
+- `e510864` + `32100f0` old-screen guard v2: settings.appRel = 2 on every save; clear "out of date — refresh the page" message
+  on refusal (c9-guard-v2); PENDING SQL at the top of SUPABASE_CHANGES.md, checked twice on a throwaway Postgres 16
+  (tests/dates/pg-guard-v2.sql: ALL GUARD V2 CHECKS PASSED).
+- Go-live checklist section added above.
+- Full suite (201 files): **3,582 pass / 28 fail**. New vs the last run: stage3/flow-attack1-switchoff "switch off: saved settings
+  have the same keys" — the saved settings now include `appRel` (the guard-v2 marker, wanted on every save); the lists switch-off
+  behaviour itself is unchanged. Everything else is the accepted list.
