@@ -8838,7 +8838,33 @@ function dmFind(j){
   return wo==null?null:(DB.orders.find(o=>o.wo===wo)||null);
 }
 function dmShiftWd(iso,n){let d=iso;n=Math.round(+n||0);for(let i=0;i<Math.abs(n);i++)d=n>0?nextWorkDay(d):prevWorkDay(d);return d;}
+/*v-deliv D3: move a job to week W (its Monday). Anchor = the delivery date if there is one, else the due date; both move by the
+  same whole number of weeks (the gap is kept). A non-working day → the working day before it in the same week, else after it in
+  the same week, else kept (bank-holiday flag). Earlier than today → today / the next working day; none left in the week → err
+  (nothing moves). A Cienapps job with no date → the last working day of W. Returns {due, deliv, err} ('' = unchanged). */
+function wkFit(d,W,tod){
+  if(!isWorkDay(d)){let x='';for(let y=addDayISO(d,-1);y>=W;y=addDayISO(y,-1))if(isWorkDay(y)){x=y;break;}
+    if(!x)for(let y=addDayISO(d,1);y<addDayISO(W,7);y=addDayISO(y,1))if(isWorkDay(y)){x=y;break;}
+    if(x)d=x;}
+  if(d<tod){const x=isWorkDay(tod)?tod:nextWorkDay(tod);if(x>=addDayISO(W,7))return{d:'',none:true};d=x;}
+  return{d};
+}
+function wkMoveTo(o,W){
+  W=wkOf(W);const tod=todayLocal(),out={due:'',deliv:'',err:''};
+  if(!o||!W){out.err='no week picked';return out;}
+  const due=dmIsDate(String(o.dueDate||''))?String(o.dueDate):'',dv=dmIsDate(String(o.delivDate||''))?String(o.delivDate):'';
+  const none='No working days left in Wk '+wkNum(W)+' — pick Next week';
+  if(!due&&!dv){let x='';for(let y=addDayISO(W,6);y>=W;y=addDayISO(y,-1))if(isWorkDay(y)){x=y;break;}
+    if(!x)x=addDayISO(W,4);if(x<tod){out.err=none;return out;}out.due=x;return out;}
+  const an=dv||due,k=Math.round(dmDays(wkOf(an),W)/7);
+  const fa=wkFit(addDayISO(an,7*k),W,tod);if(fa.none){out.err=none;return out;}
+  if(dv){out.deliv=fa.d;
+    if(due){const x=addDayISO(due,7*k),f=wkFit(x,wkOf(x),tod);out.due=f.none?(isWorkDay(tod)?tod:nextWorkDay(tod)):f.d;}}
+  else out.due=fa.d;
+  return out;
+}
 function dmTarget(o,ch){
+  if(ch&&ch.toWk)return wkMoveTo(o,ch.toWk).due||''; /*v-deliv D3*/
   if(ch&&ch.due)return String(ch.due).slice(0,10);
   if(ch&&ch.shift&&o.dueDate&&+ch.shift.n){const n=+ch.shift.n;return ch.shift.unit==='wd'?dmShiftWd(o.dueDate,n):addDayISO(o.dueDate,7*n);}
   return'';
@@ -8855,6 +8881,7 @@ function dmFlagTxt(f,r){
 }
 // dates phase 2: the new delivery date ('' = unchanged). A group shift moves it by the same amount as the due date.
 function dmDelivTarget(o,ch){
+  if(ch&&ch.toWk)return wkMoveTo(o,ch.toWk).deliv||''; /*v-deliv D3*/
   if(ch&&ch.deliv)return String(ch.deliv).slice(0,10);
   if(ch&&ch.shift&&o.delivDate&&+ch.shift.n){const n=+ch.shift.n;return ch.shift.unit==='wd'?dmShiftWd(o.delivDate,n):addDayISO(o.delivDate,7*n);}
   return'';
@@ -8864,6 +8891,7 @@ function dmRow(o,ch,opts){
   opts=opts||{};
   const from=o.dueDate||'',dFrom=o.delivDate||'';let to=dmTarget(o,ch),dTo=dmDelivTarget(o,ch);if(dTo===dFrom)dTo='';
   const r={wo:o.wo,from,to,dFrom,dTo,dueCh:false,wkFrom:o.plannedWeek||'',wkTo:o.plannedWeek||'',weekKept:false,vanPulled:false,vanKept:false,skipped:'',flags:[],slot:''};
+  if(ch&&ch.toWk){const m=wkMoveTo(o,ch.toWk);if(m.err){r.skipped=m.err;return r;}} /*v-deliv D3: "no working days left" = not moved*/
   if(ch&&ch.delivClear&&dFrom){r.dClear=true;dTo='';r.dTo='';} /*dates round 2: remove the delivery date*/
   if(!to&&!dTo&&!r.dClear){r.skipped=ch&&ch.shift&&!from?'no due date to move from':'no new date';return r;}
   if(!to)to=r.to=from;
