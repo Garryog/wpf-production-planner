@@ -754,7 +754,8 @@ function settingsFrom(s,prev){
   const r={...prev};s=s||{};
   ['weekCaps','delx','delNotes','grps','pins','pod','lists','listWBs','listDone','delArchive','staff','listHold','holdLog','listRow','listStore','listStoreAt','saveIds'].forEach(k=>{if(s[k])r[k]=s[k];});
   if(s.hourScale&&s.hourScale.length)r.hourScale=s.hourScale;
-  ['wcap','vcap','listLead','listDue','delivLead','siteDays','earlyDays'].forEach(k=>{if(s[k]>0)r[k]=s[k];}); /*dates phase 2: + delivery-date numbers*/
+  ['wcap','vcap','listLead','listDue'].forEach(k=>{if(s[k]>0)r[k]=s[k];});
+  ['delivLead','siteDays','earlyDays'].forEach(k=>{if(dsOk(s[k]))r[k]=s[k];}); /*dates: delivery-date numbers — whole 1–60 only, else the default*/
   if(typeof s.listChk==='boolean')r.listChk=s.listChk; // "Lists must be checked before the saw" (missing = keep what we had)
   if(typeof s.photoLists==='boolean')r.photoLists=s.photoLists; // "Photo lists allowed" (missing = ON)
   if(s.exportBase&&typeof s.exportBase==='object')r.exportBase=s.exportBase;
@@ -783,7 +784,7 @@ function applyPlan(p){
   ['delx','delNotes','grps','pins','pod','lists','listWBs','listDone','delArchive','staff','listHold','holdLog','listRow','listStore','listStoreAt','saveIds'].forEach(k=>{if(s[k])DB[k]=s[k];});
   if(s.listLead>0)DB.listLead=s.listLead;
   if(s.listDue>0)DB.listDue=s.listDue;
-  ['delivLead','siteDays','earlyDays'].forEach(k=>{if(s[k]>0)DB[k]=s[k];}); /*dates phase 2*/
+  ['delivLead','siteDays','earlyDays'].forEach(k=>{if(dsOk(s[k]))DB[k]=s[k];else delete DB[k];}); /*dates: out of range / text → default*/
   if(typeof s.listChk==='boolean')DB.listChk=s.listChk;
   if(typeof s.photoLists==='boolean')DB.photoLists=s.photoLists;
   if(typeof s.delLegacyWk==='string'&&s.delLegacyWk)DB.delLegacyWk=s.delLegacyWk; /*dates*/
@@ -1229,7 +1230,7 @@ async function saveDB(){
 }
 // Never let a tab close while an edit is unsaved, a save is in flight / being checked, or a retry is pending
 window.addEventListener('beforeunload',e=>{if(saveT||SAVING||DB.saveFailed||lqPending()){e.preventDefault();e.returnValue='';}});
-function fullSettings(){return{weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP,delx:DB.delx||[],delNotes:DB.delNotes||{},grps:DB.grps||{},pins:DB.pins||{},pod:DB.pod||{},lists:DB.lists||[],listWBs:DB.listWBs||{},listDone:DB.listDone||{},listLead:DB.listLead||5,delArchive:DB.delArchive||{},staff:DB.staff||[],listHold:DB.listHold||{},holdLog:DB.holdLog||[],listRow:DB.listRow||{},saveIds:DB.saveIds||[],exportBase:{wk:orig,st:origStep},...(DB.listDue>0?{listDue:DB.listDue}:{}),...['delivLead','siteDays','earlyDays'].reduce((a,k)=>{if(DB[k]>0)a[k]=DB[k];return a;},{}),...(typeof DB.listChk==='boolean'?{listChk:DB.listChk}:{}),...(typeof DB.photoLists==='boolean'?{photoLists:DB.photoLists}:{}),...(DB.delLegacyWk?{delLegacyWk:DB.delLegacyWk}:{}),...(DB.delLegacyAt?{delLegacyAt:DB.delLegacyAt}:{}),...(DB.listStore?{listStore:DB.listStore,listStoreAt:DB.listStoreAt||''}:{})};}
+function fullSettings(){return{weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP,delx:DB.delx||[],delNotes:DB.delNotes||{},grps:DB.grps||{},pins:DB.pins||{},pod:DB.pod||{},lists:DB.lists||[],listWBs:DB.listWBs||{},listDone:DB.listDone||{},listLead:DB.listLead||5,delArchive:DB.delArchive||{},staff:DB.staff||[],listHold:DB.listHold||{},holdLog:DB.holdLog||[],listRow:DB.listRow||{},saveIds:DB.saveIds||[],exportBase:{wk:orig,st:origStep},...(DB.listDue>0?{listDue:DB.listDue}:{}),...['delivLead','siteDays','earlyDays'].reduce((a,k)=>{if(dsOk(DB[k]))a[k]=DB[k];return a;},{}),...(typeof DB.listChk==='boolean'?{listChk:DB.listChk}:{}),...(typeof DB.photoLists==='boolean'?{photoLists:DB.photoLists}:{}),...(DB.delLegacyWk?{delLegacyWk:DB.delLegacyWk}:{}),...(DB.delLegacyAt?{delLegacyAt:DB.delLegacyAt}:{}),...(DB.listStore?{listStore:DB.listStore,listStoreAt:DB.listStoreAt||''}:{})};}
 /* Stage 3 switch: settings.listStore==='v2' → cutting lists live in their own tables (lists, list_lines…).
    Missing, blank or anything else (switch back writes 'v1') → today's lists in the planner record, untouched. */
 function V2(){return DB.listStore==='v2'||DB.listStore==='switching';} // 'switching' = a Switch back is rebuilding the old lists: screens still read the tables, the database takes no changes
@@ -1720,8 +1721,8 @@ function renderSettings(app){
     toast('Capacity updated ✓');
   });
   document.getElementById('btn-save-dates')?.addEventListener('click',()=>{ /*dates phase 2*/
-    const bad=[];['delivLead','siteDays','earlyDays'].forEach(k=>{const v=parseInt(document.getElementById('s-'+k)?.value,10);if(v>0&&v<=60)DB[k]=v;else bad.push(k);});
-    sched();toast(bad.length?'Enter whole numbers from 1 to 60':'Delivery-date settings saved ✓');render();
+    const bad=[];['delivLead','siteDays','earlyDays'].forEach(k=>{const t=String(document.getElementById('s-'+k)?.value||'').trim(),v=/^\d+$/.test(t)?+t:NaN;if(dsOk(v))DB[k]=v;else bad.push(k);});
+    sched();toast(bad.length?'Enter whole numbers from 1 to 60 (no decimals) — '+bad.length+' box'+(bad.length!==1?'es were':' was')+' not saved':'Delivery-date settings saved ✓');render();
   });
 }
 
@@ -8707,9 +8708,10 @@ function thisWk(){return wkOf(todayLocal());}
 function wkPlus(wk,n){return wk?wkOf(addDayISO(wk,7*(+n||0))):'';}
 // the week a delivery booking belongs to: its own week, else the week every pre-week-tabs booking was given, else this week
 // dates phase 2: Settings numbers (missing = the default)
-function delivLead(){return DB.delivLead>0?DB.delivLead:3;}
-function siteDays(){return DB.siteDays>0?DB.siteDays:5;}
-function earlyDays(){return DB.earlyDays>0?DB.earlyDays:14;}
+function dsOk(v){return Number.isInteger(v)&&v>=1&&v<=60;}
+function delivLead(){return dsOk(DB.delivLead)?DB.delivLead:3;}
+function siteDays(){return dsOk(DB.siteDays)?DB.siteDays:5;}
+function earlyDays(){return dsOk(DB.earlyDays)?DB.earlyDays:14;}
 function slotWk(o){
   if(o&&o.delWk)return o.delWk;
   /*dates: a booking with no week. The legacy week only applies to bookings made before the office answered the question;
