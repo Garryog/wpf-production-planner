@@ -4498,7 +4498,7 @@ function lsNewStd(wo,pid){const o=wo?DB.orders.find(x=>x.wo===wo):null;
 function lsListName(o){return o?(fuU(o)||o.title||o.wo):'';}
 async function confirmList(wo,tid,by){
   const o=DB.orders.find(x=>x.wo===wo);if(!o)throw new Error(wo+' is no longer on the planner');
-  return lsCreateFromTpl(tid,[wo],lsListName(o)||wo,by,{fixedFor:wo});
+  const t=lsList(tid);return lsCreateFromTpl(tid,[wo],String(t&&(t.typeName||t.name)||'').trim()||wo,by,{fixedFor:wo}); // (10 Nov) named after the template's type, not the unit
 }
 // Excel uploads are never tagged automatically (plan step 6): an untagged Excel list whose sheet name points at a WO
 // (house number, suggestWOs) is offered on that WO's row here, for a person to confirm.
@@ -5056,8 +5056,22 @@ function openListEditor2(listId,presetWo,presetPid,opt){
   let sawStarted=!!ex&&!ex.tpl&&lsTicked(ex.id); // set on a refused save too (a tick landed while the editor was open)
   const prevId=ex?(ex.tpl?'':lsReplOf(ex.id)):st.from?st.from.id:''; // the list this one replaces: "already cut on old list (n)"
   const prevCut=r=>prevId&&(lsNum(r.L)>0||lsNum(r.W)>0)?lsPrevCutHTML(prevId,r.item,r.L,r.W,r.mat):'';
-  const live=()=>DB.orders.filter(o=>!o.delDone&&!o.delDelivAt).slice().sort(woCmp);
-  const defName=wo=>{const o=DB.orders.find(x=>x.wo===wo);return o?(fuU(o)||o.title||wo):'';};
+  // ---- L11 + L12 (Garry 10 Nov): the Work order drop-down lists ONLY the picked project's live work orders (shipped, on hold
+  //      and delivered left out), soonest due first (no date last): "WO-2617-4 · Fl 7 · Unit 231 · due 14 Nov · has a list".
+  //      Customer → project is worked out once per customer per redraw. No project → "pick the project first". The chosen WO
+  //      always stays an option (marked) so a redraw never loses it.
+  const woOpts=()=>{
+    const pc=new Map(),kp=o=>{if(o.pid)return String(o.pid);const c=String(o.customer||'');if(!pc.has(c))pc.set(c,((c&&lsProjForCust(c))||{}).id||'');return pc.get(c);};
+    const hasL=new Set(lsCache().all.filter(l=>!l.tpl&&!l.archived).flatMap(l=>l.wos||[]));
+    const js=st.pid?DB.orders.filter(o=>kp(o)===st.pid&&!isShipped(o)&&!isOnHold(o)&&!o.delDone&&!o.delDelivAt):[];
+    js.sort((a,b)=>String(a.dueDate||'9999').localeCompare(String(b.dueDate||'9999'))||woCmp(a,b));
+    const line=o=>[o.wo,fuF(o)?'Fl '+fuF(o):'',fuU(o)?'Unit '+fuU(o):'',o.dueDate?'due '+dShort(o.dueDate):'no due date'].filter(Boolean).join(' · ')+(hasL.has(o.wo)?' · has a list':'');
+    const opt=(o,mark)=>`<option value="${escA(o.wo)}"${o.wo===st.wo?' selected':''} title="${escA([fuLbl(o),o.title,o.customer].filter(Boolean).join(' · '))}">${escA(line(o)+(mark?' '+mark:''))}</option>`;
+    let cur='';if(st.wo&&!js.some(o=>o.wo===st.wo)){const o=DB.orders.find(x=>x.wo===st.wo);
+      cur=o?opt(o,isShipped(o)?'(shipped)':o.delDone||o.delDelivAt?'(delivered)':isOnHold(o)?'(on hold)':st.pid&&kp(o)&&kp(o)!==st.pid?'(other project)':!kp(o)?'(customer not linked to a project)':''):`<option value="${escA(st.wo)}" selected>${escA(st.wo)} (not in the planner)</option>`;}
+    if(!st.pid)return '<option value="" disabled'+(st.wo?'':' selected')+'>— pick the project first'+(jbOn()?' (or type the WO number below)':'')+' —</option>'+cur;
+    return '<option value="">— pick a work order —</option>'+cur+js.map(o=>opt(o)).join('')+(js.length?'':'<option value="" disabled>(no live work orders for '+escA(lsProjName(st.pid))+')</option>');
+  };
   // ---- L1 + L3 (Job B part 3): a new list with no WO gets Floor | Unit | Title boxes and "🔎 Find the Cienapps WO" (also when
   // the Unit box is left). The planner's live jobs are keyed ONCE per redraw (KM). One certain match fills the WO (green, with
   // "Not this one"); several / not sure → a short pick list; a blank floor or unit → no search. A WO typed by hand must exist.
@@ -5069,8 +5083,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     const l=jbLive(wo);
     if(l){if(confirm(wo+' already has a cutting list: "'+l.name+'".\n\nOpen it instead?\n\nOK = open "'+l.name+'" (this new list is closed — nothing in it is saved)\nCancel = stay here (a work order has only one live list)')){ov.remove();openListEditor(l.id);return;}
       st.jb.res={st:'haslist',wo,name:l.name};draw();return;}
-    st.wo=wo;st.jm={wo,how};st.jb.res=null;
-    if(!String(st.name||'').trim())st.name=defName(wo);
+    st.wo=wo;st.jm={wo,how};st.jb.res=null; // (10 Nov) the list name is not pre-filled — a free name; blank = the WO number
     if(!st.pid){const p=lsProjForCust(o.customer);if(p){st.pid=p.id;st.pauto=true;edges=lsProjEdges(p.id);}}
     draw();autoProj();
   };
@@ -5166,7 +5179,6 @@ function openListEditor2(listId,presetWo,presetPid,opt){
         <button class="btn btn-s" id="me-find" style="white-space:nowrap">🔎 Find the Cienapps WO</button></div>
       <div class="me-jbm" id="me-jbm">${msg}</div></div>`;
   };
-  if(!ex&&st.wo&&!st.name)st.name=defName(st.wo);
   if(st.tpl&&!lsEditOk())return; // templates: Production Manager, Drawing office or Admin
   const sheetMats=()=>lsMats(st.pid,'sheet').map(m=>m.name),fitMats=()=>lsMats(st.pid,'other').map(m=>m.name);
   let edges=lsProjEdges(st.pid);
@@ -5277,10 +5289,10 @@ function openListEditor2(listId,presetWo,presetPid,opt){
           <button class="btn btn-s" id="me-mats" style="font-size:12px;white-space:nowrap" title="The project's boards, colours and fittings — add or change them here">🧱 Project materials (add / edit)</button>${specVis()?`<button class="btn btn-s" id="me-spec" style="font-size:12px;white-space:nowrap"${st.pid?'':' disabled'} title="The project's spec sheet">✎ Project details</button>`:''}</div>${pmsgHTML()}</div>
         ${st.tpl?'':`<div><label>Work order</label>
           ${st.newWO?`<div style="font-size:12px;color:#5b21b6;font-weight:700;padding:7px 0">New work order ${escA(nextPNumber())} <button class="btn btn-s" id="me-pick" style="font-size:11px;padding:2px 8px">use an existing WO instead</button></div>`
-          :`<div style="display:flex;gap:6px"><select id="me-wo" style="${inp};max-width:190px"><option value="">— pick a work order —</option>${live().map(o=>`<option value="${escA(o.wo)}"${o.wo===st.wo?' selected':''} title="${escA([fuLbl(o),o.title,o.customer].filter(Boolean).join(' · '))}">${escA(woShort(o))}</option>`).join('')}</select>
+          :`<div style="display:flex;gap:6px"><select id="me-wo" style="${inp};max-width:340px">${woOpts()}</select>
             ${ex?'':`<button class="btn btn-s" id="me-new" style="font-size:12px;white-space:nowrap">＋ New P-number</button>`}</div>`}</div>
         ${st.newWO?'':`<div class="wo-info" id="me-woinfo">${woInfoEdHTML(DB.orders.find(x=>x.wo===st.wo))}</div>`}`}
-        <div><label>House / list name</label><input id="me-name" value="${escA(st.name)}" placeholder="e.g. House 18" style="${inp};width:160px"></div>
+        <div><label>${st.tpl?'Template name':'List name (optional)'}</label><input id="me-name" value="${escA(st.name)}" placeholder="e.g. Kitchen — Type B" title="${st.tpl?'The template\'s name':'A name for this list — any words, searchable later. Left blank, the list is named after its work order'}" style="${inp};width:170px"></div>
         <div><label>Type</label><select id="me-type" style="${inp}">${['kitchen','house','room','other'].map(k=>`<option value="${k}"${st.ltype===k?' selected':''}>${LS_KINDS[k]}</option>`).join('')}</select>
           <input id="me-tname" value="${escA(st.tname||'')}" placeholder="e.g. Type B 3-bed" style="${inp};width:140px"></div>
       </div>
@@ -5408,10 +5420,13 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       if(e.target.value==='__new'){const o=st.wo?DB.orders.find(x=>x.wo===st.wo):null; // (L5) no PIN — the customer = project rule
         const n=prompt('New project name:',String(o&&o.customer||'').trim());if(!n||!n.trim()){draw();return;}
         lsProject(n.trim()).then(id=>{keep();st.pid=id;st.pauto=false;st.pmsg=null;edges=lsProjEdges(id);draw();projSet();}).catch(x=>{draw();g('me-err').textContent='Project not added — '+x.message;});return;}
-      st.pid=e.target.value;st.pauto=false;if(st.pid)st.pmsg=null;edges=lsProjEdges(st.pid);draw();projSet();};
+      st.pid=e.target.value;st.pauto=false;if(st.pid)st.pmsg=null;edges=lsProjEdges(st.pid);
+      let cl=''; // (L11) a NEW list: a WO of another project is cleared (said why); an existing list keeps its WO, marked "(other project)"
+      if(!ex&&st.pid&&st.wo){const o=DB.orders.find(x=>x.wo===st.wo),k=o&&keyProj(o);if(k&&k!==st.pid){cl=st.wo+' is a '+lsProjName(k)+' job, not '+lsProjName(st.pid)+' — it was taken off this list. Pick one of '+lsProjName(st.pid)+'\'s work orders.';st.wo='';st.jm=null;}}
+      draw();if(cl){const er=g('me-err');if(er)er.textContent=cl;}projSet();};
     // the name boxes keep st up to date as you type: a redraw (picking a colour, adding a row) no longer puts back the old name
     const nm=g('me-name');if(nm)nm.oninput=()=>{st.name=nm.value;};const tn0=g('me-tname');if(tn0)tn0.oninput=()=>{st.tname=tn0.value;};
-    const w=g('me-wo');if(w)w.onchange=()=>{const prev=st.wo;st.wo=w.value;if(st.pmsg&&st.pmsg.st!=='busy')st.pmsg=null;const wi=g('me-woinfo');if(wi){const wo0=DB.orders.find(x=>x.wo===st.wo);wi.innerHTML=woInfoEdHTML(wo0);woInfoBind(wi,wo0);}const ne=g('me-name');if(ne&&(!ne.value||ne.value===defName(prev))){ne.value=defName(st.wo);st.name=ne.value;}
+    const w=g('me-wo');if(w)w.onchange=()=>{const prev=st.wo;st.wo=w.value;if(st.pmsg&&st.pmsg.st!=='busy')st.pmsg=null;const wi=g('me-woinfo');if(wi){const wo0=DB.orders.find(x=>x.wo===st.wo);wi.innerHTML=woInfoEdHTML(wo0);woInfoBind(wi,wo0);}
       const h0=R()[0];if(opt.std&&h0&&h0.k==='hdr'&&!h0.sub&&(!String(h0.item||'').trim()||h0.item===lsStdHouse(DB.orders.find(x=>x.wo===prev)))){ // standard layout: the house heading follows the work order
         h0.item=lsStdHouse(DB.orders.find(x=>x.wo===st.wo));const hi=ov.querySelector('[data-mr="0|item"]');if(hi)hi.value=h0.item;}
       const o=DB.orders.find(x=>x.wo===st.wo),p=o&&lsProjForCust(o.customer);if(!st.pid&&p){keep();st.pid=p.id;st.pauto=true;edges=lsProjEdges(p.id);draw();}
@@ -5516,8 +5531,10 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       };
     };
     body.innerHTML=`<div style="font-weight:800;color:#14335c;font-size:16px;margin-bottom:6px">📐 Insert ${st.unitsOn?'unit ':''}from template — ${escA(lsProjName(st.pid))}</div>
-      ${tps.map(t=>`<div class="wl-drow"><b>${escA(t.typeName||t.name)}</b>${lsCheckInfo(t).ok?' <span class="chk-ok">✓ checked</span>':''}<span class="dsh-t">${escA(LS_KINDS[t.ltype]||t.ltype||'')} · Rev ${+t.rev||1}</span><button class="btn btn-g" data-itt="${escA(t.id)}" style="font-size:12px">Use</button></div>`).join('')}`;
+      ${tps.length>6?`<input id="it-q" placeholder="🔍 Type to find a template (name or type)" autocomplete="off" style="${LS_INP};width:100%;box-sizing:border-box;margin-bottom:8px">`:''}
+      ${tps.map(t=>`<div class="wl-drow" data-itq="${escA([t.name,t.typeName,LS_KINDS[t.ltype]||t.ltype].filter(Boolean).join(' ').toLowerCase())}"><b>${escA(t.typeName||t.name)}</b>${lsCheckInfo(t).ok?' <span class="chk-ok">✓ checked</span>':''}<span class="dsh-t">${escA(LS_KINDS[t.ltype]||t.ltype||'')} · Rev ${+t.rev||1}</span><button class="btn btn-g" data-itt="${escA(t.id)}" style="font-size:12px">Use</button></div>`).join('')}`;
     body.querySelectorAll('[data-itt]').forEach(b=>b.onclick=()=>pick(b.dataset.itt));
+    {const q=body.querySelector('#it-q');if(q){q.oninput=()=>{const ws=q.value.trim().toLowerCase().split(/\s+/).filter(Boolean);body.querySelectorAll('[data-itq]').forEach(r=>{r.style.display=ws.every(w=>r.dataset.itq.includes(w))?'':'none';});};q.focus();}}
   };
   const undo=()=>{if(!st.undo.length)return;st.rows=JSON.parse(st.undo.pop());st.snapKey='';if(st.cur&&!ov.querySelector('[data-mr="'+st.cur+'"]'))st.cur='';st.focus=st.cur&&+st.cur.split('|')[0]<R().length?st.cur:'';draw();};
   const copyToNew=()=>{ // the saw has started: a different number of units is a NEW list (Garry, 3 Nov) — copied without ticks
@@ -5533,6 +5550,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     keep();const g=id=>ov.querySelector('#'+id),err=t=>{g('me-err').textContent=t+(st.chkNote&&t&&!/^Checking/.test(t)?' '+st.chkNote:'');}; // chkNote: the house check couldn't be made (round 3)
     if(st.addBusy)return err('Wait a moment — the new material is still being added to the project.');
     if(!st.pid)return err('Pick the project — or ＋ New project… at the bottom of the list.');
+    if(st.tpl&&!String(st.name||'').trim())return err('Give the template a name.');
     let rows=R().filter(r=>!lsEmptyRow(r)); // empty rows (nothing typed) are left out, as in Excel
     const
       b=(()=>{const U=[];let u=null;rows.forEach(r=>{if(r.k==='hdr'){u=r.units!==undefined&&r.units!==null?r.units:null;U.push(null);}else U.push(u);});return U;})();
@@ -5554,13 +5572,14 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     if(st.newWO){const title=(g('me-ptitle').value||'').trim(),due=g('me-pdue').value;
       if(!title)return err('The new work order needs a title.');if(!due)return err('The new work order needs a due date — it drives the cutting deadline.');wo='__NEW__';}
     const d={...st,rows,wo,project:(LST.p.get(st.pid)||{}).name||'',replaces:!ex&&!st.tpl&&st.from?st.from:null};
+    if(!st.tpl&&!String(d.name||'').trim())d.name=wo==='__NEW__'?'':wo; // (10 Nov) list name left blank = the WO number (a new P-number: set when it is made)
     // a spec placeholder ("Worktops — None chosen / TBC", no quantity, no size) never blocks the save: it stays on the list, red
     const tbcHold=r=>!sized(r)&&String(r.qty==null?'':r.qty).trim()===''&&lsTbc([r]).length>0;
     const chk=rows.filter(r=>r.k==='part'&&!r.buy&&!tbcHold(r)).map((r,j)=>({k:sized(r)?'saw':'fit',item:r.item,qty:totalOf(r,b[rows.indexOf(r)]),L:r.L,W:r.W}));
     // Bought in rows: never cut or picked — they only need a description and a quantity
     for(const r of rows.filter(r=>r.k==='part'&&r.buy)){if(!String(r.item||'').trim())return err('Every Bought in row needs a description'+at(r)+'.');if(!(+totalOf(r,b[rows.indexOf(r)])>0))return err('Every Bought in row needs a quantity ("'+String(r.item).trim()+'"'+at(r)+').');}
     const onlyBuy=!chk.length&&rows.some(r=>r.k==='part'&&(r.buy||tbcHold(r)));
-    const e=manualListValidate({...d,rows:onlyBuy?[{k:'saw',item:'x',qty:1,L:1,W:1}]:chk,noCut:onlyBuy?false:d.noCut,noFit:onlyBuy?false:d.noFit,wo:st.tpl?'(template)':d.wo});if(e)return err(e.replace(/saw row/g,'saw row (with a length or width)').replace(/fittings row/g,'Stores row (no length or width)'));
+    const e=manualListValidate({...d,name:d.name||(st.newWO?'(the new P-number)':''),rows:onlyBuy?[{k:'saw',item:'x',qty:1,L:1,W:1}]:chk,noCut:onlyBuy?false:d.noCut,noFit:onlyBuy?false:d.noFit,wo:st.tpl?'(template)':d.wo});if(e)return err(e.replace(/saw row/g,'saw row (with a length or width)').replace(/fittings row/g,'Stores row (no length or width)'));
     if(st.newWO){ // (L4a) looked up again on Save: another PC or an import may have brought the job meanwhile — never a second job for one house
       const pf=g('me-pfloor').value,pu=g('me-punit').value,kind=seqKind(g('me-ptitle').value),kinds=seqKinds(g('me-ptitle').value);if(!kinds.size)kinds.add('kitchen');
       const sameKind=o=>{const k=seqKinds(o.title);if(!k.size)k.add('kitchen');return [...k].some(x=>kinds.has(x));}; // "KITCHEN & UTILITY" counts as both
@@ -5596,6 +5615,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
         DB.orders.push({wo:pwo,pid:st.pid||undefined,ref:'',floor:(g('me-pfloor').value||'').trim(),unit:(g('me-punit').value||'').trim(),title:g('me-ptitle').value.trim(),customer:(g('me-pcust').value||'').trim()||d.project,hours,hoursEstimated,
           dueDate:due,origDueDate:due,step:'Planner WO',salesRep:'',orderNo:'',value:val,plannedWeek:wkKey(new Date(due)),notes:'',colour:'',log:[{at:nowISO(),by,what:'Work order created with a typed cutting list'}]});
         orig[pwo]='';origStep[pwo]='Planner WO';d.wo=pwo;st.newWO=false;st.wo=pwo; // a failed save tried again reuses this P-number
+        if(!String(d.name||'').trim())d.name=pwo; // (10 Nov) blank list name = the WO number
         if(d.newId)pMineAdd(pwo,d.newId); // (round 2) this screen's list for this P-number — moved with it if a merge renumbers it
         if(st.chkFail){st.pUnchecked=pwo;st.chkFail=false;} // (round 3) made without the database check: checked again on the next Save
       }
@@ -5954,11 +5974,11 @@ function lsTemplatesFor(pid){return lsCache().all.filter(l=>l.tpl&&!l.archived&&
 // From a work order with no list: tap a template → preview with the WO ticked (+ other jobs of the project that need a list) → name → Create & attach
 function lsTplDlg(tid,wo){
   const t=lsList(tid);if(!t)return;
-  const o=DB.orders.find(x=>x.wo===wo),defName=x=>x?(fuU(x)||x.title||x.wo):'';
+  const o=DB.orders.find(x=>x.wo===wo);
   const more=listsNeeded().filter(x=>x.wo!==wo&&(lsProjForCust(x.customer)||{}).id===t.pid);
   const ov=lsDlg(`<div style="font-weight:800;color:#14335c;font-size:17px;margin-bottom:2px">📐 ${escA(t.typeName||t.name)} · Rev ${+t.rev||1} → ${escA(wo)}</div>
     <div style="font-size:12px;color:var(--t3);margin-bottom:8px">${escA(t.project)} — a live copy of the template is made and attached. Later template changes never change it.</div>
-    <div style="margin-bottom:8px"><label style="font-size:12px;color:var(--t2)">List name</label><br><input id="tp-name" value="${escA(defName(o))}" style="${LS_INP};width:240px"></div>
+    <div style="margin-bottom:8px"><label style="font-size:12px;color:var(--t2)">List name</label><br><input id="tp-name" value="${escA(t.typeName||t.name||'')}" placeholder="e.g. Kitchen — Type B" style="${LS_INP};width:240px"></div>
     <div style="font-size:12px;font-weight:700;color:#14335c;margin-bottom:4px">Work orders</div>
     <label class="hold-row" style="display:flex;gap:8px;align-items:baseline"><input type="checkbox" data-tpwo="${escA(wo)}" checked>${o?woColsHTML(o):`<b>${escA(wo)}</b>`}</label>
     ${more.map(x=>`<label class="hold-row" style="display:flex;gap:8px;align-items:baseline"><input type="checkbox" data-tpwo="${escA(x.wo)}">${woColsHTML(x)}</label>`).join('')}
