@@ -297,6 +297,25 @@ Phase 2: 17 column L · 18 settings numbers · 19 delivery date in dialog/engine
 - ASSUMED (built as written): plan decisions 1–8. Also: a week move that flags "moved out — don't cut early" (> earlyDays) shows the preview
   first; a manual job's "planned Wk N" only shows for a future week; past-week tab drops are refused with a toast.
 
+### 10 Nov 2026 (night) — Coder, Tester round (attack4) fixes
+- `ab6192f` week bar walk: earliest open past week … +12 → Later, and stops there (Next greyed on Later; Prev on Later = +12, was +3; Next on
+  Later no longer jumps back to +4). A booked week beyond +12 (own tab): Prev = the booked week before it, else +12; Next = the booked week
+  after it, else Later (U10, U11, U12).
+- `84462fc` abandoned drag: the card's dragend clears `delDragList` (dragend comes after any drop), so a later drop on a week tab does nothing (U5).
+- `22443be` cut-off text: Floor / Unit badges' tooltip carries the full text ("Floor <value>" / "Unit <value>", same as the badge, so the
+  Tester's check matches) and `.dchip-t` has `title=<full title>`; all through `escA` (U2).
+- `82dd4db` **ASSUMED, Garry to confirm (decision 9 below):** a DELIVERY date may be a Saturday (the van grid has a Sat column): a week move
+  keeps a Saturday delivery on Saturday (Sundays / bank holidays still move to the day before / after in the week); the DUE (build) date
+  stays Mon–Fri working days. New `isDelivDay`; `wkFit(d,W,tod,dv)`. Also the "delivery date not a working day" flag in `dmRow` now only
+  fires for a Sunday or bank holiday (otherwise every moved Saturday delivery would be flagged as wrong) — text "delivery date is a Sunday or
+  bank holiday" (E1). Test U12 changed (lead's rule): on the last booked week beyond +12, Next = Later is correct (was: must not be Later).
+- Not built here: L12 (WO drop-down by due date) — built on feature/project-details-v2. Its 2 attack4 checks fail on this branch:
+  "L12: list window WO drop-down sorted by due date (earliest first, no date last)" and "L12: each WO line shows its due date ("· due 14 Nov")".
+- Tests: attack4 43 pass / 2 fail (the two L12). tests/dates otherwise all pass except the 4 accepted (attack1-oldversion ×3,
+  attack3-guard). Full suite (207 files incl. the 4 probes, 3 at a time): **3,708 pass / 30 fail** — the 2 L12 above plus 28 on
+  ACCEPTED-FAILURES (t13 ×4, t14 ×3, t16 ×2, t17 ×10, t3, attack-poll P5, c4-queue A5, sawstores ×2, attack1-oldversion ×3, attack3-guard).
+  header-late-probe still crashes on the import mapping screen (pre-existing, untouched area).
+
 ---
 ## Addendum, 10 Nov 2026 (evening run): Deliveries usability D1–D4 + DD1 (Garry 10 Nov, TOP PRIORITY before Thursday)
 Architect, unattended. Garry's words and items are in docs/ROADMAP.md ("Delivery page usability", "Due dates prominent everywhere",
@@ -326,6 +345,9 @@ Architect, unattended. Garry's words and items are in docs/ROADMAP.md ("Delivery
 6. Manual jobs (Add Job, no due date): "Move to week…" sets `planWk` (Monday) on the `delx` entry, reason asked, `logEdit`. `delPoolWk` reads it; past week → This week. No new top-level key.
 7. Booked cards get no week buttons; if ticked/dragged to a week the preview says "comes off its van → rebook" (loaded stay + flagged); confirm. Dropping on a van cell = booking only.
 8. Drop on "Later" → "Move to week…" with Wk +4 chosen. Prev/Next range: earliest open past week … +12; a week outside the strip gets a temporary tab.
+9. **ASSUMED (Coder, Tester round attack4 — Garry to confirm):** a DELIVERY date may be on a Saturday (the van grid has a Sat column). A week
+   move keeps a Saturday delivery on Saturday unless it is a bank holiday; Saturday deliveries are not flagged. The DUE (build) date stays
+   Mon–Fri working days. Prev/Next: Later is the end of the walk (Next greyed), Prev from Later = +12; booked weeks beyond +12 walk to each other.
 
 ### What changes
 - **D1** `dchip` uses `dueTag`, hidden `<input type=date class=dq-in data-dq=WO data-f=due|deliv>`; tap → `showPicker()` (fallback focus);
