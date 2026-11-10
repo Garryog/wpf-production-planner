@@ -157,6 +157,12 @@ Rules: rank by the leading number. "Shipped" = step 9 only (left the factory →
   PM date tools (B11 a–j) — "PMs need lots of date tools". (5) The project sequence view, per project, is also wanted for the office and
   despatch (read it from the Deliveries page; ASSUMED look-only for stores and drivers, office can edit as already built).
 
+### Shipped tab + late steps on the board (10 Nov 2026, Garry, go-live day) — add to Job B
+Garry's words: "i need a step in the capacity job shipped plus installed and completed. i will need project and PM filters on the shipped tab for the PMs". And: the Shipped tab "might come in useful when we get to installation management" — it STAYS a main tab and is the starting point for installation management later (fitter, install date, site snags, sign-off). Do not build a separate screen for that.
+- **S1 — Capacity Board step drop-down:** add JOB SHIPPED, INSTALLED and COMPLETED after 8. PALLETED so the office can move a job on by hand (today the drop-down is Cienapps steps 1–8 only). Architect to confirm with Garry before building: exact wording (Cienapps ladder is 9. JOB SHIPPED / 10. INSTALLED TO BE INVOICE / 11 …; "Completed" = today's "Installation complete" mark?), and what the next Cienapps import does to a hand-set step — default: same rule as the existing overrides (the planner's choice holds until Cienapps moves the job on). A hand-set shipped job leaves the board and week totals exactly like an imported one.
+- **S2 — Shipped tab filters:** Project filter and PM filter (PM comes from the project → PM assignment in Job B). Phone-first, same style as the other filters.
+- No duplicates rule unchanged: shipped jobs are kept, never deleted.
+
 ## Progress log
 ### 2 Nov 2026 (scheduled run)
 - Architect confirmed the cutting-list plan against the code; build notes and build order added to docs/PLAN-cutting-lists-stage3.md (fixed garbled characters in both plan files).
