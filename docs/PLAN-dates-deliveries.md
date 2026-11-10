@@ -150,3 +150,25 @@ Phase 2: 17 column L · 18 settings numbers · 19 delivery date in dialog/engine
 
 ---
 ## Progress log
+
+### 10 Nov 2026 — Coder, steps 10–15 (scheduled run)
+- **10** week-aware bookings (`d84b621`): `placeJobs(…, wk)` writes `delWk`, clears `delRebook`; helpers `slotIn`, `slotLblO`, `dShort`,
+  `floorSlots`, `delTab`/`delTabWk`, `delNoteGet`/`delNoteSet`, `delLegacyJobs`/`setLegacyWk`. Readers by real date: floor, driver (day picker
+  = dated days of this + next week; old plain "Tue" = this week; a stale week → today), `podKey(veh,day,wk)`, missed / never left (date gone,
+  any open week), `liveWeekJobs(wk)`, dashboard, PM, Production, saw/stores DELIVERS label. Legacy question on Deliveries (office only).
+- **11** week tabs (`1095e1d`): This week · Next week · +2 · +3 · Later, plus a tab for any past week still holding bookings (and any booked
+  week past +3). Pool by due week (overdue / no date / manual → This week; past +3 → Later, grouped by week); "rebook" group first;
+  bank-holiday columns shaded; notes per date; "📅 Move dates (N)".
+- **12** Close week (`b3b3362`): `closeWeek(wk)` — see commit. Archive entries get `w`, `by`, the week's notes (by day name, so the old
+  viewer/export read them) and photos. Delivered cards left in the pool are archived with the week they were delivered in.
+- **13** `storeAt` + In store (`2359dc6`). **14** per-week poster / export / run sheets + Full Schedule columns (`a1e02bf`). **15** `get8Wks`
+  local date (`41821d3`) — weeks.test.js summer-time check passes now (marked in ACCEPTED-FAILURES for Garry to remove).
+- Fix (`c138587`): an import date Take no longer pulls a job off its van when Cienapps (same import) says it is shipped.
+- Tests: tests/dates/c5-weeks, c6-close-instore, c7-prints (all pass).
+- Full suite (186 files): **3,328 pass / 31 fail**. Baseline at the plan commit 88fc13c (179 files): 3,207 / 25. 24 of the 31 are the
+  baseline's accepted failures (the summer-time one now passes). 7 are old checks that test behaviour this plan changed on purpose:
+  dates/c2-dialog "delivery card shows 'date moved — rebook'" (the card is now on its due week's tab, Wk 49 — with that tab opened the
+  whole file passes 17/17); stage1/s10 "backup rows taken before Clear Week" (backup reason is now "Close week Wk N"); stage2/accept-board
+  AC18 (Full Schedule's last two columns are now Orig due / Moved ×); stage2/autotag-delivery "WO-800-1 … in the pool" (due Wk 45, so it is
+  in the Wk 45 tab's pool, not This week's); stage3/flow-attack1-switchoff dash/office-l/prod "same screen as stage2" (dates added to van
+  labels, dashboard "missed" wording).
