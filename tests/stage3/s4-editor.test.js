@@ -31,6 +31,7 @@ const res = []; const rec = (n, ok, d) => { res.push(ok); console.log((ok ? 'PAS
   rec('changing the project changes the materials offered', b === '|Birch ply|__add', b);
   // validation, fittings Other…
   const c = await off.page.evaluate(() => { const o = document.querySelector('.pod-ovl'), p = o.querySelector('#me-pid'); p.value = 'P1'; p.onchange({ target: p });
+    { const w = o.querySelector('#me-wo'); w.value = 'WO-1'; w.onchange(); } // Part 4 (L11, 10 Nov): moving a NEW list to Crown took WO-1 (an Aderrig job) off it — picked again
     const s = (k, v) => { const e = o.querySelector('[data-mr="' + k + '"]'); if (e.tagName === 'SELECT' && ![...e.options].some(o => o.value === v)) e.add(new Option(v, v)); /* an edging code not in the drop-down = the user's "Other…" (9 Nov) */ e.value = v; (e.oninput || e.onchange)(); };
     s('0|item', 'Gable'); s('0|qty', '2'); s('0|L', '900'); s('0|W', '560'); s('0|edging', '1mm');
     o.querySelector('#me-save').click(); return o.querySelector('#me-err').textContent; });

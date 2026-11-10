@@ -35,7 +35,7 @@ const LONG = 'Job – Kitchen and utility fit-out, Type B 3-bed end of terrace w
     const ed = [...document.querySelectorAll('#me-woinfo [data-woi]')].map(e => e.tagName + (e.readOnly || e.disabled ? ':ro' : ''));
     const r = { sel: s.options[s.selectedIndex].textContent, opts: [...s.options].map(o => o.textContent), info: f(), ed, tags: !!document.querySelector('#me-woinfo b b, #me-woinfo [data-woi] b'), tt: document.querySelector('[data-woi="Title"]').title };
     s.value = 'WO-1'; s.onchange(); r.info2 = f(); s.value = 'WO-3'; s.onchange(); return r; });
-  rec('editor: the picked WO shows just "WO-3 — Unit 31"', ed.sel === 'WO-3 — Unit 31', JSON.stringify(ed.sel));
+  rec('editor: the picked WO shows "WO-3 · Fl 2 · Unit 31 · due 28 Oct" — no title (Part 4 L12, Garry 10 Nov: due date on every line; was "WO-3 — Unit 31")', ed.sel === 'WO-3 · Fl 2 · Unit 31 · due 28 Oct', JSON.stringify(ed.sel));
   rec('editor: no drop-down option carries the title or customer', ed.opts.every(o => !/Aderrig|HOUSE 22|Kitchen/.test(o)), JSON.stringify(ed.opts));
   rec('editor: EDITABLE Floor | Unit | Title | Customer boxes (9 Nov rule) filled from WO-3 (HTML in the title is text, full title on hover)',
     ed.ed.join() === 'INPUT,INPUT,INPUT,INPUT' && !ed.tags && ed.info.Floor === '2' && ed.info.Unit === '31' && ed.info.Title === LONG && ed.info.Customer === 'Aderrig Homes' && ed.tt.startsWith(LONG), JSON.stringify({ info: ed.info, ed: ed.ed, tt: ed.tt }));

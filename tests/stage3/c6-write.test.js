@@ -71,7 +71,7 @@ const HOUSE7 = [['Aderrig', null, null, null, null, null], ['Item', 'Qty', 'Leng
     await F.sleep(600);
     const tl = S.db.t.lists.find(l => l.name === 'House 1 typed'), tln = tl && S.db.t.list_lines.find(x => x.list_id === tl.id);
     const proj = tl && D.find(S.db, 'projects', tl.project_id);
-    rec('typed list: saved to the tables (manual, tagged WO-8), editor closed', tl && tl.source === 'manual' && tl.wos.join() === 'WO-8' && !(await off.page.evaluate(() => !!document.querySelector('.pod-ovl'))), JSON.stringify(tl && { s: tl.source, w: tl.wos }));
+    rec('typed list: saved to the tables (manual, tagged WO-8), editor closed — the "Saved ✓" panel shows (Part 4 L8)', tl && tl.source === 'manual' && tl.wos.join() === 'WO-8' && await off.page.evaluate(() => !document.querySelector('.me-ed') && !!document.querySelector('.me-dov')), JSON.stringify(tl && { s: tl.source, w: tl.wos }));
     rec('typed list: edging and note kept apart; project picked (Aderrig)', tln && tln.edging === '2mm PVC' && tln.note === 'grain up' && proj && proj.name === 'Aderrig', JSON.stringify([tln && tln.edging, tln && tln.note, proj && proj.name]));
     // edit before the saw starts: same rev, same line id
     await off.page.evaluate(async () => { await lsPoll(); const l = lists().find(x => x.name === 'House 1 typed'); openListEditor(l.id); const ov = document.querySelector('.pod-ovl'); const e = ov.querySelector('[data-mr="0|qty"]'); e.value = '3'; e.oninput(); ov.querySelector('#me-save').click(); });
@@ -112,7 +112,7 @@ const HOUSE7 = [['Aderrig', null, null, null, null, null], ['Item', 'Qty', 'Leng
     S.fail3 = false;
     await off.page.evaluate(() => { document.querySelector('#me-save').click(); });
     await F.sleep(600);
-    const e2 = await off.page.evaluate(() => ({ open: !!document.querySelector('.pod-ovl'), p: DB.orders.filter(o => /^P-/.test(o.wo)).map(o => o.wo) }));
+    const e2 = await off.page.evaluate(() => ({ open: !!document.querySelector('.me-ed'), p: DB.orders.filter(o => /^P-/.test(o.wo)).map(o => o.wo) }));
     const nl = S.db.t.lists.find(l => l.name === 'New job');
     rec('database down: editor stays open with "Not saved"', e1.open && /Not saved/.test(e1.err) && e1.p.length === 1, JSON.stringify(e1));
     rec('retry saves it, tagged to the SAME P-number (no second one made)', !e2.open && e2.p.length === 1 && nl && nl.wos.join() === e1.p[0], JSON.stringify([e2, nl && nl.wos]));
