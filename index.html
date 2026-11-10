@@ -4818,6 +4818,100 @@ function suggestTpl(o,templates,projects){
 }
 /* suggestTpl:end */
 function lsProjForCust(c){return projForCust(c,lsProjects());}
+/* b0key:start */
+/* B0 — the matching key (Job B part 3). ONE rule for "the same house" everywhere in the planner: same project + same floor +
+   same unit. keyMatch answers 'same' (act on its own), 'different' (leave alone) or 'unsure' (a person taps once) — never a
+   guess. The database has the same normalising in SQL (seq_key_txt / seq_key_code / seq_floor_key / seq_unit_key /
+   seq_house_key / seq_line_key): keyHouseStr and keyLineStr must give the SAME strings (tests/seq/b0-pairs.json checks both).
+   woKey / woNorm are separate: they identify a work order; this identifies a house. Pure (only keyProj/jobKey read the app). */
+const KEY_ZW=/[­᠎​-‏⁠﻿]/g;
+// NFKC → drop zero-width → every run of non A-Z/0-9 → one space (BEFORE upper-casing, so JS and Postgres agree) → trim → upper
+function keyTxt(s){return String(s==null?'':s).normalize('NFKC').replace(KEY_ZW,'').replace(/[^A-Za-z0-9]+/g,' ').trim().toUpperCase();}
+const keyZ=d=>d.replace(/^0+/,'')||'0'; // leading zeros off a digit run (a lone 0 stays)
+// letter runs and digit runs joined with "-": "T 09" = "T09" = "T9" → "T-9"
+function keyCode(t){return (keyTxt(t).match(/[A-Z]+|[0-9]+/g)||[]).map(x=>/^[0-9]/.test(x)?keyZ(x):x).join('-');}
+const KEY_ORD={FIRST:'1',SECOND:'2',THIRD:'3',FOURTH:'4',FIFTH:'5',SIXTH:'6',SEVENTH:'7',EIGHTH:'8',NINTH:'9',TENTH:'10'};
+// a floor → {k, t, lvl}: t 'lvl' (a level number), 'code' (a block / code), 'amb' ("G", "L1", "F1": a level OR a block — .lvl
+// is the level it could be), '' blank. BLOCK x is always a code.
+function keyFloor(s){
+  let x=keyTxt(s),m;if(!x)return{k:'',t:''};
+  if((m=/^(BLOCK|BLK) (.+)$/.exec(x)||/^(BLOCK|BLK)([0-9].*)$/.exec(x)))return{k:keyCode(m[2]),t:'code'};
+  for(let i=0;i<5;i++){const y=(m=/^(FLOOR|FLR|LEVEL|LVL|STOREY) (.+)$/.exec(x)||/^(FLOOR|FLR|LEVEL|LVL|STOREY)([0-9].*)$/.exec(x))?m[2]
+    :(m=/^(.+) (FLOOR|FLR|LEVEL|LVL|STOREY)$/.exec(x))?m[1]:x;if(y===x)break;x=y;}
+  const lv=n=>({k:n,t:'lvl',lvl:n});
+  if(/^(G ?F|GRD|GND|GRND|GROUND|0+)$/.test(x))return lv('0');
+  if(/^[0-9]+$/.test(x))return lv(keyZ(x));
+  if((m=/^([0-9]+) ?(ST|ND|RD|TH)$/.exec(x)))return lv(keyZ(m[1]));
+  if(KEY_ORD[x])return lv(KEY_ORD[x]);
+  if(x==='BASEMENT')return lv('-1');
+  if(x==='G')return{k:'G',t:'amb',lvl:'0'};
+  if((m=/^(L|F|FL) ?([0-9]+)$/.exec(x)))return{k:keyCode(x),t:'amb',lvl:keyZ(m[2])};
+  return{k:keyCode(x),t:'code'};
+}
+// the floor part of a house / line key: a level is "#n"; a code (or an ambiguous "G" / "L1") is its code
+function keyFloorStr(f){return !f||!f.t?'':f.t==='lvl'?'#'+f.k:f.k;}
+const KEY_UPRE=/^(APARTMENT|APT|UNIT|NUMBER|NO|NR|HOUSE|HSE|PLOT|POSITION|POS) (.+)$/,KEY_UPRE2=/^(APARTMENT|APT|UNIT|NUMBER|NO|NR|HOUSE|HSE|PLOT|POSITION|POS)([0-9].*)$/;
+// a unit → its key: "Apt 7" = "APT07" = "No. 7" = "Unit 007" = "7"; "7 a" = "7A"; "12-14" → "12-14"; '' blank
+function keyUnit(s){
+  let x=keyTxt(s),m;
+  for(let i=0;i<5;i++){m=KEY_UPRE.exec(x)||KEY_UPRE2.exec(x);if(!m)break;x=m[2];}
+  if((m=/^([0-9]+) ?([A-Z]{0,2})$/.exec(x)))return keyZ(m[1])+m[2];
+  return keyCode(x);
+}
+// floor / unit read from a WO title ("BLOCK T09 APT 12") — only used when the job's own Floor / Unit is blank, and a match
+// that needs them is never certain. "HOUSE TYPE B" is a house type, not a unit.
+function keyTitleBits(title){
+  const w=keyTxt(title).split(' ').filter(Boolean),out={floor:'',unit:''};
+  const unitTok=t=>/^[0-9]+[A-Z]{0,2}$/.test(t),lvlTok=t=>/^[0-9]+$/.test(t)||/^[0-9]+(ST|ND|RD|TH)$/.test(t)||!!KEY_ORD[t];
+  for(let i=0;i<w.length;i++){const t=w[i],n=w[i+1]||'';let m;
+    if(t==='TYPE'){i++;continue;}
+    if(!out.floor&&(t==='BLOCK'||t==='BLK')&&n&&n!=='TYPE'){out.floor='BLOCK '+n;i++;continue;}
+    if(!out.floor&&/^(FLOOR|FLR|LEVEL|LVL)$/.test(t)&&lvlTok(n)){out.floor=n;i++;continue;}
+    if(!out.floor&&lvlTok(t)&&/^(FLOOR|FLR)$/.test(n)&&!/^[0-9]+$/.test(t)){out.floor=t;i++;continue;}
+    if(!out.floor&&(t==='GF'||((t==='GROUND'||t==='GRD')&&/^(FLOOR|FLR)$/.test(n)))){out.floor='0';if(t!=='GF')i++;continue;}
+    if(!out.unit&&/^(APARTMENT|APT|UNIT|HOUSE|HSE|NO|NR|PLOT)$/.test(t)&&unitTok(n)){out.unit=n;i++;continue;}
+    if(!out.unit&&(m=/^(APT|UNIT|NO|PLOT)([0-9]+[A-Z]?)$/.exec(t))){out.unit=m[2];continue;}
+  }
+  return out;
+}
+// the project a job belongs to: its own pid (P-numbers made in the planner), else the customer → project link, else unknown
+function keyProj(o){if(!o)return'';if(o.pid)return String(o.pid);const p=typeof lsProjForCust==='function'&&o.customer?lsProjForCust(o.customer):null;return p&&p.id?String(p.id):'';}
+// a key: {p, f:{k,t,lvl}, u, src:{f,u} ('' or 'title')}
+function keyOf(p,floor,unit,title){
+  let f=keyFloor(floor),u=keyUnit(unit);const src={f:'',u:''};
+  if((!f.t||!u)&&title){const tb=keyTitleBits(title);
+    if(!f.t&&tb.floor){f=keyFloor(tb.floor);if(f.t)src.f='title';}
+    if(!u&&tb.unit){u=keyUnit(tb.unit);if(u)src.u='title';}}
+  return{p:String(p||''),f,u,src};
+}
+// a planner job (the planner's current values: a Floor / Unit changed in the planner counts)
+function jobKey(o){return keyOf(keyProj(o),typeof fuF==='function'?fuF(o):o&&o.floor,typeof fuU==='function'?fuU(o):o&&o.unit,o&&o.title);}
+// a sequence / upload row (seqRowKey: the name rowKey is the saw/stores line key) (never reads a title — the database can't either)
+function seqRowKey(r){return keyOf(r&&(r.project_id||r.pid),r&&r.floor,r&&r.unit,'');}
+const keyFlr=(a,b)=>{ // two present floors → 'same' | 'different' | 'unsure'
+  const ta=a.t,tb=b.t;
+  if(ta==='lvl'&&tb==='lvl')return a.k===b.k?'same':'different';
+  if(ta==='lvl'||tb==='lvl'){const o=ta==='lvl'?b:a,l=ta==='lvl'?a:b;return o.t==='code'?'unsure':o.lvl===l.k?'unsure':'different';}
+  if(a.k===b.k)return'same';
+  return ta==='amb'&&tb==='amb'&&a.lvl===b.lvl?'unsure':'different';
+};
+// same / different / unsure, and why. Different beats unsure. A blank, an ambiguous floor or a value read from a title is
+// never 'same'.
+function keyMatch(a,b){
+  const un=[];
+  if(a.p&&b.p&&a.p!==b.p)return{r:'different',why:'another project'};
+  if(a.u&&b.u&&a.u!==b.u)return{r:'different',why:'unit '+a.u+' ≠ '+b.u};
+  if(a.f.t&&b.f.t){const c=keyFlr(a.f,b.f);if(c==='different')return{r:'different',why:'floor '+a.f.k+' ≠ '+b.f.k};if(c==='unsure')un.push('floor '+a.f.k+' or '+b.f.k+' — level or block?');}
+  if(!a.p||!b.p)un.push('project not known');
+  if(!a.f.t||!b.f.t)un.push('floor blank');
+  if(!a.u||!b.u)un.push('unit blank');
+  if(a.src.f||a.src.u||b.src.f||b.src.u)un.push('read from the title');
+  return un.length?{r:'unsure',why:un.join(' · ')}:{r:'same',why:'same project, floor and unit'};
+}
+// the strings the database stores (project_seq.house_key / line_key): null when a part is missing
+function keyHouseStr(f,u){const fs=keyFloorStr(keyFloor(f)),us=keyUnit(u);return fs&&us?fs+'|'+us:null;}
+function keyLineStr(f,u,p,n){const pp=keyTxt(p),nn=keyTxt(n);return !pp&&!nn?null:[keyFloorStr(keyFloor(f)),keyUnit(u),pp,nn].join('|');}
+/* b0key:end */
 /* ---------- The list editor (V2) — works like WPF's Excel sheets ----------
    Columns: Description | Qty | Length | Width | Colour | Edging | Note. No Saw / Stores column: a row with a length or width
    goes to the Saw, a row without goes to Stores (decided at save; shown with a grey "Stores" tag).
