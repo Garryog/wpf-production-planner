@@ -49,8 +49,14 @@ const tickPMs = (p, pid, names) => p.evaluate(({ pid, names }) => {
 }, { pid, names });
 const pmOpts = (p, pid) => p.evaluate(pid => [...document.querySelectorAll('[data-seqpmc]')].filter(x => x.dataset.seqpmc === pid).map(x => x.value), pid);
 const pmTicked = (p, pid) => p.evaluate(pid => [...document.querySelectorAll('[data-seqpmc]')].filter(x => x.dataset.seqpmc === pid && x.checked).map(x => x.value), pid);
+// sequence date tools: open the tool (row 📅, or a toolbar button with rows ticked), fill it, pick a reason, Save
+const dtOpen = (p, sel) => p.evaluate(sel => { const b = document.querySelector(sel); if (!b) return 'no ' + sel; b.click(); return 'ok'; }, sel);
+const dtFill = (p, vals) => p.evaluate(vals => { const o = document.querySelector('.seq-dtdlg'); if (!o) return 'no dialog';
+  for (const [id, v] of Object.entries(vals)) { const e = o.querySelector('#' + id); if (!e) return 'no #' + id; e.value = v; e.dispatchEvent(new Event('change')); } return 'ok'; }, vals);
+const dtWhy = (p, why, note) => p.evaluate(({ why, note }) => { const o = document.querySelector('.seq-dtdlg'); if (note) { o.querySelector('#sd-note').value = note; } o.querySelector('[data-sdwhy="' + why + '"]').click(); return { line: o.querySelector('#sd-line').innerText, prev: o.querySelector('#sd-prev').innerText, ok: !o.querySelector('#sd-ok').disabled }; }, { why, note });
+const dtSave = async p => { await p.evaluate(() => document.querySelector('.seq-dtdlg #sd-ok').click()); await sleep(700); };
 const order = (S, pid) => DS.liveOf(S.db, pid).map(r => r.id);
 const noScroll = p => p.evaluate(() => ({ sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth }));
 const res = []; const rec = (n, ok, d) => { res.push(ok); console.log((ok ? 'PASS ' : 'FAIL ') + n + (d ? '  -> ' + String(d).slice(0, 300) : '')); };
 function finish() { const f = res.filter(x => !x).length; console.log(f + ' failed of ' + res.length); process.exit(f ? 1 : 0); }
-module.exports = { H, D, DP, DS, SS, F3, NOW, sleep, STAFF, v2Row, v1Row, makeServer, dev, seqRow, order, tickPMs, pmOpts, pmTicked, noScroll, rec, finish };
+module.exports = { H, D, DP, DS, SS, F3, NOW, sleep, STAFF, v2Row, v1Row, makeServer, dev, seqRow, order, tickPMs, pmOpts, pmTicked, dtOpen, dtFill, dtWhy, dtSave, noScroll, rec, finish };
