@@ -9,10 +9,18 @@ insert into projects(id,name) values('QP1','Q Aderrig'),('QP2','Q Lucan') on con
 set role anon;
 do $$ declare r record; j jsonb; n int; o text;
 begin
- -- PM assignment is written to the history by the database
- update projects set pm='John Burke', updated_by='Office' where id='QP1';
- select count(*) into n from project_events where entity='project' and entity_id='QP1' and act='pm' and new->>'pm'='John Burke' and by='Office';
- if n<>1 then raise exception 'FAIL pm log %',n; end if;
+ -- PM assignment (one or more PMs) is written to the history by the database
+ if (select pms from projects where id='QP2')<>'{}'::text[] then raise exception 'FAIL pms default'; end if;
+ update projects set pms=array['John Burke','Mary O''Neill'], updated_by='Office' where id='QP1';
+ update projects set pms=array['Mary O''Neill'], updated_by='Prod' where id='QP1';
+ select count(*) into n from project_events where entity='project' and entity_id='QP1' and act='pm'; if n<>2 then raise exception 'FAIL pm log count %',n; end if;
+ select count(*) into n from project_events where entity='project' and entity_id='QP1' and act='pm' and by='Office'
+   and old->'pms'='[]'::jsonb and new->'pms'='["John Burke","Mary O''Neill"]'::jsonb; if n<>1 then raise exception 'FAIL pm log add two'; end if;
+ select count(*) into n from project_events where entity='project' and entity_id='QP1' and act='pm' and by='Prod'
+   and old->'pms'='["John Burke","Mary O''Neill"]'::jsonb and new->'pms'='["Mary O''Neill"]'::jsonb; if n<>1 then raise exception 'FAIL pm log remove one'; end if;
+ -- the old single pm column is no longer logged (kept, unused)
+ update projects set pm='Someone', updated_by='Old' where id='QP1';
+ select count(*) into n from project_events where entity='project' and entity_id='QP1' and act='pm'; if n<>2 then raise exception 'FAIL old pm column logged'; end if;
  update projects set seq_rules='{"follow":true,"offsets":{"robes":5}}', updated_by='John Burke' where id='QP1';
  select count(*) into n from project_events where entity='project' and act='rules'; if n<>1 then raise exception 'FAIL rules log'; end if;
 

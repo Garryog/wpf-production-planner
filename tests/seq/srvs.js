@@ -6,15 +6,18 @@ const SP = require('../project-details/srvp.js');
 const DS = require('./dbs.js');
 const D3 = require('../stage3/db3.js');
 const { H, D, DD, DP } = SP;
-// projects_pm_log: wrap the Stage 3 fake's update (srv3 calls D.update) — only adds the history row, changes nothing else
+// projects_pm_log: wrap the Stage 3 fake's insert / update (srv3 calls D.insert / D.update) — projects.pms text[] (default '{}')
+// and the history row when the list of PMs changes (act 'pm', old/new {pms:[…]}). The old single `pm` column is not logged.
 if (!D3.__seqWrapped) {
-  const orig = D3.update; D3.__seqWrapped = true;
+  const origU = D3.update, origI = D3.insert; D3.__seqWrapped = true;
+  const arr = v => { if (v != null && (!Array.isArray(v) || v.some(x => typeof x !== 'string'))) throw new D3.DbError('malformed array literal: "' + JSON.stringify(v) + '"', '22P02'); };
+  D3.insert = function (d, t, r) { if (t === 'projects') { arr(r.pms); r = Object.assign({ pms: [] }, r, r.pms == null ? { pms: [] } : {}); } return origI.call(this, d, t, r); };
   D3.update = function (d, t, row, patch) {
-    const old = t === 'projects' ? { pm: row.pm == null ? null : row.pm, seq_rules: JSON.stringify(row.seq_rules || {}) } : null;
-    const r = orig.apply(this, arguments);
-    if (old && d.t.project_events) {
-      if ((r.pm == null ? null : r.pm) !== old.pm) d.t.project_events.push({ id: d.seq.project_events++, project_id: r.id, entity: 'project', entity_id: r.id, act: 'pm', old: { pm: old.pm }, new: { pm: r.pm == null ? null : r.pm }, by: r.updated_by || '?', at: new Date().toISOString() });
-    }
+    if (t === 'projects' && 'pms' in patch) { arr(patch.pms); if (patch.pms == null) throw new D3.DbError('null value in column "pms" violates not-null constraint', '23502'); }
+    const old = t === 'projects' ? JSON.stringify(row.pms || []) : null;
+    const r = origU.apply(this, arguments);
+    if (old != null && d.t.project_events && JSON.stringify(r.pms || []) !== old)
+      d.t.project_events.push({ id: d.seq.project_events++, project_id: r.id, entity: 'project', entity_id: r.id, act: 'pm', old: { pms: JSON.parse(old) }, new: { pms: (r.pms || []).slice() }, by: r.updated_by || '?', at: new Date().toISOString() });
     return r;
   };
 }

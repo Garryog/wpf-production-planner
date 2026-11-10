@@ -7,8 +7,9 @@ Newest at the top. Each block must be run in Supabase BEFORE the matching code g
 ## 2026-11-10 — PM sequence & pre-production (Job B part 2) — PENDING, NOT YET RUN — Garry runs this AFTER the Stage 3 and Project details blocks and BEFORE merging `feature/project-details-v2`
 
 **What it does (plain English):**
-- Adds a **Project Manager** and the optional **date rules** (robes = kitchen + 5 working days, …) to each project.
-  Changing a project's PM is written to the history by the database.
+- Adds **one or more Project Managers** (a project can have two or three — Garry, 10 Nov) and the optional **date rules**
+  (robes = kitchen + 5 working days, …) to each project. Adding or removing a project's PMs is written to the history by
+  the database. (The old single `pm` column from Stage 3 is kept and no longer used — nothing is dropped.)
 - New table `project_seq`: each project's **sequence** — one row per work order (or future work order "waiting for a WO
   number" from the Cienapps upload file) in the order the site needs them. The DATABASE keeps the rules: the same line
   (floor + unit + product + name) can never be added twice, a WO number can only be on one row, the order only changes
@@ -39,16 +40,18 @@ details blocks, each twice); `tests/seq/pg-check.sql` checks every rule above �
 -- Runs AFTER the Stage 3 block and the Project details block (needs projects, lists_touch, lists_writable, project_events).
 -- Safe to run twice. Nothing is deleted: the app gets NO delete permission on any of these tables.
 
--- Projects: the assigned Project Manager (column already made by Stage 3 — kept) and the per-project date rules.
+-- Projects: the Project Managers (one or more names; empty = Unassigned) and the per-project date rules.
+-- (The single `pm` column made by Stage 3 is kept, unused by the new screens — never dropped.)
 alter table projects add column if not exists pm text;
+alter table projects add column if not exists pms text[] not null default '{}'::text[];
 alter table projects add column if not exists seq_rules jsonb not null default '{}'::jsonb;
 
--- Changing a project's PM is written to the history by the database.
+-- Adding / removing a project's PMs is written to the history by the database.
 create or replace function projects_pm_log() returns trigger language plpgsql security definer set search_path=public as $$
 begin
-  if new.pm is distinct from old.pm then
+  if new.pms is distinct from old.pms then
     insert into project_events(project_id,entity,entity_id,act,old,new,by)
-    values(new.id,'project',new.id,'pm',jsonb_build_object('pm',old.pm),jsonb_build_object('pm',new.pm),coalesce(new.updated_by,'?'));
+    values(new.id,'project',new.id,'pm',jsonb_build_object('pms',to_jsonb(old.pms)),jsonb_build_object('pms',to_jsonb(new.pms)),coalesce(new.updated_by,'?'));
   end if;
   if new.seq_rules is distinct from old.seq_rules then
     insert into project_events(project_id,entity,entity_id,act,old,new,by)
