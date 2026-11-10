@@ -194,6 +194,11 @@ Garry's words: "customer and project will always be the same. where do we pick a
 - **House / list name:** do NOT pre-fill it with the unit number. It is a free name for the list only, and it must be searchable — in Find old list and in the template list when the list was saved as a template.
 - **Materials:** make where to set up a project's materials obvious from the list window (see L6).
 
+### Work order drop-down in the list window (10 Nov 2026, 16:24, Garry)
+Garry's words: "we only need to see the work orders that are linked to that project in the drop down not all the work orders in the system".
+- **L11** — once a project is picked (customer = project), the Work order drop-down lists ONLY that project's work orders (same customer / linked Cienapps names), in WO order, showing WO · floor · unit · title; shipped and on-hold jobs left out; jobs that already have a live list marked. With no project picked it stays empty with "pick the project first" (or a search box) — never all 650. Picking a WO first still sets the project.
+- Live note: on 10 Nov one project per customer (40) was added to the live database for Garry (name = customer, cien_names = [customer], updated_by "Claude (go-live 10 Nov, for Garry)") so every WO has a project.
+
 ## Progress log
 ### 2 Nov 2026 (scheduled run)
 - Architect confirmed the cutting-list plan against the code; build notes and build order added to docs/PLAN-cutting-lists-stage3.md (fixed garbled characters in both plan files).
