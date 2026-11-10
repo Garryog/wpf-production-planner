@@ -179,6 +179,15 @@ Garry's words: "for the delivery planner due date of jobs need to be edit able i
   - **D3** moving a pool job to another week in one or two taps: "→ Next week" / "Move to week…" on each card, tick several + "Move ticked to week…", and drag onto a week tab on a PC. Same A3–A7 rules and reason.
 - Test with the Production Manager's real use in mind (PC first, then phone). This page decides whether he adopts the planner.
 
+### Cutting list window — Garry's first real use on the live system (10 Nov 2026, 16:11) — do with L1–L4, EARLY
+Garry's words: "i need to be able to click into delivery card and be able to add a cutting list. add new material does not see to work in cutting list. where do i add the project list of materials. you qty in the qty column same as L and W. how do you get out of the cutting list without hitting cancel. need clearer step with list is completed that list is saved and list can be closed. says it cant save". (Screenshot: New cutting list for WO-2617-4, Project = "— pick the project —", red "Pick the project.", amber "This device can't keep a backup copy … (storage full or blocked)".) Live data at the time: no real projects yet, only the two migrated example ones.
+- **L5 — Project should never block a first list:** when the WO is known, pick the project automatically from the WO's customer (customer → project link); if there is none, offer "Make project '<customer>'" in one tap right where the red message is. "Pick the project." must say what to do (e.g. "Pick the project — or ＋ New project… at the bottom of the list").
+- **L6 — Materials easy to find:** "＋ New material…" in the material drop-down must work the first time (if no project yet, lead the person through L5 then carry on, don't just refuse). The project's material list ("Materials" button) needs a clearer label, e.g. "Project materials (add / edit)". Ties in with B (materials editable from PM and office views).
+- **L7 — Qty box like L and W:** show "Qty" inside the empty box, same style as "L" and "W".
+- **L8 — Clear finish:** after Save show plainly "Saved ✓ — list is with the Saw & Stores" with a Close button; a ✕ Close at the top right of the window at all times (asks only if there are unsaved changes); "Cancel" renamed so it does not read as the only way out.
+- **L9 — From the delivery card:** tapping a job's delivery card offers "＋ Add cutting list" (and "Open list" when it has one), opening the same window with the WO, floor, unit, title pre-filled.
+- **L10 — "can't keep a backup copy" bar on Garry's office PC:** find out why (likely this browser's storage for garryog.github.io is full — the quoting tool used to be hosted on the same address and kept large local copies). The planner should say how to fix it, and Settings should show how much device storage the planner is using. Never delete another app's stored copies without asking.
+
 ## Progress log
 ### 2 Nov 2026 (scheduled run)
 - Architect confirmed the cutting-list plan against the code; build notes and build order added to docs/PLAN-cutting-lists-stage3.md (fixed garbled characters in both plan files).
