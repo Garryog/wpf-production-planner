@@ -7633,7 +7633,8 @@ const IMP_FIELDS=[
   {k:'unit',    label:'Unit',       req:false, al:['position','unit','unit no','house','house no','plot','apt','apartment','pos']},
   {k:'orderNo', label:'Order #',    req:false, al:['order #','order no','order number','order']},
   {k:'salesRep',label:'Sales rep',  req:false, al:['sales rep','rep','salesperson','sales person','sales']},
-  {k:'sheets',  label:'Sheets',     req:false, al:['sheets','no of sheets','no. of sheets','number of sheets','sheet count','boards','no of boards','board count']}
+  {k:'sheets',  label:'Sheets',     req:false, al:['sheets','no of sheets','no. of sheets','number of sheets','sheet count','boards','no of boards','board count']},
+  {k:'delivDate',label:'Delivery date',req:false,al:['delivery date','install date','installation date','delivery/install date','delivery / install date','delivery install date']} /*dates phase 2: Cienapps column L (not bare "delivery")*/
 ];
 const nrmH=s=>String(s==null?'':s).toLowerCase().replace(/\s+/g,' ').trim();
 const colLtr=i=>{let s='',n=i;while(n>=0){s=String.fromCharCode(65+(n%26))+s;n=Math.floor(n/26)-1;}return s;};
@@ -7730,6 +7731,9 @@ function normaliseRow(row){
   const d=parseDateIE(row.dueDate);
   if(d===null){r.dueBad=true;r.flags.push('due date "'+String(row.dueDate).slice(0,20)+'" unreadable — existing date kept');}
   else if(d){r.dueDate=d;r.has.dueDate=1;}
+  if(row.delivDate!==undefined){const dd=parseDateIE(row.delivDate); /*dates phase 2*/
+    if(dd===null)r.flags.push('delivery date "'+String(row.delivDate).slice(0,20)+'" unreadable — existing delivery date kept');
+    else if(dd){r.delivDate=dd;r.has.delivDate=1;}}
   return r;
 }
 // "+A" / "+A+C" badge for a WO with A/C lines folded into it (letters from o.adds)
@@ -8141,6 +8145,7 @@ function analyzeImport(input,source){
         else if(r.dueBad){unsched.push(r.key);flags.push('new job with an unreadable due date — left unscheduled (not put in this week)');}
         if(stepForDelivery(cs)){o.delv=true;autoTag.push(o.wo);} // 7 ASSEMBLY COMPLETE / 8 PALLETED → on the delivery board (no van/day)
         if(r.has.sheets)o.sheetsCien=r.sheets;
+        if(r.has.delivDate){o.delivDate=r.delivDate;o.origDelivDate=r.delivDate;if(o.dueDate&&o.dueDate>r.delivDate)flags.push('build date after the delivery date — check');} /*dates phase 2*/
         if(adds)o.adds=adds;
         newOrders.push(o);
         if(r.dupInfo)dups.push({wo:o.wo,...r.dupInfo});
@@ -8200,6 +8205,16 @@ function analyzeImport(input,source){
           set.dueDate=r.dueDate;
         }else oldDates.push(ex.wo); /*dates: Cienapps still has the old date — the planner date stays (A6)*/
       }else if(r.has.dueDate&&ex.dueKeep&&r.dueDate===ex.dueDate)fill.dueKeep=undefined;
+      /*dates phase 2: delivery date (column L). The import never works out a build date from it — it only flags.
+        A delivery date the planner moved (delivKeep = what Cienapps had) is kept until Cienapps has the planner's date. */
+      if(r.has.delivDate&&r.delivDate!==(ex.delivDate||'')){
+        if(ex.delivKeep&&ex.delivKeep===r.delivDate){} // Cienapps still has the old delivery date — the planner's stays
+        else if(ex.delivKeep){flags.push('Cienapps has delivery '+fmt(r.delivDate)+' — the planner\'s delivery date '+fmt(ex.delivDate)+' is kept');}
+        else{set.delivDate=r.delivDate;what.push('delivery date: '+(ex.delivDate?fmt(ex.delivDate):'(none)')+' → '+fmt(r.delivDate));
+          const bd=due?due.dueDate:(ex.dueDate||'');
+          if(bd&&bd>r.delivDate)flags.push('build date '+fmt(bd)+' is after the delivery date '+fmt(r.delivDate)+' — check');
+          else if(ex.delivDate&&!due)flags.push('delivery moved in Cienapps ('+fmt(ex.delivDate)+' → '+fmt(r.delivDate)+'), build date didn\'t — check');}
+      }else if(r.has.delivDate&&ex.delivKeep&&r.delivDate===ex.delivDate)fill.delivKeep=undefined;
       // shipped / invoiced in Cienapps → the Shipped tab (once; "Bring back to board" is respected until Cienapps moves on)
       if(isShipC&&!ex.shippedAt&&!(ex.shipBack&&ex.shipBack.cs===cs)){
         const onVan=!!((ex.delv||ex.delLoadedAt||ex.delDispAt)&&!ex.delDelivAt&&!ex.delDone);
@@ -8366,8 +8381,8 @@ function reanalyzeImport(p){
 /* What the planner holds for a job, for every field an import can write or depends on (due date, step, hours and
    where they came from, week, delivery tag/van/day, shipped / on hold / installed / complete, the planner's overrides).
    Apply compares this between the preview and the latest database copy. */
-const PRE_K=['dueDate','dueKeep','step','hours','plannedWeek','delv','delVeh','delDay','delLoadedAt','shippedAt','shipBack','cienHold','installedAt','completeAt','completeOverride','delvOverride','delWk','delRebook'];
-const PRE_L={dueDate:'due date',dueKeep:'due date',step:'step',hours:'hours',plannedWeek:'week',delv:'delivery tag',delVeh:'van',delDay:'delivery day',delLoadedAt:'loaded',shippedAt:'shipped',shipBack:'brought back',cienHold:'on hold',installedAt:'installed',completeAt:'complete',completeOverride:'complete undone',delvOverride:'untagged',delWk:'delivery week',delRebook:'taken off the van'};
+const PRE_K=['dueDate','dueKeep','step','hours','plannedWeek','delv','delVeh','delDay','delLoadedAt','shippedAt','shipBack','cienHold','installedAt','completeAt','completeOverride','delvOverride','delWk','delRebook','delivDate','delivKeep'];
+const PRE_L={dueDate:'due date',dueKeep:'due date',step:'step',hours:'hours',plannedWeek:'week',delv:'delivery tag',delVeh:'van',delDay:'delivery day',delLoadedAt:'loaded',shippedAt:'shipped',shipBack:'brought back',cienHold:'on hold',installedAt:'installed',completeAt:'complete',completeOverride:'complete undone',delvOverride:'untagged',delWk:'delivery week',delRebook:'taken off the van',delivDate:'delivery date',delivKeep:'delivery date'};
 function preOf(ex){return JSON.stringify(PRE_K.map(k=>ex[k]==null||ex[k]===''||ex[k]===false?null:ex[k]).concat(hSrc(ex),(ex.dueHist||[]).length));} /*dates: + date-history length (a planner date move since the preview)*/
 function preWhat(a,b){
   try{const A=JSON.parse(a),B=JSON.parse(b),r=new Set();PRE_K.forEach((k,i)=>{if(JSON.stringify(A[i])!==JSON.stringify(B[i]))r.add(PRE_L[k]);});
@@ -8433,8 +8448,10 @@ function applyImport(plan){
     const dec=plan.dueDec||{},at=nowISO();
     (plan.updates||[]).forEach(u=>{
       const ex=get(u);if(!ex)return; // deleted on another screen meanwhile — nothing to update
-      const s=u.set||{};
+      const s=u.set||{},oldDeliv=ex.delivDate||'';
       Object.keys(s).forEach(k=>{if(k!=='dueDate')ex[k]=s[k];});
+      if('delivDate' in s){if(!ex.origDelivDate&&oldDeliv)ex.origDelivDate=oldDeliv;delete ex.delivKeep; /*dates phase 2: counts as a move, history kept*/
+        if(oldDeliv)ex.dueHist=(ex.dueHist||[]).concat({at,by:'(import)',f:'deliv',from:oldDeliv,to:s.delivDate,why:'Cienapps import',note:'',src:'cienapps'}).slice(-DUE_HIST_MAX);}
       if('step' in s)storeStamp(ex,at); /*dates: first reached 7/8*/
       if('cienHold' in s){if(s.cienHold){ex.holdAt=at;holdUntag(ex);}else{delete ex.cienHold;delete ex.holdAt;ex.holdBack=at;}}
       if('dueDate' in s){
