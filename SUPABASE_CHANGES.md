@@ -11,9 +11,10 @@ Newest at the top. Each block must be run in Supabase BEFORE the matching code g
   (robes = kitchen + 5 working days, …) to each project. Adding or removing a project's PMs is written to the history by
   the database. (The old single `pm` column from Stage 3 is kept and no longer used — nothing is dropped.)
 - New table `project_seq`: each project's **sequence** — one row per work order (or future work order "waiting for a WO
-  number" from the Cienapps upload file) in the order the site needs them. The DATABASE keeps the rules: the same line
-  (floor + unit + product + name) can never be added twice, a WO number can only be on one row, the order only changes
-  through one controlled step that logs who moved what from where to where, and rows are never deleted (only marked removed).
+  number" from the Cienapps upload file) in the order the site needs them. The DATABASE keeps the rules: loading the same
+  file again adds nothing (two identical lines in one house — e.g. two wardrobes — are kept as two rows, Garry 10 Nov, and a
+  re-load still adds nothing), a WO number can only be on one row, the order only changes through one controlled step that
+  logs who moved what from where to where, and rows are never deleted (only marked removed).
 - New table `seq_requests`: **change requests** for jobs in the fixed two-week window. A request needs a reason; it can be
   decided only once (two Production Managers can't both approve); a refusal needs a reason; nothing in it can be rewritten.
 - New table `seq_pre`: **Johnny's pre-production pool** — his own order and his "Processed" tick (who / when, stamped by the
@@ -85,7 +86,9 @@ create table if not exists project_seq(id text primary key, project_id text not 
   why text, version int not null default 1, created_at timestamptz not null default now(), created_by text,
   updated_at timestamptz not null default now(), updated_by text);
 create unique index if not exists ps_wo_uq on project_seq(upper(wo)) where wo is not null and state<>'removed';
-create unique index if not exists ps_line_uq on project_seq(project_id, line_key) where line_key is not null and state<>'removed';
+-- (Garry 10 Nov) two identical lines in one house are two rows: no unique "same line" index — seq_insert counts instead
+drop index if exists ps_line_uq;
+create index if not exists ps_line_ix on project_seq(project_id, line_key) where line_key is not null and state<>'removed';
 create index if not exists ps_proj_pos on project_seq(project_id, pos);
 create index if not exists ps_upd on project_seq(updated_at);
 
@@ -208,11 +211,14 @@ begin
 end $$;
 
 -- Add rows (Cienapps upload lines, new WOs from an import, "start the sequence") in the order given, at the bottom or
--- under p_after. A line already in the project's sequence (same floor + unit + product + name) or a WO already on a live
--- row is SKIPPED and listed — never added twice.
+-- under p_after. Same line = same floor + unit + product + name. Within one call the k-th line with a given key is
+-- SKIPPED (and listed) only if the project already had k or more live rows with that key before the call — so a file with
+-- two identical "W2 BED 2" lines adds 2 the first time and 0 when loaded again (a file with three adds 1 more).
+-- A WO already on a live row is SKIPPED too — never added twice.
 create or replace function seq_insert(p_project text, p_rows jsonb, p_after text, p_by text)
 returns jsonb language plpgsql security definer set search_path=public as $$
 declare e jsonb; k text; w text; ex text; added text[] := '{}'; skipped jsonb := '[]'::jsonb; ord text[]; rest text[]; x text;
+  seen jsonb := '{}'::jsonb; c int; had int;
 begin
   if not lists_writable() then raise exception 'seq: lists are not switched on'; end if;
   if not exists(select 1 from projects where id=p_project) then return jsonb_build_object('ok',false,'err','no project'); end if;
@@ -221,7 +227,12 @@ begin
     k := seq_line_key(e->>'floor',e->>'unit',e->>'product',e->>'name');
     w := upper(seq_txt(e->>'wo'));
     ex := null;
-    if k is not null then select id into ex from project_seq where project_id=p_project and line_key=k and state<>'removed'; end if;
+    if k is not null then
+      c := coalesce((seen->>k)::int,0)+1; seen := seen || jsonb_build_object(k,c); -- this is the c-th line with key k in this call
+      select count(*) into had from project_seq where project_id=p_project and line_key=k and state<>'removed' and id<>all(added);
+      if had>=c then select id into ex from project_seq where project_id=p_project and line_key=k and state<>'removed' and id<>all(added)
+        order by pos,created_at,id offset c-1 limit 1; end if;
+    end if;
     if ex is not null then
       skipped := skipped || jsonb_build_object('line_no',e->'line_no','line_key',k,'existing_id',ex,'why','already in the sequence');
       continue; end if;
@@ -281,7 +292,10 @@ begin
   if not lists_writable() then raise exception 'seq: lists are not switched on'; end if;
   if seq_txt(p_why) is null then return jsonb_build_object('ok',false,'err','reason needed'); end if;
   select * into r from project_seq where id=p_id;
-  if r.id is null or r.state<>'matched' then return jsonb_build_object('ok',false,'err','not matched'); end if;
+  if r.id is null then return jsonb_build_object('ok',false,'err','not matched'); end if;
+  perform pg_advisory_xact_lock(hashtext('seq:'||r.project_id));
+  select * into r from project_seq where id=p_id; -- re-read under the project lock
+  if r.state<>'matched' then return jsonb_build_object('ok',false,'err','not matched'); end if;
   if p_expect is not null and r.version<>p_expect then return jsonb_build_object('ok',false,'err','stale'); end if;
   perform set_config('wpf.seq','rpc',true);
   update project_seq set wo=null, state='waiting', matched_at=null, matched_by=null, match_how=null, updated_by=p_by, why=p_why where id=p_id;
@@ -297,8 +311,10 @@ begin
   if not lists_writable() then raise exception 'seq: lists are not switched on'; end if;
   if seq_txt(p_why) is null then return jsonb_build_object('ok',false,'err','reason needed'); end if;
   select * into r from project_seq where id=p_id;
-  if r.id is null or r.state='removed' then return jsonb_build_object('ok',false,'err','not live'); end if;
+  if r.id is null then return jsonb_build_object('ok',false,'err','not live'); end if;
   perform pg_advisory_xact_lock(hashtext('seq:'||r.project_id));
+  select * into r from project_seq where id=p_id; -- re-read under the project lock
+  if r.state='removed' then return jsonb_build_object('ok',false,'err','not live'); end if;
   if p_expect is not null and r.version<>p_expect then return jsonb_build_object('ok',false,'err','stale'); end if;
   perform set_config('wpf.seq','rpc',true);
   update project_seq set state='removed', updated_by=p_by, why=p_why where id=p_id;
@@ -314,13 +330,14 @@ declare r record; np int;
 begin
   if not lists_writable() then raise exception 'seq: lists are not switched on'; end if;
   select * into r from project_seq where id=p_id;
-  if r.id is null or r.state<>'removed' then return jsonb_build_object('ok',false,'err','not removed'); end if;
+  if r.id is null then return jsonb_build_object('ok',false,'err','not removed'); end if;
   perform pg_advisory_xact_lock(hashtext('seq:'||r.project_id));
+  select * into r from project_seq where id=p_id; -- re-read under the project lock
+  if r.state<>'removed' then return jsonb_build_object('ok',false,'err','not removed'); end if;
   if p_expect is not null and r.version<>p_expect then return jsonb_build_object('ok',false,'err','stale'); end if;
   if r.wo is not null and exists(select 1 from project_seq where upper(wo)=upper(r.wo) and state<>'removed') then
     return jsonb_build_object('ok',false,'err','WO already in a sequence'); end if;
-  if r.line_key is not null and exists(select 1 from project_seq where project_id=r.project_id and line_key=r.line_key and state<>'removed') then
-    return jsonb_build_object('ok',false,'err','already in the sequence'); end if;
+  -- (Garry 10 Nov) the same line may be there twice (two wardrobes), so a removed line can always come back
   select coalesce(max(pos),0)+1 into np from project_seq where project_id=r.project_id and state<>'removed';
   perform set_config('wpf.seq','rpc',true);
   update project_seq set state=case when wo is not null then 'matched' else 'waiting' end, pos=np, updated_by=p_by, why=p_why where id=p_id;

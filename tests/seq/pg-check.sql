@@ -30,17 +30,36 @@ begin
    {"id":"Q3","floor":"T09","unit":"13","product":"K8","name":"HOUSE  TYPE C","kind":"kitchen","src":"upload","line_no":4},
    {"id":"Q4","floor":"T09","unit":"13","product":"W2","name":"BED 2","kind":"robes","src":"upload","line_no":5},
    {"id":"Q5","floor":"T09","unit":"13","product":"W2","name":"BED 2","kind":"robes","src":"upload","line_no":6}]'::jsonb, null, 'John Burke');
- if jsonb_array_length(j->'added')<>4 or jsonb_array_length(j->'skipped')<>1 then raise exception 'FAIL insert %',j; end if;
+ -- (Garry 10 Nov) the two identical "W2 BED 2" lines are two rows (maybe two wardrobes): all 5 added
+ if jsonb_array_length(j->'added')<>5 or jsonb_array_length(j->'skipped')<>0 then raise exception 'FAIL insert %',j; end if;
  select * into r from project_seq where id='Q1';
  if r.floor<>'T09' or r.name<>'HOUSE TYPE B' or r.pos<>1 or r.state<>'waiting' or r.line_key<>'T09|12|K8|HOUSE TYPE B' or r.created_by<>'John Burke' then raise exception 'FAIL row %',row_to_json(r); end if;
  select pos into n from project_seq where id='Q4'; if n<>4 then raise exception 'FAIL pos Q4 %',n; end if;
+ select pos into n from project_seq where id='Q5'; if n<>5 then raise exception 'FAIL pos Q5 %',n; end if;
+ -- the same five-line file loaded again: 0 added, 5 skipped; the second BED 2 line points at the second BED 2 row
+ j := seq_insert('QP1', '[{"id":"Q21","floor":"T09","unit":"12","product":"K8","name":"HOUSE TYPE B","line_no":2},
+   {"id":"Q22","floor":"T09","unit":"12","product":"K2","name":"HOUSE TYPE B UTILITY","line_no":3},
+   {"id":"Q23","floor":"T09","unit":"13","product":"K8","name":"HOUSE TYPE C","line_no":4},
+   {"id":"Q24","floor":"T09","unit":"13","product":"W2","name":"BED 2","line_no":5},
+   {"id":"Q25","floor":"T09","unit":"13","product":"W2","name":"bed 2 ","line_no":6}]'::jsonb, null, 'John Burke');
+ if jsonb_array_length(j->'added')<>0 or jsonb_array_length(j->'skipped')<>5 then raise exception 'FAIL reload %',j; end if;
+ if j->'skipped'->3->>'existing_id'<>'Q4' or j->'skipped'->4->>'existing_id'<>'Q5' or j->'skipped'->4->>'line_no'<>'6'
+    or j->'skipped'->4->>'why'<>'already in the sequence' then raise exception 'FAIL reload skip entries %',j->'skipped'; end if;
+ -- a file with THREE identical BED 2 lines adds one more (the third), skips two
+ j := seq_insert('QP1', '[{"id":"Q31","floor":"T09","unit":"13","product":"W2","name":"BED 2","line_no":1},
+   {"id":"Q32","floor":"T09","unit":"13","product":"W2","name":"BED 2","line_no":2},
+   {"id":"Q33","floor":"T09","unit":"13","product":"W2","name":"BED 2","line_no":3}]'::jsonb, null, 'John Burke');
+ if j->'added'<>'["Q33"]'::jsonb or jsonb_array_length(j->'skipped')<>2 then raise exception 'FAIL three lines %',j; end if;
+ select count(*) into n from project_seq where project_id='QP1' and line_key='T09|13|W2|BED 2' and state<>'removed'; if n<>3 then raise exception 'FAIL three rows %',n; end if;
+ -- take the extra two out again (marked removed, never deleted) so the rest of this check runs on Q1..Q4
+ j := seq_remove('Q33',null,'John Burke','test'); if not (j->>'ok')::boolean then raise exception 'FAIL remove Q33 %',j; end if;
+ j := seq_remove('Q5',null,'John Burke','test'); if not (j->>'ok')::boolean then raise exception 'FAIL remove Q5 %',j; end if;
+ select string_agg(id,',' order by pos) into o from project_seq where project_id='QP1' and state<>'removed';
+ if o<>'Q1,Q2,Q3,Q4' then raise exception 'FAIL after removing extras %',o; end if;
  -- the same file again: nothing added, every line skipped (Garry: never add the same work twice)
  j := seq_insert('QP1', '[{"id":"Q11","floor":"T09","unit":"12","product":"K8","name":"house type b","line_no":2},
    {"id":"Q12","floor":"t09","unit":"12 ","product":"K2","name":"HOUSE TYPE B UTILITY","line_no":3}]'::jsonb, null, 'John Burke');
  if jsonb_array_length(j->'added')<>0 or jsonb_array_length(j->'skipped')<>2 or j->'skipped'->0->>'existing_id'<>'Q1' then raise exception 'FAIL dup %',j; end if;
- -- a direct insert of the same line (another PC, old screen) is refused by the unique index
- begin insert into project_seq(id,project_id,floor,unit,product,name) values('Q13','QP1','T09','12','K8','HOUSE TYPE B');
-   raise exception 'FAIL duplicate line inserted'; exception when unique_violation then null; end;
  -- insert under a chosen row
  j := seq_insert('QP1','[{"id":"Q6","floor":"T09","unit":"14","product":"K8","name":"HOUSE TYPE A","line_no":7}]'::jsonb,'Q1','John Burke');
  select string_agg(id,',' order by pos) into o from project_seq where project_id='QP1' and state<>'removed';
@@ -105,10 +124,13 @@ begin
  select string_agg(id||':'||pos,',' order by pos) into o from project_seq where project_id='QP1' and state<>'removed';
  if o<>'Q4:1,Q7:2,Q1:3,Q2:4,Q3:5' then raise exception 'FAIL after remove %',o; end if;
  select count(*) into n from project_seq where id='Q6'; if n<>1 then raise exception 'FAIL removed row deleted'; end if;
- -- a removed line can be uploaded again (it is no longer "already in the sequence"), then the old one can't be restored over it
+ -- a removed line can be uploaded again (it is no longer counted); the old one can then still be restored too
+ -- (Garry 10 Nov: the same line may be there twice) — it goes to the bottom
  j := seq_insert('QP1','[{"id":"Q6b","floor":"T09","unit":"14","product":"K8","name":"HOUSE TYPE A"}]'::jsonb,null,'John Burke');
  if jsonb_array_length(j->'added')<>1 then raise exception 'FAIL re-add after remove %',j; end if;
- j := seq_restore('Q6',null,'Mary'); if (j->>'ok')::boolean then raise exception 'FAIL restore over a live line'; end if;
+ j := seq_restore('Q6',null,'Mary'); if not (j->>'ok')::boolean or (j->>'pos')::int<>7 then raise exception 'FAIL restore of a line that is there again %',j; end if;
+ select string_agg(id||':'||pos,',' order by pos) into o from project_seq where project_id='QP1' and state<>'removed';
+ if o<>'Q4:1,Q7:2,Q1:3,Q2:4,Q3:5,Q6b:6,Q6:7' then raise exception 'FAIL after restore %',o; end if;
 
  -- change requests: reason needed; one open request per row; decide once
  begin insert into seq_requests(id,project_id,kind,seq_ids,change,why,asked_by) values('R0','QP1','date','{Q1}','{}',' ','John Burke');
@@ -150,6 +172,11 @@ begin
  select * into r from seq_pre where seq_id='Q7'; if r.processed or r.processed_at is not null then raise exception 'FAIL untick'; end if;
  update seq_pre set pre_key=1.5 where seq_id='Q7';
  select count(*) into n from project_events where entity='pre' and entity_id='Q7'; if n<>2 then raise exception 'FAIL pre log %',n; end if;
+ -- restore is still refused when the row's WO is on another live row
+ j := seq_remove('Q7',null,'Mary','wrong project'); if not (j->>'ok')::boolean then raise exception 'FAIL remove Q7 %',j; end if;
+ j := seq_insert('QP1','[{"id":"Q7b","wo":"WO-2611-1","src":"import"}]'::jsonb,null,'Import');
+ if jsonb_array_length(j->'added')<>1 then raise exception 'FAIL WO free again after remove %',j; end if;
+ j := seq_restore('Q7',null,'Mary'); if (j->>'ok')::boolean or j->>'err'<>'WO already in a sequence' then raise exception 'FAIL restore over a live WO %',j; end if;
 
  -- nobody using the app can delete
  begin delete from project_seq where id='Q1'; raise exception 'FAIL delete seq'; exception when insufficient_privilege then null; end;
@@ -164,11 +191,37 @@ update production_planner set settings=jsonb_build_object('listStore','switching
 update production_planner set settings=jsonb_build_object('listStore','v1') where id='main';
 do $$ begin if lists_writable() then raise exception 'FAIL setup: lists still on'; end if; end $$;
 set role anon;
-do $$ declare j jsonb; begin
+do $$ declare j jsonb; n int; begin
+ -- every one of the six functions refuses (Manager condition 4)
  begin j := seq_move(array['Q1'], null, null, null, 'x', null); raise exception 'FAIL move while switched off';
  exception when raise_exception then if sqlerrm like 'FAIL%' then raise; end if; end;
+ begin j := seq_insert('QP1','[{"id":"QZ1","floor":"Z","unit":"1","product":"K1","name":"Z"}]'::jsonb,null,'x'); raise exception 'FAIL seq_insert while switched off';
+ exception when raise_exception then if sqlerrm like 'FAIL%' then raise; end if; end;
+ begin j := seq_match('Q2','WO-OFF-1',null,'confirmed','x'); raise exception 'FAIL seq_match while switched off';
+ exception when raise_exception then if sqlerrm like 'FAIL%' then raise; end if; end;
+ begin j := seq_unmatch('Q4',null,'x','off'); raise exception 'FAIL seq_unmatch while switched off';
+ exception when raise_exception then if sqlerrm like 'FAIL%' then raise; end if; end;
+ begin j := seq_remove('Q1',null,'x','off'); raise exception 'FAIL seq_remove while switched off';
+ exception when raise_exception then if sqlerrm like 'FAIL%' then raise; end if; end;
+ begin j := seq_restore('Q5',null,'x','off'); raise exception 'FAIL seq_restore while switched off';
+ exception when raise_exception then if sqlerrm like 'FAIL%' then raise; end if; end;
+ -- direct inserts are refused by row-level security; direct updates change no row
  begin insert into project_seq(id,project_id,name) values('QZ','QP1','Z'); raise exception 'FAIL insert while switched off';
  exception when insufficient_privilege then null; end;
+ begin insert into seq_requests(id,project_id,kind,seq_ids,change,why,asked_by) values('RZ','QP1','date','{Q3}','{}','off','x'); raise exception 'FAIL request insert while switched off';
+ exception when insufficient_privilege then null; end;
+ begin insert into seq_pre(seq_id,wo,processed,updated_by) values('Q3',null,true,'x'); raise exception 'FAIL seq_pre insert while switched off';
+ exception when insufficient_privilege then null; end;
+ update project_seq set req_date='2027-01-01', updated_by='x' where id='Q3'; get diagnostics n = row_count; if n<>0 then raise exception 'FAIL seq update while switched off'; end if;
+ update seq_requests set seen_at=now() where id='R4'; get diagnostics n = row_count; if n<>0 then raise exception 'FAIL request update while switched off'; end if;
+ update seq_pre set pre_key=9 where seq_id='Q7'; get diagnostics n = row_count; if n<>0 then raise exception 'FAIL seq_pre update while switched off'; end if;
+end $$;
+reset role;
+do $$ begin
+ if exists(select 1 from project_seq where id in('QZ','QZ1')) or (select req_date from project_seq where id='Q3') is not distinct from '2027-01-01'::date
+    or (select pre_key from seq_pre where seq_id='Q7')=9 or exists(select 1 from seq_requests where id='RZ') or exists(select 1 from seq_pre where seq_id='Q3')
+    or (select state from project_seq where id='Q1')='removed' or (select state from project_seq where id='Q5')<>'removed' then
+   raise exception 'FAIL something was written while switched off'; end if;
 end $$;
 reset role;
 select 'ALL SEQ PG CHECKS PASSED' as result;

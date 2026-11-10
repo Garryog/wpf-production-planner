@@ -23,7 +23,7 @@ function seqCheck(d, n, self) {
   if (n.req_date != null && (n.req_date === '' || isNaN(Date.parse(n.req_date)))) throw new DbError('invalid input syntax for type date: "' + n.req_date + '"', '22007');
   if (!find(d, 'projects', n.project_id)) throw new DbError('insert or update on table "project_seq" violates foreign key constraint', '23503');
   if (live(n) && n.wo != null && d.t.project_seq.some(x => x !== self && x.id !== n.id && live(x) && x.wo != null && x.wo.toUpperCase() === n.wo.toUpperCase())) throw new DbError('duplicate key value violates unique constraint "ps_wo_uq"', '23505');
-  if (live(n) && n.line_key != null && d.t.project_seq.some(x => x !== self && x.id !== n.id && live(x) && x.project_id === n.project_id && x.line_key === n.line_key)) throw new DbError('duplicate key value violates unique constraint "ps_line_uq"', '23505');
+  // (Garry 10 Nov) no unique "same line" index any more: two identical lines in one house are two rows (seq_insert counts)
 }
 function tidy(n) { n.wo = n.wo == null ? null : (txt(n.wo) || '').toUpperCase() || null; ['floor', 'unit', 'product', 'name', 'descr', 'why'].forEach(k => { n[k] = txt(n[k]); }); n.line_key = lineKey(n.floor, n.unit, n.product, n.name); }
 // ps_log (AFTER) — the database writes the history, never the app
@@ -103,10 +103,15 @@ const RPC = {
   seq_insert(d, a) {
     needOn(d);
     if (!find(d, 'projects', a.p_project)) return { ok: false, err: 'no project' };
-    const added = [], skipped = [];
+    const added = [], skipped = [], seen = {};
     for (const e of a.p_rows || []) {
       const k = lineKey(e.floor, e.unit, e.product, e.name), w = e.wo == null ? null : ((txt(e.wo) || '').toUpperCase() || null);
-      let ex = k != null ? d.t.project_seq.find(x => x.project_id === a.p_project && x.line_key === k && live(x)) : null;
+      let ex = null;
+      if (k != null) { // the c-th line with this key is skipped only if the project already had c or more such live rows
+        const c = seen[k] = (seen[k] || 0) + 1;
+        const had = liveOf(d, a.p_project).filter(x => x.line_key === k && !added.includes(x.id));
+        if (had.length >= c) ex = had[c - 1];
+      }
       if (ex) { skipped.push({ line_no: e.line_no == null ? null : e.line_no, line_key: k, existing_id: ex.id, why: 'already in the sequence' }); continue; }
       ex = w != null ? d.t.project_seq.find(x => x.wo != null && x.wo.toUpperCase() === w && live(x)) : null;
       if (ex) { skipped.push({ line_no: e.line_no == null ? null : e.line_no, wo: w, existing_id: ex.id, why: 'WO already in a sequence' }); continue; }
@@ -154,7 +159,6 @@ const RPC = {
     const r = find(d, 'project_seq', a.p_id); if (!r || r.state !== 'removed') return { ok: false, err: 'not removed' };
     if (a.p_expect != null && r.version !== a.p_expect) return { ok: false, err: 'stale' };
     if (r.wo != null && d.t.project_seq.some(x => x.wo != null && x.wo.toUpperCase() === r.wo.toUpperCase() && live(x))) return { ok: false, err: 'WO already in a sequence' };
-    if (r.line_key != null && d.t.project_seq.some(x => x.project_id === r.project_id && x.line_key === r.line_key && live(x))) return { ok: false, err: 'already in the sequence' };
     const np = liveOf(d, r.project_id).reduce((m, x) => Math.max(m, x.pos), 0) + 1;
     seqUpdate(d, r, { state: r.wo != null ? 'matched' : 'waiting', pos: np, updated_by: a.p_by, why: a.p_why == null ? null : a.p_why }, true);
     return { ok: true, pos: np };
