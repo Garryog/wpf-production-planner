@@ -13,6 +13,7 @@ function row() {
     H.order({ wo: 'WO-23', customer: 'Twin Homes', floor: '1', unit: '2', title: 'TWO PROJECTS FIT', dueDate: '2026-11-30', origDueDate: '2026-11-30' }),
     H.order({ wo: 'WO-24', customer: 'Aderrig Homes', floor: 'T09', unit: '30', title: 'ON HOLD <b>x</b>', dueDate: '2026-11-05', origDueDate: '2026-11-05', cienHold: true }),
     H.order({ wo: 'WO-25', customer: 'Aderrig Homes', floor: 'T09', unit: '31', title: 'NO DUE', dueDate: '', origDueDate: '' }),
+    H.order({ wo: 'WO-27', customer: 'Mat Homes', floor: '3', unit: '1', title: 'MATERIAL FIRST', dueDate: '2026-11-30', origDueDate: '2026-11-30' }),
     H.order({ wo: 'WO-26', customer: 'Race Homes', floor: '2', unit: '9', title: 'TWO PCS', dueDate: '2026-11-30', origDueDate: '2026-11-30' }));
   return r;
 }
@@ -175,6 +176,39 @@ const donep = p => p.evaluate(() => { const d = document.querySelector('.me-dov'
     const fs = projs('Fresh Site');
     rec('L5: ＋ New project… in the window → no PIN, project made and picked', fs.length === 1 && w.pid === fs[0].id && await p.evaluate(() => window.__pq.length === 1 && !window.__pq.some(m => /PIN/.test(m))), JSON.stringify([w, await p.evaluate(() => window.__pq)]));
     await p.evaluate(() => { window.prompt = window.__pr0; });
+    await closeAll(p);
+
+    // ---- L6: "＋ Add new material…" with no project yet → led through, asked once, saved on the project and picked
+    const addAsk = (k, name) => p.evaluate(({ k, name }) => { window.__mq = []; window.__pr1 = window.prompt; window.prompt = (m, d) => { window.__mq.push(m); return /New material/.test(m) ? name : null; };
+      const s = document.querySelector('.me-ed [data-mr="' + k + '"]'); s.value = '__add'; s.dispatchEvent(new Event('input')); s.dispatchEvent(new Event('change')); }, { k, name });
+    const mq = () => p.evaluate(() => { window.prompt = window.__pr1 || window.prompt; return window.__mq.filter(m => /New material/.test(m)).length; });
+    const mats = pid => S.db.t.project_materials.filter(m => m.project_id === pid).map(m => m.name);
+    // (a) WO known, project not set on this screen: L5 runs, then the name is asked
+    await p.evaluate(() => { window.__e = openListEditor(null, 'WO-27'); }); await sleep(900);
+    const mh = projs('Mat Homes')[0];
+    await p.evaluate(() => { window.__e.st.pid = ''; window.__e.st.pauto = false; window.__e.draw(); }); // as if the project had not been set up yet
+    await setv(p, '0|item', 'Side'); await setv(p, '0|L', '700');
+    await addAsk('0|mat', 'Oak 18'); await sleep(1200);
+    w = await p.evaluate(() => ({ pid: document.getElementById('me-pid').value, mat: document.querySelector('.me-ed [data-mr="0|mat"]').value }));
+    rec('L6: WO known, no project → project set from the customer, then the name asked ONCE, saved on the project, picked on the row', mh && w.pid === mh.id && (await mq()) === 1 && mats(mh.id).includes('Oak 18') && w.mat === 'Oak 18', JSON.stringify([w, mh && mats(mh.id)]));
+    await closeAll(p);
+    // (b) no WO, no project: "Pick the project — then the new material is added"; picking it carries on
+    await p.evaluate(() => openListEditor(null, '', '')); await sleep(400);
+    await setv(p, '0|item', 'Side'); await setv(p, '0|L', '700');
+    await addAsk('0|mat', 'Ash 18'); await sleep(300);
+    w = await p.evaluate(() => ({ pm: (document.getElementById('me-pm') || {}).innerText || '', focus: (document.activeElement || {}).id }));
+    rec('L6: no WO, no project → "Pick the project — then the new material is added", the project box focused, nothing asked yet', /Pick the project — then the new material is added/.test(w.pm) && w.focus === 'me-pid' && await p.evaluate(() => !window.__mq.length), JSON.stringify(w));
+    await p.evaluate(() => { const s = document.getElementById('me-pid'); s.value = 'P2'; s.dispatchEvent(new Event('change')); }); await sleep(900);
+    w = await p.evaluate(() => ({ mat: document.querySelector('.me-ed [data-mr="0|mat"]').value }));
+    rec('L6: …project picked → the name is asked (once), added to Lucan\'s materials, picked on the row', (await mq()) === 1 && mats('P2').includes('Ash 18') && w.mat === 'Ash 18', JSON.stringify([w, mats('P2')]));
+    await closeAll(p);
+    // (c) two projects fit: picking one of them carries on too
+    await p.evaluate(() => openListEditor(null, 'WO-23')); await sleep(800);
+    await setv(p, '0|item', 'Side'); await setv(p, '0|L', '700');
+    await addAsk('0|mat', 'Elm 18'); await sleep(300);
+    rec('L6: two projects fit → still "pick one", nothing asked yet', await p.evaluate(() => /fits more than one project/.test(document.getElementById('me-pm').innerText) && !window.__mq.length));
+    await p.evaluate(() => document.querySelector('[data-mepp="P3"]').click()); await sleep(900);
+    rec('L6: …"Twin North" tapped → name asked once, added, picked', (await mq()) === 1 && mats('P3').includes('Elm 18') && await p.evaluate(() => document.querySelector('.me-ed [data-mr="0|mat"]').value === 'Elm 18'), JSON.stringify(mats('P3')));
     await closeAll(p);
 
     rec('no page errors', !(S.errors || []).length, JSON.stringify(S.errors));
