@@ -1578,7 +1578,7 @@ function render(){
   if(ROLE==='floor'){renderFloor(app);return;}
   if(ROLE==='dash'){renderDash(app);return;}
   if(ROLE==='pm'){if(V2())renderPMV2(app);else renderPM(app);return;}
-  if(ROLE==='prod'){if(V2())renderProdV2(app);else renderProd(app);return;}
+  if(ROLE==='prod'){if(V2())renderProdV2(app);else{if(prodTab==='deliv')renderDeliveries(app);else renderProd(app);prodStrip(app);}return;} /*v-deliv: + 🚚 Deliveries*/
   if(ROLE==='design'){renderDesign(app);return;}
   if(ROLE==='saw'){renderWorkList(app,'saw');return;}
   if(ROLE==='stores'){renderWorkList(app,'fit');return;}
@@ -3718,10 +3718,17 @@ let prodTab='today';
 function renderProdV2(app){
   if(prodTab==='lists')lsHomePage(app);
   else if(prodTab==='snags')renderSnags(app);
+  else if(prodTab==='deliv')renderDeliveries(app);
   else renderProd(app);
-  const t=(k,l)=>`<button data-prodtab="${k}" style="padding:9px 18px;border:none;border-radius:6px;font-size:15px;font-weight:700;cursor:pointer;${prodTab===k?'background:#14335c;color:#fff':'background:#e6ebf2;color:#14335c'}">${l}</button>`;
-  app.insertAdjacentHTML('afterbegin',`<div id="prod-strip" style="max-width:1400px;margin:10px auto 0;padding:0 20px;display:flex;gap:8px;flex-wrap:wrap">${t('today','🧭 Today')}${t('lists','📋 Lists')}${t('snags','🩹 Snags')}<button id="prod-sent" class="dk-gate"${dkVis()?'':' hidden'} style="padding:9px 18px;border:none;border-radius:6px;font-size:15px;font-weight:700;cursor:pointer;background:#e6ebf2;color:#14335c">📦 Items sent</button></div>`);
-  document.getElementById('prod-sent').onclick=()=>dkReportDlg();dkShow();
+  prodStrip(app);
+}
+/*v-deliv (Tester round 4): the Production Manager's own tab strip — 🧭 Today (his home) · 🚚 Deliveries (the same page the office has,
+  same rights: dateCanMove / van booking) · and, with the lists switch on, 📋 Lists · 🩹 Snags · 📦 Items sent. ASSUMED (Garry to confirm):
+  the Production Manager gets the full Deliveries page. */
+function prodStrip(app){
+  const v2=V2(),t=(k,l)=>`<button data-prodtab="${k}" style="padding:9px 18px;border:none;border-radius:6px;font-size:15px;font-weight:700;cursor:pointer;min-height:44px;${prodTab===k?'background:#14335c;color:#fff':'background:#e6ebf2;color:#14335c'}">${l}</button>`;
+  app.insertAdjacentHTML('afterbegin',`<div id="prod-strip" style="max-width:1400px;margin:10px auto 0;padding:0 20px;display:flex;gap:8px;flex-wrap:wrap">${t('today','🧭 Today')}${t('deliv','🚚 Deliveries')}${v2?t('lists','📋 Lists')+t('snags','🩹 Snags')+`<button id="prod-sent" class="dk-gate"${dkVis()?'':' hidden'} style="padding:9px 18px;border:none;border-radius:6px;font-size:15px;font-weight:700;cursor:pointer;background:#e6ebf2;color:#14335c">📦 Items sent</button>`:''}</div>`);
+  const ps=document.getElementById('prod-sent');if(ps){ps.onclick=()=>dkReportDlg();dkShow();}
   document.querySelectorAll('[data-prodtab]').forEach(b=>b.onclick=()=>{prodTab=b.dataset.prodtab;if(prodTab==='lists')lsStart();render();});
 }
 /* "Waiting for a list" on the saw (build note j): each planned job with no list, with its cut-by date, the list due by
