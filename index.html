@@ -3936,7 +3936,7 @@ function seqPageHTML(pid){
       <td data-l="Progress" class="seq-prog">${o?seqProgHTML(o,r):''}</td><td data-l="Moved">${mv?`<span class="dm-chip" title="Due date changed ${mv} time${mv!==1?'s':''}">🔁 ${mv}×</span>`:''}</td>
       ${can?`<td class="seq-mv"><button class="btn btn-s" data-sequp="${escA(r.id)}" title="Up one"${i?'':' disabled'}>▲</button><button class="btn btn-s" data-seqdn="${escA(r.id)}" title="Down one"${i<rows.length-1?'':' disabled'}>▼</button><button class="btn btn-s" data-seqto="${escA(r.id)}" title="Move to a position number"># Move to…</button></td>`:''}</tr>`;};
   return `<div class="exp-panel seq-pg-wrap" id="seq-pg" data-pid="${escA(pid)}">
-    <div class="seq-top">${seqTitleHTML(pid)}<span style="flex:1"></span>${can&&rows.length?`<label class="seq-all" title="Moving one row moves every row of the same house (same floor + unit) with it"><input type="checkbox" id="seq-house"${SEQV.house?' checked':''}> Whole house</label>`:''}<button class="btn btn-s" id="seq-hist">📜 History</button></div>
+    <div class="seq-top">${seqTitleHTML(pid)}<span style="flex:1"></span>${can&&rows.length?`<label class="seq-all" title="Moving one row moves every row of the same house (same floor + unit) with it"><input type="checkbox" id="seq-house"${SEQV.house?' checked':''}> Whole house</label>`:''}${seqUndoBtn(pid)}<button class="btn btn-s" id="seq-hist">📜 History</button></div>
     ${can?'':`<div class="seq-ro">👁 Read-only — ${ROLE==='pm'?'this is not one of your projects':'only the project\'s PM, the office or the Production Manager change the sequence'}.</div>`}
     ${todo.length?`<div class="seq-start"><button class="btn btn-g" id="seq-start">▶ Start the sequence from today's jobs (${todo.length})</button> <span>Every live work order of this project that isn't shipped, in due-date order. You can reorder them after.</span></div>`:''}
     ${rows.length?`${can?seqTickBarHTML(pid,rows,tk):''}<table class="lst-tbl seq-tbl${can?' seq-can':''}"><thead><tr>${can?'<th></th><th></th>':''}<th>#</th><th>WO</th><th>Flr</th><th>Unit</th><th>Prod</th><th>Name</th><th>Required</th><th>Build</th><th>Progress</th><th>Moved</th>${can?'<th>Move</th>':''}</tr></thead><tbody>${rows.map(tr).join('')}</tbody></table>`
@@ -3948,6 +3948,7 @@ function seqBind(root,pid,redraw){
   const st=root.querySelector('#seq-start');
   if(st)st.onclick=()=>seqStart(pid,redraw);
   const hi=root.querySelector('#seq-hist');if(hi)hi.onclick=()=>seqHistDlg(pid);
+  const ud=root.querySelector('#seq-undo');if(ud)ud.onclick=()=>seqUndo(pid,redraw);
   root.querySelectorAll('[data-seqdate]').forEach(b=>b.onclick=()=>seqDateDlg(pid,[b.dataset.seqdate],'set',redraw));
   // B11a tick boxes + helpers (Whole house / Whole block / From here down) → one tool for all ticked rows
   const tk=seqTicks(pid);
@@ -4141,9 +4142,53 @@ async function seqDatesSave(pid,t,reason,by){
   res.undo=seqUndoRecord(pid,res,before,by);
   return res;
 }
-function seqUndoRecord(){return null;} // ↶ Undo comes with the preview line (next step)
-function seqPreviewLine(rs,t){const ok=rs.filter(r=>!r.skipped&&!r.needReq),n=ok.length+((t&&t.wait)||[]).length;
-  return n?n+' to change':'';}
+/* B11h: one line before Save, and "↶ Undo" for 10 minutes after it (this screen only, memory only). Undo puts the dates back
+   through the same engine (src 'undo'); a job or row changed since is left alone and listed; jobs taken off vans are NOT
+   re-booked — listed "rebook these". */
+let SEQ_UNDO=null;const SEQ_UNDO_MS=600000;
+function seqUndoRecord(pid,res,before,by){
+  const jobs=[];Object.keys(before).forEach(w=>{const o=dmFind(w),b=before[w];if(!o)return;const a={dueDate:o.dueDate||'',delivDate:o.delivDate||''};
+    if(a.dueDate!==b.dueDate||a.delivDate!==b.delivDate)jobs.push({wo:w,before:b,after:a,pulled:(res.rows||[]).some(r=>r.wo===w&&r.vanPulled)});});
+  const rows=(res.wait||[]).map(x=>({...x}));
+  if(!jobs.length&&!rows.length)return null;
+  return SEQ_UNDO={pid,at:Date.now(),by,jobs,rows};
+}
+function seqUndoLeft(pid){return SEQ_UNDO&&SEQ_UNDO.pid===pid?Math.max(0,SEQ_UNDO_MS-(Date.now()-SEQ_UNDO.at)):0;}
+function seqUndoBtn(pid){const ms=seqUndoLeft(pid);return ms&&seqCanEdit(pid)?`<button class="btn btn-s seq-undo" id="seq-undo" title="Put back the dates of the last change made on this screen">↶ Undo (${Math.max(1,Math.ceil(ms/60000))} min)</button>`:'';}
+async function seqUndo(pid,redraw){
+  const u=SEQ_UNDO;if(!u||u.pid!==pid||!seqUndoLeft(pid)){SEQ_UNDO=null;toast('Undo is no longer available (10 minutes)');if(redraw)redraw();return;}
+  if(!confirm('Put back the dates of the last change ('+(u.jobs.length+u.rows.length)+' row'+(u.jobs.length+u.rows.length!==1?'s':'')+')?'))return;
+  seqBy(async by=>{
+    const per={},wos=[],since=[];
+    u.jobs.forEach(j=>{const o=dmFind(j.wo);if(!o||(o.dueDate||'')!==j.after.dueDate||(o.delivDate||'')!==j.after.delivDate){since.push(j.wo);return;}
+      per[j.wo]={due:j.before.dueDate,deliv:j.before.delivDate,delivClear:!j.before.delivDate&&!!j.after.delivDate};wos.push(j.wo);});
+    const res=wos.length?moveDates(wos,{per},{why:'Undo',note:''},by,{src:'undo'}).apply():{moved:0,rows:[]};
+    let rw=0;for(const x of u.rows){const r=LST.sq.get(x.id);if(!r||(r.req_date||'')!==x.to||(x.v&&+r.version!==+x.v)){since.push([r&&r.floor,r&&r.unit,r&&r.name].filter(Boolean).join(' ')||'a waiting row');continue;}
+      try{await lsWrite('project_seq',r,{req_date:x.from||null,why:'Undo'});rw++;}catch(e){since.push([r.floor,r.unit,r.name].filter(Boolean).join(' '));}}
+    SEQ_UNDO=null;seqMapsDrop();if(redraw)redraw();
+    const reb=u.jobs.filter(j=>j.pulled).map(j=>j.wo);
+    const n=(res.moved||0)+rw;
+    if(!since.length&&!reb.length){toast(n+' date'+(n!==1?'s':'')+' put back ✓');return;}
+    lsDlg(`<div style="font-weight:800;color:#14335c;font-size:16px;margin-bottom:6px">↶ Undo — ${n} put back</div>
+      ${since.length?`<div style="font-size:13px;margin:4px 0">Changed since — left as they are: <b>${since.map(escA).join(', ')}</b></div>`:''}
+      ${reb.length?`<div class="sd-req">🚚 Rebook these — they came off their vans and are NOT put back on: ${reb.map(escA).join(', ')}</div>`:''}`,480).classList.add('seq-res');
+  });
+}
+// "3 jobs come off vans, 1 already cut — flagged, 2 cutting lists move, 2 need the Production Manager"
+function seqPreviewLine(rs,t){
+  const ok=rs.filter(r=>!r.skipped&&!r.needReq),w=((t&&t.wait)||[]).length,nr=rs.filter(r=>r.needReq).length,pl=(n,a,b)=>n+' '+(n===1?a:b);
+  const moved=new Set(ok.filter(r=>r.dueCh&&!r.weekKept).map(r=>r.wo));let nl=0;try{nl=lists().filter(l=>(l.wos||[]).some(x=>moved.has(x))).length;}catch(e){}
+  const p=[];
+  if(ok.length)p.push(pl(ok.length,'job changes','jobs change'));
+  if(w)p.push(pl(w,'waiting row changes','waiting rows change'));
+  const v=ok.filter(r=>r.vanPulled).length;if(v)p.push(pl(v,'job comes off its van','jobs come off vans'));
+  const ld=ok.filter(r=>r.flags.includes('on-van-loaded')).length;if(ld)p.push(pl(ld,'already loaded — flagged','already loaded — flagged'));
+  const ct=ok.filter(r=>r.flags.includes('cut-week-kept')).length;if(ct)p.push(ct+' already cut — flagged');
+  if(nl)p.push(pl(nl,'cutting list moves','cutting lists move'));
+  const fx=ok.filter(r=>r.fixed).length;if(fx)p.push(fx+' inside the fixed window (logged)');
+  if(nr)p.push(pl(nr,'needs the Production Manager','need the Production Manager'));
+  return p.length?p.join(', '):'Nothing to change';
+}
 function seqResult(res){
   const nr=res.needReq||[],fl=(res.rows||[]).filter(r=>!r.skipped&&!r.needReq&&r.flags.some(f=>f!=='fixed')),wf=res.waitFail||[],n=(res.moved||0)+(res.wait||[]).length;
   if(!nr.length&&!fl.length&&!wf.length&&!(res.pulled)){toast(n?n+' date'+(n!==1?'s':'')+' changed ✓':'Nothing changed');return;}
