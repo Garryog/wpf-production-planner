@@ -427,3 +427,37 @@ j) PROGRESS ON EACH ROW (look only) — list ready · processed by Johnny · cut
 SAME RULES FOR EVERY TOOL: reason every time, full history, next 14 days need the Production Manager's OK, build week, van,
 saw and stores follow the new date like any other date change.
 ```
+
+## Progress log — Part 2
+
+### 10 Nov 2026 (scheduled run, 07:00–08:50 UTC) — steps 1–4 built, Tester round 1 fixed, Manager GO WITH CONDITIONS (checkpoint)
+- **Branch:** the 9 Nov Part 1 work + this plan were rebased cleanly onto the latest Job A (`feature/dates-deliveries` 7d3fec5, Manager GO)
+  and pushed as **`feature/project-details-v2`** — this is now the Job B branch. Force-pushing the old `feature/project-details` was refused,
+  so that branch is **SUPERSEDED — do not merge it** (it is Part 1 on top of list-excel-template only). The one-run-at-a-time check must
+  look at `feature/project-details-v2` too.
+- **Part 1 leftover:** Tester rewrote the 11 old checks to Garry's 9 Nov rules (a2c3990) — none was a real bug; all pass.
+- **Step 1 SQL** (93e7b21, 7728b9d): PENDING block "PM sequence & pre-production" at the top of SUPABASE_CHANGES.md. Run twice on a
+  throwaway Postgres 16 set up like Supabase after Stage 1 / Stage 3 / Stores dockets / Project details (each twice):
+  tests/seq/pg-check.sql **ALL SEQ PG CHECKS PASSED**, project-details pg-check still passes, upgrade from the first draft leaves one seq_move.
+- **Steps 2–4** (b35d55a, d179001, 1d23e98): B5 PM assignment, pick-your-name once per device, PM sees only his projects ("All projects"
+  read-only), Pre-production role (PIN 1010, placeholder page), Settings seqFixedDays 14 (7–30) / preWks 3 (3–12) / seqWaitWks 3 (1–12);
+  B6a read-only sequence page, progress chips, 🔒 fixed badge, "Start the sequence from today's jobs"; B6b reorder (▲▼, Move to, drag on
+  PC, Whole house) through seq_move with versions, History.
+  Coder ASSUMED: office/Production Manager open the sequence from Lists → 🏗 Projects → 🔢 Sequence; PM filter applies to Deliveries and
+  Projects (not Snags), a PM with no projects sees everything; Start-the-sequence puts the job title in the description; the Pre-production
+  button/PIN/staff column only show once the tables exist; the name question pops up once per page load.
+- **Tester round 1** (1517cac): 1 High (poll never brought other PCs' changes — seq_pre order), 3 Medium (free row above fixed rows; anchor
+  not version-checked; lost reply said "Not moved"), 4 Low. Fixed: c024c49, 7728b9d (seq_move p_after_ver), aea6021, 35d7214, c74e9ca.
+  #7 (old screen drops the three new Settings numbers) → ACCEPTED-FAILURES, pending Garry.
+- **Full suite** at c74e9ca (213 files): **3,904 pass / 30 fail**. Baseline at the rebased start (206 files): 3,704 / 41. Every failure is on
+  ACCEPTED-FAILURES except stage3/attack4-states M3, which failed once with two suites' worth of load and passes 4/4 alone (timing, not a bug).
+- **Manager: GO WITH CONDITIONS** (fine to build on, not releasable alone). Before the next steps:
+  1. (before step 7) rows made by "Start the sequence" have no same-work key, so a later upload of the same houses would add a second
+     "no WO yet" row per line → step 7 must also skip an upload line whose floor + unit + kind already has a matched row of that product, or
+     seqStart fills product/name. 2. (before step 7, Garry) the database treats two identical lines in one house (e.g. two "W2 BED 2") as
+     the same work — see Garry's question. 3. (before step 6) time the sequence page at 300 rows × 2,500 jobs on a throttled phone; build a
+     WO→job lookup if slow. 4. (before steps 8/9) seq_remove / seq_restore re-read after the lock, seq_unmatch takes the lock; pg-check to
+     cover all six functions and direct writes to seq_requests / seq_pre. 5. (step 9) office/prod moves of fixed rows also write a 'direct'
+     request row so the scorecard counts them.
+- **Next run:** Manager conditions 1, 3, 4 → steps 5–10 (engine, row dates, upload + matching, requests, Johnny's pool) → Tester → full
+  suite → Manager. B11 tools only after Garry's yes.
