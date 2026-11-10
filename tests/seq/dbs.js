@@ -9,11 +9,15 @@ const TABLES = ['project_seq', 'seq_requests', 'seq_pre'];
 const now = () => new Date().toISOString();
 // seq_txt(): NFKC, whitespace collapsed, trimmed, '' → null
 const txt = v => { const s = String(v == null ? '' : v).normalize('NFKC').replace(/\s+/g, ' ').trim(); return s || null; };
-const lineKey = (f, u, p, n) => (txt(p) == null && txt(n) == null) ? null : [f, u, p, n].map(x => txt(x) || '').join('|').toUpperCase();
+// seq_line_key / seq_house_key (Job B part 3): the planner's own B0 key functions (tests/seq/b0lib.js takes them out of
+// index.html; pg-check.sql proves the SQL gives the same strings from tests/seq/b0-pairs.json)
+const B0 = require('./b0lib.js');
+const lineKey = (f, u, p, n) => B0.keyLineStr(f, u, p, n);
+const houseKey = (f, u) => B0.keyHouseStr(f, u);
 function ensure(d) { TABLES.forEach(x => { if (!d.t[x]) d.t[x] = []; }); if (!d.t.project_events) d.t.project_events = []; if (!d.seq.project_events) d.seq.project_events = 1; }
 const live = r => r.state !== 'removed';
 const ev = (d, project_id, entity, entity_id, act, old, nw, by) => d.t.project_events.push({ id: d.seq.project_events++, project_id, entity, entity_id, act, old, new: nw, by: by || '?', at: now() });
-const SEQ_COLS = ['id', 'project_id', 'pos', 'state', 'wo', 'floor', 'unit', 'product', 'name', 'descr', 'kind', 'children', 'line_key', 'req_date', 'own_date', 'is_new', 'src', 'upload_id', 'line_no',
+const SEQ_COLS = ['id', 'project_id', 'pos', 'state', 'wo', 'floor', 'unit', 'product', 'name', 'descr', 'kind', 'children', 'line_key', 'house_key', 'req_date', 'own_date', 'is_new', 'src', 'upload_id', 'line_no',
   'matched_at', 'matched_by', 'match_how', 'why', 'version', 'created_at', 'created_by', 'updated_at', 'updated_by'];
 function seqCheck(d, n, self) {
   if (!['waiting', 'matched', 'removed'].includes(n.state)) throw new DbError('new row violates check constraint "project_seq_state_check"', '23514');
@@ -25,7 +29,7 @@ function seqCheck(d, n, self) {
   if (live(n) && n.wo != null && d.t.project_seq.some(x => x !== self && x.id !== n.id && live(x) && x.wo != null && x.wo.toUpperCase() === n.wo.toUpperCase())) throw new DbError('duplicate key value violates unique constraint "ps_wo_uq"', '23505');
   // (Garry 10 Nov) no unique "same line" index any more: two identical lines in one house are two rows (seq_insert counts)
 }
-function tidy(n) { n.wo = n.wo == null ? null : (txt(n.wo) || '').toUpperCase() || null; ['floor', 'unit', 'product', 'name', 'descr', 'why'].forEach(k => { n[k] = txt(n[k]); }); n.line_key = lineKey(n.floor, n.unit, n.product, n.name); }
+function tidy(n) { n.wo = n.wo == null ? null : (txt(n.wo) || '').toUpperCase() || null; ['floor', 'unit', 'product', 'name', 'descr', 'why'].forEach(k => { n[k] = txt(n[k]); }); n.line_key = lineKey(n.floor, n.unit, n.product, n.name); n.house_key = houseKey(n.floor, n.unit); }
 // ps_log (AFTER) — the database writes the history, never the app
 function seqLog(d, n, old) {
   let a;
@@ -103,16 +107,18 @@ const RPC = {
   seq_insert(d, a) {
     needOn(d);
     if (!find(d, 'projects', a.p_project)) return { ok: false, err: 'no project' };
-    const added = [], skipped = [], seen = {};
+    const added = [], skipped = [], claimed = [];
     for (const e of a.p_rows || []) {
       const k = lineKey(e.floor, e.unit, e.product, e.name), w = e.wo == null ? null : ((txt(e.wo) || '').toUpperCase() || null);
-      let ex = null;
-      if (k != null) { // the c-th line with this key is skipped only if the project already had c or more such live rows
-        const c = seen[k] = (seen[k] || 0) + 1;
-        const had = liveOf(d, a.p_project).filter(x => x.line_key === k && !added.includes(x.id));
-        if (had.length >= c) ex = had[c - 1];
+      const hk = houseKey(e.floor, e.unit), kd = e.kind || 'kitchen';
+      let ex = null, how = 'line';
+      if (k != null) { // the claim rule: the first unclaimed live row with this line key; else (no WO) the first unclaimed row with
+        // no line key in the same house and of the same kind ("Start the sequence" rows)
+        const free = x => !added.includes(x.id) && !claimed.includes(x.id);
+        ex = liveOf(d, a.p_project).find(x => x.line_key === k && free(x)) || null;
+        if (!ex && w == null && hk != null) { how = 'house'; ex = liveOf(d, a.p_project).find(x => x.line_key == null && x.house_key === hk && x.kind === kd && free(x)) || null; }
       }
-      if (ex) { skipped.push({ line_no: e.line_no == null ? null : e.line_no, line_key: k, existing_id: ex.id, why: 'already in the sequence' }); continue; }
+      if (ex) { claimed.push(ex.id); skipped.push({ line_no: e.line_no == null ? null : e.line_no, line_key: k, existing_id: ex.id, why: 'already in the sequence', by: how }); continue; }
       ex = w != null ? d.t.project_seq.find(x => x.wo != null && x.wo.toUpperCase() === w && live(x)) : null;
       if (ex) { skipped.push({ line_no: e.line_no == null ? null : e.line_no, wo: w, existing_id: ex.id, why: 'WO already in a sequence' }); continue; }
       if (find(d, 'project_seq', e.id)) { skipped.push({ line_no: e.line_no == null ? null : e.line_no, existing_id: e.id, why: 'already saved' }); continue; }
@@ -218,4 +224,4 @@ function preWrite(d, row, patch) {
   if ((!old && n.processed) || (old && n.processed !== old.processed)) { const s = find(d, 'project_seq', n.seq_id); ev(d, s && s.project_id, 'pre', n.seq_id, n.processed ? 'processed' : 'unprocessed', null, { wo: n.wo, src: n.processed_src }, n.updated_by); }
   return row;
 }
-module.exports = { TABLES, ensure, txt, lineKey, seqInsert, seqUpdate, RPC, reqInsert, reqUpdate, preWrite, liveOf };
+module.exports = { TABLES, ensure, txt, lineKey, houseKey, seqInsert, seqUpdate, RPC, reqInsert, reqUpdate, preWrite, liveOf };

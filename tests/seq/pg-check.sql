@@ -1,8 +1,37 @@
 -- PM sequence & pre-production: the SQL in SUPABASE_CHANGES.md ("PM sequence & pre-production" block) checked on a THROWAWAY
 -- local Postgres set up like Supabase (roles anon / authenticated / service_role; Stage 1 + Stage 3 + Stores dockets + Project
 -- details + PM sequence blocks run first, each twice). Never run this against the live project.
--- Run: psql -v ON_ERROR_STOP=1 -d <throwaway db> -f tests/seq/pg-check.sql   → last line: ALL SEQ PG CHECKS PASSED
+-- Run FROM THE REPO ROOT (it reads tests/seq/b0-pairs.json):
+--   psql -v ON_ERROR_STOP=1 -d <throwaway db> -f tests/seq/pg-check.sql   → last line: ALL SEQ PG CHECKS PASSED
 -- Every check raises an error (and stops) if it fails. Run it on a fresh throwaway database (it adds fixed ids).
+-- B0 matching key (Job B part 3): the SQL key functions give exactly the strings in tests/seq/b0-pairs.json — the file the
+-- planner's own functions are checked against (tests/seq/b0-key.test.js) — and a pair that is not "same" never shares a key.
+\set b0fx `cat tests/seq/b0-pairs.json`
+create temp table b0fx as select :'b0fx'::jsonb as j;
+do $$ declare fx jsonb := (select j from b0fx); c jsonb; ha text; hb text; n int := 0;
+begin
+ for c in select * from jsonb_array_elements(fx->'pairs') loop
+   ha := seq_house_key(c->'a'->>'floor',c->'a'->>'unit'); hb := seq_house_key(c->'b'->>'floor',c->'b'->>'unit');
+   if ha is distinct from (c->'hk'->>0) or hb is distinct from (c->'hk'->>1) then
+     raise exception 'FAIL B0 pair % (%) house keys SQL % / % — fixture %',c->>'n',c->>'what',ha,hb,c->'hk'; end if;
+   if coalesce((c->>'jsOnly')::boolean,false)=false then
+     if c->>'r'<>'same' and ha is not null and ha=hb then raise exception 'FAIL B0 pair % (%) is %, but both get key %',c->>'n',c->>'what',c->>'r',ha; end if;
+     if c->>'r'='same' and (ha is null or ha<>hb) then raise exception 'FAIL B0 pair % (%) is same, keys % / %',c->>'n',c->>'what',ha,hb; end if;
+   end if;
+   n := n+1;
+ end loop;
+ if n<60 then raise exception 'FAIL B0 fixture has only % pairs',n; end if;
+ for c in select * from jsonb_array_elements(fx->'lines') loop
+   if seq_line_key(c->>'f',c->>'u',c->>'p',c->>'name') is distinct from (c->>'lk') then
+     raise exception 'FAIL B0 line % (%) SQL % — fixture %',c->>'n',c->>'what',seq_line_key(c->>'f',c->>'u',c->>'p',c->>'name'),c->>'lk'; end if;
+ end loop;
+ -- the parts on their own
+ if seq_key_txt(' ｔ'||chr(8203)||'09 -- apt.'||chr(160)||'7 ')<>'T09 APT 7' then raise exception 'FAIL seq_key_txt'; end if;
+ if seq_key_txt('Ré-sidence ß')<>'R SIDENCE' then raise exception 'FAIL seq_key_txt accents %',seq_key_txt('Ré-sidence ß'); end if;
+ if seq_key_code('T 09')<>'T-9' or seq_key_code('0')<>'0' or seq_key_code('A00')<>'A-0' or seq_key_code(' - ')<>'' or seq_key_code(null)<>'' then raise exception 'FAIL seq_key_code'; end if;
+ if seq_unit_key('NORTH 7')<>'NORTH-7' or seq_unit_key('Unit No 007')<>'7' or seq_unit_key(null)<>'' then raise exception 'FAIL seq_unit_key'; end if;
+ if seq_floor_key(null)<>'' or seq_floor_key('third floor')<>'#3' or seq_floor_key('000')<>'#0' then raise exception 'FAIL seq_floor_key'; end if;
+end $$;
 update production_planner set settings=jsonb_build_object('listStore','migrating') where id='main' and coalesce(settings->>'listStore','v1')='v1';
 update production_planner set settings=jsonb_build_object('listStore','v2') where id='main' and settings->>'listStore'='migrating';
 insert into projects(id,name) values('QP1','Q Aderrig'),('QP2','Q Lucan') on conflict do nothing;
@@ -33,7 +62,7 @@ begin
  -- (Garry 10 Nov) the two identical "W2 BED 2" lines are two rows (maybe two wardrobes): all 5 added
  if jsonb_array_length(j->'added')<>5 or jsonb_array_length(j->'skipped')<>0 then raise exception 'FAIL insert %',j; end if;
  select * into r from project_seq where id='Q1';
- if r.floor<>'T09' or r.name<>'HOUSE TYPE B' or r.pos<>1 or r.state<>'waiting' or r.line_key<>'T09|12|K8|HOUSE TYPE B' or r.created_by<>'John Burke' then raise exception 'FAIL row %',row_to_json(r); end if;
+ if r.floor<>'T09' or r.name<>'HOUSE TYPE B' or r.pos<>1 or r.state<>'waiting' or r.line_key<>'T-9|12|K8|HOUSE TYPE B' or r.house_key<>'T-9|12' or r.created_by<>'John Burke' then raise exception 'FAIL row %',row_to_json(r); end if;
  select pos into n from project_seq where id='Q4'; if n<>4 then raise exception 'FAIL pos Q4 %',n; end if;
  select pos into n from project_seq where id='Q5'; if n<>5 then raise exception 'FAIL pos Q5 %',n; end if;
  -- the same five-line file loaded again: 0 added, 5 skipped; the second BED 2 line points at the second BED 2 row
@@ -50,7 +79,7 @@ begin
    {"id":"Q32","floor":"T09","unit":"13","product":"W2","name":"BED 2","line_no":2},
    {"id":"Q33","floor":"T09","unit":"13","product":"W2","name":"BED 2","line_no":3}]'::jsonb, null, 'John Burke');
  if j->'added'<>'["Q33"]'::jsonb or jsonb_array_length(j->'skipped')<>2 then raise exception 'FAIL three lines %',j; end if;
- select count(*) into n from project_seq where project_id='QP1' and line_key='T09|13|W2|BED 2' and state<>'removed'; if n<>3 then raise exception 'FAIL three rows %',n; end if;
+ select count(*) into n from project_seq where project_id='QP1' and line_key='T-9|13|W2|BED 2' and state<>'removed'; if n<>3 then raise exception 'FAIL three rows %',n; end if;
  -- take the extra two out again (marked removed, never deleted) so the rest of this check runs on Q1..Q4
  j := seq_remove('Q33',null,'John Burke','test'); if not (j->>'ok')::boolean then raise exception 'FAIL remove Q33 %',j; end if;
  j := seq_remove('Q5',null,'John Burke','test'); if not (j->>'ok')::boolean then raise exception 'FAIL remove Q5 %',j; end if;
@@ -177,6 +206,45 @@ begin
  j := seq_insert('QP1','[{"id":"Q7b","wo":"WO-2611-1","src":"import"}]'::jsonb,null,'Import');
  if jsonb_array_length(j->'added')<>1 then raise exception 'FAIL WO free again after remove %',j; end if;
  j := seq_restore('Q7',null,'Mary'); if (j->>'ok')::boolean or j->>'err'<>'WO already in a sequence' then raise exception 'FAIL restore over a live WO %',j; end if;
+
+ -- (Job B part 3) the house key is stored on every row; the claim rule in seq_insert
+ select house_key into o from project_seq where id='Q3'; if o<>'T-9|13' then raise exception 'FAIL house_key %',o; end if;
+ select house_key into o from project_seq where id='Q7b'; if o is not null then raise exception 'FAIL house_key of a row with no floor/unit %',o; end if;
+ insert into projects(id,name) values('QP3','Q Claim') on conflict do nothing;
+ -- "Start the sequence" rows: a WO, floor + unit, no product / name (no line key)
+ j := seq_insert('QP3','[{"id":"QC1","wo":"QWO-1","floor":"T09","unit":"12","descr":"HOUSE TYPE B","kind":"kitchen","src":"start","match_how":"start"},
+   {"id":"QC2","wo":"QWO-2","floor":"G","unit":"5","descr":"HOUSE TYPE A","kind":"kitchen","src":"start","match_how":"start"},
+   {"id":"QC3","wo":"QWO-3","floor":"T09","unit":"12","descr":"HOUSE TYPE B KITCHEN 2","kind":"kitchen","src":"start","match_how":"start"}]'::jsonb,null,'John Burke');
+ if jsonb_array_length(j->'added')<>3 then raise exception 'FAIL start rows (two kitchens in one house both kept) %',j; end if;
+ select line_key, house_key into r from project_seq where id='QC1'; if r.line_key is not null or r.house_key<>'T-9|12' then raise exception 'FAIL start row keys %',row_to_json(r); end if;
+ -- the upload: the T09/12 kitchen line is the Start row's work (typed "Block T9" / "Apt 012") → skipped; the utility is new;
+ -- a second kitchen line in that house claims the second Start row; a third has none left → added; "0"/5 is not "G"/5 → added
+ j := seq_insert('QP3','[{"id":"QU1","floor":"Block T9","unit":"Apt 012","product":"K8","name":"HOUSE TYPE B","kind":"kitchen","line_no":1},
+   {"id":"QU2","floor":"T09","unit":"12","product":"K2","name":"HOUSE TYPE B UTILITY","kind":"utility","line_no":2},
+   {"id":"QU3","floor":"T09","unit":"12","product":"K9","name":"HOUSE TYPE B ISLAND","kind":"kitchen","line_no":3},
+   {"id":"QU4","floor":"T09","unit":"12","product":"K7","name":"HOUSE TYPE B EXTRA","kind":"kitchen","line_no":4},
+   {"id":"QU5","floor":"0","unit":"5","product":"K1","name":"HOUSE TYPE A","kind":"kitchen","line_no":5},
+   {"id":"QU6","floor":"T09","unit":"12","product":"W2","name":"BED 2","kind":"robes","line_no":6},
+   {"id":"QU7","floor":"T09","unit":"12","product":"W2","name":"BED 2","kind":"robes","line_no":7}]'::jsonb,null,'John Burke');
+ if j->'added'<>'["QU2","QU4","QU5","QU6","QU7"]'::jsonb then raise exception 'FAIL claim added %',j; end if;
+ if j->'skipped'->0->>'existing_id'<>'QC1' or j->'skipped'->0->>'by'<>'house' or j->'skipped'->1->>'existing_id'<>'QC3' or jsonb_array_length(j->'skipped')<>2
+   then raise exception 'FAIL claim skipped %',j->'skipped'; end if;
+ -- the same file again: 0 added (the line rows claim by line key first, the Start rows by house)
+ j := seq_insert('QP3','[{"id":"QV1","floor":"T09","unit":"12","product":"K8","name":"HOUSE TYPE B","kind":"kitchen","line_no":1},
+   {"id":"QV2","floor":"T09","unit":"12","product":"K2","name":"HOUSE TYPE B UTILITY","kind":"utility","line_no":2},
+   {"id":"QV3","floor":"T09","unit":"12","product":"K9","name":"HOUSE TYPE B ISLAND","kind":"kitchen","line_no":3},
+   {"id":"QV4","floor":"T09","unit":"12","product":"K7","name":"HOUSE TYPE B EXTRA","kind":"kitchen","line_no":4},
+   {"id":"QV5","floor":"0","unit":"5","product":"K1","name":"HOUSE TYPE A","kind":"kitchen","line_no":5},
+   {"id":"QV6","floor":"T09","unit":"12","product":"W2","name":"BED 2","kind":"robes","line_no":6},
+   {"id":"QV7","floor":"T09","unit":"12","product":"W2","name":"BED 2","kind":"robes","line_no":7}]'::jsonb,null,'John Burke');
+ if jsonb_array_length(j->'added')<>0 or jsonb_array_length(j->'skipped')<>7 then raise exception 'FAIL claim same file twice %',j; end if;
+ select count(*) into n from project_seq where project_id='QP3' and state<>'removed'; if n<>8 then raise exception 'FAIL claim row count %',n; end if;
+ -- a line WITH a WO never claims a Start row by house (it is its own work order)
+ j := seq_insert('QP3','[{"id":"QW1","wo":"QWO-9","floor":"G","unit":"5","product":"K1","name":"HOUSE TYPE A","kind":"kitchen"}]'::jsonb,null,'Import');
+ if j->'added'<>'["QW1"]'::jsonb then raise exception 'FAIL WO line claimed by house %',j; end if;
+ -- an old key (an earlier run of the block) is put right by any write
+ update project_seq set line_key='OLD', house_key='OLD', updated_by='x' where id='QU2';
+ select line_key, house_key into r from project_seq where id='QU2'; if r.line_key<>'T-9|12|K2|HOUSE TYPE B UTILITY' or r.house_key<>'T-9|12' then raise exception 'FAIL keys not recomputed %',row_to_json(r); end if;
 
  -- nobody using the app can delete
  begin delete from project_seq where id='Q1'; raise exception 'FAIL delete seq'; exception when insufficient_privilege then null; end;

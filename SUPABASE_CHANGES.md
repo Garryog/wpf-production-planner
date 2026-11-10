@@ -19,6 +19,12 @@ Newest at the top. Each block must be run in Supabase BEFORE the matching code g
   decided only once (two Production Managers can't both approve); a refusal needs a reason; nothing in it can be rewritten.
 - New table `seq_pre`: **Johnny's pre-production pool** — his own order and his "Processed" tick (who / when, stamped by the
   database). Reading his spreadsheet later can tick, but never un-tick what he ticked by hand.
+- **(Job B part 3, added 10 Nov) The matching key:** the database works out, for every sequence row, which house it is for
+  (`house_key` = floor + unit, typed any way: "T09" = "t9 " = "Block T09", "Apt 07" = "No. 7" = "7", "GF" = "Ground" = "0") with
+  exactly the same rule as the planner (`seq_key_txt`, `seq_key_code`, `seq_floor_key`, `seq_unit_key`, `seq_house_key`;
+  `seq_line_key` now uses them). Loading the Cienapps file after "Start the sequence" no longer adds a second row for a house
+  that already has its work order (the file's kitchen line is matched to that house's kitchen row). A floor that could be a
+  level OR a block ("G", "L1") is never treated as the same as the level by the database — a person decides.
 - Every add / match / move / date / request / tick is written to `project_events` (the history table from the Project details
   block) by the database. The app can read it, never write it.
 - Writes only while the lists are switched on (same rule as snags, materials and the spec sheet). No DELETE for the app.
@@ -28,7 +34,10 @@ Newest at the top. Each block must be run in Supabase BEFORE the matching code g
 Pre-production view simply don't appear (the screens check once per page load). Everything else works as before.
 
 **Tested:** run twice on a throwaway Postgres set up like Supabase (after the Stage 1, Stage 3, Stores dockets and Project
-details blocks, each twice); `tests/seq/pg-check.sql` checks every rule above — ALL SEQ PG CHECKS PASSED (10 Nov).
+details blocks, each twice); `tests/seq/pg-check.sql` checks every rule above — ALL SEQ PG CHECKS PASSED (10 Nov). Re-checked
+after the matching key was added (10 Nov, later): the block run twice on two fresh throwaway databases, ALL SEQ PG CHECKS PASSED
+both times (60 key pairs + 8 line keys from `tests/seq/b0-pairs.json`, the claim rule); also run over the earlier version of
+this block with a row in it — the row's keys were put right, nothing written to the history.
 
 ### Steps for Garry
 1. Supabase → WPF project → **SQL Editor** → **New query**. Copy everything in the grey box below, paste, **Run**.
@@ -67,10 +76,65 @@ create trigger projects_pm_log after update on projects for each row execute fun
 create or replace function seq_txt(v text) returns text language sql immutable as $$
  select nullif(btrim(regexp_replace(normalize(coalesce(v,''),NFKC),'\s+',' ','g')),'')
 $$;
--- The "same work" key: floor + unit + product + name, upper case, spaces collapsed (Garry: never add the same work twice).
+-- The matching key (B0, Job B part 3) — the SAME rule as the planner's keyTxt / keyCode / keyFloor / keyUnit / keyHouseStr /
+-- keyLineStr (index.html, b0key block); tests/seq/b0-pairs.json is checked against both. Same project + same floor + same unit
+-- = the same house: "T09" = "t9 " = "Block T09"; "Apt 07" = "No. 7" = "7"; "GF" = "Ground" = "0". A floor that could be a level
+-- OR a block ("G", "L1") is kept apart from the level, so the database never treats them as the same house.
+-- Text: NFKC, zero-width characters out, every run of anything but A-Z / 0-9 → one space, trimmed, upper case.
+create or replace function seq_key_txt(s text) returns text language sql immutable as $$
+ select upper(btrim(regexp_replace(regexp_replace(normalize(coalesce(s,''),NFKC),'[\u00AD\u180E\u200B-\u200F\u2060\uFEFF]','','g'),'[^A-Za-z0-9]+',' ','g')))
+$$;
+-- A code: letter runs and digit runs joined with "-", leading zeros off each digit run ("T 09" = "T09" = "T9" → T-9).
+create or replace function seq_key_code(t text) returns text language sql immutable as $$
+ select coalesce(string_agg(case when x.m[1] ~ '^[0-9]' then coalesce(nullif(ltrim(x.m[1],'0'),''),'0') else x.m[1] end,'-' order by x.o),'')
+ from regexp_matches(seq_key_txt(t),'[A-Z]+|[0-9]+','g') with ordinality as x(m,o)
+$$;
+-- A floor: a level is "#n" (GF / Ground / 0 / 00 → #0, 1st / First / Level 1 / 01 → #1, Basement → #-1); a block or code is
+-- its code (Block T09 → T-9); "G" and "L1" / "F1" / "FL1" stay as their code (never equal to a level). '' = blank.
+create or replace function seq_floor_key(s text) returns text language plpgsql immutable as $$
+declare x text := seq_key_txt(s); y text; m text[]; i int;
+begin
+  if x='' then return ''; end if;
+  m := regexp_match(x,'^(BLOCK|BLK) (.+)$'); if m is null then m := regexp_match(x,'^(BLOCK|BLK)([0-9].*)$'); end if;
+  if m is not null then return seq_key_code(m[2]); end if;
+  for i in 1..5 loop
+    m := regexp_match(x,'^(FLOOR|FLR|LEVEL|LVL|STOREY) (.+)$'); if m is null then m := regexp_match(x,'^(FLOOR|FLR|LEVEL|LVL|STOREY)([0-9].*)$'); end if;
+    if m is not null then y := m[2];
+    else m := regexp_match(x,'^(.+) (FLOOR|FLR|LEVEL|LVL|STOREY)$'); y := case when m is null then x else m[1] end; end if;
+    exit when y=x; x := y;
+  end loop;
+  if x ~ '^(G ?F|GRD|GND|GRND|GROUND|0+)$' then return '#0'; end if;
+  if x ~ '^[0-9]+$' then return '#'||coalesce(nullif(ltrim(x,'0'),''),'0'); end if;
+  m := regexp_match(x,'^([0-9]+) ?(ST|ND|RD|TH)$'); if m is not null then return '#'||coalesce(nullif(ltrim(m[1],'0'),''),'0'); end if;
+  y := case x when 'FIRST' then '1' when 'SECOND' then '2' when 'THIRD' then '3' when 'FOURTH' then '4' when 'FIFTH' then '5'
+    when 'SIXTH' then '6' when 'SEVENTH' then '7' when 'EIGHTH' then '8' when 'NINTH' then '9' when 'TENTH' then '10' end;
+  if y is not null then return '#'||y; end if;
+  if x='BASEMENT' then return '#-1'; end if;
+  return seq_key_code(x);
+end $$;
+-- A unit: APT / APARTMENT / UNIT / NO / NR / NUMBER / HOUSE / HSE / PLOT / POS / POSITION in front taken off (also "APT07"),
+-- then 7 / 7A (leading zeros off, "7 a" = 7A), else its code ("12-14" → 12-14). '' = blank.
+create or replace function seq_unit_key(s text) returns text language plpgsql immutable as $$
+declare x text := seq_key_txt(s); m text[]; i int;
+begin
+  for i in 1..5 loop
+    m := regexp_match(x,'^(APARTMENT|APT|UNIT|NUMBER|NO|NR|HOUSE|HSE|PLOT|POSITION|POS) (.+)$');
+    if m is null then m := regexp_match(x,'^(APARTMENT|APT|UNIT|NUMBER|NO|NR|HOUSE|HSE|PLOT|POSITION|POS)([0-9].*)$'); end if;
+    exit when m is null; x := m[2];
+  end loop;
+  m := regexp_match(x,'^([0-9]+) ?([A-Z]{0,2})$');
+  if m is not null then return coalesce(nullif(ltrim(m[1],'0'),''),'0')||coalesce(m[2],''); end if;
+  return seq_key_code(x);
+end $$;
+-- The house: floor|unit, null when either is blank (then nothing is ever treated as the same house automatically).
+create or replace function seq_house_key(f text, u text) returns text language sql immutable as $$
+ select case when seq_floor_key(f)='' or seq_unit_key(u)='' then null else seq_floor_key(f)||'|'||seq_unit_key(u) end
+$$;
+-- The "same work" key: floor|unit|product|name, the same normalising (Garry: never add the same work twice). Null when the
+-- line has no product and no name.
 create or replace function seq_line_key(f text, u text, p text, n text) returns text language sql immutable as $$
- select case when seq_txt(p) is null and seq_txt(n) is null then null
-   else upper(concat_ws('|',coalesce(seq_txt(f),''),coalesce(seq_txt(u),''),coalesce(seq_txt(p),''),coalesce(seq_txt(n),''))) end
+ select case when seq_key_txt(p)='' and seq_key_txt(n)='' then null
+   else concat_ws('|',seq_floor_key(f),seq_unit_key(u),seq_key_txt(p),seq_key_txt(n)) end
 $$;
 
 -- One row per work order (or future work order, "waiting for WO number") in the PM's required order.
@@ -89,6 +153,9 @@ create unique index if not exists ps_wo_uq on project_seq(upper(wo)) where wo is
 -- (Garry 10 Nov) two identical lines in one house are two rows: no unique "same line" index — seq_insert counts instead
 drop index if exists ps_line_uq;
 create index if not exists ps_line_ix on project_seq(project_id, line_key) where line_key is not null and state<>'removed';
+-- (Job B part 3) the house each row is for (floor|unit, worked out by the database — see seq_house_key)
+alter table project_seq add column if not exists house_key text;
+create index if not exists ps_house_ix on project_seq(project_id, house_key, kind) where house_key is not null and state<>'removed';
 create index if not exists ps_proj_pos on project_seq(project_id, pos);
 create index if not exists ps_upd on project_seq(updated_at);
 
@@ -100,6 +167,7 @@ begin
   new.product := seq_txt(new.product); new.name := seq_txt(new.name); new.descr := seq_txt(new.descr);
   new.why := seq_txt(new.why);
   new.line_key := seq_line_key(new.floor,new.unit,new.product,new.name);
+  new.house_key := seq_house_key(new.floor,new.unit);
   if tg_op='INSERT' then
     perform pg_advisory_xact_lock(hashtext('seq:'||new.project_id));
     select coalesce(max(pos),0)+1 into new.pos from project_seq where project_id=new.project_id and state<>'removed';
@@ -127,6 +195,10 @@ drop trigger if exists ps_rules on project_seq;
 create trigger ps_rules before insert or update on project_seq for each row execute function ps_rules();
 drop trigger if exists project_seq_touch on project_seq;
 create trigger project_seq_touch before update on project_seq for each row execute function lists_touch();
+-- Rows saved before the matching key (an earlier run of this block): work their keys out again. Only rows whose keys
+-- changed are touched (their version goes up; nothing is written to the history); a second run touches nothing.
+update project_seq set updated_by=coalesce(updated_by,'(key update)')
+ where line_key is distinct from seq_line_key(floor,unit,product,name) or house_key is distinct from seq_house_key(floor,unit);
 
 create or replace function ps_log() returns trigger language plpgsql security definer set search_path=public as $$
 declare a text;
@@ -211,14 +283,16 @@ begin
 end $$;
 
 -- Add rows (Cienapps upload lines, new WOs from an import, "start the sequence") in the order given, at the bottom or
--- under p_after. Same line = same floor + unit + product + name. Within one call the k-th line with a given key is
--- SKIPPED (and listed) only if the project already had k or more live rows with that key before the call — so a file with
--- two identical "W2 BED 2" lines adds 2 the first time and 0 when loaded again (a file with three adds 1 more).
+-- under p_after. The claim rule (Job B part 3, the same in the planner): lines in the order given each CLAIM the first
+-- unclaimed live row with the same line key (floor + unit + product + name); a line with no WO that finds none claims the first
+-- unclaimed live row with NO line key in the same house (house_key) and of the same kind — a row made by "Start the
+-- sequence" (Manager condition 1). A line that claims a row is SKIPPED (and listed). So a file with two identical
+-- "W2 BED 2" lines adds 2 the first time and 0 when loaded again (a file with three adds 1 more).
 -- A WO already on a live row is SKIPPED too — never added twice.
 create or replace function seq_insert(p_project text, p_rows jsonb, p_after text, p_by text)
 returns jsonb language plpgsql security definer set search_path=public as $$
 declare e jsonb; k text; w text; ex text; added text[] := '{}'; skipped jsonb := '[]'::jsonb; ord text[]; rest text[]; x text;
-  seen jsonb := '{}'::jsonb; c int; had int;
+  claimed text[] := '{}'; hk text; kd text; how text;
 begin
   if not lists_writable() then raise exception 'seq: lists are not switched on'; end if;
   if not exists(select 1 from projects where id=p_project) then return jsonb_build_object('ok',false,'err','no project'); end if;
@@ -226,15 +300,18 @@ begin
   for e in select * from jsonb_array_elements(coalesce(p_rows,'[]'::jsonb)) loop
     k := seq_line_key(e->>'floor',e->>'unit',e->>'product',e->>'name');
     w := upper(seq_txt(e->>'wo'));
-    ex := null;
+    hk := seq_house_key(e->>'floor',e->>'unit'); kd := coalesce(e->>'kind','kitchen');
+    ex := null; how := 'line';
     if k is not null then
-      c := coalesce((seen->>k)::int,0)+1; seen := seen || jsonb_build_object(k,c); -- this is the c-th line with key k in this call
-      select count(*) into had from project_seq where project_id=p_project and line_key=k and state<>'removed' and id<>all(added);
-      if had>=c then select id into ex from project_seq where project_id=p_project and line_key=k and state<>'removed' and id<>all(added)
-        order by pos,created_at,id offset c-1 limit 1; end if;
+      select id into ex from project_seq where project_id=p_project and line_key=k and state<>'removed'
+        and id<>all(added) and id<>all(claimed) order by pos,created_at,id limit 1;
+      if ex is null and w is null and hk is not null then how := 'house';
+        select id into ex from project_seq where project_id=p_project and line_key is null and house_key=hk and kind=kd
+          and state<>'removed' and id<>all(added) and id<>all(claimed) order by pos,created_at,id limit 1;
+      end if;
     end if;
-    if ex is not null then
-      skipped := skipped || jsonb_build_object('line_no',e->'line_no','line_key',k,'existing_id',ex,'why','already in the sequence');
+    if ex is not null then claimed := claimed || ex;
+      skipped := skipped || jsonb_build_object('line_no',e->'line_no','line_key',k,'existing_id',ex,'why','already in the sequence','by',how);
       continue; end if;
     if w is not null then select id into ex from project_seq where upper(wo)=w and state<>'removed'; end if;
     if ex is not null then
@@ -487,7 +564,8 @@ create policy "seq_pre edit" on seq_pre for update to anon, authenticated using 
 grant select, insert, update on project_seq, seq_requests, seq_pre to anon, authenticated;
 revoke delete, truncate on project_seq, seq_requests, seq_pre from anon, authenticated;
 grant all on project_seq, seq_requests, seq_pre to service_role;
-grant execute on function seq_txt(text), seq_line_key(text,text,text,text) to anon, authenticated, service_role;
+grant execute on function seq_txt(text), seq_line_key(text,text,text,text), seq_key_txt(text), seq_key_code(text), seq_floor_key(text),
+  seq_unit_key(text), seq_house_key(text,text) to anon, authenticated, service_role;
 grant execute on function seq_move(text[],text,int[],int,text,text), seq_insert(text,jsonb,text,text), seq_match(text,text,int,text,text),
   seq_unmatch(text,int,text,text), seq_remove(text,int,text,text), seq_restore(text,int,text,text) to anon, authenticated, service_role;
 revoke execute on function seq_renumber(text,text[]) from public, anon, authenticated;
