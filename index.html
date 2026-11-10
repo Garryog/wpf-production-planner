@@ -3909,8 +3909,7 @@ function seqWoRow(wo){return seqMaps().rows.get(seqWoK(wo))||null;}
 // Required date: the job's delivery date, else its build (due) date; a waiting row's own date
 function seqRowDate(r,o){o=o===undefined?seqJob(r):o;return o?(o.delivDate||o.dueDate||''):(r&&r.req_date||'');}
 // Fixed window (Key questions 3 / 4): the build OR delivery date (or the date it's being moved to) within seqFixedDays() calendar days, overdue included
-function seqFixedAt(o,to){if(!o)return false;const ds=[o.dueDate,o.delivDate||o.dueDate,to].filter(d=>/^\d{4}-\d{2}-\d{2}/.test(String(d||'')));if(!ds.length)return false;
-  return ds.map(d=>String(d).slice(0,10)).sort()[0]<=addDayISO(todayLocal(),seqFixedDays());}
+function seqFixedAt(o,to){return !!o&&dmFixedAt(o,[to],seqFixedDays());}
 function seqKind(t){const s=String(t||'').toUpperCase();return /QUARTZ/.test(s)?'quartz':/UTILITY/.test(s)?'utility':/\b(ROBES?|WARDROBES?|BED\s*\d*)\b/.test(s)?'robes':'kitchen';}
 // Progress (look only): list ready · processed · cut · assembled · in store · on a van · delivered — from the planner's own fields
 function seqProgress(o,r){if(!o)return[];const n=stepNo(o.step),dl=dStage(o)==='deliv'||!!o.delDone||isShipped(o),pre=r&&LST.sp.get(r.id);
@@ -9347,6 +9346,7 @@ function dmFind(j){
 }
 function dmShiftWd(iso,n){let d=iso;n=Math.round(+n||0);for(let i=0;i<Math.abs(n);i++)d=n>0?nextWorkDay(d):prevWorkDay(d);return d;}
 function dmTarget(o,ch){
+  if(ch&&ch.per){const p=ch.per[o.wo];return p&&p.due?String(p.due).slice(0,10):'';} /*seq: per-job targets (PM sequence tools)*/
   if(ch&&ch.due)return String(ch.due).slice(0,10);
   if(ch&&ch.shift&&o.dueDate&&+ch.shift.n){const n=+ch.shift.n;return ch.shift.unit==='wd'?dmShiftWd(o.dueDate,n):addDayISO(o.dueDate,7*n);}
   return'';
@@ -9354,7 +9354,11 @@ function dmTarget(o,ch){
 const DM_FLAG={'cut-week-kept':'already cut — build week kept, check it','on-van-loaded':'already loaded — stays on the van, check it',
   'bank-hol':'not a working day','past':'date is in the past — build week is this week','beyond-8wks':'beyond the 8 board weeks — Unscheduled',
   'programmed':'programmed (step 5) — take it out of the nest','on-hold':'on hold in Cienapps (12) — moved anyway',
-  'after-delivery':'build date is after the delivery date','moved-out':'moved out a long way — "don\'t cut early" shows on the saw, stores, board and lists','deliv-bank-hol':'delivery date is not a working day','deliv-past':'delivery date is in the past'};
+  'after-delivery':'build date is after the delivery date','fixed':'inside the fixed window — needs the Production Manager','moved-out':'moved out a long way — "don\'t cut early" shows on the saw, stores, board and lists','deliv-bank-hol':'delivery date is not a working day','deliv-past':'delivery date is in the past'};
+/*seq: the fixed window (Key questions 3/4): the job's build OR delivery date, or a date it is being moved to, within `days`
+  calendar days of today (overdue included)*/
+function dmFixedAt(o,tos,days){const ds=[o&&o.dueDate,o&&(o.delivDate||o.dueDate)].concat(tos||[]).filter(d=>/^\d{4}-\d{2}-\d{2}/.test(String(d||''))).map(d=>String(d).slice(0,10));
+  return !!ds.length&&ds.sort()[0]<=addDayISO(todayLocal(),days);}
 function dmDays(a,b){return Math.round((new Date(b+'T12:00:00')-new Date(a+'T12:00:00'))/86400000);}
 function dmFlagTxt(f,r){
   if(f==='moved-out'&&r&&r.outDays)return 'moved out '+r.outDays+' days, not cut yet — "don\'t cut early" shows on the saw, stores, board and lists';
@@ -9363,6 +9367,7 @@ function dmFlagTxt(f,r){
 }
 // dates phase 2: the new delivery date ('' = unchanged). A group shift moves it by the same amount as the due date.
 function dmDelivTarget(o,ch){
+  if(ch&&ch.per){const p=ch.per[o.wo];return p&&p.deliv?String(p.deliv).slice(0,10):'';} /*seq*/
   if(ch&&ch.deliv)return String(ch.deliv).slice(0,10);
   if(ch&&ch.shift&&o.delivDate&&+ch.shift.n){const n=+ch.shift.n;return ch.shift.unit==='wd'?dmShiftWd(o.delivDate,n):addDayISO(o.delivDate,7*n);}
   return'';
@@ -9396,6 +9401,7 @@ function dmRow(o,ch,opts){
     (ASSUMED, Garry to confirm) — so several small moves add up*/
   if(r.dueCh&&from&&!woCut(o)){const h=o.dueHold,base=(h&&h.off&&h.off.due)||o.origDueDate||from,n=dmDays(base,to);if(n>earlyDays()){r.flags.push('moved-out');r.outDays=n;r.outFrom=base;}}
   if(isOnHold(o))r.flags.push('on-hold'); /*dates: ASSUMED (Tester round 1) — flagged in the preview, still moved*/
+  if(opts.frozenDays!=null&&dmFixedAt(o,[r.dueCh?to:'',dTo],opts.frozenDays)){r.flags.push('fixed');r.fixed=true;if(opts.requestOnly)r.needReq=true;} /*seq: fixed window*/
   // A4: a van booking follows the delivery date when the job has one, else the due date
   // round 2: a delivery date set to the day it is already booked keeps the booking
   if((D||r.dClear?(!!dTo&&dTo!==slotDate(o)):r.dueCh)&&(o.delVeh||o.delDay)&&dStage(o)!=='deliv'){
@@ -9417,14 +9423,15 @@ function moveDates(jobs,change,reason,by,opts){
       if(done.has(o))return;done.add(o);
       const r=dmRow(o,change,opts);res.rows.push(r);
       if(r.skipped){res.skipped.push({wo:o.wo,why:r.skipped});return;}
-      const what=[];
+      if(r.needReq){(res.needReq=res.needReq||[]).push(r);return;} /*seq: a PM's change inside the fixed window waits for the Production Manager*/
+      const what=[],fx=r.fixed?{fx:1}:{},rq=opts.reqId?{rq:String(opts.reqId)}:{};
       if(r.dueCh){
       // the date Cienapps still holds (dueKeep): set on the first planner move, gone when the planner is back on it
       if(!o.origDueDate)o.origDueDate=r.from;
       if(src==='cienapps')delete o.dueKeep;
       else if(!/^P-/i.test(String(o.wo))){if(!o.dueKeep&&r.from)o.dueKeep=r.from;if(o.dueKeep===r.to)delete o.dueKeep;}
       o.dueDate=r.to;
-      o.dueHist=(o.dueHist||[]).concat({at,by:by||'',f:'due',from:r.from,to:r.to,why,note,src}).slice(-DUE_HIST_MAX); /*dates: last 30 (Tester round 1 — save size)*/
+      o.dueHist=(o.dueHist||[]).concat({at,by:by||'',f:'due',from:r.from,to:r.to,why,note,src,...fx,...rq}).slice(-DUE_HIST_MAX); /*dates: last 30 (Tester round 1 — save size); seq: fx = changed inside the fixed window, rq = request*/
       what.push('Due date '+(r.from?fmt(r.from):'—')+' → '+fmt(r.to));
       /*dates phase 2 (A9): a job not cut yet that moved out by more than earlyDays — "don't cut early" until cut, dismissed or close again*/
       if(r.flags.includes('moved-out')){o.dueHold={at,by:by||'',days:r.outDays,from:r.outFrom||r.from,to:r.to};what.push('moved out '+r.outDays+' days — don\'t cut early');}
@@ -9435,7 +9442,7 @@ function moveDates(jobs,change,reason,by,opts){
         if(src==='cienapps')delete o.delivKeep;
         else if(!/^P-/i.test(String(o.wo))){if(!o.delivKeep)o.delivKeep=r.dFrom||'-';if(o.delivKeep===r.dTo)delete o.delivKeep;}
         o.delivDate=r.dTo;
-        o.dueHist=(o.dueHist||[]).concat({at,by:by||'',f:'deliv',from:r.dFrom,to:r.dTo,why,note,src}).slice(-DUE_HIST_MAX);
+        o.dueHist=(o.dueHist||[]).concat({at,by:by||'',f:'deliv',from:r.dFrom,to:r.dTo,why,note,src,...fx,...rq}).slice(-DUE_HIST_MAX);
         what.push('Delivery date '+(r.dFrom?fmt(r.dFrom):'—')+' → '+fmt(r.dTo));
       }
       if(r.dClear){ /*dates round 2: delivery date removed — kept for the Cienapps list if Cienapps has one*/
@@ -9467,7 +9474,7 @@ function moveDates(jobs,change,reason,by,opts){
       if(r.vanKept&&dStage(o)){o.dueMv={...(o.dueMv||{at,by:by||'',from:r.from,to:r.to}),loaded:true};what.push('already loaded — left on the van, check');}
       else if(r.vanKept)what.push('shipped in Cienapps — left on the van');
       afterDelivSync(o,at,by);
-      logEdit(o,what.join(' · ')+(src==='cienapps'?' (Cienapps import)':src==='group'?' (group move)':''),by||'',[why,note].filter(Boolean).join(': '));
+      logEdit(o,what.join(' · ')+(src==='cienapps'?' (Cienapps import)':src==='group'?' (group move)':src==='pmseq'?' (PM sequence'+(r.fixed?', fixed window':'')+')':src==='undo'?' (undo)':''),by||'',[why,note].filter(Boolean).join(': '));
       res.moved++;if(r.flags.length)res.flagged++;
     });
     if(res.moved){if(res.pulled&&typeof updDelBadge==='function')updDelBadge();sched();}
@@ -9481,7 +9488,7 @@ function dateCanMove(){return ROLE==='office'||ROLE==='prod'||!ROLE;}
 function dmDay(iso){if(!iso)return'—';const d=new Date(String(iso).slice(0,10)+'T12:00:00');if(isNaN(d))return String(iso);return d.toLocaleDateString('en-IE',{weekday:'short',day:'numeric',month:'short'})+' (Wk '+wkNum(String(iso).slice(0,10))+')';}
 function dmHistHTML(o){
   const h=(o&&o.dueHist)||[];if(!h.length)return'<div style="font-size:12px;color:var(--t3)">No date changes yet.</div>';
-  return h.slice().reverse().map(x=>`<div style="font-size:12px;padding:3px 0;border-bottom:1px solid var(--border)"><b>${escA(x.from?fmt(x.from):'—')} → ${escA(fmt(x.to))}</b> · ${escA(x.why||'')}${x.note?' — '+escA(x.note):''} <span style="color:var(--t3)">· ${escA(x.by||'')} ${x.at?escA(new Date(x.at).toLocaleString('en-IE',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})):''}${x.src==='cienapps'?' · Cienapps import':x.src==='group'?' · group move':''}</span></div>`).join('');
+  return h.slice().reverse().map(x=>`<div style="font-size:12px;padding:3px 0;border-bottom:1px solid var(--border)"><b>${escA(x.from?fmt(x.from):'—')} → ${escA(fmt(x.to))}</b> · ${escA(x.why||'')}${x.note?' — '+escA(x.note):''} <span style="color:var(--t3)">· ${escA(x.by||'')} ${x.at?escA(new Date(x.at).toLocaleString('en-IE',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})):''}${x.src==='cienapps'?' · Cienapps import':x.src==='group'?' · group move':x.src==='pmseq'?' · PM sequence':x.src==='undo'?' · undo':''}${x.fx?' · 🔒 fixed window':''}${x.rq?' · request':''}</span></div>`).join('');
 }
 function dmHistDlg(wo){
   const o=findDel(wo);if(!o)return;
