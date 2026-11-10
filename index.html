@@ -5329,7 +5329,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       ${(c=>c?`<div style="margin-bottom:6px">${c}</div>`:'')(st.pid?specChip(st.pid,true):'')}
       <div class="me-top">
         <div><label>Project</label><div style="display:flex;gap:6px;flex-wrap:wrap"><select id="me-pid" style="${inp};max-width:230px"><option value="">— pick the project —</option>${lsProjects().map(p=>`<option value="${escA(p.id)}"${p.id===st.pid?' selected':''}>${escA(p.name)}</option>`).join('')}<option value="__new">＋ New project…</option></select>
-          <button class="btn btn-s" id="me-mats" style="font-size:12px;white-space:nowrap" title="The project's boards, colours and fittings — add or change them here">🧱 Project materials (add / edit)</button>${specVis()?`<button class="btn btn-s" id="me-spec" style="font-size:12px;white-space:nowrap"${st.pid?'':' disabled'} title="The project's spec sheet">✎ Project details</button>`:''}</div>${pmsgHTML()}</div>
+          <button class="btn btn-s" id="me-mats" style="font-size:12px;white-space:nowrap" title="The project's boards, materials and fittings — add or change them here">🧱 Project materials (add / edit)</button>${specVis()?`<button class="btn btn-s" id="me-spec" style="font-size:12px;white-space:nowrap"${st.pid?'':' disabled'} title="The project's spec sheet">✎ Project details</button>`:''}</div>${pmsgHTML()}</div>
         ${st.tpl?'':`<div><label>Work order</label>
           ${st.newWO?`<div style="font-size:12px;color:#5b21b6;font-weight:700;padding:7px 0">New work order ${escA(nextPNumber())} <button class="btn btn-s" id="me-pick" style="font-size:11px;padding:2px 8px">use an existing WO instead</button></div>`
           :`<div style="display:flex;gap:6px"><select id="me-wo" style="${inp};max-width:340px">${woOpts()}</select>
@@ -5582,7 +5582,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
   const undo=()=>{if(!st.undo.length)return;st.rows=JSON.parse(st.undo.pop());st.snapKey='';if(st.cur&&!ov.querySelector('[data-mr="'+st.cur+'"]'))st.cur='';st.focus=st.cur&&+st.cur.split('|')[0]<R().length?st.cur:'';draw();};
   const copyToNew=()=>{ // the saw has started: a different number of units is a NEW list (Garry, 3 Nov) — copied without ticks
     keep();if(!confirm('Make a new list from "'+st.name+'"?\n\nThe rows are copied (no ticks) into a new list you can change. When you SAVE the new list, this one is archived (taken off the saw). Parts already cut on this list show on the new one as "already cut on old list" so the saw can check before cutting again.'))return;
-    ov.remove();openListEditor2(null,st.wo,st.pid,{rows:R(),name:st.name+' (new)',ltype:st.ltype,tname:st.tname,from:{id:ex.id,name:ex.name,sig:lsOldSig(ex.id),lines:lsOldLines(ex.id)},
+    ov.remove();openListEditor2(null,st.wo,st.pid,{rows:R(),name:String(st.name||'').trim()?st.name+' (new)':'',ltype:st.ltype,tname:st.tname,from:{id:ex.id,name:ex.name,sig:lsOldSig(ex.id),lines:lsOldLines(ex.id)},
       note:'Copied from "'+st.name+'" — nothing is saved until you press Save. Saving archives "'+ex.name+'" (takes it off the saw); until then it is not changed.'});
   };
   const keep=()=>{const g=id=>ov.querySelector('#'+id);const n=g('me-name');if(n)st.name=n.value;const w=g('me-wo');if(w)st.wo=w.value;
@@ -5775,6 +5775,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
   const dirty=()=>{if(ov.classList.contains('me-dov'))return false;keep();return sig()!==st.sig0;};
   const closeEd=()=>{if(!document.body.contains(ov))return;if(dirty()&&!confirm('Close without saving?\n\nWhat you typed in this list is lost.\n\nOK = close without saving\nCancel = stay and Save'))return;ov.remove();};
   const done=(l,d)=>{ // the finish panel: matches what happened, [Close] (big, focused) and [Edit it again]
+    if([...document.querySelectorAll('.pod-ovl .me-ed')].some(e=>!ov.contains(e))){ov.remove();return;} // another list window is already open: the toast says it was saved
     const lv=lsList(l.id)||l,wait=!st.tpl&&lsWaitCheck(lv),rev=+lv.rev||1,wo=d.wo&&!st.tpl&&d.wo!=='__NEW__'?d.wo:'';
     const h=st.tpl?'Template saved ✓':wait?'Saved ✓ — waiting to be checked before the saw sees it':ex&&rev>(+ex.rev||1)?'Saved ✓ — Rev '+rev+' is with the Saw &amp; Stores':'Saved ✓ — list is with the Saw &amp; Stores';
     const cnt=st.tpl?'':[(+l.saw?l.saw+' saw row'+(+l.saw!==1?'s':''):'no cutting'),(+l.fit?l.fit+' Stores row'+(+l.fit!==1?'s':''):'no Stores'),wo?escA(wo):''].filter(Boolean).join(' · ');
