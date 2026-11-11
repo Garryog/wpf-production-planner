@@ -4396,7 +4396,9 @@ function seqHouses(rows){const m=new Map();rows.forEach(r=>{const k=seqHouseOf(r
 // a date moved by n working days, or n weeks (a week landing on a weekend / bank holiday → the next working day; earlier → the one before)
 function seqWd(d,fwd){return isWorkDay(d)?d:(fwd?nextWorkDay(d):prevWorkDay(d));}
 /*attack7: dv = a DELIVERY date — by weeks it may land on a Saturday (isDelivDay, like Deliveries); build dates stay working days*/
-function seqDvWd(d,fwd){if(isDelivDay(d))return d;for(let i=0;i<14&&!isDelivDay(d);i++)d=addDayISO(d,fwd?1:-1);return d;}
+/*attack8 1i/1h: a delivery landing on a Sunday / bank holiday is fitted in that SAME week exactly like Deliveries' "Move to week" (wkFit:
+  the delivery day before it in the week, else the one after) — so a pull never jumps back to the Saturday before a Monday holiday*/
+function seqDvWd(d,fwd){if(isDelivDay(d))return d;const x=wkFit(d,wkOf(d),'0000-00-00',1).d;if(x&&isDelivDay(x))return x;for(let i=0;i<14&&!isDelivDay(d);i++)d=addDayISO(d,fwd?1:-1);return d;}
 function seqShift(d,n,unit,dv){if(!dmIsDate(d)||!n)return'';return unit==='wd'?dmShiftWd(d,n):(dv?seqDvWd:seqWd)(addDayISO(d,7*n),n>0);}
 // → {dateOf(r,o,i) → {job:{deliv,due}} | {req} | {none}} or {err}
 function seqDtCalc(mode,rows,ov){
