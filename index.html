@@ -4513,9 +4513,23 @@ function seqReqRefuseDlg(id,redraw){
 // the PM who asked: answers not seen yet (Garry: several PMs per project — the answer goes to the one who asked)
 function seqAnsMine(){if(ROLE!=='pm')return[];const me=seqMe('pm');if(!me)return[];
   return seqReqAll().filter(q=>(q.status==='approved'||q.status==='refused')&&!q.seen_at&&seqKey(q.asked_by)===seqKey(me)).sort((a,b)=>String(a.decided_at||'').localeCompare(String(b.decided_at||'')));}
+/*B7 attack6: the answer says what really happened (from 'applied'): not changed / not moved, came off a van, already cut*/
+function seqAnsOut(q){
+  if(q.status!=='approved')return{h:'✗ REFUSED',c:'#b42318',x:[]};
+  const a=q.applied&&typeof q.applied==='object'?q.applied:null,arr=v=>Array.isArray(v)?v:[];
+  if(!a||a.kind==null)return{h:'✓ APPROVED',c:'#0d6e46',x:['being made now']};
+  if(a.kind==='move')return a.ok?{h:'✓ APPROVED',c:'#0d6e46',x:[+a.pos>0?'now #'+(+a.pos):'']}:{h:'⚠ Approved — but not moved',c:'#b45309',x:[String(a.err||'not moved')]};
+  const sk=arr(a.skipped).map(s=>String((s&&s.wo)||'')+(s&&s.why?' ('+s.why+')':'')).filter(Boolean),x=[];
+  const nm=+a.moved||0;
+  if(nm>0&&sk.length)x.push('not changed: '+sk.join(', '));
+  if(arr(a.rebook).length)x.push('🚚 came off van — rebook: '+arr(a.rebook).join(', '));
+  if(arr(a.cut).length)x.push('already cut — build week kept: '+arr(a.cut).join(', '));
+  if(!nm)return{h:'⚠ Approved — but not changed',c:'#b45309',x:[sk.length?sk.join(', '):((q.wos||[]).join(', ')||'nothing to change')].concat(x)};
+  return{h:'✓ APPROVED',c:'#0d6e46',x};
+}
 function seqAnsHTML(){const a=seqAnsMine();if(!a.length)return'';
-  return `<div class="seq-ans" id="seq-ans">${a.map(q=>{const ok=q.status==='approved',p=LST.p.get(q.project_id);
-    return `<div class="${ok?'ok':'no'}" data-seqans="${escA(q.id)}"><span>✋ Your change request — ${escA((p&&p.name)||'')}: ${escA(seqReqSum(q))}</span><b style="color:${ok?'#0d6e46':'#b42318'}">${ok?'✓ APPROVED':'✗ REFUSED'} by ${escA(q.decided_by||'')}</b>${q.answer?`<span>“${escA(q.answer)}”</span>`:''}<span style="flex:1"></span><button class="btn btn-s" data-seqseen="${escA(q.id)}" style="min-height:40px">✓ Seen</button></div>`;}).join('')}</div>`;}
+  return `<div class="seq-ans" id="seq-ans">${a.map(q=>{const ok=q.status==='approved',p=LST.p.get(q.project_id),o=seqAnsOut(q);
+    return `<div class="${ok?'ok':'no'}" data-seqans="${escA(q.id)}"><span>✋ Your change request — ${escA((p&&p.name)||'')}: ${escA(seqReqSum(q))}</span><b style="color:${o.c}">${escA(o.h.replace(/^(✓ APPROVED|⚠ Approved|✗ REFUSED)/,'$1 by '+(q.decided_by||'')))}${o.h.indexOf('—')>0?':':''}</b>${o.x.filter(Boolean).map(t=>`<span>${escA(t)}</span>`).join('')}${q.answer?`<span>“${escA(q.answer)}”</span>`:''}<span style="flex:1"></span><button class="btn btn-s" data-seqseen="${escA(q.id)}" style="min-height:40px">✓ Seen</button></div>`;}).join('')}</div>`;}
 async function seqReqSeen(id){const q=LST.sr.get(id);if(!q||q.seen_at)return;
   try{await seqReqPatch(q,{seen_at:new Date().toISOString()});}catch(e){toast('Not saved — '+e.message,true);}}
 // 📜 History: the database's own record (project_events, entity 'seq'), read when opened — who, when, what, old → new position
