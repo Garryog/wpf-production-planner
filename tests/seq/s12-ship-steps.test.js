@@ -74,7 +74,8 @@ const HDR = ['WO #', 'Title', 'Customer', 'Due Date', 'Step', 'Sub-Total'];
     await p.evaluate(() => { showTab('b'); }); await sleep(200);
     await pick('WO-6', '11. COMPLETED AND INVOICED', true); await sleep(300);
     j = await job('WO-6'); asked = await p.evaluate(() => window.__asked);
-    rec('11. COMPLETED AND INVOICED by hand: shipped + installed + "Installation complete" (by the person), confirm says so', j.step === '11. COMPLETED AND INVOICED' && j.sh && j.inst && j.done && j.by === 'Op' && /Installation complete/.test(asked[0] || ''), JSON.stringify({ j, asked }));
+    // (rule changed by Garry 11 Nov): 11 by hand does NOT tick "Installation complete" — that stays its own button
+    rec('11. COMPLETED AND INVOICED by hand: shipped + installed, NOT "Installation complete" (Garry 11 Nov: kept separate)', j.step === '11. COMPLETED AND INVOICED' && j.sh && j.inst && !j.done && !/Installation complete/.test(asked[0] || ''), JSON.stringify({ j, asked }));
     // ---- a job on Deliveries (delv) set to 9 by hand stays on Deliveries until the driver confirms
     await pick('WO-9', '9. JOB SHIPPED', true); await sleep(300);
     j = await job('WO-9'); asked = await p.evaluate(() => window.__asked);

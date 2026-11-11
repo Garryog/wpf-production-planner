@@ -2380,12 +2380,12 @@ function stepShipHand(o,v){
   if(c!==null&&c<0&&isShipped(o)){toast('Steps only move forward — '+o.wo+' is already at '+stepShort(was));render();return;}
   const what=n===9?'Job shipped':n===10?'Installed (to be invoiced)':'Completed and invoiced';
   if(!confirm('Set '+o.wo+' to "'+v+'"?\n\n'+what+(isShipped(o)?'.':' — it leaves the Capacity Board and the week totals and goes to the 📦 Shipped tab'+(o.delv&&!o.delDelivAt&&!o.delDone?' (it stays on 🚚 Deliveries until the driver confirms)':'')+'.')
-    +(n===11?'\nIt is also marked "Installation complete".':'')+'\n\nCienapps is not changed — it is listed in Export Changes until Cienapps has it.')){render();return;}
++'\n\nCienapps is not changed — it is listed in Export Changes until Cienapps has it.')){render();return;}
   officeWho(by=>{const at=nowISO(),p0=o.stepHand&&String(o.step||'').trim()===o.stepHand.to?o.stepHand:null,h={from:p0?p0.from:was,to:v,at,by,...(p0&&p0.inst?{inst:true}:{})}; // 9 then 10 by hand: ↩ still goes back to the step before 9
     logEdit(o,'Step '+(was||'—')+' → '+v+' (set by hand)',by);o.step=v;
     if(!isShipped(o)){o.shippedAt=at;o.shippedStep=v;delete o.shipBack;logEdit(o,'Moved to Shipped — set by hand: '+v,by);}
     if(n>=10&&!o.installedAt){o.installedAt=at;h.inst=true;logEdit(o,'Installed — set by hand',by);}
-    if(n===11&&!o.completeAt){o.completeAt=at;o.completeBy=by;delete o.completeOverride;logEdit(o,'Installation complete',by);}
+    /*Garry 11 Nov: 11 by hand does NOT tick "Installation complete" — that stays its own button*/
     o.stepHand=h;sched();render();toast(o.wo+' — '+stepShort(v).toLowerCase()+(isShipped(o)?' · now on the 📦 Shipped tab':''));},()=>render());
 }
 let shSrch='',shDel='',shDone=false,shHoldQ='';
