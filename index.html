@@ -7104,7 +7104,7 @@ function renderDeliveries(app){
     Round 4: the sticky week bar is a drop target too (◀ Prev = the week before the shown one, Next ▶ = the week after, the label =
     the shown week), so a booked card low in the van grid can go to another week without scrolling up. Past weeks never light up. */
   const wkDropOk=t=>t!=null&&(t==='later'||delTabWk(t)>=thisWk());
-  const wkDrop=(el,t)=>{if(!el)return;if(t!=null&&!wkDropOk(t))el.classList.add('nodrop'); // carry-over: a past week on the bar is not outlined either
+  const wkDrop=(el,t,toW)=>{if(!el)return; // toW: a drop goes straight to this week (Next ▶ on +12 or a far booked week, see below)if(t!=null&&!wkDropOk(t))el.classList.add('nodrop'); // carry-over: a past week on the bar is not outlined either
     el.ondragover=e=>{if(!delDragList||!dateCanMove()||t==null)return;e.preventDefault();if(wkDropOk(t))el.classList.add('dragover');}; // a past week: not lit; a drop there explains itself
     el.ondragleave=()=>el.classList.remove('dragover');
     el.ondrop=e=>{
@@ -7112,13 +7112,14 @@ function renderDeliveries(app){
       const list=(delDragList||[]).filter(w=>findDel(w));delDragList=null;
       if(!list.length||!dateCanMove())return;
       if(!list.some(w=>wkMovable(findDel(w)))){toast('Nothing moved — '+wkNoMoveWhy(findDel(list[0])));return;} /*v-deliv attack5: same rule as Move ticked*/
+      if(toW){wkMoveDo(list,toW);return;}
       if(t==='later'){wkPickDlg(list,4);return;}
       const w=delTabWk(t);if(!wkDropOk(t)){toast('Wk '+wkNum(w)+' has gone — drop on This week or later');return;}
       wkMoveDo(list,w);
     };
   };
   document.querySelectorAll('[data-deltab]').forEach(b=>wkDrop(b,b.dataset.deltab));
-  wkDrop(document.getElementById('wkb-prev'),wkPrev);wkDrop(document.getElementById('wkb-next'),wkNext);wkDrop(document.getElementById('wkb-lbl'),delTab);
+  wkDrop(document.getElementById('wkb-prev'),wkPrev);wkDrop(document.getElementById('wkb-next'),wkNext,wkNext==='later'&&!later?wkPlus(wk,1):''); /*v-deliv attack5: on +12 or a far booked week, Next ▶ leads to Later — but a DROP there means "the week after the one shown", so it moves straight to it (not the Later picker preset to +4, weeks earlier)*/wkDrop(document.getElementById('wkb-lbl'),delTab);
   const isb=document.getElementById('btn-instore');if(isb)isb.onclick=()=>{delStoreOpen=!delStoreOpen;render();};
   document.querySelectorAll('[data-storebook]').forEach(b=>b.onclick=()=>{ // ⤵ Book: tick it for delivery if it isn't, select it, open its week
     const o=DB.orders.find(x=>x.wo===b.dataset.storebook);if(!o)return;
