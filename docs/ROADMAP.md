@@ -342,3 +342,9 @@ Garry sent the Aderrig cutting-list workbook ("a current high volume job … a n
 - **GR2 — add an item to more than one template at once (wanted):** e.g. add the right tap to all 17 templates in one go. Architect to plan.
 - **Start-up (Garry, 11 Nov):** build the database of cutting lists for CURRENT jobs early — "if production can see the ease of use
   of the system we will have more success. having jobs ready to go from the start will help".
+- (11 Nov, Garry, later) Start the real lists with CURRENT work orders, not old / delivered ones: Garry clears the orders and does a
+  fresh Cienapps import on 12 Nov; lists for apartments are made after that. "Clear All Orders" only removes orders and untags lists —
+  templates, projects and materials stay (checked in the code); safety copy of the 17 templates: docs/restore/aderrig-templates-2026-11-11.sql.
+- (11 Nov, Garry) **Cutting Lists page: project filter, and the customer / project always visible** on the page. Released as a SMALL
+  release of its own on top of the live version (branch feature/lists-project-filter), not waiting for the big release.
+- (11 Nov, Garry) **"Speed up the new system" = get features live faster**: small tested releases as each piece is ready.
