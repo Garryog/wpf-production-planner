@@ -7112,7 +7112,7 @@ function renderDeliveries(app){
     Round 4: the sticky week bar is a drop target too (◀ Prev = the week before the shown one, Next ▶ = the week after, the label =
     the shown week), so a booked card low in the van grid can go to another week without scrolling up. Past weeks never light up. */
   const wkDropOk=t=>t!=null&&(t==='later'||delTabWk(t)>=thisWk());
-  const wkDrop=(el,t,toW)=>{if(!el)return; // toW: a drop goes straight to this week (Next ▶ on +12 or a far booked week, see below)if(t!=null&&!wkDropOk(t))el.classList.add('nodrop'); // carry-over: a past week on the bar is not outlined either
+  const wkDrop=(el,t,toW)=>{if(!el)return;/*toW: a drop goes straight to this week (Next ▶ on +12 or a far booked week, see below)*/if(t!=null&&!wkDropOk(t))el.classList.add('nodrop'); // carry-over: a past week on the bar is not outlined either
     el.ondragover=e=>{if(!delDragList||!dateCanMove()||t==null)return;e.preventDefault();if(wkDropOk(t))el.classList.add('dragover');}; // a past week: not lit; a drop there explains itself
     el.ondragleave=()=>el.classList.remove('dragover');
     el.ondrop=e=>{
