@@ -2395,7 +2395,7 @@ let shSrch='',shDel='',shDone=false,shHoldQ='';
 const SH_ALL='*',SH_NONE='-';
 function shFiltOn(){return seqVis();}
 function shProjSel(){return ls.get('wpfShProj')||SH_ALL;}
-function shPMSel(){const v=ls.get('wpfShPM');if(v)return v;const me=ROLE==='pm'?seqMe('pm'):'';return me||SH_ALL;}
+function shPMSel(){const v=ls.get('wpfShPM');if(v)return v;const me=ROLE==='pm'&&pmMineAny()?seqMe('pm'):'';return me||SH_ALL;} // attack9 T2a: a PM with no projects yet starts on All
 function shPMsOf(o){const pid=keyProj(o);return pid?seqPMs(LST.p.get(pid)):[];}
 function shKeep(o){if(!shFiltOn())return true;
   const pf=shProjSel(),mf=shPMSel(),pid=keyProj(o);
