@@ -4826,7 +4826,8 @@ document.addEventListener('click',e=>{const b=e.target&&e.target.closest&&e.targ
    WO (and how many longer than seqWaitWks weeks) · new rows to place. Tap = the Sequence tab (the project with the most). */
 function seqNudges(){
   const today=todayLocal(),old=addDayISO(today,-7*seqWaitWks()),n={nodate:0,past:0,wait:0,waitOld:0,place:0},by={};
-  lsProjects().filter(p=>pmShows(p.id)).forEach(p=>seqRows(p.id).forEach(r=>{const o=seqJob(r),d=seqRowDate(r,o),done=o&&(dStage(o)==='deliv'||o.delDone||isShipped(o));let hit=false;
+  const mine=pmMineAny(); /*attack8 5b: the nudges are about HIS projects, even with "All projects" ticked*/
+  lsProjects().filter(p=>mine?pmMine(p.id):pmShows(p.id)).forEach(p=>seqRows(p.id).forEach(r=>{const o=seqJob(r),d=seqRowDate(r,o),done=o&&(dStage(o)==='deliv'||o.delDone||isShipped(o));let hit=false;
     if(!d&&!done){n.nodate++;hit=true;}else if(d&&d<today&&!done){n.past++;hit=true;}
     if(!r.wo){n.wait++;hit=true;if(String(r.created_at||'').slice(0,10)&&String(r.created_at).slice(0,10)<old)n.waitOld++;}
     if(r.is_new){n.place++;hit=true;}
