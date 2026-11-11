@@ -7320,9 +7320,7 @@ function wkManOk(){return true;}
 function wkNoMoveWhy(o){
   if(!o)return 'not on the planner any more';
   if(!delOnPage(o))return DB.orders.includes(o)&&delHidden(o)?'on hold in Cienapps — not on Deliveries':'not on Deliveries any more';
-  const st=dStage(o);
-  if(st==='deliv')return 'already delivered';
-  if(st==='disp')return 'on the road — already dispatched';
+  if(dStage(o)==='deliv')return 'already delivered'; // loaded / on the road DO move: they stay on the van, flagged "date moved after loading — check" (plan Q15, attack4 U9)
   if(isShipped(o))return 'already shipped in Cienapps';
   if(o.manual&&o.delDay)return 'on a van — a job added by hand keeps its booking';
   return '';
@@ -7352,7 +7350,7 @@ function wkMoveDo(wos,W){
   W=wkOf(W);if(!W)return;
   if(W<thisWk()){toast('Wk '+wkNum(W)+' has gone — pick this week or later');return;}
   wos=[...new Set(wos||[])];
-  /*v-deliv attack5: one filter (wkMovable) — a job no longer on Deliveries, delivered, on the road, shipped or a booked manual job
+  /*v-deliv attack5: one filter (wkMovable) — a job no longer on Deliveries, delivered, shipped or a booked manual job
     is never moved; it is listed "not moved" with why*/
   const mv=wos.filter(w=>wkMovable(findDel(w))),nm=wos.filter(w=>!mv.includes(w)).map(w=>({wo:w,skipped:wkNoMoveWhy(findDel(w)),flags:[]}));
   const ords=mv.filter(w=>DB.orders.some(o=>o.wo===w)),man=wkManJobs(mv,W);
