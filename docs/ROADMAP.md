@@ -325,3 +325,20 @@ Garry's words: "this is messy they are all over lapping, you can drop the value 
 - **D4** — pool cards must never overlap: WO, Floor and Unit badges fit inside the card (wrap or shrink), nothing spills into the next card, at PC and phone width. Drop the € value from each card; show the group total value once at the bottom of the group. Add the due date to every card in the DD1 style (red overdue, amber this week). Same fix on the cards in the week grids if they share the layout. Part of the Deliveries usability pass (D1–D3), before Thursday's release.
 
 
+
+### Aderrig templates + list grouping (11 Nov 2026, Garry, live)
+Garry sent the Aderrig cutting-list workbook ("a current high volume job … a number of apartment kitchens are on the one page").
+- **Done on the LIVE planner at Garry's request (11 Nov):** 17 cutting-list templates under project ELLIOTTS ADERRIG 4 — Kitchen Type
+  1L, 1R, 1AL, 2L, 2R, 4L, 4R, 6L, 6R and the PV versions 1L/1R/2L/2R/4L/4R/6L/6R PV — plus project material "Lorenzo 38mm". Added
+  only; nothing existing changed. Made by running the live app code on the fake database, replaying the same `save_list_revision`
+  calls on live and checking every line matched (by "Claude (for Garry, 11 Nov)").
+- **Garry's rules for them:** tap left OFF (the one in the file is wrong); NO extractors — WPF does not supply them on this project;
+  no robe templates (robes come off the CNC); worktop sizes are the standard ones (type 6 = 3300 + 900); a run over 3600 uses the
+  4100 long worktop (a small quantity was ordered for kitchens over 3900) — noted on the 4L / 4R lines.
+- **L and R matter:** "Kitchen Type 2R" and "Kitchen Type 1L" — the L / R is the hand (left / right) and must never be dropped,
+  merged or guessed when lists are generated or matched (the workbook also writes "6_L_", "1L V" — treat as a person-to-confirm).
+- **GR1 — grouping (wanted):** a way to group several apartments' lists on one page (as the workbook does per block / floor:
+  "B2 1st Fl 056–067"), for making, viewing and printing. Architect to plan.
+- **GR2 — add an item to more than one template at once (wanted):** e.g. add the right tap to all 17 templates in one go. Architect to plan.
+- **Start-up (Garry, 11 Nov):** build the database of cutting lists for CURRENT jobs early — "if production can see the ease of use
+  of the system we will have more success. having jobs ready to go from the start will help".
