@@ -1357,7 +1357,7 @@ async function saveCheck(p,v,tok){
 }
 // Re-draw after a merge brought in other people's changes — but never under someone's fingers.
 function mergedRender(){
-  if(PREV&&PREV.drag)return; /*B9c: never redraw the pool under a drag*/
+  if(preDragOn())return; /*B9c: never redraw the pool under a drag (attack10 D2/D3: only on the pool, and never for more than 30 s)*/
   const ae=document.activeElement;if(ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName))return;
   if(document.querySelector('.pod-ovl'))return;
   if(typeof IMPPLAN!=='undefined'&&(IMPPLAN||PEND))return;
@@ -1643,7 +1643,8 @@ function startAutoRefresh(){
       if(typeof IMPPLAN!=='undefined'&&(IMPPLAN||PEND))return; // an import review in progress must never be wiped by a refresh
       const ae=document.activeElement;if(ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName))return; // someone is typing
       if(document.querySelector('.pod-ovl'))return; // a dialog is open (name, reason, list editor) — its answer must land on the live objects
-      loadDB().then(()=>{lsStart();if(ROLE)render();});
+      if(preDragOn())return; // attack10 D3: Johnny is dragging a pool row (the guard expires by itself)
+      loadDB().then(()=>{lsStart();if(ROLE&&!preDragOn())render();});
     },120000);
   }
 }
@@ -4189,14 +4190,21 @@ function renderPre(app){
   else app.innerHTML=`<div class="pg"><h1 style="font-size:22px;color:#14335c;margin:6px 0 10px">🗂 Pre-production</h1>${prePoolHTML()}</div>`; /*B9a*/
   const t=(k,l)=>`<button data-pretab="${k}" style="padding:9px 18px;border:none;border-radius:6px;font-size:15px;font-weight:700;cursor:pointer;${preTab===k?'background:#14335c;color:#fff':'background:#e6ebf2;color:#14335c'}">${l}</button>`;
   app.insertAdjacentHTML('afterbegin',`<div id="pre-strip" style="max-width:1400px;margin:10px auto 0;padding:0 20px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">${t('','🗂 Pool')}${t('lists','📋 Cutting lists')}<span style="flex:1"></span>${seqMeStrip('pre')}</div>`);
-  app.querySelectorAll('[data-pretab]').forEach(b=>b.onclick=()=>{preTab=b.dataset.pretab;lsStart();render();});
+  app.querySelectorAll('[data-pretab]').forEach(b=>b.onclick=()=>{preTab=b.dataset.pretab;PREV.drag='';lsStart();render();});
   if(preTab!=='lists')preBind(app); /*B9a*/
   seqMeBind('pre');if(!seqMe('pre')&&staffFor('pre').length&&!document.querySelector('.pod-ovl')&&!SEQ_ASKED.has('pre')){SEQ_ASKED.add('pre');seqMeAsk('pre');}
 }
 /*B9a: ---------- Johnny's pre-production pool. Every work order to process in the next weeks, every project, in HIS order
    (seq_pre.pre_key) — never the PM's sequence (no project_seq write, no planner field). Processed = Cienapps step 5–11
    (worked out, nothing written) or his tick in seq_pre. Rows with no PM sequence row are shown but can't be ticked / moved. ---------- */
-var PREV={pm:'',pid:'',mat:'',proc:'not',drag:'',open:false}; // var: mergedRender reads PREV.drag before this line has run
+var PREV={pm:'',pid:'',mat:'',proc:'not',drag:'',dragAt:0,open:false}; // var: mergedRender reads PREV.drag before this line has run
+/*attack10 D2/D3: the drag guard holds redraws only while the pool is on screen, and lets go by itself after 30 s, on Escape,
+  on any mouse / pointer release, or when the page is hidden (a lost dragend must never freeze the screen)*/
+function preDragOn(){if(typeof PREV==='undefined'||!PREV||!PREV.drag)return false;
+  let onPool=false;try{onPool=ROLE==='pre'&&preTab!=='lists'&&!!document.getElementById('pre-pool');}catch(e){}
+  if(!onPool||Date.now()-(PREV.dragAt||0)>30000){PREV.drag='';return false;}
+  return true;}
+function preDragOff(){if(PREV.drag){PREV.drag='';setTimeout(mergedRender,0);}}
 // CNC cut-by: 7 calendar days before the build due date, then back to a working day (Sat / Sun / bank holiday → the day before)
 function cncCutBy(due){due=String(due||'').slice(0,10);if(!dmIsDate(due))return'';let d=addDayISO(due,-7);while(!isWorkDay(d))d=addDayISO(d,-1);return d;}
 // weeks shown: Settings' preWks(), or more if picked on this device (never fewer; never written to Settings)
@@ -4345,7 +4353,7 @@ function preBind(root){
   root.querySelectorAll('[data-preto]').forEach(b=>b.onclick=()=>{const n=preRows().length,v=prompt('Move to which My# number? (1 = top, '+n+' = bottom)','1');if(v===null)return;
     const k=String(v).trim();if(!/^\d+$/.test(k)||+k<1)return toast('Type a number from 1 to '+n);preMove(b.dataset.preto,{to:Math.min(+k,n)});});
   root.querySelectorAll('tr[data-prer][draggable]').forEach(tr=>{
-    tr.addEventListener('dragstart',e=>{PREV.drag=tr.dataset.prer;tr.classList.add('seq-drag');try{e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain','pre:'+tr.dataset.prer);}catch(x){}});
+    tr.addEventListener('dragstart',e=>{PREV.drag=tr.dataset.prer;PREV.dragAt=Date.now();tr.classList.add('seq-drag');try{e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain','pre:'+tr.dataset.prer);}catch(x){}});
     tr.addEventListener('dragend',()=>{PREV.drag='';tr.classList.remove('seq-drag');root.querySelectorAll('.seq-over').forEach(x=>x.classList.remove('seq-over'));});
   });
   root.querySelectorAll('tr[data-prer]').forEach(tr=>{
@@ -4356,7 +4364,10 @@ function preBind(root){
       if(!id||got!=='pre:'+id)return; // only a row this page started dragging
       if(id!==tr.dataset.prer)preMove(id,{onto:tr.dataset.prer});else render();});
   });
-  if(!PREV.docBound){PREV.docBound=true;document.addEventListener('dragend',()=>{if(PREV.drag){PREV.drag='';setTimeout(mergedRender,0);}},true);} // a drag ended anywhere = nothing armed
+  if(!PREV.docBound){PREV.docBound=true;document.addEventListener('dragend',preDragOff,true); // a drag ended anywhere = nothing armed
+    document.addEventListener('keydown',e=>{if(e.key==='Escape')preDragOff();},true);
+    ['mouseup','pointerup','pointercancel'].forEach(t=>document.addEventListener(t,preDragOff,true));
+    document.addEventListener('visibilitychange',()=>{if(document.hidden)preDragOff();});}
 }
 /*B9c: Johnny's order. A moved row gets pre_key = the midpoint of its new neighbours (top = first − 1, bottom = last + 1) on the
   list as shown (# Move to: the My# number); a never-moved row keeps its due-date place. Only seq_pre is written. */
