@@ -116,7 +116,7 @@ const { H, rec, sleep } = X;
   const w1 = await pre.page.evaluate(() => ({ role: ROLE, lbl: ROLE_LBL.pre, pin: pins().pre, dlg: (document.querySelector('.pod-ovl') || {}).innerText || '' }));
   rec('Pre-production view: role, label, default PIN 1010, asks the name (Staff ticked Pre-production)', w1.role === 'pre' && w1.lbl === 'Pre-production' && w1.pin === '1010' && /Which Pre-production are you/.test(w1.dlg) && /Johnny/.test(w1.dlg), JSON.stringify(w1));
   await pre.page.evaluate(() => document.querySelector('[data-meis="Johnny"]').click()); await sleep(300);
-  rec('Pre-production placeholder page with the name strip', await pre.page.evaluate(() => /coming in the next build/.test(document.getElementById('app').innerText) && /Johnny/.test(document.querySelector('.seq-me').innerText) && localStorage.getItem('wpfMe_pre') === 'Johnny'));
+  rec('Pre-production pool page (B9 — was the placeholder) with the name strip', await pre.page.evaluate(() => !!document.getElementById('pre-pool') && /Johnny/.test(document.querySelector('.seq-me').innerText) && localStorage.getItem('wpfMe_pre') === 'Johnny'));
   await pre.page.evaluate(() => { rolePicker(); }); await sleep(100);
   rec('role picker shows Pre-production once the tables are there', await pre.page.evaluate(() => { const b = document.querySelector('[data-role="pre"]'); return !!b && !b.hidden; }));
   await pre.close();

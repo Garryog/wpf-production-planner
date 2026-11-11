@@ -1252,3 +1252,41 @@ last changed (compare `seq_pre.updated_at`); only rows with a sequence row.
 5. Tester → fixes → Manager.
 
 ## Progress log — Part 5
+
+### 11 Nov 2026 (scheduled run, night) — Coder: B9a–B9d built
+Built on `feature/project-details-v2`, one commit per step, all pushed. **No SQL, no new save key, no planner-record field** — the pool
+reads the planner, `project_seq` and `seq_pre`, and writes `seq_pre` only (never `project_seq`, never `seq_move` / `seq_insert`).
+- **B9a** (32ba13e) pool, read-only: `cncCutBy`, `preDue`, `preRows` (live sequence rows + WOs with no live row; cut / shipped / on hold /
+  delivered left out; due ≤ today + 7 × weeks), default order due → project → PM position (`dk` = day number + fraction), My# / Due#,
+  `preProcessed` (Cienapps 5–11 worked out, nothing written; else the `seq_pre` tick), material (saw lines on the WO's live lists, else the
+  spec's materials in grey "(spec)"), spec n/n, list ✓, sheets, 🔒 / 🔁, red (past cut-by) / amber (due within `preWks()` weeks), strips
+  (jobs with no PM sequence by project + PM; red count), footer counts. Processed filter (Not / Processed / All) is in this step.
+  tests/seq/b9a-pool.test.js **27 / 0** (fixture tests/seq/b9fix.js, today Wed 11 Nov 2026).
+- **B9b** (96198a9) ✓ Processed tick / ↺ un-tick (reason Ticked by mistake / Files need redoing / Other → `seq_pre.note`; refused at
+  Cienapps 5+), `preWrite` (POST, or PATCH `seq_id=eq.X&version=eq.V`; 409 / 23505 / empty reply → re-read the row, "changed on another
+  screen"), Export Changes panel "⚙ Processed by pre-production — set 5. WORK ORDER PROCESSED in Cienapps (N)" + its own Excel + a
+  "Processed" sheet in the Changes Excel, `woProgrammed` also true for a ticked job below step 6 (only while the pool is visible).
+  tests/seq/b9b-tick.test.js **20 / 0**; dates attack1-engine 25 / 0, c1-engine 22 / 0.
+- **B9c** (0b5e2e9) Johnny's order: drag (PC), ▲ ▼, # Move to (My# number) → `pre_key` midpoint (top = first − 1, bottom = last + 1; gap
+  < 1e-6 refused → "Back to due-date order first"), ↺ Back to due-date order (confirm, clears every `pre_key`), OUT OF STEP (one pass,
+  processed ignored), "↻ changed" since you last looked (localStorage `wpfSeen_pre_<name>`, first visit = baseline, tap clears one,
+  ✓ Seen all), `mergedRender` holds off while a pool drag is armed (`PREV.drag`). tests/seq/b9c-order.test.js **25 / 0**.
+- **B9d** (44a440e) filters PM / Project / Material (each with a "none" choice, ✕ Clear), weeks ▾ `preWks()`…12 (this device only,
+  `wpfPreWks`), filters fold away on a phone, 360 px cards (no sideways scroll, buttons 40 px). tests/seq/b9d-filters.test.js **15 / 0**.
+- **Old test moved to the new behaviour:** tests/seq/s2-pm-assign "Pre-production placeholder page" now checks the pool page (the
+  placeholder is gone on purpose) — 39 / 0.
+- **Full suite** (261 test files + 4 probes, 3 at a time, at 44a440e): **5,893 pass / 40 fail**, all failing before B9 too:
+  ACCEPTED-FAILURES rows — dates attack1-oldversion ×3, attack3-guard, project-details attack1-merge 1c, sawstores ×2, seq attack1-oldtab ×2,
+  attack3-editor, attack4-fold, attack5-window ×2, attack7 2b, stage1 t17 ×10, t13 ×4, t14 ×3 (C7, D4a, D4b), t3, stage3 attack-poll P5,
+  c4-queue A5; plus stage1 t16 ×2 "WITH proposed guard" (informational, as before); plus three NOT on the list that fail identically at
+  4294cd2 (before B9, checked in a worktree): sawstores retest-nov B (2028 list has Mon 3 Jan 2028 — the ASSUMED substitute holiday),
+  stage2 coder-r2 #4 (board step dropdown has the S1 steps), stage3 flow-attack1-switchoff office/b (same cause); plus editor e7 redraw
+  timing (passes alone, 23 / 0). header-late-probe still crashes (pre-existing). attack8-merge now passes. **No new failure.**
+- **ASSUMED (Garry to confirm):** (1) A sequence row whose WO is not in the planner is left out of the pool (nothing to process). (2) A job
+  with no due date is not listed (footer count). (3) My# / Due# number the whole pool (filters hide rows but keep the numbers); "# Move to"
+  takes a My# number; ▲ ▼ and drag move among the rows shown. (4) The Export Changes panel appears only when there is at least one
+  line (so Export Changes looks exactly as before otherwise). (5) Re-ticking keeps the last un-tick reason in `note` (history has every
+  tick / un-tick). (6) The pool's buttons are for ROLE Pre-production only, with the lists switched on (`v2`); everyone else, and the
+  "switching" state, sees it read-only. (7) The "changed" baseline is never taken while the tables are still loading. (8) P-numbers are
+  in the pool (they need processing) but never in the Export Changes panel.
+- **Left:** Tester → fixes → Manager (build step 5). Not built: the sheet reader (B8 / later, as the plan says).
