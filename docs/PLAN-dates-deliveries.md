@@ -455,3 +455,46 @@ Tester attack5 (7d08f36, tests/dates/attack5-carryover): 102 pass / 13 fail on a
 - Tests: attack5 115 / 0; attack4b 94 / 0; attack4 43 / 2 (the 2 accepted L12); c10 62 / 0. Full suite (209 files incl. the 4 probes,
   3 at a time): **3,917 pass / 30 fail** — the same 30 as before (2 L12 + 28 on ACCEPTED-FAILURES), +115 from attack5; no new
   failures, no timing reruns needed. header-late-probe still crashes on the import mapping screen (pre-existing).
+
+### 11 Nov 2026 — Manager verdict on Job A after attack5
+**Verdict: GO WITH CONDITIONS** (ready to merge into Job B; not to be released on its own). No Blocker or Critical issue.
+
+Checked: the diffs 22b2b1d..7dc7988, attack5 and attack4b. Re-run on the fake database: attack5 115/0, attack4b 94/0, c10 62/0,
+switch-off 12/0, attack4 43/2 (the 2 accepted L12). The full suite (3,917 / 30) was the Coder's run and was not re-run here.
+- **No SQL and no new top-level save key.** This run adds no saved field. The switch-off test confirms the jobs and settings keys are unchanged.
+- **Lists switch OFF:** the only differences are the intended ones: the Production Manager's 🧭 Today / 🚚 Deliveries buttons,
+  the board's "⚠ built after due" chip (replacing the red tag), and text wrapping at 360 px.
+- **History tidy (5d70da8), release risk: low.** It never changes a date. It only drops a history line that repeats the line just before it
+  (same date, same from and to). A real change is lost only if a date moved with no history line in between (an import
+  fallback). Two gaps: (a) it does not work for a job that has a delivery date, because the delivery line sits between the two repeats, so
+  the stale repeat still shows twice (cosmetic, checked by hand); (b) no test proves a real back-and-forth (12→19, 19→12, 12→19)
+  is kept. The by-hand check says it is kept.
+
+Key issues
+1. [Decision] The Production Manager's 🚚 Deliveries is the FULL office page. Besides moving dates and booking vans it includes
+   **Close week**, the one-time "which week are the old bookings" answer, Add Job, and marking a job Delivered. Garry: decision A below.
+2. [Should fix, Coder, low] Make the history tidy work when the job has a delivery date. Tester: add a back-and-forth-kept check and a
+   with-delivery-date stale-repeat check.
+3. [Decision] Coder deviation: a loaded / on-the-road job still moves with a group week move (it stays on its van and is flagged
+   "date moved after loading — check"). Decision D below.
+4. [Note] A stale screen gets no "already moved" message. Its person's reason is silently left out of the history. Accept.
+5. [Not verified] Real PC mouse drag onto the week bar, the Production Manager's screen layout with the sticky week bar, 360 px wraps
+   and the date picker on an Android phone in Chrome.
+
+Conditions
+- [ ] Garry answers A, B, C, D.
+- [ ] Merge Job A into Job B. The full suite there must pass with only ACCEPTED-FAILURES rows failing; the 2 L12 rows then come off the list.
+- [ ] Issue 2 is fixed (or Garry accepts it) before release.
+- [ ] Spot-check on the Production Manager's own PC and an Android phone in Chrome: tap the due date, → Wk, drag onto Next ▶, Move ticked.
+- [ ] Release Mon–Wed only, with Job B, using the Go-live checklist above. Add to "Who to tell": the PM's 🚚 Deliveries button.
+
+Garry's decisions
+- **A. Production Manager on Deliveries:** (1) full page as built, Close week included. **Recommended**, because Close week takes a
+  backup first. (2) Same, but no Close week or old-bookings answer. (3) No Deliveries button.
+- **B. Saturday deliveries:** (1) allowed and not flagged, as built. **Recommended.** (2) Flag them.
+- **C. Release day:** (1) with Job B, on a Mon/Tue/Wed after the merge re-test. **Recommended.** (2) Job A on its own first.
+- **D. A loaded / on-the-road job ticked in a group week move:** (1) it moves, stays on the van, flagged, as built and as in plan Q15.
+  **Recommended.** (2) Leave it out and list it as "not moved — on the road".
+
+Process notes: the Coder changed the Tester's attack5 F2 expected result (on the lead's call, logged). The Tester should confirm it on
+the Job B merge. No Tester re-attack has been run since the attack5 fixes; that re-attack happens on the Job B merge.
