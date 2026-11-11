@@ -1088,3 +1088,29 @@ insTpl filter · 7 L9 (after D4 is merged) · 8 L10 · 9 full suite → Tester �
   attack3-guard, attack1-merge 1c, sawstores ×2, seq attack1-oldtab ×2, attack3-editor, attack4-fold, attack5-window ×2, attack7 2b,
   stage1 t17 ×10) + e7 redraw and dates a5-histdedup 3b (timing; both pass alone) + attack8-merge ×5 (the Tester is updating those
   expectations for S1/S2). tests/seq otherwise all pass.
+
+### 11 Nov 2026 — Manager verdict (afternoon run)
+Reviewed f4a7719..41ab040 on `feature/project-details-v2`. Re-run by the Manager: all 50 files in tests/seq + tests/project-details, plus
+tests/dates (27), stage1 t17, e5-columns, s1s3-screens, s4-editor (81 of 256 files). Only ACCEPTED-FAILURES rows fail; attack8-merge 68/0,
+attack8-dates 65/0, attack9-pmerge 29/0, attack9-ship-spec 17/0, l4b 23/0, s12 20/0, s13 23/0. The other 175 files: not re-run (the
+5,765 / 47 figure is the Coder's). Throwaway Postgres 16: every pending block in go-live order (Stage 1 → guard → Stage 3 → Photo →
+Stores dockets → Project details → PM sequence → Merged P-numbers → guard v2) run twice, then the whole set twice again — no errors;
+seq / project-details / stores-docket pg-checks, attack3-pg (0/45), pg-pmerged, attack3-pgrace and attack4-jsvssql all pass.
+- **Part 1 carry-over: GO.** Every line the six 11 Nov commits added on the old branch is on this branch; the only differences are the
+  intended merges (`px` beside `sq/sr/sp`, Pre-production added to SPEC_ED). Project details SQL is byte-identical to the old branch's.
+- **S1 hand-set steps 9/10/11: GO WITH CONDITIONS** — Garry confirms ASSUMED 1–2 (Completed also ticks Installation complete; steps only move forward).
+- **S2 Shipped filters + PM Shipped tab: GO WITH CONDITIONS** — Garry confirms ASSUMED 3–5.
+- **L4b merge + attack9 + "Merged P-numbers stay merged" SQL: GO WITH CONDITIONS.** Nothing is deleted (full copy on the WO `pFrom`
+  and in `pMerged`; sequence rows retired, never deleted); merged once on two PCs; a stale screen can't bring a P back. The trigger is
+  safe, re-runnable, independent of the other blocks, works with both old-screen guards and with junk in orders/settings.
+  Issues: (Low, Coder) restoring a planner backup taken before a merge is refused by the trigger — add "drop the trigger first" to the
+  block's Rollback note; (Low, Coder) give `pp_pmerged_guard` `set search_path = public` like the other functions (Supabase advisor);
+  (Note, Garry) a "not sure" pair left unticked keeps two jobs for one house on the board until someone ticks it; ASSUMED 6–9 and M5
+  (earlier sequence row kept) need Garry's yes.
+- **attack8 B11 date fixes: GO WITH CONDITIONS** — bank-holiday list checked against the Irish rules 2026–2028 (correct); Garry confirms
+  Mon 3 Jan 2028.
+- **Job A + Job B release: NOT YET — GO WITH CONDITIONS once:** (1) Garry answers the open items (ACCEPTED-FAILURES 1c, two P-numbers
+  flag vs Keep one, attack7 2b, attack5-window ×2, the ASSUMED list); (2) SQL run in the order above, guard v2 only after the new code
+  has saved once; (3) `origin/main` is ahead by history only (same files as 4bb9bed) and merges cleanly — merge it in, full suite once;
+  (4) go-live day: close/reopen every screen, incognito check, PINs not the defaults. B10 upload is not built (needs the Q7 sample) — it
+  is not needed for this release.
