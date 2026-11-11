@@ -593,6 +593,25 @@ saw and stores follow the new date like any other date change.
   sends the 5 real WO titles + their upload lines + one real 27-column file (if they are late, do B9 first); (e) B9 Johnny's pool;
   (f) B11 d/e/f/g last.
 
+### 11 Nov 2026 (scheduled run) — Manager issue 1 fixed
+- **6494632** — after an approved change is made, "applied" is written with up to 4 tries (waits 0.4 / 1 / 2.5 s), re-reading the
+  request each time, so a ✓ Seen (version moved) or a network blip in those seconds no longer loses it. If it still fails: a warning
+  that stays (sticky toast + red line on the request card) **"Changed, but not recorded — do NOT tap Apply now; tell the office"**; that
+  card has no Apply now on this screen (only "Try to record it again", which records and never re-applies).
+- **The real guard, on every screen:** before a date request is made (approve or Apply now, after the planner is re-read), if any of its
+  jobs' date history already carries `rq:<request id>`, the change is NOT made again — "applied" is recorded instead (`fromHist:1`) and
+  the user is told "Already made earlier … not made again". So a second screen's "Apply now" can no longer undo a later change.
+- `seqReqDirect`: the same row is retried 4 times (a lost reply is found by re-reading — never two rows); still failing → sticky warning
+  "Changed, but not counted in "Late changes" (WO-…) … Tell the office".
+- The Approve confirm box repeats the card's "⚠ changed since asked" line (and says approving makes exactly what was asked).
+- Tests: `tests/seq/s11-requests.test.js` part 17 (+14 checks, 70/70): fails twice then works; fails always → warning, Apply now refused
+  here and on a fresh second screen with the office's later date kept; ✓ Seen racing the write; direct row lost reply / always failing;
+  confirm box with and without the warning. Full suite: **5,325 pass / 36 fail** = the 35 accepted + e7 redraw timing (982 ms); nothing new.
+  (Tester's in-progress `tests/seq/attack7-*` not run.)
+- Left: an **order** (move) request has no per-job marker like `rq:` — if its "applied" write fails for good, this screen refuses, but
+  another screen's Apply now (after 2 min) would move the rows again. Rare (4 failed tries + someone taps Apply now elsewhere); a guard would
+  need the request id in the seq_move history (SQL) — Architect / Garry to decide.
+
 
 ---
 
