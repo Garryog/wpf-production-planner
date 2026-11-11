@@ -1059,3 +1059,18 @@ insTpl filter · 7 L9 (after D4 is merged) · 8 L10 · 9 full suite → Tester �
   every import — no "not the same house" memory yet (plan's pNotSame, not built). (10) Pre-production keeps spec / materials editing
   (Drawing office rights) but, like the Drawing office, can't sign off.
 - **Left:** Tester + Manager on S1 / S2 / L4b and the Part 1 carry-over; B10 upload / matching (needs Garry's Q7 sample); pNotSame.
+- **Later the same afternoon — Tester attack 8 (0632203) findings fixed** (tests/seq/attack8-dates.test.js: was 58 / 7, now **65 / 0**):
+  099b53c 4c HIGH — sequence Undo re-reads the planner first (like Approve); a job changed on another PC since is left ("changed since by X —
+  not undone"), the other jobs are still undone. eae424a 1a/1h/1j — the bank-holiday list now has the actual days as well as the substitutes
+  (Sat 26 Dec 2026, Sat 25 / Sun 26 Dec 2027) and **Mon 3 Jan 2028 (ASSUMED substitute for Sat 1 Jan — Garry to confirm)**. 2d7d0d2 1i/1h — a
+  delivery pushed / pulled by weeks onto a Sunday or bank holiday is fitted in the same week exactly like Deliveries' Move to week (the day
+  before in that week, else the one after — so Fri 18 Dec +1 week → Thu 24 Dec, Mon 2 Nov −1 week → Tue 27 Oct). b517aba 1h/1j/2d — the
+  preview says when a delivery was moved off a holiday, and warns when a date is in the past. e0bca98 5b — PM nudges count only his own projects
+  even with "All projects" ticked. A bulk SET to a holiday is not moved (the person picked it) — the preview's existing bank-holiday warning
+  shows instead (ASSUMED). Spread already uses working days.
+- **Full suite** at e0bca98 (254 test files + 4 probes): **5,722 pass / 44 fail** = ACCEPTED-FAILURES rows (dates attack1-oldversion ×3,
+  attack3-guard, attack1-merge 1c, sawstores ×2, seq attack1-oldtab ×2, attack3-editor, attack4-fold, attack5-window ×2, attack7 2b, stage1 t17 ×8)
+  + editor e7 redraw 842 ms (timing) + **5 in the Tester's new tests/seq/attack8-merge.test.js** (A1a, A1b2, A1d, A1d2 ×2): they compare
+  screens with code from before S1/S2 and see the new board step options (JOB SHIPPED / INSTALLED / COMPLETED) and the PM's 📦 Shipped tab —
+  intended changes; the Tester should allow them as attack5 B8 now does (not changed by the Coder). tests/seq: all others pass; tests/dates:
+  only the accepted rows.
