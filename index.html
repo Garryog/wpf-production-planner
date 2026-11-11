@@ -651,7 +651,10 @@ let DB={orders:[],nid:1,weekCaps:{}};
 // Default value-to-hours scale (editable in Settings tab)
 // Board step dropdown: Cienapps steps 1–8 only (exact Cienapps wording). Shipped / installed / invoiced / on hold
 // (9–12) only ever come from a Cienapps import. A job already at another step keeps it (shown as its own option).
-const MANUAL_STEPS=['1. DRAWING','2. NO SITE MEASURE DONE','3. READY FOR UPLOAD','4. READY FOR PRODUCTION','5. WORK ORDER PROCESSED','6. JOB CUT COMPLETE','7. ASSEMBLY COMPLETE','8. PALLETED'];
+const MANUAL_STEPS=['1. DRAWING','2. NO SITE MEASURE DONE','3. READY FOR UPLOAD','4. READY FOR PRODUCTION','5. WORK ORDER PROCESSED','6. JOB CUT COMPLETE','7. ASSEMBLY COMPLETE','8. PALLETED','9. JOB SHIPPED','10. INSTALLED TO BE INVOICE','11. COMPLETED AND INVOICED'];
+/*S1 (Garry 10 Nov): steps 9-11 stored as Cienapps' exact text, shown short on the board drop-down*/
+const STEP_SHORT={'9. JOB SHIPPED':'JOB SHIPPED','10. INSTALLED TO BE INVOICE':'INSTALLED','11. COMPLETED AND INVOICED':'COMPLETED'};
+function stepShort(s){const t=String(s||'').trim();return STEP_SHORT[t]||t.replace(/^\d+\.\s*/,'');}
 function getSteps(){return MANUAL_STEPS.slice();}
 let HOUR_SCALE=[
   {maxVal:1000,  hours:1},
@@ -2007,8 +2010,8 @@ function renderBoard(app){
           <td>${dueTag(o,{late:true})}${dateCanMove()?`<button class="dq-more" data-duedlg="${escA(o.wo)}" title="All date options — due and delivery dates, history">⋯</button>`:''}${dmChips(o)}</td>
           <td style="text-align:right;font-size:12px;color:var(--t2)">€${Math.round(o.value||0).toLocaleString()}</td>
           <td><select class="step-sel" data-stepsel="${escA(o.wo)}" style="font-size:11px;padding:3px 4px;border-radius:6px;border:1px solid var(--b2);background:#fff;color:var(--text);max-width:120px">
-            ${getSteps().map(s=>`<option value="${escA(s)}"${(o.step||'')===s?' selected':''}>${escA(s.replace(/^\d+\.\s*/,''))}</option>`).join('')}
-            ${getSteps().includes(o.step||'')||!(o.step||'')?'':`<option value="${escA(o.step)}" selected>${escA(o.step.replace(/^\d+\.\s*/,''))}</option>`}
+            ${getSteps().map(s=>`<option value="${escA(s)}"${String(o.step||'').trim()===s?' selected':''}>${escA(stepShort(s))}</option>`).join('')}
+            ${getSteps().includes(String(o.step||'').trim())||!(o.step||'')?'':`<option value="${escA(o.step)}" selected>${escA(stepShort(o.step))}</option>`}
           </select></td>
           <td><select class="week-sel" data-wsel="${escA(o.wo)}">${weekOpts(o.plannedWeek||'',false)}</select></td>
           <td style="text-align:center"><button style="background:none;border:none;color:var(--t3);font-size:14px;padding:0 2px;cursor:pointer;line-height:1" data-del="${escA(o.wo)}" title="Delete order">🗑</button></td>
@@ -2301,7 +2304,9 @@ function renderBoard(app){
   document.querySelectorAll('[data-s]').forEach(th=>th.onclick=()=>{const s=th.dataset.s;if(sortCol===s)sortDir*=-1;else{sortCol=s;sortDir=1;}render();});
   // Every board edit is stamped with the person at this machine (asked once per tab)
   document.querySelectorAll('[data-wsel]').forEach(sel=>sel.onchange=function(){const o=DB.orders.find(x=>x.wo===this.dataset.wsel);const v=this.value;if(o)officeWho(by=>{const was=o.plannedWeek||'';o.plannedWeek=v;if(o.dueMv&&!o.dueMv.prog&&!o.dueMv.loaded)delete o.dueMv;/*dates: week checked by hand (programmed / loaded chips stay until tapped)*/logEdit(o,'Build week '+(was?wkLbl(was):'unscheduled')+' → '+(v?wkLbl(v):'unscheduled'),by);sched();render();},()=>render());});
-  document.querySelectorAll('[data-stepsel]').forEach(sel=>sel.onchange=function(){const o=DB.orders.find(x=>x.wo===this.dataset.stepsel);const v=this.value;if(o)officeWho(by=>{logEdit(o,'Step '+(o.step||'—')+' → '+v,by);o.step=v;storeStamp(o);/*dates*/const tg=delvAuto(o,by);if(tg)updDelBadge();sched();render();toast(tg?'Step updated — ticked for delivery':'Step updated');},()=>render());});
+  document.querySelectorAll('[data-stepsel]').forEach(sel=>sel.onchange=function(){const o=DB.orders.find(x=>x.wo===this.dataset.stepsel);const v=this.value;if(!o)return;
+    if(stepIsShipped(v)){stepShipHand(o,v);return;} /*S1: 9 / 10 / 11 by hand — confirmed, then off the board like an imported one*/
+    officeWho(by=>{logEdit(o,'Step '+(o.step||'—')+' → '+v,by);o.step=v;storeStamp(o);/*dates*/const tg=delvAuto(o,by);if(tg)updDelBadge();sched();render();toast(tg?'Step updated — ticked for delivery':'Step updated');},()=>render());});
   document.querySelectorAll('[data-hl]').forEach(el=>el.onclick=function(){const o=DB.orders.find(x=>x.wo===this.dataset.hl);if(o){o.hl=!o.hl;sched();render();}});
   document.querySelectorAll('[data-hi]').forEach(inp=>inp.onchange=function(){const o=DB.orders.find(x=>x.wo===this.dataset.hi);const v=parseFloat(this.value)||0;if(o)officeWho(by=>{logEdit(o,'Hours '+o.hours+' → '+v,by);o.hours=v;o.hoursEstimated=false;o.hoursSrc='hand';sched();render();},()=>render());});
   document.querySelectorAll('[data-del]').forEach(btn=>btn.onclick=()=>{
@@ -2336,18 +2341,64 @@ function renderBoard(app){
 
 /* ---------- 📦 Shipped tab: jobs Cienapps calls shipped/invoiced. Off the Capacity Board, kept here until the
    planner marks installation complete. Searchable; a job can be brought back to the board. Works on a phone (Chrome). ---------- */
+/* S1 (Garry 10 Nov; Part 3 plan, Q10 ASSUMED): the office moves a job to 9. JOB SHIPPED / 10. INSTALLED TO BE INVOICE /
+   11. COMPLETED AND INVOICED by hand. Confirmed first. The job then leaves the board and the week totals exactly like one
+   Cienapps called shipped (shippedAt / shippedStep), 10 and 11 mark it installed, 11 also "Installation complete". A job on a
+   van stays on Deliveries until the driver confirms (same rule as an import). The step holds until a Cienapps import moves
+   the job on (steps only move forward; while Cienapps is behind it is listed in Export Changes). Logged in the job's history;
+   stepHand = what it was, so "↩ Bring back to board" can put the old step back. Never deletes anything. */
+function stepShipHand(o,v){
+  const n=stepNo(v),was=String(o.step||'').trim(),c=was?stepCmp(v,was):1;
+  if(c!==null&&c<0&&isShipped(o)){toast('Steps only move forward — '+o.wo+' is already at '+stepShort(was));render();return;}
+  const what=n===9?'Job shipped':n===10?'Installed (to be invoiced)':'Completed and invoiced';
+  if(!confirm('Set '+o.wo+' to "'+v+'"?\n\n'+what+(isShipped(o)?'.':' — it leaves the Capacity Board and the week totals and goes to the 📦 Shipped tab'+(o.delv&&!o.delDelivAt&&!o.delDone?' (it stays on 🚚 Deliveries until the driver confirms)':'')+'.')
+    +(n===11?'\nIt is also marked "Installation complete".':'')+'\n\nCienapps is not changed — it is listed in Export Changes until Cienapps has it.')){render();return;}
+  officeWho(by=>{const at=nowISO(),p0=o.stepHand&&String(o.step||'').trim()===o.stepHand.to?o.stepHand:null,h={from:p0?p0.from:was,to:v,at,by,...(p0&&p0.inst?{inst:true}:{})}; // 9 then 10 by hand: ↩ still goes back to the step before 9
+    logEdit(o,'Step '+(was||'—')+' → '+v+' (set by hand)',by);o.step=v;
+    if(!isShipped(o)){o.shippedAt=at;o.shippedStep=v;delete o.shipBack;logEdit(o,'Moved to Shipped — set by hand: '+v,by);}
+    if(n>=10&&!o.installedAt){o.installedAt=at;h.inst=true;logEdit(o,'Installed — set by hand',by);}
+    if(n===11&&!o.completeAt){o.completeAt=at;o.completeBy=by;delete o.completeOverride;logEdit(o,'Installation complete',by);}
+    o.stepHand=h;sched();render();toast(o.wo+' — '+stepShort(v).toLowerCase()+(isShipped(o)?' · now on the 📦 Shipped tab':''));},()=>render());
+}
 let shSrch='',shDel='',shDone=false,shHoldQ='';
+/* S2 (Garry 10 Nov): Project and PM filters on the Shipped tab (both lists). The project is the job's own (P-number pid, else
+   customer → project); the PM comes from that project's PM assignment. Remembered on this device; the PM filter starts on this
+   device's PM (Q11 ASSUMED). Only with the new cutting lists switched on AND the PM sequence tables installed (seqVis()). */
+const SH_ALL='*',SH_NONE='-';
+function shFiltOn(){return seqVis();}
+function shProjSel(){return ls.get('wpfShProj')||SH_ALL;}
+function shPMSel(){const v=ls.get('wpfShPM');if(v)return v;const me=ROLE==='pm'?seqMe('pm'):'';return me||SH_ALL;}
+function shPMsOf(o){const pid=keyProj(o);return pid?seqPMs(LST.p.get(pid)):[];}
+function shKeep(o){if(!shFiltOn())return true;
+  const pf=shProjSel(),mf=shPMSel(),pid=keyProj(o);
+  if(pf!==SH_ALL&&(pf===SH_NONE?!!(pid&&LST.p.has(pid)):pid!==pf))return false;
+  if(mf!==SH_ALL){const pm=shPMsOf(o);if(mf===SH_NONE?pm.length>0:!pm.some(n=>seqKey(n)===seqKey(mf)))return false;}
+  return true;}
+function shFiltHTML(jobs){if(!shFiltOn())return'';
+  const pf=shProjSel(),mf=shPMSel(),ids=new Set(jobs.map(o=>keyProj(o)).filter(id=>id&&LST.p.has(id)));if(pf!==SH_ALL&&pf!==SH_NONE)ids.add(pf);
+  const ps=[...ids].map(id=>LST.p.get(id)).filter(Boolean).sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+  const pms=new Map();staffFor('pm').forEach(x=>pms.set(seqKey(x.n),x.n.trim()));lsProjects(true).forEach(p=>seqPMs(p).forEach(n=>{if(!pms.has(seqKey(n)))pms.set(seqKey(n),n);}));
+  if(mf!==SH_ALL&&mf!==SH_NONE&&!pms.has(seqKey(mf)))pms.set(seqKey(mf),mf);
+  const pl=[...pms.values()].sort((a,b)=>a.localeCompare(b));
+  return `<select class="filter-sel" id="sh-proj" title="Project">
+      <option value="${SH_ALL}"${pf===SH_ALL?' selected':''}>Project: all</option>
+      ${ps.map(p=>`<option value="${escA(p.id)}"${pf===p.id?' selected':''}>${escA(p.name)}</option>`).join('')}
+      <option value="${SH_NONE}"${pf===SH_NONE?' selected':''}>No project linked</option></select>
+    <select class="filter-sel" id="sh-pm" title="Project Manager (from the project's PM assignment)">
+      <option value="${SH_ALL}"${mf===SH_ALL?' selected':''}>PM: all</option>
+      ${pl.map(n=>`<option value="${escA(n)}"${seqKey(n)===seqKey(mf)?' selected':''}>PM: ${escA(n)}</option>`).join('')}
+      <option value="${SH_NONE}"${mf===SH_NONE?' selected':''}>PM: none assigned</option></select>`;}
 function renderShipped(app){
   const am=attnMap();
   const all=DB.orders.filter(isShipped);
-  let os=all.filter(o=>shDone||!o.completeAt);
+  let os=all.filter(o=>(shDone||!o.completeAt)&&shKeep(o));
   if(shDel==='yes')os=os.filter(o=>dStage(o)==='deliv');else if(shDel==='no')os=os.filter(o=>dStage(o)!=='deliv');
   if(shSrch){const q=shSrch.toLowerCase();os=os.filter(o=>[o.wo,o.title,o.customer,o.floor,o.unit].some(v=>String(v||'').toLowerCase().includes(q)));}
   os.sort((a,b)=>String(b.shippedAt||'').localeCompare(String(a.shippedAt||''))||woCmp(a,b));
   const shown=os.slice(0,300);
   const dt=s=>s?new Date(s).toLocaleDateString('en-IE',{day:'numeric',month:'short'}):'—';
   const nDone=all.filter(o=>o.completeAt).length;
-  const held=DB.orders.filter(o=>isOnHold(o)&&!isShipped(o));
+  const heldAll=DB.orders.filter(o=>isOnHold(o)&&!isShipped(o)),held=heldAll.filter(shKeep);
   const hs=shHoldQ?held.filter(o=>[o.wo,o.title,o.customer,o.floor,o.unit].some(v=>String(v||'').toLowerCase().includes(shHoldQ.toLowerCase()))):held;
   const card=o=>{
     const deliv=dStage(o)==='deliv',w=am.get(o.wo)||0;
@@ -2361,7 +2412,7 @@ function renderShipped(app){
       ${o.completeAt?`<div class="sh-m" style="color:#0d6e46;font-weight:700">✓ Installation complete ${dt(o.completeAt)}${o.completeBy?' — '+escA(o.completeBy):''}</div>`:''}
       <div class="sh-b">
         ${o.completeAt?`<button class="btn btn-s" data-shu="${escA(o.wo)}">Undo complete</button>`:`<button class="btn btn-g" data-shc="${escA(o.wo)}">✓ Installation complete</button>`}
-        <button class="btn btn-s" data-shb="${escA(o.wo)}">↩ Bring back to board</button>
+        ${ROLE==='pm'?'':`<button class="btn btn-s" data-shb="${escA(o.wo)}">↩ Bring back to board</button>`}
       </div>
     </div>`;
   };
@@ -2373,17 +2424,18 @@ function renderShipped(app){
         <option value="yes"${shDel==='yes'?' selected':''}>Delivered: yes</option>
         <option value="no"${shDel==='no'?' selected':''}>Delivered: no</option>
       </select>
+      ${shFiltHTML(all.concat(heldAll))}
       <label class="sh-chk"><input type="checkbox" id="sh-done"${shDone?' checked':''}> Show completed (${nDone})</label>
     </div>
     <div style="font-size:12px;color:var(--t2);margin:2px 0 10px">${os.length} shown · ${all.length} shipped in total. Shipped jobs are off the Capacity Board and out of the week totals; jobs on a van stay on 🚚 Deliveries until the driver confirms.</div>
     ${shown.length?shown.map(card).join(''):`<div class="empty">${all.length?'No shipped jobs match.':'No shipped jobs yet — they arrive here when a Cienapps import says shipped or invoiced.'}</div>`}
     ${os.length>shown.length?`<div style="font-size:12px;color:var(--t3);padding:6px 0">…and ${os.length-shown.length} more — search to narrow down</div>`:''}
     <div id="sh-hold" style="margin-top:22px;border-top:2px solid var(--b2);padding-top:12px">
-      <div style="font-size:14px;font-weight:700;margin-bottom:4px">⏸ On hold in Cienapps <span id="sh-hcnt" style="font-weight:400;color:var(--t2)">(${held.length})</span></div>
+      <div style="font-size:14px;font-weight:700;margin-bottom:4px">⏸ On hold in Cienapps <span id="sh-hcnt" style="font-weight:400;color:var(--t2)">(${held.length}${held.length!==heldAll.length?' of '+heldAll.length:''})</span></div>
       <div style="font-size:12px;color:var(--t2);margin-bottom:8px">Step 12 ON HOLD / DELETE. Off the Capacity Board, week totals and capacity — never deleted. The next import with any other step puts the job back on the board.</div>
-      ${held.length?`<input class="search-input" id="sh-hq" placeholder="Search on-hold jobs…" value="${escA(shHoldQ)}" style="margin-bottom:8px">`:''}
+      ${heldAll.length?`<input class="search-input" id="sh-hq" placeholder="Search on-hold jobs…" value="${escA(shHoldQ)}" style="margin-bottom:8px">`:''}
       ${hs.length?hs.slice(0,300).map(o=>`<div class="sh-card"><div class="sh-top"><span class="wo-num">${escA(o.wo)}</span>${fuHTML(o)}<span class="sh-pill no">⏸ On hold</span>${(am.get(o.wo)||0)?`<span class="sh-pill warn" title="Waiting (N/A) lines on its cutting/fittings lists">⚠ ${am.get(o.wo)} line${am.get(o.wo)!==1?'s':''} waiting</span>`:''}${!delHidden(o)&&o.delv?'<span class="sh-pill warn">🚚 Already loaded / on a van</span>':''}</div>
-        <div class="sh-t">${escA(o.title||'')}</div><div class="sh-m">${escA(o.customer||'')} · on hold since ${dt(o.holdAt)} · ${o.hours!=null?escA(String(o.hours))+'h · ':''}due ${fmt(o.dueDate)}</div>${o.holdDel?`<div class="sh-m">Taken off Deliveries when it went on hold (was ${escA(o.holdDel)}) — not put back automatically</div>`:''}</div>`).join(''):`<div class="empty">${held.length?'No on-hold jobs match.':'No jobs on hold.'}</div>`}
+        <div class="sh-t">${escA(o.title||'')}</div><div class="sh-m">${escA(o.customer||'')} · on hold since ${dt(o.holdAt)} · ${o.hours!=null?escA(String(o.hours))+'h · ':''}due ${fmt(o.dueDate)}</div>${o.holdDel?`<div class="sh-m">Taken off Deliveries when it went on hold (was ${escA(o.holdDel)}) — not put back automatically</div>`:''}</div>`).join(''):`<div class="empty">${heldAll.length?'No on-hold jobs match.':'No jobs on hold.'}</div>`}
     </div>
   </div>`;
   const hq=document.getElementById('sh-hq');
@@ -2392,6 +2444,8 @@ function renderShipped(app){
   if(q)q.oninput=function(){shSrch=this.value;const pos=this.selectionStart;render();const n=document.getElementById('sh-q');if(n){n.focus();try{n.setSelectionRange(pos,pos);}catch(e){}}};
   const sd=document.getElementById('sh-del');if(sd)sd.onchange=function(){shDel=this.value;render();};
   const sc=document.getElementById('sh-done');if(sc)sc.onchange=function(){shDone=this.checked;render();};
+  const sp=document.getElementById('sh-proj');if(sp)sp.onchange=function(){ls.set('wpfShProj',this.value);render();};
+  const sm=document.getElementById('sh-pm');if(sm)sm.onchange=function(){ls.set('wpfShPM',this.value);render();};
   const find=wo=>DB.orders.find(x=>x.wo===wo);
   app.querySelectorAll('[data-shc]').forEach(b=>b.onclick=()=>{const o=find(b.dataset.shc);if(!o)return;
     officeWho(by=>{o.completeAt=nowISO();o.completeBy=by;delete o.completeOverride;logEdit(o,'Installation complete',by);sched();render();toast(o.wo+' — installation complete ✓');});});
@@ -2399,7 +2453,10 @@ function renderShipped(app){
     officeWho(by=>{delete o.completeAt;delete o.completeBy;o.completeOverride=o.cienStep||o.shippedStep||o.step||'(none)';logEdit(o,'Installation complete undone',by);sched();render();});});
   app.querySelectorAll('[data-shb]').forEach(b=>b.onclick=()=>{const o=find(b.dataset.shb);if(!o)return;
     if(!confirm('Bring '+o.wo+' back to the Capacity Board?\n\nIt stays there even though Cienapps says shipped — until Cienapps moves it on (e.g. to invoiced).'))return;
-    officeWho(by=>{o.shipBack={at:nowISO(),by,cs:o.cienStep||o.shippedStep||''};delete o.shippedAt;delete o.completeAt;delete o.completeBy;logEdit(o,'Brought back to the board from Shipped',by);sched();render();toast(o.wo+' is back on the Capacity Board');});});
+    officeWho(by=>{o.shipBack={at:nowISO(),by,cs:o.cienStep||o.shippedStep||''};delete o.shippedAt;delete o.completeAt;delete o.completeBy;
+      /*S1: a step set by hand to 9/10/11 goes back to the step it had before (only while it is still the hand-set one)*/
+      const h=o.stepHand;if(h&&String(o.step||'').trim()===h.to){o.step=h.from||'';if(h.inst)delete o.installedAt;logEdit(o,'Step '+h.to+' → '+(h.from||'—')+' (the step set by hand undone)',by);}
+      delete o.stepHand;logEdit(o,'Brought back to the board from Shipped',by);sched();render();toast(o.wo+' is back on the Capacity Board');});});
 }
 
 /* ---------- Deliveries: plan next week's deliveries by vehicle and day (v2) ---------- */
@@ -6661,11 +6718,12 @@ function renderSnags(app){
 }
 let pmTab='';
 function renderPMV2(app){
-  if(pmTab==='seq'&&!seqVis())pmTab='';
+  if((pmTab==='seq'||pmTab==='ship')&&!seqVis())pmTab='';
+  if(pmTab==='ship')renderShipped(app);else /*S2: the PMs' own way into the Shipped tab (ASSUMED — Garry: filters "for the PMs")*/
   if(pmTab==='snags')renderSnags(app);else if(pmTab==='projects'){app.innerHTML='<div class="pg">'+lsProjHubHTML()+'</div>';lsProjHubBind(app);}else if(pmTab==='seq')seqPMTab(app);else renderPM(app);
   const t=(k,l)=>`<button data-pmtab="${k}" style="padding:9px 18px;border:none;border-radius:6px;font-size:15px;font-weight:700;cursor:pointer;${pmTab===k?'background:#14335c;color:#fff':'background:#e6ebf2;color:#14335c'}">${l}</button>`;
   const sv=seqVis(),mineAny=sv&&pmMineAny(); /*seq: name strip + "All projects" (B5)*/
-  app.insertAdjacentHTML('afterbegin',`<div id="pm-strip" style="max-width:1400px;margin:10px auto 0;padding:0 20px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">${t('','🚚 Deliveries')}${t('snags','🩹 Snags')}${t('projects','🏗 Projects')}${sv?t('seq','🔢 Sequence'):''}<button id="pm-sent" class="dk-gate"${dkVis()?'':' hidden'} style="padding:9px 18px;border:none;border-radius:6px;font-size:15px;font-weight:700;cursor:pointer;background:#e6ebf2;color:#14335c">📦 Items sent</button>${sv?`<span style="flex:1"></span>${seqMeStrip('pm')}${mineAny?`<label class="seq-all"><input type="checkbox" id="pm-all"${PMALL?' checked':''}> All projects <small>(others read-only)</small></label>`:seqMe('pm')?'<span class="seq-un">No projects assigned to you yet — showing all</span>':''}`:''}</div>`);
+  app.insertAdjacentHTML('afterbegin',`<div id="pm-strip" style="max-width:1400px;margin:10px auto 0;padding:0 20px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">${t('','🚚 Deliveries')}${t('snags','🩹 Snags')}${t('projects','🏗 Projects')}${sv?t('seq','🔢 Sequence')+t('ship','📦 Shipped'):''}<button id="pm-sent" class="dk-gate"${dkVis()?'':' hidden'} style="padding:9px 18px;border:none;border-radius:6px;font-size:15px;font-weight:700;cursor:pointer;background:#e6ebf2;color:#14335c">📦 Items sent</button>${sv?`<span style="flex:1"></span>${seqMeStrip('pm')}${mineAny?`<label class="seq-all"><input type="checkbox" id="pm-all"${PMALL?' checked':''}> All projects <small>(others read-only)</small></label>`:seqMe('pm')?'<span class="seq-un">No projects assigned to you yet — showing all</span>':''}`:''}</div>`);
   document.querySelectorAll('[data-pmtab]').forEach(b=>b.onclick=()=>{pmTab=b.dataset.pmtab;lsStart();render();});
   document.getElementById('pm-sent').onclick=()=>dkReportDlg();dkShow();
   if(sv){const an=seqAnsHTML();if(an){document.getElementById('pm-strip').insertAdjacentHTML('afterend',an);document.querySelectorAll('[data-seqseen]').forEach(b=>b.onclick=async()=>{b.disabled=true;await seqReqSeen(b.dataset.seqseen);render();});} /*B7: the answer, until he taps Seen*/
@@ -10032,6 +10090,7 @@ function analyzeImport(input,source){
       if(cs&&ex.cienStep!==cs)fill.cienStep=cs;
       if(cs&&ex.delvOverride&&!ovrHolds(ex.delvOverride,cs))fill.delvOverride=undefined;     // Cienapps has moved beyond the planner's untag
       if(cs&&ex.completeOverride&&!ovrHolds(ex.completeOverride,cs))fill.completeOverride=undefined;
+      if(cs&&ex.stepHand&&(stepCmp(cs,ex.stepHand.to)??-1)>=0)fill.stepHand=undefined; /*S1: Cienapps has caught up with a step set by hand — it is Cienapps' now*/
       // hours: planner-set hours always win
       const src=hSrc(ex);
       if(src!=='hand'&&!(src==='cien'&&!r.has.hours&&!/assembly\s*complete|pallet/i.test(newStep))){
