@@ -178,3 +178,40 @@ one (Q2); the SQL not yet run (sheet hidden, nothing breaks).
 7. Still open: yes/no on the ACCEPTED-FAILURES row attack1-merge 1c (old-version screen importing).
 
 **Architect change (from answer 2/6):** new table `project_specs` (id, project_id, name, spec_type kitchens/robes/schools, sort, active — retired, never deleted). `project_spec_items` gets `spec_id`; one item name per spec. A project with no spec yet shows its default checklist (named after the project type) and the first edit creates it. Project details window: one tab per spec, "＋ Add spec" (name + type), rename / "not used any more". Print and the printed saw/stores sheets: one block per spec.
+
+### 11 Nov 2026 (run 2) — Garry's answers built; Tester rounds 2–4; Manager GO WITH CONDITIONS, no Blockers
+- **Coder** (16794ad, 2a22f09, 30ffedd, b35c7bb, e4861f2, 9db5b98):
+  - Several specs per project (`project_specs`; tabs, ＋ Add spec, Rename, Not used any more / Bring back — never deleted).
+    The project stays red until every item on every spec in use is signed off; the chip reads "Kitchens: … · Robes: …".
+  - Sign-off: Project Managers only. On the PM screen directly; on any other screen the PM (or Admin) PIN is asked EVERY
+    time and the Project Manager's own name is asked and recorded.
+  - Marking a spec "not used any more" while it has open items also needs a Project Manager (Manager issue 1); the database
+    writes spec add / rename / retire / bring-back to the history, keeps one spec in use per project (two PCs can't retire
+    the last two) and refuses saves on a retired spec.
+  - Materials and spec values: PM, office, Management, Drawing office, Production Manager — no PIN. Saw, stores, drivers,
+    floor read-only. Materials window works on a 360 px phone.
+  - Customer of a job: Admin PIN every time (also for ↺). Floor, Unit, Title unchanged.
+  - The spec's materials come first in the cutting-list Material drop-down ("From the project details (spec)"); the other
+    project materials are still listed below. Nothing is applied to a list or a template.
+  - SQL block (now dated 11 Nov) run twice on a fresh throwaway Postgres and as an upgrade of the 9 Nov draft:
+    tests/project-details/pg-check.sql ALL PG CHECKS PASSED; two-session retire race script OK.
+- **Tester:** round 2 — the 11 old checks that tested the pre-9-Nov rules rewritten to the new rules (s1s3-screens,
+  attack2-screens, s4-editor, e5-columns, coder-wo-cols: all pass); attack2-spec / -cust / -mats / -phone / -pg: 1 High
+  (two PCs could retire every spec → project went green), 4 Medium, Lows. Rounds 3 and 4: all fixed and re-tested.
+  Project-details files now: p1 0/30, p2 0/24, p3 0/28, attack1-spec 0/35, attack1-phone 0/10, attack2-spec 0/81,
+  attack2-cust 0/14, attack2-mats 0/13, attack2-phone 0/11; attack1-merge 1 of 18 (1c).
+- **Full suite** (HEAD 9db5b98, 188 files, one at a time): **3,472 pass / 27 fail**. Same known failures as the parent
+  branch, plus: attack1-merge 1c (ACCEPTED-FAILURES, pending Garry); the 2,500-job timing check (passes alone); and two
+  "WITH proposed guard" checks in stage1 t16-oldtab-overwrite — NOT from this branch: `origin/main` moved on 10 Nov
+  (release/2026-11-10) and that test uses main as its "old screen"; it fails the same way on feature/list-excel-template.
+- **Manager (final, 11 Nov):** item 1 GO WITH CONDITIONS, item 2 GO WITH CONDITIONS, items 3 and 4 GO. No Blockers.
+  Conditions: (a) Garry's yes/no on 1c; (b) `origin/main` is 4 commits ahead (the 10 Nov release) — bring it into this
+  branch and re-run the full suite before merging (merges cleanly, not yet tested together); (c) SQL first, in order:
+  Stage 3 → Photo of a list → Project details; (d) merge feature/list-excel-template first, then this branch; (e) close
+  and reopen every screen on go-live day, incognito check; (f) Admin and PM PINs must not be the built-in defaults.
+- **Questions for Garry (multiple choice sent):** Q-A material drop-down: spec's materials first + the rest (built) or ONLY
+  the spec's materials; Q-B Admin PIN as a backstop for sign-off (built) or PM PIN only; Q-C changing a PROJECT's customer
+  in the Projects window: Admin only too?; 1c yes/no.
+- **Note:** `origin/feature/project-details-v2` is a different piece of work by another scheduled run (not this branch).
+- Screenshots (fake database): docs/screens-project-details/ (remake with `node tests/project-details/screens.js`).
+- **Next:** on Garry's go-ahead — merge the 10 Nov release into this branch, full suite, Manager confirm. Nothing else to build.
