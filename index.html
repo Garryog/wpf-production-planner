@@ -3510,7 +3510,7 @@ function lpfCur(){ // the remembered project — one that no longer exists falls
   return v;}
 function lpfSec(){return lpfPage?lpfCur():'';}            // for the panels other pages share (to issue, waiting on material)
 function lhPid(){const v=lpfCur();return v===LPF_NONE?'':v;} // the picked project as a real project id ('' = none picked)
-function lpfJobPid(){const m=new Map();return o=>{const c=String((o&&o.customer)||'');if(!m.has(c)){const p=lsProjForCust(c);m.set(c,p?p.id:'');}return m.get(c);};}
+function lpfJobPid(){const m=new Map();return o=>{const c=String((o&&o.customer)||'');if(!m.has(c)){const p=lsProjForCust(c)||projForCust(c,lsProjects(true).filter(p=>p.active===false).map(p=>({...p,active:true})));m.set(c,p?p.id:'');}return m.get(c);};} // an archived project keeps its own jobs (never "No project") when no live project claims the customer
 function lpfJobs(os){const v=lpfSec();if(!v)return os;const pid=lpfJobPid();return os.filter(o=>(pid(o)||LPF_NONE)===v);}
 function lpfLists(a){const v=lpfSec();return v?a.filter(l=>(l.pid||LPF_NONE)===v):a;}
 function lpfHolds(hs){const v=lpfSec();return v?hs.filter(x=>(x.l.pid||LPF_NONE)===v):hs;}
@@ -3782,7 +3782,7 @@ function ltiInner(){
     const when=r.onDel?`<span class="lti-b" style="background:#c0392b;color:#fff">🚚 ${escA(slotLbl(o.delVeh,o.delDay))}</span>`:'';
     const due=r.due?`<span class="lti-b" style="${r.late?'background:#c0392b;color:#fff':'background:#eef1f5;color:#14335c'}">${r.late?'LATE · was due '+fmt(r.due):'list due by '+fmt(r.due)}</span>`:'';
     return `<div class="lti-row" data-ltirow="${escA(w)}" style="border-left:5px solid ${bd}">
-      <div class="lti-top">${woColsHTML(o)}${lpfTag(lsProjName(pid))}${when}${due}</div>
+      <div class="lti-top">${woColsHTML(o)}${jtag(o)}${when}${due}</div>
       <div class="lti-sug"><span class="lti-chip" data-ltilvl="${r.lvl}" style="background:${bg};color:${c};border-color:${bd}">${lbl}${r.tid?': <b>'+escA(ltiTplName(r.tid))+'</b>':''}</span><span class="lti-why">${escA(r.lvl==='pick'?'picked by hand':r.s.why)}</span></div>
       ${busy?'<div class="lti-msg" style="color:#14335c">Saving…</div>':`<div class="lti-act">
         ${r.tid?`<button class="btn btn-g" data-lticonf="${escA(w)}" style="${btn}">✓ Confirm</button>`:''}
