@@ -236,7 +236,7 @@ const LIT = () => ({ prev: document.getElementById('wkb-prev').className, next: 
         await t.page.reload(); await t.page.waitForFunction(() => typeof analyzeImport === 'function'); await t.page.waitForTimeout(300);
       }
       const out = await t.page.evaluate(async roles => { const W = ms => new Promise(r => setTimeout(r, ms)); const o = {};
-        for (const r of roles) { ls.set('wpfPin_' + r, pins()[r]); ROLE = r; render(); await W(100); o[r] = document.getElementById('app').innerText.replace(/\d{1,2}:\d{2}(:\d{2})?/g, 'hh:mm').replace(/📦 Items sent/g, '').replace(/🔢 Sequence 📦 Shipped/g, '🔢 Sequence') /*S2 (11 Nov): the PM view gains a Shipped tab on purpose*/.replace(/\s+/g, ' ').trim(); }
+        for (const r of roles) { ls.set('wpfPin_' + r, pins()[r]); ROLE = r; render(); await W(100); o[r] = document.getElementById('app').innerText.replace(/\d{1,2}:\d{2}(:\d{2})?/g, 'hh:mm').replace(/📦 Items sent/g, '').replace(/\s+/g, ' ').replace(/🔢 Sequence 📦 Shipped/g, '🔢 Sequence').trim(); } /*S2 (11 Nov): the PM view gains a Shipped tab on purpose*/
         ROLE = 'office'; render(); return o; }, roles);
       await t.close(); return out;
     };
