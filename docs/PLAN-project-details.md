@@ -167,3 +167,14 @@ one (Q2); the SQL not yet run (sheet hidden, nothing breaks).
 - **Waiting on Garry:** Q1–Q5 above; yes/no on the 1c accepted-failure row.
 - **Next run:** Tester updates the 11 old checks + attacks the Materials window at 360 px; full suite; Manager final verdict;
   then screenshots and the final summary.
+
+### 11 Nov 2026 — Garry's answers (replace the recommended defaults)
+1. **Sign-off: Project Managers only.** (Built: the PM view signs off directly; any other screen needs the PM or Admin PIN, and the name is recorded.)
+2. **Red until everything is filled and signed off.** A project can have **several specs** (e.g. different rooms / house types, or robes). Built: named specs per project, each with its own checklist type; the chip stays red while ANY active spec has an item not signed off ("Robes: Hinges" when there is more than one).
+3. **Materials: PM, office and Management** add/edit (no PIN). Drawing office and Production Manager keep it too (Garry, 11 Nov). Saw, stores, drivers, floor read-only.
+4. **Changing a job's Customer: Admin only** (Admin PIN each time). Floor, Unit and Title stay editable from the list window.
+5. **Who fills in the spec: PM, office and Management** (+ Drawing office and Production Manager keep it). Robes / Schools lists stay as drafted until corrected.
+6. **A spec is not applied to a cutting list.** The project keeps its materials list; a list made into a template keeps its materials. The spec only **gives the material choices for the cutting list**: the spec's chosen materials come first in the cutting-list Material drop-down ("From the project details").
+7. Still open: yes/no on the ACCEPTED-FAILURES row attack1-merge 1c (old-version screen importing).
+
+**Architect change (from answer 2/6):** new table `project_specs` (id, project_id, name, spec_type kitchens/robes/schools, sort, active — retired, never deleted). `project_spec_items` gets `spec_id`; one item name per spec. A project with no spec yet shows its default checklist (named after the project type) and the first edit creates it. Project details window: one tab per spec, "＋ Add spec" (name + type), rename / "not used any more". Print and the printed saw/stores sheets: one block per spec.

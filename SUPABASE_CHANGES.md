@@ -4,14 +4,16 @@ Newest at the top. Each block must be run in Supabase BEFORE the matching code g
 
 ---
 
-## 2026-11-09 — Project details (spec sheet) — PENDING, NOT YET RUN — Garry runs this AFTER the Stage 3 block and BEFORE merging `feature/project-details`
+## 2026-11-11 — Project details (spec sheets) — PENDING, NOT YET RUN — Garry runs this AFTER the Stage 3 block and BEFORE merging `feature/project-details`
 
 **What it does (plain English):**
-- Makes a new table `project_spec_items`: one row per item on a project's spec sheet ("Project details": Carcass Material,
+- Makes a new table `project_specs`: a project's named spec sheets. A project can have several (Garry, 11 Nov), e.g.
+  "Kitchens", "Kitchen Type B", "Robes". A spec can be marked "not used any more"; it is never deleted.
+- Makes a new table `project_spec_items`: one row per item on a spec sheet ("Project details": Carcass Material,
   Hinges, Worktop Colour …) with its value, its status (Not specified / Proposed / Signed off) and who signed it off and when.
 - The DATABASE keeps the rules, so an old or out-of-date screen can't break them: a blank or "TBC" value is always "Not
   specified" and can never be signed off; changing a signed-off value drops it back to "Proposed" and clears the signer;
-  a sign-off can't be re-dated or re-named afterwards. One row per item per project (two PCs can't make two).
+  a sign-off can't be re-dated or re-named afterwards. One row per item per spec (two PCs can't make two).
 - Makes a history table `project_events`: every add / change / sign-off is written there BY THE DATABASE (who, when, old
   value, new value). The app can read it but never write, change or delete it.
 - Nothing is deleted: the app gets NO delete permission on either table. Writes are only taken while the lists are switched
@@ -23,19 +25,39 @@ chips simply don't appear (the screens check once per page load and hide them qu
 materials for PMs / office, editing Floor / Unit / Title / Customer — works without it.
 
 **Tested:** run twice on a throwaway Postgres set up like Supabase (after the Stage 1, Stage 3 and Stores dockets blocks);
-`tests/project-details/pg-check.sql` checks every rule above — ALL PG CHECKS PASSED (9 Nov).
+`tests/project-details/pg-check.sql` checks every rule above — ALL PG CHECKS PASSED (11 Nov, with the several-specs change).
 
 ### Steps for Garry
 1. Supabase → WPF project → **SQL Editor** → **New query**. Copy everything in the grey box below, paste, **Run**.
 2. Expected result: **"Success. No rows returned"**. A red error: stop and send a screenshot — do not merge.
-3. Check: **Table Editor** shows `project_spec_items` and `project_events` (both empty). **Database → Triggers** shows
+3. Check: **Table Editor** shows `project_specs`, `project_spec_items` and `project_events` (all empty). **Database → Triggers** shows
+   `pspec_rules` and `project_specs_touch` on `project_specs`, and
    `psi_rules`, `psi_log` and `project_spec_items_touch` on `project_spec_items`.
 4. Safe to run twice (nothing is duplicated, no data touched).
 
 ```sql
--- ===================== PROJECT DETAILS (spec sheet) — project_spec_items + project_events =====================
+-- ===================== PROJECT DETAILS (spec sheets) — project_specs + project_spec_items + project_events =====================
 -- Runs AFTER the Stage 3 block (it needs projects, project_materials, lists_touch and lists_writable). Safe to run twice.
+-- A project can have several specs (Garry, 11 Nov): e.g. "Kitchens", "Kitchen Type B", "Robes". Retired, never deleted.
+create table if not exists project_specs(id text primary key, project_id text not null references projects(id),
+  name text not null, spec_type text not null default 'kitchens' check(spec_type in('kitchens','robes','schools')),
+  sort int not null default 0, active boolean not null default true,
+  version int not null default 1, updated_at timestamptz not null default now(), updated_by text);
+create unique index if not exists pspec_uq on project_specs(project_id, lower(trim(name)));
+create or replace function pspec_rules() returns trigger language plpgsql as $$
+begin
+  new.name := btrim(regexp_replace(normalize(coalesce(new.name,''),NFKC),'\s+',' ','g'));
+  if new.name='' then raise exception 'a spec needs a name'; end if;
+  if tg_op='UPDATE' and new.project_id<>old.project_id then raise exception 'a spec stays on its project'; end if;
+  return new;
+end $$;
+drop trigger if exists pspec_rules on project_specs;
+create trigger pspec_rules before insert or update on project_specs for each row execute function pspec_rules();
+drop trigger if exists project_specs_touch on project_specs;
+create trigger project_specs_touch before update on project_specs for each row execute function lists_touch();
+
 create table if not exists project_spec_items(id text primary key, project_id text not null references projects(id),
+  spec_id text not null references project_specs(id),
   item text not null, sort int not null default 0, is_extra boolean not null default false,
   value text, material_id text references project_materials(id),
   status text not null default 'not-specified' check(status in('not-specified','proposed','signed-off')),
@@ -48,7 +70,7 @@ create or replace function psi_tbc(v text) returns boolean language sql immutabl
    ~ '^(|T\.? ?B\.? ?C\.?|T\.? ?B\.? ?A\.?|TO BE (CONFIRMED|ADVISED))$'
 $$;
 alter table project_spec_items add constraint psi_signed_needs_value check(status<>'signed-off' or not psi_tbc(value));
-create unique index if not exists psi_uq on project_spec_items(project_id, lower(trim(item)));
+create unique index if not exists psi_uq on project_spec_items(spec_id, lower(trim(item)));
 
 
 -- Who changed what on a project, written ONLY by the database (the app can read it, never write or change it)
@@ -63,6 +85,8 @@ create or replace function psi_rules() returns trigger language plpgsql as $$
 begin
   new.value := nullif(regexp_replace(normalize(coalesce(new.value,''),NFKC),'^\s+|\s+$','','g'),'');
   new.item := btrim(regexp_replace(normalize(new.item,NFKC),'\s+',' ','g'));
+  if tg_op='UPDATE' then new.spec_id := old.spec_id; end if;                         -- an item stays on its spec
+  select s.project_id into new.project_id from project_specs s where s.id=new.spec_id; -- and on that spec's project
   if psi_tbc(new.value) then
     new.status := 'not-specified';
   elsif tg_op='UPDATE' and old.status='signed-off' and new.status='signed-off' and new.value is distinct from old.value then
@@ -99,6 +123,13 @@ create trigger psi_log after insert or update on project_spec_items for each row
 
 -- Row level security: everyone using the app can read; add and change only while the lists are on the new store
 -- (the same rule as snags and materials). Nobody can delete.
+alter table project_specs enable row level security;
+drop policy if exists "project_specs read" on project_specs;
+create policy "project_specs read" on project_specs for select to anon, authenticated using (true);
+drop policy if exists "project_specs add" on project_specs;
+create policy "project_specs add" on project_specs for insert to anon, authenticated with check (lists_writable());
+drop policy if exists "project_specs edit" on project_specs;
+create policy "project_specs edit" on project_specs for update to anon, authenticated using (lists_writable()) with check (lists_writable());
 alter table project_spec_items enable row level security;
 drop policy if exists "project_spec_items read" on project_spec_items;
 create policy "project_spec_items read" on project_spec_items for select to anon, authenticated using (true);
@@ -111,10 +142,10 @@ drop policy if exists "project_events read" on project_events;
 create policy "project_events read" on project_events for select to anon, authenticated using (true);
 
 -- Grants (30 Oct rule). No DELETE for anyone using the app. project_events: read only (the database writes it).
-grant select, insert, update on project_spec_items to anon, authenticated;
+grant select, insert, update on project_specs, project_spec_items to anon, authenticated;
 grant select on project_events to anon, authenticated;
 grant execute on function psi_tbc(text) to anon, authenticated, service_role;
-grant all on project_spec_items, project_events to service_role;
+grant all on project_specs, project_spec_items, project_events to service_role;
 grant usage, select on sequence project_events_id_seq to service_role;
 ```
 

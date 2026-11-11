@@ -61,7 +61,7 @@ const { H, D, DP, rec, sleep } = X;
   rec('two PCs: the stale save is refused, the other PC\'s value kept and shown', h1.value === 'Blum' && /another screen/.test(m1), h1.value + ' / ' + m1);
   rec('the window now shows Blum', await pm.page.evaluate(() => { const i = specItems('P1').findIndex(e => e.item === 'Hinges'); return document.querySelector('[data-spv="' + i + '"]').value === 'Blum'; }));
   // two PCs creating the same item at once
-  DP.insert(S.db, { id: 'SP-X', project_id: 'P1', item: 'Sink Type', value: 'Franke', updated_by: 'PC2' });
+  DP.insert(S.db, { id: 'SP-X', project_id: 'P1', spec_id: 'SPD:P1', item: 'Sink Type', value: 'Franke', updated_by: 'PC2' });
   await pm.page.evaluate(() => { const i = specItems('P1').findIndex(e => e.item === 'Sink Type'); const s = document.querySelector('[data-spv="' + i + '"]'); s.value = 'Blanco'; s.onchange(); }); await sleep(500);
   rec('two PCs add the same item: one row, the first value kept, told', S.db.t.project_spec_items.filter(r => r.item === 'Sink Type').length === 1 && S.db.t.project_spec_items.find(r => r.item === 'Sink Type').value === 'Franke' && /another screen/.test(await pm.page.evaluate(() => document.getElementById('sp-msg').textContent)));
   // extra item
@@ -100,7 +100,7 @@ const { H, D, DP, rec, sleep } = X;
   await st.close();
   // all signed off → chip gone
   const items = await (await X.dev(browser, S, 'design')).page.evaluate(() => specItems('P1').map(e => e.item));
-  items.forEach((it, i) => { if (/^other info/i.test(it)) return; const r = S.db.t.project_spec_items.find(x => x.item.toLowerCase() === it.toLowerCase()); if (r) DP.update(S.db, r, { value: r.value && !/tbc/i.test(r.value) ? r.value : 'X', status: 'signed-off', signed_by: 'T', updated_by: 'T' }); else DP.insert(S.db, { id: 'SPA' + i, project_id: 'P1', item: it, value: 'Y', status: 'signed-off', signed_by: 'T' }); });
+  items.forEach((it, i) => { if (/^other info/i.test(it)) return; const r = S.db.t.project_spec_items.find(x => x.spec_id === 'SPD:P1' && x.item.toLowerCase() === it.toLowerCase()); if (r) DP.update(S.db, r, { value: r.value && !/tbc/i.test(r.value) ? r.value : 'X', status: 'signed-off', signed_by: 'T', updated_by: 'T' }); else DP.insert(S.db, { id: 'SPA' + i, project_id: 'P1', spec_id: 'SPD:P1', item: it, value: 'Y', status: 'signed-off', signed_by: 'T' }); });
   const sw2 = await X.dev(browser, S, 'saw');
   rec('everything signed off: no chip on the saw', await sw2.page.evaluate(() => !document.querySelector('.spec-chip') && specOpen('P1').length === 0));
   rec('no page errors', !(S.errors || []).length, JSON.stringify(S.errors));

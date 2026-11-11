@@ -43,14 +43,14 @@ async function handle(S, route) {
     if (S.row && !['v2', 'migrating'].includes((S.row.settings || {}).listStore)) return J(route, 403, { code: '42501', message: 'new row violates row-level security policy for table "' + t + '"' });
     if (m === 'POST') {
       let b = JSON.parse(req.postData() || '[]'); if (!Array.isArray(b)) b = [b];
-      const out = b.map(r => DP.insert(S.db, r));
+      const out = b.map(r => t === 'project_specs' ? DP.insertSpec(S.db, r) : DP.insert(S.db, r));
       if (S.dropReplyP && S.dropReplyP-- > 0) return route.abort('connectionreset');
       return /return=representation/.test(pre) ? J(route, 201, out) : route.fulfill({ status: 201, body: '' });
     }
     if (m === 'PATCH') {
       const b = JSON.parse(req.postData() || '{}');
       const hit = S.db.t[t].filter(r => { const u = new URL(url); let ok = true; u.searchParams.forEach((v, k) => { if (!SPECIAL.has(k) && !match(r, k, v)) ok = false; }); return ok; });
-      hit.forEach(r => DP.update(S.db, r, b));
+      hit.forEach(r => t === 'project_specs' ? DP.updateSpec(S.db, r, b) : DP.update(S.db, r, b));
       if (S.dropReplyP && S.dropReplyP-- > 0) return route.abort('connectionreset');
       return /return=representation/.test(pre) ? J(route, 200, JSON.parse(JSON.stringify(hit))) : route.fulfill({ status: 204, body: '' });
     }

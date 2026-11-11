@@ -18,7 +18,9 @@ async function dev(browser, S, role, extra = {}) {
   return t;
 }
 // a spec row straight into the fake database (as if another PC had saved it)
-function spec(S, id, item, value, extra) { return DP.insert(S.db, Object.assign({ id, project_id: 'P1', item, value, updated_by: 'Seed' }, extra || {})); }
+// 'SPD:P1' is the id the app gives a project's first (default) spec; sid picks another spec
+function sheet(S, id, name, type, pid) { return S.db.t.project_specs.find(x => x.id === id) || DP.insertSpec(S.db, { id, project_id: pid || 'P1', name, spec_type: type || 'kitchens', updated_by: 'Seed' }); }
+function spec(S, id, item, value, extra) { const sid = (extra && extra.spec_id) || 'SPD:P1'; if (sid === 'SPD:P1') sheet(S, sid, 'Kitchens'); return DP.insert(S.db, Object.assign({ id, project_id: 'P1', spec_id: sid, item, value, updated_by: 'Seed' }, extra || {})); }
 const res = []; const rec = (n, ok, d) => { res.push(ok); console.log((ok ? 'PASS ' : 'FAIL ') + n + (d ? '  -> ' + String(d).slice(0, 300) : '')); };
 function finish() { const f = res.filter(x => !x).length; console.log(f + ' failed of ' + res.length); process.exit(f ? 1 : 0); }
-module.exports = { H, D, DP, SP, F3, NOW, sleep, v2Row, v1Row, makeServer, dev, spec, catchPrint, printed, LINES, rec, finish };
+module.exports = { H, D, DP, SP, F3, NOW, sleep, v2Row, v1Row, makeServer, dev, spec, sheet, catchPrint, printed, LINES, rec, finish };

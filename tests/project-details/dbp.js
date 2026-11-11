@@ -4,14 +4,14 @@
 const DD = require('../stores-docket/dbd.js');
 const D3 = require('../stage3/db3.js');
 const { DbError, clone, find } = D3;
-const TABLES = ['project_spec_items', 'project_events'];
+const TABLES = ['project_specs', 'project_spec_items', 'project_events'];
 const now = () => new Date().toISOString();
 const t = v => (v == null ? '' : String(v)).trim();
 // psi_tbc(): blank, TBC, T.B.C., TBA, "to be confirmed / advised" (after NFKC, any whitespace)
 const tbc = v => /^(|T\.? ?B\.? ?C\.?|T\.? ?B\.? ?A\.?|TO BE (CONFIRMED|ADVISED))$/.test(String(v == null ? '' : v).normalize('NFKC').replace(/\s+/g, ' ').trim().toUpperCase());
 function makeDb() { const d = DD.makeDb(); TABLES.forEach(x => { d.t[x] = []; }); d.seq.project_events = 1; return d; }
 function ensure(d) { TABLES.forEach(x => { if (!d.t[x]) d.t[x] = []; }); if (!d.seq.project_events) d.seq.project_events = 1; }
-const COLS = ['id', 'project_id', 'item', 'sort', 'is_extra', 'value', 'material_id', 'status', 'signed_by', 'signed_at', 'note', 'version', 'updated_at', 'updated_by'];
+const COLS = ['id', 'project_id', 'spec_id', 'item', 'sort', 'is_extra', 'value', 'material_id', 'status', 'signed_by', 'signed_at', 'note', 'version', 'updated_at', 'updated_by'];
 // psi_rules (BEFORE INSERT OR UPDATE)
 function rules(n, old) {
   n.value = String(n.value == null ? '' : n.value).normalize('NFKC').replace(/^\s+|\s+$/g, '') || null; n.item = String(n.item == null ? '' : n.item).normalize('NFKC').replace(/\s+/g, ' ').trim();
@@ -25,9 +25,10 @@ function rules(n, old) {
 function check(n, d, self) {
   if (!['not-specified', 'proposed', 'signed-off'].includes(n.status)) throw new DbError('new row violates check constraint', '23514');
   if (n.status === 'signed-off' && tbc(n.value)) throw new DbError('new row violates check constraint "psi_signed_needs_value"', '23514');
+  if (!n.spec_id) throw new DbError('null value in column "spec_id" of relation "project_spec_items" violates not-null constraint', '23502');
   if (!n.project_id || !find(d, 'projects', n.project_id)) throw new DbError('insert or update violates foreign key constraint', '23503');
   if (n.material_id && !find(d, 'project_materials', n.material_id)) throw new DbError('insert or update violates foreign key constraint', '23503');
-  if (d.t.project_spec_items.some(x => x !== self && x.id !== n.id && x.project_id === n.project_id && t(x.item).toLowerCase() === t(n.item).toLowerCase()))
+  if (d.t.project_spec_items.some(x => x !== self && x.id !== n.id && x.spec_id === n.spec_id && t(x.item).toLowerCase() === t(n.item).toLowerCase()))
     throw new DbError('duplicate key value violates unique constraint "psi_uq"', '23505');
 }
 // psi_log (AFTER INSERT OR UPDATE) — written by the database, never by the app
@@ -44,14 +45,41 @@ function insert(d, r) {
   if (d.t.project_spec_items.some(x => x.id === r.id)) throw new DbError('duplicate key value violates unique constraint "project_spec_items_pkey"', '23505');
   Object.keys(r).forEach(k => { if (!COLS.includes(k)) throw new DbError('Could not find the \'' + k + '\' column of \'project_spec_items\' in the schema cache', 'PGRST204'); });
   const n = Object.assign({ sort: 0, is_extra: false, value: null, material_id: null, status: 'not-specified', signed_by: null, signed_at: null, note: null, version: 1, updated_at: now(), updated_by: null }, clone(r));
-  rules(n, null); check(n, d, null);
+  rules(n, null); specOf(d, n); check(n, d, null);
   d.t.project_spec_items.push(n); log(d, n, null); return n;
 }
 function update(d, row, patch) {
   Object.keys(patch).forEach(k => { if (!COLS.includes(k)) throw new DbError('Could not find the \'' + k + '\' column of \'project_spec_items\' in the schema cache', 'PGRST204'); });
   const old = clone(row), n = Object.assign(clone(row), clone(patch));
   n.version = old.version + 1; n.updated_at = now(); // lists_touch
-  rules(n, old); check(n, d, row);
+  n.spec_id = old.spec_id; // an item stays on its spec
+  rules(n, old); specOf(d, n); check(n, d, row);
   Object.keys(row).forEach(k => delete row[k]); Object.assign(row, n); log(d, row, old); return row;
 }
-module.exports = { TABLES, makeDb, ensure, insert, update, rules };
+// psi_rules: an item takes its project from its spec
+function specOf(d, n) { const s = n.spec_id ? d.t.project_specs.find(x => x.id === n.spec_id) : null; n.project_id = s ? s.project_id : null; if (n.spec_id && !s) throw new DbError('null value in column "project_id" violates not-null constraint', '23502'); }
+// project_specs: pspec_rules + lists_touch + the unique name per project
+const SCOLS = ['id', 'project_id', 'name', 'spec_type', 'sort', 'active', 'version', 'updated_at', 'updated_by'];
+const sname = v => String(v == null ? '' : v).normalize('NFKC').replace(/\s+/g, ' ').trim();
+function specCheck(d, n, self) {
+  if (!n.name) throw new DbError('a spec needs a name');
+  if (!['kitchens', 'robes', 'schools'].includes(n.spec_type)) throw new DbError('new row violates check constraint', '23514');
+  if (!n.project_id || !find(d, 'projects', n.project_id)) throw new DbError('insert or update violates foreign key constraint', '23503');
+  if (d.t.project_specs.some(x => x !== self && x.id !== n.id && x.project_id === n.project_id && sname(x.name).toLowerCase() === n.name.toLowerCase())) throw new DbError('duplicate key value violates unique constraint "pspec_uq"', '23505');
+}
+function insertSpec(d, r) {
+  ensure(d);
+  if (r.id == null || r.id === '') throw new DbError('null value in column "id"', '23502');
+  Object.keys(r).forEach(k => { if (!SCOLS.includes(k)) throw new DbError('Could not find the \'' + k + '\' column of \'project_specs\' in the schema cache', 'PGRST204'); });
+  if (d.t.project_specs.some(x => x.id === r.id)) throw new DbError('duplicate key value violates unique constraint "project_specs_pkey"', '23505');
+  const n = Object.assign({ spec_type: 'kitchens', sort: 0, active: true, version: 1, updated_at: now(), updated_by: null }, clone(r));
+  n.name = sname(n.name); specCheck(d, n, null); d.t.project_specs.push(n); return n;
+}
+function updateSpec(d, row, patch) {
+  Object.keys(patch).forEach(k => { if (!SCOLS.includes(k)) throw new DbError('Could not find the \'' + k + '\' column of \'project_specs\' in the schema cache', 'PGRST204'); });
+  const n = Object.assign(clone(row), clone(patch)); n.name = sname(n.name);
+  if (n.project_id !== row.project_id) throw new DbError('a spec stays on its project');
+  n.version = row.version + 1; n.updated_at = now(); specCheck(d, n, row);
+  Object.keys(row).forEach(k => delete row[k]); Object.assign(row, n); return row;
+}
+module.exports = { TABLES, makeDb, ensure, insert, update, rules, insertSpec, updateSpec };
