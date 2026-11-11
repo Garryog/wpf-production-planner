@@ -2,9 +2,7 @@
 // Two screens racing on seq_pre, Johnny's order under new rows / tiny gaps, "changed since", horizon and cut-by edges,
 // leaving the pool, Export Changes, the request log (no PM sequence / planner writes), escaping, lists OFF.
 // Fake Supabase only (tests/seq/srvs.js). Run: node tests/seq/attack10-pool.test.js
-// Expected FAILS at 29932fd (Tester findings): 1e (lost reply → "Not saved" / "changed on another screen"), 3b (new same-day WOs
-// shift a moved row: preDefKey fractions), 4e (storage full: Seen all silent), 4f (weeks pick flags rows as changed), 6f ×2 (P-number merge
-// retires the WO's row → Johnny's tick + place lost). Run one part: node tests/seq/attack10-pool.test.js race|prog|order|changed|horizon|leave|log|esc|off
+// attack10 findings all fixed at a8e4b60 (re-run: 0 failed).
 const { X, NOW11, poolRow, makePool, pre, pool, wos } = require('./b9fix.js');
 const { H, rec, sleep } = X;
 const toasts = p => p.evaluate(() => { window.__t = []; const T = window.toast; window.toast = (m, s) => { window.__t.push(String(m)); try { T(m, s); } catch (e) {} }; });

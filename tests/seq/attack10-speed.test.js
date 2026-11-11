@@ -1,7 +1,6 @@
 // attack10 (Tester): the pre-production pool at size (~2,000 jobs / 300 lists / ~1,000 sequence rows), the drag guard getting
 // stuck "armed", and a 360 px phone with very long names. Fake Supabase only. Run: node tests/seq/attack10-speed.test.js
-// Expected FAILS at 29932fd (Tester findings): D2/D3 (no dragend → PREV.drag stuck, every merge redraw held off), P1/P2 (filter
-// selects with long names → 1,689 px sideways scroll at 360 px), P3 ("Not you?" 21 px — pre-existing seqMeStrip). Parts: speed|drag|phone
+// attack10 findings all fixed at a8e4b60 (re-run: 0 failed).
 const { X, NOW11, poolRow, makePool, pre, pool, wos } = require('./b9fix.js');
 const { H, rec, sleep } = X;
 const SECTION = process.argv[2] || '';
