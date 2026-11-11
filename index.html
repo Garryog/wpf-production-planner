@@ -2329,6 +2329,11 @@ function delvAuto(o,by,what){if(!delvAutoOk(o))return false;o.delv=true;delete o
   logEdit(o,(what||'Auto-tagged for delivery — step changed to '+o.step)+' by '+(by||'—'),by);return true;}
 function delAll(){return[...DB.orders.filter(o=>o.delv&&!delHidden(o)),...(DB.delx||[])];}
 function findDel(wo){return DB.orders.find(o=>o.wo===wo)||(DB.delx||[]).find(o=>o.wo===wo);}
+/*v-deliv attack5: a ticked job is only kept while it is on the Deliveries page (tagged and not hidden on hold, or added by hand).
+  Another PC untagging it / putting it on hold, then a refresh, drops the tick — so a drag, ⤵ Place or a group move never takes it along.*/
+function delOnPage(o){return !!o&&(DB.orders.includes(o)?(!!o.delv&&!delHidden(o)):(DB.delx||[]).includes(o));}
+function delSelLive(){return [...delSel].filter(w=>delOnPage(findDel(w)));}
+function delSelPrune(){[...delSel].forEach(w=>{if(!delOnPage(findDel(w)))delSel.delete(w);});}
 function woCmp(a,b){
   const na=(String(a.wo).match(/\d+/g)||[]).map(Number),nb=(String(b.wo).match(/\d+/g)||[]).map(Number);
   for(let i=0;i<Math.max(na.length,nb.length);i++){
@@ -6978,6 +6983,7 @@ function dchip(o,showCust){
 }
 
 function renderDeliveries(app){
+  delSelPrune(); /*v-deliv attack5*/
   const tagged=delAll();
   const catchUp=DB.orders.filter(o=>delvCatchUpOk(o)); // go-live gap: jobs already at 7/8 before the auto-tag rule existed (due from the cut-off only)
   const done=tagged.filter(o=>o.delDone).length;
@@ -7016,7 +7022,7 @@ function renderDeliveries(app){
         <div class="dpool-chips">${list.map(o=>dchip(o,later||k==='__rebook')).join('')}</div>
         <div class="dgrp-f">${list.length} job${list.length!==1?'s':''} · €${Math.round(list.reduce((a,o)=>a+(+o.value||0),0)).toLocaleString()}</div>
       </div>`;
-  const nOrd=[...delSel].filter(w=>DB.orders.some(o=>o.wo===w)).length;
+  const nOrd=delSelLive().filter(w=>DB.orders.some(o=>o.wo===w)).length;
   const nMv=[...delSel].map(findDel).filter(wkMovable).length; /*v-deliv D3*/
   const store=inStoreJobs(),storeOld=store.filter(x=>x.n!=null&&x.n>14).length;
 
@@ -7132,7 +7138,7 @@ function renderDeliveries(app){
     };
     ch.ondragstart=e=>{
       const wo=ch.dataset.dw;
-      delDragList=delSel.has(wo)?[...delSel]:[wo];
+      delDragList=delSel.has(wo)?delSelLive():[wo]; /*v-deliv attack5: only ticked jobs still on the page*/
       ch.classList.add('dragging');document.body.classList.add('del-dragging'); /*v-deliv D3: week tabs light up as drop targets*/
       e.dataTransfer.effectAllowed='move';
     };
@@ -7162,7 +7168,7 @@ function renderDeliveries(app){
     render();
   });
   const sc=document.getElementById('selclr');if(sc)sc.onclick=()=>{delSel.clear();render();};
-  const sdt=document.getElementById('seldates');if(sdt)sdt.onclick=()=>dateDlg([...delSel]); /*dates: group move from ticked cards*/
+  const sdt=document.getElementById('seldates');if(sdt)sdt.onclick=()=>dateDlg(delSelLive()); /*dates: group move from ticked cards*/
   const swk=document.getElementById('selwk');if(swk)swk.onclick=()=>wkPickDlg([...delSel].filter(w=>wkTickedOk(findDel(w)))); /*v-deliv D3 — a booked manual job goes along only to be reported "not moved (on a van)"*/
   document.querySelectorAll('[data-wknext]').forEach(b=>b.onclick=e=>{e.stopPropagation();wkMoveDo([b.dataset.wknext],b.dataset.wk);});
   document.querySelectorAll('[data-wkpick]').forEach(b=>b.onclick=e=>{e.stopPropagation();wkPickDlg([b.dataset.wkpick]);});
@@ -7253,7 +7259,7 @@ function renderDeliveries(app){
   // Tap-to-place: select chips, then tap a day cell — works with gloves/touch and keyboards, no dragging needed
   document.querySelectorAll('[data-place]').forEach(b=>b.onclick=()=>{
     const[veh,day,dwk]=b.dataset.place.split('|');
-    placeJobs([...delSel].map(findDel),veh,day,dwk);
+    placeJobs(delSelLive().map(findDel),veh,day,dwk);
   });
   const pl=document.getElementById('dpool');
   if(pl)dropTo(pl,'','');
@@ -9438,7 +9444,7 @@ function dateDlgOpen(wos,by){
 function slotLbl(v,d,wk){if(!d)return'the pool';const i=DEL_DAYS.indexOf(d),dt=wk&&i>=0?dShort(addDayISO(wk,i)):'';return (vehLbl(v)||v)+' '+d+(dt?' '+dt:'');}
 /*dates: wk = the week being booked (the open tab's week). A move to another week is a move like any other — it asks why. */
 function placeJobs(moved,veh,day,wk){
-  moved=moved.filter(Boolean);
+  moved=moved.filter(delOnPage); /*v-deliv attack5: never books a job that has left the Deliveries page*/
   if(!moved.length)return;
   wk=day?(wk||delTabWk()||thisWk()):'';
   const changing=moved.filter(o=>(o.delVeh||'')!==veh||(o.delDay||'')!==day||(!!day&&slotWk(o)!==wk));
