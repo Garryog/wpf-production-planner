@@ -328,6 +328,8 @@ details.lti-other{margin-bottom:14px}details.lti-other>summary{cursor:pointer;fo
 @media(max-width:700px){.wkb-t{display:none}.wkb-lbl{font-size:13px}.wkb-lbl b{font-size:15px}.wkb-btn{padding:0 10px}.del-wkbar{gap:5px;padding:5px}}
 .del-tab .n{font-weight:400;opacity:.8;margin-left:4px}
 body.del-dragging .del-tab[data-deltab]:not(.past){outline:2px dashed #7ba7e0;outline-offset:2px}
+body.del-dragging #del-wkbar .wkb-btn:not(:disabled):not(.nodrop),body.del-dragging #wkb-lbl:not(.nodrop){outline:2px dashed #9cc3ff;outline-offset:2px}
+.wkb-btn.dragover,#wkb-lbl.dragover{background:#1a56db!important;border-color:#fff!important;border-radius:8px}
 .del-tab.dragover{background:#1a56db!important;border-color:#1a56db!important;color:#fff!important}
 .del-grid th.hol,.del-grid td.hol{background:repeating-linear-gradient(45deg,#f3f0ea,#f3f0ea 6px,#ebe6dc 6px,#ebe6dc 12px)}
 .dwk-h{font-size:12px;font-weight:800;color:#14335c;margin:12px 0 2px;border-bottom:1px solid var(--border);padding-bottom:2px}
@@ -7091,20 +7093,24 @@ function renderDeliveries(app){
     const st=document.getElementById('del-tabs'),on=st&&st.querySelector('.del-tab.on');
     if(st&&on){const a=st.getBoundingClientRect(),b=on.getBoundingClientRect();if(b.left<a.left||b.right>a.right)st.scrollLeft+=(b.left-a.left)-(a.width-b.width)/2;}}catch(e){}
   document.querySelectorAll('[data-deltab]').forEach(b=>b.onclick=()=>{delTab=b.dataset.deltab;render();}); /*dates: week tabs*/
-  /*v-deliv D3: drop cards on a week tab (PC) = move their dates to that week (asks why). Later → the week picker at +4.*/
-  document.querySelectorAll('[data-deltab]').forEach(b=>{
-    b.ondragover=e=>{if(!delDragList||!dateCanMove())return;e.preventDefault();b.classList.add('dragover');};
-    b.ondragleave=()=>b.classList.remove('dragover');
-    b.ondrop=e=>{
-      e.preventDefault();b.classList.remove('dragover');document.body.classList.remove('del-dragging');
+  /*v-deliv D3: drop cards on a week tab (PC) = move their dates to that week (asks why). Later → the week picker at +4.
+    Round 4: the sticky week bar is a drop target too (◀ Prev = the week before the shown one, Next ▶ = the week after, the label =
+    the shown week), so a booked card low in the van grid can go to another week without scrolling up. Past weeks never light up. */
+  const wkDropOk=t=>t!=null&&(t==='later'||delTabWk(t)>=thisWk());
+  const wkDrop=(el,t)=>{if(!el)return;if(t!=null&&!wkDropOk(t))el.classList.add('nodrop'); // carry-over: a past week on the bar is not outlined either
+    el.ondragover=e=>{if(!delDragList||!dateCanMove()||t==null)return;e.preventDefault();if(wkDropOk(t))el.classList.add('dragover');}; // a past week: not lit; a drop there explains itself
+    el.ondragleave=()=>el.classList.remove('dragover');
+    el.ondrop=e=>{
+      e.preventDefault();el.classList.remove('dragover');document.body.classList.remove('del-dragging');
       const list=(delDragList||[]).filter(w=>{const o=findDel(w);return o&&!o.delDone&&dStage(o)!=='deliv';});delDragList=null;
-      if(!list.length)return;
-      const t=b.dataset.deltab;
+      if(!list.length||!dateCanMove())return;
       if(t==='later'){wkPickDlg(list,4);return;}
-      const w=delTabWk(t);if(w<thisWk()){toast('Wk '+wkNum(w)+' has gone — drop on This week or later');return;}
+      const w=delTabWk(t);if(!wkDropOk(t)){toast('Wk '+wkNum(w)+' has gone — drop on This week or later');return;}
       wkMoveDo(list,w);
     };
-  });
+  };
+  document.querySelectorAll('[data-deltab]').forEach(b=>wkDrop(b,b.dataset.deltab));
+  wkDrop(document.getElementById('wkb-prev'),wkPrev);wkDrop(document.getElementById('wkb-next'),wkNext);wkDrop(document.getElementById('wkb-lbl'),delTab);
   const isb=document.getElementById('btn-instore');if(isb)isb.onclick=()=>{delStoreOpen=!delStoreOpen;render();};
   document.querySelectorAll('[data-storebook]').forEach(b=>b.onclick=()=>{ // ⤵ Book: tick it for delivery if it isn't, select it, open its week
     const o=DB.orders.find(x=>x.wo===b.dataset.storebook);if(!o)return;
@@ -7230,7 +7236,7 @@ function renderDeliveries(app){
     el.ondragover=e=>{e.preventDefault();el.classList.add('dragover');};
     el.ondragleave=()=>el.classList.remove('dragover');
     el.ondrop=e=>{
-      e.preventDefault();el.classList.remove('dragover');
+      e.preventDefault();el.classList.remove('dragover');document.body.classList.remove('del-dragging');
       const list=delDragList||[];delDragList=null;
       placeJobs(list.map(findDel),veh,day,dwk);
     };
