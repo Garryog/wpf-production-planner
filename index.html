@@ -962,12 +962,13 @@ const BOOK_K=['delVeh','delDay','delWk','delRebook'];
   screens moved the date, the newer move (latest dueHist entry) wins as a unit — never one PC's date with the other's week.
   Any other case (e.g. a week drag here, a date move there) merges field by field as before. */
 const DUE_K=['dueDate','plannedWeek','dueMv','dueKeep'],DUE_HIST_MAX=30;
-/*v-deliv attack5: oldest → newest, and a move that repeats the one just before it (same date field, same from → to) is dropped —
+/*v-deliv attack5: oldest → newest, and a move that repeats the last one of the same date field (same from → to) is dropped —
   a screen that had not refreshed yet made the same move again ("12 Nov → 19 Nov" twice). The first one (who / why) is kept;
   the second changed nothing, so it is not history. A real back-and-forth (12 → 19, 19 → 12, 12 → 19) is all kept.*/
 function dueHistTidy(h){
   const s=h.slice().sort((x,y)=>String(x&&x.at||'').localeCompare(String(y&&y.at||''))),out=[];
-  s.forEach(x=>{const p=out[out.length-1];if(p&&x&&(p.f||'due')===(x.f||'due')&&String(p.from||'')===String(x.from||'')&&String(p.to||'')===String(x.to||''))return;out.push(x);});
+  const lastF={}; /*Manager issue 2: compare with the last line of the SAME date field — a move with a delivery date writes a due line and a delivery line, so the repeat's due line no longer sits right after the first one*/
+  s.forEach(x=>{const f=(x&&x.f)||'due',p=lastF[f];if(p&&x&&String(p.from||'')===String(x.from||'')&&String(p.to||'')===String(x.to||''))return;out.push(x);if(x)lastF[f]=x;});
   return out.slice(-DUE_HIST_MAX);
 }
 function mDue(b,m,t,path,N){
