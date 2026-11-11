@@ -74,7 +74,7 @@ function insertSpec(d, r) {
   Object.keys(r).forEach(k => { if (!SCOLS.includes(k)) throw new DbError('Could not find the \'' + k + '\' column of \'project_specs\' in the schema cache', 'PGRST204'); });
   if (d.t.project_specs.some(x => x.id === r.id)) throw new DbError('duplicate key value violates unique constraint "project_specs_pkey"', '23505');
   const n = Object.assign({ spec_type: 'kitchens', sort: 0, active: true, version: 1, updated_at: now(), updated_by: null }, clone(r));
-  n.name = sname(n.name); specCheck(d, n, null); d.t.project_specs.push(n); return n;
+  n.name = sname(n.name); specCheck(d, n, null); d.t.project_specs.push(n); slog(d, n, null); return n;
 }
 function updateSpec(d, row, patch) {
   Object.keys(patch).forEach(k => { if (!SCOLS.includes(k)) throw new DbError('Could not find the \'' + k + '\' column of \'project_specs\' in the schema cache', 'PGRST204'); });
@@ -82,6 +82,12 @@ function updateSpec(d, row, patch) {
   if (n.project_id !== row.project_id) throw new DbError('a spec stays on its project');
   if (row.active && !n.active && !d.t.project_specs.some(x => x !== row && x.project_id === row.project_id && x.active)) throw new DbError('a project keeps at least one spec');
   n.version = row.version + 1; n.updated_at = now(); specCheck(d, n, row);
-  Object.keys(row).forEach(k => delete row[k]); Object.assign(row, n); return row;
+  const old = clone(row); Object.keys(row).forEach(k => delete row[k]); Object.assign(row, n); slog(d, row, old); return row;
+}
+// pspec_log (AFTER INSERT OR UPDATE on project_specs)
+function slog(d, n, old) {
+  if (old && n.name === old.name && n.active === old.active && n.spec_type === old.spec_type) return;
+  d.t.project_events.push({ id: d.seq.project_events++, project_id: n.project_id, entity: 'spec-sheet', entity_id: n.id, act: !old ? 'add' : old.active && !n.active ? 'retire' : n.active && !old.active ? 'bring-back' : 'rename',
+    old: old ? { name: old.name, active: old.active, spec_type: old.spec_type } : null, new: { name: n.name, active: n.active, spec_type: n.spec_type }, by: n.updated_by || '?', at: now() });
 }
 module.exports = { TABLES, makeDb, ensure, insert, update, rules, insertSpec, updateSpec };
