@@ -433,3 +433,25 @@ branch did not already have was carried over, one commit each; where both runs f
 - Tests: attack4b 94 pass / 0 fail; attack4 43 / 2 (the 2 accepted L12); c10 62 / 0; switch-off 12 / 0. Full suite (208 files incl. the
   4 probes, 3 at a time): **3,802 pass / 30 fail** — the same 30 as before (2 L12 + 28 on ACCEPTED-FAILURES); no new failures, no timing
   reruns needed. header-late-probe still crashes on the import mapping screen (pre-existing).
+
+### 11 Nov 2026 (scheduled run) — attack5 fixes
+Tester attack5 (7d08f36, tests/dates/attack5-carryover): 102 pass / 13 fail on aa1c618. Fixed:
+- `e2b718d` HIGH 1 + LOW 6: a ticked job that leaves the Deliveries page (untagged or put on hold on another PC, then a refresh) is
+  un-ticked on every redraw (`delOnPage`, `delSelPrune`, `delSelLive`). The drag list, ⤵ Place, Move dates and `placeJobs` itself only
+  take jobs still on the page; the selection bar counts only those.
+- `022638c` + `a1c7adc` HIGH 2 + MEDIUM 3 + LOW 5: one rule `wkMovable` / `wkNoMoveWhy` for "can a week move change this ticked job".
+  Left out (listed "not moved" with why in the preview and summary): not on Deliveries any more, hidden on hold, delivered, shipped in
+  Cienapps, booked manual job. The button, picker title, reason heading ("Move N jobs" = the jobs that will really move), "N jobs →"
+  line and summary all count the same jobs. A tab / week-bar drop uses the same rule. "Move 1 job" (no "1 jobs").
+  **Deviation from the lead's brief:** loaded / dispatched (on the road) jobs still move — they stay on the van, flagged "date moved
+  after loading — check" — because the plan (Q15) says so and attack4 U9 checks it (it failed when on-the-road jobs were left out).
+  attack5 D1 allows 5 or 6, so both checks pass. Garry to confirm if on-the-road jobs should be left out instead.
+- `5ed6a2a` (+ fix-up `c1129af`) MEDIUM 4: a DROP on Next ▶ while +12 or a far booked week is shown moves the jobs straight to the week
+  after the one shown (it used to open the Later picker preset to +4, weeks earlier). Clicking Next still goes to Later.
+- `5d70da8` LOW 7: when two screens make the identical move (same field, same from → to — a stale screen repeating "12 Nov → 19 Nov"),
+  the merge keeps the first entry and drops the repeat (`dueHistTidy`). A real back-and-forth is kept. The stale screen itself
+  can't know at the click (it has not refreshed), so it gets no "already on …" message — only the history is put right.
+- Test changed (intended, lead's LOW 7): attack5 F2 now expects the history once (B's move) instead of two identical moves (`220ccaf`).
+- Tests: attack5 115 / 0; attack4b 94 / 0; attack4 43 / 2 (the 2 accepted L12); c10 62 / 0. Full suite (209 files incl. the 4 probes,
+  3 at a time): **3,917 pass / 30 fail** — the same 30 as before (2 L12 + 28 on ACCEPTED-FAILURES), +115 from attack5; no new
+  failures, no timing reruns needed. header-late-probe still crashes on the import mapping screen (pre-existing).
