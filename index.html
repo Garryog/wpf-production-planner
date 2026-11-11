@@ -4212,6 +4212,13 @@ function preMaps(){const mat=new Map(),wl=new Set();
     if(ms.size)(l.wos||[]).forEach(w=>{const k=seqWoK(w);let s=mat.get(k);if(!s)mat.set(k,s=new Set());ms.forEach(x=>s.add(x));});});}catch(e){}
   return{mat,wl};}
 function preMaterial(x,mp){const s=x.o&&mp.mat.get(seqWoK(x.o.wo));if(s&&s.size)return{names:[...s],spec:false};return{names:specMatNames(x.pid),spec:true};}
+/*attack10 3b: a never-moved row's key must not depend on how many rows share its day (a moved row's neighbours would shift when
+  new WOs arrive). The fraction comes from the row itself: project name (first 3 letters), then PM position, then the WO number. */
+function preFrac(x){const s=String(x.pn||'').normalize('NFKD').toLowerCase();let n=0;
+  for(let i=0;i<3;i++){const ch=s.charAt(i);n=n*39+(!ch?0:/[0-9]/.test(ch)?2+(+ch):/[a-z]/.test(ch)?12+ch.charCodeAt(0)-97:ch<'0'?1:38);}
+  const pos=x.r?Math.max(0,Math.min(1022,Math.round(+x.r.pos||0))):1023;
+  let h=0;const w=String(x.o?x.o.wo:x.k);for(let i=0;i<w.length;i++)h=(h*31+w.charCodeAt(i))%1000003;
+  return 0.01+0.98*(n+(pos+0.9*(h/1000003))/1024)/59319;}
 function preDayNo(iso){const[y,m,d]=String(iso).split('-').map(Number);return Date.UTC(y,m-1,d)/864e5;}
 function preKey(x){const p=x.r&&LST.sp.get(x.r.id),k=p&&p.pre_key!=null&&p.pre_key!==''?+p.pre_key:NaN;return Number.isFinite(k)?k:x.dk;}
 /* The pool: live sequence rows (waiting rows by their required date) + planner WOs with no live row; not cut / shipped /
@@ -4228,9 +4235,10 @@ function preRows(){
     const k=seqWoK(r.wo);if(M.rows.get(k)!==r||had.has(k))return;const o=M.jobs.get(k);if(!o)return; // a WO not in the planner: nothing to process here
     had.add(k);if(!gone(o))add(r,o,r.project_id);});
   DB.orders.forEach(o=>{if(!o||o.manual||!o.wo)return;const k=seqWoK(o.wo);if(had.has(k)||M.rows.has(k))return;had.add(k);if(!gone(o))add(null,o,specPidOfWO(o));});
-  out.sort((a,b)=>a.due.localeCompare(b.due)||a.pn.localeCompare(b.pn)||(a.pos-b.pos)||String(a.o?a.o.wo:'').localeCompare(String(b.o?b.o.wo:''))||a.k.localeCompare(b.k));
-  // preDefKey: the day number + a fraction (its place among that day's rows), so a never-moved row follows its date
-  for(let i=0;i<out.length;){let j=i;while(j<out.length&&out[j].due===out[i].due)j++;const d=preDayNo(out[i].due);for(let q=i;q<j;q++){out[q].dk=d+(q-i+1)/(j-i+1);out[q].dn=q+1;}i=j;}
+  // preDefKey: the day number + the row's own fraction (preFrac), so a never-moved row follows its date and never shifts
+  out.forEach(x=>{x.dk=preDayNo(x.due)+preFrac(x);});
+  out.sort((a,b)=>(a.dk-b.dk)||a.pn.localeCompare(b.pn)||(a.pos-b.pos)||String(a.o?a.o.wo:'').localeCompare(String(b.o?b.o.wo:''))||a.k.localeCompare(b.k));
+  out.forEach((x,i)=>{x.dn=i+1;});
   out.forEach(x=>{x.key=preKey(x);});
   out.sort((a,b)=>(a.key-b.key)||(a.dn-b.dn));
   out.forEach((x,i)=>{x.my=i+1;});
@@ -4363,7 +4371,7 @@ async function preMove(k,how){
   else if(how.onto){const ti=L.findIndex(y=>y.k===how.onto);if(ti<0)return render();j=rest.indexOf(L[ti])+(ti>i?1:0);}
   else return;
   const a=rest[j-1],b=rest[j];let key;
-  if(a&&b){if(!(b.key-a.key>=1e-6)){toast('No room to place it there — press “↺ Back to due-date order” first, then move it again');return render();}key=(a.key+b.key)/2;}
+  if(a&&b){if(!(b.key-a.key>=1e-9)){toast('No room to place it there — press “↺ Back to due-date order” first, then move it again');return render();}key=(a.key+b.key)/2;}
   else if(a)key=a.key+1;else if(b)key=b.key-1;else return render();
   const by=preBy();if(!by)return render();
   try{await preWrite(x.r.id,{pre_key:key,wo:x.r.wo||null},by);}

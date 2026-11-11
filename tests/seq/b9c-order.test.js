@@ -48,10 +48,10 @@ const oos = r => r.filter(x => /OUT OF STEP/.test(x.flags)).map(x => x.wo).join(
   rec('WO-1 moved above WO-12 → WO-12 OUT OF STEP (same project and due, higher PM position above)', /WO-1,WO-12/.test(wos(r)) && /WO-12/.test(oos(r)), wos(r) + ' | ' + oos(r));
   // gap too small
   const before = JSON.stringify(S.db.t.seq_pre);
-  await b.page.evaluate(() => { const r1 = LST.sp.get('Q1'); LST.sp.set('Q12', Object.assign({}, r1, { seq_id: 'Q12', id: 'Q12', wo: 'WO-12', pre_key: r1.pre_key + 1e-9, version: 99 })); LST.gen++; render(); }); await sleep(200);
+  await b.page.evaluate(() => { const r1 = LST.sp.get('Q1'); LST.sp.set('Q12', Object.assign({}, r1, { seq_id: 'Q12', id: 'Q12', wo: 'WO-12', pre_key: r1.pre_key + 1e-11, version: 99 })); LST.gen++; render(); }); await sleep(200);
   r = await pool(b.page);
   await b.page.evaluate(() => preMove('R:W1', { onto: 'W:WO-1' })); await sleep(400);
-  rec('two neighbours too close (< 1e-6): refused, "Back to due-date order first", nothing written', /Back to due-date order/.test(await lastToast(b.page)) && JSON.stringify(S.db.t.seq_pre) === before, await lastToast(b.page));
+  rec('two neighbours too close (< 1e-9): refused, "Back to due-date order first", nothing written', /Back to due-date order/.test(await lastToast(b.page)) && JSON.stringify(S.db.t.seq_pre) === before, await lastToast(b.page));
   await b.close();
   // drag on a PC
   await a.page.evaluate(async () => { await lsPoll(); render(); }); await sleep(300);
