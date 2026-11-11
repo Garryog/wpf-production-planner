@@ -3588,7 +3588,10 @@ function specCount(pid,sid){const a=(sid?[specSheet(pid,sid)]:specSheets(pid)).f
 function specMatNames(pid){if(!specVis()||!pid)return[];const ms=lsMats(pid,'sheet'),out=[];
   specSheets(pid).forEach(sh=>specItems(pid,sh.id).forEach(e=>{if(!e.row||specKind(e.item)!=='mat')return;const m=ms.find(x=>x.id===e.row.material_id)||ms.find(x=>specNorm(x.name)===specNorm(e.row.value));if(m&&!out.includes(m.name))out.push(m.name);}));
   return out;}
-function specOpenTxt(open,max){max=max||3;return open.slice(0,max).join(', ')+(open.length>max?' +'+(open.length-max):'');}
+function specOpenTxt(open,max){max=max||3;const cut=(a,m)=>a.slice(0,m).join(', ')+(a.length>m?' +'+(a.length-m):'');
+  const g=new Map();open.forEach(x=>{const i=x.indexOf(': '),k=i>0?x.slice(0,i):'',v=i>0?x.slice(i+2):x;if(!g.has(k))g.set(k,[]);g.get(k).push(v);});
+  if(g.size===1&&g.has(''))return cut(open,max);
+  return[...g.entries()].map(([k,a])=>(k?k+': ':'')+cut(a,g.size>1?2:max)).join(' · ');} // several specs: "Kitchens: Hinges, Handles +4 · Robes: Mirror"
 // The red chip: "SPEC NOT SIGNED OFF: Hinges, Handles, Worktop Colour +2" — tap to open the sheet. Never blocks anything.
 function specChip(pid,big){const o=specOpen(pid);if(!o.length)return'';
   return `<span class="spec-chip" data-specopen="${escA(pid)}" role="button" tabindex="0"${big?' style="font-size:14px"':''} title="Project details not signed off: ${escA(o.join(', '))} — tap to open. Production is not blocked.">⚠ SPEC NOT SIGNED OFF: ${escA(specOpenTxt(o))}</span>`;}
