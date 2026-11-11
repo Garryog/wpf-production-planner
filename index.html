@@ -216,6 +216,12 @@ button,input,select{font-family:inherit;cursor:pointer}
 .lti-why{font-size:11px;color:var(--t3)}.lti-act{display:flex;flex-wrap:wrap;align-items:center;margin-top:4px}.lti-msg{font-size:12px;font-weight:700;margin-top:4px}
 .lti-done{background:#e7f6ec;border:1px solid #9fd8b4;border-radius:8px;padding:6px 10px;margin-bottom:8px;font-size:12px;color:#0d6e46}
 .lti-nar{padding:3px 0;border-bottom:1px solid var(--border)}
+.lpf{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center}.lpf-on{border:2px solid #1a56db;background:#f3f8ff}.lpf-l{font-size:14px;font-weight:800;color:#14335c}
+.lpf select,.lpf input{padding:8px 10px;border:1px solid var(--b2);border-radius:6px;font-size:14px;min-width:0;max-width:100%;flex:1 1 240px;background:#fff}.lpf input{flex:0 1 200px}
+.lpf-n{font-size:12px;color:var(--t2);overflow-wrap:anywhere;min-width:0}
+.lpf-p{display:inline-block;max-width:100%;font-size:11px;font-weight:700;color:#14335c;background:#eaf2ff;border:1px solid #c5d8f5;border-radius:5px;padding:1px 6px;white-space:normal;overflow-wrap:anywhere;vertical-align:baseline}
+.lpf-p0{color:#7a4a00;background:#fff4d6;border-color:#e0a43a}
+@media(max-width:700px){details.lti-other .lst-tbl,details.lti-other .lst-tbl tbody,details.lti-other .lst-tbl tr,details.lti-other .lst-tbl td{display:block;width:auto}details.lti-other .lst-tbl thead{display:none}details.lti-other .lst-tbl tr{border-bottom:1px solid var(--border);padding:6px 4px}details.lti-other .lst-tbl td{border:none;padding:2px 4px;overflow-wrap:anywhere}details.lti-other select{max-width:100%!important}}
 details.lti-other{margin-bottom:14px}details.lti-other>summary{cursor:pointer;font-size:13px;font-weight:700;color:#14335c;padding:8px 4px}
 .wl-drow{display:flex;gap:10px;align-items:center;background:#fff;border:1px solid var(--border);border-radius:8px;padding:9px 12px;margin-bottom:6px;font-size:14px}
 .wl-drow>b{font-size:16px;color:#14335c}
@@ -1455,6 +1461,7 @@ function rolePicker(pinFor){
 }
 
 function render(){
+  lpfPage=false; // the Project filter is only in force on the Cutting Lists page (renderLists / lsHomePage switch it on)
   const app=document.getElementById('app');
   const tabsBar=document.querySelector('.tabs');
   const sw=document.getElementById('role-sw');
@@ -3489,16 +3496,53 @@ function lsMaterialsDlg(pid,after){
   draw();
 }
 /* Lists home: search, filters, grouped by project. Shared by the office Lists tab, the Drawing office and the Production Manager. */
-const LH={q:'',proj:'',type:'',kind:'live',rev:'',state:''};
+const LH={q:'',proj:ls.get('wpfListProj'),type:'',kind:'live',rev:'',state:''};
+/* (Garry, 11 Nov) ONE Project filter for the whole Cutting Lists page — lists to issue, lists needed, waiting on material,
+   the lists and the templates — remembered on this device (wpfListProj). LH.proj = '' (all projects), a project id, or
+   LPF_NONE (lists / jobs with no project). Customer = project: a job belongs to the project its Cienapps customer is linked
+   to (lsProjForCust). Only ever in force on the Cutting Lists page itself (lpfPage) and with the lists switch on. */
+const LPF_NONE='~none';
+let lpfPage=false; // true while the Cutting Lists page (office Lists tab, Drawing office, Production Manager → Lists) is on screen
+function lpfSet(v){LH.proj=v||'';ls.set('wpfListProj',LH.proj);}
+function lpfCur(){ // the remembered project — one that no longer exists falls back to All projects
+  if(!V2())return'';const v=LH.proj||'';
+  if(v&&v!==LPF_NONE&&LST.loaded&&!LST.p.has(v)){lpfSet('');return'';}
+  return v;}
+function lpfSec(){return lpfPage?lpfCur():'';}            // for the panels other pages share (to issue, waiting on material)
+function lhPid(){const v=lpfCur();return v===LPF_NONE?'':v;} // the picked project as a real project id ('' = none picked)
+function lpfJobPid(){const m=new Map();return o=>{const c=String((o&&o.customer)||'');if(!m.has(c)){const p=lsProjForCust(c);m.set(c,p?p.id:'');}return m.get(c);};}
+function lpfJobs(os){const v=lpfSec();if(!v)return os;const pid=lpfJobPid();return os.filter(o=>(pid(o)||LPF_NONE)===v);}
+function lpfLists(a){const v=lpfSec();return v?a.filter(l=>(l.pid||LPF_NONE)===v):a;}
+function lpfHolds(hs){const v=lpfSec();return v?hs.filter(x=>(x.l.pid||LPF_NONE)===v):hs;}
+function lpfName(v){return v===LPF_NONE?'No project':lsProjName(v)||'(project with no name)';}
+function lpfTag(name){const n=String(name||'').trim();return `<span class="lpf-p${n?'':' lpf-p0'}" data-lpfp title="Project (customer)">🏗 ${escA(n||'No project')}</span>`;}
+function lpfBarHTML(){
+  if(!V2())return'';
+  let v=lpfCur();const pid=lpfJobPid(),cnt=new Map(),add=k=>cnt.set(k,(cnt.get(k)||0)+1),need=listsNeeded();
+  lsCache().all.forEach(l=>{if(!l.archived)add(l.pid||LPF_NONE);});need.forEach(o=>add(pid(o)||LPF_NONE));
+  if(v===LPF_NONE&&LST.loaded&&!cnt.get(LPF_NONE)){lpfSet('');v='';} // nothing is without a project any more
+  const ps=lsProjects(true),nm=p=>String(p.name||'').trim()||'(project with no name)';
+  const has=ps.filter(p=>cnt.get(p.id)),none=ps.filter(p=>!cnt.get(p.id)&&(p.active!==false||p.id===v));
+  const opt=(k,t)=>`<option value="${escA(k)}"${k===v?' selected':''}>${escA(t)}</option>`;
+  const tot=[...cnt.values()].reduce((a,b)=>a+b,0);
+  const M=lsHomeLists(true).length+need.length,N=v?lsHomeLists().length+need.filter(o=>(pid(o)||LPF_NONE)===v).length:M;
+  return `<div class="exp-panel lpf${v?' lpf-on':''}" id="lpf">
+    <label class="lpf-l" for="lh-proj">🏗 Project</label>
+    <select id="lh-proj" title="Show one project only — every section of this page follows. Remembered on this device.">${opt('','All projects ('+tot+')')}${has.map(p=>opt(p.id,nm(p)+' ('+cnt.get(p.id)+')')).join('')}${cnt.get(LPF_NONE)?opt(LPF_NONE,'No project ('+cnt.get(LPF_NONE)+')'):''}${none.length?`<optgroup label="No lists yet">${none.map(p=>opt(p.id,nm(p))).join('')}</optgroup>`:''}</select>
+    ${ps.length>=40?`<input id="lpf-q" list="lpf-dl" placeholder="🔍 Type to find a project" autocomplete="off"><datalist id="lpf-dl">${ps.filter(p=>cnt.get(p.id)||p.active!==false).map(p=>`<option value="${escA(nm(p))}"></option>`).join('')}</datalist>`:''}
+    ${v?'<button class="btn btn-s" id="lpf-x" style="font-size:13px;padding:7px 12px;font-weight:700">✕ All projects</button>':''}
+    <span class="lpf-n" id="lpf-n">${v?`Only <b>${escA(lpfName(v))}</b> — `:''}<b>${N} of ${M}</b> shown</span>
+  </div>`;
+}
 // An archived list that another list replaced ("Make new list from this"): shown "Superseded (view only)" — no Edit
 function lsSupersededBy(l){if(!V2()||!l||!l.archived||l.tpl)return null;return lsCache().all.find(x=>x.id!==l.id&&!x.tpl&&lsReplOf(x.id)===l.id)||null;}
 function lsState(l){if(l.archived)return'archived';if(listFinished(l))return'done';return lsLocked(l)?'live':'draft';}
 const LS_STATE={draft:['Draft','#5b6b82'],live:['Live','#1a56db'],done:['Done','#0d6e46'],archived:['Archived','#8e99ab']};
-function lsHomeLists(){
-  const q=LH.q.trim().toLowerCase();
+function lsHomeLists(allProj){
+  const q=LH.q.trim().toLowerCase(),pf=allProj?'':lpfCur();
   return lsCache().all.filter(l=>{
     if(LH.kind==='live'&&l.tpl)return false;if(LH.kind==='tpl'&&!l.tpl)return false;
-    if(LH.proj&&l.pid!==LH.proj)return false;
+    if(pf&&(l.pid||LPF_NONE)!==pf)return false;
     if(LH.type&&l.ltype!==LH.type)return false;
     if(LH.rev==='revised'&&!((+l.rev||1)>1))return false;
     const st=lsState(l);if(LH.state==='any'){}else if(LH.state?st!==LH.state:st==='archived')return false; // archived only when asked for ('any' = everything, 9 Nov)
@@ -3509,11 +3553,12 @@ function lsHomeLists(){
 function lsHomeHTML(){
   const ls0=lsHomeLists(),grp=new Map();
   ls0.forEach(l=>{const k=l.pid||'';if(!grp.has(k))grp.set(k,[]);grp.get(k).push(l);});
-  if(LH.proj&&!grp.has(LH.proj))grp.set(LH.proj,[]);
+  const pf=lpfCur(),pfk=pf===LPF_NONE?'':pf;
+  if(pf&&!grp.has(pfk))grp.set(pfk,[]);
   const keys=[...grp.keys()].sort((a,b)=>(a?lsProjName(a):'~').localeCompare(b?lsProjName(b):'~'));
   const sel=(id,v,opts)=>`<select id="${id}" style="${LS_INP};max-width:100%;min-width:0">${opts.map(([k,t])=>`<option value="${escA(k)}"${k===v?' selected':''}>${escA(t)}</option>`).join('')}</select>`;
   const prog=(l,m)=>{const n=m==='saw'?l.saw:l.fit;if(!n)return(m==='saw'?l.noCut:l.noFit)?'n/a':'—';if(listDone(l.id)[m])return'✓';const t=Object.values(rowTicks(l.id)).filter(x=>x.m===m).length;return t+'/'+n;};
-  const row=l=>{const sup=lsSupersededBy(l);const[st,col]=sup?['Superseded (view only)','#8e99ab']:LS_STATE[lsState(l)];return `<tr data-lhrow="${escA(l.id)}"><td><b>${escA(l.name)}</b>${sup?`<div class="lh-sup" style="font-size:11px;color:#5b6b82">replaced by "${escA(sup.name)}"</div>`:''}${l.tpl?' <span class="lst-chip" style="background:#efe7ff;color:#5b21b6">TEMPLATE'+(l.typeName?' · '+escA(l.typeName):'')+'</span>':''}</td>
+  const row=l=>{const sup=lsSupersededBy(l);const[st,col]=sup?['Superseded (view only)','#8e99ab']:LS_STATE[lsState(l)];return `<tr data-lhrow="${escA(l.id)}"><td><b>${escA(l.name)}</b><div class="lh-pj">${lpfTag(l.pid?lsProjName(l.pid)||l.project:'')}</div>${sup?`<div class="lh-sup" style="font-size:11px;color:#5b6b82">replaced by "${escA(sup.name)}"</div>`:''}${l.tpl?' <span class="lst-chip" style="background:#efe7ff;color:#5b21b6">TEMPLATE'+(l.typeName?' · '+escA(l.typeName):'')+'</span>':''}</td>
     <td>${escA(LS_KINDS[l.ltype]||l.ltype||'')}${l.templateId?`<div style="font-size:11px;color:#5b21b6">${escA(lsTplInfo(l))}</div>`:''}</td><td>${(l.wos||[]).map(w=>`<span class="lst-chip">${escA(w)}</span>`).join('')||'<span style="color:var(--t3)">—</span>'}</td>${lsFuTds(l)}
     <td>${(+l.rev||1)>1?`<span class="lst-chip" style="background:#fff4d6;color:#7a5200">Rev ${+l.rev}</span>`:'Rev 1'}</td><td><span style="color:${col};font-weight:700">${st}</span>${!l.archived&&!sup?'<div>'+(lsChkOn()&&l.tpl&&l.checkReq&&!l.checkedAt?'<span class="chk-wait">Not checked</span>':lsCheckChip(l))+'</div>':''}${(t=>t.length?'<div>'+lsTbcChip(t)+'</div>':'')(l.archived?[]:lsTbc(lsView(l.id).rows))}</td><td>🪚 ${prog(l,'saw')}</td><td>🧰 ${prog(l,'fit')}</td>
     <td class="lh-act">${!l.archived&&!sup&&lsChkOn()&&l.checkReq&&!l.checkedAt?`<button class="btn btn-g" data-lhchk="${escA(l.id)}" style="padding:2px 8px;font-size:11px" title="Drawing office / Production Manager / Admin PIN — the saw sees the list once it is checked">✓ Check</button> `:''}${sup?'':`<button class="btn btn-s" data-lhedit="${escA(l.id)}" style="padding:2px 8px;font-size:11px">✎ Edit</button> `}<button class="btn btn-s" data-lhview="${escA(l.id)}" style="padding:2px 8px;font-size:11px">View</button> <button class="btn btn-s" data-lhcopy="${escA(l.id)}" style="padding:2px 8px;font-size:11px" title="Start a NEW list from this one's rows — pick the work order and change anything. This list is not changed">⧉ Copy</button>${l.archived?'':` <button class="btn btn-s" data-lhastpl="${escA(l.id)}" style="padding:2px 8px;font-size:11px" title="Save this list as a template of the project (ticks are not copied)">📐 Save as template</button>`}${l.tpl?` <button class="btn btn-s" data-lhhist="${escA(l.id)}" style="padding:2px 8px;font-size:11px">🕘 History</button>`:''}${!l.tpl&&!l.archived&&lsState(l)==='draft'?` <button class="btn btn-s" data-lhsend="${escA(l.id)}" style="padding:2px 8px;font-size:11px">➜ Send to saw</button>`:''}${l.archived?'':` <button class="btn btn-s" data-lharc="${escA(l.id)}" style="padding:2px 8px;font-size:11px;color:var(--red);border-color:var(--red)">Archive</button>`}</td></tr>`;};
@@ -3521,19 +3566,18 @@ function lsHomeHTML(){
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
       <div style="font-size:15px;font-weight:700;color:#14335c">📋 Lists — ${ls0.length}</div>
       <input id="lh-q" value="${escA(LH.q)}" placeholder="🔍 Search name, house, WO, customer, type" style="${LS_INP};width:250px;max-width:100%">
-      ${sel('lh-proj',LH.proj,[['','All projects'],...lsProjects().map(p=>[p.id,p.name])])}
       ${sel('lh-type',LH.type,[['','Any type'],...Object.entries(LS_KINDS)])}
       ${sel('lh-kind',LH.kind,[['live','Live lists'],['tpl','Templates'],['all','Lists + templates']])}
       ${sel('lh-rev',LH.rev,[['','Any revision'],['revised','Revised (rev 2+)']])}
       ${sel('lh-state',LH.state,[['','Not archived'],['draft','Draft'],['live','Live (with the saw)'],['done','Done'],['archived','Archived'],['any','Any state (incl. archived)']])}
-      ${LH.q||LH.proj||LH.type||LH.kind!=='live'||LH.rev||LH.state?'<button class="btn btn-s" id="lh-x" style="font-size:12px">✕ Clear</button>':''}
-      <span style="flex:1"></span>${LH.kind==='tpl'?`<button class="btn btn-s" id="lh-copy"${LH.proj?'':' disabled title="Pick the project first"'}>⧉ Copy from another project</button><button class="btn btn-g" id="lh-newtpl"${LH.proj?'':' disabled title="Pick the project first"'}>＋ New template</button>`:''}<button class="btn btn-s" id="lh-projs">🏗 Projects</button><button class="btn btn-s dk-gate" id="lh-sent"${dkVis()?'':' hidden'} title="Everything sent to a project's site between two dates — print or Excel">📦 Items sent</button><button class="btn btn-s" id="lh-find" title="Search every list — any project, done or archived too — and copy one to start a new list">🔍 Find old list</button><button class="btn btn-s" id="lh-imp" title="Import a cutting-list workbook — one sheet per house, each sheet becomes a list. You see a preview first; nothing is saved until you press Save">📥 Import Excel</button><button class="btn btn-g" id="lh-new" title="Opens the standard layout: the house heading and the sub-headings Fillers and Kickers, Worktops, Stores items, ready to fill">＋ New list</button><details class="me-more lh-more" id="lh-more"><summary class="btn btn-s">More ▾</summary><div class="me-morep"><button class="btn btn-s" id="lh-blank" title="An empty list with no headings">Blank list</button><a class="btn btn-s" id="lh-xltpl" href="${LS_XL_TPL}" download="WPF-Cutting-List-Template.xlsx" title="The Excel template to fill in and import — send it to anyone who types cutting lists">⬇ Excel template</a></div></details>
+      ${LH.q||pf||LH.type||LH.kind!=='live'||LH.rev||LH.state?'<button class="btn btn-s" id="lh-x" style="font-size:12px">✕ Clear</button>':''}
+      <span style="flex:1"></span>${LH.kind==='tpl'?`<button class="btn btn-s" id="lh-copy"${pfk?'':' disabled title="Pick the project first"'}>⧉ Copy from another project</button><button class="btn btn-g" id="lh-newtpl"${pfk?'':' disabled title="Pick the project first"'}>＋ New template</button>`:''}<button class="btn btn-s" id="lh-projs">🏗 Projects</button><button class="btn btn-s dk-gate" id="lh-sent"${dkVis()?'':' hidden'} title="Everything sent to a project's site between two dates — print or Excel">📦 Items sent</button><button class="btn btn-s" id="lh-find" title="Search every list — any project, done or archived too — and copy one to start a new list">🔍 Find old list</button><button class="btn btn-s" id="lh-imp" title="Import a cutting-list workbook — one sheet per house, each sheet becomes a list. You see a preview first; nothing is saved until you press Save">📥 Import Excel</button><button class="btn btn-g" id="lh-new" title="Opens the standard layout: the house heading and the sub-headings Fillers and Kickers, Worktops, Stores items, ready to fill">＋ New list</button><details class="me-more lh-more" id="lh-more"><summary class="btn btn-s">More ▾</summary><div class="me-morep"><button class="btn btn-s" id="lh-blank" title="An empty list with no headings">Blank list</button><a class="btn btn-s" id="lh-xltpl" href="${LS_XL_TPL}" download="WPF-Cutting-List-Template.xlsx" title="The Excel template to fill in and import — send it to anyone who types cutting lists">⬇ Excel template</a></div></details>
     </div>
     <input type="file" id="lh-file" accept=".xlsx,.xls" style="display:none"><div id="lh-upmsg" style="font-size:12px;margin-bottom:6px"></div>
     ${keys.length?keys.map(k=>{const a=grp.get(k);return `<div class="lh-grp" style="margin-bottom:12px"><div style="background:#14335c;color:#fff;border-radius:6px 6px 0 0;padding:7px 10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <b>${escA(k?lsProjName(k):'No project')}</b><span style="font-size:12px;opacity:.85">${a.length} list${a.length!==1?'s':''}</span><span style="flex:1"></span>
         ${k?`<button class="btn btn-s" data-lhtpl="${escA(k)}" style="font-size:11px;padding:3px 9px">Templates</button><button class="btn btn-s" data-lhmat="${escA(k)}" style="font-size:11px;padding:3px 9px">Materials</button><button class="btn btn-s" data-lhnew="${escA(k)}" style="font-size:11px;padding:3px 9px">＋ New list</button><button class="btn btn-s" data-lhimp="${escA(k)}" style="font-size:11px;padding:3px 9px">Import Excel</button>`:''}</div>
-      <table class="lst-tbl" style="margin:0"><thead><tr><th>List</th><th>Type</th><th>Work orders</th><th>Floor</th><th>Unit</th><th>Title</th><th>Rev</th><th>State</th><th>Saw</th><th>Stores</th><th></th></tr></thead><tbody>${a.map(row).join('')||'<tr><td colspan="11" style="color:var(--t3)">No lists match.</td></tr>'}</tbody></table></div>`;}).join('')
+      <table class="lst-tbl" style="margin:0"><thead><tr><th>List · Project</th><th>Type</th><th>Work orders</th><th>Floor</th><th>Unit</th><th>Title</th><th>Rev</th><th>State</th><th>Saw</th><th>Stores</th><th></th></tr></thead><tbody>${a.map(row).join('')||'<tr><td colspan="11" style="color:var(--t3)">No lists match.</td></tr>'}</tbody></table></div>`;}).join('')
       :`<div style="font-size:13px;color:var(--t3);padding:10px">${LST.loaded?'No lists match.':'Loading the lists…'}</div>`}
   </div>`;
 }
@@ -3542,23 +3586,28 @@ const LS_XL_TPL='templates/WPF-Cutting-List-Template.xlsx'; // (9 Nov) the circu
 function lsHomeBind(){
   const re=id=>{render();const n=document.getElementById(id);if(n&&n.focus){n.focus();if(n.setSelectionRange)n.setSelectionRange(n.value.length,n.value.length);}};
   const q=document.getElementById('lh-q');if(q)q.oninput=()=>{LH.q=q.value;re('lh-q');};
-  [['lh-proj','proj'],['lh-type','type'],['lh-kind','kind'],['lh-rev','rev'],['lh-state','state']].forEach(([id,k])=>{const e=document.getElementById(id);if(e)e.onchange=()=>{LH[k]=e.value;render();};});
-  const x=document.getElementById('lh-x');if(x)x.onclick=()=>{Object.assign(LH,{q:'',proj:'',type:'',kind:'live',rev:'',state:''});render();};
+  [['lh-type','type'],['lh-kind','kind'],['lh-rev','rev'],['lh-state','state']].forEach(([id,k])=>{const e=document.getElementById(id);if(e)e.onchange=()=>{LH[k]=e.value;render();};});
+  const pjs=document.getElementById('lh-proj');if(pjs)pjs.onchange=()=>{lpfSet(pjs.value);render();};
+  const px=document.getElementById('lpf-x');if(px)px.onclick=()=>{lpfSet('');render();};
+  const pq=document.getElementById('lpf-q');if(pq)pq.onchange=()=>{const k=pq.value.trim().toLowerCase();if(!k)return;const ps=lsProjects(true),nm=p=>String(p.name||'').trim().toLowerCase();
+    const hit=ps.find(p=>nm(p)===k)||(a=>a.length===1?a[0]:null)(ps.filter(p=>nm(p).includes(k)));
+    if(hit){lpfSet(hit.id);render();}else toast('No single project matches "'+pq.value.trim()+'" — pick it from the list');};
+  const x=document.getElementById('lh-x');if(x)x.onclick=()=>{Object.assign(LH,{q:'',type:'',kind:'live',rev:'',state:''});lpfSet('');render();};
   const pj=document.getElementById('lh-projs');if(pj)pj.onclick=()=>lsProjectsDlg();
   const sn=document.getElementById('lh-sent');if(sn){sn.onclick=()=>dkReportDlg();dkShow();}
   // (Garry, 4 Nov) one "＋ New list" — the standard layout; an empty list is under More ▾ → Blank list
-  const nw=document.getElementById('lh-new');if(nw)nw.onclick=()=>lsNewStd('',LH.proj||'');
-  const nb=document.getElementById('lh-blank');if(nb)nb.onclick=()=>{const m=document.getElementById('lh-more');if(m)m.open=false;openListEditor(null,'',LH.proj||'');};
-  const nt=document.getElementById('lh-newtpl');if(nt)nt.onclick=()=>openListEditor(null,'',LH.proj,{tpl:true});
-  const cp=document.getElementById('lh-copy');if(cp)cp.onclick=()=>lsCopyDlg(LH.proj);
-  document.querySelectorAll('[data-lhtpl]').forEach(b=>b.onclick=()=>{LH.proj=b.dataset.lhtpl;LH.kind='tpl';render();});
+  const nw=document.getElementById('lh-new');if(nw)nw.onclick=()=>lsNewStd('',lhPid());
+  const nb=document.getElementById('lh-blank');if(nb)nb.onclick=()=>{const m=document.getElementById('lh-more');if(m)m.open=false;openListEditor(null,'',lhPid());};
+  const nt=document.getElementById('lh-newtpl');if(nt)nt.onclick=()=>openListEditor(null,'',lhPid(),{tpl:true});
+  const cp=document.getElementById('lh-copy');if(cp)cp.onclick=()=>lsCopyDlg(lhPid());
+  document.querySelectorAll('[data-lhtpl]').forEach(b=>b.onclick=()=>{lpfSet(b.dataset.lhtpl);LH.kind='tpl';render();});
   document.querySelectorAll('[data-lhmat]').forEach(b=>b.onclick=()=>lsMaterialsDlg(b.dataset.lhmat));
   document.querySelectorAll('[data-lhnew]').forEach(b=>b.onclick=()=>lsNewStd('',b.dataset.lhnew)); // the standard layout, like ＋ New list
   const fi=document.getElementById('lh-file');
   document.querySelectorAll('[data-lhimp]').forEach(b=>b.onclick=()=>{lhImpPid=b.dataset.lhimp;if(fi)fi.click();});
-  const lf=document.getElementById('lh-find');if(lf)lf.onclick=()=>lsFindDlg(LH.proj||'');
-  document.querySelectorAll('[data-lhcopy]').forEach(b=>b.onclick=()=>lsCopyToNew(b.dataset.lhcopy,LH.proj||''));
-  const li=document.getElementById('lh-imp');if(li)li.onclick=()=>{lhImpPid=LH.proj||'';if(fi)fi.click();}; // (9 Nov) the project picked above, else the workbook's Project cell / file name
+  const lf=document.getElementById('lh-find');if(lf)lf.onclick=()=>lsFindDlg(lhPid());
+  document.querySelectorAll('[data-lhcopy]').forEach(b=>b.onclick=()=>lsCopyToNew(b.dataset.lhcopy,lhPid()));
+  const li=document.getElementById('lh-imp');if(li)li.onclick=()=>{lhImpPid=lhPid();if(fi)fi.click();}; // (9 Nov) the project picked above, else the workbook's Project cell / file name
   if(fi)fi.onchange=()=>{const f=fi.files[0];if(f)lsUpload(f,lhImpPid);fi.value='';};
   document.querySelectorAll('[data-lhedit]').forEach(b=>b.onclick=()=>openListEditor(b.dataset.lhedit));
   document.querySelectorAll('[data-lhastpl]').forEach(b=>b.onclick=()=>lsSaveAsTpl({id:b.dataset.lhastpl}));
@@ -3584,8 +3633,9 @@ function lsHomeMount(){ // office Lists tab with the switch on: the library beco
   lsHomeBind();
 }
 function lsHomePage(app,title){
-  app.innerHTML=`<div class="pg">${title||''}${listsToIssueHTML()}
-    ${allHolds(['saw','fit'],'hold').length?`<div class="exp-panel" style="border:2px solid #d4880f;background:#fffaf0"><div style="font-size:14px;font-weight:700;color:#7a4a00;margin-bottom:4px">⏸ Waiting on material</div>${holdBookHTML(['saw','fit'])}</div>`:''}
+  lpfPage=true;const bar=lpfBarHTML(); // first: it settles a remembered project that no longer exists
+  app.innerHTML=`<div class="pg">${title||''}${bar}${listsToIssueHTML()}
+    ${lpfHolds(allHolds(['saw','fit'],'hold')).length?`<div class="exp-panel" style="border:2px solid #d4880f;background:#fffaf0"><div style="font-size:14px;font-weight:700;color:#7a4a00;margin-bottom:4px">⏸ Waiting on material</div>${holdBookHTML(['saw','fit'])}</div>`:''}
     ${lsHomeHTML()}</div>`;
   lsHomeBind();ltiBind();bindHoldBook(['saw','fit'],officeWhoFn);
 }
@@ -3707,7 +3757,7 @@ function ltiExcelSugg(){
 }
 function ltiRows(){
   const today=todayLocal(),xl=V2()?ltiExcelSugg():new Map();
-  return listsNeeded().map(o=>{const n=lsNeedInfo(o,today),s=lsSuggest(o),pk=LTI.pick[o.wo]&&lsList(LTI.pick[o.wo])?LTI.pick[o.wo]:'',x=xl.get(o.wo)||[];
+  return lpfJobs(listsNeeded()).map(o=>{const n=lsNeedInfo(o,today),s=lsSuggest(o),pk=LTI.pick[o.wo]&&lsList(LTI.pick[o.wo])?LTI.pick[o.wo]:'',x=xl.get(o.wo)||[];
     let lvl=pk&&pk!==s.tid?'pick':s.level;if(x.length&&lvl==='strong')lvl='weak'; // an Excel list fits too: a person picks — never "Confirm all"
     return Object.assign(n,{s,xl:x,tid:pk||s.tid,lvl});})
     .sort((a,b)=>(b.onDel-a.onDel)||(b.late-a.late)||(a.due||'9999').localeCompare(b.due||'9999')||woCmp(a.o,b.o));
@@ -3715,15 +3765,16 @@ function ltiRows(){
 const LTI_COL={strong:['#0d6e46','#e7f6ec','#9fd8b4','✓ Suggested'],weak:['#7a4a00','#fff4d6','#e0a43a','? Best guess'],none:['#5b6b82','#eef1f5','#c9d1dc','No suggestion'],pick:['#1a56db','#eaf2ff','#9cbce8','Chosen']};
 function ltiTplName(id){const t=lsList(id);return t?(t.typeName||t.name)+' · Rev '+(+t.rev||1):'';}
 function ltiInner(){
-  const rows=ltiRows(),green=rows.filter(r=>r.lvl==='strong'&&r.tid&&!LTI.busy.has(r.o.wo)),wc=lsWaitCheckLists().sort((a,b)=>(listDueKey(a)||'9999').localeCompare(listDueKey(b)||'9999'));
-  const na=DB.orders.filter(o=>lsNA(o)&&!woFinished(o)),phs=phJobs(),show=LTI.all?rows:rows.slice(0,40);
+  const rows=ltiRows(),green=rows.filter(r=>r.lvl==='strong'&&r.tid&&!LTI.busy.has(r.o.wo)),wc=lpfLists(lsWaitCheckLists()).sort((a,b)=>(listDueKey(a)||'9999').localeCompare(listDueKey(b)||'9999'));
+  const na=lpfJobs(DB.orders.filter(o=>lsNA(o)&&!woFinished(o))),phs=lpfJobs(phJobs()),show=LTI.all?rows:rows.slice(0,40);
+  const pf=lpfSec(),pfAll=pf?listsNeeded().length+lsWaitCheckLists().length:0,jp=lpfJobPid(),jtag=o=>lpfTag(lsProjName(jp(o)));
   const btn='font-size:12px;padding:6px 10px;margin:2px 4px 2px 0';
   const row=r=>{const o=r.o,w=o.wo,[c,bg,bd,lbl]=LTI_COL[r.lvl],busy=LTI.busy.has(w),err=(LTI.res[w]||{}).err;
     const pid=r.s.pid,alts=pid?(r.s.alts.length?r.s.alts:lsTemplatesFor(pid).map(t=>t.id)):[];
     const when=r.onDel?`<span class="lti-b" style="background:#c0392b;color:#fff">🚚 ${escA(slotLbl(o.delVeh,o.delDay))}</span>`:'';
     const due=r.due?`<span class="lti-b" style="${r.late?'background:#c0392b;color:#fff':'background:#eef1f5;color:#14335c'}">${r.late?'LATE · was due '+fmt(r.due):'list due by '+fmt(r.due)}</span>`:'';
     return `<div class="lti-row" data-ltirow="${escA(w)}" style="border-left:5px solid ${bd}">
-      <div class="lti-top">${woColsHTML(o)}${when}${due}</div>
+      <div class="lti-top">${woColsHTML(o)}${lpfTag(lsProjName(pid))}${when}${due}</div>
       <div class="lti-sug"><span class="lti-chip" data-ltilvl="${r.lvl}" style="background:${bg};color:${c};border-color:${bd}">${lbl}${r.tid?': <b>'+escA(ltiTplName(r.tid))+'</b>':''}</span><span class="lti-why">${escA(r.lvl==='pick'?'picked by hand':r.s.why)}</span></div>
       ${busy?'<div class="lti-msg" style="color:#14335c">Saving…</div>':`<div class="lti-act">
         ${r.tid?`<button class="btn btn-g" data-lticonf="${escA(w)}" style="${btn}">✓ Confirm</button>`:''}
@@ -3737,25 +3788,25 @@ function ltiInner(){
       ${err&&!busy?`<div class="lti-msg" style="color:#b42318">✗ Not saved — ${escA(err)} <button class="btn btn-s" data-ltiretry="${escA(w)}" style="${btn};color:#b42318;border-color:#b42318">↻ Retry</button></div>`:''}
     </div>`;};
   const wrow=l=>{const t=lsTbc(lsView(l.id).rows),due=listDueKey(l);return `<div class="lti-row lti-wc" data-ltiwc="${escA(l.id)}" style="border-left:5px solid #e0a43a">
-      <div class="lti-top"><span class="chk-wait">Waiting for check</span><b class="lti-wo">${escA(l.name)}</b><span class="lti-t">${escA(l.project||'')}${(+l.rev||1)>1?' · Rev '+(+l.rev):''}</span><span class="lti-c">${(l.wos||[]).map(escA).join(' · ')||'no work order'}</span>${due?`<span class="lti-b" style="background:#eef1f5;color:#14335c">delivers ${fmt(due)}</span>`:''}${lsTbcChip(t)}</div>
+      <div class="lti-top"><span class="chk-wait">Waiting for check</span><b class="lti-wo">${escA(l.name)}</b><span class="lti-t">${lpfTag(l.pid?lsProjName(l.pid)||l.project:'')}${(+l.rev||1)>1?' · Rev '+(+l.rev):''}</span><span class="lti-c">${(l.wos||[]).map(escA).join(' · ')||'no work order'}</span>${due?`<span class="lti-b" style="background:#eef1f5;color:#14335c">delivers ${fmt(due)}</span>`:''}${lsTbcChip(t)}</div>
       <div class="lti-act"><button class="btn btn-g" data-ltichk="${escA(l.id)}" style="${btn}">✓ Check</button><button class="btn btn-s" data-ltiview="${escA(l.id)}" style="${btn}">View</button><button class="btn btn-s" data-ltiedit="${escA(l.id)}" style="${btn}">✎ Edit</button><span class="lti-why">made by ${escA(l.createdBy||'?')} — the saw sees it once it is checked</span></div></div>`;};
   const nAll=rows.length+wc.length;
   return `<div class="exp-panel lti" id="lti" style="border:2px solid ${rows.some(r=>r.late||r.onDel)?'#c0392b':nAll?'#d4880f':'#9fd8b4'};background:${nAll?'#fffdf7':'#f4fbf6'}">
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
-      <div style="font-size:16px;font-weight:800;color:#14335c">📋 Cutting lists to issue — ${nAll}</div>${wc.length?`<span class="chk-wait">${wc.length} waiting for check</span>`:''}
+      <div style="font-size:16px;font-weight:800;color:#14335c">📋 Cutting lists to issue — ${nAll}</div>${pf?`<span class="lpf-n" id="lti-of">of ${pfAll} — only ${escA(lpfName(pf))}</span>`:''}${wc.length?`<span class="chk-wait">${wc.length} waiting for check</span>`:''}
       ${rows.filter(r=>r.late).length?`<span class="lti-b" style="background:#c0392b;color:#fff">${rows.filter(r=>r.late).length} late</span>`:''}
       <span style="flex:1"></span>
       ${green.length?`<button class="btn btn-g" id="lti-all" style="font-size:13px;padding:8px 14px">✓ Confirm all green (${green.length})</button>`:''}
     </div>
     ${wc.map(wrow).join('')}
-    <div style="font-size:12px;color:var(--t3);margin-bottom:8px">${rows.length?'Each processed work order needs its cutting list. Check the suggested template and tap ✓ Confirm. <b>Nothing reaches the saw until it is confirmed.</b> Green = strong match · amber = a guess · grey = no suggestion.':'✓ Every processed work order has a cutting list.'}</div>
+    <div style="font-size:12px;color:var(--t3);margin-bottom:8px">${rows.length?'Each processed work order needs its cutting list. Check the suggested template and tap ✓ Confirm. <b>Nothing reaches the saw until it is confirmed.</b> Green = strong match · amber = a guess · grey = no suggestion.':pf?'✓ Nothing to issue for '+escA(lpfName(pf))+'.':'✓ Every processed work order has a cutting list.'}</div>
     ${LTI.done.length?`<div class="lti-done">${LTI.done.slice(0,12).map(d=>`<div>✓ <b>${escA(d.wo)}</b> — "${escA(d.name)}"${d.tpl?' from '+escA(d.tpl):''}${d.already?' <i>(already made on another screen — no second list)</i>':''}</div>`).join('')}${LTI.done.length>12?`<div>…and ${LTI.done.length-12} more</div>`:''}<button class="btn btn-s" id="lti-dx" style="font-size:11px;padding:2px 8px;margin-top:4px">Clear</button></div>`:''}
     ${show.map(row).join('')}
     ${rows.length>show.length?`<button class="btn btn-s" id="lti-more" style="font-size:12px;margin-top:6px">Show all ${rows.length}</button>`:''}
     ${phs.length?`<div style="margin-top:8px;font-size:12px"><button class="btn btn-s" id="lti-ph" style="font-size:11px;padding:3px 9px">${LTI.showPh?'▲':'▼'} 📷 Photo lists (${phs.length})</button>
-      ${LTI.showPh?phs.map(o=>`<div class="lti-nar"><b>${escA(o.wo)}</b> ${escA(o.title||'')} — ${phList(o).length} photo${phList(o).length!==1?'s':''} · ${escA(phList(o)[0].by||'')} ${fmt(phList(o)[0].at)} <button class="btn btn-s" data-phwo="${escA(o.wo)}" style="font-size:11px;padding:2px 8px">Open</button></div>`).join(''):''}</div>`:''}
+      ${LTI.showPh?phs.map(o=>`<div class="lti-nar"><b>${escA(o.wo)}</b> ${jtag(o)} ${escA(o.title||'')} — ${phList(o).length} photo${phList(o).length!==1?'s':''} · ${escA(phList(o)[0].by||'')} ${fmt(phList(o)[0].at)} <button class="btn btn-s" data-phwo="${escA(o.wo)}" style="font-size:11px;padding:2px 8px">Open</button></div>`).join(''):''}</div>`:''}
     ${na.length?`<div style="margin-top:8px;font-size:12px"><button class="btn btn-s" id="lti-na" style="font-size:11px;padding:3px 9px">${LTI.showNA?'▲':'▼'} Cleared without a planner list (${na.length})</button>
-      ${LTI.showNA?na.map(o=>`<div class="lti-nar"><b>${escA(o.wo)}</b> ${escA(o.title||'')} — no list needed · ${escA(o.listNA.by||'')} ${o.listNA.at?fmt(o.listNA.at):''} <button class="btn btn-s" data-ltiundo="${escA(o.wo)}" style="font-size:11px;padding:2px 8px">Undo</button></div>`).join(''):''}</div>`:''}
+      ${LTI.showNA?na.map(o=>`<div class="lti-nar"><b>${escA(o.wo)}</b> ${jtag(o)} ${escA(o.title||'')} — no list needed · ${escA(o.listNA.by||'')} ${o.listNA.at?fmt(o.listNA.at):''} <button class="btn btn-s" data-ltiundo="${escA(o.wo)}" style="font-size:11px;padding:2px 8px">Undo</button></div>`).join(''):''}</div>`:''}
   </div>`;
 }
 // After an Apply, the import tab keeps the panel when it is redrawn (a refresh), until the page is reloaded
@@ -4841,7 +4892,7 @@ function lsCopyDlg(pid){
         const lines=await lsCopyLines(s.id,map);lsFlagMats(lines,pid);
         const r=s.ltype==='snag'?'other':s.ltype||'house';
         const res=await lsSaveList({id:uid('L'),name:s.typeName||s.name,project_id:pid,is_template:true,list_type:r,type_name:s.typeName||s.name,source:'template',wos:[]},lines,whoNow(),'Copied from '+s.project+' — '+s.name+' rev '+(+s.rev||1));
-        ov.remove();LH.proj=pid;LH.kind='tpl';render();toast('Copied — "'+res.list.name+'" is now a template in '+lsProjName(pid));
+        ov.remove();lpfSet(pid);LH.kind='tpl';render();toast('Copied — "'+res.list.name+'" is now a template in '+lsProjName(pid));
       }catch(e){err('Not copied — '+e.message);}
     });
   };
@@ -5536,18 +5587,18 @@ let lstGroupBy='project'; // library grouping: 'project' | 'customer'
 const lstColl=new Set(); // collapsed project groups
 let lstAttachOpen=null;  // WO in the needed panel whose attach row is open
 function renderLists(app){
-  const need=listsNeeded();
+  const v2=V2();lpfPage=v2;const lpfBar=v2?lpfBarHTML():''; // first: it settles a remembered project that no longer exists
+  const need=lpfJobs(listsNeeded()),njp=lpfJobPid();
   const all=[...lists()].sort((a,b)=>(listDueKey(a)||'9999').localeCompare(listDueKey(b)||'9999')||String(a.name).localeCompare(String(b.name)));
   const woLbl=w=>{const o=DB.orders.find(x=>x.wo===w);return o&&fuLbl(o)?`${w} (${fuLbl(o)})`:w;};
   const candFor=o=>{const u=parseInt(o.unit);if(isNaN(u))return[];return all.filter(l=>{const ns=(String(l.sheet).match(/\d+/g)||[]).map(Number);return ns.includes(u)&&!(l.wos||[]).includes(o.wo);});};
-  const v2=V2();
-  app.innerHTML=`<div class="pg">${listsToIssueHTML()}
+  app.innerHTML=`<div class="pg">${lpfBar}${listsToIssueHTML()}
     ${v2&&need.length?`<details class="lti-other"${lstAttachOpen?' open':''}><summary>More ways to attach a list (type one, or pick an uploaded list) — Cutting lists needed: ${need.length}</summary>`:''}
     ${v2&&!need.length?'':need.length?`<div class="exp-panel" style="border:2px solid #c0392b;background:#fdf3f2">
       <div style="font-size:14px;font-weight:700;color:#8a1c10;margin-bottom:6px">⚠ Cutting lists needed — ${need.length} work order${need.length!==1?'s':''} scheduled with no list tagged</div>
       <p style="font-size:12px;color:#8a1c10;margin-bottom:10px">These are on the delivery board or due within ${listLead()} days. Upload the cutting list below and tag it, so the saw and stores see it in good time.</p>
-      <table class="lst-tbl"><thead><tr><th>WO #</th><th>Floor</th><th>Unit</th><th>Title</th><th>Customer</th><th>Due</th><th>Why flagged</th><th></th></tr></thead><tbody>
-      ${need.slice(0,30).map(o=>{const cands=lstAttachOpen===o.wo?candFor(o):[];return `<tr style="cursor:pointer" data-nrow="${escA(o.wo)}"><td style="font-family:monospace;font-weight:700">${escA(o.wo)}</td><td>${escA(fuF(o))}</td><td>${escA(fuU(o))}</td><td>${escA(o.title)}</td><td>${escA(o.customer)}</td><td>${fmt(o.dueDate)}</td><td>${o.delv&&o.delDay?'On delivery board ('+escA(o.delDay)+')':'Due within '+listLead()+' days'}</td>
+      <table class="lst-tbl"><thead><tr><th>WO #</th><th>Floor</th><th>Unit</th><th>Title</th><th>${v2?'Project / customer':'Customer'}</th><th>Due</th><th>Why flagged</th><th></th></tr></thead><tbody>
+      ${need.slice(0,30).map(o=>{const cands=lstAttachOpen===o.wo?candFor(o):[];return `<tr style="cursor:pointer" data-nrow="${escA(o.wo)}"><td style="font-family:monospace;font-weight:700">${escA(o.wo)}</td><td>${escA(fuF(o))}</td><td>${escA(fuU(o))}</td><td>${escA(o.title)}</td><td>${v2?lpfTag(lsProjName(njp(o)))+' ':''}${escA(o.customer)}</td><td>${fmt(o.dueDate)}</td><td>${o.delv&&o.delDay?'On delivery board ('+escA(o.delDay)+')':'Due within '+listLead()+' days'}</td>
         <td style="white-space:nowrap"><button class="btn btn-s" data-natt="${escA(o.wo)}" style="padding:2px 8px;font-size:11px">${lstAttachOpen===o.wo?'✕ close':'➕ Attach list'}</button></td></tr>
       ${lstAttachOpen===o.wo?`<tr><td colspan="8" style="background:#fff;border:1px solid var(--b2);padding:10px">
         <div style="font-size:12px;font-weight:700;color:#14335c;margin-bottom:6px">Attach a cutting list to ${escA(o.wo)}${o.unit?' (unit '+escA(o.unit)+')':''}:</div>
@@ -5572,8 +5623,8 @@ function renderLists(app){
       </div>
       <div id="lst-upmsg" style="margin-top:8px;font-size:12px"></div>
     </div>
-    ${allHolds(['saw','fit'],'hold').length?`<div class="exp-panel" style="border:2px solid #d4880f;background:#fffaf0">
-      <div style="font-size:14px;font-weight:700;color:#7a4a00;margin-bottom:4px">⏸ Waiting on material — ${allHolds(['saw','fit'],'hold').length} row${allHolds(['saw','fit'],'hold').length!==1?'s':''}</div>
+    ${lpfHolds(allHolds(['saw','fit'],'hold')).length?`<div class="exp-panel" style="border:2px solid #d4880f;background:#fffaf0">
+      <div style="font-size:14px;font-weight:700;color:#7a4a00;margin-bottom:4px">⏸ Waiting on material — ${lpfHolds(allHolds(['saw','fit'],'hold')).length} row${lpfHolds(allHolds(['saw','fit'],'hold')).length!==1?'s':''}</div>
       <p style="font-size:12px;color:#7a4a00;margin-bottom:8px">Parked by the saw or stores because material or stock isn't in. Release when it arrives and the rows go back on the bench queue as due work.</p>
       ${holdBookHTML(['saw','fit'])}</div>`:''}
     <div class="exp-panel">
@@ -8677,17 +8728,17 @@ function openHold(l,mode){
 }
 /* The waiting book, grouped by material so one delivery of board releases every job it unblocks */
 function holdBookHTML(modes){
-  const hs=allHolds(modes,'hold');
+  const hs=lpfHolds(allHolds(modes,'hold')),pj=lpfPage&&V2(); // Cutting Lists page: the Project filter, and the project on every row
   if(!hs.length)return `<div class="flr-none">Nothing waiting on material ✓</div>`;
   const grp={};hs.forEach(x=>{const n=holdGrp(x),gk=matKey(n);(grp[gk]=grp[gk]||{n,a:[]}).a.push(x);}); // same board, any case/spacing = one group (first spelling shown)
   return Object.keys(grp).sort().map(gk=>{const g=grp[gk].n,a=grp[gk].a;return `<div class="hold-grp">
     <div class="hold-gh"><span>${escA(g)} — ${a.length} row${a.length!==1?'s':''} waiting</span><button class="wl-btn" data-relg="${escA(g)}" style="padding:10px 18px;font-size:15px">▶ ARRIVED — RELEASE ALL</button></div>
-    ${a.map(x=>`<div class="wl-drow"><b>${escA(x.l.name)}</b><span class="dsh-t">${escA(x.v.item||'')} ×${escA(x.v.qty)}${x.v.L||x.v.W?' · '+escA(x.v.L)+' × '+escA(x.v.W):''}</span><span class="dsh-c">${escA(listCust(x.l))}</span><span class="dsh-x">since ${new Date(x.v.at).toLocaleDateString('en-IE',{day:'numeric',month:'short'})}${x.v.by?' · '+escA(x.v.by):''}${listDueKey(x.l)?' · delivers '+fmt(listDueKey(x.l)):''}</span><button class="wl-undo" data-rel1="${escA(x.l.id)}|${escA(x.k)}">Release</button></div>`).join('')}
+    ${a.map(x=>`<div class="wl-drow"><b>${escA(x.l.name)}</b><span class="dsh-t">${escA(x.v.item||'')} ×${escA(x.v.qty)}${x.v.L||x.v.W?' · '+escA(x.v.L)+' × '+escA(x.v.W):''}</span>${pj?lpfTag(x.l.pid?lsProjName(x.l.pid)||x.l.project:''):''}<span class="dsh-c">${escA(listCust(x.l))}</span><span class="dsh-x">since ${new Date(x.v.at).toLocaleDateString('en-IE',{day:'numeric',month:'short'})}${x.v.by?' · '+escA(x.v.by):''}${listDueKey(x.l)?' · delivers '+fmt(listDueKey(x.l)):''}</span><button class="wl-undo" data-rel1="${escA(x.l.id)}|${escA(x.k)}">Release</button></div>`).join('')}
   </div>`;}).join('');
 }
 function holdGrp(x){return x.v.m==='saw'?(String(x.v.mat||'').trim()||'(material not named)'):('🧰 '+(String(x.v.item||x.v.mat||'').trim()||'fitting'));}
 function bindHoldBook(modes,whoFn){
-  const hs=allHolds(modes,'hold');
+  const hs=lpfHolds(allHolds(modes,'hold'));
   const gname=x=>matKey(holdGrp(x));
   const go=(items,label)=>whoFn('Released — '+label,by=>{releaseHolds(items,by);lsSched();render();toast(items.length+' row'+(items.length!==1?'s':'')+' released — back in the queue as due work');});
   document.querySelectorAll('[data-relg]').forEach(b=>b.onclick=()=>{const items=hs.filter(x=>gname(x)===matKey(b.dataset.relg));if(items.length)go(items,b.dataset.relg);});
