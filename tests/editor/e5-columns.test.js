@@ -1,6 +1,6 @@
 // Editor step 5: the columns of WPF's sheets (Description | Qty | Length | Width | Colour | Edging | Note), no Saw/Fit
 // column (a row with a length or width goes to the Saw, without to Stores), Colour dropdown of the project's materials with
-// "+ Add new material…" (9 Nov: office/PM/Production Manager/Drawing office add with no PIN; Management needs the PIN, else this row only, flagged), Edging suggestions, new rows take the colour
+// "+ Add new material…" (9 Nov: office/PM/Production Manager/Drawing office add with no PIN; Management too since 11 Nov; a failed add → this row only, flagged), Edging suggestions, new rows take the colour
 // of the row above, header carcass/door colour as an optional default. Fake Supabase only.
 // Run: node tests/editor/e5-columns.test.js
 const F = require('../stage3/fix3.js');
@@ -86,13 +86,13 @@ const S_ = (k, v) => `(()=>{const e=document.querySelector('.pod-ovl [data-mr="$
     document.getElementById('me-save').click(); const e2 = document.getElementById('me-err').textContent; document.querySelector('.pod-ovl').remove(); return [e1, e2]; });
   rec('a saw row with no colour: "Pick the material for every saw row ("Gable" (row 1))"', /Pick the material for every saw row \("Gable" \(row 1\)\)/.test(v[0]), v[0]);
   rec('a row with no quantity is refused in plain English', /needs a quantity/.test(v[1]), v[1]);
-  // Management keeps the PIN: Cancel → this row only, amber, told it is flagged, nothing added to the project list
+  // (rule changed by Garry 11 Nov — docs/PLAN-project-details.md Part 1): Management adds project materials with NO PIN too
   const mg = await F.dev(browser, S, 'dash');
   await mg.page.evaluate(() => { localStorage.removeItem('wpfEditPin'); window.__prompts = []; window.__ans = ['Walnut Mystery', null]; window.prompt = m => { window.__prompts.push(m); return window.__ans.length ? window.__ans.shift() : null; }; window.confirm = () => true; openListEditor(null, 'WO-1'); });
   await mg.page.evaluate(S_('0|item', 'Shelf')); await mg.page.evaluate(S_('0|qty', '1')); await mg.page.evaluate(S_('0|mat', '__add'));
   await F.sleep(300);
   const m = await mg.page.evaluate(() => { const s = document.querySelector('.pod-ovl [data-mr="0|mat"]'); return { v: s.value, amber: /fff4d6/.test(s.getAttribute('style') || ''), toast: document.getElementById('toast').textContent, pin: window.__prompts[1] || '' }; });
-  rec('Management: still asked for the PIN, in plain English; Cancel → this row only, amber, flagged, not on the project list', m.v === 'Walnut Mystery' && m.amber && /used on this row only and flagged/.test(m.toast) && /needs the Production Manager, Drawing office or Admin PIN/.test(m.pin) && !S.db.t.project_materials.some(x => x.name === 'Walnut Mystery'), JSON.stringify(m));
+  rec('Management: no PIN asked (rule changed 11 Nov); the new material goes on the project list, not amber', m.v === 'Walnut Mystery' && !m.amber && !m.pin && /added to the/.test(m.toast) && S.db.t.project_materials.some(x => x.name === 'Walnut Mystery' && x.project_id === 'P1'), JSON.stringify(m));
   await mg.close();
   rec('no page errors', !(S.errors || []).length, (S.errors || []).join(' | '));
   await o.close(); await browser.close();

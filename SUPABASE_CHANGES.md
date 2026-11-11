@@ -681,7 +681,7 @@ refused this screen because it is out of date. Refresh the page" when refused (`
 
 ---
 
-## 2026-11-11 — Project details (spec sheets) — PENDING, NOT YET RUN — Garry runs this AFTER the Stage 3 block and BEFORE merging `feature/project-details`
+## 2026-11-11 — Project details (spec sheets) — PENDING, NOT YET RUN — Garry runs this AFTER the Stage 3 block and BEFORE merging `feature/project-details-v2` (carried over from `feature/project-details`, 11 Nov)
 
 **What it does (plain English):**
 - Makes a new table `project_specs`: a project's named spec sheets. A project can have several (Garry, 11 Nov), e.g.
