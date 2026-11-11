@@ -3516,6 +3516,13 @@ function lpfLists(a){const v=lpfSec();return v?a.filter(l=>(l.pid||LPF_NONE)===v
 function lpfHolds(hs){const v=lpfSec();return v?hs.filter(x=>(x.l.pid||LPF_NONE)===v):hs;}
 function lpfName(v){return v===LPF_NONE?'No project':lsProjName(v)||'(project with no name)';}
 function lpfTag(name){const n=String(name||'').trim();return `<span class="lpf-p${n?'':' lpf-p0'}" data-lpfp title="Project (customer)">🏗 ${escA(n||'No project')}</span>`;}
+// With a project picked: what the filter is hiding that can't wait — jobs late for their list or already on a delivery run, lists waiting for their check
+function lpfHidden(){
+  const v=lpfCur();if(!v)return{n:0,txt:''};
+  const pid=lpfJobPid(),today=todayLocal();let late=0,del=0;
+  listsNeeded().forEach(o=>{if((pid(o)||LPF_NONE)===v)return;const i=lsNeedInfo(o,today);if(i.late)late++;else if(i.onDel)del++;});
+  const wc=lsWaitCheckLists().filter(l=>(l.pid||LPF_NONE)!==v).length;
+  return{n:late+del+wc,txt:[late?late+' late':'',del?del+' on a delivery with no list':'',wc?wc+' waiting for check':''].filter(Boolean).join(' · ')};}
 function lpfBarHTML(){
   if(!V2())return'';
   let v=lpfCur();const pid=lpfJobPid(),cnt=new Map(),add=k=>cnt.set(k,(cnt.get(k)||0)+1),need=listsNeeded();
@@ -3532,6 +3539,7 @@ function lpfBarHTML(){
     ${ps.length>=40?`<input id="lpf-q" list="lpf-dl" placeholder="🔍 Type to find a project" autocomplete="off"><datalist id="lpf-dl">${ps.filter(p=>cnt.get(p.id)||p.active!==false).map(p=>`<option value="${escA(nm(p))}"></option>`).join('')}</datalist>`:''}
     ${v?'<button class="btn btn-s" id="lpf-x" style="font-size:13px;padding:7px 12px;font-weight:700">✕ All projects</button>':''}
     <span class="lpf-n" id="lpf-n">${v?`Only <b>${escA(lpfName(v))}</b> — `:''}<b>${N} of ${M}</b> shown</span>
+    ${(h=>h.n?`<button class="btn" id="lpf-warn" style="background:#c0392b;color:#fff;border-color:#c0392b;font-size:13px;font-weight:700;padding:7px 12px;white-space:normal;text-align:left;max-width:100%">⚠ ${escA(h.txt)} in other projects — show all</button>`:'')(lpfHidden())}
   </div>`;
 }
 // An archived list that another list replaced ("Make new list from this"): shown "Superseded (view only)" — no Edit
@@ -3588,7 +3596,7 @@ function lsHomeBind(){
   const q=document.getElementById('lh-q');if(q)q.oninput=()=>{LH.q=q.value;re('lh-q');};
   [['lh-type','type'],['lh-kind','kind'],['lh-rev','rev'],['lh-state','state']].forEach(([id,k])=>{const e=document.getElementById(id);if(e)e.onchange=()=>{LH[k]=e.value;render();};});
   const pjs=document.getElementById('lh-proj');if(pjs)pjs.onchange=()=>{lpfSet(pjs.value);render();};
-  const px=document.getElementById('lpf-x');if(px)px.onclick=()=>{lpfSet('');render();};
+  ['lpf-x','lpf-warn'].forEach(id=>{const px=document.getElementById(id);if(px)px.onclick=()=>{lpfSet('');render();};});
   const pq=document.getElementById('lpf-q');if(pq)pq.onchange=()=>{const k=pq.value.trim().toLowerCase();if(!k)return;const ps=lsProjects(true),nm=p=>String(p.name||'').trim().toLowerCase();
     const hit=ps.find(p=>nm(p)===k)||(a=>a.length===1?a[0]:null)(ps.filter(p=>nm(p).includes(k)));
     if(hit){lpfSet(hit.id);render();}else toast('No single project matches "'+pq.value.trim()+'" — pick it from the list');};
@@ -3793,7 +3801,7 @@ function ltiInner(){
   const nAll=rows.length+wc.length;
   return `<div class="exp-panel lti" id="lti" style="border:2px solid ${rows.some(r=>r.late||r.onDel)?'#c0392b':nAll?'#d4880f':'#9fd8b4'};background:${nAll?'#fffdf7':'#f4fbf6'}">
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
-      <div style="font-size:16px;font-weight:800;color:#14335c">📋 Cutting lists to issue — ${nAll}</div>${pf?`<span class="lpf-n" id="lti-of">of ${pfAll} — only ${escA(lpfName(pf))}</span>`:''}${wc.length?`<span class="chk-wait">${wc.length} waiting for check</span>`:''}
+      <div style="font-size:16px;font-weight:800;color:#14335c">📋 Cutting lists to issue — ${nAll}</div>${pf?`<span class="lpf-n" id="lti-of">of ${pfAll} — only ${escA(lpfName(pf))}</span>${(h=>h.n?`<span class="lti-b" id="lti-hid" style="background:#c0392b;color:#fff;white-space:normal">⚠ ${escA(h.txt)} in other projects</span>`:'')(lpfHidden())}`:''}${wc.length?`<span class="chk-wait">${wc.length} waiting for check</span>`:''}
       ${rows.filter(r=>r.late).length?`<span class="lti-b" style="background:#c0392b;color:#fff">${rows.filter(r=>r.late).length} late</span>`:''}
       <span style="flex:1"></span>
       ${green.length?`<button class="btn btn-g" id="lti-all" style="font-size:13px;padding:8px 14px">✓ Confirm all green (${green.length})</button>`:''}
