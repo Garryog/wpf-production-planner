@@ -4265,7 +4265,9 @@ function seqSpreadDates(houses,start,pace,n,dow){
 function seqHouses(rows){const m=new Map();rows.forEach(r=>{const k=seqHouseOf(r)||'#'+r.id;if(!m.has(k))m.set(k,[]);m.get(k).push(r);});return[...m.values()];}
 // a date moved by n working days, or n weeks (a week landing on a weekend / bank holiday → the next working day; earlier → the one before)
 function seqWd(d,fwd){return isWorkDay(d)?d:(fwd?nextWorkDay(d):prevWorkDay(d));}
-function seqShift(d,n,unit){if(!dmIsDate(d)||!n)return'';return unit==='wd'?dmShiftWd(d,n):seqWd(addDayISO(d,7*n),n>0);}
+/*attack7: dv = a DELIVERY date — by weeks it may land on a Saturday (isDelivDay, like Deliveries); build dates stay working days*/
+function seqDvWd(d,fwd){if(isDelivDay(d))return d;for(let i=0;i<14&&!isDelivDay(d);i++)d=addDayISO(d,fwd?1:-1);return d;}
+function seqShift(d,n,unit,dv){if(!dmIsDate(d)||!n)return'';return unit==='wd'?dmShiftWd(d,n):(dv?seqDvWd:seqWd)(addDayISO(d,7*n),n>0);}
 // → {dateOf(r,o,i) → {job:{deliv,due}} | {req} | {none}} or {err}
 function seqDtCalc(mode,rows,ov){
   const $=s=>ov.querySelector(s);
@@ -4274,7 +4276,7 @@ function seqDtCalc(mode,rows,ov){
     return{dateOf:()=>({job:seqJobDates(X),req:X})};}
   if(mode==='push'){const t=String(($('#sd-n')||{}).value||'').trim();if(!/^\d+$/.test(t)||+t<1||+t>99)return{err:'Type how many (a whole number, 1–99).'};
     const n=+t*(+(($('#sd-dir')||{}).value)||1),u=(($('#sd-u')||{}).value)==='wk'?'wk':'wd';
-    return{dateOf:(r,o)=>{if(o){if(!o.dueDate)return{none:'no build date to move from'};return{job:{due:seqShift(o.dueDate,n,u),deliv:o.delivDate?seqShift(o.delivDate,n,u):''}};}
+    return{dateOf:(r,o)=>{if(o){if(!o.dueDate)return{none:'no build date to move from'};return{job:{due:seqShift(o.dueDate,n,u),deliv:o.delivDate?seqShift(o.delivDate,n,u,1):''}};}
       if(!r.req_date)return{none:'no date to move from'};return{req:seqShift(r.req_date,n,u)};}};}
   if(mode==='spread'){const st=($('#sd-start')||{}).value||'',pace=($('#sd-pace')||{}).value||'nweek',pn=String(($('#sd-pn')||{}).value||'').trim(),dow=+(($('#sd-dow')||{}).value||1);
     const pnI=$('#sd-pn'),dwI=$('#sd-dow');if(pnI)pnI.style.display=pace==='nweek'?'':'none';if(dwI)dwI.style.display=pace==='dow'?'':'none';
