@@ -4457,8 +4457,10 @@ async function seqUndo(pid,redraw){
   const u=SEQ_UNDO;if(!u||u.pid!==pid||!seqUndoLeft(pid)){SEQ_UNDO=null;toast('Undo is no longer available (10 minutes)');if(redraw)redraw();return;}
   if(!confirm('Put back the dates of the last change ('+(u.jobs.length+u.rows.length)+' row'+(u.jobs.length+u.rows.length!==1?'s':'')+')?'))return;
   seqBy(async by=>{
+    /*attack8 4c (HIGH): like Approve, re-read the planner FIRST — another PC may have moved one of these jobs since; that job is not undone*/
+    if(u.jobs.length&&!(await freshForImport())){toast('The planner could not be reloaded — nothing undone. Check the connection and try again.',true);if(redraw)redraw();return;}
     const per={},wos=[],since=[];
-    u.jobs.forEach(j=>{const o=dmFind(j.wo);if(!o||(o.dueDate||'')!==j.after.dueDate||(o.delivDate||'')!==j.after.delivDate){since.push(j.wo);return;}
+    u.jobs.forEach(j=>{const o=dmFind(j.wo);if(!o||(o.dueDate||'')!==j.after.dueDate||(o.delivDate||'')!==j.after.delivDate){const h=o&&(o.dueHist||[]).slice(-1)[0];since.push(j.wo+(h&&h.by?' (changed since by '+h.by+' — not undone)':' (changed since — not undone)'));return;}
       per[j.wo]={due:j.before.dueDate,deliv:j.before.delivDate,delivClear:!j.before.delivDate&&!!j.after.delivDate};wos.push(j.wo);});
     const fxd=ROLE!=='pm'?{frozenDays:seqFixedDays()}:{}; /*attack6: office / Production Manager Undo inside the fixed window is counted too*/
     const res=wos.length?moveDates(wos,{per},{why:'Undo',note:''},by,{src:'undo',...fxd}).apply():{moved:0,rows:[]};
