@@ -2558,7 +2558,8 @@ async function lsGet(q){
   database's "now" is at least U + (performance.now() − P), whatever this PC's clock says*/
 let SRV_T=null;
 function srvSeen(r){const u=Date.parse(r&&r.updated_at);if(!u)return;const v=u-performance.now();if(SRV_T==null||v>SRV_T)SRV_T=v;}
-function srvAge(t){t=Date.parse(t)||0;const a=Date.now()-t;return SRV_T==null?a:Math.min(a,SRV_T+performance.now()-t);}
+/*attack7: once a database time is known it is used ALONE (a slow PC no longer shows "Apply now" minutes late); this PC's clock only before any row came in*/
+function srvAge(t){t=Date.parse(t)||0;return SRV_T==null?Date.now()-t:SRV_T+performance.now()-t;}
 function lsPut(t,rows,part){
   const M=LST[LS_T[t]];let n=0;
   (rows||[]).forEach(r=>{
@@ -4577,6 +4578,22 @@ function seqReqPage(app){
     ${dec.length?`<div style="font-size:14px;font-weight:700;color:#14335c;margin:14px 0 6px">Last ${dec.length} decided</div>${dec.map(q=>seqReqCardHTML(q,false)).join('')}`:''}
   </div></div>`;
   seqReqBind(app,()=>render());
+  seqReqTick(all);
+}
+/*attack7: redraw the requests page the moment an approval (or another screen's claim) passes 2 minutes, so "Apply now" shows on
+  time instead of at the next 2-minute refresh. One timer; never while a dialog is open or someone is typing (tries again shortly).*/
+let SEQ_REQ_T=null;
+function seqReqTick(all){
+  clearTimeout(SEQ_REQ_T);SEQ_REQ_T=null;let w=Infinity;
+  (all||[]).forEach(q=>{if(!seqReqUnapplied(q)||SEQ_APPLYING.has(q.id)||seqReqStuck(q))return;
+    w=Math.min(w,SEQ_REQ_STALE_MS-srvAge(q.decided_at||q.updated_at));
+    if(seqReqClaimBy(q)&&!SEQ_MYCLAIM.has(q.id))w=Math.max(w,SEQ_REQ_STALE_MS-srvAge(q.updated_at));});
+  if(w===Infinity)return;
+  SEQ_REQ_T=setTimeout(function go(){
+    const pg=document.getElementById('sr-pg');if(!pg)return;
+    const ae=document.activeElement;
+    if(document.querySelector('.pod-ovl')||(ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName))){SEQ_REQ_T=setTimeout(go,3000);return;}
+    render();},Math.max(250,Math.min(w,SEQ_REQ_STALE_MS)+400));
 }
 function seqReqBind(root,redraw){
   root.querySelectorAll('[data-srok]').forEach(b=>b.onclick=()=>{const q=LST.sr.get(b.dataset.srok);if(!q)return;
