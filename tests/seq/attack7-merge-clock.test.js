@@ -302,7 +302,8 @@ const prodDev = async (browser, S, who, extra) => { const p = await X.dev(browse
     await pm.page.evaluate(() => render()); await tick(pm.page, ['SD']); await X.dtOpen(pm.page, '[data-seqtool="set"]'); await sleep(200);
     await X.dtFill(pm.page, { 'sd-date': '2027-03-17' }); pv = await X.dtWhy(pm.page, 'Site not ready');
     const sug2 = await pm.page.evaluate(() => (document.querySelector('.seq-dtdlg #sd-sug') || {}).textContent || '');
-    rec('3e set required Wed 17 Mar 2027 (St Patrick\'s Day) → warned "not a working day" before Save', /not a working day/.test(sug2) || /bank holiday|not a working day/i.test(pv.prev), sug2 + ' | ' + pv.prev);
+    // (rule changed by Garry 11 Nov): a Set onto a bank holiday is MOVED to the next delivery day and the preview says so
+    rec('3e set required Wed 17 Mar 2027 (St Patrick\'s Day) → moved to Thu 18 Mar, said before Save (Garry 11 Nov)', /17 Mar is a bank holiday[\s\S]*moved to 18 Mar/.test(sug2), sug2 + ' | ' + pv.prev);
     await closeDlg(pm.page);
     // spread 3 houses from Tue 16 Mar 2027, 1 per working day → 16, 18, 19 Mar (17 skipped); builds 11, 12, 15 Mar
     await pm.page.evaluate(() => render()); await tick(pm.page, ['SC', 'SD', 'SW']); await X.dtOpen(pm.page, '[data-seqtool="spread"]'); await sleep(200);
