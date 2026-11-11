@@ -251,8 +251,9 @@ details.lti-other{margin-bottom:14px}details.lti-other>summary{cursor:pointer;fo
 .ph-chip b{color:#0d6e46}
 .del-panel{background:#fff;border:1px solid var(--border);border-radius:10px;padding:16px 18px;margin-bottom:14px}
 .dgrp{margin-bottom:6px}
-.dgrp-h{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.4px;margin:10px 0 5px;cursor:pointer;user-select:none}
+.dgrp-h{display:flex;flex-wrap:wrap;min-width:0;align-items:center;gap:2px 8px;font-size:11px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.4px;margin:10px 0 5px;cursor:pointer;user-select:none}
 .dgrp-h:hover{color:#1a56db}
+.dgrp-n{min-width:0;overflow-wrap:anywhere}
 .dgrp-h .gcnt{font-weight:400;color:var(--t3);text-transform:none;letter-spacing:0;font-size:10px}
 .dpool-chips{display:flex;flex-wrap:wrap;gap:6px}
 .dchip{width:216px;box-sizing:border-box;min-width:0;overflow:hidden;background:#fff;border:1px solid #cfd6df;border-radius:7px;padding:6px 8px;font-size:11px;cursor:grab;user-select:none;box-shadow:0 1px 2px rgba(15,25,40,.06)}
@@ -261,7 +262,7 @@ details.lti-other{margin-bottom:14px}details.lti-other>summary{cursor:pointer;fo
 .dchip-top b{font-family:monospace;font-size:12px;font-weight:700;color:#14335c;min-width:0;flex:1 1 80px;overflow-wrap:anywhere}
 /*v-deliv D4: card rows — WO + buttons · Floor / Unit · title · dates · chips. Nothing may spill out of the card.*/
 .dchip-fu{display:flex;flex-wrap:wrap;gap:4px;margin-top:2px;min-width:0}
-.dchip-fu .dfu{display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;box-sizing:border-box}
+.dchip-fu .dfu{display:inline-block;max-width:100%;box-sizing:border-box;white-space:normal;overflow-wrap:anywhere}
 .dchip-fu .fu-fl+.fu-un{margin-left:0}
 .dchip-dates{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:4px;min-width:0}
 .dchip-dates .dm-chip,.dchip-wkb .dm-chip{margin:0}
@@ -286,7 +287,7 @@ details.lti-other{margin-bottom:14px}details.lti-other>summary{cursor:pointer;fo
 .dchip .dchip-btns button:hover{background:#dde3ea;color:var(--text)}
 .dchip .dchk.on{color:#0b7e44;font-weight:700}
 .dchip-t{font-size:11px;color:var(--text);line-height:1.35;margin-top:3px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
-.dchip-c{font-size:10px;color:var(--t3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dchip-c{font-size:10px;color:var(--t3);margin-top:2px;overflow:hidden;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .dchip.done{background:#eefbf3;border-color:#b3e0c4}
 .dchip.done .dchip-t,.dchip.done .dchip-top b{text-decoration:line-through;opacity:.6}
 .dchip.dispd{background:#e8f1fd;border-color:#9cbce8}
@@ -6972,7 +6973,7 @@ function dchip(o,showCust){
     ${wkBtnsOk(o)?(nw=>`<div class="dchip-wkb"><button class="dwk-btn" data-wknext="${escA(o.wo)}" data-wk="${escA(nw)}" title="Move the due date${o.delivDate?' and the delivery date':''} one week on — asks why">→ Wk ${wkNum(nw)}</button><button class="dwk-btn" data-wkpick="${escA(o.wo)}" title="Pick any week — asks why">Move to week…</button></div>`)(wkPlus(delPoolWk(o),1)):''}${o.delRebook&&!o.delDay?`<div class="dm-moved" title="${escA('Taken off '+(o.delRebook.was||'').split('|').slice(0,2).join(' ')+' by '+(o.delRebook.by||'')+(o.delRebook.why?' — '+o.delRebook.why:''))}">${o.delRebook.nd?'🚚 not delivered Wk '+escA(o.delRebook.nd)+' — rebook':'📅 date moved — rebook'}</div>`:''}${o.dueMv&&o.dueMv.loaded&&dStage(o)&&dStage(o)!=='deliv'?`<div class="dm-moved" style="color:#b42318">📅 date moved after loading — check</div>`:''}
     ${st?`<div class="dstg s-${st}">${dStageLbl[st]}${dStageTime(o)?' '+dStageTime(o):''}${st==='deliv'&&o.delivBy?' — '+escA(o.delivBy):st==='load'&&o.ldBy?' — '+escA(o.ldBy):''}</div>`:''}
     ${isOnHold(o)?`<div class="rdy-tag" style="background:#fde8e8;color:#b42318" title="Step 12 in Cienapps — kept here because it's already loaded / on the road">⏸ ON HOLD in Cienapps</div>`:''}${rd?`<div class="rdy-tag">${RDY_LBL[rd.lvl]}</div>`:''}${(o.delMoves||[]).length?`<div class="dmoved" title="${escA(o.delMoves.map(m=>m.why+' — '+m.by).join(' | '))}">🚚 rebooked ×${o.delMoves.length}</div>`:''}
-    ${!o.manual&&(afterDelivOn(o)||delivMvOn(o))?`<div>${delivFlagChips(o)}</div>`:''}${siteChip(o)}${showCust?`<div class="dchip-c">${escA(o.customer)}</div>`:''}
+    ${!o.manual&&(afterDelivOn(o)||delivMvOn(o))?`<div>${delivFlagChips(o)}</div>`:''}${siteChip(o)}${showCust?`<div class="dchip-c" title="${escA(o.customer)}">${escA(o.customer)}</div>`:''}
   </div>`;
 }
 
@@ -7011,7 +7012,7 @@ function renderDeliveries(app){
   gkeys.forEach(k=>grps[k].sort(later?((a,b)=>(a.customer||'').localeCompare(b.customer||'')||woCmp(a,b)):woCmp));
   const gName=k=>later?'Wk '+wkNum(k)+' — due from '+dShort(k):k;
   const gHTML=(k,lbl,list,sty)=>`<div class="dgrp">
-        <div class="dgrp-h" data-grp="${escA(k)}"${sty?` style="${sty}"`:''}>${escA(lbl)}<span class="gcnt">${list.length} job${list.length!==1?'s':''} · click to select all</span></div>
+        <div class="dgrp-h" data-grp="${escA(k)}"${sty?` style="${sty}"`:''}><span class="dgrp-n">${escA(lbl)}</span><span class="gcnt">${list.length} job${list.length!==1?'s':''} · click to select all</span></div>
         <div class="dpool-chips">${list.map(o=>dchip(o,later||k==='__rebook')).join('')}</div>
         <div class="dgrp-f">${list.length} job${list.length!==1?'s':''} · €${Math.round(list.reduce((a,o)=>a+(+o.value||0),0)).toLocaleString()}</div>
       </div>`;
