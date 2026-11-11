@@ -17,6 +17,8 @@ numbers. No table, no column, no data is touched, so no GRANT lines. Works wheth
 Safe to run twice.
 
 **Rollback:** `drop trigger if exists pp_pmerged_guard on production_planner;`
+**Restoring a backup taken before a merge:** drop the trigger FIRST (line above). Otherwise the database refuses the restore, because
+the backup still has the merged P-number as a job. Once the restore is done, run the block again to put the rule back.
 
 ### Steps for Garry
 1. Supabase → WPF project → **SQL Editor** → **New query**. Copy everything in the grey box below, paste, **Run**. "Success. No rows returned" = done.
@@ -25,7 +27,7 @@ Safe to run twice.
 ```sql
 -- ===================== MERGED P-NUMBERS STAY MERGED (L4b, attack9 M4) =====================
 -- A save may not bring back a P-number that the planner record lists as merged (settings.pMerged[].wo) and that is no longer a job.
-create or replace function pp_pmerged_guard() returns trigger language plpgsql as $$
+create or replace function pp_pmerged_guard() returns trigger language plpgsql set search_path = public as $$
 declare back text;
 begin
   if new.orders is null then return new; end if;

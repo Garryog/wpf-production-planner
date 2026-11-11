@@ -1,6 +1,6 @@
 -- ===================== MERGED P-NUMBERS STAY MERGED (L4b, attack9 M4) =====================
 -- A save may not bring back a P-number that the planner record lists as merged (settings.pMerged[].wo) and that is no longer a job.
-create or replace function pp_pmerged_guard() returns trigger language plpgsql as $$
+create or replace function pp_pmerged_guard() returns trigger language plpgsql set search_path = public as $$
 declare back text;
 begin
   if new.orders is null then return new; end if;
