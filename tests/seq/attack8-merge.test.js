@@ -50,7 +50,10 @@ const HELP = `(()=>{window.W=ms=>new Promise(r=>setTimeout(r,ms));
         return route.fulfill({ status: 404, body: '' }); });
       await t.page.reload(); await t.page.waitForFunction(() => typeof analyzeImport === 'function'); await t.page.waitForTimeout(500);
       const out = await t.page.evaluate(async roles => { const W = ms => new Promise(r => setTimeout(r, ms)); const o = {};
-        for (const r of roles) { ls.set('wpfPin_' + r, pins()[r]); ROLE = r; if (typeof prodTab !== 'undefined') prodTab = 'today'; render(); await W(150); o[r] = document.getElementById('app').innerText.replace(/\d{1,2}:\d{2}(:\d{2})?/g, 'hh:mm').replace(/📦 Items sent/g, '').replace(/\s+/g, ' ').trim(); }
+        for (const r of roles) { ls.set('wpfPin_' + r, pins()[r]); ROLE = r; if (typeof prodTab !== 'undefined') prodTab = 'today'; render(); await W(150); o[r] = document.getElementById('app').innerText.replace(/\d{1,2}:\d{2}(:\d{2})?/g, 'hh:mm').replace(/📦 Items sent/g, '').replace(/\s+/g, ' ')
+          // intended after this test's baselines (11 Nov, S1 / S2): the board step drop-down gains JOB SHIPPED / INSTALLED / COMPLETED after
+          // PALLETED, and the PM view gains a 📦 Shipped tab after 🔢 Sequence — exactly those two are ignored, nothing else
+          .replace(/PALLETED JOB SHIPPED INSTALLED COMPLETED /g, 'PALLETED ').replace(/🔢 Sequence 📦 Shipped/g, '🔢 Sequence').trim(); }
         ROLE = 'office'; render(); return o; }, roles);
       await t.close(); return out;
     };
