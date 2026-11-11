@@ -10011,6 +10011,7 @@ function analyzeImport(input,source){
     if(Array.isArray(input))input=prepImport(input);
     const board=boardMap(),recs=input.recs||[],skip=input.skip||{};
     const dups=[],newOrders=[],updates=[],fills=[],povs=[],synced=[],autoTag=[],shipped=[],inTransit=[],dispGaps=[],flagged=[],stepDiffs=[],exCounts={},marks=[],unsched=[],pre={},oldDates=[],delivQ=[];
+    const impJobs=[]; /*L4b: the Cienapps jobs in this file (new and existing) — a P-number for the same house is offered for merging*/
     let unchanged=0,excluded=0;
     const sh=s=>String(s||'—').replace(/^\d+\.\s*/,'');
     recs.forEach(r=>{
@@ -10046,13 +10047,14 @@ function analyzeImport(input,source){
         if(r.has.sheets)o.sheetsCien=r.sheets;
         if(r.has.delivDate){o.delivDate=r.delivDate;o.origDelivDate=r.delivDate;if(o.dueDate&&o.dueDate>r.delivDate)flags.push('build date after the delivery date — check');} /*dates phase 2*/
         if(adds)o.adds=adds;
-        newOrders.push(o);
+        newOrders.push(o);impJobs.push(o);
         if(r.dupInfo)dups.push({wo:o.wo,...r.dupInfo});
         if(flags.length)flagged.push({wo:r.wo,title:o.title,why:flags.join(' · '),isNew:true});
         return;
       }
       // ---- existing job
       pre[r.key]=preOf(ex); // the job as it stood when this plan was worked out (Apply compares it with the latest)
+      impJobs.push(ex);
       const set={},fill={},what=[];
       const ch=(k,v,label)=>{if(v===undefined)return;
         // a planner override (job info changed in the planner, 9 Nov): Cienapps bringing the planner's value clears it; any other value is noted, the planner's kept
@@ -10153,7 +10155,8 @@ function analyzeImport(input,source){
       importError('None of the '+(input.rows||recs.length)+' rows had a usable WO number, so nothing was imported.','Check that the WO number column is mapped to the column holding values like WO-2604-7.');
       return null;
     }
-    return{source:source||'file',input,pre,oldDates,delivQ,dups,skipped:input.skipped||[],marks,unsched,autoTag,newOrders,updates,fills,povs,synced,shipped,inTransit,dispGaps,flagged,folds:input.folds||[],stepDiffs,exCounts,
+    const pMerge=V2()?pMergePlan(impJobs):[]; /*L4b*/
+    return{source:source||'file',input,pre,oldDates,delivQ,pMerge,dups,skipped:input.skipped||[],marks,unsched,autoTag,newOrders,updates,fills,povs,synced,shipped,inTransit,dispGaps,flagged,folds:input.folds||[],stepDiffs,exCounts,
       removals:[],backfills:[],
       counts:{added,updated,skipped:unchanged,noWo:skip.noWo||0,totals:skip.totals||0,snag:skip.snag||0,excluded,shipped:shipped.length,folded:(input.folds||[]).length,rows:input.rows||recs.length}};
 }
@@ -10232,6 +10235,7 @@ function renderImportPreview(plan){
     </div>`:''}
     ${section('⤼ Skipped — rows in the file that are not work orders','#d1d5db','#f9fafb',plan.skipped||[],s=>line(s.wo,'line '+s.line,escA(s.why)),20)}
     ${section('⚑ Flagged — check these','#e57368','#fdf3f2',plan.flagged,f=>line(f.wo,f.title,escA(f.why)),20)}
+    ${pMergeHTML(plan)}
     ${section('🆕 New work orders — will be added and scheduled to their due-date week','#b3e0c4','#f4fbf6',plan.newOrders,o=>line(o.wo,o.title,o.hours+'h · due '+(o.dueDate?fmt(o.dueDate):'—')),15)}
     ${section('✏ Other updates to existing work orders','#f5d89b','#fffbeb',plan.updates.filter(u=>!u.dateChanged||u.what),u=>line(u.wo,u.exTitle,escA(u.what||'due date')),15)}
     <div style="display:flex;gap:10px;margin-top:6px;flex-wrap:wrap">
@@ -10250,6 +10254,7 @@ function renderImportPreview(plan){
     document.querySelectorAll('[data-rmv]').forEach(s=>{if(s.value)moves[s.dataset.rmv]=s.value;});
     document.querySelectorAll('[data-dk]').forEach(r=>{if(r.checked)dueDec[r.dataset.dk]=r.value;});
     document.querySelectorAll('[data-dlk]').forEach(r=>{if(r.checked)delivDec[r.dataset.dlk]=r.value;}); /*dates round 2*/
+    const pmDec=pMergeDec();if(pmDec===null)return; /*L4b: the ticked P-number merges (one WO per P-number, one P-number per WO)*/
     const ns=IMPPLAN.shipped.length;
     if(ns>20&&!await backupFirst('import moving '+ns+' work orders to Shipped'))return;
     if(!IMPPLAN)return;
@@ -10270,11 +10275,12 @@ function renderImportPreview(plan){
       const chg=new Set(d.changed.map(x=>x.key));
       document.querySelectorAll('[data-dk]').forEach(r=>{const k=woKey(r.dataset.dk);if(chg.has(k))r.checked=r.value==='keep';else if(dueDec[r.dataset.dk])r.checked=dueDec[r.dataset.dk]===r.value;});
       document.querySelectorAll('[data-rmv]').forEach(s=>{if(chg.has(woKey(s.dataset.rmv)))return;if(moves[s.dataset.rmv]&&[...s.options].some(o=>o.value===moves[s.dataset.rmv]))s.value=moves[s.dataset.rmv];});
+      document.querySelectorAll('[data-pmg]').forEach(c=>{c.checked=(pmDec[c.dataset.pmg]||[]).includes(c.value);}); /*L4b: the person's ticks kept*/
       toast('The plan changed while you were reviewing — check the preview again');
       return;
     }
     // Same or fewer changes: each dropped one was either already applied by another PC, or edited there (the planner's edit wins)
-    fresh.moves=moves;fresh.dueDec=dueDec;fresh.delivDec=delivDec;
+    fresh.moves=moves;fresh.dueDec=dueDec;fresh.delivDec=delivDec;fresh.pmDec=pmDec;
     applyImport(fresh);IMPPLAN=null;
   };
 }
@@ -10432,6 +10438,7 @@ function applyImport(plan){
       ${V2()?'<div style="margin-top:14px">'+listsToIssueHTML()+'</div>':''}
     </div>`;
     if(el&&V2()){LTI.afterImp=true;ltiBind();}
+    if(V2()&&plan.pmDec&&Object.keys(plan.pmDec).length)PMERGE_RUN=pMergeAll(plan.pmDec,(plan.newOrders||[]).map(o=>woKey(o.wo))); /*L4b*/
     toast(`Import applied — ${fresh.length} added, ${(plan.updates||[]).length} updated${nShip?', '+nShip+' to Shipped':''}`);
 }
 
@@ -11421,6 +11428,109 @@ async function pBare(o){const why=[];
   else{try{if((await lsLiveFor(o.wo)).length)why.push('a cutting list');}catch(e){why.push('(the lists could not be checked)');}}
   const t0=Date.parse(((o.log||[])[0]||{}).at||'');if(!(t0>Date.now()-60*60e3))why.push('it is more than an hour old');
   return why;}
+/* ---------- L4b (Job B part 3; ROADMAP L4 "NEVER two jobs for one unit"): a P-number folded into the Cienapps WO ----------
+   When an import brings a Cienapps WO for the same house as a live P-number (the B0 key: same project + floor + unit, the
+   kinds meet), the preview lists the pair with a tick — pre-ticked ONLY when the key says "same" and it is one-to-one (the
+   P-number matches no other WO, the WO no other P-number, and the planner has no other Cienapps WO for that house). Anything
+   "not sure" is shown unticked with the reason: a person decides, the planner never guesses. Lists switched on only.
+   Ticked at Apply (pMerge): the WO survives with Cienapps' own fields; the P-job's live cutting list(s) move onto it (refused
+   when BOTH have a live list — "archive one first"); its history, date history, delivery booking and planner fields are
+   copied where the WO has none (both booked → the WO's booking kept, flagged); the higher step; the planner's hand-typed due
+   date is kept and Cienapps' date listed under "Dates to change in Cienapps" (Q9, ASSUMED); its sequence row is handed over
+   (same row: position and Johnny's tick kept). The P-job then leaves the job list — NEVER just deleted: a full copy stays on
+   the WO (pFrom, permanent) and in settings pMerged. */
+let PMERGE_RUN=null;
+const PM_SKIP=new Set(['wo','ref','floor','unit','f','u','title','customer','value','hours','hoursEstimated','hoursSrc','dueDate','origDueDate','dueKeep','dueHist','step','cienStep','salesRep','orderNo','sheetsCien','adds','log','pid','pov','plannedWeek','delivDate','origDelivDate','delivKeep','notes','pFrom','manual','stepHand']);
+const PM_DEL=['delv','delVeh','delDay','delWk','delLoadedAt','delDispAt','delDelivAt','delDone','delRebook','delvOverride','holdDel'];
+function pmBooked(o){return !!(o&&(o.delVeh||o.delDay||o.delWk||o.delLoadedAt||o.delDispAt));}
+function pmLbl(o){return [fuF(o)?'Fl '+fuF(o):'',fuU(o)?'Unit '+fuU(o):'',o.title||''].filter(Boolean).join(' · ');}
+function pMergePlan(js){
+  const ps=DB.orders.filter(o=>pIsP(o.wo)&&pLive(o));if(!ps.length)return[];
+  const ws=(js||[]).filter(o=>o&&!pIsP(o.wo)&&pLive(o)&&!isOnHold(o));if(!ws.length)return[];
+  const wk=new Map(ws.map(w=>[w.wo,jobKey(w)])),pairs=[];
+  ps.forEach(p=>{const pk=jobKey(p);ws.forEach(w=>{const k=wk.get(w.wo),m=keyMatch(pk,k);
+    if(m.r==='different'||!pKindsMeet(p.title,w.title))return;
+    if(m.r==='unsure'&&!(pk.u&&k.u&&keyUBase(pk.u)===keyUBase(k.u)))return; // a blank or other unit is no reason to offer it
+    pairs.push({p:p.wo,w:w.wo,key:woKey(w.wo),r:m.r,why:m.why,pT:pmLbl(p),wT:pmLbl(w)});});});
+  pairs.forEach(x=>{const np=pairs.filter(y=>y.p===x.p).length,nw=pairs.filter(y=>y.key===x.key).length;
+    const p=DB.orders.find(o=>o.wo===x.p),other=pSameHouseAll(p).filter(o=>!pIsP(o.wo)&&woKey(o.wo)!==x.key);
+    x.certain=x.r==='same'&&np===1&&nw===1&&!other.length;
+    if(!x.certain)x.why=np>1?'this P-number could be more than one WO in this file':nw>1?'more than one P-number could be this WO':other.length?'the planner already has '+other.map(o=>o.wo).join(', ')+' for this house':x.why;});
+  return pairs;
+}
+function pMergeHTML(plan){const a=plan.pMerge||[];if(!a.length)return'';
+  return `<div id="imp-pm" style="background:#f3effc;border:1px solid #7c5cd6;border-radius:8px;padding:10px 13px;margin-bottom:10px">
+    <div style="font-size:13px;font-weight:700;margin-bottom:4px">🔗 P-numbers that now have a Cienapps WO — merge (never two jobs for one house)</div>
+    <div style="font-size:12px;color:var(--t2);margin-bottom:6px">Ticked = the P-number's cutting list, history, dates and delivery booking move onto the Cienapps WO and the P-number is retired (a full copy is kept). Ticked already only when it is certainly the same house. Not sure? Leave it unticked — nothing is merged.</div>
+    ${a.map(x=>`<label class="imp-pmr" style="display:flex;gap:8px;align-items:flex-start;padding:6px 0;border-top:1px solid #e2d9f7;font-size:13px;min-height:44px;cursor:pointer"><input type="checkbox" data-pmg="${escA(x.p)}" value="${escA(x.w)}"${x.certain?' checked':''} style="width:22px;height:22px;flex-shrink:0;margin-top:1px"><span style="min-width:0;overflow-wrap:anywhere"><b style="color:#7c5cd6">${escA(x.p)}</b> ${escA(x.pT)} → <b>${escA(x.w)}</b> ${escA(x.wT)}<br><span style="font-size:11px;font-weight:600;color:${x.certain?'#0d6e46':'#8a5a00'}">${x.certain?'✓ Same project, floor and unit':'❓ Not sure — '+escA(x.why)+'. Tick only if it is the same house.'}</span></span></label>`).join('')}
+  </div>`;}
+// the ticks → {P: [W]}; null (and nothing applied) when one P-number is ticked for two WOs or one WO for two P-numbers
+function pMergeDec(){const d={},byW={};
+  document.querySelectorAll('[data-pmg]').forEach(c=>{if(!c.checked)return;(d[c.dataset.pmg]=d[c.dataset.pmg]||[]).push(c.value);(byW[woKey(c.value)]=byW[woKey(c.value)]||[]).push(c.dataset.pmg);});
+  const bp=Object.keys(d).find(k=>d[k].length>1),bw=Object.keys(byW).find(k=>byW[k].length>1);
+  if(bp){alert(bp+' is ticked to merge into '+d[bp].join(' and ')+'.\n\nA P-number merges into ONE work order — untick the others. Nothing was imported yet.');return null;}
+  if(bw){alert(byW[bw].join(' and ')+' are both ticked to merge into '+bw+'.\n\nOnly one P-number can merge into a work order — untick the other (if both are for the same house, sort the lists out first). Nothing was imported yet.');return null;}
+  return d;}
+async function pMergeAll(dec,fresh){const by=lqBy(''),out=[],nw=new Set(fresh||[]);
+  for(const [P,ws] of Object.entries(dec||{})){const W=(ws||[])[0];if(!W)continue;
+    try{out.push(await pMerge(P,W,by,nw.has(woKey(W))));}catch(e){out.push({p:P,w:W,ok:false,why:e.message});}}
+  if(out.some(x=>x.ok))sched();
+  const el=document.getElementById('iprev'),h=`<div id="imp-pmres" style="margin-top:10px;background:#f3effc;border:1px solid #7c5cd6;border-radius:8px;padding:8px 12px;font-size:13px">${out.map(x=>x.ok?`<div>🔗 <b>${escA(x.p)}</b> merged into <b>${escA(x.w)}</b>${x.notes&&x.notes.length?` — ${escA(x.notes.join(' · '))}`:''}</div>`:`<div style="color:#b42318">✕ <b>${escA(x.p)}</b> NOT merged into ${escA(x.w)} — ${escA(x.why)}</div>`).join('')}</div>`;
+  if(el&&tab==='i')el.insertAdjacentHTML('beforeend',h);else try{render();}catch(e){}
+  const n=out.filter(x=>x.ok).length,bad=out.length-n;
+  if(out.length)toast(n+' P-number'+(n!==1?'s':'')+' merged into the Cienapps WO'+(bad?' · '+bad+' NOT merged — see the import screen':''),!!bad);
+  return out;}
+async function pMerge(P,W,by,wNew){
+  const find=w=>DB.orders.find(o=>woKey(o.wo)===woKey(w));
+  let p=find(P),w=find(W);
+  if(!p)return{p:P,w:W,ok:false,why:(DB.pMerged||[]).some(x=>x.wo===P&&woKey(x.into)===woKey(W))?'already merged (another PC)':P+' is no longer in the planner'};
+  if(!w)return{p:P,w:W,ok:false,why:W+' is not in the planner'};
+  if(!pIsP(p.wo)||pIsP(w.wo))return{p:P,w:W,ok:false,why:'only a P-number merges into a Cienapps WO'};
+  if(!pLive(p)||!pLive(w))return{p:P,w:W,ok:false,why:'one of them is already shipped or delivered'};
+  const m=keyMatch(jobKey(p),jobKey(w));if(m.r==='different'||!pKindsMeet(p.title,w.title))return{p:P,w:W,ok:false,why:'not the same house ('+m.why+')'};
+  // the cutting lists — asked of the database, never just this screen's copy: one live list per WO
+  let pl,wl;try{pl=await lsLiveFor(p.wo);wl=await lsLiveFor(w.wo);}catch(e){return{p:P,w:W,ok:false,why:'the cutting lists could not be checked ('+e.message+') — nothing changed; it is offered again on the next import'};}
+  if(pl.length&&wl.length)return{p:P,w:W,ok:false,why:'both have a live cutting list ("'+pl[0].name+'" and "'+wl[0].name+'") — archive one first, then import again'};
+  p=find(P);w=find(W);if(!p||!w)return{p:P,w:W,ok:false,why:'changed on another screen meanwhile — import again'};
+  const at=nowISO(),snap=JSON.parse(JSON.stringify(p)),notes=[];
+  pl.forEach(l=>{listTag(l,w.wo,true,by);listTag(l,p.wo,false,by);});
+  if(pl.length)notes.push('list '+pl.map(l=>'"'+l.name+'"').join(', ')+' moved');
+  // step: the further on of the two
+  const sc=p.step&&w.step?stepCmp(p.step,w.step):null;if(sc!==null&&sc>0&&!stepIsShipped(p.step)){w.step=p.step;storeStamp(w,at);notes.push('step '+stepShort(p.step)+' (the planner was further on)');}
+  // week: the planner's (a WO new in this import only has the automatic due-date week)
+  if(p.plannedWeek&&(wNew||!w.plannedWeek)&&w.plannedWeek!==p.plannedWeek){w.plannedWeek=p.plannedWeek;if(wNew)orig[w.wo]=w.plannedWeek;}
+  // hours typed by hand on the P-job win over an estimate
+  if(hSrc(p)==='hand'&&hSrc(w)!=='hand'&&p.hours!=null){w.hours=p.hours;w.hoursSrc='hand';w.hoursEstimated=false;}
+  // due date (Q9 ASSUMED): the planner's hand-typed date is kept; Cienapps' date goes on "Dates to change in Cienapps"
+  const wMoved=!!w.dueKeep||(w.dueHist||[]).some(x=>x.src!=='cienapps'&&(x.f||'due')==='due');
+  if(p.dueDate&&p.dueDate!==w.dueDate){if(!wMoved){w.dueKeep=w.dueDate||'';w.dueDate=p.dueDate;notes.push('due '+fmt(p.dueDate)+' kept (Cienapps has '+(w.dueKeep?fmt(w.dueKeep):'none')+' — listed under Dates to change in Cienapps)');}
+    else notes.push(W+'\'s own moved due date kept ('+P+' had '+fmt(p.dueDate)+')');}
+  if(p.delivDate&&p.delivDate!==(w.delivDate||'')&&!w.delivKeep){w.delivKeep=w.delivDate||'-';w.delivDate=p.delivDate;}
+  w.dueHist=(w.dueHist||[]).concat(p.dueHist||[]).sort((a,b)=>String(a.at||'').localeCompare(String(b.at||''))).slice(-DUE_HIST_MAX);if(!w.dueHist.length)delete w.dueHist;
+  // delivery booking: the WO's own wins when both are booked
+  if(pmBooked(p)&&pmBooked(w))notes.push('⚠ both were booked for delivery — '+W+'\'s booking kept, '+P+'\'s was '+[p.delDay,vehLbl(p.delVeh)].filter(Boolean).join(' ')+' (check Deliveries)');
+  else if(pmBooked(p))PM_DEL.forEach(k=>{if(p[k]!=null&&p[k]!=='')w[k]=p[k];});
+  else if(p.delv&&!w.delv)w.delv=true;
+  // any other planner field the WO doesn't have yet
+  Object.keys(p).forEach(k=>{if(PM_SKIP.has(k)||PM_DEL.includes(k))return;if((w[k]==null||w[k]===''||w[k]===false)&&p[k]!=null&&p[k]!==''&&p[k]!==false)w[k]=p[k];});
+  if(p.notes&&!String(w.notes||'').includes(p.notes))w.notes=[w.notes,p.notes].filter(Boolean).join(' · ');
+  // history: both logs, in time order, then the merge line
+  w.log=(w.log||[]).concat((p.log||[]).map(x=>({...x,what:'['+P+'] '+(x.what||'')}))).sort((a,b)=>String(a.at||'').localeCompare(String(b.at||''))).slice(-60);
+  // the sequence row (PM sequence installed): the same row is handed to the WO, so its place and Johnny's tick stay
+  if(seqVis()){const r=seqWoRow(p.wo),rw=seqWoRow(w.wo);
+    if(r&&!rw)try{const a=await lsRpc('seq_unmatch',{p_id:r.id,p_expect:null,p_by:by,p_why:P+' merged into '+W});
+      const b=a&&a.ok?await lsRpc('seq_match',{p_id:r.id,p_wo:w.wo,p_expect:null,p_how:'confirmed',p_by:by}):a;
+      notes.push(b&&b.ok?'sequence row handed over':'⚠ sequence row not handed over ('+((b&&b.err)||'?')+') — match it on the sequence page');}catch(e){notes.push('⚠ sequence row not handed over ('+e.message+') — match it on the sequence page');}
+    else if(r&&rw)notes.push('⚠ '+W+' already has a sequence row — '+P+'\'s row left as it was (check the sequence page)');}
+  // retire the P-job: a full copy stays on the WO (permanent) and in settings pMerged
+  w.pFrom=(w.pFrom||[]).concat([{wo:P,at,by,job:snap}]);
+  DB.pMerged=(DB.pMerged||[]).concat([{at,by,wo:P,into:w.wo,why:'Cienapps WO for the same house (L4b)',job:snap}]).slice(-300);
+  logEdit(w,P+' (planner P-number for this house) merged into '+w.wo+(notes.length?': '+notes.join(' · '):'')+' — its full copy is kept on this job',by);
+  const i=DB.orders.indexOf(p);if(i>=0)DB.orders.splice(i,1);
+  delete orig[P];delete origStep[P];grpSel.delete(P);cleanGroups();
+  if(seqVis())try{await lsPoll();}catch(e){}
+  return{p:P,w:w.wo,ok:true,notes};
+}
 let PMFIX=null;
 function pMineFix(){if(!V2()||PMFIX)return PMFIX;PMFIX=(async()=>{await null;let wait=false;try{ // (await first: the finally must run AFTER PMFIX is set)
   if(!DB.loaded||!LST.loaded){wait=true;return;}
