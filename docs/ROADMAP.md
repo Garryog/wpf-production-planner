@@ -117,6 +117,16 @@ Rules: rank by the leading number. "Shipped" = step 9 only (left the factory →
 
 - (4 Nov, Garry, answers) Photo of a list REPLACES the paper option: on a WO with no typed list, attach a photo (phone camera or file); the saw must be able to open it; it is a stop-gap to be removed later once the typed system is in place (keep it simple, easy to switch off). Docket cancel ASKS "Did these items leave stores?" (Yes = stay got out; No = back to 'to pick'). Dockets are for FITTINGS (stores items) only for now — cutting-list (saw) items are not docketed, so no per-WO quantity split is needed.
 
+### Access and sign-in decisions (11 Nov 2026, Garry — supersedes "simple PIN per person" above)
+- Why: the planner repo is public with GitHub Pages on (needed for the 10 Nov go-live), and the key in it also opens the quoting data. Daily security check 11 Nov.
+- Planner rollout to other PCs and phones goes ahead on the current GitHub Pages link; no Cloudflare.
+- Quoting tool moves to its OWN Supabase project (planner and quoting never share a database or key again). Quoting stays office-only (SharePoint file) for now.
+- Sign-in for the wide rollout: Supabase Auth with "Sign in with Microsoft" (one login per person), for both apps. Planner first, quoting later.
+- Expected users: ~40 internal (office, factory, delivery) + ~25 subcontractor employees.
+- Subcontractors sign in with Microsoft too and need web access to the PLANNER ONLY (never quoting). Their screens and data are to be agreed (likely the Fitters view, item 8 of the build order).
+- After sign-in is live: database rules become "signed-in staff only", exposed keys are replaced, the repo goes private.
+- Open: guests vs their own Microsoft accounts (IT provider); what subcontractors see/do; roles replace PINs (per-role screens kept).
+
 ## Progress log
 ### 2 Nov 2026 (scheduled run)
 - Architect confirmed the cutting-list plan against the code; build notes and build order added to docs/PLAN-cutting-lists-stage3.md (fixed garbled characters in both plan files).
