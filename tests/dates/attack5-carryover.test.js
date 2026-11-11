@@ -513,7 +513,9 @@ const LIT = () => ({ prev: document.getElementById('wkb-prev').className, next: 
     await B.page.evaluate(async () => { await loadDB(); });
     const g2 = p => p.evaluate(() => { const o = __g('WO-S'); return { due: o.dueDate, wk: o.plannedWeek, h: (o.dueHist || []).filter(h => h.f !== 'deliv').map(h => h.from + '>' + h.to + ':' + h.why) }; });
     const fa = await g2(A.page), fb = await g2(B.page);
-    rec('F2 stale screen: B moved WO-S a week and saved; A (no refresh) presses → Wk on its old card: both PCs end up the same and neither move is lost from the history', JSON.stringify(fa) === JSON.stringify(fb) && fa.h.length === 2 && fa.h.some(x => /Customer delay/.test(x)) && fa.h.some(x => /Production/.test(x)), JSON.stringify({ f2pre, f2a, fa, fb }));
+    // Coder 11 Nov (intended change, lead's LOW 7): A's stale move repeats B's exactly (12 Nov → 19 Nov) — it changed nothing, so the
+    // merge keeps B's move (the first) and records no second identical entry. Was: 2 entries, both reasons.
+    rec('F2 stale screen: B moved WO-S a week and saved; A (no refresh) presses → Wk on its old card: both PCs end up the same, B\'s move is in the history once and A\'s identical repeat is not recorded', JSON.stringify(fa) === JSON.stringify(fb) && fa.h.length === 1 && /Customer delay/.test(fa.h[0]) && fa.due === '2026-11-19', JSON.stringify({ f2pre, f2a, fa, fb }));
     rec('F2b the final due date follows the history (last entry\'s "to" = due date; not two moves both from 12 Nov)', fa.h.length && fa.h[fa.h.length - 1].split('>')[1].split(':')[0] === fa.due && !(fa.h.length === 2 && fa.h[0].split('>')[0] === fa.h[1].split('>')[0]), JSON.stringify(fa));
     rec('F: no page errors', ![...(A.server.errors || []), ...(B.server.errors || [])].length, [...(A.server.errors || []), ...(B.server.errors || [])].join(' | '));
     await A.close(); await B.close();
