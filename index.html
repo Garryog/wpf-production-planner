@@ -4303,7 +4303,11 @@ async function seqUndo(pid,redraw){
     const per={},wos=[],since=[];
     u.jobs.forEach(j=>{const o=dmFind(j.wo);if(!o||(o.dueDate||'')!==j.after.dueDate||(o.delivDate||'')!==j.after.delivDate){since.push(j.wo);return;}
       per[j.wo]={due:j.before.dueDate,deliv:j.before.delivDate,delivClear:!j.before.delivDate&&!!j.after.delivDate};wos.push(j.wo);});
-    const res=wos.length?moveDates(wos,{per},{why:'Undo',note:''},by,{src:'undo'}).apply():{moved:0,rows:[]};
+    const fxd=ROLE!=='pm'?{frozenDays:seqFixedDays()}:{}; /*attack6: office / Production Manager Undo inside the fixed window is counted too*/
+    const res=wos.length?moveDates(wos,{per},{why:'Undo',note:''},by,{src:'undo',...fxd}).apply():{moved:0,rows:[]};
+    if(ROLE!=='pm'){const fx=(res.rows||[]).filter(r=>!r.skipped&&r.fixed),ids=fx.map(r=>seqWoRow(r.wo)).filter(Boolean).map(s=>s.id);
+      if(ids.length){const pr={};fx.forEach(r=>{if(per[r.wo])pr[r.wo]=per[r.wo];});
+        await seqReqDirect(pid,'date',{ids,wos:fx.map(r=>r.wo),change:{per:pr},preview:{rows:fx.map(seqReqPrevRow)},why:'Undo',by});}}
     let rw=0;for(const x of u.rows){const r=LST.sq.get(x.id);if(!r||(r.req_date||'')!==x.to||(x.v&&+r.version!==+x.v)){since.push([r&&r.floor,r&&r.unit,r&&r.name].filter(Boolean).join(' ')||'a waiting row');continue;}
       try{await lsWrite('project_seq',r,{req_date:x.from||null,why:'Undo'});rw++;}catch(e){since.push([r.floor,r.unit,r.name].filter(Boolean).join(' '));}}
     SEQ_UNDO=null;seqMapsDrop();if(redraw)redraw();
