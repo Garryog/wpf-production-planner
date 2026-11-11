@@ -11783,6 +11783,7 @@ async function pMergeSeq(P,W,by){
       const d=await lsRpc('seq_remove',{p_id:drop.id,p_expect:null,p_by:by,p_why:why+' — one row per house, the earlier-placed row kept'});
       if(!d||!d.ok)return['⚠ two sequence rows for this house — one could not be retired ('+((d&&d.err)||'?')+'); check the sequence page'];
       out.push('sequence: the earlier-placed row kept, the other retired (not deleted)');
+      try{const cm=await preCarry(drop,keep,rw.id,W,by);if(cm)out.push(cm);}catch(e){out.push('⚠ Pre-production tick / place not carried over ('+e.message+') — tick it again on the pool');} /*attack10 6f*/
       if(!keepP){if(drop.req_date&&!keep.req_date){try{await lsWrite('project_seq',LST.sq.get(keep.id)||keep,{req_date:drop.req_date,why});}catch(e){}}return out;}
       r=keep;}
     const a=await lsRpc('seq_unmatch',{p_id:r.id,p_expect:null,p_by:by,p_why:why});
@@ -11793,6 +11794,19 @@ async function pMergeSeq(P,W,by){
     out.push('⚠ sequence row not handed over ('+((b&&b.err)||'?')+') — match it on the sequence page');
   }catch(e){out.push('⚠ sequence row not handed over ('+e.message+') — match it on the sequence page');}
   return out;
+}
+/*attack10 6f: the retired row's seq_pre (Johnny's Processed tick and his place) goes onto the kept row. Both ticked → processed stays;
+  both placed → the WO row's place. The database stamps a fresh "processed" time — the original who / when go in the note. */
+async function preCarry(drop,keep,woRowId,W,by){
+  if(!seqVis())return'';const ds=LST.sp.get(drop.id),ks=LST.sp.get(keep.id),has=k=>k&&k.pre_key!=null&&k.pre_key!=='';
+  if(!ds||(!ds.processed&&!has(ds)))return'';
+  const patch={wo:W};let what=[];
+  if(ds.processed&&!(ks&&ks.processed)){patch.processed=true;patch.processed_src=ds.processed_src||'tick';patch.processed_by=ds.processed_by||by;
+    patch.note='Processed tick carried from the retired sequence row '+drop.id+' (ticked by '+(ds.processed_by||'?')+(ds.processed_at?' '+String(ds.processed_at).slice(0,16).replace('T',' '):'')+')';what.push('Processed tick');}
+  if(has(ds)&&(!has(ks)||drop.id===woRowId)){patch.pre_key=+ds.pre_key;what.push('place in the pool');}
+  if(!what.length)return'';
+  await preWrite(keep.id,patch,by); // history: carried by the person merging; processed_by stays Johnny
+  return 'Pre-production: '+what.join(' and ')+' carried onto the kept sequence row';
 }
 async function pMerge(P,W,by,wNew){
   const find=w=>DB.orders.find(o=>woKey(o.wo)===woKey(w));
