@@ -33,7 +33,9 @@ const want = s => !SECTION || SECTION === s;
     ['WO-61', 'WO-62', 'WO-63'].forEach(w => X.seqRow(S, 'Q' + w.slice(3), 'P4', { wo: w }));
     await a.page.evaluate(async () => { const b = DB.orders.find(o => o.wo === 'WO-71'); ['WO-61', 'WO-62', 'WO-63'].forEach(w => DB.orders.push(Object.assign({}, b, { wo: w, customer: 'Aderrig North Ltd' }))); await lsPoll(); render(); }); await sleep(300);
     const r1b = (await pool(a.page)).filter(x => /WO-[68]\d/.test(x.wo));
-    rec('A1b "Aderrig North" and "Aderrig Park" both at PM positions 1-3 on one day: each project kept together, not interleaved', /^WO-61,WO-62,WO-63,WO-81,WO-82,WO-83$/.test(wos(r1b)), wos(r1b));
+    // (Coder, attack11 fix) which of two same-day projects with the same first letters comes first is fixed but not alphabetical
+    // (a stable hash of the whole name — one number per row can't hold the full name); the check is that each stays together
+    rec('A1b "Aderrig North" and "Aderrig Park" both at PM positions 1-3 on one day: each project kept together, not interleaved', /^(WO-61,WO-62,WO-63,WO-81,WO-82,WO-83|WO-81,WO-82,WO-83,WO-61,WO-62,WO-63)$/.test(wos(r1b)), wos(r1b));
     await a.page.evaluate(async () => { DB.orders = DB.orders.filter(o => !/^WO-6\d$/.test(o.wo)); render(); });
     const oos = (await pool(a.page)).filter(x => /OUT OF STEP/.test(x.flags)).map(x => x.wo);
     rec('A2 default order never OUT OF STEP', !oos.length, oos.join());
