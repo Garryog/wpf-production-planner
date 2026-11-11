@@ -4420,7 +4420,10 @@ async function preWrite(sid,patch,by){
     body:JSON.stringify(cur?{...patch,updated_by:by}:{...patch,seq_id:sid,updated_by:by})});}
   catch(e){ // attack10 1e: no reply — it may have landed. Re-read the row: already as asked = saved.
     let g=null;try{g=(await lsGet('seq_pre?select=*&seq_id=eq.'+encodeURIComponent(sid)+'&order=seq_id.asc'))[0]||null;if(g)lsPut('seq_pre',[{...g,id:g.seq_id}],true);}catch(x){}
-    if(g&&(!cur||(+g.version||0)>(+cur.version||0))&&preAsAsked(g,patch))return g;
+    if(g&&(!cur||(+g.version||0)>(+cur.version||0))){
+      if(preAsAsked(g,patch)&&String(g.updated_by||'')===String(by))return g;
+      if(patch.processed===true&&g.processed)throw new Error('already ticked by '+(g.processed_by||g.updated_by||'someone')+' on another screen');
+      if('processed' in patch||'pre_key' in patch)throw new Error('changed by '+(g.updated_by||'someone')+' on another screen meanwhile — showing it as it is now, check and try again');}
     throw e;}
   const d=await r.json().catch(()=>null);
   if(r.status===409||(d&&d.code==='23505')||(cur&&r.ok&&Array.isArray(d)&&!d.length)){
