@@ -886,7 +886,7 @@ function m3(b,m,t,path,N,o,u){
       const du=path[0]==='orders'&&path.length===2?mDue(bb,m,t,path,N):null;
       if(du)DUE_K.forEach(k=>{if(du[k]!==undefined)r[k]=du[k];});
       [...new Set([...Object.keys(m),...Object.keys(t)])].forEach(k=>{if(hu&&HRS_K.includes(k))return;if(dl&&DEL_K.includes(k))return;if(du&&DUE_K.includes(k))return;const v=m3(bb[k],m[k],t[k],path.concat(k),N,o,u.map(x=>isObj(x)?x[k]:NOU));if(v!==undefined)r[k]=v;});
-      if(path[0]==='orders'&&path.length===2&&Array.isArray(r.dueHist))r.dueHist=r.dueHist.slice().sort((x,y)=>String(x&&x.at||'').localeCompare(String(y&&y.at||''))).slice(-DUE_HIST_MAX); /*dates: oldest → newest*/
+      if(path[0]==='orders'&&path.length===2&&Array.isArray(r.dueHist))r.dueHist=dueHistTidy(r.dueHist); /*dates: oldest → newest*/
       return r;
     }
   }
@@ -962,6 +962,14 @@ const BOOK_K=['delVeh','delDay','delWk','delRebook'];
   screens moved the date, the newer move (latest dueHist entry) wins as a unit — never one PC's date with the other's week.
   Any other case (e.g. a week drag here, a date move there) merges field by field as before. */
 const DUE_K=['dueDate','plannedWeek','dueMv','dueKeep'],DUE_HIST_MAX=30;
+/*v-deliv attack5: oldest → newest, and a move that repeats the one just before it (same date field, same from → to) is dropped —
+  a screen that had not refreshed yet made the same move again ("12 Nov → 19 Nov" twice). The first one (who / why) is kept;
+  the second changed nothing, so it is not history. A real back-and-forth (12 → 19, 19 → 12, 12 → 19) is all kept.*/
+function dueHistTidy(h){
+  const s=h.slice().sort((x,y)=>String(x&&x.at||'').localeCompare(String(y&&y.at||''))),out=[];
+  s.forEach(x=>{const p=out[out.length-1];if(p&&x&&(p.f||'due')===(x.f||'due')&&String(p.from||'')===String(x.from||'')&&String(p.to||'')===String(x.to||''))return;out.push(x);});
+  return out.slice(-DUE_HIST_MAX);
+}
 function mDue(b,m,t,path,N){
   if(same(m.dueDate,t.dueDate)||same(m.dueDate,b.dueDate)||same(t.dueDate,b.dueDate))return null;
   const last=x=>((x.dueHist||[]).map(h=>h&&h.at||'').sort().pop())||'';
