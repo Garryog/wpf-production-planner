@@ -115,17 +115,14 @@ Rules: rank by the leading number. "Shipped" = step 9 only (left the factory →
 
 - (4 Nov, Garry) Be more aware of SIMPLEST use, especially for production and stores. REMOVE the "Paper list issued" option. Maybe allow attaching a PHOTO of a list instead. In the cutting list rename "Colour" to "Material".
 - (11 Nov, Garry — Project details, docs/PLAN-project-details.md) Spec sign-off: PMs only. Projects stay red until every spec item is filled and signed off; a project can have several specs (rooms, house types, robes). Materials and spec values: PM, office, Management (+ Drawing office, Production Manager). Changing a job's Customer in the planner: Admin only. A spec is not applied to a cutting list — it only gives the material choices for the list (templates keep their materials).
-- (11 Nov, ASSUMED — built on the recommended answer, **Garry to confirm**; details in docs/PLAN-project-details.md, 11 Nov afternoon
-  entry) S1/S2/L4b: (1) "11. COMPLETED AND INVOICED" also ticks "Installation complete"; (2) a shipped job's step can't be set backwards
-  by hand, and "Bring back to board" also clears an "installed" mark set by hand; (3) the Shipped tab's PM filter starts on this device's
-  PM (on "All" for a PM with no projects); (4) PMs get their own 📦 Shipped tab and can tick Installation complete, "Bring back to board"
-  stays office-only; (5) the Project filter lists only projects with shipped / on-hold jobs, plus "No project linked", and the PM filter
-  has "none assigned"; (6) P-number → WO merge by a tick, pre-ticked only when certain; (7) at a merge the planner's due date is kept and
-  Cienapps' listed under Dates to change in Cienapps; (8) at a merge the P-job's week beats the automatic week of a WO new in that import,
-  hand-typed hours beat estimates, and if both are booked the WO's booking is kept and flagged; (9) a "not sure" pair left unticked is
-  offered again on every import. Also: when both the P-job and the WO have a sequence row, the earlier-placed row is kept and the other
-  retired (attack9 M5); Mon 3 Jan 2028 is a bank holiday (substitute for Sat 1 Jan 2028); a bulk "Set date" to a bank holiday is not moved
-  (the person picked it — the preview warns).
+- (11 Nov, Garry, answers — S1 / S2 / L4b and the date tools, docs/PLAN-project-details.md) (1) Step 11 "Completed and invoiced" set by
+  hand does NOT tick "Installation complete" — kept separate (CHANGED from the assumed answer). (2) A shipped job's step can't be set
+  backwards by hand; use "Bring back to board" — yes. (3)+(4) PMs get the 📦 Shipped tab: view and tick Installed; "Bring back to board" is
+  office-only; the PM filter starts on his own PM — yes. (5) Project / PM filters as built — yes. (6) P-number → WO merge by a tick,
+  pre-ticked only when certain — yes. (7) At a merge the planner's due date wins (Cienapps' listed under Dates to change) — yes. (8) Both
+  booked → the WO's booking kept and flagged — yes. (9) A "not sure" pair is offered again on every import — yes. Sequence rows: the
+  earlier-placed row is kept, the other retired — yes. Mon 3 Jan 2028 is a bank holiday — yes. Bulk "Set date" onto a bank holiday /
+  Sunday MOVES to the next delivery day (build date: next working day before it), and the preview says so (CHANGED).
 
 - (4 Nov, Garry, answers) Photo of a list REPLACES the paper option: on a WO with no typed list, attach a photo (phone camera or file); the saw must be able to open it; it is a stop-gap to be removed later once the typed system is in place (keep it simple, easy to switch off). Docket cancel ASKS "Did these items leave stores?" (Yes = stay got out; No = back to 'to pick'). Dockets are for FITTINGS (stores items) only for now — cutting-list (saw) items are not docketed, so no per-WO quantity split is needed.
 

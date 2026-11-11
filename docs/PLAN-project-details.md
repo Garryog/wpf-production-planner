@@ -1114,3 +1114,6 @@ seq / project-details / stores-docket pg-checks, attack3-pg (0/45), pg-pmerged, 
   has saved once; (3) `origin/main` is ahead by history only (same files as 4bb9bed) and merges cleanly — merge it in, full suite once;
   (4) go-live day: close/reopen every screen, incognito check, PINs not the defaults. B10 upload is not built (needs the Q7 sample) — it
   is not needed for this release.
+- **11 Nov (live) — Garry's answers** (ROADMAP "11 Nov, Garry, answers"): all the ASSUMED calls confirmed except two, now built:
+  0624b07 step 11 by hand no longer ticks "Installation complete"; 42a6355 bulk "Set date" onto a Sunday / bank holiday moves to the
+  next delivery day and the preview says so (new tests/seq/s14-set-holiday 5/5).
