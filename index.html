@@ -3419,7 +3419,7 @@ function lsEditOk(){
 }
 async function lsWrite(t,row,patch){ // insert (row) or version-checked update (row + patch); the database's copy comes back
   const u=patch?SUPA_URL+'/'+t+'?id=eq.'+encodeURIComponent(row.id)+'&version=eq.'+(+row.version||1):SUPA_URL+'/'+t;
-  const r=await fetch(u,{method:patch?'PATCH':'POST',headers:{...SUPA_HDR,'Prefer':'return=representation'},body:JSON.stringify(patch?{...patch,updated_by:lqBy('')}:{...row,updated_by:lqBy('')})});
+  const r=await fetch(u,{method:patch?'PATCH':'POST',headers:{...SUPA_HDR,'Prefer':'return=representation'},body:JSON.stringify(patch?{updated_by:lqBy(''),...patch}:{...row,updated_by:lqBy('')})});
   const d=await r.json().catch(()=>null);
   if(r.status===409||(d&&d.code==='23505'))throw new Error('that name is already used in this project');
   if(!r.ok)throw new Error((d&&d.message)||('HTTP '+r.status));
@@ -3722,12 +3722,15 @@ function lsSpecDlg(pid,sid0){
     const rn=ov.querySelector('#sp-ren');if(rn)rn.onclick=()=>{const cs=LST.px.get(sid);if(!cs||!specEditOk())return;const n=prompt('Spec name:',cs.name);if(n===null)return;const nn=n.replace(/[\u200B-\u200D\uFEFF]/g,'').replace(/\s+/g,' ').trim();if(!nn||nn===cs.name)return;
       if(specSheets(pid,true).some(s=>s.id!==sid&&specNorm(s.name)===specNorm(nn)))return msg('This project already has a spec called "'+nn+'".');
       lsWrite('project_specs',cs,{name:nn}).then(()=>{draw();toast('Renamed');}).catch(x=>{draw();msg('Not renamed — '+x.message);});};
-    const rt=ov.querySelector('#sp-ret');if(rt)rt.onclick=()=>{const cs=LST.px.get(sid);if(!cs||!specEditOk())return;
+    const rt=ov.querySelector('#sp-ret');if(rt)rt.onclick=async()=>{let cs=LST.px.get(sid);if(!cs||!specEditOk())return;
       if(specSheets(pid).length<2)return msg('A project keeps at least one spec.');
+      try{await specFresh(pid);}catch(x){return msg('Could not check the spec — '+x.message);} // against the database, not this screen's copy (an item may just have been un-signed elsewhere)
+      cs=LST.px.get(sid);if(!cs||cs.active===false){draw();return;}
       // a spec with items still open would turn the project green without a sign-off: only a Project Manager retires it (Manager, 11 Nov)
-      if(specCount(pid,sid).ok<specCount(pid,sid).n&&!specSignOk())return;
+      let who='';const k=specCount(pid,sid);
+      if(k.ok<k.n){if(!specSignOk())return;who=specWho();if(!who)return;}
       if(!confirm('Mark the spec "'+cs.name+'" as not used any more?\n\nIt is hidden and no longer counts for the red chip. Nothing is deleted.'))return;
-      lsWrite('project_specs',cs,{active:false}).then(()=>{sid='';draw();toast('"'+cs.name+'" is no longer used');}).catch(x=>{draw();msg('Not changed — '+x.message);});};
+      lsWrite('project_specs',cs,{active:false,...(who?{updated_by:who}:{})}).then(()=>{sid='';draw();toast('"'+cs.name+'" is no longer used');}).catch(x=>{draw();msg('Not changed — '+x.message);});};
     const mb=ov.querySelector('#sp-mats');if(mb)mb.onclick=()=>lsMaterialsDlg(pid,()=>{if(SPEC_DLG.draw)SPEC_DLG.draw();});
   };
   SPEC_DLG.draw=draw;draw();
