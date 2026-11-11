@@ -3609,8 +3609,8 @@ function specSignOk(){if(ROLE==='pm')return true;if(specRO()){toast('Project det
   if(v===null)return false;if(!ok(v.trim())){toast('Wrong PIN — not signed off');return false;}return true;}
 function specWho(){ // the Project Manager's own name goes on the sign-off — on another screen it is asked for, not taken from who is signed in there
   if(ROLE==='pm'){const w=String(whoNow()||'').trim();if(w)return w;return opName('Sign off');}
-  let by=prompt('Project Manager signing off — your name:','');while(by!==null&&!by.trim())by=prompt('A name is needed for the record — which Project Manager is signing off?','');
-  return by===null?null:by.trim();}
+  let by=prompt('Project Manager signing off — your name:','');const cl=s=>String(s).replace(/[\u200B-\u200D\uFEFF]/g,'').trim();while(by!==null&&!cl(by))by=prompt('A name is needed for the record — which Project Manager is signing off?','');
+  return by===null?null:cl(by);}
 async function specFresh(pid){const q='?select=*&project_id=eq.'+encodeURIComponent(pid);lsPut('project_specs',await lsGet('project_specs'+q),true);lsPut('project_spec_items',await lsGet('project_spec_items'+q),true);}
 // Save one item: a version-checked change of the row this screen showed, or a new row the first time the item is edited
 // The project's first spec is only made when something is first saved on it (fixed id: two PCs make one)
@@ -3713,7 +3713,9 @@ function lsSpecDlg(pid,sid0){
           if(got){sid=got.id;draw();toast('Spec "'+n+'" added');return;}
           draw();msg('Not added — '+(/already used/.test(x.message)?'this project already has a spec called "'+n+'"':/fetch|network/i.test(x.message)?'no reply from the database — try again':x.message));}};};
     ov.querySelectorAll('[data-spback]').forEach(b=>b.onclick=()=>{const cs=LST.px.get(b.dataset.spback);if(!cs||!specEditOk())return;
-      lsWrite('project_specs',cs,{active:true}).then(()=>{sid=cs.id;draw();toast('"'+cs.name+'" is in use again');}).catch(x=>{draw();msg('Not changed — '+x.message);});});
+      lsWrite('project_specs',cs,{active:true}).then(()=>{sid=cs.id;draw();toast('"'+cs.name+'" is in use again');}).catch(x=>{const now=LST.px.get(cs.id);
+        if(now&&now.active!==false){sid=cs.id;draw();toast('"'+cs.name+'" is in use again');return;} // another screen brought it back at the same moment
+        draw();msg('Not changed — '+x.message);});});
     const rn=ov.querySelector('#sp-ren');if(rn)rn.onclick=()=>{const cs=LST.px.get(sid);if(!cs||!specEditOk())return;const n=prompt('Spec name:',cs.name);if(n===null)return;const nn=n.replace(/[\u200B-\u200D\uFEFF]/g,'').replace(/\s+/g,' ').trim();if(!nn||nn===cs.name)return;
       if(specSheets(pid,true).some(s=>s.id!==sid&&specNorm(s.name)===specNorm(nn)))return msg('This project already has a spec called "'+nn+'".');
       lsWrite('project_specs',cs,{name:nn}).then(()=>{draw();toast('Renamed');}).catch(x=>{draw();msg('Not renamed — '+x.message);});};

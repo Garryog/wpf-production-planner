@@ -39,6 +39,19 @@ const measure = (t, sel) => ev(t, sel => {
   rec('360px Materials window: name / kind / also-called / Save / ＋ Add tappable', !(m4.small || []).length, JSON.stringify(m4.small));
   const nm = await ev(pm, () => { const i = document.querySelector('[data-mtn="MX0"]'); const r = i.getBoundingClientRect(); return { w: Math.round(r.width), vis: r.right <= document.documentElement.clientWidth }; });
   rec('360px Materials window: a material name box is wide enough to read (>=120px) and on screen', nm.w >= 120 && nm.vis, JSON.stringify(nm));
+  // round 3: use the Materials cards at 360 px with real clicks (Playwright refuses if covered / off screen)
+  const pg = pm.page, acts = [];
+  const tryDo = async (n, f) => { try { await f(); acts.push(n + ' ok'); } catch (e) { acts.push(n + ' FAILED ' + String(e.message).split('\n')[0].slice(0, 120)); } await sleep(400); };
+  await tryDo('add', async () => { await pg.fill('#mt-new-n', 'Phone board 360'); await pg.click('#mt-add', { timeout: 3000 }); });
+  await tryDo('rename', async () => { await pg.fill('[data-mtn="MX0"]', 'Renamed on phone'); await pg.click('[data-mts="MX0"]', { timeout: 3000 }); });
+  await tryDo('alias', async () => { await pg.fill('[data-mta="MX2"]', 'ph alias a, ph alias b'); await pg.click('[data-mts="MX2"]', { timeout: 3000 }); });
+  await tryDo('retire', async () => { await pg.uncheck('[data-mtv="MX4"]', { timeout: 3000 }); await pg.click('[data-mts="MX4"]', { timeout: 3000 }); });
+  const M = id => D.find(S.db, 'project_materials', id);
+  rec('360px Materials cards: add, rename, alias and retire all work by tapping', S.db.t.project_materials.some(m => m.name === 'Phone board 360') && M('MX0').name === 'Renamed on phone' && (M('MX0').aliases || []).some(a => /Egger H3000/.test(a)) && (M('MX2').aliases || []).join() === 'ph alias a,ph alias b' && M('MX4').active === false, acts.join(' | ') + ' ' + JSON.stringify([M('MX0').aliases, M('MX2').aliases, M('MX4').active]));
+  const m6 = await measure(pm, '.pod-ovl:last-of-type .pod-in');
+  rec('360px Materials cards after the edits (retired card, new card): still no sideways scroll, all tappable', m6.doc <= 360 && !m6.nOut && !(m6.small || []).length, JSON.stringify(m6));
+  const lbl = await ev(pm, () => { const r = document.querySelector('[data-mtv="MX4"]').closest('td'); return getComputedStyle(r, '::before').content; });
+  rec('360px: the Active tick box is labelled on its card', /Active/.test(lbl), lbl);
   await pm.close();
   // the list window header on a phone (office): Floor / Unit / Title / Customer with an override
   const of = await X.dev(browser, S, 'office', VP);

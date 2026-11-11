@@ -59,7 +59,7 @@ function signAll(S, sid, items) { items.forEach((it, i) => { if (/^other info/i.
     rec('2e offline first edit (default spec not yet made): told "Not saved", nothing half-made', /Not saved/.test(m3) && !S2.db.t.project_specs.length && !S2.db.t.project_spec_items.length, m3);
     await c.close();
   }
-  // ---------- 3. retire races and retired specs
+  // ---------- 3. retire races and retired specs (round 3: the database keeps one spec in use; "Bring back")
   {
     const S = X.makeServer();
     X.sheet(S, 'SPD:P1', 'Kitchens'); X.sheet(S, 'SR', 'Robes', 'robes');
@@ -67,22 +67,33 @@ function signAll(S, sid, items) { items.forEach((it, i) => { if (/^other info/i.
     await open(a); await open(b); await tab(a, 'Kitchens'); await tab(b, 'Robes');
     const go = hold(S);
     await ev(a, () => document.getElementById('sp-ret').click()); await ev(b, () => document.getElementById('sp-ret').click()); await sleep(300); go(); await sleep(900);
-    const act = S.db.t.project_specs.filter(s => s.active !== false).length;
-    rec('3a two PCs each retire a different spec at once: the project still keeps at least one active spec', act >= 1, 'active specs left: ' + act);
+    const act = S.db.t.project_specs.filter(s => s.active !== false).length, ma = await msg(a), mb = await msg(b);
+    rec('3a two PCs each retire a different spec at once: one is refused and that person is told, one spec stays in use', act === 1 && (/at least one spec/.test(ma) || /at least one spec/.test(mb)), 'active=' + act + ' | ' + ma + ' | ' + mb);
     const saw = await X.dev(browser, S, 'saw');
     const r = await ev(saw, () => ({ open: specOpen('P1').length, chip: !!document.querySelector('.spec-chip'), btn: specBtn('P1').replace(/<[^>]+>/g, '') }));
-    rec('3b ...and with nothing signed off the project is still RED on the saw (not silently green)', r.open > 0 && r.chip, JSON.stringify(r));
+    rec('3b ...and with nothing signed off the project is still RED on the saw', r.open === 21 && r.chip && !/0\/0/.test(r.btn), JSON.stringify(r));
     await saw.close();
-    // what the office sees with every spec retired
+    // the retired one is listed with "Bring back"; the refusal for its name points there
     await open(b);
-    const v = await ev(b, () => ({ tabs: document.querySelectorAll('[data-sptab]').length, rows: document.querySelectorAll('.spec-tbl tr.spec-r').length, txt: document.getElementById('sp-body').innerText.slice(0, 300) }));
-    rec('3c every spec retired: the window still shows a sheet to fill in (or a way to bring one back)', v.tabs > 0 || /bring.*back|reinstate|use again/i.test(v.txt), JSON.stringify(v));
-    // bring back a retired spec: the duplicate-name message tells you to "ask the office to bring it back" — is there a way?
-    DP.updateSpec(S.db, S.db.t.project_specs.find(s => s.id === 'SPD:P1'), { active: true }); await ev(b, async () => { await lsPoll(); }); await open(b);
-    await addSpec(b, 'Robes', 'robes'); await sleep(400);
-    const m = await msg(b);
-    const back = await ev(b, () => { const h = document.querySelector('.pod-ovl:last-of-type').innerHTML; return /bring (it )?back|reinstate|use again|retired|not used any more \(/i.test(h.replace(/ask the office to bring it back/g, '')) && !!document.querySelector('[data-spback],[data-sprestore],#sp-back,#sp-restore'); });
-    rec('3d a retired spec can be brought back from the screen (the refusal says "ask the office to bring it back")', back, 'msg=' + m + ' (no control found on the office screen)');
+    const v = await ev(b, () => ({ tabs: [...document.querySelectorAll('[data-sptab]')].map(x => x.textContent.trim()), back: [...document.querySelectorAll('[data-spback]')].map(x => x.closest('.lst-chip').textContent.trim()) }));
+    rec('3c the retired spec is listed under "Not used any more" with Bring back; the other stays a tab', v.tabs.length === 1 && v.back.length === 1, JSON.stringify(v));
+    const retName = S.db.t.project_specs.find(s => !s.active).name; await addSpec(b, retName.toUpperCase(), 'kitchens'); await sleep(300);
+    rec('3d adding a spec with the retired one\'s name (other case) points to Bring back', /Bring back/.test(await msg(b)) && S.db.t.project_specs.length === 2, await msg(b));
+    // Bring back on two PCs at once
+    await open(a); await open(b);
+    const go2 = hold(S);
+    await ev(a, () => document.querySelector('[data-spback]').click()); await ev(b, () => document.querySelector('[data-spback]').click()); await sleep(300); go2(); await sleep(900);
+    const mA = await msg(a), mB = await msg(b);
+    rec('3e Bring back on two PCs at once: the spec is in use once, both screens show it as a tab', S.db.t.project_specs.every(s => s.active) && (await tabs(a)).length === 2 && (await tabs(b)).length === 2, JSON.stringify([await tabs(a), await tabs(b)]) + ' msgs: ' + mA + ' | ' + mB);
+    rec('3f ...and the second person is not told an alarming "Not changed" for something that is now done', !/Not changed/.test(mA + mB), mA + ' | ' + mB);
+    // retire, then a stale screen (it still shows the spec in use) brings back while another PC adds a new spec of the same name
+    await open(a); await tab(a, 'Robes'); await ev(a, () => document.getElementById('sp-ret').click()); await sleep(500);
+    await open(b); const go3 = hold(S);
+    await ev(b, () => { const x = document.querySelector('[data-spback]'); if (x) x.click(); }); await addSpec(a, 'Robes', 'robes'); await sleep(300); go3(); await sleep(900);
+    rec('3g Bring back vs a new spec of the same name at once: one "Robes", in use', S.db.t.project_specs.filter(s => /robes/i.test(s.name)).length === 1 && S.db.t.project_specs.find(s => s.id === 'SR').active === true, JSON.stringify(S.db.t.project_specs.map(s => s.name + ':' + s.active)) + ' ' + (await msg(a)));
+    // the only spec in use can't be retired by a raw database call either
+    let e1 = ''; try { DP.updateSpec(S.db, S.db.t.project_specs.find(s => s.id === 'SR'), { active: false }); DP.updateSpec(S.db, S.db.t.project_specs.find(s => s.id === 'SPD:P1'), { active: false }); } catch (x) { e1 = x.message; }
+    rec('3h fake database: the last spec in use can\'t be retired', /at least one spec/.test(e1) && S.db.t.project_specs.some(s => s.active), e1);
     await a.close(); await b.close();
   }
   // ---------- 4. retire on one PC while another edits / signs off an item on that spec; rename vs edit; rename vs rename
@@ -94,10 +105,11 @@ function signAll(S, sid, items) { items.forEach((it, i) => { if (/^other info/i.
     await ev(a, () => document.getElementById('sp-ret').click()); await sleep(500);
     await setVal(b, 'Hinges', 'Blum'); await sleep(500);
     const mb = await msg(b), onRet = S.db.t.project_spec_items.find(r => r.spec_id === 'SR' && r.item === 'Hinges');
-    rec('4a an item saved on a spec that another PC has just retired: refused or the person is told it is no longer used', !onRet || /not used|retired|no longer/i.test(mb), 'saved on the retired spec: ' + JSON.stringify(onRet && onRet.value) + ' msg=' + mb);
+    rec('4a an item saved on a spec that another PC has just retired: refused and the person told', !onRet && /not used any more/.test(mb), 'saved on the retired spec: ' + JSON.stringify(onRet && onRet.value) + ' msg=' + mb);
     await ev(b, () => { const on = document.querySelector('.spec-tab.on'); const i = specItems('P1', on && on.dataset.sptab).findIndex(e => e.item === 'Handles'); const s = document.querySelector('[data-sps="' + i + '"]'); if (s) s.click(); }); await sleep(500);
     const h = S.db.t.project_spec_items.find(r => r.id === 'R-H');
-    rec('4b (info) a sign-off on the retired spec from the stale screen', true, 'Handles on retired Robes: ' + h.status + ' msg=' + (await msg(b)));
+    const mb2 = await msg(b); rec('4b a sign-off on the spec retired on another screen: refused and told', h.status !== 'signed-off' && /not used any more/.test(mb2), 'Handles on retired Robes: ' + h.status + ' msg=' + mb2);
+    rec('4b2 ...and the sheet refreshes (the retired spec is no longer a tab)', !(await tabs(b)).some(x => /^Robes/.test(x)), JSON.stringify(await tabs(b)));
     DP.updateSpec(S.db, S.db.t.project_specs.find(s => s.id === 'SR'), { active: true });
     await open(a); await open(b); await tab(a, 'Robes'); await tab(b, 'Robes');
     await ev(a, () => { window.prompt = () => 'Robes Block C'; document.getElementById('sp-ren').click(); }); await sleep(400);
@@ -145,10 +157,14 @@ function signAll(S, sid, items) { items.forEach((it, i) => { if (/^other info/i.
     await st.close();
     // a project whose only specs are all retired
     const S2 = X.makeServer(); X.sheet(S2, 'SPD:P1', 'Kitchens'); X.sheet(S2, 'SR', 'Robes', 'robes');
-    S2.db.t.project_specs.forEach(s => DP.updateSpec(S2.db, s, { active: false }));
+    S2.db.t.project_specs.forEach(s => { s.active = false; }); // a state the database now refuses (attack2-pg 4): forced here to check the screen's fallback
     const sw = await X.dev(browser, S2, 'saw');
     const r2 = await ev(sw, () => ({ open: specOpen('P1').length, btn: specBtn('P1').replace(/<[^>]+>/g, '').trim() }));
     rec('5i a project whose only specs are all retired (nothing ever signed): still red, not "Details 0/0"', r2.open > 0 && !/0\/0/.test(r2.btn), JSON.stringify(r2));
+    const o5 = await X.dev(browser, S2, 'office'); await open(o5); await setVal(o5, 'Hinges', 'Blum'); await sleep(500);
+    const v5 = await ev(o5, () => ({ back: document.querySelectorAll('[data-spback]').length, msg: document.getElementById('sp-msg').textContent }));
+    rec('5j (info, forced state the database now refuses) every spec retired: saving is refused and there is no Bring back — a dead end if it ever happened', true, JSON.stringify(v5));
+    await o5.close();
     await sw.close();
   }
   // ---------- 6. sign-off: Project Managers only
@@ -164,23 +180,43 @@ function signAll(S, sid, items) { items.forEach((it, i) => { if (/^other info/i.
       rec('6a ' + role + ': an old remembered Production Manager / Drawing office sign PIN, or an old edit PIN, does not sign off', !r.oldProdSignPin && !r.oldDesignSignPin && !r.adminEditPin && r.n === 3, JSON.stringify(r));
       await t.close();
     }
+    // round 3: off the PM screen the PM/Admin PIN is asked EVERY time and the Project Manager's own name is asked and recorded
     const of = await X.dev(browser, S, 'office');
-    const r = await ev(of, () => { window.prompt = () => ' 9000 '; const a = specSignOk(); const rem = localStorage.getItem('wpfSignPin'); DB.pins = Object.assign({}, DB.pins, { admin: '4321' }); let n = 0; window.prompt = () => { n++; return null; }; const b = specSignOk(); return { a, rem, b, n }; });
-    rec('6b office: the Admin PIN (with spaces) signs off; after the Admin PIN is changed in Settings the remembered one stops working', r.a && r.rem === '9000' && !r.b && r.n === 1, JSON.stringify(r));
-    // who is recorded when the office signs off with the PM PIN?
-    await ev(of, () => { localStorage.removeItem('wpfSignPin'); DB.pins = Object.assign({}, DB.pins, { admin: '' }); sessionStorage.setItem('wpfWho', 'Olive (office)'); window.prompt = m => /PIN/.test(m) ? '6666' : 'Olive (office)'; lsSpecDlg('P1'); }); await sleep(400);
-    await ev(of, () => { const i = specItems('P1').findIndex(e => e.item === 'Hinges'); document.querySelector('[data-sps="' + i + '"]').click(); }); await sleep(400);
-    const h = S.db.t.project_spec_items.find(x => x.id === 'SP-1');
-    rec('6c office signs off with the PM PIN: the record should show a Project Manager, not the office person', h.status === 'signed-off' && !/Olive/.test(h.signed_by || ''), 'signed_by=' + h.signed_by);
-    // the PM PIN is remembered: the next person on the office PC signs off with no PIN at all
-    X.spec(S, 'SP-2', 'Handles', 'Bar'); await ev(of, async () => { await lsPoll(); }); await open(of);
-    await ev(of, () => { sessionStorage.setItem('wpfWho', 'Temp (office)'); window.__n = 0; window.prompt = () => { window.__n++; return null; }; const i = specItems('P1').findIndex(e => e.item === 'Handles'); document.querySelector('[data-sps="' + i + '"]').click(); }); await sleep(400);
+    const r = await ev(of, () => { let n = 0; window.prompt = () => { n++; return ' 9000 '; }; const a = specSignOk(); const b = specSignOk(); DB.pins = Object.assign({}, DB.pins, { admin: '4321' }); window.prompt = () => { n++; return '9000'; }; const c = specSignOk(); DB.pins = Object.assign({}, DB.pins, { admin: '' }); return { a, b, c, n, rem: localStorage.getItem('wpfSignPin') }; });
+    rec('6b office: the Admin PIN (with spaces) signs off, asked every time (never remembered); an old Admin PIN refused after a change', r.a && r.b && !r.c && r.n === 3 && !r.rem, JSON.stringify(r));
+    const sign = (t, item, answers) => ev(t, ([item, ans]) => { window.__pp = []; window.prompt = m => { window.__pp.push(m.split('\n')[0]); return ans.length ? ans.shift() : null; }; window.confirm = () => true;
+      const i = specItems('P1').findIndex(e => e.item === item); const b = document.querySelector('[data-sps="' + i + '"]'); if (b) b.click(); return !!b; }, [item, answers]);
+    await ev(of, () => { sessionStorage.setItem('wpfWho', 'Olive (office)'); }); await open(of);
+    await sign(of, 'Hinges', ['6666', 'Mary PM']); await sleep(400);
+    const h = S.db.t.project_spec_items.find(x => x.id === 'SP-1'), pp = await ev(of, () => window.__pp);
+    rec('6c office signs off with the PM PIN: the Project Manager\'s own name is asked and recorded', h.status === 'signed-off' && h.signed_by === 'Mary PM' && pp.length === 2 && /Project Manager/.test(pp[1]), 'signed_by=' + h.signed_by + ' prompts=' + JSON.stringify(pp));
+    X.spec(S, 'SP-2', 'Handles', 'Bar'); X.spec(S, 'SP-3', 'Cornice', 'None'); X.spec(S, 'SP-4', 'Kicker type', 'PVC'); X.spec(S, 'SP-5', 'Sink Type', 'Belfast'); X.spec(S, 'SP-6', 'Tap Type', 'Mixer');
+    await ev(of, async () => { await lsPoll(); }); await open(of);
+    await sign(of, 'Handles', []); await sleep(400);
+    rec('6d the next sign-off on the office PC asks the PIN again (Cancel = not signed)', S.db.t.project_spec_items.find(x => x.id === 'SP-2').status !== 'signed-off' && (await ev(of, () => window.__pp.length)) === 1, JSON.stringify(await ev(of, () => window.__pp)));
+    await open(of); await sign(of, 'Handles', ['6666']); await sleep(400);
+    rec('6d2 right PIN, name prompt cancelled: not signed off', S.db.t.project_spec_items.find(x => x.id === 'SP-2').status !== 'signed-off', JSON.stringify(await ev(of, () => window.__pp)));
+    await open(of); await sign(of, 'Handles', ['6666', '   ', '\u200B', null]); await sleep(400);
     const h2 = S.db.t.project_spec_items.find(x => x.id === 'SP-2');
-    rec('6d after a PM typed the PIN once on the office PC, anyone there signs off later with no PIN (Garry: "Project Managers only")', !(h2.status === 'signed-off' && (await ev(of, () => window.__n)) === 0), 'Handles ' + h2.status + ' by ' + h2.signed_by + ', PIN prompts=' + (await ev(of, () => window.__n)));
+    rec('6d3 blank name then an invisible-character "name": neither is recorded as a signer', h2.status !== 'signed-off' || !/^[\s\u200B]*$/.test(h2.signed_by), 'status=' + h2.status + ' by=' + JSON.stringify(h2.signed_by) + ' prompts=' + JSON.stringify(await ev(of, () => window.__pp)));
+    await open(of); await sign(of, 'Cornice', ['1234']); await sleep(400);
+    rec('6d4 wrong PIN: no name asked, not signed', S.db.t.project_spec_items.find(x => x.id === 'SP-3').status !== 'signed-off' && (await ev(of, () => window.__pp.length)) === 1);
+    for (const role of ['dash', 'prod', 'design']) {
+      const t = await X.dev(browser, S, role); await open(t);
+      await sign(t, role === 'dash' ? 'Kicker type' : role === 'prod' ? 'Sink Type' : 'Cornice', ['6666', 'PM ' + role]); await sleep(400);
+      const it = S.db.t.project_spec_items.find(x => x.id === (role === 'dash' ? 'SP-4' : role === 'prod' ? 'SP-5' : 'SP-3'));
+      rec('6e ' + role + ': PIN then the PM\'s name, recorded', it.status === 'signed-off' && it.signed_by === 'PM ' + role, it.status + ' by ' + it.signed_by + ' ' + JSON.stringify(await ev(t, () => window.__pp)));
+      await t.close();
+    }
+    // the PM screen itself: no PIN, no name prompt (the signed-in name)
+    const pmt = await X.dev(browser, S, 'pm'); await ev(pmt, () => sessionStorage.setItem('wpfWho', 'Mary PM')); await open(pmt);
+    await sign(pmt, 'Tap Type', []); await sleep(400);
+    rec('6f PM screen: signs off with no prompts, under the signed-in name', S.db.t.project_spec_items.find(x => x.id === 'SP-6').signed_by === 'Mary PM' && (await ev(pmt, () => window.__pp.length)) === 0, JSON.stringify(S.db.t.project_spec_items.find(x => x.id === 'SP-6')));
+    await pmt.close();
     // straight to the database from an office screen (PINs are only on the screen)
     const d = await ev(of, async () => { const r = [...LST.ps.values()].find(x => x.item === 'Handles'); const res = await fetch(SUPA_URL + '/project_spec_items?id=eq.' + encodeURIComponent(r.id), { method: 'PATCH', headers: { ...SUPA_HDR, 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify({ status: 'proposed' }) }); const r2 = [...LST.ps.values()].find(x => x.item === 'Hinges'); const res2 = await fetch(SUPA_URL + '/project_spec_items?id=eq.' + encodeURIComponent(r2.id), { method: 'PATCH', headers: { ...SUPA_HDR, 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify({ status: 'proposed' }) }); return res.status + '/' + res2.status; });
     DP.update(S.db, S.db.t.project_spec_items.find(x => x.id === 'SP-1'), { status: 'signed-off', signed_by: 'Fake PM', updated_by: 'office PC' });
-    rec('6e (info) a non-PM can sign off / un-sign by calling the database directly — PINs are screen-level only', true, 'PATCH ' + d + '; sign-off under any name: ' + S.db.t.project_spec_items.find(x => x.id === 'SP-1').signed_by);
+    rec('6g (info) a non-PM can sign off / un-sign by calling the database directly — PINs are screen-level only', true, 'PATCH ' + d + '; sign-off under any name: ' + S.db.t.project_spec_items.find(x => x.id === 'SP-1').signed_by);
     await of.close();
   }
   // ---------- 7. escaping in spec names (tabs, chip, prints, prompts)
