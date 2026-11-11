@@ -240,6 +240,96 @@ function row() {
   rec('phone 360 px, PM: answers strip and sequence with "request sent" fit; ✓ Seen / Withdraw ≥ 44 px', sp2.sw <= sp2.cw + 1 && sp3.sw <= sp3.cw + 1 && sh.length >= 1 && sh.every(h => h >= 44) && wh.length >= 1 && wh.every(h => h >= 44), JSON.stringify([sp2, sh, sp3, wh]));
   await pp.close();
 
+  // ---------- 17. Manager issue 1 (11 Nov): the change is made but recording 'applied' fails — retried; still failing → a
+  // warning that stays, and "Apply now" never makes it again (this screen: refused; every screen: the job's date history has rq)
+  {
+    const T = X.makeServer(row());
+    X.seqRow(T, 'TA', 'P1', { wo: 'WO-3', floor: 'T09', unit: '13' }); X.seqRow(T, 'TB', 'P1', { wo: 'WO-4', floor: 'T09', unit: '13' });
+    X.seqRow(T, 'TC', 'P1', { wo: 'WO-1', floor: 'GF', unit: '12' }); X.seqRow(T, 'TE', 'P1', { wo: 'WO-7', floor: 'T09', unit: '16' });
+    const ask = (id, sid, wo, per, prev) => DS.reqInsert(T.db, { id, project_id: 'P1', kind: 'date', seq_ids: [sid], wos: [wo], change: { per: { [wo]: per } }, preview: { rows: [prev] }, why: 'Customer delay', asked_by: 'John Burke' });
+    const fail = { applied: 0, direct: 0, lost: 0, seen: null }; const tries = { applied: 0, direct: 0 };
+    const hook = async route => { const q = route.request(), m = q.method(); let b = null; try { b = JSON.parse(q.postData() || 'null'); } catch (e) {}
+      if (m === 'PATCH' && b && b.applied != null) { tries.applied++;
+        if (fail.seen) { const r = D.find(T.db, 'seq_requests', fail.seen); fail.seen = null; DS.reqUpdate(T.db, r, { seen_at: new Date().toISOString(), updated_by: 'John Burke' }); } // the PM taps ✓ Seen just before it lands
+        if (fail.applied > 0) { fail.applied--; return route.fulfill({ status: 503, contentType: 'application/json', body: '{"message":"Service Unavailable"}' }); } }
+      if (m === 'POST' && b && (Array.isArray(b) ? b[0] : b).status === 'direct') { tries.direct++;
+        if (fail.lost > 0) { fail.lost--; DS.reqInsert(T.db, Array.isArray(b) ? b[0] : b); return route.abort('connectionreset'); } // it landed, the reply was lost
+        if (fail.direct > 0) { fail.direct--; return route.fulfill({ status: 503, contentType: 'application/json', body: '{"message":"Service Unavailable"}' }); } }
+      return route.fallback(); };
+    const qa = await X.dev(browser, T, 'prod'); await asWho(qa.page, 'Pat Prod'); await qa.page.route('**/seq_requests*', hook);
+    const hist = (wo, id) => (job(T, wo).dueHist || []).filter(h => h.rq === id).length;
+    const card = (p, id) => p.evaluate(id => { const c = document.querySelector('[data-srcard="' + id + '"]'); return c ? { t: c.innerText, w: !!c.querySelector('.sr-unrec'), ap: !!c.querySelector('[data-srapply]') } : null; }, id);
+    const reqPg = async p => { await reload(p); await p.evaluate(() => { prodTab = 'req'; render(); }); await sleep(200); };
+
+    // a. fails twice, then works
+    ask('R-T1', 'TA', 'WO-3', { deliv: '2026-12-11', due: '2026-12-08' }, { wo: 'WO-3', from: '2026-12-03', to: '2026-12-08', dFrom: '', dTo: '2026-12-11' });
+    await reload(qa.page); fail.applied = 2; tries.applied = 0;
+    await qa.page.evaluate(() => seqDecide('R-T1', 'approved', '', 'Pat Prod')); await sleep(2500);
+    const t1 = D.find(T.db, 'seq_requests', 'R-T1');
+    rec('issue 1a: "applied" fails twice then works → recorded on the 3rd try, change made once, no warning', !!t1.applied && tries.applied === 3 && job(T, 'WO-3').dueDate === '2026-12-08' && hist('WO-3', 'R-T1') >= 1 && hist('WO-3', 'R-T1') <= 2 && !/not recorded/.test(await toast(qa.page)), JSON.stringify([t1.applied && t1.applied.moved, tries.applied, job(T, 'WO-3').dueDate, hist('WO-3', 'R-T1'), await toast(qa.page)]));
+
+    // b. fails every time → warning on the card + toast; Apply now refused on this screen
+    ask('R-T2', 'TB', 'WO-4', { deliv: '2026-12-04', due: '2026-12-01' }, { wo: 'WO-4', from: '2026-11-20', to: '2026-12-01', dFrom: '2026-11-25', dTo: '2026-12-04' });
+    await reload(qa.page); fail.applied = 99; tries.applied = 0;
+    await qa.page.evaluate(() => seqDecide('R-T2', 'approved', '', 'Pat Prod')); await sleep(5200);
+    const n2 = hist('WO-4', 'R-T2');
+    rec('issue 1b: "applied" fails every time → 4 tries, the change WAS made (WO-4 build 1 Dec), nothing recorded', tries.applied === 4 && job(T, 'WO-4').dueDate === '2026-12-01' && n2 >= 1 && D.find(T.db, 'seq_requests', 'R-T2').applied == null, JSON.stringify([tries.applied, job(T, 'WO-4').dueDate, n2]));
+    const tt = await toast(qa.page);
+    rec('issue 1b: a toast that stays: "Changed, but not recorded — do NOT tap Apply now; tell the office" (not "Approved ✓")', /Changed, but not recorded — do NOT tap Apply now; tell the office/.test(tt) && !/Approved ✓/.test(tt) && await qa.page.evaluate(() => document.getElementById('toast').classList.contains('stick')), tt);
+    const old3 = async p => { const pn = await p.evaluate(() => Date.now()); const r = T.db.t.seq_requests.find(q => q.id === 'R-T2'); r.decided_at = r.updated_at = new Date(pn - 180000).toISOString(); }; // 3 min later (the page's clock, as part 14)
+    await old3(qa.page);
+    await reqPg(qa.page);
+    const c2 = await card(qa.page, 'R-T2');
+    rec('issue 1b: the card keeps the warning at the top and shows NO "Apply now" (3 min later too)', !!c2 && c2.w && !c2.ap && /do NOT tap Apply now/.test(c2.t), JSON.stringify(c2));
+    const h0 = (job(T, 'WO-4').dueHist || []).length;
+    await qa.page.evaluate(() => seqReqApply(LST.sr.get('R-T2'), 'Pat Prod')); await sleep(5200);
+    rec('issue 1b: Apply now on this screen (called anyway) is refused — nothing made again, warning again', (job(T, 'WO-4').dueHist || []).length === h0 && hist('WO-4', 'R-T2') === n2 && /do NOT tap Apply now/.test(await toast(qa.page)), JSON.stringify([h0, (job(T, 'WO-4').dueHist || []).length, await toast(qa.page)]));
+    // another screen (fresh, knows nothing): the office has since moved WO-4 to build 9 Dec; "Apply now" there must NOT undo that
+    const w4 = job(T, 'WO-4'); w4.dueDate = '2026-12-09'; w4.delivDate = '2026-12-14';
+    fail.applied = 0;
+    const qb = await X.dev(browser, T, 'prod'); await asWho(qb.page, 'Sean Prod'); await old3(qb.page); await reqPg(qb.page);
+    const cb = await card(qb.page, 'R-T2');
+    rec('issue 1b: a second screen shows "Apply now" (it cannot know) …', !!cb && cb.ap && !cb.w, JSON.stringify(cb));
+    await qb.page.evaluate(() => document.querySelector('[data-srapply="R-T2"]').click()); await sleep(2500);
+    const t2 = D.find(T.db, 'seq_requests', 'R-T2');
+    rec('issue 1b: … but its Apply now finds rq:R-T2 in WO-4\'s date history → NOT made again (office\'s 9 Dec kept), now recorded', job(T, 'WO-4').dueDate === '2026-12-09' && job(T, 'WO-4').delivDate === '2026-12-14' && hist('WO-4', 'R-T2') === n2 && !!t2.applied && t2.applied.fromHist === 1 && /not made again/.test(await toast(qb.page)), JSON.stringify([job(T, 'WO-4').dueDate, hist('WO-4', 'R-T2'), t2.applied, await toast(qb.page)]));
+    await qb.close();
+    await reqPg(qa.page);
+    rec('issue 1b: once recorded, the first screen\'s warning goes', !(await card(qa.page, 'R-T2') || {}).w);
+
+    // c. ✓ Seen lands between the change and the "applied" write (version moved) → re-read and recorded, Seen kept
+    ask('R-T3', 'TE', 'WO-7', { deliv: '2026-11-30', due: '2026-11-25' }, { wo: 'WO-7', from: '2026-10-28', to: '2026-11-25', dFrom: '', dTo: '2026-11-30' });
+    await qa.page.evaluate(() => { const t = document.getElementById('toast'); t._stick = null; t.classList.remove('show', 'stick'); t.textContent = ''; }); // clear part b's warnings
+    await reload(qa.page); fail.seen = 'R-T3'; tries.applied = 0;
+    await qa.page.evaluate(() => seqDecide('R-T3', 'approved', '', 'Pat Prod')); await sleep(2500);
+    const t3 = D.find(T.db, 'seq_requests', 'R-T3');
+    rec('issue 1c: ✓ Seen racing the "applied" write → re-read, recorded on the 2nd try, seen_at kept, made once, no warning', !!t3.applied && !!t3.seen_at && tries.applied === 2 && job(T, 'WO-7').dueDate === '2026-11-25' && hist('WO-7', 'R-T3') >= 1 && hist('WO-7', 'R-T3') <= 2 && !/not recorded/.test(await toast(qa.page)), JSON.stringify([t3.applied && t3.applied.moved, t3.seen_at, tries.applied, job(T, 'WO-7').dueDate]));
+
+    // d. a direct row (office / Production Manager changed a fixed job): lost reply → found, ONE row; fails always → warning
+    fail.lost = 1; tries.direct = 0;
+    const d1 = await qa.page.evaluate(async () => { const r = await seqReqDirect('P1', 'date', { ids: ['TC'], wos: ['WO-1'], why: 'Production', note: 'lost reply', by: 'Pat Prod' }); return r && r.id; });
+    const dl = T.db.t.seq_requests.filter(q => q.status === 'direct' && q.note === 'lost reply');
+    rec('issue 1d: direct row whose reply was lost → re-read, found, exactly ONE row', !!d1 && dl.length === 1 && dl[0].id === d1, JSON.stringify([d1, dl.length, tries.direct]));
+    fail.direct = 99; tries.direct = 0;
+    const d2 = await qa.page.evaluate(async () => { const r = await seqReqDirect('P1', 'date', { ids: ['TC'], wos: ['WO-1'], why: 'Production', note: 'always fails', by: 'Pat Prod' }); return r; });
+    const tw = await toast(qa.page);
+    rec('issue 1d: direct row write fails every time → 4 tries, a warning that stays "not counted in Late changes … Tell the office"', d2 === null && tries.direct === 4 && /Changed, but not counted in "Late changes" \(WO-1\)/.test(tw) && /Tell the office/.test(tw) && !T.db.t.seq_requests.some(q => q.note === 'always fails'), JSON.stringify([d2, tries.direct, tw]));
+    fail.direct = 0;
+
+    // e. the Approve confirm box repeats "⚠ changed since asked" (and doesn't when nothing changed)
+    ask('R-T5', 'TC', 'WO-1', { deliv: '2026-12-01', due: '2026-11-26' }, { wo: 'WO-1', from: '2026-10-05', to: '2026-11-26', dFrom: '', dTo: '2026-12-01' });
+    await reqPg(qa.page);
+    const cm = await qa.page.evaluate(() => { let m = null; window.confirm = x => { m = x; return false; }; document.querySelector('[data-srok="R-T5"]').click(); return m; });
+    rec('issue 1e: Approve confirm repeats the card\'s "⚠ changed since asked: WO-1 is now build …"; nothing done on Cancel', /⚠ changed since asked: WO-1 is now build/.test(cm || '') && D.find(T.db, 'seq_requests', 'R-T5').status === 'open', cm);
+    const w1 = await qa.page.evaluate(() => { const o = DB.orders.find(o => o.wo === 'WO-1'); return [o.dueDate || '', o.delivDate || '']; });
+    T.db.t.seq_requests.find(q => q.id === 'R-T5').preview.rows[0].from = w1[0]; T.db.t.seq_requests.find(q => q.id === 'R-T5').preview.rows[0].dFrom = w1[1];
+    await reqPg(qa.page);
+    const cm2 = await qa.page.evaluate(() => { let m = null; window.confirm = x => { m = x; return false; }; document.querySelector('[data-srok="R-T5"]').click(); return m; });
+    rec('issue 1e: … and no ⚠ line when the job has not changed since asked', !!cm2 && /Approve this change\?/.test(cm2) && !/changed since asked/.test(cm2), cm2);
+    await qa.close();
+    rec('issue 1: no page errors', !(T.errors || []).length, JSON.stringify(T.errors));
+  }
+
   await pa.close(); await pb.close(); await pm.close();
   rec('no page errors', !(S.errors || []).length, JSON.stringify(S.errors));
   await browser.close();

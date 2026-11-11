@@ -4416,10 +4416,19 @@ async function seqReqMake(pid,kind,o){
     return got?{ok:true,q:got}:{err:seqReqErr(e)};}
 }
 // the office / Production Manager changed fixed rows themselves: one 'direct' row so the scorecard counts it (never blocks the change)
+/*v2 Manager issue 1: retried (same id — a reply lost on the way is found by re-reading); still failing → a warning that stays on screen*/
+const SEQ_REC_WAIT=[400,1000,2500]; // waits between tries when recording 'applied' / a direct row
+const seqWait=ms=>new Promise(r=>setTimeout(r,ms));
 async function seqReqDirect(pid,kind,o){
   if(!seqVis())return null;const ids=[...new Set(o.ids||[])].filter(Boolean);if(!ids.length)return null;
-  try{return await lsWrite('seq_requests',{id:uid('R'),project_id:pid,kind,seq_ids:ids,wos:(o.wos||[]).filter(Boolean),change:o.change||{},preview:o.preview||null,why:String(o.why||'').trim()||'?',note:String(o.note||'').trim()||null,status:'direct',asked_by:String(o.by||'').trim()||lqBy(''),applied:{at:nowISO(),by:o.by||''},applied_at:nowISO()});}
-  catch(e){console.warn('Direct change not counted: '+e.message);return null;}
+  const row={id:uid('R'),project_id:pid,kind,seq_ids:ids,wos:(o.wos||[]).filter(Boolean),change:o.change||{},preview:o.preview||null,why:String(o.why||'').trim()||'?',note:String(o.note||'').trim()||null,status:'direct',asked_by:String(o.by||'').trim()||lqBy(''),applied:{at:nowISO(),by:o.by||''},applied_at:nowISO()};
+  for(let k=0;k<=SEQ_REC_WAIT.length;k++){
+    if(k){await seqWait(SEQ_REC_WAIT[k-1]);try{const g=await seqReqFresh(row.id);if(g)return g;}catch(e){}}
+    try{return await lsWrite('seq_requests',row);}
+    catch(e){console.warn('Direct change not counted (try '+(k+1)+'): '+e.message);if(/^req:|violates|security/.test(String(e.message||'')))break;}
+  }
+  toast('⚠ Changed, but not counted in "Late changes" ('+((row.wos||[]).join(', ')||'the change')+') — no answer from the database. Tell the office.',true);
+  return null;
 }
 function seqReqDoneMsg(x){if(!x||x.status==='open')return false;toast('Already '+(SEQ_REQ_ST[x.status]||x.status)+(x.decided_by?' by '+x.decided_by:'')+' — nothing done',true);return true;}
 function seqReqBy(q,by){return(q.asked_by||'PM')+' (approved by '+by+')';}
@@ -4436,6 +4445,8 @@ function seqReqNow(q){
 async function seqReqApplyDate(q,by){
   if(!(await freshForImport()))throw new Error('the planner could not be reloaded — check the connection'); /*B7: re-run on TODAY's data (another PC may have moved the job since)*/
   const per=(q.change||{}).per||{},wos=Object.keys(per);
+  const done=seqReqInHist(q); /*v2 Manager issue 1: already made (its rq is in the date history) → never made again*/
+  if(done.length)return{kind:'date',moved:done.length,pulled:0,rebook:[],cut:[],skipped:[],fromHist:1};
   const res=moveDates(wos,{per},{why:q.why||'',note:q.note||''},seqReqBy(q,by),{src:'pmseq',reqId:q.id,frozenDays:seqFixedDays()}).apply();
   seqMapsDrop();
   return{kind:'date',moved:res.moved,pulled:res.pulled,rebook:(res.rows||[]).filter(r=>r.vanPulled).map(r=>r.wo),cut:(res.rows||[]).filter(r=>!r.skipped&&r.flags.includes('cut-week-kept')).map(r=>r.wo),skipped:(res.skipped||[]).slice(0,30)};
@@ -4457,6 +4468,27 @@ async function seqReqApplyMove(q,by){
 /*attack6: re-read first (a stale "Apply now" on a second screen must not re-apply over a later change), then claim the apply
   (version-checked) so two taps can't both apply. A claim this screen made whose apply failed may be retried at once.*/
 const SEQ_MYCLAIM=new Set(),SEQ_APPLYING=new Set();
+/*v2 Manager issue 1: the change was made but 'applied' could not be written — id → what was done (this screen). The card keeps a
+  warning and this screen never makes it again; on every screen the real guard is the job's date history (rq:<request id>).*/
+const SEQ_UNREC=new Map();
+const SEQ_UNREC_MSG='Changed, but not recorded — do NOT tap Apply now; tell the office';
+function seqReqUnrec(q){return !!q&&SEQ_UNREC.has(q.id)&&seqReqUnapplied(q);}
+// the jobs whose date history already carries this request (it was made, maybe on another screen)
+function seqReqInHist(q){const per=((q&&q.change)||{}).per||{};return Object.keys(per).filter(w=>{const o=dmFind(w);return o&&(o.dueHist||[]).some(h=>h&&h.rq===q.id);});}
+// write 'applied': a few tries; re-read when the version moved (e.g. the PM tapped ✓ Seen meanwhile) → true when recorded (by anyone)
+async function seqReqRecord(id,a){
+  for(let k=0;k<=SEQ_REC_WAIT.length;k++){
+    let x=LST.sr.get(id);
+    if(k){await seqWait(SEQ_REC_WAIT[k-1]);try{x=await seqReqFresh(id);}catch(e){continue;}}
+    if(!x)continue;
+    if(x.applied!=null){SEQ_UNREC.delete(id);SEQ_MYCLAIM.delete(id);return true;}
+    if(x.status!=='approved')return false;
+    try{if(await seqReqPatch(x,{applied:a})){SEQ_UNREC.delete(id);SEQ_MYCLAIM.delete(id);return true;}}
+    catch(e){console.warn('Request applied, not recorded (try '+(k+1)+'): '+e.message);}
+  }
+  SEQ_UNREC.set(id,a);return false;
+}
+function seqReqUnrecWarn(){toast('⚠ '+SEQ_UNREC_MSG+'.',true);}
 function seqHM(t){const d=new Date(t);return isNaN(d)?'':d.toLocaleTimeString('en-IE',{hour:'2-digit',minute:'2-digit'});}
 async function seqReqApply(q,by){
   if(SEQ_APPLYING.has(q.id))return null;SEQ_APPLYING.add(q.id);
@@ -4467,7 +4499,10 @@ async function seqReqApply1(q,by){
   try{x=await seqReqFresh(q.id);}catch(e){toast('No answer from the database — nothing done. Look again in a moment.',true);return null;}
   if(!x){toast('That request is no longer there',true);return null;}
   if(x.status!=='approved'){seqReqDoneMsg(x);return null;}
-  if(x.applied!=null){const ap=typeof x.applied==='object'?x.applied:{};toast('Already applied by '+(ap.by||x.decided_by||'another screen')+(seqHM(x.applied_at||ap.at)?' at '+seqHM(x.applied_at||ap.at):'')+' — nothing done',true);return null;}
+  if(x.applied!=null){SEQ_UNREC.delete(x.id);const ap=typeof x.applied==='object'?x.applied:{};toast('Already applied by '+(ap.by||x.decided_by||'another screen')+(seqHM(x.applied_at||ap.at)?' at '+seqHM(x.applied_at||ap.at):'')+' — nothing done',true);return null;}
+  if(SEQ_UNREC.has(x.id)){ // made on this screen, not recorded: never made again — only try to record it
+    if(await seqReqRecord(x.id,SEQ_UNREC.get(x.id))){toast('Recorded ✓ — the change was already made, not made again');return SEQ_UNREC.get(x.id)||{};}
+    seqReqUnrecWarn();return null;}
   const cb=seqReqClaimBy(x);
   if(cb&&!SEQ_MYCLAIM.has(x.id)&&srvAge(x.updated_at)<=SEQ_REQ_STALE_MS){toast('Being applied by '+cb+' on another screen right now — nothing done',true);return null;}
   let cl=null;try{cl=await seqReqPatch(x,{updated_by:'apply:'+by});}catch(e){toast('Not applied — '+seqReqErr(e),true);return null;}
@@ -4478,7 +4513,8 @@ async function seqReqApply1(q,by){
   catch(e){toast('Approved — not applied yet ('+e.message+'). Tap "Apply now" on the request.',true);return null;}
   finally{SEQ_DLG.busy=false;}
   a.by=by;a.at=nowISO();
-  try{const x=LST.sr.get(q.id)||q;if(await seqReqPatch(x,{applied:a}))SEQ_MYCLAIM.delete(q.id);}catch(e){console.warn('Request applied, not recorded: '+e.message);}
+  if(!(await seqReqRecord(q.id,a))){seqReqUnrecWarn();return a;}
+  if(a.fromHist){toast('Already made earlier (it is in the job\'s date history) — not made again ✓ recorded');return a;}
   if(q.kind==='move')toast(a.ok?'Approved ✓ — moved to #'+a.pos:'Approved — but not moved: '+a.err,!a.ok);
   else if(a.rebook.length||a.cut.length||a.skipped.length)lsDlg(`<div style="font-weight:800;color:#14335c;font-size:16px;margin-bottom:6px">✓ Approved — ${a.moved} job${a.moved!==1?'s':''} changed</div>
       ${a.rebook.length?`<div class="sd-req">🚚 Taken off vans — rebook: ${a.rebook.map(escA).join(', ')}</div>`:''}
@@ -4519,7 +4555,7 @@ function seqReqWithdraw(id,redraw){
 function seqReqCardHTML(q,act){
   const p=LST.p.get(q.project_id),when=t=>t?new Date(t).toLocaleString('en-IE',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'';
   const now=q.status==='open'?seqReqNow(q):null,rows=(q.preview||{}).rows||[],stuck=seqReqStuck(q);
-  const st=q.status==='open'?'':q.status==='direct'?`🛠 changed directly by ${escA(q.asked_by||'')}`:`${q.status==='approved'?'✓ Approved':q.status==='refused'?'✗ Refused':'↩ Withdrawn'} by ${escA(q.decided_by||'')} · ${escA(when(q.decided_at))}${q.answer?' — “'+escA(q.answer)+'”':''}${seqReqUnapplied(q)?(stuck?' · <b style="color:#b42318">not applied yet</b>':' · being applied…'):''}`;
+  const st=q.status==='open'?'':q.status==='direct'?`🛠 changed directly by ${escA(q.asked_by||'')}`:`${q.status==='approved'?'✓ Approved':q.status==='refused'?'✗ Refused':'↩ Withdrawn'} by ${escA(q.decided_by||'')} · ${escA(when(q.decided_at))}${q.answer?' — “'+escA(q.answer)+'”':''}${seqReqUnapplied(q)?(seqReqUnrec(q)?' · <b style="color:#b42318">changed, not recorded</b>':stuck?' · <b style="color:#b42318">not applied yet</b>':' · being applied…'):''}`;
   return `<div class="sr-card${q.status==='open'||stuck?'':' sr-dec'}" data-srcard="${escA(q.id)}">
     <div class="sr-h">${q.kind==='move'?'🔢 Order change':'📅 Date change'} · ${escA((p&&p.name)||q.project_id)} · ✋ ${escA(q.asked_by||'')} <span class="sr-s">${escA(when(q.asked_at))}</span></div>
     <div class="sr-m">${q.kind==='move'?escA(seqReqSum(q)):rows.length?rows.map(x=>`<div>${escA(seqReqLine(x))}</div>`).join(''):escA((q.wos||[]).join(', '))}</div>
@@ -4527,12 +4563,12 @@ function seqReqCardHTML(q,act){
     ${now?`<div class="sr-s">If you approve now: ${escA(now.line)}</div>${now.since.length?`<div class="sr-m" style="color:#b42318">⚠ changed since asked: ${now.since.map(escA).join(' · ')}</div>`:''}`:''}
     ${st?`<div class="sr-s">${st}</div>`:''}
     ${act&&q.status==='open'?`<div class="sr-act"><button class="btn btn-g" data-srok="${escA(q.id)}">✓ Approve</button><button class="btn btn-s" data-srno="${escA(q.id)}">✗ Refuse — reason required</button></div>`:''}
-    ${act&&stuck?`<div class="sr-act"><b style="color:#b42318">Approved — not applied yet</b><button class="btn btn-g" data-srapply="${escA(q.id)}">Apply now</button></div>`:''}
+    ${seqReqUnrec(q)?`<div class="sr-m sr-unrec" style="color:#b42318;font-weight:700;background:#fdf3f2;border:1px solid #e5a39b;border-radius:6px;padding:6px 8px">⚠ ${escA(SEQ_UNREC_MSG)}</div>${act?`<div class="sr-act"><button class="btn btn-s" data-srrec="${escA(q.id)}">Try to record it again</button></div>`:''}`:act&&stuck?`<div class="sr-act"><b style="color:#b42318">Approved — not applied yet</b><button class="btn btn-g" data-srapply="${escA(q.id)}">Apply now</button></div>`:''}
   </div>`;
 }
 function seqReqPage(app){
-  const act=ROLE==='prod',all=seqReqAll(),open=seqReqOpen(),stuck=all.filter(seqReqStuck);
-  const dec=all.filter(q=>q.status!=='open'&&!seqReqStuck(q)).sort((a,b)=>String(b.decided_at||b.asked_at||'').localeCompare(String(a.decided_at||a.asked_at||''))).slice(0,30);
+  const act=ROLE==='prod',all=seqReqAll(),open=seqReqOpen(),stuck=all.filter(q=>seqReqStuck(q)||seqReqUnrec(q));
+  const dec=all.filter(q=>q.status!=='open'&&!stuck.includes(q)).sort((a,b)=>String(b.decided_at||b.asked_at||'').localeCompare(String(a.decided_at||a.asked_at||''))).slice(0,30);
   app.innerHTML=`<div class="pg"><div class="exp-panel" id="sr-pg">
     <div style="font-size:18px;font-weight:800;color:#14335c;margin-bottom:4px">✋ Change requests — ${open.length} waiting</div>
     <div style="font-size:12px;color:var(--t3);margin-bottom:10px">A PM asked to change a job inside the next ${seqFixedDays()} days. Approve = the change is made now on today's data (build week, vans, saw and stores follow, like any date change). Refuse = nothing moves; your reason goes back to the PM.</div>
@@ -4544,10 +4580,13 @@ function seqReqPage(app){
 }
 function seqReqBind(root,redraw){
   root.querySelectorAll('[data-srok]').forEach(b=>b.onclick=()=>{const q=LST.sr.get(b.dataset.srok);if(!q)return;
-    if(!confirm('Approve this change?\n\n'+seqReqSum(q)+'\n\nIt is made now, with every date rule (vans, build week, saw and stores).'))return;
+    const sn=seqReqNow(q).since; /*v2: the card's "changed since asked" line, repeated here*/
+    if(!confirm('Approve this change?\n\n'+seqReqSum(q)+(sn.length?'\n\n⚠ changed since asked: '+sn.join(' · ')+'\nApproving makes exactly what was asked.':'')+'\n\nIt is made now, with every date rule (vans, build week, saw and stores).'))return;
     seqBy(async by=>{b.disabled=true;await seqDecide(q.id,'approved','',by);redraw();});});
   root.querySelectorAll('[data-srno]').forEach(b=>b.onclick=()=>seqReqRefuseDlg(b.dataset.srno,redraw));
   root.querySelectorAll('[data-srapply]').forEach(b=>b.onclick=()=>{const q=LST.sr.get(b.dataset.srapply);if(!q||!seqReqUnapplied(q))return redraw();
+    seqBy(async by=>{b.disabled=true;await seqReqApply(q,by);redraw();});});
+  root.querySelectorAll('[data-srrec]').forEach(b=>b.onclick=()=>{const q=LST.sr.get(b.dataset.srrec);if(!q)return redraw();
     seqBy(async by=>{b.disabled=true;await seqReqApply(q,by);redraw();});});
 }
 function seqReqRefuseDlg(id,redraw){
