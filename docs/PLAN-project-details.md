@@ -1074,3 +1074,17 @@ insTpl filter · 7 L9 (after D4 is merged) · 8 L10 · 9 full suite → Tester �
   screens with code from before S1/S2 and see the new board step options (JOB SHIPPED / INSTALLED / COMPLETED) and the PM's 📦 Shipped tab —
   intended changes; the Tester should allow them as attack5 B8 now does (not changed by the Coder). tests/seq: all others pass; tests/dates:
   only the accepted rows.
+- **Evening — Tester attack 9 (17e680c) findings fixed** (attack9-pmerge was 25 / 4 → **29 / 0**; attack9-ship-spec 16 / 1 → **17 / 0**):
+  889ee7f M4 HIGH — the save merge treats settings `pMerged` / the WO's `pFrom` as a tombstone: a merged P-number edited on a stale
+  screen is dropped again, the WO's history says the change was not kept, and that screen is told to make it on the WO; merged
+  P-numbers are never reused. For screens running an OLDER version: new **PENDING SQL "Merged P-numbers stay merged"** (trigger
+  `pp_pmerged_guard`, refuses a save that brings one back; no table / column / GRANT) — tests/seq/pg-pmerged.sql passes twice, json and
+  jsonb, and with every other block run (seq pg-check still passes). 618ace8 M3b — merge re-reads the database first ("already merged by X
+  on another screen", nothing done again; two PCs at the same moment → one pFrom, one pMerged entry, one merge line; no false sequence
+  warning); M5 — when both have a sequence row, ONE stays: the earlier-placed one (ASSUMED), the other retired with a reason (seq_remove,
+  never deleted), its date carried over if the kept row has none. e7ba7e2 M9 — a P-number already shipped by hand is offered (never
+  pre-ticked, "P-number already shipped"); merging moves the shipped mark onto the WO. 58e591d T2a — a PM with no projects starts on PM: All.
+- **Full suite** at 58e591d (256 test files + 4 probes): **5,765 pass / 47 fail** = the accepted rows (dates attack1-oldversion ×3,
+  attack3-guard, attack1-merge 1c, sawstores ×2, seq attack1-oldtab ×2, attack3-editor, attack4-fold, attack5-window ×2, attack7 2b,
+  stage1 t17 ×10) + e7 redraw and dates a5-histdedup 3b (timing; both pass alone) + attack8-merge ×5 (the Tester is updating those
+  expectations for S1/S2). tests/seq otherwise all pass.
