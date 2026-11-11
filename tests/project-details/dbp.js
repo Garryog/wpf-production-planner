@@ -53,14 +53,15 @@ function update(d, row, patch) {
   const old = clone(row), n = Object.assign(clone(row), clone(patch));
   n.version = old.version + 1; n.updated_at = now(); // lists_touch
   n.spec_id = old.spec_id; // an item stays on its spec
-  rules(n, old); specOf(d, n); check(n, d, row);
+  rules(n, old); specOf(d, n, old); check(n, d, row);
   Object.keys(row).forEach(k => delete row[k]); Object.assign(row, n); log(d, row, old); return row;
 }
 // psi_rules: an item takes its project from its spec
-function specOf(d, n) { const s = n.spec_id ? d.t.project_specs.find(x => x.id === n.spec_id) : null; n.project_id = s ? s.project_id : null; if (n.spec_id && !s) throw new DbError('null value in column "project_id" violates not-null constraint', '23502'); }
+function specOf(d, n, old) { const s = n.spec_id ? d.t.project_specs.find(x => x.id === n.spec_id) : null; n.project_id = s ? s.project_id : null; if (n.spec_id && !s) throw new DbError('null value in column "project_id" violates not-null constraint', '23502');
+  if (s && !s.active && (!old || n.value !== old.value || n.status !== old.status || n.item !== old.item)) throw new DbError('this spec is not used any more'); }
 // project_specs: pspec_rules + lists_touch + the unique name per project
 const SCOLS = ['id', 'project_id', 'name', 'spec_type', 'sort', 'active', 'version', 'updated_at', 'updated_by'];
-const sname = v => String(v == null ? '' : v).normalize('NFKC').replace(/\s+/g, ' ').trim();
+const sname = v => String(v == null ? '' : v).normalize('NFKC').replace(/[\u200B-\u200D\uFEFF]/g, '').replace(/\s+/g, ' ').trim();
 function specCheck(d, n, self) {
   if (!n.name) throw new DbError('a spec needs a name');
   if (!['kitchens', 'robes', 'schools'].includes(n.spec_type)) throw new DbError('new row violates check constraint', '23514');
@@ -79,6 +80,7 @@ function updateSpec(d, row, patch) {
   Object.keys(patch).forEach(k => { if (!SCOLS.includes(k)) throw new DbError('Could not find the \'' + k + '\' column of \'project_specs\' in the schema cache', 'PGRST204'); });
   const n = Object.assign(clone(row), clone(patch)); n.name = sname(n.name);
   if (n.project_id !== row.project_id) throw new DbError('a spec stays on its project');
+  if (row.active && !n.active && !d.t.project_specs.some(x => x !== row && x.project_id === row.project_id && x.active)) throw new DbError('a project keeps at least one spec');
   n.version = row.version + 1; n.updated_at = now(); specCheck(d, n, row);
   Object.keys(row).forEach(k => delete row[k]); Object.assign(row, n); return row;
 }

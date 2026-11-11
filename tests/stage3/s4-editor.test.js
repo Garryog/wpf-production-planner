@@ -35,22 +35,33 @@ const res = []; const rec = (n, ok, d) => { res.push(ok); console.log((ok ? 'PAS
     s('0|item', 'Gable'); s('0|qty', '2'); s('0|L', '900'); s('0|W', '560'); s('0|edging', '1mm');
     o.querySelector('#me-save').click(); return o.querySelector('#me-err').textContent; });
   rec('a saw row with no material is refused', /Pick the material for every saw row/.test(c), c);
-  const d = await off.page.evaluate(() => { const o = document.querySelector('.pod-ovl');
+  await off.page.evaluate(() => { const o = document.querySelector('.pod-ovl');
     const s = (k, v) => { const e = o.querySelector('[data-mr="' + k + '"]'); if (e.tagName === 'SELECT' && ![...e.options].some(o => o.value === v)) e.add(new Option(v, v)); /* an edging code not in the drop-down = the user's "Other…" (9 Nov) */ e.value = v; (e.oninput || e.onchange)(); };
     s('0|mat', 'MFC White'); o.querySelector('#me-addsaw').click(); document.querySelector('.pod-ovl #me-addsaw').click();
     const s2 = (k, v) => { const e = document.querySelector('.pod-ovl [data-mr="' + k + '"]'); if (e.tagName === 'SELECT' && ![...e.options].some(o => o.value === v)) e.add(new Option(v, v)); /* an edging code not in the drop-down = the user's "Other…" (9 Nov) */ e.value = v; (e.oninput || e.onchange)(); };
     s2('1|item', 'Hinge'); s2('1|qty', '8'); s2('1|mat', 'Blum hinge');
     s2('2|item', 'Sink'); s2('2|qty', '1');
-    const pr = window.prompt; localStorage.removeItem('wpfEditPin'); const ans = ['Franke 1.5 bowl', null]; window.prompt = () => ans.shift(); // "+ Add new material…", no PIN → this row only, flagged
-    s2('2|mat', '__add'); window.prompt = pr;
-    const m2 = document.querySelector('.pod-ovl [data-mr="2|mat"]'), flagged = /fff4d6/.test(m2.getAttribute('style')) && m2.value === 'Franke 1.5 bowl';
+    // (rule changed by Garry 9/11 Nov — docs/PLAN-project-details.md): the office adds a new material to the project list with NO PIN
+    const pr = window.prompt; localStorage.removeItem('wpfEditPin'); window.__asked = 0; const ans = ['Franke 1.5 bowl']; window.prompt = m => { if (/PIN/.test(m)) window.__asked++; return ans.shift() || null; };
+    s2('2|mat', '__add'); window.__pr = pr; return {}; });
+  await F.sleep(600);
+  const d = await off.page.evaluate(async () => { window.prompt = window.__pr;
+    const m2 = document.querySelector('.pod-ovl [data-mr="2|mat"]'), added = m2.value === 'Franke 1.5 bowl' && !/fff4d6/.test(m2.getAttribute('style') || '') && window.__asked === 0;
+    // still covered: when the add FAILS (here: the database refuses it) the material is used on that row only, amber
+    document.querySelector('.pod-ovl #me-addsaw').click();
+    const s3 = (k, v) => { const e = document.querySelector('.pod-ovl [data-mr="' + k + '"]'); e.value = v; (e.oninput || e.onchange)(); };
+    s3('3|item', 'Basket'); s3('3|qty', '1');
+    const f0 = window.fetch; window.fetch = (u, o) => (o && o.method === 'POST' && /project_materials/.test(u) ? Promise.resolve(new Response(JSON.stringify({ code: '42501', message: 'refused' }), { status: 403 })) : f0(u, o));
+    const ans = ['Broken basket']; const pr = window.prompt; window.prompt = () => ans.shift() || null;
+    s3('3|mat', '__add'); await new Promise(r => setTimeout(r, 400)); window.fetch = f0; window.prompt = pr;
+    const m3 = document.querySelector('.pod-ovl [data-mr="3|mat"]'), flagged = /fff4d6/.test(m3.getAttribute('style') || '') && m3.value === 'Broken basket';
     const o2 = document.querySelector('.pod-ovl'); o2.querySelector('#me-type').value = 'kitchen'; o2.querySelector('#me-tname').value = 'Type A';
-    o2.querySelector('#me-save').click(); return { flagged }; });
-  rec('Stores rows: project fittings to pick from, or a new one added without the PIN — used on that row only, amber (editor step 5)', d.flagged, JSON.stringify(d));
+    o2.querySelector('#me-save').click(); return { added, flagged }; });
+  rec('Stores rows: a new fitting is added to the project list with no PIN (rule changed 9/11 Nov); if the add fails it is used on that row only, amber (editor step 5)', d.added && d.flagged, JSON.stringify(d));
   await F.sleep(600);
   const nl = S.db.t.lists.find(l => l.name === 'House 1' && l.id !== 'L1') || S.db.t.lists.find(l => l.id !== 'L1' && l.id !== 'T1');
   const lns = nl ? S.db.t.list_lines.filter(x => x.list_id === nl.id).sort((x, y) => x.seq - y.seq) : [];
-  rec('saved: project P1, type kitchen "Type A", edging kept, Blum hinge not flagged, "Other…" sink flagged', nl && nl.project_id === 'P1' && nl.list_type === 'kitchen' && nl.type_name === 'Type A' && lns[0].material === 'MFC White' && lns[0].edging === '1mm' && lns[1].material_other === false && lns[2].material === 'Franke 1.5 bowl' && lns[2].material_other === true, JSON.stringify(lns.map(x => [x.material, x.material_other])));
+  rec('saved: project P1, type kitchen "Type A", edging kept, Blum hinge and the added Franke sink not flagged, the failed-add basket flagged (rule changed 9/11 Nov)', nl && nl.project_id === 'P1' && nl.list_type === 'kitchen' && nl.type_name === 'Type A' && lns[0].material === 'MFC White' && lns[0].edging === '1mm' && lns[1].material_other === false && lns[2].material === 'Franke 1.5 bowl' && lns[2].material_other === false && S.db.t.project_materials.some(m => m.name === 'Franke 1.5 bowl' && m.project_id === 'P1') && lns[3] && lns[3].material === 'Broken basket' && lns[3].material_other === true, JSON.stringify(lns.map(x => [x.material, x.material_other])));
   // editing an existing list: a board not on the project list is kept and shown flagged; a typed fitting shows as Other…
   const e = await off.page.evaluate(() => { openListEditor('L1'); const o = document.querySelector('.pod-ovl'), m = o.querySelector('[data-mr="0|mat"]');
     const f2 = o.querySelector('[data-mr="2|mat"]'); return { sel: m.value, txt: m.options[m.selectedIndex].text, fit: f2.value, fitTxt: f2.options[f2.selectedIndex].text, hinge: o.querySelector('[data-mr="1|mat"]').value }; });

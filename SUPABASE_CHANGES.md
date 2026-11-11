@@ -13,7 +13,8 @@ Newest at the top. Each block must be run in Supabase BEFORE the matching code g
   Hinges, Worktop Colour …) with its value, its status (Not specified / Proposed / Signed off) and who signed it off and when.
 - The DATABASE keeps the rules, so an old or out-of-date screen can't break them: a blank or "TBC" value is always "Not
   specified" and can never be signed off; changing a signed-off value drops it back to "Proposed" and clears the signer;
-  a sign-off can't be re-dated or re-named afterwards. One row per item per spec (two PCs can't make two).
+  a sign-off can't be re-dated or re-named afterwards. A project always keeps at least one spec in use, and nothing can be
+  saved or signed on a spec that was marked "not used any more". One row per item per spec (two PCs can't make two).
 - Makes a history table `project_events`: every add / change / sign-off is written there BY THE DATABASE (who, when, old
   value, new value). The app can read it but never write, change or delete it.
 - Nothing is deleted: the app gets NO delete permission on either table. Writes are only taken while the lists are switched
@@ -46,9 +47,16 @@ create table if not exists project_specs(id text primary key, project_id text no
 create unique index if not exists pspec_uq on project_specs(project_id, lower(trim(name)));
 create or replace function pspec_rules() returns trigger language plpgsql as $$
 begin
-  new.name := btrim(regexp_replace(normalize(coalesce(new.name,''),NFKC),'\s+',' ','g'));
+  new.name := btrim(regexp_replace(regexp_replace(normalize(coalesce(new.name,''),NFKC),'[\u200B-\u200D\uFEFF]','','g'),'\s+',' ','g'));
   if new.name='' then raise exception 'a spec needs a name'; end if;
   if tg_op='UPDATE' and new.project_id<>old.project_id then raise exception 'a spec stays on its project'; end if;
+  -- a project keeps at least one spec in use (two PCs retiring the last two at the same moment take turns here),
+  -- otherwise nothing would be left to sign off and the project would quietly go green
+  if tg_op='UPDATE' and old.active and not new.active then
+    perform pg_advisory_xact_lock(hashtext('pspec:'||new.project_id));
+    if not exists(select 1 from project_specs s where s.project_id=new.project_id and s.id<>new.id and s.active) then
+      raise exception 'a project keeps at least one spec'; end if;
+  end if;
   return new;
 end $$;
 drop trigger if exists pspec_rules on project_specs;
@@ -63,6 +71,7 @@ create table if not exists project_spec_items(id text primary key, project_id te
   status text not null default 'not-specified' check(status in('not-specified','proposed','signed-off')),
   signed_by text, signed_at timestamptz, note text,
   version int not null default 1, updated_at timestamptz not null default now(), updated_by text);
+alter table project_spec_items add column if not exists spec_id text references project_specs(id); -- only matters if an earlier draft of this block was run
 alter table project_spec_items drop constraint if exists psi_signed_needs_value;
 -- TBC, T.B.C., TBA, "to be confirmed / advised" = not signed off (pasted no-break spaces, tabs and full-width letters count too)
 create or replace function psi_tbc(v text) returns boolean language sql immutable as $$
@@ -70,7 +79,8 @@ create or replace function psi_tbc(v text) returns boolean language sql immutabl
    ~ '^(|T\.? ?B\.? ?C\.?|T\.? ?B\.? ?A\.?|TO BE (CONFIRMED|ADVISED))$'
 $$;
 alter table project_spec_items add constraint psi_signed_needs_value check(status<>'signed-off' or not psi_tbc(value));
-create unique index if not exists psi_uq on project_spec_items(spec_id, lower(trim(item)));
+drop index if exists psi_uq;
+create unique index psi_uq on project_spec_items(spec_id, lower(trim(item)));
 
 
 -- Who changed what on a project, written ONLY by the database (the app can read it, never write or change it)
@@ -87,6 +97,10 @@ begin
   new.item := btrim(regexp_replace(normalize(new.item,NFKC),'\s+',' ','g'));
   if tg_op='UPDATE' then new.spec_id := old.spec_id; end if;                         -- an item stays on its spec
   select s.project_id into new.project_id from project_specs s where s.id=new.spec_id; -- and on that spec's project
+  -- nothing is saved or signed on a spec that was marked "not used any more" (another screen may have just done that)
+  if (tg_op='INSERT' or new.value is distinct from old.value or new.status is distinct from old.status or new.item is distinct from old.item)
+     and exists(select 1 from project_specs s where s.id=new.spec_id and not s.active) then
+    raise exception 'this spec is not used any more'; end if;
   if psi_tbc(new.value) then
     new.status := 'not-specified';
   elsif tg_op='UPDATE' and old.status='signed-off' and new.status='signed-off' and new.value is distinct from old.value then

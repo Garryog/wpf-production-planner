@@ -30,12 +30,12 @@ const LONG = 'Job – Kitchen and utility fit-out, Type B 3-bed end of terrace w
   const p = off.page;
   // ---- editor
   const ed = await p.evaluate(async () => { showTab('l'); openListEditor(null, 'WO-3', 'P1'); await new Promise(r => setTimeout(r, 120));
-    const s = document.getElementById('me-wo'), f = () => Object.fromEntries([...document.querySelectorAll('#me-woinfo [data-woi]')].map(e => [e.dataset.woi, e.textContent.trim()]));
+    const s = document.getElementById('me-wo'), f = () => Object.fromEntries([...document.querySelectorAll('#me-woinfo [data-woi]')].map(e => [e.dataset.woi, e.tagName === 'INPUT' && e.dataset.woe ? e.value.trim() : '(not an editable box) ' + e.textContent.trim()])); // (rule changed by Garry 9/11 Nov — docs/PLAN-project-details.md): editable boxes, read .value
     const r = { sel: s.options[s.selectedIndex].textContent, opts: [...s.options].map(o => o.textContent), info: f(), tt: document.querySelector('[data-woi="Title"]').title };
     s.value = 'WO-1'; s.onchange(); r.info2 = f(); s.value = 'WO-3'; s.onchange(); return r; });
   rec('editor: the picked WO shows just "WO-3 — Unit 31"', ed.sel === 'WO-3 — Unit 31', JSON.stringify(ed.sel));
   rec('editor: no drop-down option carries the title or customer', ed.opts.every(o => !/Aderrig|HOUSE 22|Kitchen/.test(o)), JSON.stringify(ed.opts));
-  rec('editor: read-only Floor | Unit | Title | Customer filled from WO-3 (title shown as text, full title on hover)',
+  rec('editor: editable Floor | Unit | Title | Customer boxes filled from WO-3 (full title on hover) (rule changed 9/11 Nov)',
     ed.info.Floor === '2' && ed.info.Unit === '31' && ed.info.Title === LONG && ed.info.Customer === 'Aderrig Homes' && ed.tt === LONG, JSON.stringify(ed.info));
   rec('editor: picking WO-1 changes the boxes to 1 / 22 / HOUSE 22 TYPE B', ed.info2.Floor === '1' && ed.info2.Unit === '22' && ed.info2.Title === 'HOUSE 22 TYPE B', JSON.stringify(ed.info2));
   if (SHOTS) { const r = await p.evaluate(() => { const b = document.querySelector('.me-ed').getBoundingClientRect(); return { x: Math.max(0, b.x - 10), y: Math.max(0, b.y - 10), width: Math.min(1400, b.width + 20), height: 260 }; }); await p.screenshot({ path: SHOTS + '/editor-header-1400.png', clip: r }); }
