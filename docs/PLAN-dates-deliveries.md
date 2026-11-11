@@ -406,3 +406,30 @@ showPicker needs Chrome 99+. Two PCs moving one job → newer wins, both in hist
   attack4 there; spot-check with the Production Manager on his own PC and an Android phone in Chrome; add to "Who to tell": "Tap the due
   date on a card to change it; → Wk N moves it a week; ◀ Prev / Next ▶ at the top." Not yet checked on a real phone/PC: the date picker,
   real mouse drag, sticky week bar, real long titles.
+
+### 11 Nov 2026 (scheduled run, ~01:00 UTC) — parked round-4 fixes carried over
+An earlier overlapping run built Tester round-4 fixes on `parked/job-a-fixes-run-2026-11-10-1903` (never on this branch). What this
+branch did not already have was carried over, one commit each; where both runs fixed the same thing this branch's version was kept.
+- `ea990d4` that run's Tester file, as **tests/dates/attack4b-usability.test.js** (name clash with this branch's attack4; same require
+  paths). Before the fixes on this branch: 84 pass / 10 fail.
+- `22b2b1d` (parked 77d1acd) **ASSUMED, Garry to confirm (Manager condition A):** the Production Manager gets a 🚚 Deliveries button next
+  to 🧭 Today on his screen (Today stays his home; lists switch off or on) — the full Deliveries page with the rights he already has
+  (`dateCanMove`, van booking). attack4b H signs in as Production Manager and taps it. stage3/flow-attack1-switchoff folds the new leading
+  "🧭 Today 🚚 Deliveries" pair (allowed difference).
+- `c9aded6` (parked bc814ba) Move ticked to week…: a ticked job on hold in Cienapps that is hidden from Deliveries is never moved; the button
+  and dialog count only ticked cards that can move (`wkTickedOk` / `wkMovable`); a ticked booked manual job is listed in the summary as
+  "not moved — on a van".
+- `29457dd` (parked 127e933) the sticky week bar is a drop target (◀ Prev = week before, Next ▶ = week after, label = shown week); past
+  weeks never light up, on the tabs or the bar (small addition: a past week on the bar is not outlined either, class `nodrop`); a drop on a
+  van cell clears the tab glow. **Kept this branch's** Prev/Next ends (ab6192f — booked weeks beyond +12, Later = end) and dragend fix
+  (84462fc) instead of the parked versions.
+- `94d2396` (parked da0f017) one due-tag colour rule everywhere (red overdue, amber this week, grey later). The board's "planned week ends
+  after the due date" warning is now its own small "⚠ built after due" chip instead of turning the tag red. c10 check 11 updated (intended
+  change); switch-off comparison folds the chip.
+- `74ca5f0` (parked 9f0c93b) 360 px: long customer name with no spaces wraps in the group heading (no sideways scroll); Floor / Unit badges
+  wrap onto a second line instead of "…"; customer on a card wraps to 2 lines with a tooltip. **Choice:** this differs from the addendum's
+  "badges cut off with …" — wrapping was taken (the lead listed it); this branch's tooltips (22443be) are kept, so attack4 U2 still passes.
+- Skipped (already on this branch): parked Next-off-on-Later and dragend clears the drag list (ab6192f, 84462fc).
+- Tests: attack4b 94 pass / 0 fail; attack4 43 / 2 (the 2 accepted L12); c10 62 / 0; switch-off 12 / 0. Full suite (208 files incl. the
+  4 probes, 3 at a time): **3,802 pass / 30 fail** — the same 30 as before (2 L12 + 28 on ACCEPTED-FAILURES); no new failures, no timing
+  reruns needed. header-late-probe still crashes on the import mapping screen (pre-existing).
