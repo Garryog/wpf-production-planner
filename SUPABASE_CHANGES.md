@@ -4,6 +4,50 @@ Newest at the top. Each block must be run in Supabase BEFORE the matching code g
 
 ---
 
+## 2026-11-11 — Merged P-numbers stay merged — PENDING, NOT YET RUN — Garry runs this with (or after) the PM sequence block, BEFORE merging `feature/project-details-v2`
+
+**Why (plain English):** when a Cienapps import folds a planner P-number into its real work order (L4b), the P-number leaves the job
+list and is remembered in the planner settings (`pMerged`). The new code never lets it come back, even from a screen that was not
+refreshed. But a screen still running an OLDER version of the planner does not know about merges: if it still shows the P-number and
+saves, it could put the P-number back beside the work order — two jobs for one house. This SQL makes the database refuse such a save.
+That old screen shows "Save failed"; whoever is using it refreshes and gets the new version (and sees the work order instead).
+
+**What it changes:** one new function and one new trigger on `production_planner` (`pp_pmerged_guard`). It only looks at the job
+numbers. No table, no column, no data is touched, so no GRANT lines. Works whether `orders` / `settings` are stored as json or jsonb.
+Safe to run twice.
+
+**Rollback:** `drop trigger if exists pp_pmerged_guard on production_planner;`
+
+### Steps for Garry
+1. Supabase → WPF project → **SQL Editor** → **New query**. Copy everything in the grey box below, paste, **Run**. "Success. No rows returned" = done.
+2. Close and reopen every PC, saw, stores, floor screen and driver's phone on go-live day anyway.
+
+```sql
+-- ===================== MERGED P-NUMBERS STAY MERGED (L4b, attack9 M4) =====================
+-- A save may not bring back a P-number that the planner record lists as merged (settings.pMerged[].wo) and that is no longer a job.
+create or replace function pp_pmerged_guard() returns trigger language plpgsql as $$
+declare back text;
+begin
+  if new.orders is null then return new; end if;
+  select string_agg(distinct n->>'wo', ', ') into back
+    from jsonb_array_elements(case when jsonb_typeof(new.orders::jsonb)='array' then new.orders::jsonb else '[]'::jsonb end) n
+   where n->>'wo' ~ '^P-[0-9]+$'
+     and exists(select 1 from jsonb_array_elements(case when jsonb_typeof(coalesce(old.settings::jsonb->'pMerged','[]'::jsonb))='array'
+                  then old.settings::jsonb->'pMerged' else '[]'::jsonb end) t where t->>'wo' = n->>'wo')
+     and not exists(select 1 from jsonb_array_elements(case when jsonb_typeof(old.orders::jsonb)='array' then old.orders::jsonb else '[]'::jsonb end) o
+                  where o->>'wo' = n->>'wo');
+  if back is not null then
+    raise exception '% was merged into its Cienapps work order — this screen is out of date. Refresh the page.', back;
+  end if;
+  return new;
+end $$;
+drop trigger if exists pp_pmerged_guard on production_planner;
+create trigger pp_pmerged_guard before update on production_planner for each row execute function pp_pmerged_guard();
+```
+Checked twice on a throwaway Postgres (orders/settings as jsonb and as json): `tests/seq/pg-pmerged.sql` → ALL PMERGED CHECKS PASSED.
+
+---
+
 ## 2026-11-10 — PM sequence & pre-production (Job B part 2) — PENDING, NOT YET RUN — Garry runs this AFTER the Stage 3 and Project details blocks and BEFORE merging `feature/project-details-v2`
 
 **What it does (plain English):**

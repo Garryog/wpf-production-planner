@@ -1070,6 +1070,7 @@ function mergePlan(base,mine,theirs,o){
   const orders=m3(base.orders||[],mine.orders||[],theirs.orders||[],['orders'],N,o,un.map(x=>x.orders||[]))||[];
   const settings=m3(base.settings||{},mine.settings||{},theirs.settings||{},['settings'],N,o,un.map(x=>x.settings||{}))||{};
   const plan={orders,nid:Math.max(+mine.nid||1,+theirs.nid||1),settings};
+  pMergedTidy(orders,settings,N); /*attack9 M4 / M3b: a merged P-number never comes back; two PCs' copies of one merge are one*/
   const sh=v=>v===undefined||v===null||v===''?'(blank)':String(typeof v==='object'?JSON.stringify(v):v).slice(0,40);
   N.forEach(n=>{
     if(n.path[0]!=='orders'||n.path.length<3)return;
@@ -1104,11 +1105,40 @@ function renumberP(base,mine,theirs,o){
   }
   return ren;
 }
+/* attack9 M4 (HIGH): a P-number merged into a Cienapps WO (L4b) is a tombstone — settings pMerged + the WO's pFrom. A screen that
+   still showed the P-job and saved an edit to it would otherwise bring it back beside the WO ("deleted here, changed there —
+   kept"). It is dropped again here, the WO's history says an out-of-date screen's change was not kept, and that screen is told.
+   A different job that happens to reuse the number (not made by new code — numbers of merged P-jobs are never reused) is kept.
+   M3b: two PCs that ran the same merge at the same moment — one pFrom copy, one pMerged entry, one merge line on the WO. */
+function pMergedTidy(orders,settings,N){
+  const tomb=new Map(),c0=x=>((x&&x.log||[])[0]||{}).at||'';
+  (settings.pMerged||[]).forEach(x=>{if(x&&x.wo&&x.into&&!tomb.has(x.wo))tomb.set(x.wo,x);});
+  orders.forEach(od=>(od.pFrom||[]).forEach(x=>{if(x&&x.wo&&!tomb.has(x.wo))tomb.set(x.wo,{wo:x.wo,into:od.wo,by:x.by,at:x.at,job:x.job});}));
+  if(!tomb.size)return;
+  for(let i=orders.length-1;i>=0;i--){const od=orders[i],t=tomb.get(od&&od.wo);if(!t||!/^P-\d+$/.test(String(od.wo)))continue;
+    if(t.job&&c0(t.job)&&c0(od)&&c0(t.job)!==c0(od))continue; // another job with the same number — not the merged one
+    orders.splice(i,1);
+    for(let j=N.length-1;j>=0;j--)if(N[j].path[0]==='orders'&&String(N[j].path[1]).replace(/^wo:/,'').replace(/#\d+$/,'')===od.wo)N.splice(j,1);
+    N.push({path:['orders','wo:'+od.wo],gone:'merged',pm:true,into:t.into,by:t.by||''});
+    const w=orders.find(x=>x.wo===t.into);if(w)logEdit(w,'An out-of-date screen changed '+od.wo+' after it was merged into '+t.into+' — that change was NOT kept (make it on '+t.into+')','(auto-merge)');}
+  // M3b: one copy of each merge
+  if(Array.isArray(settings.pMerged)){const seen=new Set();settings.pMerged=settings.pMerged.filter(x=>{const k=x&&x.wo+'>'+x.into;if(seen.has(k))return false;seen.add(k);return true;});}
+  orders.forEach(od=>{if(!Array.isArray(od.pFrom)||!od.pFrom.length)return;
+    const seen=new Set();od.pFrom=od.pFrom.filter(x=>{if(!x||seen.has(x.wo))return false;seen.add(x.wo);return true;});
+    const ml=new Map();(od.log||[]).forEach(x=>{const m=/^(P-\d+) \(planner P-number for this house\) merged into /.exec(String(x&&x.what||''));if(!m)return;
+      const k=m[1],p=ml.get(k);if(!p||(/⚠/.test(p.what)&&!/⚠/.test(x.what))||(!!/⚠/.test(p.what)===!!/⚠/.test(x.what)&&String(x.at)<String(p.at)))ml.set(k,x);});
+    if(ml.size){const keep=new Set(ml.values());od.log=od.log.filter(x=>{const m=/^(P-\d+) \(planner P-number for this house\) merged into /.exec(String(x&&x.what||''));return !m||keep.has(x);});}
+    const sl=new Set();od.log=(od.log||[]).filter(x=>{if(!/^\[P-\d+\] /.test(String(x&&x.what||'')))return true;const k=x.at+'|'+x.by+'|'+x.what;if(sl.has(k))return false;sl.add(k);return true;});
+    if(Array.isArray(od.dueHist)){const sh=new Set();od.dueHist=od.dueHist.filter(h=>{const k=JSON.stringify(h);if(sh.has(k))return false;sh.add(k);return true;});}});
+}
 function noteMerge(N,ren,by){
   const r=Object.keys(ren||{});
   if(r.length&&V2()){let ch=false;r.forEach(w=>{const e=PMINE[w];if(e&&!e.to){e.to=ren[w];ch=true;}});if(ch){pMineSave();setTimeout(()=>pMineFix(),0);}} // our lists in the list tables follow (round 2)
   if(r.length){alert('Work order number changed: '+r.map(w=>w+' is now '+ren[w]).join(', ')+'.\n\nAnother screen created the same P-number at the same moment. Use the new number from now on (cutting lists were updated).');}
   if(!N||!N.length)return;
+  const pmN=N.filter(n=>n.pm); /*attack9 M4*/
+  if(pmN.length)alert(pmN.map(n=>String(n.path[1]).replace(/^wo:/,'')+' was merged into '+n.into+(n.by?' by '+n.by:'')+' on another screen.').join('\n')+'\n\nYour change to it was NOT kept — this screen now shows '+pmN.map(n=>n.into).join(', ')+'. Make the change there.');
+  N=N.filter(n=>!n.pm);if(!N.length)return;
   const g=N.filter(n=>n.gone).map(n=>String(n.path[1]).replace(/^wo:/,''));
   // Say plainly what changed: "<field> on <WO> was also changed by <who> — kept <value>"
   const sh=v=>v===undefined||v===null||v===''?'(blank)':String(typeof v==='object'?JSON.stringify(v):v).slice(0,30);
@@ -2218,9 +2248,7 @@ function renderBoard(app){
     const title=g('pwo-title'),due=g('pwo-due');
     if(!title){toast('Give the work order a title');document.getElementById('pwo-title').focus();return;}
     if(!due){toast('Set the due date — it drives cutting deadlines and the delivery plan');document.getElementById('pwo-due').focus();return;}
-    let num=Math.max(1000,...DB.orders.map(o=>{const m=String(o.wo).match(/^P-(\d+)$/);return m?+m[1]:0;}))+1;
-    while(DB.orders.some(o=>o.wo==='P-'+num))num++;
-    const wo='P-'+num;
+    const wo=nextPNumber(); /*attack9: merged P-numbers are never reused*/
     const val=parseFloat(g('pwo-val'))||0;
     let hours=parseFloat(g('pwo-hrs')),hoursEstimated=false;
     if(isNaN(hours)||hours<=0){hours=estimateHours(val);hoursEstimated=true;}
@@ -11595,8 +11623,9 @@ async function pFreshDup(pid,floor,unit,title,skip){
   const row=await fetchMain(),jobs=row&&Array.isArray(row.orders)?row.orders:[];
   const me={wo:'(new)',pid,floor,unit,title};return pSameHouse(me,jobs.concat(DB.orders).filter(x=>x.wo!==skip));}
 function nextPNumber(){
-  let num=Math.max(1000,...DB.orders.map(o=>{const m=String(o.wo).match(/^P-(\d+)$/);return m?+m[1]:0;}))+1;
-  while(DB.orders.some(o=>o.wo==='P-'+num))num++;
+  const used=DB.orders.map(o=>o.wo).concat((DB.pMerged||[]).map(x=>x&&x.wo),...DB.orders.map(o=>(o.pFrom||[]).map(x=>x&&x.wo))); // attack9: a merged P-number is never used again
+  let num=Math.max(1000,...used.map(w=>{const m=String(w||'').match(/^P-(\d+)$/);return m?+m[1]:0;}))+1;
+  while(used.includes('P-'+num))num++;
   return'P-'+num;
 }
 function manualListValidate(d){ // pure — used by the editor and the tests
