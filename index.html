@@ -4509,6 +4509,12 @@ function seqReqRefuseDlg(id,redraw){
   ta.oninput=()=>{ok.disabled=!ta.value.trim();};ta.focus();
   ok.onclick=()=>{const v=ta.value.trim();if(!v)return;ok.disabled=true;seqBy(async by=>{await seqDecide(id,'refused',v,by);ov.remove();redraw();});};
 }
+// the PM who asked: answers not seen yet (Garry: several PMs per project — the answer goes to the one who asked)
+function seqAnsMine(){if(ROLE!=='pm')return[];const me=seqMe('pm');if(!me)return[];
+  return seqReqAll().filter(q=>(q.status==='approved'||q.status==='refused')&&!q.seen_at&&seqKey(q.asked_by)===seqKey(me)).sort((a,b)=>String(a.decided_at||'').localeCompare(String(b.decided_at||'')));}
+function seqAnsHTML(){const a=seqAnsMine();if(!a.length)return'';
+  return `<div class="seq-ans" id="seq-ans">${a.map(q=>{const ok=q.status==='approved',p=LST.p.get(q.project_id);
+    return `<div class="${ok?'ok':'no'}" data-seqans="${escA(q.id)}"><span>✋ Your change request — ${escA((p&&p.name)||'')}: ${escA(seqReqSum(q))}</span><b style="color:${ok?'#0d6e46':'#b42318'}">${ok?'✓ APPROVED':'✗ REFUSED'} by ${escA(q.decided_by||'')}</b>${q.answer?`<span>“${escA(q.answer)}”</span>`:''}<span style="flex:1"></span><button class="btn btn-s" data-seqseen="${escA(q.id)}" style="min-height:40px">✓ Seen</button></div>`;}).join('')}</div>`;}
 async function seqReqSeen(id){const q=LST.sr.get(id);if(!q||q.seen_at)return;
   try{await seqReqPatch(q,{seen_at:new Date().toISOString()});}catch(e){toast('Not saved — '+e.message,true);}}
 // 📜 History: the database's own record (project_events, entity 'seq'), read when opened — who, when, what, old → new position
@@ -6451,7 +6457,8 @@ function renderPMV2(app){
   app.insertAdjacentHTML('afterbegin',`<div id="pm-strip" style="max-width:1400px;margin:10px auto 0;padding:0 20px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">${t('','🚚 Deliveries')}${t('snags','🩹 Snags')}${t('projects','🏗 Projects')}${sv?t('seq','🔢 Sequence'):''}<button id="pm-sent" class="dk-gate"${dkVis()?'':' hidden'} style="padding:9px 18px;border:none;border-radius:6px;font-size:15px;font-weight:700;cursor:pointer;background:#e6ebf2;color:#14335c">📦 Items sent</button>${sv?`<span style="flex:1"></span>${seqMeStrip('pm')}${mineAny?`<label class="seq-all"><input type="checkbox" id="pm-all"${PMALL?' checked':''}> All projects <small>(others read-only)</small></label>`:seqMe('pm')?'<span class="seq-un">No projects assigned to you yet — showing all</span>':''}`:''}</div>`);
   document.querySelectorAll('[data-pmtab]').forEach(b=>b.onclick=()=>{pmTab=b.dataset.pmtab;lsStart();render();});
   document.getElementById('pm-sent').onclick=()=>dkReportDlg();dkShow();
-  if(sv){const nb=seqNudgesHTML();if(nb){document.getElementById('pm-strip').insertAdjacentHTML('afterend',nb);document.querySelectorAll('[data-seqnudge]').forEach(b=>b.onclick=()=>{if(b.dataset.seqnudge)SEQV.pid=b.dataset.seqnudge;pmTab='seq';lsStart();render();});}
+  if(sv){const an=seqAnsHTML();if(an){document.getElementById('pm-strip').insertAdjacentHTML('afterend',an);document.querySelectorAll('[data-seqseen]').forEach(b=>b.onclick=async()=>{b.disabled=true;await seqReqSeen(b.dataset.seqseen);render();});} /*B7: the answer, until he taps Seen*/
+    const nb=seqNudgesHTML();if(nb){document.getElementById('pm-strip').insertAdjacentHTML('afterend',nb);document.querySelectorAll('[data-seqnudge]').forEach(b=>b.onclick=()=>{if(b.dataset.seqnudge)SEQV.pid=b.dataset.seqnudge;pmTab='seq';lsStart();render();});}
     seqMeBind('pm');const pa=document.getElementById('pm-all');if(pa)pa.onchange=()=>{PMALL=pa.checked;render();};
     if(!seqMe('pm')&&staffFor('pm').length&&!document.querySelector('.pod-ovl')&&!SEQ_ASKED.has('pm')){SEQ_ASKED.add('pm');seqMeAsk('pm');}}
 }
@@ -11419,16 +11426,21 @@ function weekPerf(jobs,pastIx){
   return{planned:planned.length,due:due.length,onTime:onTime.length,pct:due.length?Math.round(100*onTime.length/due.length):null,moved,partial,never,top};
 }
 function todayDayIx(){return (i=>i<0?6:i)(DEL_DAYS.indexOf(wdName(new Date())));}
+/*B7: "Late changes" — the change requests asked in that week (by the day asked): "3 (2✓ 1✗) + 1 direct"*/
+function seqLateChanges(wk){if(!wk)return'—';const a=seqReqAll().filter(q=>q.asked_at&&wkOf(isoOf(new Date(q.asked_at)))===wk);
+  const d=a.filter(q=>q.status==='direct').length,r=a.filter(q=>q.status!=='direct'&&q.status!=='withdrawn'),ok=r.filter(q=>q.status==='approved').length,no=r.filter(q=>q.status==='refused').length,w=r.length-ok-no;
+  if(!r.length&&!d)return'—';
+  return(r.length?r.length+' ('+[ok?ok+'✓':'',no?no+'✗':'',w?w+' waiting':''].filter(Boolean).join(' ')+')':'')+(d?(r.length?' + ':'')+d+' direct':'');}
 function scorecardHTML(n){
-  const rows=[{lbl:'This week (so far)',p:weekPerf(liveWeekJobs(),todayDayIx()),live:true}];
+  const rows=[{lbl:'This week (so far)',p:weekPerf(liveWeekJobs(),todayDayIx()),live:true,wk:thisWk()}],lc=seqVis();
   const ar=DB.delArchive||{};
   Object.keys(ar).sort().reverse().slice(0,n||8).forEach(k=>{
     const a=ar[k];const d=new Date(a.at);
-    rows.push({lbl:(a.w?'Wk '+wkNum(a.w)+' · closed ':'Wk '+wkNum(new Date(d.getTime()-3*86400000))+' · cleared ')+d.toLocaleDateString('en-IE',{day:'numeric',month:'short'}),p:weekPerf(a.jobs.map(j=>({...j,mv:j.mv||[],mw:j.mw||null})),7)});
+    rows.push({lbl:(a.w?'Wk '+wkNum(a.w)+' · closed ':'Wk '+wkNum(new Date(d.getTime()-3*86400000))+' · cleared ')+d.toLocaleDateString('en-IE',{day:'numeric',month:'short'}),p:weekPerf(a.jobs.map(j=>({...j,mv:j.mv||[],mw:j.mw||null})),7),wk:a.w?wkOf(a.w):isNaN(d)?'':wkOf(isoOf(new Date(d.getTime()-3*86400000)))});
   });
   const pc=p=>p.pct===null?'<span style="color:var(--t3)">—</span>':`<b style="color:${p.pct>=90?'#0d6e46':p.pct>=75?'#8a5a00':'#b42318'}">${p.pct}%</b> <span style="color:var(--t3);font-size:11px">${p.onTime}/${p.due}</span>`;
-  return `<table class="lst-tbl sc-tbl"><thead><tr><th>Week</th><th>Planned</th><th>On time</th><th>Moved</th><th>Partial runs</th><th>Never left</th><th>Main reasons</th></tr></thead><tbody>
-    ${rows.map(r=>`<tr${r.live?' style="background:#f4f8ff"':''}><td style="font-weight:700">${escA(r.lbl)}</td><td>${r.p.planned}</td><td>${pc(r.p)}</td><td>${r.p.moved.length||'—'}</td><td>${r.p.partial.length||'—'}</td><td>${r.p.never.length?`<b style="color:#b42318">${r.p.never.length}</b>`:'—'}</td><td style="font-size:12px">${r.p.top.slice(0,3).map(([w,c])=>escA(w)+' ×'+c).join(' · ')||'<span style="color:var(--t3)">—</span>'}</td></tr>`).join('')}
+  return `<table class="lst-tbl sc-tbl"><thead><tr><th>Week</th><th>Planned</th><th>On time</th><th>Moved</th><th>Partial runs</th><th>Never left</th><th>Main reasons</th>${lc?'<th title="Change requests for jobs inside the fixed window, asked that week: approved ✓ / refused ✗, plus changes the office or Production Manager made directly">Late changes</th>':''}</tr></thead><tbody>
+    ${rows.map(r=>`<tr${r.live?' style="background:#f4f8ff"':''}><td style="font-weight:700">${escA(r.lbl)}</td><td>${r.p.planned}</td><td>${pc(r.p)}</td><td>${r.p.moved.length||'—'}</td><td>${r.p.partial.length||'—'}</td><td>${r.p.never.length?`<b style="color:#b42318">${r.p.never.length}</b>`:'—'}</td><td style="font-size:12px">${r.p.top.slice(0,3).map(([w,c])=>escA(w)+' ×'+c).join(' · ')||'<span style="color:var(--t3)">—</span>'}</td>${lc?`<td class="sc-late" style="font-size:12px">${escA(seqLateChanges(r.wk))}</td>`:''}</tr>`).join('')}
   </tbody></table>
   <div style="font-size:11px;color:var(--t3);margin-top:6px">On time = delivered on the day it was planned, without being moved. Only days already gone are counted. Weeks are stored when a week is closed (📚 Past weeks); moves and reasons are recorded from 15 Oct 2026.</div>`;
 }
