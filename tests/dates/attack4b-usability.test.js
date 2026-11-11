@@ -458,14 +458,17 @@ const prep = async t => { await t.page.evaluate(HELP); return t.page; };
         out[r] = x;
       }
       out.same = __snap() === s0;
+      ls.set('wpfPin_prod', pins().prod); // (Coder, fix round) signed in to the Production Manager view, as staff are
       ROLE = 'prod'; tab = 'd'; render(); await W(80);
+      // (Coder, fix round: the Production Manager's home stays his dashboard — he opens Deliveries with the new 🚚 Deliveries button)
+      out.prodHome = (document.querySelector('#app h1') || {}).textContent || ''; const pdb = document.querySelector('[data-prodtab="deliv"]'); out.prodBtn = !!pdb; if (pdb) pdb.click(); await W(80);
       out.prod = { wkbar: !!document.getElementById('del-wkbar'), tabsBar: getComputedStyle(document.querySelector('.tabs')).display, h1: (document.querySelector('#app h1') || {}).textContent || '', dqb: document.querySelectorAll('#app [data-dqb]').length };
       ROLE = 'office'; render();
       return out;
     });
     const ro = ['saw', 'stores', 'driver', 'floor', 'pm', 'dash', 'design'];
     rec('H saw / stores / driver / floor / PM / management / drawing office: no date button, no week buttons, forced moves refused, nothing changed', ro.every(r => !Hh[r].dqb && !Hh[r].wk && !Hh[r].ovMove && !Hh[r].ovQ && !Hh[r].ovP) && Hh.same, JSON.stringify(ro.map(r => r + ':' + JSON.stringify(Hh[r]))));
-    rec('H the Production Manager role ("prod") can reach the Deliveries page (week bar, quick date edit) — Garry\'s buy-in user', Hh.prod.wkbar, 'Production Manager screen: "' + Hh.prod.h1 + '", main tabs display=' + Hh.prod.tabsBar + ', week bar=' + Hh.prod.wkbar + ' — dateCanMove() allows "prod" but render() sends prod to renderProd (dashboard) with the tabs hidden, so D1–D3 are only usable signed in as Office');
+    rec('H the Production Manager role ("prod") can reach the Deliveries page (week bar, quick date edit) — Garry\'s buy-in user', Hh.prod.wkbar && Hh.prodBtn && /Production/.test(Hh.prodHome) && Hh.prod.dqb > 0, 'home "' + Hh.prodHome + '", Deliveries button ' + Hh.prodBtn + ', quick-date buttons ' + Hh.prod.dqb + ' — Production Manager screen: "' + Hh.prod.h1 + '", main tabs display=' + Hh.prod.tabsBar + ', week bar=' + Hh.prod.wkbar + ' — dateCanMove() allows "prod" but render() sends prod to renderProd (dashboard) with the tabs hidden, so D1–D3 are only usable signed in as Office');
     await t.close();
   }
 

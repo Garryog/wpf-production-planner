@@ -20,7 +20,9 @@ const norm = s => String(s).replace(/\d{1,2}:\d{2}(:\d{2})?/g, 'HH:MM').replace(
 // dashboard's missed count reads "planned for a day already gone" (missed = by real date, any open week) for stage2's
 // "planned earlier this week", and the scorecard note says weeks are stored "when a week is closed" (Close week). Only these exact shapes are folded back, on both sides; everything else must still match.
 const DAYS = '(Mon|Tue|Wed|Thu|Fri|Sat)', MON = '(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)', VANS = '(?:Artic|Volvo|Renault|Iveco|Crafter|Smart Movers)';
-const normDates = s => norm(s).replace(new RegExp('\\b' + DAYS + ' \\d{1,2} ' + MON + '\\b', 'g'), '$1')
+// ALLOWED DIFFERENCE (Coder, round-4 carry-over 11 Nov — Production Manager buy-in, ASSUMED, Garry to confirm): the Production Manager
+// screen starts with its own two buttons "🧭 Today 🚚 Deliveries" (the way to the Deliveries page). Only that exact leading pair is taken off.
+const normDates = s => norm(s).replace(/^🧭 Today 🚚 Deliveries /, '').replace(new RegExp('\\b' + DAYS + ' \\d{1,2} ' + MON + '\\b', 'g'), '$1')
   .replace(new RegExp('\\(' + VANS + ' ' + DAYS + '\\)', 'g'), '($1)')
   .replace(/planned for a day already gone, not delivered|planned earlier this week, not delivered/g, '«missed»')
   .replace(/Weeks are stored when (?:a week is closed|the board is cleared) \(/g, 'Weeks are stored «close week» (')
