@@ -1138,3 +1138,15 @@ is public and the sheet holds customer / project names). What the planner needs 
   struck; part-struck shows "2 of 3 materials cut"; (3) machine + CNC day = the newest day tab the job is on; (4) sheets per material
   come from the Qty columns (better than Cienapps' single sheet count); (5) "out of step" = a job on the master tab not struck whose
   cut-by date (due − 7) has passed, or a job due inside 3 weeks that is not on the master tab at all.
+
+### 11 Nov 2026 (evening, Garry live) — what Johnny's strike-through means + a real Cienapps export
+- **Garry: a strike-through on Johnny's CNC list means the job's files are SENT TO THE MACHINE and the Cienapps unit labels and
+  Crystal reports are PRINTED** — i.e. the job is PROCESSED (Cienapps "5. WORK ORDER PROCESSED"), NOT cut. This replaces the earlier
+  ASSUMED reading ("struck = cut"). So for B9: strike-through (all materials) fills Johnny's PROCESSED tick; part-struck = "2 of 3
+  materials sent"; on the sheet but not struck = queued for processing; "cut" still comes only from Cienapps step 6 / the saw ticks.
+- **Cienapps work-order export received** (23 WOs; file not stored — public repo). Columns: Reference · Floor · To process · Unit ·
+  Due Date · Step · Customer · Title · Order # · Sub-total · # WO · Installation date · Shipping date · Created on · Total · Sales Rep ·
+  Type · Planned · WO Type · PO. Useful for B0 / B10: Floor is written "G", "GF", "LGF", "0", "1", "2", "T12", "Multiple" or blank;
+  Unit is "Apt 51", "X1", "63", "Multiple" or blank (8 of 23 have neither); Reference = order-line-floor-unit ("2796-15-2-APT 51");
+  # WO = "WO-2796-15"; there is a "To process" 0/1 column and a "Planned" 0/1 column the import does not use yet; several WOs of one
+  order share a Title. Tester: use these shapes (not the names) in the B0 key attacks — "LGF", "T12", "X1", "Multiple", blank/blank.
