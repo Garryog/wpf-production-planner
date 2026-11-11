@@ -1150,3 +1150,105 @@ is public and the sheet holds customer / project names). What the planner needs 
   Unit is "Apt 51", "X1", "63", "Multiple" or blank (8 of 23 have neither); Reference = order-line-floor-unit ("2796-15-2-APT 51");
   # WO = "WO-2796-15"; there is a "To process" 0/1 column and a "Planned" 0/1 column the import does not use yet; several WOs of one
   order share a Title. Tester: use these shapes (not the names) in the B0 key attacks — "LGF", "T12", "X1", "Multiple", blank/blank.
+
+---
+
+# Part 5 — B9 Johnny's pre-production pool
+*(Architect, 11 Nov 2026 22:00 UTC, unattended scheduled run — every key question uses the recommended answer, marked ASSUMED, Garry to confirm.)*
+
+## Goal (plain English)
+Johnny gets one list on the Pre-production screen of every work order to be processed in the next 3 weeks (or more if he picks),
+across every PM's projects, starting in due-date order. He drags it into his own working order without changing any PM's sequence,
+and ticks **Processed** when the CNC files are sent and the labels printed. Export Changes lists the ticks that still need
+"5. WORK ORDER PROCESSED" in Cienapps. Red/amber flags show what is late; a marker shows what a PM changed since he last looked.
+His spreadsheet stays in use; later the CNC view reads his tick and his order.
+
+## Key questions (ASSUMED — Garry to confirm)
+1. **Jobs due soon with no PM sequence row** (sequence not started, or no project): SHOWN with a grey tag "not in a PM sequence" /
+   "no project", sorted by due date; Cienapps step 5+ still shows them processed; they can't be ticked or moved until the PM/office
+   presses "Start the sequence". Top strip: "N jobs have no PM sequence: <project> (PM …), …". Why: `seq_pre` must point at a sequence
+   row; making a row by itself would change the PM's table; a planner-record field breaks the "pool writes no planner field" rule. No SQL.
+2. **Processed:** Cienapps step 5–11 → "✓ processed (Cienapps)", worked out on screen, nothing written. Johnny's tick writes `seq_pre`
+   (database stamps who/when). Cienapps below 5 → listed in Export Changes "set 5. WORK ORDER PROCESSED in Cienapps"; clears itself when an
+   import brings 5+. Un-tick allowed (own or sheet tick) with a reason (Ticked by mistake / Files need redoing / Other) in `seq_pre.note`,
+   logged by the database; refused when Cienapps says 5+ ("Cienapps says processed — change it there"). Waiting rows can't be ticked.
+3. **Johnny's order:** never-moved row → `preDefKey` = build-due day + fraction (project name, then PM position), so it follows its date.
+   Moved row → `pre_key` = midpoint of its neighbours (top = first − 1, bottom = last + 1); it stays put. New rows slot in by due date.
+   "↺ Back to due-date order" clears every `pre_key` after a confirm.
+4. **Out of step** (Part 2 Q14, processed rows ignored both sides): a not-processed row is flagged when a not-processed row ABOVE it has a
+   cut-by more than 2 working days later, or a row above is the same project + same due date with a HIGHER PM position. The default order
+   is never out of step.
+5. **Waiting rows ("⏳ no WO yet") are in the pool**: build due = `req_date` − `delivLead()` working days, shown with "~"; undated ones not
+   listed (footer count). Movable, not tickable.
+6. **Two PCs:** version-checked writes; a clash reloads the row, "changed on another screen — check and try again". Johnny reordering while a
+   PM moves a date: no clash (date on the job, order in `seq_pre`); the row gets "changed since you last looked".
+7. **Who:** Pre-production role with his name picked (`seqMe('pre')`), lists on. Office / Production Manager open the view with its PIN if he's off.
+8. **Amber** = not processed and build due within 7 × `preWks()` days (rows shown only because he picked more weeks are not amber).
+   **Red** = not processed and today after cut-by (cut-by day itself amber). Overdue unprocessed rows always listed.
+9. **"Changed since you last looked"** = due/delivery date, waiting row date or PM position changed, or new to the pool; per person per
+   device; first visit on a device = baseline (nothing flagged). "✓ Seen all" clears all; tapping a badge clears one.
+10. **Default filter = Not processed**; "All" one tap away.
+
+## What changes
+- **Pre-production → 🗂 Pool** (`renderPre` ~4181) replaces the placeholder. Header "Due by <date> (N wks) [weeks ▾ preWks()…12]" (device
+  only, `wpfPreWks`, never Settings). Filters PM / Project / Material / Processed (Not / Processed / All) in `PREV`, fold-out on a phone.
+  [✓ Seen all] [↺ Back to due-date order]. Strips: no-PM-sequence (Q1), red count past cut-by. Columns: My# · Due# · WO / "⏳ no WO yet" ·
+  Project · PM · Flr · Unit · Title · Due (`dueTag`, read-only) · Cut-by · Sheets (`o.sheetsCien`) · Material · Spec · List · Badges
+  (🔒 fixed, 🔁 moved N×, OUT OF STEP, ↻ changed, grey "not in a PM sequence") · ✓ Processed (who/when). PC: drag, ▲▼, # Move to.
+  Phone 360 px: cards (`.seq-tbl` card CSS ~255), ▲▼, # Move to, ✓ Processed ≥36 px; no drag, no sideways scroll.
+- **Export Changes** (`renderExport` ~10496): panel "⚙ Processed by pre-production — set 5. WORK ORDER PROCESSED in Cienapps (N)" only when
+  `seqVis()`: WO, Floor, Unit, Title, Customer, Cienapps step now, Processed by, When; own Excel button; Changes Excel gets a "Processed"
+  sheet when not empty. P-numbers, on hold, shipped left out.
+- **New functions** beside `renderPre`: `cncCutBy(due)` (= due − 7, then back with `isWorkDay` until a working day — not `prevWorkDay`,
+  which steps one day too far on a working day); `preDue(r,o)`; `preRows()` = live `LST.sq` rows + WO jobs from `DB.orders` (not manual)
+  with no live row (`seqWoRow`), base filter as `seqJobsToStart` (~4223), minus `woCut` / `isShipped` / `isOnHold` / `delDone` /
+  `dStage==='deliv'`, due ≤ today + 7 × weeks; `preDefKey`, `preKey`, `preOutOfStep(list)` (one pass, running max); `preProcessed(r,o)` →
+  `{on,src:'cienapps'|'tick'|'sheet',by,at}`; `preMaterial(o)` (distinct saw-line `mat` on the WO's live lists via a map built once per
+  redraw, else `specMatNames(pid)` grey "(spec)"); spec cell `specCount(pid)`; list cell `seqProgress(o,r).list`; `preWrite(seqId,patch)`
+  (POST when no `LST.sp` row, else PATCH `seq_pre?seq_id=eq.X&version=eq.V`; 409/23505/empty → GET, `lsPut`, throw "changed on another
+  screen"; NOT `lsWrite`, which filters on `id`); `preTick`, `preUntick` (`pickReason` → note); `preMove(id,{up|down|to|onto})` (midpoint
+  on the list as shown; gap < 1e-6 → "use Back to due-date order"); `preReset()`; `preSig`, `preSeen` (localStorage
+  `wpfSeen_pre_<name>`; blocked storage → nothing flagged); `preBind(root)` (pattern of `seqBind` ~4250–4284, `data-prer`); `preCienRows()`.
+- **Changed:** `woProgrammed(o)` (~10746) also true when the job's row is ticked in `seq_pre` and step < 6 (step 5 only when `!seqVis()`).
+  `lsRedraw` / `mergedRender` skip redraw while a pool drag is armed (`PREV.drag`).
+- **Data / SQL: NONE new.** `seq_pre` (PENDING "PM sequence & pre-production" block) already has `pre_key`, `processed`, `processed_by/at/src`,
+  `note`, `version`, stamping, "a sheet tick never clears a hand tick", `sp_log`, RLS, GRANTs. Reorders are not written to history (ASSUMED);
+  ticks / un-ticks are. Poll already 10 s for ROLE pre.
+
+## Must NOT change
+Lists OFF or SQL not run → old message, no new Export panel, no errors. The pool never changes a PM sequence (no `seq_move` / `seq_insert`
+/ `project_seq` writes) and never writes a planner field; it cannot move dates. Job A rules, Export Changes' existing sections, import
+counts, the Pre-production 📋 Cutting lists tab, `seqProgress` and the PM sequence page unchanged.
+
+## Risks
+Few tickable rows at go-live (Q1 — strip names PMs to press Start). Two Johnny devices (version checks). Redraw mid-drag (`PREV.drag`).
+Speed with ~2,000 jobs (maps once per redraw). Storage blocked → "changed since" off. Phones: Chrome only.
+
+## What the CNC view (B8) will read later
+Per WO: Johnny's order (`preKey`, tie-break / locked order), processed = `preProcessed().on`, `cncCutBy`, `seqFixedAt`, `o.sheetsCien`
+(per-material sheets from his sheet later), `preMaterial`, `project_seq.pos`. Sheet reader (not built): Job ID `2766_01` → WO-2766-1; all
+materials struck → `preWrite({processed:true, processed_src:'sheet'})`; never un-ticks; never re-ticks a row Johnny un-ticked after the sheet
+last changed (compare `seq_pre.updated_at`); only rows with a sequence row.
+
+## Acceptance checks
+1. SQL not run / lists OFF: old message, Export Changes unchanged, no console errors.
+2. Today Wed 11 Nov 2026, preWks 3: due Wed 2 Dec in (day 21), Thu 3 Dec out; weeks ▾ 4 brings 3 Dec in, not amber; preWks 2 acts as 3.
+3. Due 1 Nov, unprocessed, not cut → listed, red; at step 6 / saw ticked → gone; on hold / shipped → gone.
+4. Cut-by: due Tue 8 Dec → Tue 1 Dec; Sat 12 Dec → Fri 4 Dec; Fri 1 Jan 2027 → Thu 24 Dec 2026; Wed 24 Mar 2027 → Tue 16 Mar. Red from the day after.
+5. Default order due → project → PM position (Due# = My#). Drag on PC, ▲ / # Move to on 360 px. `project_seq` untouched. Order holds after reload; a new WO slots in by date.
+6. Out of step cases as Q4; processed never flagged; Back to due-date order clears.
+7. Tick at step 4 → stamped, in Export Changes + Excel sheet; import at step 5 → line gone. Step 5 never ticked → "✓ processed (Cienapps)", no `seq_pre` row.
+8. Un-tick asks a reason, history "unprocessed"; refused at Cienapps 5+.
+9. No sequence row → grey tag, not tickable / movable, named in strip. Waiting row "⏳ no WO yet", "~" date, movable not tickable.
+10. Two PCs tick the same row → one database row, second told + reloaded. PM date change → "↻ changed" within 2 min; Seen all clears; new device flags nothing.
+11. Filters each narrow; 360 px no sideways scroll, buttons ≥36 px.
+12. Full suite: nothing new outside ACCEPTED-FAILURES; Job A tests pass after the `woProgrammed` change.
+
+## Build steps (one commit each)
+1. B9a pool read-only (cut-by, rows, default order, processed, material/spec/list cells, amber/red, 🔒 🔁, no-sequence strip; fake `seq_pre` POST/PATCH routes in tests/seq/srvs.js if missing).
+2. B9b tick + un-tick + Export Changes panel + Excel sheet + `woProgrammed`.
+3. B9c Johnny's order (drag / ▲▼ / Move to), Back to due-date order, out of step, changed since, Seen all, drag redraw guard.
+4. B9d filters, fold-out, weeks ▾, 360 px pass.
+5. Tester → fixes → Manager.
+
+## Progress log — Part 5
