@@ -11483,16 +11483,17 @@ const PM_DEL=['delv','delVeh','delDay','delWk','delLoadedAt','delDispAt','delDel
 function pmBooked(o){return !!(o&&(o.delVeh||o.delDay||o.delWk||o.delLoadedAt||o.delDispAt));}
 function pmLbl(o){return [fuF(o)?'Fl '+fuF(o):'',fuU(o)?'Unit '+fuU(o):'',o.title||''].filter(Boolean).join(' · ');}
 function pMergePlan(js){
-  const ps=DB.orders.filter(o=>pIsP(o.wo)&&pLive(o));if(!ps.length)return[];
+  const ps=DB.orders.filter(o=>pIsP(o.wo)&&(pLive(o)||isShipped(o)));if(!ps.length)return[]; /*attack9 M9: a P-number shipped by hand is offered too (never pre-ticked)*/
   const ws=(js||[]).filter(o=>o&&!pIsP(o.wo)&&pLive(o)&&!isOnHold(o));if(!ws.length)return[];
   const wk=new Map(ws.map(w=>[w.wo,jobKey(w)])),pairs=[];
   ps.forEach(p=>{const pk=jobKey(p);ws.forEach(w=>{const k=wk.get(w.wo),m=keyMatch(pk,k);
     if(m.r==='different'||!pKindsMeet(p.title,w.title))return;
     if(m.r==='unsure'&&!(pk.u&&k.u&&keyUBase(pk.u)===keyUBase(k.u)))return; // a blank or other unit is no reason to offer it
-    pairs.push({p:p.wo,w:w.wo,key:woKey(w.wo),r:m.r,why:m.why,pT:pmLbl(p),wT:pmLbl(w)});});});
+    pairs.push({p:p.wo,w:w.wo,key:woKey(w.wo),r:m.r,why:m.why,pT:pmLbl(p),wT:pmLbl(w),pShip:!pLive(p)});});});
   pairs.forEach(x=>{const np=pairs.filter(y=>y.p===x.p).length,nw=pairs.filter(y=>y.key===x.key).length;
     const p=DB.orders.find(o=>o.wo===x.p),other=pSameHouseAll(p).filter(o=>!pIsP(o.wo)&&woKey(o.wo)!==x.key);
-    x.certain=x.r==='same'&&np===1&&nw===1&&!other.length;
+    x.certain=x.r==='same'&&np===1&&nw===1&&!other.length&&!x.pShip;
+    if(x.pShip){x.why='P-number already shipped — ticking it moves its shipped mark onto '+x.w+' (the house is not built twice)';return;}
     if(!x.certain)x.why=np>1?'this P-number could be more than one WO in this file':nw>1?'more than one P-number could be this WO':other.length?'the planner already has '+other.map(o=>o.wo).join(', ')+' for this house':x.why;});
   return pairs;
 }
@@ -11561,7 +11562,8 @@ async function pMerge(P,W,by,wNew){
   pl.forEach(l=>{listTag(l,w.wo,true,by);listTag(l,p.wo,false,by);});
   if(pl.length)notes.push('list '+pl.map(l=>'"'+l.name+'"').join(', ')+' moved');
   // step: the further on of the two
-  const sc=p.step&&w.step?stepCmp(p.step,w.step):null;if(sc!==null&&sc>0&&!stepIsShipped(p.step)){w.step=p.step;storeStamp(w,at);notes.push('step '+stepShort(p.step)+' (the planner was further on)');}
+  if(isShipped(p)){w.step=p.step;['shippedAt','shippedStep','installedAt','completeAt','completeBy','stepHand'].forEach(k=>{if(p[k]!=null&&w[k]==null)w[k]=p[k];});notes.push(P+' was already shipped — '+W+' is shipped too');} /*attack9 M9*/
+  else{const sc=p.step&&w.step?stepCmp(p.step,w.step):null;if(sc!==null&&sc>0&&!stepIsShipped(p.step)){w.step=p.step;storeStamp(w,at);notes.push('step '+stepShort(p.step)+' (the planner was further on)');}}
   // week: the planner's (a WO new in this import only has the automatic due-date week)
   if(p.plannedWeek&&(wNew||!w.plannedWeek)&&w.plannedWeek!==p.plannedWeek){w.plannedWeek=p.plannedWeek;if(wNew)orig[w.wo]=w.plannedWeek;}
   // hours typed by hand on the P-job win over an estimate
