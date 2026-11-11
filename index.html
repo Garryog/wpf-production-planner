@@ -4434,8 +4434,10 @@ function seqShift(d,n,unit,dv){if(!dmIsDate(d)||!n)return'';return unit==='wd'?d
 // → {dateOf(r,o,i) → {job:{deliv,due}} | {req} | {none}} or {err}
 function seqDtCalc(mode,rows,ov){
   const $=s=>ov.querySelector(s);
-  if(mode==='set'){const X=($('#sd-date')||{}).value||'';if(!dmIsDate(X))return{err:'Pick the required date.'};
-    const s=$('#sd-sug');if(s)s.textContent='build '+dShort(dmShiftWd(X,-delivLead()))+(isWorkDay(X)?'':' · ⚠ '+dShort(X)+' is not a working day');
+  if(mode==='set'){const X0=($('#sd-date')||{}).value||'';if(!dmIsDate(X0))return{err:'Pick the required date.'};
+    /*Garry 11 Nov: a date set on a Sunday / bank holiday moves to the next delivery day (the build date follows, on a working day); the preview says so*/
+    let X=X0;for(let i=0;i<14&&!isDelivDay(X);i++)X=addDayISO(X,1);
+    const s=$('#sd-sug');if(s)s.textContent=(X!==X0?'⚠ '+dShort(X0)+' is a bank holiday / Sunday — moved to '+dShort(X)+' · ':'')+'build '+dShort(dmShiftWd(X,-delivLead()));
     return{dateOf:()=>({job:seqJobDates(X),req:X})};}
   if(mode==='push'){const t=String(($('#sd-n')||{}).value||'').trim();if(!/^\d+$/.test(t)||+t<1||+t>99)return{err:'Type how many (a whole number, 1–99).'};
     const n=+t*(+(($('#sd-dir')||{}).value)||1),u=(($('#sd-u')||{}).value)==='wk'?'wk':'wd';
