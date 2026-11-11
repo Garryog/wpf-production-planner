@@ -1290,3 +1290,24 @@ reads the planner, `project_seq` and `seq_pre`, and writes `seq_pre` only (never
   "switching" state, sees it read-only. (7) The "changed" baseline is never taken while the tables are still loading. (8) P-numbers are
   in the pool (they need processing) but never in the Export Changes panel.
 - **Left:** Tester → fixes → Manager (build step 5). Not built: the sheet reader (B8 / later, as the plan says).
+
+### 12 Nov 2026 (scheduled run, night) — Coder: Tester attack10 findings fixed
+attack10-pool **84 / 0** (was 77 / 7), attack10-speed **16 / 0** (was 11 / 5); b9a 27 / 0, b9b 20 / 0, b9c 25 / 0, b9d 15 / 0;
+l4b-pmerge 23 / 0, attack9-pmerge 29 / 0. No Tester expectation changed.
+- 690065e **6f HIGH**: when a P-number merge retires one of two sequence rows, the retired row's `seq_pre` (Processed tick + pool place)
+  goes onto the kept row (both ticked → stays processed; both placed → the WO row's place). Original ticker kept in `processed_by`, the
+  original time in the note (the database stamps a new `processed_at` — **ASSUMED** acceptable, no SQL); history logged by the person merging.
+- d7625ce **3b HIGH**: a never-moved row's default key = day + its own fraction (project name first 3 letters → PM position → WO), no longer
+  its rank among that day's rows, so moved rows don't jump when same-day WOs arrive or leave. Default order now follows that key (two
+  projects sharing the first 3 letters can interleave by position — **ASSUMED** fine). No-room guard 1e-6 → 1e-9 (my b9c check moved with it).
+- e01c03a **P1/P2/P3**: filter boxes capped at 360 px (no 1,689 px page); "Not you?" 36 px on the pool strip.
+- bf82ce6 **D2/D3**: drag guard only while the pool is on screen, expires after 30 s, cleared by Escape / any mouse-pointer release /
+  page hidden / the Cutting lists tab; the 2-minute auto refresh respects it.
+- b27642b **1e / 4e / 4f LOW**: a lost reply re-reads the row (already as asked = saved, no "Not saved"); storage full → told once;
+  the seen map remembers its horizon (`_lim`), so rows that only come into view are remembered quietly, not "changed".
+- 8525328 tests moved to Garry's confirmed rules (11 Nov): sawstores retest-nov B (Mon 3 Jan 2028 holiday) 79 / 79, stage2 coder-r2 #4
+  (steps 1-11) 13 / 0, stage3 flow-attack1-switchoff office/b (S1 steps folded as an allowed difference) 12 / 0.
+- **Full suite** (263 test files + 4 probes, 3 at a time, at 8525328): **5,995 pass / 38 fail** = the ACCEPTED-FAILURES rows as before
+  (dates attack1-oldversion ×3, attack3-guard, attack1-merge 1c, sawstores ×2, seq attack1-oldtab ×2, attack3-editor, attack4-fold,
+  attack5-window ×2, attack7 2b, stage1 t17 ×10, t13 ×4, t14 ×3, t3, attack-poll P5, c4-queue A5) + t16 ×2 "WITH proposed guard"
+  (informational) + 2 timing under load (editor e7 redraw, stage1 s11-pend 2,500-job copy) that pass alone (23 / 0, 3 / 0). No new failure.
