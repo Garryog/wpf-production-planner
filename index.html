@@ -7568,10 +7568,12 @@ const SHEET_M2=5.75,SHEET_WASTE=0.10; // one full board = 5.75 m²; +10% for off
 const SHEET_MIN_DIM=100,SHEET_MAX_DIM=3000; // mm — a panel part outside this is flagged "check units"
 function isoOf(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function addDayISO(iso,n){const d=new Date(iso+'T12:00:00');d.setDate(d.getDate()+n);return isoOf(d);}
-// Irish public holidays (incl. the weekday substitutes for Christmas/St Stephen's at weekends). Edit here — one place.
-const IE_BANK_HOLS=['2026-01-01','2026-02-02','2026-03-17','2026-04-06','2026-05-04','2026-06-01','2026-08-03','2026-10-26','2026-12-25','2026-12-28',
-  '2027-01-01','2027-02-01','2027-03-17','2027-03-29','2027-05-03','2027-06-07','2027-08-02','2027-10-25','2027-12-27','2027-12-28',
-  '2028-01-01','2028-02-07','2028-03-17','2028-04-17','2028-05-01','2028-06-05','2028-08-07','2028-10-30','2028-12-25','2028-12-26'];
+// Irish public holidays — the actual days (also when they fall on a Saturday: no deliveries then either, attack8 1h/1j) AND the
+// weekday substitutes for a holiday at a weekend. Edit here — one place.
+// 3 Jan 2028 = substitute for New Year's Day on Sat 1 Jan 2028 — ASSUMED (attack8 1a), Garry to confirm.
+const IE_BANK_HOLS=['2026-01-01','2026-02-02','2026-03-17','2026-04-06','2026-05-04','2026-06-01','2026-08-03','2026-10-26','2026-12-25','2026-12-26','2026-12-28',
+  '2027-01-01','2027-02-01','2027-03-17','2027-03-29','2027-05-03','2027-06-07','2027-08-02','2027-10-25','2027-12-25','2027-12-26','2027-12-27','2027-12-28',
+  '2028-01-01','2028-01-03','2028-02-07','2028-03-17','2028-04-17','2028-05-01','2028-06-05','2028-08-07','2028-10-30','2028-12-25','2028-12-26'];
 function bankHolsStale(t){const last=IE_BANK_HOLS.reduce((a,d)=>d>a?d:a,'').slice(0,4);return (t||todayLocal())>=last+'-12-01'?last:'';} // from 1 Dec of the last year listed
 function isWorkDay(iso){return ![0,6].includes(new Date(iso+'T12:00:00').getDay())&&!IE_BANK_HOLS.includes(iso);}
 function nextWorkDay(iso){let d=addDayISO(iso,1);while(!isWorkDay(d))d=addDayISO(d,1);return d;} // Fri → Mon; skips bank holidays
