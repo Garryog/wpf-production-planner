@@ -36,13 +36,13 @@ const tk = (p, k) => p.evaluate(k => document.querySelector('[data-seqtk="' + k 
   await tk(pm.page, 'clear'); await tick(pm.page, 'QC'); await tk(pm.page, 'down');
   await X.dtOpen(pm.page, '[data-seqtool="push"]'); await sleep(200);
   await X.dtFill(pm.page, { 'sd-dir': '1', 'sd-n': '3', 'sd-u': 'wd' }); pv = await X.dtWhy(pm.page, 'Customer delay');
-  rec('PM mixed push: preview says 2 need the Production Manager (WO-1, WO-2), rest changes, HOUSE F has no date', /2 need the Production Manager/.test(pv.prev) && /WO-1, WO-2/.test(pv.prev) && /no date to move from/.test(pv.prev) && pv.ok, pv.prev);
+  rec('PM mixed push: preview says 2 need the Production Manager (WO-1, WO-2), rest changes, HOUSE F has no date', /2 inside the next 14 days — sent to the Production Manager as ONE change request/.test(pv.prev) && /WO-1 ·[\s\S]*; WO-2 ·/.test(pv.prev) && /no date to move from/.test(pv.prev) && pv.ok, pv.prev);
   await X.dtSave(pm.page);
   const a2 = await pj(pm.page, 'WO-3'), c1 = await pj(pm.page, 'WO-1');
   rec('free rows pushed 3 working days (build 9 → 14 Dec, delivery 14 → 17 Dec); fixed WO-1 unchanged', a2.due === '2026-12-14' && a2.deliv === '2026-12-17' && c1.due === '2026-10-22', JSON.stringify([a2, c1]));
   rec('waiting row pushed: 30 Nov → 3 Dec', X.D.find(S.db, 'project_seq', 'QW').req_date === '2026-12-03', X.D.find(S.db, 'project_seq', 'QW').req_date);
   const rt = await pm.page.evaluate(() => ([...document.querySelectorAll('.seq-res')].pop() || {}).innerText || 'none:' + (document.getElementById('toast') || {}).textContent);
-  rec('result lists the jobs that need the Production Manager', /NOT changed: WO-1, WO-2/.test(rt), rt);
+  rec('result: ONE change request sent for WO-1, WO-2 (B7), not changed until approved', /Change request sent to the Production Manager for WO-1, WO-2/.test(rt) && S.db.t.seq_requests.filter(q => q.status === 'open').length === 1, rt);
   await pm.page.evaluate(() => document.querySelectorAll('.pod-ovl').forEach(x => x.remove()));
   // ---- push by weeks onto Christmas: Fri 18 Dec + 1 week = Fri 25 Dec → next working day Tue 29 Dec
   X.DS.seqUpdate(S.db, X.D.find(S.db, 'project_seq', 'QX'), { req_date: '2026-12-18', updated_by: 'Seed' }, false);

@@ -1,7 +1,7 @@
 // PM sequence step 6 (B6c): the required date on a sequence row (PC + 360 px). Today = Wed 21 Oct 2026; fixed window = 14
 // days (to Wed 4 Nov). Sets the delivery date and build = delivery − 3 working days, with Job A's knock-ons (week, van,
 // history, Dates to change in Cienapps, cut job keeps its week). A PM's change inside the window is NOT made (request
-// next build); the office changes it with fx:1. Waiting rows: version-checked req_date. Fake Supabase only.
+// request — B7, tests/seq/s11); the office changes it with fx:1. Waiting rows: version-checked req_date. Fake Supabase only.
 // Run: node tests/seq/s8-row-date.test.js
 const X = require('./fixs.js');
 const { H, rec, sleep } = X;
@@ -35,7 +35,7 @@ const pj = async (p, wo) => p.evaluate(wo => JSON.parse(JSON.stringify(DB.orders
   // ---- day 14 / 15 edge on WO-4 (build 20 Nov, delivery 25 Nov, on a van) — PM
   await X.dtOpen(pm.page, '[data-seqdate="QB"]'); await sleep(200);
   await X.dtFill(pm.page, { 'sd-date': '2026-11-09' }); let pv = await X.dtWhy(pm.page, 'Customer delay');
-  rec('PM, required 9 Nov → build 4 Nov (day 14): needs the Production Manager, Save off', /need.*Production Manager/.test(pv.prev) && !pv.ok, pv.prev);
+  rec('PM, required 9 Nov → build 4 Nov (day 14): goes to the Production Manager as a request (B7: Save = "✋ Send the request")', /sent to the Production Manager as ONE change request/.test(pv.prev) && pv.ok && await pm.page.evaluate(() => /Send the request/.test(document.querySelector('#sd-ok').textContent)), pv.prev);
   await X.dtFill(pm.page, { 'sd-date': '2026-11-10' }); pv = await pm.page.evaluate(() => ({ prev: document.querySelector('#sd-prev').innerText, ok: !document.querySelector('#sd-ok').disabled }));
   rec('PM, required 10 Nov → build 5 Nov (day 15): free, and the van booking comes off (rebook)', !/Production Manager/.test(pv.prev) && pv.ok && /off .*rebook/.test(pv.prev), pv.prev);
   await X.dtSave(pm.page);
@@ -44,7 +44,7 @@ const pj = async (p, wo) => p.evaluate(wo => JSON.parse(JSON.stringify(DB.orders
   // ---- PM on a fixed row (WO-1 due tomorrow): listed, NOT changed
   await X.dtOpen(pm.page, '[data-seqdate="QC"]'); await sleep(200);
   await X.dtFill(pm.page, { 'sd-date': '2026-12-01' }); pv = await X.dtWhy(pm.page, 'Customer delay');
-  rec('PM on a 🔒 fixed job: "needs the Production Manager — request coming in the next build", Save off', /request coming in the next build/.test(pv.prev) && /WO-1/.test(pv.prev) && !pv.ok, pv.prev);
+  rec('PM on a 🔒 fixed job: "sent to the Production Manager as ONE change request when you Save" (B7), not saved here', /ONE change request/.test(pv.prev) && /WO-1/.test(pv.prev) && pv.ok, pv.prev);
   await pm.page.evaluate(() => document.querySelectorAll('.pod-ovl').forEach(x => x.remove()));
   rec('… WO-1 not changed', (await pj(pm.page, 'WO-1')).dueDate === '2026-10-22');
   // ---- waiting row: version-checked req_date

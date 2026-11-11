@@ -1,6 +1,6 @@
 // PM sequence step 4 (Coder, B6b): reorder — ▲ ▼, "# Move to…", HTML5 drag on PC, "Whole house" (same floor + unit moves
 // as a block), all through seq_move with the versions this screen read; two PCs at once → 'stale' → reload + message;
-// fixed (🔒) rows: a PM is told "Request a change — coming soon", the office moves them with a reason; 📜 History
+// fixed (🔒) rows: a PM is asked "Ask the Production Manager?" (B7 change request; Cancel = nothing sent), the office moves them with a reason; 📜 History
 // (who / when / old → new position) read from project_events. PC + 360 px phone; hidden before the SQL and with the
 // switch off. Fake Supabase only. Run: node tests/seq/s4-seq-move.test.js
 const X = require('./fixs.js');
@@ -59,13 +59,15 @@ const { H, rec, sleep } = X;
   rec('PC drag down: C dropped on E → A,B,D,E,C,F', ord() === 'QA,QB,QD,QE,QC,QF', ord());
   // a fixed row: the PM is told to ask, nothing moves
   const nMoves = (S.rpcCalls || []).filter(c => c.fn === 'seq_move').length;
+  // B7: the PM is asked whether to send a change request; Cancel = nothing sent (helper: read the dialog, then cancel it)
+  const askX = p => p.evaluate(() => { const o = [...document.querySelectorAll('.pod-ovl')].pop(); const t = o ? o.innerText : 'no dialog'; if (o) o.querySelector('#pod-x').click(); return t; });
   await pc1.page.evaluate(() => document.querySelector('[data-seqdn="QA"]').click()); await sleep(300);
-  const tf = await pc1.page.evaluate(() => (document.getElementById('toast') || {}).textContent || '');
-  rec('PM on a 🔒 fixed row: "✋ Request a change — coming soon", nothing sent', /Request a change — coming soon/.test(tf) && (S.rpcCalls || []).filter(c => c.fn === 'seq_move').length === nMoves && ord() === 'QA,QB,QD,QE,QC,QF', tf);
-  await pc1.page.dragAndDrop('tr[data-seqr="QB"] .seq-hd', 'tr[data-seqr="QD"]'); await sleep(400);
-  rec('PM dragging a fixed row: refused the same way', (S.rpcCalls || []).filter(c => c.fn === 'seq_move').length === nMoves && ord() === 'QA,QB,QD,QE,QC,QF', ord());
+  const tf = await askX(pc1.page);
+  rec('PM on a 🔒 fixed row: "Ask the Production Manager?" (B7); Cancel → nothing sent', /Ask the Production Manager\?/.test(tf) && (S.rpcCalls || []).filter(c => c.fn === 'seq_move').length === nMoves && !S.db.t.seq_requests.length && ord() === 'QA,QB,QD,QE,QC,QF', tf);
+  await pc1.page.dragAndDrop('tr[data-seqr="QB"] .seq-hd', 'tr[data-seqr="QD"]'); await sleep(400); await askX(pc1.page);
+  rec('PM dragging a fixed row: asked the same way, nothing moves', (S.rpcCalls || []).filter(c => c.fn === 'seq_move').length === nMoves && ord() === 'QA,QB,QD,QE,QC,QF', ord());
   await pc1.page.evaluate(() => { window.__prompt = '1'; document.querySelector('[data-seqto="QF"]').click(); }); await sleep(400);
-  rec('PM putting a FREE row above 🔒 fixed rows: "Request a change — coming soon", nothing sent', /Request a change — coming soon/.test(await pc1.page.evaluate(() => document.getElementById('toast').textContent)) && (S.rpcCalls || []).filter(c => c.fn === 'seq_move').length === nMoves && ord() === 'QA,QB,QD,QE,QC,QF', ord());
+  rec('PM putting a FREE row above 🔒 fixed rows: asked "Ask the Production Manager?", Cancel → nothing sent', /Ask the Production Manager\?[\s\S]*above/.test(await askX(pc1.page)) && (S.rpcCalls || []).filter(c => c.fn === 'seq_move').length === nMoves && ord() === 'QA,QB,QD,QE,QC,QF', ord());
 
   // ---- two PCs: the office window is open on the same list; the PM moves; the office's move is refused as stale
   const pc2 = await X.dev(browser, S, 'office');
@@ -123,7 +125,8 @@ const { H, rec, sleep } = X;
   await ph.page.click('[data-seqdn="QD"]'); await sleep(700);
   rec('phone: ▼ on D moves it down one', ord() === 'QE,QA,QF,QB,QC,QD', ord());
   await ph.page.evaluate(() => { const w = document.getElementById('seq-house'); w.checked = true; w.onchange(); window.__prompt = '1'; }); await ph.page.click('[data-seqto="QD"]'); await sleep(700);
-  rec('phone: Whole house + Move to 1 above 🔒 fixed rows → refused (request coming soon), nothing moves', ord() === 'QE,QA,QF,QB,QC,QD' && /Request a change/.test(await ph.page.evaluate(() => document.getElementById('toast').textContent)), ord());
+  const phAsk = await ph.page.evaluate(() => { const o = [...document.querySelectorAll('.pod-ovl')].pop(); const t = o ? o.innerText : 'no dialog'; if (o) o.querySelector('#pod-x').click(); return t; });
+  rec('phone: Whole house + Move to 1 above 🔒 fixed rows → "Ask the Production Manager?" (Cancel), nothing moves', ord() === 'QE,QA,QF,QB,QC,QD' && /Ask the Production Manager\?/.test(phAsk), ord() + ' ' + phAsk);
   const sc2 = await X.noScroll(ph.page);
   rec('phone: still no sideways scroll after moving', sc2.sw <= sc2.cw + 1, JSON.stringify(sc2));
   await ph.page.evaluate(() => document.getElementById('seq-hist').click()); await sleep(500);
