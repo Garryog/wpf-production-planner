@@ -9241,8 +9241,8 @@ function afterDelivOn(o){return !!(o&&o.dueAfterDeliv&&o.delivDate&&o.dueDate&&o
 function delivMvOn(o){return !!(o&&o.delivMv&&o.delDay&&o.delivDate&&slotDate(o)!==o.delivDate&&dStage(o)!=='deliv');}
 function delivFlagChips(o){return (afterDelivOn(o)?`<span class="dm-chip red" title="Build date ${escA(fmt(o.dueDate))} is after the delivery date ${escA(fmt(o.delivDate))}">⚠ build after delivery — check</span>`:'')
   +(delivMvOn(o)?`<span class="dm-chip red" title="Cienapps moved the delivery date after it was booked">⚠ booked ${escA(dShort(slotDate(o)))} — delivery date now ${escA(dShort(o.delivDate))} — check</span>`:'');}
-/*v-deliv DD1: the due-date tag — one style on every screen. opts: {late:true} (board: also red when the planned week ends after the
-  due date, keeps "(orig …)"), {noDeliv:true}, {ro:true} (never a button). Office / Production Manager get a button that opens the
+/*v-deliv DD1: the due-date tag — one style on every screen. opts: {late:true} (board: a "⚠ built after due" chip when the planned week
+  ends after the due date, keeps "(orig …)"), {noDeliv:true}, {ro:true} (never a button). Office / Production Manager get a button that opens the
   quick date picker (data-dqb → the hidden data-dq input); everyone else sees the same tag, not tappable. Manual jobs have no date. */
 function dTagTxt(iso){iso=String(iso||'').slice(0,10);const d=new Date(iso+'T12:00:00');if(!iso||isNaN(d))return String(iso||'');
   const y=d.getFullYear()!==new Date(todayLocal()+'T12:00:00').getFullYear();
@@ -9258,8 +9258,9 @@ function dueTag(o,opts){
   let h;
   if(!due)h=one('due','','no due date','grey','No due date');
   else{let c=dTagCls(due),ttl=c==='red'?'Overdue — was due '+fmt(due):c==='amber'?'Due this week':'Due date';
-    if(opts.late&&c!=='red'&&o.plannedWeek&&dmIsDate(String(o.plannedWeek))&&addDayISO(o.plannedWeek,4)>due){c='red';ttl='Planned build week ends after the due date';}
-    h=one('due',due,'Due '+dTagTxt(due),c,ttl);}
+    h=one('due',due,'Due '+dTagTxt(due),c,ttl);
+    /*round 4: one colour rule everywhere; the board's "planned week ends after the due date" warning is its own small chip*/
+    if(opts.late&&o.plannedWeek&&dmIsDate(String(o.plannedWeek))&&addDayISO(o.plannedWeek,4)>due)h+=`<span class="dm-chip red" style="margin:0" title="${escA('Planned build week '+wkLbl(o.plannedWeek)+' ends after the due date '+fmt(due))}">⚠ built after due</span>`;}
   const dv=!opts.noDeliv&&dmIsDate(String(o.delivDate||'').slice(0,10))?String(o.delivDate).slice(0,10):'';
   if(dv)h+=one('deliv',dv,'🚚 '+dTagTxt(dv),dTagCls(dv),'Delivery date');
   if(opts.late&&due&&o.origDueDate&&o.origDueDate!==due)h+=`<span class="due-orig">(orig ${escA(dShort(o.origDueDate))} Wk ${wkNum(String(o.origDueDate).slice(0,10))})</span>`;
