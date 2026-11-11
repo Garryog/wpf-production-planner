@@ -131,14 +131,14 @@ One thing must be said plainly. **`production_planner` is one big record, so the
 
 About 11 agent days in total.
 
-## 9. Key questions for Garry
-1. **Subcontractors:** no accounts until the Fitters view exists. Then they see their firm's jobs only (site, unit, delivery date, delivered snags and photos) and can mark a job "installed". *Recommend: yes.*
-2. **Pay for GitHub Pro (about $4 a month)** so the repo can go private while the site keeps running? *Recommend: yes.*
-3. **`cp_tracker` / `aa_tracker`:** move them to their own free Supabase project before the old key is deleted, as with quoting? *Recommend: yes.*
-4. **Who are the admins** (create, reset, disable)? *Recommend: Garry plus one office manager.*
-5. **Drivers:** a personal account each on their own phone, not one per van? *Recommend: personal.*
-6. **PMs:** keep them read-only on the main record until the snag and project tables arrive? *Recommend: yes.*
-7. **Passwords:** 10+ characters, changed at first sign-in, and stations never expire? *Recommend: yes.*
+## 9. Garry's answers (11 Nov 2026)
+1. Subcontractors: no accounts until the Fitters view exists: **yes.**
+2. GitHub Pro (about $4 a month) so the repo can go private with the site still running: **yes.**
+3. `cp_tracker` / `aa_tracker`: **these apps will not be used again.** So they are not moved. Before the old keys are deleted: take their public pages offline and keep the two tables as they are (never delete production data; they are already in the nightly export). After S3 they are closed like every other table.
+4. Admins: **Garry and Johnny.**
+5. Drivers: a personal account each on their own phone: **yes.**
+6. PMs read-only on the main record until the snag and project tables arrive: **yes.**
+7. Passwords 10+ characters, changed at first sign-in, stations never expire: **yes.**
 
 ## Code facts behind the plan
 - `SUPA_HDR` / `SUPA_WHDR` (lines 559–560) are fixed objects that send the publishable key as Bearer. The two photo uploads (lines 5349 and 6812) build their own headers.
