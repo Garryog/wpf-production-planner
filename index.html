@@ -2537,10 +2537,16 @@ async function lsGet(q){
   return out;
 }
 // Keep a database row unless we already hold that version or a newer one (the 30-second overlap re-sends rows we have)
+/*attack6: the database's clock, as a lower bound that never runs ahead — a row stamped U seen at performance time P means the
+  database's "now" is at least U + (performance.now() − P), whatever this PC's clock says*/
+let SRV_T=null;
+function srvSeen(r){const u=Date.parse(r&&r.updated_at);if(!u)return;const v=u-performance.now();if(SRV_T==null||v>SRV_T)SRV_T=v;}
+function srvAge(t){t=Date.parse(t)||0;const a=Date.now()-t;return SRV_T==null?a:Math.min(a,SRV_T+performance.now()-t);}
 function lsPut(t,rows,part){
   const M=LST[LS_T[t]];let n=0;
   (rows||[]).forEach(r=>{
     if(!r||r.id==null)return;
+    srvSeen(r);
     if(t==='list_lines'&&!LST.full.has(r.list_id))return; // lines of a list not loaded yet come with the whole list when it's opened
     if(r.updated_at&&!part&&(!LST.since[t]||r.updated_at>LST.since[t]))LST.since[t]=r.updated_at; // the database's clock, never this device's
     const o=M.get(r.id);
@@ -4349,7 +4355,13 @@ function seqReqAll(){return seqVis()?[...LST.sr.values()]:[];}
 function seqReqOpen(pid){return seqReqAll().filter(q=>q.status==='open'&&(!pid||q.project_id===pid)).sort((a,b)=>String(a.asked_at||'').localeCompare(String(b.asked_at||'')));}
 function seqReqOfRow(id){return seqReqAll().find(q=>q.status==='open'&&(q.seq_ids||[]).includes(id))||null;}
 function seqReqUnapplied(q){return !!q&&q.status==='approved'&&q.applied==null;}
-function seqReqStuck(q){return seqReqUnapplied(q)&&Date.now()-Date.parse(q.decided_at||q.updated_at||0)>SEQ_REQ_STALE_MS;}
+// attack6: a screen applying an approval first claims it (version-checked PATCH, updated_by 'apply:<name>'); the claim holds 2 min
+function seqReqClaimBy(q){const u=String((q&&q.updated_by)||'');return q&&q.applied==null&&u.indexOf('apply:')===0?u.slice(6):'';}
+// 2 minutes on the database's clock (srvAge), not this PC's: a PC running fast must not show "Apply now" early.
+// A claim by another screen restarts the 2 minutes; this screen's own failed claim does not (it may retry).
+function seqReqStuck(q){if(!seqReqUnapplied(q)||SEQ_APPLYING.has(q.id))return false;
+  if(srvAge(q.decided_at||q.updated_at)<=SEQ_REQ_STALE_MS)return false;
+  return !(seqReqClaimBy(q)&&!SEQ_MYCLAIM.has(q.id)&&srvAge(q.updated_at)<=SEQ_REQ_STALE_MS);}
 function seqReqErr(e){const m=String((e&&e.message)||e||'');
   if(/open request exists/.test(m))return'one of these jobs already has a change request waiting for the Production Manager — withdraw that one first, or wait for his answer';
   if(/reason needed/.test(m))return'a reason is needed';
@@ -4366,7 +4378,7 @@ async function seqReqFresh(id){lsPut('seq_requests',await lsGet1('seq_requests?s
 // version-checked PATCH that can also require a state (status=eq.open for the claim) → the new row, or null (changed meanwhile: re-read)
 async function seqReqPatch(q,patch,st){
   const u=SUPA_URL+'/seq_requests?id=eq.'+encodeURIComponent(q.id)+'&version=eq.'+(+q.version||1)+(st?'&status=eq.'+st:'');
-  const r=await fetch(u,{method:'PATCH',headers:{...SUPA_HDR,'Prefer':'return=representation'},body:JSON.stringify({...patch,updated_by:lqBy('')})});
+  const r=await fetch(u,{method:'PATCH',headers:{...SUPA_HDR,'Prefer':'return=representation'},body:JSON.stringify({updated_by:lqBy(''),...patch})});
   const d=await r.json().catch(()=>null);
   if(!r.ok){const e=new Error((d&&d.message)||('HTTP '+r.status));e.status=r.status;throw e;}
   if(Array.isArray(d)&&d.length){lsPut('seq_requests',d);return d[0];}
@@ -4421,13 +4433,31 @@ async function seqReqApplyMove(q,by){
   return{kind:'move',ok:false,err:'the list kept changing on another screen'};
 }
 // approve: make the change, then record it. Used straight after the claim and by "Apply now".
+/*attack6: re-read first (a stale "Apply now" on a second screen must not re-apply over a later change), then claim the apply
+  (version-checked) so two taps can't both apply. A claim this screen made whose apply failed may be retried at once.*/
+const SEQ_MYCLAIM=new Set(),SEQ_APPLYING=new Set();
+function seqHM(t){const d=new Date(t);return isNaN(d)?'':d.toLocaleTimeString('en-IE',{hour:'2-digit',minute:'2-digit'});}
 async function seqReqApply(q,by){
+  if(SEQ_APPLYING.has(q.id))return null;SEQ_APPLYING.add(q.id);
+  try{return await seqReqApply1(q,by);}finally{SEQ_APPLYING.delete(q.id);}
+}
+async function seqReqApply1(q,by){
+  let x=null;
+  try{x=await seqReqFresh(q.id);}catch(e){toast('No answer from the database — nothing done. Look again in a moment.',true);return null;}
+  if(!x){toast('That request is no longer there',true);return null;}
+  if(x.status!=='approved'){seqReqDoneMsg(x);return null;}
+  if(x.applied!=null){const ap=typeof x.applied==='object'?x.applied:{};toast('Already applied by '+(ap.by||x.decided_by||'another screen')+(seqHM(x.applied_at||ap.at)?' at '+seqHM(x.applied_at||ap.at):'')+' — nothing done',true);return null;}
+  const cb=seqReqClaimBy(x);
+  if(cb&&!SEQ_MYCLAIM.has(x.id)&&srvAge(x.updated_at)<=SEQ_REQ_STALE_MS){toast('Being applied by '+cb+' on another screen right now — nothing done',true);return null;}
+  let cl=null;try{cl=await seqReqPatch(x,{updated_by:'apply:'+by});}catch(e){toast('Not applied — '+seqReqErr(e),true);return null;}
+  if(!cl){const y=LST.sr.get(q.id);if(y&&y.applied!=null)toast('Already applied by '+((y.applied||{}).by||y.decided_by||'another screen')+' — nothing done',true);else toast('Changed on another screen — nothing done. Look again.',true);return null;}
+  SEQ_MYCLAIM.add(q.id);q=cl;
   let a;SEQ_DLG.busy=true;
   try{a=q.kind==='move'?await seqReqApplyMove(q,by):await seqReqApplyDate(q,by);}
   catch(e){toast('Approved — not applied yet ('+e.message+'). Tap "Apply now" on the request.',true);return null;}
   finally{SEQ_DLG.busy=false;}
   a.by=by;a.at=nowISO();
-  try{const x=LST.sr.get(q.id)||q;await seqReqPatch(x,{applied:a});}catch(e){console.warn('Request applied, not recorded: '+e.message);}
+  try{const x=LST.sr.get(q.id)||q;if(await seqReqPatch(x,{applied:a}))SEQ_MYCLAIM.delete(q.id);}catch(e){console.warn('Request applied, not recorded: '+e.message);}
   if(q.kind==='move')toast(a.ok?'Approved ✓ — moved to #'+a.pos:'Approved — but not moved: '+a.err,!a.ok);
   else if(a.rebook.length||a.cut.length||a.skipped.length)lsDlg(`<div style="font-weight:800;color:#14335c;font-size:16px;margin-bottom:6px">✓ Approved — ${a.moved} job${a.moved!==1?'s':''} changed</div>
       ${a.rebook.length?`<div class="sd-req">🚚 Taken off vans — rebook: ${a.rebook.map(escA).join(', ')}</div>`:''}
