@@ -20,14 +20,16 @@ const norm = s => String(s).replace(/\d{1,2}:\d{2}(:\d{2})?/g, 'HH:MM').replace(
 // dashboard's missed count reads "planned for a day already gone" (missed = by real date, any open week) for stage2's
 // "planned earlier this week", and the scorecard note says weeks are stored "when a week is closed" (Close week). Only these exact shapes are folded back, on both sides; everything else must still match.
 const DAYS = '(Mon|Tue|Wed|Thu|Fri|Sat)', MON = '(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)', VANS = '(?:Artic|Volvo|Renault|Iveco|Crafter|Smart Movers)';
-const normDates = s => norm(s).replace(new RegExp('\\b' + DAYS + ' \\d{1,2} ' + MON + '\\b', 'g'), '$1')
+// ALLOWED DIFFERENCE (Coder, round-4 carry-over 11 Nov — Production Manager buy-in, ASSUMED, Garry to confirm): the Production Manager
+// screen starts with its own two buttons "🧭 Today 🚚 Deliveries" (the way to the Deliveries page). Only that exact leading pair is taken off.
+const normDates = s => norm(s).replace(/^🧭 Today 🚚 Deliveries /, '').replace(new RegExp('\\b' + DAYS + ' \\d{1,2} ' + MON + '\\b', 'g'), '$1')
   .replace(new RegExp('\\(' + VANS + ' ' + DAYS + '\\)', 'g'), '($1)')
   .replace(/planned for a day already gone, not delivered|planned earlier this week, not delivered/g, '«missed»')
   .replace(/Weeks are stored when (?:a week is closed|the board is cleared) \(/g, 'Weeks are stored «close week» (')
   // ALLOWED DIFFERENCE (Coder, 10 Nov evening — Deliveries usability DD1, Garry 10 Nov): the board's due cell is the one due tag
   // "Due Wed 28 Oct · Wk 44" (+ "🚚 <delivery date>" tag, "(orig 21 Oct Wk 43)", the ⋯ full-dialog button) for stage2's
-  // "[OVERDUE ]28 Oct 26 Wk44[ (orig: 21 Oct 26 Wk43)]". Only these shapes are folded back to «due», on both sides.
-  .replace(new RegExp('Due ' + DAYS + '(?: \\d{4})? · Wk \\d+(?: 🚚 ' + DAYS + '(?: \\d{4})? · Wk \\d+)?(?: \\(orig \\d{1,2} ' + MON + ' Wk \\d+\\))?(?: ⋯)?', 'g'), '«due»')
+  // "[OVERDUE ]28 Oct 26 Wk44[ (orig: 21 Oct 26 Wk43)]"; the board's "⚠ built after due" chip (round-4 carry-over, 11 Nov) goes with it. Only these shapes are folded back to «due», on both sides.
+  .replace(new RegExp('Due ' + DAYS + '(?: \\d{4})? · Wk \\d+(?: ⚠ built after due)?(?: 🚚 ' + DAYS + '(?: \\d{4})? · Wk \\d+)?(?: \\(orig \\d{1,2} ' + MON + ' Wk \\d+\\))?(?: ⋯)?', 'g'), '«due»')
   .replace(new RegExp('(?:OVERDUE )?\\d{1,2} ' + MON + ' \\d{2} Wk\\d+(?: \\(orig: \\d{1,2} ' + MON + ' \\d{2} Wk\\d+\\))?', 'g'), '«due»');
 (async () => {
   if (!OLD) { rec('origin/feature/stage2-imports index.html readable from git (run git fetch)', false); done(); process.exit(1); }

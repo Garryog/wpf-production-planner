@@ -539,6 +539,24 @@ saw and stores follow the new date like any other date change.
   machine). header-late-probe still crashes on the import mapping screen (pre-existing). No new failures. No SQL.
 - Next: Tester (re-run attack6) → Manager.
 
+### 11 Nov 2026 (scheduled run) — Job A (69eb600+) merged into Job B
+- First on Job A, ba6ecd8 (Manager issue 2): the date-history tidy now also works for a job WITH a delivery date (a stale screen's
+  identical repeat is compared with the last line of the same date field, so the delivery line in between no longer hides it).
+  New tests/dates/a5-histdedup.test.js 12 / 12: repeat with a delivery date shown once; a genuine back-and-forth 12→19, 19→12, 12→19
+  is all kept, with and without a delivery date. (The check fails on the old code, as it should.)
+- Merged origin/feature/dates-deliveries (ba6ecd8) into Job B with a normal merge commit. One conflict, the Production Manager's tab
+  strip: Job A's shared `prodStrip` (used with the lists switch off and on) is kept, with Job B's "✋ Requests (N)" added after
+  🧭 Today when the sequence tables exist (and its tab still loads the lists data). Strip with lists on:
+  🧭 Today · ✋ Requests (N) · 🚚 Deliveries · 📋 Lists · 🩹 Snags · 📦 Items sent. Lists off: 🧭 Today · 🚚 Deliveries.
+- attack5-carryover B1/B2/B8/B9 (Job A's Tester file) updated for the merge, not for a bug: the expected strip includes ✋ Requests
+  when it shows, and "screens unchanged" compares with Job B just before this merge (404262a) — the old baseline ea990d4 has none of
+  Job B's screens. On the Job A branch the file still uses ea990d4. attack5 115 / 0. **Tester: please confirm these four changes.**
+- The two attack4 L12 rows were already off ACCEPTED-FAILURES (removed at the 10 Nov merge); attack4 45 / 0.
+- tests/dates + tests/seq: 1,970 pass / 14 fail before the attack5 fix-up — the 10 accepted rows + the 4 attack5 checks above.
+- **Full suite** (242 test files + 4 probes, 3 at a time): **5,311 pass / 36 fail** — the 35 on ACCEPTED-FAILURES + editor e7 redraw
+  timing (891 ms; 634 ms alone, passes). No new failures. header-late-probe still crashes (pre-existing). No SQL, no new saved field.
+- Next: Tester (re-attack on the merge, incl. confirming attack5 F2 and the B1/B2/B8/B9 changes) → Manager.
+
 
 ---
 
