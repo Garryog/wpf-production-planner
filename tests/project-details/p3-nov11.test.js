@@ -55,7 +55,7 @@ const ev = (t, f, a) => t.page.evaluate(f, a);
     rec(role + ': edits values without a PIN; sign-off asks for the Project Manager PIN', r.edit && !r.sign && r.n === 1 && /Only Project Managers/.test(r.txt), JSON.stringify(r).slice(0, 200));
     if (role === 'office') {
       const r2 = await ev(t, () => { window.prompt = () => '7777'; const a = specSignOk(); window.prompt = () => '8888'; const b = specSignOk(); window.prompt = () => '6666'; const c = specSignOk(); let n = 0; window.prompt = () => { n++; return null; }; const d = specSignOk(); return { a, b, c, d, n }; });
-      rec('office: Production Manager / Drawing office PINs refused, the PM PIN accepted and remembered', !r2.a && !r2.b && r2.c && r2.d && r2.n === 0, JSON.stringify(r2));
+      rec('office: Production Manager / Drawing office PINs refused, the PM PIN accepted — and asked again next time (never remembered off the PM screen)', !r2.a && !r2.b && r2.c && !r2.d && r2.n === 1, JSON.stringify(r2));
     }
     await t.close();
   }

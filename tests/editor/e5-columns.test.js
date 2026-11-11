@@ -41,16 +41,22 @@ const S_ = (k, v) => `(()=>{const e=document.querySelector('.pod-ovl [data-mr="$
   await pg.evaluate(() => { localStorage.removeItem('wpfEditPin'); window.__ans = ['UD96', '7777']; window.__n0 = window.__prompts.length; });
   await pg.evaluate(S_('0|mat', '__add'));
   await F.sleep(500);
-  const d = await pg.evaluate(() => ({ v: document.querySelector('[data-mr="0|mat"]').value, prompts: window.__prompts.slice(window.__n0) }));
-  rec('＋ Add new material… (office): added to the project\'s materials and selected', d.v === 'UD96' && S.db.t.project_materials.some(m => m.project_id === 'P1' && m.name === 'UD96' && m.kind === 'sheet'), JSON.stringify(d));
-  rec('… the office is asked only for the name — no PIN question (9 Nov rule)', d.prompts.length === 1 && /New material/.test(d.prompts[0]) && !d.prompts.some(m => /PIN/.test(m)), JSON.stringify(d.prompts));
-  // a second new one: also straight on the project's list, not amber (the old "Cancel → this row only, flagged" now only
-  // applies to Management, checked at the end)
+  const d = await pg.evaluate(() => ({ v: document.querySelector('[data-mr="0|mat"]').value, prompts: window.__prompts.slice(-2) }));
+  rec('＋ Add new material… (no PIN since 9/11 Nov): added to the project\'s materials and selected', d.v === 'UD96' && S.db.t.project_materials.some(m => m.project_id === 'P1' && m.name === 'UD96' && m.kind === 'sheet'), JSON.stringify(d));
+  // (rule changed by Garry 9/11 Nov — docs/PLAN-project-details.md): the office adds materials with NO PIN — only the name is asked
+  rec('… no PIN question for the office, only the material name (rule changed 9/11 Nov)', !d.prompts.slice(-1).some(m => /PIN/.test(m)) && /New material/.test(d.prompts.slice(-1)[0] || ''), JSON.stringify(d.prompts));
+  // still covered: if the add FAILS (database refuses / no signal) → this row only, flagged amber, and the person is told
+  await pg.evaluate(() => { window.__f0 = window.fetch; window.fetch = (u, o) => (o && o.method === 'POST' && /project_materials/.test(u) ? Promise.reject(new TypeError('Failed to fetch')) : window.__f0(u, o)); window.__ans = ['Pine Ghost']; document.getElementById('toast').textContent = ''; });
+  await pg.evaluate(S_('1|mat', '__add'));
+  await F.sleep(300);
+  const e0 = await pg.evaluate(() => { window.fetch = window.__f0; const s = document.querySelector('[data-mr="1|mat"]'); return { v: s.value, txt: s.options[s.selectedIndex].text, amber: /fff4d6/.test(s.getAttribute('style')), toast: document.getElementById('toast').textContent }; });
+  rec('add fails: the colour is used on this row only, amber, and the person is told it is flagged', e0.v === 'Pine Ghost' && /⚠ Pine Ghost/.test(e0.txt) && e0.amber && /used on this row only and flagged/.test(e0.toast) && !S.db.t.project_materials.some(m => m.name === 'Pine Ghost'), JSON.stringify(e0));
+  // no PIN needed: the new colour goes on the project's list and is picked (not amber)
   await pg.evaluate(() => { localStorage.removeItem('wpfEditPin'); window.__ans = ['Oak Mystery', null]; document.getElementById('toast').textContent = ''; });
   await pg.evaluate(S_('1|mat', '__add'));
   await F.sleep(300);
-  const e = await pg.evaluate(() => { const s = document.querySelector('[data-mr="1|mat"]'); return { v: s.value, txt: s.options[s.selectedIndex].text, amber: /fff4d6/.test(s.getAttribute('style')), toast: document.getElementById('toast').textContent }; });
-  rec('office, no PIN: the new colour goes on the project\'s list, not amber, and the person is told it was added', e.v === 'Oak Mystery' && !/⚠/.test(e.txt) && !e.amber && /added to the/.test(e.toast) && S.db.t.project_materials.some(m => m.project_id === 'P1' && m.name === 'Oak Mystery' && m.kind === 'other'), JSON.stringify(e));
+  const e = await pg.evaluate(() => { const s = document.querySelector('[data-mr="1|mat"]'); return { v: s.value, txt: s.options[s.selectedIndex].text, amber: /fff4d6/.test(s.getAttribute('style') || ''), toast: document.getElementById('toast').textContent }; });
+  rec('no PIN (rule changed 9/11 Nov): the new colour is added to the project\'s materials and picked, not amber', e.v === 'Oak Mystery' && !/⚠/.test(e.txt) && !e.amber && /added to the Aderrig materials/.test(e.toast) && S.db.t.project_materials.some(m => m.name === 'Oak Mystery' && m.project_id === 'P1'), JSON.stringify(e));
   // an existing material typed again is just picked
   await pg.evaluate(() => { window.__ans = ['w/w']; });
   await pg.evaluate(S_('1|mat', '__add'));
@@ -70,6 +76,7 @@ const S_ = (k, v) => `(()=>{const e=document.querySelector('.pod-ovl [data-mr="$
   for (let i = 0; i < 30 && !S.db.t.lists.some(l => l.name === 'House 9'); i++) await F.sleep(100);
   const l = S.db.t.lists.find(x => x.name === 'House 9'), ln = l ? S.db.t.list_lines.filter(x => x.list_id === l.id).sort((x, y) => x.seq - y.seq) : [];
   const br = ln.map(x => [x.kind, x.part, x.qty, x.material, x.material_other ? 'FLAG' : '', x.section || ''].join('|'));
+  // (rule changed by Garry 9/11 Nov — docs/PLAN-project-details.md): Oak Mystery is now on the project list, so it is not flagged
   rec('saved: length/width → Saw, none → Stores, heading kept, empty row left out', br.join(';') === 'saw|Side panel|2|UD96||;fit|Hanging rail|1|Oak Mystery||;hdr|Road 1 No 1 extras||||;saw|Kicker|7|UD96||Road 1 No 1 extras', br.join(';'));
   // validation messages, plain English
   const v = await pg.evaluate(() => { openListEditor(null, 'WO-2'); const ov = document.querySelector('.pod-ovl'); const set = (k, v) => { const e = ov.querySelector('[data-mr="' + k + '"]'); e.value = v; (e.tagName === 'SELECT' ? e.onchange : e.oninput)(); };

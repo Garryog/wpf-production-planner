@@ -93,15 +93,13 @@ function fixture(on) {
   const off = await F.dev(browser, S, 'office');
   await off.page.evaluate(async () => { showTab('l'); await new Promise(r => setTimeout(r, 100)); });
   rec('office Lists tab: the library is Lists home (with the needed panel kept above)', !!(await off.page.evaluate(() => document.getElementById('lh'))) && /Cutting lists needed/.test(await txt(off.page)));
-  // 9 Nov rule (Garry): Office / PM / Production Manager / Drawing office add and edit project materials with NO PIN;
-  // Saw / Stores / Drivers / Floor are read-only; Management keeps the PIN. (Rewritten by the Tester 10 Nov — the old
-  // checks asked for the Production Manager PIN here.)
+  // (rule changed by Garry 9/11 Nov — docs/PLAN-project-details.md): the office adds / edits project materials with NO PIN
   await off.page.evaluate(() => { window.__asked = 0; window.prompt = () => { window.__asked++; return '2468'; }; lsMaterialsDlg('P1'); const o = document.querySelector('.pod-ovl'); o.querySelector('#mt-new-n').value = 'Grey Gloss'; o.querySelector('#mt-add').click(); });
   await F.sleep(300);
-  rec('office: adds a material with no PIN question (9 Nov rule)', S.db.t.project_materials.some(m => m.name === 'Grey Gloss') && (await off.page.evaluate(() => window.__asked)) === 0);
+  rec('office: adds a material with no PIN asked (rule changed 9/11 Nov)', S.db.t.project_materials.some(m => m.name === 'Grey Gloss') && (await off.page.evaluate(() => window.__asked)) === 0);
   await off.page.evaluate(() => { const o = document.querySelector('.pod-ovl'); o.querySelector('#mt-new-n').value = 'Black Gloss'; o.querySelector('#mt-add').click(); });
   await F.sleep(300);
-  rec('office: a second material, still never asked for a PIN', S.db.t.project_materials.some(m => m.name === 'Black Gloss') && (await off.page.evaluate(() => window.__asked)) === 0);
+  rec('office: a second material, still no PIN and nothing remembered (rule changed 9/11 Nov)', S.db.t.project_materials.some(m => m.name === 'Grey Gloss') && S.db.t.project_materials.some(m => m.name === 'Black Gloss') && (await off.page.evaluate(() => window.__asked)) === 0 && !(await off.page.evaluate(() => localStorage.getItem('wpfEditPin'))));
   await off.page.evaluate(() => document.querySelector('.pod-ovl').remove());
   // ---- Production Manager strip
   const pr = await F.dev(browser, S, 'prod');
@@ -117,10 +115,11 @@ function fixture(on) {
   rec('saw strip: jobs with no list, above the sheets panel', w && w.rows.join() === 'WO-2:red,WO-4:' && (await saw.page.evaluate(() => { const a = document.getElementById('wait-list'), b = document.body.innerText.indexOf('Sheets need'); return document.body.innerText.indexOf('WAITING FOR A LIST') < b; })), JSON.stringify(w && w.rows));
   rec('saw strip: WO-2 cut by today (21 Oct), list due by Tue 20 Oct — overdue red; owner from the project', /WO-2[\s\S]*OVERDUE · cut by 21 Oct[\s\S]*list due by 20 Oct[\s\S]*owner Ciara \(design\)/.test(w.t), w.t);
   rec('saw strip: WO-4 (delivers Mon 26, a bank holiday) cut by Sun 25 → the saw cuts it Fri 23, so the list is due Thu 22; owner defaults to Production Manager', /WO-4[\s\S]*cut by 25 Oct[\s\S]*list due by 22 Oct[\s\S]*owner Production Manager/.test(w.t), w.t);
-  await saw.page.evaluate(() => { window.__asked = 0; window.prompt = () => { window.__asked++; return '7777'; }; lsMaterialsDlg('P1'); const o = document.querySelector('.pod-ovl'); if (o) { const n = o.querySelector('#mt-new-n'), b = o.querySelector('#mt-add'); if (n && b) { n.value = 'Saw Gloss'; b.click(); } } });
+  // (rule changed by Garry 9/11 Nov — docs/PLAN-project-details.md): the saw stays read-only for materials, no PIN route
+  await saw.page.evaluate(() => { window.__asked = 0; window.prompt = () => { window.__asked++; return '7777'; }; lsMaterialsDlg('P1'); const o = document.querySelector('.pod-ovl'); o.querySelector('#mt-new-n').value = 'Saw board'; o.querySelector('#mt-add').click(); });
   await F.sleep(300);
-  rec('saw: still cannot add a project material (read-only, even with a PIN typed)', !S.db.t.project_materials.some(m => m.name === 'Saw Gloss'));
-  await saw.page.evaluate(() => { const o = document.querySelector('.pod-ovl'); if (o) o.remove(); });
+  rec('saw: can\'t add a material, not even with a PIN (rule changed 9/11 Nov)', !S.db.t.project_materials.some(m => m.name === 'Saw board') && (await saw.page.evaluate(() => window.__asked)) === 0);
+  await saw.page.evaluate(() => document.querySelectorAll('.pod-ovl').forEach(o => o.remove()));
   rec('no page errors', !(S.errors || []).length, (S.errors || []).join(' | '));
   await des.close(); await off.close(); await pr.close(); await saw.close();
   await browser.close();

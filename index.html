@@ -222,7 +222,7 @@ button.due-tag{cursor:pointer;min-height:26px}button.due-tag:hover{outline:2px s
 .pjh-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;border-bottom:1px solid var(--b2);padding:8px 2px}.pjh-n{flex:1;min-width:200px}.pjh-n span{font-size:12px;color:var(--t3);margin-left:6px}.pjh-n .spec-chip{color:#fff;margin-left:0;display:inline-block}.pjh-b{display:flex;gap:6px;flex-wrap:wrap}
 .pp-list{display:flex;flex-direction:column;gap:6px;max-height:55vh;overflow:auto}.pp-b{text-align:left;padding:10px 12px;border:1px solid var(--b2);border-radius:6px;background:#fff;font-size:14px;cursor:pointer}.pp-b span{font-size:12px;color:var(--t3)}
 .wo-ed{padding:6px 8px;border:1px solid var(--b2);border-radius:6px;font-size:13px;color:#14335c;min-height:33px;box-sizing:border-box;width:0;min-width:100%;background:#fff}.wo-ed.wo-ov{border-color:#e0a43a;background:#fff8e6}.wo-ovn{font-size:11px;color:#8a5a00;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.wo-ovn button{min-width:28px;min-height:24px;border:none;background:none;color:#1a56db;cursor:pointer;font-size:11px;padding:0 2px;text-decoration:underline}
-@media(max-width:699px){.spec-tab{min-height:40px}.spec-addf input,.spec-addf select,.spec-addf .btn{min-height:40px;flex:1 1 100%}.wo-ovn button{min-width:44px;min-height:40px;font-size:14px}.spec-tbl thead{display:none}.spec-tbl,.spec-tbl tbody,.spec-tbl tr,.spec-tbl td{display:block;width:100%;box-sizing:border-box}.spec-tbl tr{border:1px solid var(--b2);border-radius:6px;margin-bottom:8px;padding:6px}.spec-tbl td{border:none!important;padding:3px 2px}.spec-tbl td[data-l]:not([data-l=""])::before{content:attr(data-l);display:block;font-size:11px;color:var(--t3);font-weight:700}.spec-tbl .btn{min-height:40px}.spec-tbl select,.spec-tbl input{min-height:40px;font-size:15px}.pjh-b .btn{min-height:40px}}
+@media(max-width:699px){.mt-tbl thead{display:none}.mt-tbl,.mt-tbl tbody,.mt-tbl tr,.mt-tbl td{display:block;width:100%;box-sizing:border-box}.mt-tbl tr{border:1px solid var(--b2);border-radius:6px;margin-bottom:8px;padding:6px}.mt-tbl td{border:none!important;padding:3px 2px}.mt-tbl td:empty{display:none}.mt-tbl input:not([type=checkbox]),.mt-tbl select{width:100%!important;min-height:40px;font-size:15px;box-sizing:border-box}.mt-tbl input[type=checkbox]{width:26px;height:26px;vertical-align:middle}.mt-tbl td:nth-child(4):not(:empty)::before{content:'Active (untick to retire) ';font-size:13px;color:var(--t3)}.mt-tbl .btn{min-height:40px;min-width:90px;font-size:14px!important}.spec-sub .btn{min-height:40px}.spec-tab{min-height:40px}.spec-addf input,.spec-addf select,.spec-addf .btn{min-height:40px;flex:1 1 100%}.wo-ovn button{min-width:44px;min-height:40px;font-size:14px}.spec-tbl thead{display:none}.spec-tbl,.spec-tbl tbody,.spec-tbl tr,.spec-tbl td{display:block;width:100%;box-sizing:border-box}.spec-tbl tr{border:1px solid var(--b2);border-radius:6px;margin-bottom:8px;padding:6px}.spec-tbl td{border:none!important;padding:3px 2px}.spec-tbl td[data-l]:not([data-l=""])::before{content:attr(data-l);display:block;font-size:11px;color:var(--t3);font-weight:700}.spec-tbl .btn{min-height:40px}.spec-tbl select,.spec-tbl input{min-height:40px;font-size:15px}.pjh-b .btn{min-height:40px}}
 .tbc-chip{display:inline-block;margin-left:4px;font-size:11px;font-weight:800;border-radius:4px;padding:1px 6px;background:#c0392b;color:#fff;white-space:normal;vertical-align:middle}
 .tbc-cell{color:#c0392b!important;font-weight:800}
 .buy-chip{display:inline-block;margin-left:4px;font-size:10px;font-weight:800;border-radius:4px;padding:1px 6px;background:#e3f4f8;color:#0b5566;border:1px solid #7cc3d3;white-space:nowrap}
@@ -2506,11 +2506,13 @@ function woInfoBind(root,o){if(!root||!o)return;
   const redo=()=>{root.innerHTML=woInfoEdHTML(o);woInfoBind(root,o);};
   root.querySelectorAll('[data-woe]').forEach(i=>i.onchange=()=>{const k=i.dataset.woe;
     // the Customer decides the job's project: Admin only (Garry, 11 Nov) — the Admin PIN is asked every time, never remembered
+    if(k==='customer'&&!i.value.trim()){toast('A job needs a customer — not changed');redo();return;}
     if(k==='customer'&&i.value.replace(/\s+/g,' ').trim()!==povVal(o,k)){const v=prompt('Only an Admin can change the customer of a job.\n\nEnter the Admin PIN:','');
       if(v===null){redo();return;}if(v.trim()!==pins().admin){toast('Wrong PIN — customer not changed');redo();return;}}
     if(k==='customer'&&i.value.trim()&&!confirm('Change the customer of '+o.wo+' to "'+i.value.trim()+'"?\n\nThe customer decides which project the job belongs to (materials and project details for NEW lists; lists already made stay on their project). Cienapps is not changed — the change is listed in Export Changes for Cienapps.')){redo();return;}
     if(jobInfoSet(o,k,i.value))toast(POV_F[k]+' saved on '+o.wo+(/^P-\d+$/.test(o.wo)?'':' — listed in Export Changes for Cienapps'));redo();});
   root.querySelectorAll('[data-woundo]').forEach(b=>b.onclick=()=>{const k=b.dataset.woundo,pv=o.pov&&o.pov[k];if(!pv)return;
+    if(k==='customer'){const v=prompt('Only an Admin can change the customer of a job.\n\nEnter the Admin PIN:','');if(v===null)return;if(v.trim()!==pins().admin){toast('Wrong PIN — customer not changed');return;}}
     if(jobInfoSet(o,k,pv.cien||''))toast(POV_F[k]+' back to the Cienapps value');redo();});}
 
 /* Dispatch stages: '' → loaded → dispatched (left the factory, timestamped) → delivered */
@@ -3763,7 +3765,7 @@ function lsMaterialsDlg(pid,after){
       <td><input type="checkbox" data-mtv="${escA(m.id)}"${m.active!==false?' checked':''}></td><td><button class="btn btn-g" data-mts="${escA(m.id)}" style="font-size:12px;padding:4px 10px">Save</button></td></tr>`;
     ov.querySelector('#mt-body').innerHTML=`<div style="font-weight:800;color:#14335c;font-size:17px;margin-bottom:2px">🧱 Materials — ${escA(p.name)}</div>
       <div style="font-size:12px;color:var(--t3);margin-bottom:10px">Sheet materials are the only boards the office can pick on this project's lists. Other spellings from Excel files are remembered as aliases. Untick Active to retire a material — it is never deleted.</div>
-      <table class="lst-tbl"><thead><tr><th>Name</th><th>Kind</th><th>Also called</th><th>Active</th><th></th></tr></thead><tbody>${ms.map(row).join('')||'<tr><td colspan="5" style="color:var(--t3)">No materials yet.</td></tr>'}
+      <table class="lst-tbl mt-tbl"><thead><tr><th>Name</th><th>Kind</th><th>Also called</th><th>Active</th><th></th></tr></thead><tbody>${ms.map(row).join('')||'<tr><td colspan="5" style="color:var(--t3)">No materials yet.</td></tr>'}
       <tr><td><input id="mt-new-n" placeholder="e.g. 18mm MFC White" style="${LS_INP};width:100%"></td><td><select id="mt-new-k" style="${LS_INP}"><option value="sheet">Sheet (saw)</option><option value="other">Fitting / other</option></select></td><td></td><td></td>
         <td><button class="btn btn-g" id="mt-add" style="font-size:12px;padding:4px 10px">＋ Add</button></td></tr></tbody></table><div id="mt-msg" style="font-size:12px;color:#b42318;font-weight:700;margin-top:6px"></div>`;
     const msg=t=>{const e=ov.querySelector('#mt-msg');if(e)e.textContent=t;};
@@ -3842,7 +3844,8 @@ const SPEC_TYPES={kitchens:'Kitchens',robes:'Robes / wardrobes',schools:'Schools
    A project with none yet shows one default sheet (named after its type); its first edit creates it with the fixed id
    'SPD:<project>' so two PCs starting it at the same moment make ONE. "Not used any more" retires a spec (never deleted). */
 function specSheets(pid,all){const a=[...LST.px.values()].filter(s=>s.project_id===pid&&(all||s.active!==false)).sort((x,y)=>(x.sort||0)-(y.sort||0)||String(x.name).localeCompare(String(y.name)));
-  if(a.length||[...LST.px.values()].some(s=>s.project_id===pid))return a;
+  if(a.length)return a;
+  if(!all){const any=specSheets(pid,true);if(any.length)return any;} // never "no spec in use" (the database refuses it too): the project must not go quietly green
   const ty=specTypeOf(LST.p.get(pid));return[{id:'SPD:'+pid,project_id:pid,name:SPEC_TYPES[ty].split(' /')[0],spec_type:ty,sort:0,active:true,virtual:true}];}
 function specSheet(pid,sid){const a=specSheets(pid);return a.find(s=>s.id===sid)||a[0]||null;}
 // One spec sheet: its type's checklist in order (with the saved row, if any), then its extra items
@@ -3879,10 +3882,13 @@ const SPEC_ED=['pm','office','dash','prod','design','pre'];
 function specRO(){return!SPEC_ED.includes(ROLE);}
 function specEditOk(){if(SPEC_ED.includes(ROLE))return true;toast('Project details are read-only on this screen');return false;}
 function specSignOk(){if(ROLE==='pm')return true;if(specRO()){toast('Project details are read-only on this screen');return false;}
-  const p=pins(),ok=v=>!!v&&[p.pm,p.admin].includes(v);if(ok(ls.get('wpfSignPin')))return true;
+  const p=pins(),ok=v=>!!v&&[p.pm,p.admin].includes(v); // asked every time on a screen that isn't the Project Managers' — never remembered there
   const v=prompt('Only Project Managers sign off the project details.\n\nEnter the Project Manager (or Admin) PIN:','');
-  if(v===null)return false;if(!ok(v.trim())){toast('Wrong PIN — not signed off');return false;}ls.set('wpfSignPin',v.trim());return true;}
-function specWho(){const w=String(whoNow()||'').trim();if(w)return w;return opName('Sign off');}
+  if(v===null)return false;if(!ok(v.trim())){toast('Wrong PIN — not signed off');return false;}return true;}
+function specWho(){ // the Project Manager's own name goes on the sign-off — on another screen it is asked for, not taken from who is signed in there
+  if(ROLE==='pm'){const w=String(whoNow()||'').trim();if(w)return w;return opName('Sign off');}
+  let by=prompt('Project Manager signing off — your name:','');while(by!==null&&!by.trim())by=prompt('A name is needed for the record — which Project Manager is signing off?','');
+  return by===null?null:by.trim();}
 async function specFresh(pid){const q='?select=*&project_id=eq.'+encodeURIComponent(pid);lsPut('project_specs',await lsGet('project_specs'+q),true);lsPut('project_spec_items',await lsGet('project_spec_items'+q),true);}
 // Save one item: a version-checked change of the row this screen showed, or a new row the first time the item is edited
 // The project's first spec is only made when something is first saved on it (fixed id: two PCs make one)
@@ -3936,6 +3942,7 @@ function lsSpecDlg(pid,sid0){
       <div class="spec-tabs">${shs.map(s=>{const k=specCount(pid,s.id);return `<button class="spec-tab${s.id===sid?' on':''}${k.ok<k.n?' red':''}" data-sptab="${escA(s.id)}" title="${escA(SPEC_TYPES[s.spec_type]||'')} checklist">${escA(s.name)} <span>${k.ok}/${k.n}</span></button>`;}).join('')}${ro?'':'<button class="spec-tab spec-tab-add" id="sp-newspec" title="Another spec for this project — e.g. a second kitchen type, or the robes">＋ Add spec</button>'}</div>
       ${sh&&!ro?`<div class="spec-sub"><span>${escA(SPEC_TYPES[sh.spec_type]||'')} checklist</span>${sh.virtual?'':`<button class="btn btn-s" id="sp-ren" style="font-size:11px;padding:3px 8px">Rename</button><button class="btn btn-s" id="sp-ret" style="font-size:11px;padding:3px 8px" title="Hides this spec and takes it out of the red chip. Nothing is deleted.">Not used any more</button>`}</div>`:''}
       <div id="sp-addform"></div>
+      ${(rt=>rt.length&&!ro?`<div class="spec-sub spec-retd"><span>Not used any more:</span>${rt.map(s=>`<span class="lst-chip">${escA(s.name)} <button class="btn btn-s" data-spback="${escA(s.id)}" style="font-size:11px;padding:2px 8px">Bring back</button></span>`).join('')}</div>`:'')(specSheets(pid,true).filter(s=>s.active===false&&shs.some(x=>x.active!==false)))}
       <div style="font-size:12px;color:var(--t3);margin:4px 0 10px">Blank or TBC = not signed off (red on the saw, stores and the cutting list) — the project stays red until every item on every spec is signed off. A value is Proposed until a Project Manager signs it off. Changing a signed-off value takes the sign-off away. Each box saves when you leave it.</div>
       <table class="lst-tbl spec-tbl"><thead><tr><th style="width:24%">Item</th><th>Value</th><th style="width:150px">Status</th><th style="width:150px"></th></tr></thead><tbody>
       ${its.map((e,i)=>`<tr class="spec-r spec-${specSt(e)}${specIsOther(e.item)?' spec-other':''}"><td data-l="Item"><b>${escA(e.item)}</b>${e.extra?' <span style="font-size:11px;color:#5b21b6">extra</span>':''}</td><td data-l="Value">${valBox(e,i)}</td><td data-l="Status">${specStHTML(e)}</td><td data-l="" class="spec-act">${act(e,i)}</td></tr>`).join('')}
@@ -3945,7 +3952,7 @@ function lsSpecDlg(pid,sid0){
     const after=ok=>{if(ok)toast(ok);const a=document.activeElement;if(a&&ov.contains(a)&&a.matches('[data-spv],#sp-new')&&a.value!==a.defaultValue){SPEC_DLG.pend=true;return;}draw();};
     const cur=i=>{const e=its[i];if(!e||e.row)return e;return specItems(pid,sid).find(x=>specNorm(x.item)===specNorm(e.item))||e;}; // an item drawn with no row may have one now (our own save whose reply was lost); a drawn row stays as shown, so a change made elsewhere is refused, never overwritten
     const save=(i,patch,ok)=>{const e=cur(i);if(!e||!specEditOk()){draw();return;}
-      specSave(pid,sid,e,patch).then(()=>after(ok||'Saved')).catch(x=>{after('');msg('Not saved — '+x.message);});};
+      specSave(pid,sid,e,patch).then(()=>after(ok||'Saved')).catch(async x=>{if(/not used any more/.test(x.message))await specFresh(pid).catch(()=>{});after('');msg('Not saved — '+(/not used any more/.test(x.message)?'this spec was marked "not used any more" on another screen':x.message));});};
     ov.querySelectorAll('[data-spv]').forEach(b=>b.onchange=()=>{const i=+b.dataset.spv,e=cur(i);let v=b.value;
       if(v==='__add'){draw();lsMaterialsDlg(pid,()=>{if(SPEC_DLG.draw)SPEC_DLG.draw();});return;}
       if(v==='__other'){const t=prompt('Edging for '+e.item+':','');if(t===null||!t.trim()){draw();return;}v=t.trim();}
@@ -3957,7 +3964,7 @@ function lsSpecDlg(pid,sid0){
     ov.querySelectorAll('[data-sps]').forEach(b=>b.onclick=()=>{const i=+b.dataset.sps,e=its[i];if(!e||!e.row)return;
       if(!/\S/.test(e.row.value||'')||SPEC_TBC.test(specNorm(e.row.value)))return msg('Blank or TBC can\'t be signed off.');
       if(!specSignOk())return;const who=specWho();if(!who)return;
-      lsWrite('project_spec_items',e.row,{status:'signed-off',signed_by:who}).then(()=>after(e.item+' signed off ✓')).catch(x=>{after('');msg('Not signed off — '+x.message);});});
+      lsWrite('project_spec_items',e.row,{status:'signed-off',signed_by:who}).then(()=>after(e.item+' signed off ✓')).catch(async x=>{if(/not used any more/.test(x.message))await specFresh(pid).catch(()=>{});after('');msg('Not signed off — '+(/not used any more/.test(x.message)?'this spec was marked "not used any more" on another screen':x.message));});});
     ov.querySelectorAll('[data-spu]').forEach(b=>b.onclick=()=>{const i=+b.dataset.spu,e=its[i];if(!e||!e.row||!specSignOk())return;
       if(!confirm('Take the sign-off away from '+e.item+'? It goes back to Proposed (red).'))return;
       lsWrite('project_spec_items',e.row,{status:'proposed'}).then(()=>after(e.item+' — sign-off taken away')).catch(x=>{after('');msg('Not changed — '+x.message);});});
@@ -3975,13 +3982,17 @@ function lsSpecDlg(pid,sid0){
     const ns=ov.querySelector('#sp-newspec');if(ns)ns.onclick=()=>{const f=ov.querySelector('#sp-addform');
       f.innerHTML=`<div class="spec-addf"><b>New spec</b><input id="sp-nsn" placeholder="Name — e.g. Kitchen Type B, Robes, Utility" style="${LS_INP};flex:1;min-width:160px"><select id="sp-nst" style="${LS_INP}">${Object.entries(SPEC_TYPES).map(([k,l])=>`<option value="${k}"${k===specTypeOf(p)?' selected':''}>${escA(l)} checklist</option>`).join('')}</select><button class="btn btn-g" id="sp-nsok" style="font-size:12px;padding:4px 10px">Add</button><button class="btn btn-s" id="sp-nsx" style="font-size:12px;padding:4px 10px">Cancel</button></div>`;
       f.querySelector('#sp-nsn').focus();f.querySelector('#sp-nsx').onclick=()=>{f.innerHTML='';};
-      f.querySelector('#sp-nsok').onclick=async()=>{const n=f.querySelector('#sp-nsn').value.replace(/\s+/g,' ').trim(),ty=f.querySelector('#sp-nst').value;if(!n)return msg('Type the spec name first.');
-        if(specSheets(pid,true).some(s=>specNorm(s.name)===specNorm(n)))return msg('This project already has a spec called "'+n+'"'+(specSheets(pid).some(s=>specNorm(s.name)===specNorm(n))?'.':' (marked not used — ask the office to bring it back).'));
+      f.querySelector('#sp-nsok').onclick=async()=>{const n=f.querySelector('#sp-nsn').value.replace(/[\u200B-\u200D\uFEFF]/g,'').replace(/\s+/g,' ').trim(),ty=f.querySelector('#sp-nst').value;if(!n)return msg('Type the spec name first.');
+        if(specSheets(pid,true).some(s=>specNorm(s.name)===specNorm(n)))return msg('This project already has a spec called "'+n+'"'+(specSheets(pid).some(s=>specNorm(s.name)===specNorm(n))?'.':' — it is marked not used: press "Bring back" beside it below.'));
         if(!specEditOk())return;
         try{const d0=specSheets(pid)[0];if(d0&&d0.virtual)await specEnsure(pid,d0); // keep the default sheet as the project's first spec
           const r=await lsWrite('project_specs',{id:uid('SS'),project_id:pid,name:n,spec_type:ty,sort:specSheets(pid,true).length});sid=r.id;draw();toast('Spec "'+n+'" added');}
-        catch(x){await specFresh(pid).catch(()=>{});draw();msg('Not added — '+(/already used/.test(x.message)?'this project already has a spec called "'+n+'"':x.message));}};};
-    const rn=ov.querySelector('#sp-ren');if(rn)rn.onclick=()=>{const cs=LST.px.get(sid);if(!cs||!specEditOk())return;const n=prompt('Spec name:',cs.name);if(n===null)return;const nn=n.replace(/\s+/g,' ').trim();if(!nn||nn===cs.name)return;
+        catch(x){await specFresh(pid).catch(()=>{});const got=/fetch|network/i.test(x.message)&&specSheets(pid).find(s=>specNorm(s.name)===specNorm(n)); // no reply, but it landed
+          if(got){sid=got.id;draw();toast('Spec "'+n+'" added');return;}
+          draw();msg('Not added — '+(/already used/.test(x.message)?'this project already has a spec called "'+n+'"':/fetch|network/i.test(x.message)?'no reply from the database — try again':x.message));}};};
+    ov.querySelectorAll('[data-spback]').forEach(b=>b.onclick=()=>{const cs=LST.px.get(b.dataset.spback);if(!cs||!specEditOk())return;
+      lsWrite('project_specs',cs,{active:true}).then(()=>{sid=cs.id;draw();toast('"'+cs.name+'" is in use again');}).catch(x=>{draw();msg('Not changed — '+x.message);});});
+    const rn=ov.querySelector('#sp-ren');if(rn)rn.onclick=()=>{const cs=LST.px.get(sid);if(!cs||!specEditOk())return;const n=prompt('Spec name:',cs.name);if(n===null)return;const nn=n.replace(/[\u200B-\u200D\uFEFF]/g,'').replace(/\s+/g,' ').trim();if(!nn||nn===cs.name)return;
       if(specSheets(pid,true).some(s=>s.id!==sid&&specNorm(s.name)===specNorm(nn)))return msg('This project already has a spec called "'+nn+'".');
       lsWrite('project_specs',cs,{name:nn}).then(()=>{draw();toast('Renamed');}).catch(x=>{draw();msg('Not renamed — '+x.message);});};
     const rt=ov.querySelector('#sp-ret');if(rt)rt.onclick=()=>{const cs=LST.px.get(sid);if(!cs||!specEditOk())return;

@@ -41,8 +41,12 @@ async function openSheet(t) { await ev(t, () => lsSpecDlg('P1')); await sleep(40
     await ev(pm, i => document.querySelector('[data-sps="' + i + '"]').click(), hi); await sleep(400);
     const pm2 = await X.dev(browser, S, 'design'); await openSheet(pm2);
     const by0 = row(S, 'Handles').signed_by;
-    await ev(pm2, i => { const b = document.querySelector('[data-spu="' + i + '"]'); if (b) b.click(); }, hi); await sleep(300);
-    rec('a second screen can un-sign (design) — sign-off taken away, logged', row(S, 'Handles').status === 'proposed' && S.db.t.project_events.some(e => e.act === 'unsign'), by0 + ' ' + row(S, 'Handles').status);
+    // (rule changed by Garry 9/11 Nov — docs/PLAN-project-details.md): sign-off (and un-sign) is Project Managers only —
+    // the Drawing office needs the PM (or Admin) PIN; its own PIN is refused
+    await ev(pm2, i => { localStorage.removeItem('wpfSignPin'); window.__n = 0; window.prompt = () => { window.__n++; return '8888'; }; const b = document.querySelector('[data-spu="' + i + '"]'); if (b) b.click(); }, hi); await sleep(300);
+    rec('design screen: un-sign with the Drawing office PIN refused, still signed off (rule changed 9/11 Nov)', row(S, 'Handles').status === 'signed-off' && (await ev(pm2, () => window.__n)) === 1, row(S, 'Handles').status);
+    await ev(pm2, i => { window.prompt = () => '6666'; const b = document.querySelector('[data-spu="' + i + '"]'); if (b) b.click(); }, hi); await sleep(300);
+    rec('a second screen can un-sign (design, with the PM PIN) — sign-off taken away, logged', row(S, 'Handles').status === 'proposed' && S.db.t.project_events.some(e => e.act === 'unsign'), by0 + ' ' + row(S, 'Handles').status);
     await pm2.close();
     // material item: a material renamed after sign-off
     await setVal(pm, 'Carcass Material', 'MFC White'); const ci = await idx(pm, 'Carcass Material');
@@ -93,12 +97,14 @@ async function openSheet(t) { await ev(t, () => lsSpecDlg('P1')); await sleep(40
     rec('office: edits without PIN, sign-off with a wrong PIN refused', r1.e && !r1.s && r1.n === 1, JSON.stringify(r1));
     const r2 = await ev(of, () => { localStorage.removeItem('wpfEditPin'); window.prompt = () => '6666'; return specSignOk(); });
     rec('office: a Project Manager PIN (6666) lets the office sign off (plan Q1: PM sign-off PIN)', r2 === true, 'accepted=' + r2);
-    const r3 = await ev(of, () => { localStorage.removeItem('wpfEditPin'); window.prompt = () => '8888'; const a = specSignOk(); window.prompt = () => { throw new Error('asked again'); }; let b; try { b = specSignOk(); } catch (e) { b = e.message; } return { a, b }; });
-    rec('office: a Drawing office PIN works, and is then remembered on the PC (info: anyone on that PC signs off afterwards)', r3.a === true, JSON.stringify(r3));
+    // (rule changed by Garry 9/11 Nov — docs/PLAN-project-details.md): only the PM / Admin PIN signs off; the PM PIN is remembered
+    const r3 = await ev(of, () => { window.prompt = () => { throw new Error('asked again'); }; let b; try { b = specSignOk(); } catch (e) { b = e.message; } localStorage.removeItem('wpfSignPin'); localStorage.removeItem('wpfEditPin'); window.prompt = () => '8888'; const a = specSignOk(); return { a, b }; });
+    rec('office: the PM PIN is remembered on the PC (info: anyone on that PC signs off afterwards); a Drawing office PIN is refused (rule changed 9/11 Nov)', r3.b === true && r3.a === false, JSON.stringify(r3));
     await of.close();
     const dash = await X.dev(browser, S, 'dash');
-    const r4 = await ev(dash, () => { localStorage.removeItem('wpfEditPin'); let n = 0; window.prompt = () => { n++; return null; }; return { e: specEditOk(), s: specSignOk(), n }; });
-    rec('dash: edit and sign-off both need a PIN', !r4.e && !r4.s && r4.n === 2, JSON.stringify(r4));
+    // (rule changed by Garry 9/11 Nov — docs/PLAN-project-details.md): Management fills in values with no PIN; sign-off asks the PM PIN
+    const r4 = await ev(dash, () => { localStorage.removeItem('wpfEditPin'); localStorage.removeItem('wpfSignPin'); let n = 0; window.prompt = () => { n++; return null; }; return { e: specEditOk(), s: specSignOk(), n }; });
+    rec('dash: edits with no PIN; sign-off asks for a PIN (rule changed 9/11 Nov)', r4.e && !r4.s && r4.n === 1, JSON.stringify(r4));
     await dash.close();
   }
   // ---- lists switch OFF: nothing new visible, no calls to project_spec_items

@@ -19,6 +19,16 @@ do $$ declare r record; n int; begin
  begin delete from project_specs; raise exception 'FAIL spec delete allowed'; exception when insufficient_privilege then null; end;
  update project_specs set active=false where id='SR'; update project_specs set active=true where id='SR';
  if (select version from project_specs where id='SR')<>3 then raise exception 'FAIL spec version'; end if;
+ -- a project keeps at least one spec in use; nothing is saved or signed on a spec that is not used any more
+ begin update project_specs set active=false where id='SO'; raise exception 'FAIL last spec retired'; exception when raise_exception then null; end;
+ insert into project_spec_items(id,project_id,spec_id,item,value) values('RX','PS1','SR','Mirror','Yes');
+ update project_specs set active=false where id='SR';
+ begin update project_specs set active=false where id='SK'; raise exception 'FAIL both specs retired'; exception when raise_exception then null; end;
+ begin insert into project_spec_items(id,project_id,spec_id,item,value) values('RY','PS1','SR','Lighting','LED'); raise exception 'FAIL item added on a retired spec'; exception when raise_exception then null; end;
+ begin update project_spec_items set value='No' where id='RX'; raise exception 'FAIL item changed on a retired spec'; exception when raise_exception then null; end;
+ begin update project_spec_items set status='signed-off',signed_by='Mary' where id='RX'; raise exception 'FAIL signed on a retired spec'; exception when raise_exception then null; end;
+ update project_specs set active=true where id='SR'; update project_spec_items set value='No' where id='RX';
+ begin insert into project_specs(id,project_id,name) values('SZW','PS1',U&'\200B'); raise exception 'FAIL invisible spec name allowed'; exception when raise_exception then null; end;
  -- the same item on two specs of one project is fine; an item takes its project from its spec, and stays on its spec
  insert into project_spec_items(id,project_id,spec_id,item,value) values('R1','PS2','SR','Hinges','Blum');
  select * into r from project_spec_items where id='R1'; if r.project_id<>'PS1' then raise exception 'FAIL item project not taken from its spec'; end if;
