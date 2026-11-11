@@ -613,6 +613,27 @@ saw and stores follow the new date like any other date change.
   need the request id in the seq_move history (SQL) — Architect / Garry to decide.
 
 
+### 11 Nov 2026 (scheduled run) — attack7 fixes
+- **4f12911** fix 1 (HIGH, Manager condition 2): `srvAge` uses the database's clock ALONE once any row has come in (no longer the smaller
+  of that and this PC's clock), so a PC running 5 min slow shows "Apply now" on time; before any row arrives it still uses the PC clock.
+  The requests page now sets one timer (`seqReqTick`) that redraws it the moment an approval — or another screen's claim — passes 2 minutes
+  (waits while a dialog is open or someone is typing). attack7 1a: fast 123 s, right 125 s, slow 127 s after the claim (was: slow ~7 min).
+- **87e7cc4** fix 2 (MEDIUM): `dueHistTidy` — of two identical moves it keeps the richer line (request `rq` > fixed window `fx` >
+  "approved by"), else the earlier, in the first one's place; so a slow stale screen's repeat no longer replaces the approval's line.
+  New tests/seq/a7-histtidy.test.js 6/6 (incl. a genuine back-and-forth with rq / fx lines all kept, tidy twice = once).
+  **Job A not changed:** feature/dates-deliveries has no requests, rq or fx marks, so there the rule is unchanged (keep the earlier).
+- **5949f4c** fix 4 (LOW): sequence "push by weeks" keeps a Saturday delivery on Saturday (`isDelivDay`, like Deliveries); build dates
+  stay working days; push by working days unchanged. (Spread / set not changed — they count working days on purpose.)
+- **6274e29** fix 5 (LOW): ↶ Undo on the sequence page 44 px tall on phones.
+- **4ee0363** test fix-up (s11 part 14, attack6 part 7): the claim times in those two tests were set on the page's fake date; with fix 1 the
+  timer reads the database's clock (the fake database = the Node process), so they now use that. Checks unchanged.
+- Issue 3 (Manager; attack7 2b — Deliveries moves inside the 14 days not counted as "direct") added to ACCEPTED-FAILURES as
+  **pending — Garry to decide**.
+- Tests: attack7 52 / 53 (only 2b), s11 70/70, attack6 45/45, a7-histtidy 6/6. **Full suite** (244 test files + 4 probes, 3 at a time):
+  5,379 pass / 41 fail = the 36 on ACCEPTED-FAILURES + 5 timing (dates attack3-guard ×3, attack1-perf export 7.3 s, editor e7 920 ms) —
+  all pass alone (attack3-guard then shows only its accepted row). header-late-probe still crashes (pre-existing). No SQL.
+- Left: issue 3 for Garry; the order-request guard noted in the previous entry.
+
 ---
 
 # Part 3 — the matching key (B0), upload + matching (B10), cutting-list job boxes (L1–L4), late steps (S1–S2)
