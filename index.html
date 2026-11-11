@@ -4370,10 +4370,11 @@ function preBind(root){
     tr.addEventListener('dragend',()=>{PREV.drag='';tr.classList.remove('seq-drag');root.querySelectorAll('.seq-over').forEach(x=>x.classList.remove('seq-over'));});
   });
   root.querySelectorAll('tr[data-prer]').forEach(tr=>{
-    tr.addEventListener('dragover',e=>{if(!PREV.drag)return;e.preventDefault();tr.classList.add('seq-over');});
+    tr.addEventListener('dragover',e=>{let ok=!!PREV.drag;if(!ok)try{ok=[...(e.dataTransfer&&e.dataTransfer.types||[])].includes('text/plain');}catch(x){}if(!ok)return;e.preventDefault();tr.classList.add('seq-over');});
     tr.addEventListener('dragleave',()=>tr.classList.remove('seq-over'));
-    tr.addEventListener('drop',e=>{e.preventDefault();tr.classList.remove('seq-over');const id=PREV.drag;PREV.drag='';
+    tr.addEventListener('drop',e=>{e.preventDefault();tr.classList.remove('seq-over');let id=PREV.drag;PREV.drag='';
       let got='';try{got=e.dataTransfer?e.dataTransfer.getData('text/plain'):'';}catch(x){}
+      if(!id&&/^pre:/.test(got)){id=got.slice(4);if(!preRows().some(x=>x.k===id)){toast('That row is no longer in the pool — drag again');return render();}} // attack11 L2: the guard ran out (> 30 s) — the drag data still says which row
       if(!id||got!=='pre:'+id)return; // only a row this page started dragging
       if(id!==tr.dataset.prer)preMove(id,{onto:tr.dataset.prer});else render();});
   });
