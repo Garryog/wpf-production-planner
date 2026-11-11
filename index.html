@@ -3794,7 +3794,7 @@ async function seqLoad(full){ // called by the list store's load and poll; probe
   }catch(e){if(specMissing(e))SEQP.st='missing';else if(was!=='ok'){SEQP.st='net';SEQP.retry=Date.now()+60000;}seqShow();return 0;}
 }
 // The screens that want the 10-second poll (sequence page open, PM's Sequence tab, Pre-production)
-function seqBusyScreen(){return !!(SEQP.st==='ok'&&(ROLE==='pre'||(ROLE==='pm'&&pmTab==='seq')||(SEQ_DLG.el&&document.body.contains(SEQ_DLG.el))));}
+function seqBusyScreen(){return !!(SEQP.st==='ok'&&(ROLE==='pre'||(ROLE==='pm'&&pmTab==='seq')||(ROLE==='prod'&&prodTab==='req')||(SEQ_DLG.el&&document.body.contains(SEQ_DLG.el))));}
 const SEQ_DLG={el:null,draw:null,busy:false};
 const SPEC_TBC=/^(t\.?\s*b\.?\s*c\.?|t\.?\s*b\.?\s*a\.?|to be (confirmed|advised))$/i; // all mean not signed off (the database says the same)
 const specNorm=s=>String(s==null?'':s).normalize('NFKC').replace(/\s+/g,' ').trim().toLowerCase();
@@ -4463,6 +4463,52 @@ function seqReqWithdraw(id,redraw){
     if(redraw)redraw();});
 }
 // the PM who asked has seen the answer
+/* Production Manager: ✋ Requests — waiting first (oldest first), then "approved — not applied yet", then the last 30 decided */
+function seqReqCardHTML(q,act){
+  const p=LST.p.get(q.project_id),when=t=>t?new Date(t).toLocaleString('en-IE',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'';
+  const now=q.status==='open'?seqReqNow(q):null,rows=(q.preview||{}).rows||[],stuck=seqReqStuck(q);
+  const st=q.status==='open'?'':q.status==='direct'?`🛠 changed directly by ${escA(q.asked_by||'')}`:`${q.status==='approved'?'✓ Approved':q.status==='refused'?'✗ Refused':'↩ Withdrawn'} by ${escA(q.decided_by||'')} · ${escA(when(q.decided_at))}${q.answer?' — “'+escA(q.answer)+'”':''}${seqReqUnapplied(q)?(stuck?' · <b style="color:#b42318">not applied yet</b>':' · being applied…'):''}`;
+  return `<div class="sr-card${q.status==='open'||stuck?'':' sr-dec'}" data-srcard="${escA(q.id)}">
+    <div class="sr-h">${q.kind==='move'?'🔢 Order change':'📅 Date change'} · ${escA((p&&p.name)||q.project_id)} · ✋ ${escA(q.asked_by||'')} <span class="sr-s">${escA(when(q.asked_at))}</span></div>
+    <div class="sr-m">${q.kind==='move'?escA(seqReqSum(q)):rows.length?rows.map(x=>`<div>${escA(seqReqLine(x))}</div>`).join(''):escA((q.wos||[]).join(', '))}</div>
+    <div class="sr-m">Why: <b>${escA(seqReqWhy(q)||'—')}</b></div>
+    ${now?`<div class="sr-s">If you approve now: ${escA(now.line)}</div>${now.since.length?`<div class="sr-m" style="color:#b42318">⚠ changed since asked: ${now.since.map(escA).join(' · ')}</div>`:''}`:''}
+    ${st?`<div class="sr-s">${st}</div>`:''}
+    ${act&&q.status==='open'?`<div class="sr-act"><button class="btn btn-g" data-srok="${escA(q.id)}">✓ Approve</button><button class="btn btn-s" data-srno="${escA(q.id)}">✗ Refuse — reason required</button></div>`:''}
+    ${act&&stuck?`<div class="sr-act"><b style="color:#b42318">Approved — not applied yet</b><button class="btn btn-g" data-srapply="${escA(q.id)}">Apply now</button></div>`:''}
+  </div>`;
+}
+function seqReqPage(app){
+  const act=ROLE==='prod',all=seqReqAll(),open=seqReqOpen(),stuck=all.filter(seqReqStuck);
+  const dec=all.filter(q=>q.status!=='open'&&!seqReqStuck(q)).sort((a,b)=>String(b.decided_at||b.asked_at||'').localeCompare(String(a.decided_at||a.asked_at||''))).slice(0,30);
+  app.innerHTML=`<div class="pg"><div class="exp-panel" id="sr-pg">
+    <div style="font-size:18px;font-weight:800;color:#14335c;margin-bottom:4px">✋ Change requests — ${open.length} waiting</div>
+    <div style="font-size:12px;color:var(--t3);margin-bottom:10px">A PM asked to change a job inside the next ${seqFixedDays()} days. Approve = the change is made now on today's data (build week, vans, saw and stores follow, like any date change). Refuse = nothing moves; your reason goes back to the PM.</div>
+    ${stuck.length?stuck.map(q=>seqReqCardHTML(q,act)).join(''):''}
+    ${open.length?open.map(q=>seqReqCardHTML(q,act)).join(''):'<div style="color:var(--t3);padding:6px 0 10px">Nothing waiting ✓</div>'}
+    ${dec.length?`<div style="font-size:14px;font-weight:700;color:#14335c;margin:14px 0 6px">Last ${dec.length} decided</div>${dec.map(q=>seqReqCardHTML(q,false)).join('')}`:''}
+  </div></div>`;
+  seqReqBind(app,()=>render());
+}
+function seqReqBind(root,redraw){
+  root.querySelectorAll('[data-srok]').forEach(b=>b.onclick=()=>{const q=LST.sr.get(b.dataset.srok);if(!q)return;
+    if(!confirm('Approve this change?\n\n'+seqReqSum(q)+'\n\nIt is made now, with every date rule (vans, build week, saw and stores).'))return;
+    seqBy(async by=>{b.disabled=true;await seqDecide(q.id,'approved','',by);redraw();});});
+  root.querySelectorAll('[data-srno]').forEach(b=>b.onclick=()=>seqReqRefuseDlg(b.dataset.srno,redraw));
+  root.querySelectorAll('[data-srapply]').forEach(b=>b.onclick=()=>{const q=LST.sr.get(b.dataset.srapply);if(!q||!seqReqUnapplied(q))return redraw();
+    seqBy(async by=>{b.disabled=true;await seqReqApply(q,by);redraw();});});
+}
+function seqReqRefuseDlg(id,redraw){
+  const q=LST.sr.get(id);if(!q)return;if(q.status!=='open'){seqReqDoneMsg(q);return redraw();}
+  const ov=lsDlg(`<div style="font-weight:800;color:#14335c;font-size:16px;margin-bottom:6px">✗ Refuse the change request</div>
+    <div style="font-size:13px;margin-bottom:6px">${escA(seqReqSum(q))} — asked by ${escA(q.asked_by||'')}</div>
+    <div style="font-size:13px;font-weight:700;margin:6px 0 4px">Why not? (goes back to ${escA(q.asked_by||'the PM')})</div>
+    <textarea id="sr-ans" maxlength="300" rows="3" style="width:100%;box-sizing:border-box;padding:9px;border:1px solid var(--b2);border-radius:8px;font-size:14px"></textarea>
+    <div style="display:flex;justify-content:flex-end;margin-top:8px"><button class="btn btn-g" id="sr-no-ok" style="min-height:44px" disabled>✗ Refuse</button></div>`,520);
+  ov.classList.add('sr-nodlg');const ta=ov.querySelector('#sr-ans'),ok=ov.querySelector('#sr-no-ok');
+  ta.oninput=()=>{ok.disabled=!ta.value.trim();};ta.focus();
+  ok.onclick=()=>{const v=ta.value.trim();if(!v)return;ok.disabled=true;seqBy(async by=>{await seqDecide(id,'refused',v,by);ov.remove();redraw();});};
+}
 async function seqReqSeen(id){const q=LST.sr.get(id);if(!q||q.seen_at)return;
   try{await seqReqPatch(q,{seen_at:new Date().toISOString()});}catch(e){toast('Not saved — '+e.message,true);}}
 // 📜 History: the database's own record (project_events, entity 'seq'), read when opened — who, when, what, old → new position
@@ -4636,13 +4682,15 @@ function renderDesign(app){
 }
 let prodTab='today';
 function renderProdV2(app){
+  if(prodTab==='req'&&!seqVis())prodTab='today';
   if(prodTab==='lists')lsHomePage(app);
+  else if(prodTab==='req')seqReqPage(app); /*B7*/
   else if(prodTab==='snags')renderSnags(app);
   else renderProd(app);
-  const t=(k,l)=>`<button data-prodtab="${k}" style="padding:9px 18px;border:none;border-radius:6px;font-size:15px;font-weight:700;cursor:pointer;${prodTab===k?'background:#14335c;color:#fff':'background:#e6ebf2;color:#14335c'}">${l}</button>`;
-  app.insertAdjacentHTML('afterbegin',`<div id="prod-strip" style="max-width:1400px;margin:10px auto 0;padding:0 20px;display:flex;gap:8px;flex-wrap:wrap">${t('today','🧭 Today')}${t('lists','📋 Lists')}${t('snags','🩹 Snags')}<button id="prod-sent" class="dk-gate"${dkVis()?'':' hidden'} style="padding:9px 18px;border:none;border-radius:6px;font-size:15px;font-weight:700;cursor:pointer;background:#e6ebf2;color:#14335c">📦 Items sent</button></div>`);
+  const t=(k,l)=>`<button data-prodtab="${k}" style="padding:9px 18px;border:none;border-radius:6px;font-size:15px;font-weight:700;cursor:pointer;min-height:44px;${prodTab===k?'background:#14335c;color:#fff':'background:#e6ebf2;color:#14335c'}">${l}</button>`;
+  app.insertAdjacentHTML('afterbegin',`<div id="prod-strip" style="max-width:1400px;margin:10px auto 0;padding:0 20px;display:flex;gap:8px;flex-wrap:wrap">${t('today','🧭 Today')}${seqVis()?t('req','✋ Requests ('+seqReqOpen().length+')'):''}${t('lists','📋 Lists')}${t('snags','🩹 Snags')}<button id="prod-sent" class="dk-gate"${dkVis()?'':' hidden'} style="padding:9px 18px;border:none;border-radius:6px;font-size:15px;font-weight:700;cursor:pointer;background:#e6ebf2;color:#14335c">📦 Items sent</button></div>`);
   document.getElementById('prod-sent').onclick=()=>dkReportDlg();dkShow();
-  document.querySelectorAll('[data-prodtab]').forEach(b=>b.onclick=()=>{prodTab=b.dataset.prodtab;if(prodTab==='lists')lsStart();render();});
+  document.querySelectorAll('[data-prodtab]').forEach(b=>b.onclick=()=>{prodTab=b.dataset.prodtab;if(prodTab==='lists'||prodTab==='req')lsStart();render();});
 }
 /* "Waiting for a list" on the saw (build note j): each planned job with no list, with its cut-by date, the list due by
    (the working day before, so the saw sees it a day ahead) and who owns the list. Overdue is red. */
@@ -11411,6 +11459,7 @@ function renderProd(app){
   const tile=(n,lbl,sub,bad)=>`<div class="dsh-tile" style="border-top:4px solid ${bad?'#c0392b':'#5b6b82'}"><div class="dsh-n" style="color:${bad?'#c0392b':'#14335c'}">${n}</div><div class="dsh-l">${lbl}</div>${sub?`<div class="dsh-s">${sub}</div>`:''}</div>`;
   app.innerHTML=`<div class="dsh">
     <h1 style="font-size:26px;color:#14335c;margin:0 0 12px">🧭 Production — what needs you today</h1>
+    ${(n=>n?`<div class="sr-ban" data-srgo="1" role="button" tabindex="0">✋ ${n} change request${n!==1?'s':''} waiting — tap to answer</div>`:'')(ROLE==='prod'&&seqVis()?seqReqOpen().length+seqReqAll().filter(seqReqStuck).length:0)}
     <div class="dsh-tiles">
       ${tile(atRisk.length,'AT RISK TODAY / TOMORROW','on a van, not ready',atRisk.length>0)}
       ${tile(holds.length,'ROWS WAITING ON MATERIAL','release when it arrives',holds.length>0)}
@@ -11435,6 +11484,7 @@ function renderProd(app){
   bindMissWhy();
   bindHoldBook(['saw','fit'],officeWhoFn);
   document.querySelectorAll('[data-pmlists]').forEach(e=>e.onclick=()=>{prodTab='lists';lsStart();render();});
+  document.querySelectorAll('[data-srgo]').forEach(e=>e.onclick=()=>{prodTab='req';lsStart();render();}); /*B7*/
 }
 
 loadDB().then(()=>{render();startAutoRefresh();});
