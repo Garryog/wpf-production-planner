@@ -11513,18 +11513,45 @@ async function pMergeAll(dec,fresh){const by=lqBy(''),out=[],nw=new Set(fresh||[
   for(const [P,ws] of Object.entries(dec||{})){const W=(ws||[])[0];if(!W)continue;
     try{out.push(await pMerge(P,W,by,nw.has(woKey(W))));}catch(e){out.push({p:P,w:W,ok:false,why:e.message});}}
   if(out.some(x=>x.ok))sched();
-  const el=document.getElementById('iprev'),h=`<div id="imp-pmres" style="margin-top:10px;background:#f3effc;border:1px solid #7c5cd6;border-radius:8px;padding:8px 12px;font-size:13px">${out.map(x=>x.ok?`<div>🔗 <b>${escA(x.p)}</b> merged into <b>${escA(x.w)}</b>${x.notes&&x.notes.length?` — ${escA(x.notes.join(' · '))}`:''}</div>`:`<div style="color:#b42318">✕ <b>${escA(x.p)}</b> NOT merged into ${escA(x.w)} — ${escA(x.why)}</div>`).join('')}</div>`;
+  const el=document.getElementById('iprev'),h=`<div id="imp-pmres" style="margin-top:10px;background:#f3effc;border:1px solid #7c5cd6;border-radius:8px;padding:8px 12px;font-size:13px">${out.map(x=>x.ok?`<div>🔗 <b>${escA(x.p)}</b> merged into <b>${escA(x.w)}</b>${x.notes&&x.notes.length?` — ${escA(x.notes.join(' · '))}`:''}</div>`:x.already?`<div>ℹ <b>${escA(x.p)}</b> → <b>${escA(x.w)}</b>: ${escA(x.why)}</div>`:`<div style="color:#b42318">✕ <b>${escA(x.p)}</b> NOT merged into ${escA(x.w)} — ${escA(x.why)}</div>`).join('')}</div>`;
   if(el&&tab==='i')el.insertAdjacentHTML('beforeend',h);else try{render();}catch(e){}
-  const n=out.filter(x=>x.ok).length,bad=out.length-n;
+  const n=out.filter(x=>x.ok).length,bad=out.filter(x=>!x.ok&&!x.already).length;
   if(out.length)toast(n+' P-number'+(n!==1?'s':'')+' merged into the Cienapps WO'+(bad?' · '+bad+' NOT merged — see the import screen':''),!!bad);
   return out;}
+/* L4b sequence rows. P-job's row only → handed to the WO (same row: place, date, Johnny's tick). Both have a row (attack9 M5,
+   ASSUMED): ONE row stays — the one placed first (created earlier); the other is retired (seq_remove, kept, never deleted) and its
+   date goes onto the kept row when that has none. A second screen finding the work already done says so (no false warning). */
+async function pMergeSeq(P,W,by){
+  const out=[],why=P+' merged into '+W,t=x=>Date.parse(x&&x.created_at||'')||0;
+  try{await lsPoll();}catch(e){}
+  let r=seqWoRow(P),rw=seqWoRow(W);
+  if(!r)return rw?[]:[];
+  try{
+    if(rw){const keepP=t(r)<t(rw)||(t(r)===t(rw)&&String(r.id)<String(rw.id)),keep=keepP?r:rw,drop=keepP?rw:r;
+      const d=await lsRpc('seq_remove',{p_id:drop.id,p_expect:null,p_by:by,p_why:why+' — one row per house, the earlier-placed row kept'});
+      if(!d||!d.ok)return['⚠ two sequence rows for this house — one could not be retired ('+((d&&d.err)||'?')+'); check the sequence page'];
+      out.push('sequence: the earlier-placed row kept, the other retired (not deleted)');
+      if(!keepP){if(drop.req_date&&!keep.req_date){try{await lsWrite('project_seq',LST.sq.get(keep.id)||keep,{req_date:drop.req_date,why});}catch(e){}}return out;}
+      r=keep;}
+    const a=await lsRpc('seq_unmatch',{p_id:r.id,p_expect:null,p_by:by,p_why:why});
+    const b=a&&a.ok?await lsRpc('seq_match',{p_id:r.id,p_wo:W,p_expect:null,p_how:'confirmed',p_by:by}):a;
+    if(b&&b.ok){out.push('sequence row handed over');return out;}
+    try{await lsPoll();}catch(e){}
+    if(seqWoRow(W)&&!seqWoRow(P))return out; // another screen did it a moment ago — nothing wrong
+    out.push('⚠ sequence row not handed over ('+((b&&b.err)||'?')+') — match it on the sequence page');
+  }catch(e){out.push('⚠ sequence row not handed over ('+e.message+') — match it on the sequence page');}
+  return out;
+}
 async function pMerge(P,W,by,wNew){
   const find=w=>DB.orders.find(o=>woKey(o.wo)===woKey(w));
   let p=find(P),w=find(W);
   if(!p)return{p:P,w:W,ok:false,why:(DB.pMerged||[]).some(x=>x.wo===P&&woKey(x.into)===woKey(W))?'already merged (another PC)':P+' is no longer in the planner'};
   if(!w)return{p:P,w:W,ok:false,why:W+' is not in the planner'};
   if(!pIsP(p.wo)||pIsP(w.wo))return{p:P,w:W,ok:false,why:'only a P-number merges into a Cienapps WO'};
-  if(!pLive(p)||!pLive(w))return{p:P,w:W,ok:false,why:'one of them is already shipped or delivered'};
+  if(!pLive(w))return{p:P,w:W,ok:false,why:W+' is already shipped or delivered'};
+  try{const row=await fetchMain(),t=((row&&row.settings&&row.settings.pMerged)||[]).find(x=>x&&x.wo===P); /*attack9 M3b: another screen may have merged it a moment ago*/
+    if(t||(row&&Array.isArray(row.orders)&&!row.orders.some(o=>o&&o.wo===P)&&row.orders.some(o=>(o&&o.pFrom||[]).some(x=>x&&x.wo===P))))return{p:P,w:W,ok:false,already:true,why:'already merged'+(t&&t.by?' by '+t.by:'')+' on another screen — nothing done again'};}catch(e){}
+  p=find(P);w=find(W);if(!p||!w)return{p:P,w:W,ok:false,why:'changed on another screen meanwhile — import again'};
   const m=keyMatch(jobKey(p),jobKey(w));if(m.r==='different'||!pKindsMeet(p.title,w.title))return{p:P,w:W,ok:false,why:'not the same house ('+m.why+')'};
   // the cutting lists — asked of the database, never just this screen's copy: one live list per WO
   let pl,wl;try{pl=await lsLiveFor(p.wo);wl=await lsLiveFor(w.wo);}catch(e){return{p:P,w:W,ok:false,why:'the cutting lists could not be checked ('+e.message+') — nothing changed; it is offered again on the next import'};}
@@ -11555,11 +11582,7 @@ async function pMerge(P,W,by,wNew){
   // history: both logs, in time order, then the merge line
   w.log=(w.log||[]).concat((p.log||[]).map(x=>({...x,what:'['+P+'] '+(x.what||'')}))).sort((a,b)=>String(a.at||'').localeCompare(String(b.at||''))).slice(-60);
   // the sequence row (PM sequence installed): the same row is handed to the WO, so its place and Johnny's tick stay
-  if(seqVis()){const r=seqWoRow(p.wo),rw=seqWoRow(w.wo);
-    if(r&&!rw)try{const a=await lsRpc('seq_unmatch',{p_id:r.id,p_expect:null,p_by:by,p_why:P+' merged into '+W});
-      const b=a&&a.ok?await lsRpc('seq_match',{p_id:r.id,p_wo:w.wo,p_expect:null,p_how:'confirmed',p_by:by}):a;
-      notes.push(b&&b.ok?'sequence row handed over':'⚠ sequence row not handed over ('+((b&&b.err)||'?')+') — match it on the sequence page');}catch(e){notes.push('⚠ sequence row not handed over ('+e.message+') — match it on the sequence page');}
-    else if(r&&rw)notes.push('⚠ '+W+' already has a sequence row — '+P+'\'s row left as it was (check the sequence page)');}
+  if(seqVis())notes.push(...await pMergeSeq(P,w.wo,by));
   // retire the P-job: a full copy stays on the WO (permanent) and in settings pMerged
   w.pFrom=(w.pFrom||[]).concat([{wo:P,at,by,job:snap}]);
   DB.pMerged=(DB.pMerged||[]).concat([{at,by,wo:P,into:w.wo,why:'Cienapps WO for the same house (L4b)',job:snap}]).slice(-300);
