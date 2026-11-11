@@ -122,7 +122,7 @@ Rules: rank by the leading number. "Shipped" = step 9 only (left the factory →
 - Planner rollout to other PCs and phones goes ahead on the current GitHub Pages link; no Cloudflare. The planner's main use is on the web (any PC or phone).
 - Quoting tool moves to its OWN Supabase project (planner and quoting never share a database or key again). Quoting stays office-only (SharePoint file) for now.
 - Users: ~40 internal (office, factory, delivery) + ~25 subcontractor employees. Only the 12 office staff have Microsoft accounts; nobody else does (Garry, 11 Nov). Subcontractors: planner only, never quoting.
-- Proposed (Claude, awaiting Garry's OK): one sign-in for everyone = Supabase Auth username + password, accounts created and disabled by an admin in the planner (public sign-up off; no email needed, so staff without email are fine). Phones/PCs stay signed in. Shared factory PCs (saw, stores, floor screen) use a station login + pick your name, as now. "Sign in with Microsoft" for the 12 office staff is optional, later.
+- DECIDED (Garry said yes, 11 Nov): one sign-in for everyone = Supabase Auth username + password, accounts created and disabled by an admin in the planner (public sign-up off; no email needed, so staff without email are fine). Phones/PCs stay signed in. Shared factory PCs (saw, stores, floor screen) use a station login + pick your name, as now. "Sign in with Microsoft" for the 12 office staff is optional, later.
 - After sign-in is live: database rules become "signed-in staff only", exposed keys are replaced, the repo goes private.
 - Open: what subcontractors see/do (likely the Fitters view, build-order item 8); roles replace PINs (per-role screens kept).
 
