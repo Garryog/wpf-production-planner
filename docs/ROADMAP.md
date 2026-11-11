@@ -119,13 +119,12 @@ Rules: rank by the leading number. "Shipped" = step 9 only (left the factory →
 
 ### Access and sign-in decisions (11 Nov 2026, Garry — supersedes "simple PIN per person" above)
 - Why: the planner repo is public with GitHub Pages on (needed for the 10 Nov go-live), and the key in it also opens the quoting data. Daily security check 11 Nov.
-- Planner rollout to other PCs and phones goes ahead on the current GitHub Pages link; no Cloudflare.
+- Planner rollout to other PCs and phones goes ahead on the current GitHub Pages link; no Cloudflare. The planner's main use is on the web (any PC or phone).
 - Quoting tool moves to its OWN Supabase project (planner and quoting never share a database or key again). Quoting stays office-only (SharePoint file) for now.
-- Sign-in for the wide rollout: Supabase Auth with "Sign in with Microsoft" (one login per person), for both apps. Planner first, quoting later.
-- Expected users: ~40 internal (office, factory, delivery) + ~25 subcontractor employees.
-- Subcontractors will NOT have Microsoft accounts (Garry, 11 Nov). They get a Supabase email + password login, created by an admin (public sign-up off), and need web access to the PLANNER ONLY (never quoting). Supabase email needs the company's own mail sender set up (built-in sender is limited to a few emails an hour). Their screens and data are to be agreed (likely the Fitters view, item 8 of the build order).
+- Users: ~40 internal (office, factory, delivery) + ~25 subcontractor employees. Only the 12 office staff have Microsoft accounts; nobody else does (Garry, 11 Nov). Subcontractors: planner only, never quoting.
+- Proposed (Claude, awaiting Garry's OK): one sign-in for everyone = Supabase Auth username + password, accounts created and disabled by an admin in the planner (public sign-up off; no email needed, so staff without email are fine). Phones/PCs stay signed in. Shared factory PCs (saw, stores, floor screen) use a station login + pick your name, as now. "Sign in with Microsoft" for the 12 office staff is optional, later.
 - After sign-in is live: database rules become "signed-in staff only", exposed keys are replaced, the repo goes private.
-- Open: Microsoft accounts for factory/delivery staff without a licence (IT provider); what subcontractors see/do; roles replace PINs (per-role screens kept).
+- Open: what subcontractors see/do (likely the Fitters view, build-order item 8); roles replace PINs (per-role screens kept).
 
 ## Progress log
 ### 2 Nov 2026 (scheduled run)
