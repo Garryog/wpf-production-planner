@@ -32,7 +32,7 @@ materials for PMs / office, editing Floor / Unit / Title / Customer — works wi
 1. Supabase → WPF project → **SQL Editor** → **New query**. Copy everything in the grey box below, paste, **Run**.
 2. Expected result: **"Success. No rows returned"**. A red error: stop and send a screenshot — do not merge.
 3. Check: **Table Editor** shows `project_specs`, `project_spec_items` and `project_events` (all empty). **Database → Triggers** shows
-   `pspec_rules` and `project_specs_touch` on `project_specs`, and
+   `pspec_rules`, `pspec_log` and `project_specs_touch` on `project_specs`, and
    `psi_rules`, `psi_log` and `project_spec_items_touch` on `project_spec_items`.
 4. Safe to run twice (nothing is duplicated, no data touched).
 
@@ -135,6 +135,21 @@ begin
     coalesce(new.updated_by,'?'));
   return null;
 end $$;
+-- ... and the same for the specs themselves: added, renamed, marked "not used any more", brought back
+create or replace function pspec_log() returns trigger language plpgsql security definer set search_path=public as $$
+begin
+  if tg_op='UPDATE' and new.name=old.name and new.active=old.active and new.spec_type=old.spec_type then return null; end if;
+  insert into project_events(project_id,entity,entity_id,act,old,new,by)
+  values(new.project_id,'spec-sheet',new.id,
+    case when tg_op='INSERT' then 'add' when old.active and not new.active then 'retire'
+         when new.active and not old.active then 'bring-back' else 'rename' end,
+    case when tg_op='UPDATE' then jsonb_build_object('name',old.name,'active',old.active,'spec_type',old.spec_type) end,
+    jsonb_build_object('name',new.name,'active',new.active,'spec_type',new.spec_type),
+    coalesce(new.updated_by,'?'));
+  return null;
+end $$;
+drop trigger if exists pspec_log on project_specs;
+create trigger pspec_log after insert or update on project_specs for each row execute function pspec_log();
 drop trigger if exists psi_log on project_spec_items;
 create trigger psi_log after insert or update on project_spec_items for each row execute function psi_log();
 

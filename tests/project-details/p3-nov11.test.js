@@ -60,6 +60,14 @@ const ev = (t, f, a) => t.page.evaluate(f, a);
     await t.close();
   }
   for (const role of ['saw', 'stores', 'driver', 'floor']) { const t = await X.dev(browser, S2, role); const r = await ev(t, () => { let n = 0; window.prompt = () => { n++; return '9000'; }; return { e: specEditOk(), s: specSignOk(), m: lsMatEditOk(), n }; }); rec(role + ': read-only, never asked for a PIN', !r.e && !r.s && !r.m && r.n === 0, JSON.stringify(r)); await t.close(); }
+  // retiring a spec that still has open items needs a Project Manager (it would turn the project green without a sign-off)
+  { X.sheet(S2, 'SSR', 'Robes', 'robes'); const t = await X.dev(browser, S2, 'office');
+    await ev(t, () => lsSpecDlg('P1', 'SSR')); await sleep(300);
+    const r = await ev(t, async () => { let n = 0; window.prompt = () => { n++; return null; }; window.confirm = () => true; document.getElementById('sp-ret').click(); await new Promise(r => setTimeout(r, 300)); return n; });
+    rec('office: "Not used any more" on a spec with open items asks for the Project Manager PIN; cancelled = still in use', r === 1 && S2.db.t.project_specs.find(s => s.id === 'SSR').active === true);
+    const r2 = await ev(t, async () => { const a = ['6666', 'Mary PM']; window.prompt = () => a.shift(); document.getElementById('sp-ret').click(); await new Promise(r => setTimeout(r, 400)); return 1; });
+    rec('with the PM PIN it is retired, and the history says who', S2.db.t.project_specs.find(s => s.id === 'SSR').active === false && S2.db.t.project_events.some(e => e.entity === 'spec-sheet' && e.entity_id === 'SSR' && e.act === 'retire'), JSON.stringify(S2.db.t.project_events.filter(e => e.entity === 'spec-sheet')));
+    await t.close(); }
   // Management adds a material and fills in a value
   const dash = await X.dev(browser, S2, 'dash');
   await ev(dash, () => { let n = 0; window.prompt = () => { n++; return null; }; window.__n = () => n; lsMaterialsDlg('P1'); }); await sleep(200);

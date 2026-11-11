@@ -28,6 +28,7 @@ do $$ declare r record; n int; begin
  begin update project_spec_items set value='No' where id='RX'; raise exception 'FAIL item changed on a retired spec'; exception when raise_exception then null; end;
  begin update project_spec_items set status='signed-off',signed_by='Mary' where id='RX'; raise exception 'FAIL signed on a retired spec'; exception when raise_exception then null; end;
  update project_specs set active=true where id='SR'; update project_spec_items set value='No' where id='RX';
+ if not exists(select 1 from project_events where entity='spec-sheet' and entity_id='SR' and act='retire' and by='Ann') or not exists(select 1 from project_events where entity='spec-sheet' and entity_id='SR' and act='bring-back') or not exists(select 1 from project_events where entity='spec-sheet' and entity_id='SK' and act='add') then raise exception 'FAIL spec add / retire / bring back not in the history'; end if;
  begin insert into project_specs(id,project_id,name) values('SZW','PS1',U&'\200B'); raise exception 'FAIL invisible spec name allowed'; exception when raise_exception then null; end;
  -- the same item on two specs of one project is fine; an item takes its project from its spec, and stays on its spec
  insert into project_spec_items(id,project_id,spec_id,item,value) values('R1','PS2','SR','Hinges','Blum');

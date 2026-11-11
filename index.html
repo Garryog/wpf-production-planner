@@ -3665,7 +3665,7 @@ function lsSpecDlg(pid,sid0){
         <b class="${c.ok<c.n?'spec-cnt-red':'spec-cnt-ok'}">${c.ok} of ${c.n} signed off</b><span style="flex:1"></span>
         <button class="btn btn-s" id="sp-print">🖨 Print</button>${ro?'':`<button class="btn btn-s" id="sp-mats">🧱 Materials</button>`}</div>
       <div class="spec-tabs">${shs.map(s=>{const k=specCount(pid,s.id);return `<button class="spec-tab${s.id===sid?' on':''}${k.ok<k.n?' red':''}" data-sptab="${escA(s.id)}" title="${escA(SPEC_TYPES[s.spec_type]||'')} checklist">${escA(s.name)} <span>${k.ok}/${k.n}</span></button>`;}).join('')}${ro?'':'<button class="spec-tab spec-tab-add" id="sp-newspec" title="Another spec for this project — e.g. a second kitchen type, or the robes">＋ Add spec</button>'}</div>
-      ${sh&&!ro?`<div class="spec-sub"><span>${escA(SPEC_TYPES[sh.spec_type]||'')} checklist</span>${sh.virtual?'':`<button class="btn btn-s" id="sp-ren" style="font-size:11px;padding:3px 8px">Rename</button><button class="btn btn-s" id="sp-ret" style="font-size:11px;padding:3px 8px" title="Hides this spec and takes it out of the red chip. Nothing is deleted.">Not used any more</button>`}</div>`:''}
+      ${sh&&!ro?`<div class="spec-sub"><span>${escA(SPEC_TYPES[sh.spec_type]||'')} checklist</span>${sh.virtual?'':`<button class="btn btn-s" id="sp-ren" style="font-size:11px;padding:3px 8px">Rename</button><button class="btn btn-s" id="sp-ret" style="font-size:11px;padding:3px 8px" title="Hides this spec and takes it out of the red chip (a Project Manager does this while items are still open). Logged; nothing is deleted.">Not used any more</button>`}</div>`:''}
       <div id="sp-addform"></div>
       ${(rt=>rt.length&&!ro?`<div class="spec-sub spec-retd"><span>Not used any more:</span>${rt.map(s=>`<span class="lst-chip">${escA(s.name)} <button class="btn btn-s" data-spback="${escA(s.id)}" style="font-size:11px;padding:2px 8px">Bring back</button></span>`).join('')}</div>`:'')(specSheets(pid,true).filter(s=>s.active===false&&shs.some(x=>x.active!==false)))}
       <div style="font-size:12px;color:var(--t3);margin:4px 0 10px">Blank or TBC = not signed off (red on the saw, stores and the cutting list) — the project stays red until every item on every spec is signed off. A value is Proposed until a Project Manager signs it off. Changing a signed-off value takes the sign-off away. Each box saves when you leave it.</div>
@@ -3724,6 +3724,8 @@ function lsSpecDlg(pid,sid0){
       lsWrite('project_specs',cs,{name:nn}).then(()=>{draw();toast('Renamed');}).catch(x=>{draw();msg('Not renamed — '+x.message);});};
     const rt=ov.querySelector('#sp-ret');if(rt)rt.onclick=()=>{const cs=LST.px.get(sid);if(!cs||!specEditOk())return;
       if(specSheets(pid).length<2)return msg('A project keeps at least one spec.');
+      // a spec with items still open would turn the project green without a sign-off: only a Project Manager retires it (Manager, 11 Nov)
+      if(specCount(pid,sid).ok<specCount(pid,sid).n&&!specSignOk())return;
       if(!confirm('Mark the spec "'+cs.name+'" as not used any more?\n\nIt is hidden and no longer counts for the red chip. Nothing is deleted.'))return;
       lsWrite('project_specs',cs,{active:false}).then(()=>{sid='';draw();toast('"'+cs.name+'" is no longer used');}).catch(x=>{draw();msg('Not changed — '+x.message);});};
     const mb=ov.querySelector('#sp-mats');if(mb)mb.onclick=()=>lsMaterialsDlg(pid,()=>{if(SPEC_DLG.draw)SPEC_DLG.draw();});
