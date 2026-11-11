@@ -198,7 +198,7 @@ function row() {
   // 14. claimed but not applied (that screen died): after 2 min "Approved — not applied yet [Apply now]"
   DS.reqInsert(S.db, { id: 'R-STUCK', project_id: 'P1', kind: 'date', seq_ids: ['QA'], wos: ['WO-3'], change: { per: { 'WO-3': { deliv: '2026-12-11', due: '2026-12-08' } } }, preview: { rows: [{ wo: 'WO-3', from: '2026-12-03', to: '2026-12-08', dFrom: '', dTo: '2026-12-11' }] }, why: 'Customer delay', asked_by: 'John Burke' });
   DS.reqUpdate(S.db, D.find(S.db, 'seq_requests', 'R-STUCK'), { status: 'approved', decided_by: 'Sean Prod' });
-  const browserNow = await pa.page.evaluate(() => Date.now());
+  const browserNow = Date.now(); // attack7 fix 1: the 2-minute timer reads the DATABASE's clock (the fake one = this Node process), not the page's fake date
   D.find(S.db, 'seq_requests', 'R-STUCK').decided_at = new Date(browserNow - 60000).toISOString();
   await reload(pa.page); await pa.page.evaluate(() => { prodTab = 'req'; render(); }); await sleep(200);
   const st1 = await pa.page.evaluate(() => (document.querySelector('[data-srcard="R-STUCK"]') || {}).innerText || 'none');

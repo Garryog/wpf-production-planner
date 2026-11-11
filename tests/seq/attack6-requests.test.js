@@ -216,7 +216,7 @@ const pmDev = async (browser, S, who, extra) => { const p = await X.dev(browser,
     DS.reqUpdate(S.db, D.find(S.db, 'seq_requests', 'R-K'), { status: 'approved', decided_by: 'Sean Prod' });
     const pa = await prodDev(browser, S, 'Pat Prod');
     // "now" in the database = the moment of the claim; this PC's clock reads 5 min later
-    const st = await pa.page.evaluate(() => { const q = LST.sr.get('R-K'); q.decided_at = new Date(Date.now() - 20000).toISOString(); const a = seqReqStuck(q); q.decided_at = new Date(Date.now() - 20000 - 300000).toISOString(); return [a, seqReqStuck(q)]; });
+    const st = await pa.page.evaluate(() => { const q = LST.sr.get('R-K'); const dbNow = SRV_T == null ? Date.now() : SRV_T + performance.now(); /*attack7 fix 1: the database's clock*/ q.decided_at = new Date(dbNow - 20000).toISOString(); const a = seqReqStuck(q); q.decided_at = new Date(dbNow - 20000 - 300000).toISOString(); return [a, seqReqStuck(q)]; });
     rec('7 [info] a claim 20 s old is not "stuck"; on a PC 5 min fast the same claim already shows "Apply now" (uses this PC\'s clock vs the database time)', st[0] === false, JSON.stringify(st));
     // scorecard week: asked Mon 19 Oct 00:30 Irish summer time (= Sun 23:30 UTC) and Sun 25 Oct 23:30 (after the clocks went back)
     reqs(S).forEach(q => { q.asked_at = '2026-10-18T23:30:00.000Z'; });
