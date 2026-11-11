@@ -1117,3 +1117,24 @@ seq / project-details / stores-docket pg-checks, attack3-pg (0/45), pg-pmerged, 
 - **11 Nov (live) — Garry's answers** (ROADMAP "11 Nov, Garry, answers"): all the ASSUMED calls confirmed except two, now built:
   0624b07 step 11 by hand no longer ticks "Installation complete"; 42a6355 bulk "Set date" onto a Sunday / bank holiday moves to the
   next delivery day and the preview says so (new tests/seq/s14-set-holiday 5/5).
+
+### 11 Nov 2026 (evening, Garry live) — Johnny's CNC sheet received: what is in it (for B8 / B9)
+Garry sent `CNC Schedule 2025.xlsm` ("this is what he works from for managing CNC"). The file itself is NOT in this repo (the repo
+is public and the sheet holds customer / project names). What the planner needs to know about it:
+- **478 tabs.** One master tab per year — **`CNC work 2026`** (1,779 jobs) — plus one tab per machine per day, named
+  `CNC 1 09.11.2026`, `CNC 2 …`, `CNC 3 …` (about 150 each since Oct 2023; a few odd names: `CNC 1 + 2`, `Running`, `Shane CNC`,
+  `Sheet8`; dates written `09.11.2026` or `23.10.26`). Also `16mm Cutter tracker` (not needed).
+- **Master tab columns:** PROJECT · Room ID (free text, e.g. "Block H1 Robe B101", "House 10") · **Job ID** · Material 1 · Qty 1 ·
+  Material 2 · Qty 2 · Material 3 · Qty 3 (Qty = sheets). **No due date, no machine, no date** on the master tab.
+- **Job ID = the Cienapps work order number**: `2766_01` = WO-2766-1. 1,747 of 1,779 rows are in that shape; 32 are something else
+  (hand names like "RM_Compact_LH", joined jobs) — these go to a person, never guessed (B0 rule).
+- **Strike-through = done**, and it is **per material**, not per job: 1,540 jobs fully struck, 136 part-struck (e.g. Material 1 and 2
+  cut, Material 3 not), about 100 not started.
+- **Day tabs:** title cell = machine + date, then Project · Room ID · Job ID · Material 1 · Sheets · Material 2 · Sheets · Material 3 ·
+  Sheets. The header row moves (row 2 or row 4) and there is a junk "Column1…" row under it — find the header by content. The machine
+  and the planned day of a job come ONLY from which tab it is on.
+- **What this changes in the plan (ASSUMED, Garry to confirm):** (1) match a sheet row to a planner job by WO number from the Job ID —
+  no project/floor/unit guessing needed; (2) "processed" in Johnny's pool = the job is on the master tab; "cut" = all its materials
+  struck; part-struck shows "2 of 3 materials cut"; (3) machine + CNC day = the newest day tab the job is on; (4) sheets per material
+  come from the Qty columns (better than Cienapps' single sheet count); (5) "out of step" = a job on the master tab not struck whose
+  cut-by date (due − 7) has passed, or a job due inside 3 weeks that is not on the master tab at all.
