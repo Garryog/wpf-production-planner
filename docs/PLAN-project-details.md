@@ -557,6 +557,42 @@ saw and stores follow the new date like any other date change.
   timing (891 ms; 634 ms alone, passes). No new failures. header-late-probe still crashes (pre-existing). No SQL, no new saved field.
 - Next: Tester (re-attack on the merge, incl. confirming attack5 F2 and the B1/B2/B8/B9 changes) → Manager.
 
+### 11 Nov 2026 — Manager verdict on B7 + Job A merge
+- **B7 change requests (cafd8dd…d6c06d4): GO WITH CONDITIONS** (fine to build on; Job B is not releasable yet anyway). **Job A merge
+  (de0d4dc): GO WITH CONDITIONS.** Manager re-ran on the fake database: s11 56/56, attack6 45/45, attack5-carryover 115/0,
+  a5-histdedup 12/12. Full suite NOT re-run by the Manager (Coder's 5,311 / 36 taken as reported). Merge conflict resolution read and
+  correct: one shared `prodStrip`, ✋ Requests only when the sequence tables exist, lists-off strip unchanged.
+- Key issues: (1) [Should fix, Coder] after a change is made, recording "applied" can fail with only a console line (e.g. the PM taps
+  ✓ Seen in those seconds → version moved; or a network blip). The screen says "Approved ✓", but 2 minutes later every Production
+  Manager screen shows "Approved — not applied yet [Apply now]", and tapping it re-applies the old request over any later change —
+  the attack6 fix-2 problem by another door. Found by reading, not reproduced. Fix: re-read and retry the `applied` write while the claim
+  is this screen's; if it still fails, a sticky warning "changed, but not recorded — do not tap Apply now". Same for `seqReqDirect`
+  (scorecard silently under-counts). (2) [Should fix, Tester] no test proves a real page/server clock gap: attack6 part 7 is [info], moves
+  `decided_at` in the page only and does not check its second value; the fake database and the browser share one clock. Add a test with
+  the page clock ±5 min from the fake server: "Apply now" never early, and not later than 2 min + one poll after the screen first saw the
+  row. The design itself (lower bound from rows received + performance.now, never ahead of the database) is sound. (3) [Garry] office /
+  Production Manager date moves made on Deliveries, the board or the pool (Job A tools) inside the 14 days are NOT counted as "direct"
+  in Late changes — only moves from the sequence page are. The Production Manager will mostly use Deliveries, so the column will
+  under-count. (4) [Process, Tester] the merge has not had its Tester re-attack; the four attack5 edits (B1/B2/B8/B9 now vs 404262a) are
+  reasonable but unconfirmed, and B8/B9 no longer check Job A's screens against the old ea990d4 baseline on this branch. The B11 a–c / h / i
+  date batch (bulk, spread, push, preview, Undo) still has no dedicated Tester attack (attack6 parts 8–9 cover part of it).
+  (5) [Note] every request ever made is loaded on every screen (no age limit) — fine now, look again after a few months.
+- ASSUMED calls judged: any PM of the project withdraws — agree (Garry: PMs share everything); only the Production Manager answers,
+  office changes directly with a reason — agree, but see Garry's decision on cover when he is off; approve applies exactly what was asked
+  even if moved since, card warns — agree, the Approve confirm box should repeat the "⚠ changed since asked" line (Coder, small);
+  refused / withdrawn can be asked again — agree; Late changes by week asked, withdrawn not counted — agree; only with lists ON + tables
+  — agree; another project's PM can still send a request from code until Stage 4 — accept (no real logins yet; same as every table).
+- Apply-claim (`updated_by='apply:<name>'`, 2 min on the database's clock): sound as a soft lock — it stops two taps and a stale second
+  screen; a screen that dies mid-apply is taken over after 2 min, which re-applies the same dates (harmless unless someone moved the job in
+  those 2 min). It relies on the `applied` write landing — issue 1.
+- Conditions before the Job B release: issues 1 and 2 fixed and tested; Tester re-attack on the merge confirms the attack5 edits; Garry
+  answers issue 3; full suite re-run with nothing new outside ACCEPTED-FAILURES. Before go-live (unchanged): run the PENDING "PM sequence &
+  pre-production" SQL first, close and reopen every screen, check in an incognito window; rollback = leave `main` as it is.
+- Recommended next order: (a) the fixes above + Tester on the merge and the B11 a–c batch; (b) L4b P-number → WO merge (staff are making
+  lists now; "avoid duplications"); (c) S1 + S2 (small, asked for on go-live day, no dependency); (d) B10 upload + matching as soon as Garry
+  sends the 5 real WO titles + their upload lines + one real 27-column file (if they are late, do B9 first); (e) B9 Johnny's pool;
+  (f) B11 d/e/f/g last.
+
 
 ---
 
