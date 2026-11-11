@@ -520,6 +520,25 @@ saw and stores follow the new date like any other date change.
   sequence tables installed (switch OFF = today's app).
 - Next: Tester (B7 — see the report) → Manager.
 
+### 11 Nov 2026 (scheduled run) — attack6 fixes
+- 1c4dff4 fix 1+3 (MEDIUM 5a/5b, LOW 4): the PM's answer strip reads `applied` (`seqAnsOut`): "⚠ Approved by X — but not changed:
+  WO-7 (already shipped)" / "— but not moved: the rows are no longer in the sequence", plus "🚚 came off van — rebook: …" and
+  "already cut — build week kept: …"; approved but not yet made = "being made now". Old rows without these fields still show.
+- 7310664 fix 2+6 (MEDIUM 6, LOW 7): "Apply now" (and the apply straight after Approve) re-reads the request first; already applied →
+  "Already applied by X at hh:mm — nothing done". It then claims the apply with a version-checked PATCH (`updated_by` = 'apply:<name>',
+  held 2 min) so two taps / a stale second screen can't both apply; this screen may retry its own failed claim. The 2-minute timer now
+  uses the database's clock: a lower bound built from the `updated_at` of rows received + `performance.now()`, taking the smaller of
+  that and this PC's own reading — a PC running fast can no longer show "Apply now" early (a slow PC shows it a little late — safe).
+  No SQL: `updated_by` on a decided request is already allowed by sr_rules.
+- d6c06d4 fix 4 (LOW 8b): an office / Production Manager ↶ Undo of a change inside the fixed window writes its own 'direct' row with
+  reason "Undo" (scorecard counts it; the job's history marks it fixed window). A PM's Undo is unchanged.
+- Finding 5 (info: seqReqMake from another project's PM is not refused by the database) left for Stage 4 logins as instructed.
+- attack6: 45 / 45 pass. s11 56 / 56. tests/seq: 1,260 pass / 6 fail, all six on ACCEPTED-FAILURES.
+- **Full suite** (239 test files + 4 probes, 3 at a time) at d6c06d4: **5,089 pass / 37 fail** — the 35 on ACCEPTED-FAILURES + two
+  timing ones that pass alone (editor e7 redraw 972 ms; stage1 t4 2,500-job merge 12.5 s, 6.5 s alone — another run was using the
+  machine). header-late-probe still crashes on the import mapping screen (pre-existing). No new failures. No SQL.
+- Next: Tester (re-run attack6) → Manager.
+
 
 ---
 
