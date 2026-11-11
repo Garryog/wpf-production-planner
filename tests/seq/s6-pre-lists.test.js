@@ -8,8 +8,12 @@ const { H, rec, sleep } = X;
   const S = X.makeServer();
   const pre = await X.dev(browser, S, 'pre', { me: { pre: 'Johnny' } });
   await pre.page.evaluate(() => { window.__pins = 0; const P = window.prompt; window.prompt = (m, d) => { if (/PIN/.test(m)) { window.__pins++; return null; } return P(m, d); }; });
-  const r = await pre.page.evaluate(() => ({ ed: lsEditOk(), mat: lsMatEditOk(), can: lsMatCan(), spec: specEditOk(), sign: specSignOk(), pin: lsPinOk('Checking'), pins: window.__pins }));
-  rec('pre has the Drawing office rights (lists, materials, project details, check) with no PIN question', r.ed && r.mat && r.can && r.spec && r.sign && r.pin && r.pins === 0, JSON.stringify(r));
+  const r = await pre.page.evaluate(() => ({ ed: lsEditOk(), mat: lsMatEditOk(), can: lsMatCan(), spec: specEditOk(), pin: lsPinOk('Checking'), pins: window.__pins }));
+  rec('pre has the Drawing office rights (lists, materials, project details, check) with no PIN question', r.ed && r.mat && r.can && r.spec && r.pin && r.pins === 0, JSON.stringify(r));
+  // (rule changed by Garry 11 Nov — docs/PLAN-project-details.md Part 1): project details are signed off by Project Managers only,
+  // so the Drawing office (and Pre-production with its rights) is asked for the PM / Admin PIN; Cancel = not signed
+  const sg = await pre.page.evaluate(() => { const n0 = window.__pins; const ok = specSignOk(); const n = window.__pins - n0; window.__pins = n0; return { ok, n }; });
+  rec('pre: sign-off asks for the Project Manager (or Admin) PIN — PMs only since 11 Nov; Cancel = not signed', !sg.ok && sg.n === 1, JSON.stringify(sg));
   // his view: a Cutting lists tab = the Lists page
   const t = await pre.page.evaluate(() => ({ tabs: [...document.querySelectorAll('[data-pretab]')].map(b => b.textContent) }));
   await pre.page.evaluate(() => document.querySelector('[data-pretab="lists"]').click()); await sleep(300);
