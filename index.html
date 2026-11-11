@@ -7023,7 +7023,7 @@ function renderDeliveries(app){
         <div class="dgrp-f">${list.length} job${list.length!==1?'s':''} · €${Math.round(list.reduce((a,o)=>a+(+o.value||0),0)).toLocaleString()}</div>
       </div>`;
   const nOrd=delSelLive().filter(w=>DB.orders.some(o=>o.wo===w)).length;
-  const nMv=[...delSel].map(findDel).filter(wkMovable).length; /*v-deliv D3*/
+  const nMv=delSelLive().map(findDel).filter(wkMovable).length; /*v-deliv D3; attack5: the same rule as the move itself*/
   const store=inStoreJobs(),storeOld=store.filter(x=>x.n!=null&&x.n>14).length;
 
   app.innerHTML=`<div class="pg">
@@ -7109,8 +7109,9 @@ function renderDeliveries(app){
     el.ondragleave=()=>el.classList.remove('dragover');
     el.ondrop=e=>{
       e.preventDefault();el.classList.remove('dragover');document.body.classList.remove('del-dragging');
-      const list=(delDragList||[]).filter(w=>{const o=findDel(w);return o&&!o.delDone&&dStage(o)!=='deliv';});delDragList=null;
+      const list=(delDragList||[]).filter(w=>findDel(w));delDragList=null;
       if(!list.length||!dateCanMove())return;
+      if(!list.some(w=>wkMovable(findDel(w)))){toast('Nothing moved — '+wkNoMoveWhy(findDel(list[0])));return;} /*v-deliv attack5: same rule as Move ticked*/
       if(t==='later'){wkPickDlg(list,4);return;}
       const w=delTabWk(t);if(!wkDropOk(t)){toast('Wk '+wkNum(w)+' has gone — drop on This week or later');return;}
       wkMoveDo(list,w);
@@ -7169,7 +7170,7 @@ function renderDeliveries(app){
   });
   const sc=document.getElementById('selclr');if(sc)sc.onclick=()=>{delSel.clear();render();};
   const sdt=document.getElementById('seldates');if(sdt)sdt.onclick=()=>dateDlg(delSelLive()); /*dates: group move from ticked cards*/
-  const swk=document.getElementById('selwk');if(swk)swk.onclick=()=>wkPickDlg([...delSel].filter(w=>wkTickedOk(findDel(w)))); /*v-deliv D3 — a booked manual job goes along only to be reported "not moved (on a van)"*/
+  const swk=document.getElementById('selwk');if(swk)swk.onclick=()=>wkPickDlg(delSelLive()); /*v-deliv D3; attack5 — the ones that can't move go along only to be listed "not moved" with why*/
   document.querySelectorAll('[data-wknext]').forEach(b=>b.onclick=e=>{e.stopPropagation();wkMoveDo([b.dataset.wknext],b.dataset.wk);});
   document.querySelectorAll('[data-wkpick]').forEach(b=>b.onclick=e=>{e.stopPropagation();wkPickDlg([b.dataset.wkpick]);});
   // Status menu: plain-words choices instead of a cryptic cycle — no more silent mis-click to DELIVERED
@@ -7304,9 +7305,21 @@ function renderDeliveries(app){
   something needs a look (flagged / not moved / off a van), otherwise it is the reason picker alone (2 taps). */
 function wkBtnsOk(o){return !!o&&dateCanMove()&&!o.delDay&&!o.delDone&&dStage(o)!=='deliv'&&!isShipped(o)&&(o.manual?wkManOk():true);}
 function wkManOk(){return true;}
-// (Tester round 4) a ticked card that a week move can change: visible on Deliveries (not a hidden on-hold job), not delivered, not a booked manual job
-function wkTickedOk(o){return !!o&&!(DB.orders.includes(o)&&delHidden(o))&&!o.delDone&&dStage(o)!=='deliv';}
-function wkMovable(o){return wkTickedOk(o)&&!(o.manual&&o.delDay);} // manual jobs (Add Job, no due date): "Move to week…" sets planWk on the delx entry
+/*v-deliv attack5: ONE rule for "can a week move change this ticked job" — the button, the picker title, the reason heading, the
+  "N jobs →" line and the summary all count with it. '' = it can move; otherwise why not (listed in the summary as "not moved").
+  Manual jobs (Add Job, no due date): "Move to week…" sets planWk on the delx entry.*/
+function wkNoMoveWhy(o){
+  if(!o)return 'not on the planner any more';
+  if(!delOnPage(o))return DB.orders.includes(o)&&delHidden(o)?'on hold in Cienapps — not on Deliveries':'not on Deliveries any more';
+  const st=dStage(o);
+  if(st==='deliv')return 'already delivered';
+  if(st==='disp')return 'on the road — already dispatched';
+  if(isShipped(o))return 'already shipped in Cienapps';
+  if(o.manual&&o.delDay)return 'on a van — a job added by hand keeps its booking';
+  return '';
+}
+function wkMovable(o){return !wkNoMoveWhy(o);}
+const jobsN=n=>n+' job'+(n!==1?'s':'');
 function wkCountIn(w){return delAll().filter(o=>o.delDay?slotIn(o,w):delPoolWk(o)===w).length;}
 function wkPickDlg(wos,pre){
   wos=[...new Set(wos||[])].filter(w=>findDel(w));if(!wos.length){toast('Nothing to move');return;}
@@ -7314,7 +7327,7 @@ function wkPickDlg(wos,pre){
   const W0=thisWk(),one=wos.length===1?findDel(wos[0]):null,ords=wos.filter(w=>DB.orders.some(o=>o.wo===w));
   const ov=document.createElement('div');ov.className='pod-ovl';ov.id='wkpick-dlg';
   ov.innerHTML=`<div class="pod-in" style="width:min(460px,94vw)">
-    <div style="font-weight:800;color:#14335c;font-size:16px;margin-bottom:2px">Move ${one?escA(one.wo):wos.map(findDel).filter(wkMovable).length+' jobs'} to week…</div>
+    <div style="font-weight:800;color:#14335c;font-size:16px;margin-bottom:2px">Move ${one?escA(one.wo):jobsN(wos.map(findDel).filter(wkMovable).length)} to week…</div>
     <div style="font-size:12px;color:var(--t3);margin-bottom:10px">${one&&!one.manual&&one.dueDate?'Due now '+escA(dTagTxt(one.dueDate))+(one.delivDate?' · delivery '+escA(dTagTxt(one.delivDate)):'')+'. ':''}Keeps the weekday${one&&one.delivDate?' and the gap to the delivery date':''}. Asks why.</div>
     <div class="wkp-list">${Array.from({length:13},(_,i)=>{const w=wkPlus(W0,i);return `<button class="rbtn${i===0?' cur':''}${pre===i?' pre':''}" data-wkp="${escA(w)}"><span>${i===0?'This week · ':i===1?'Next week · ':''}<b>Wk ${wkNum(w)}</b> · Mon ${escA(dShort(w))}</span><span class="wkp-n">${one&&!one.delDay&&delPoolWk(one)===w?'<b style="color:#1a56db">it is here now</b> · ':''}${wkCountIn(w)} job${wkCountIn(w)!==1?'s':''}</span></button>`;}).join('')}</div>
     ${ords.length?`<button class="btn btn-s" id="wkp-date" style="min-height:40px">or a date… (full date dialog)</button>`:''}
@@ -7330,15 +7343,19 @@ function wkMoveDo(wos,W){
   W=wkOf(W);if(!W)return;
   if(W<thisWk()){toast('Wk '+wkNum(W)+' has gone — pick this week or later');return;}
   wos=[...new Set(wos||[])];
-  const ords=wos.filter(w=>{const o=DB.orders.find(x=>x.wo===w);return o&&!delHidden(o);}),man=wkManJobs(wos,W); /*round 4: a hidden on-hold job is never moved*/
+  /*v-deliv attack5: one filter (wkMovable) — a job no longer on Deliveries, delivered, on the road, shipped or a booked manual job
+    is never moved; it is listed "not moved" with why*/
+  const mv=wos.filter(w=>wkMovable(findDel(w))),nm=wos.filter(w=>!mv.includes(w)).map(w=>({wo:w,skipped:wkNoMoveWhy(findDel(w)),flags:[]}));
+  const ords=mv.filter(w=>DB.orders.some(o=>o.wo===w)),man=wkManJobs(mv,W);
   officeWho(by=>{
     const n=wos.length,src=n>1?'group':'planner';
     const rows=moveDates(ords,{toWk:W},{},by,{src}).rows,ok=rows.filter(r=>!r.skipped);
-    const skM=wos.filter(w=>!ords.includes(w)&&!man.some(o=>o.wo===w)).map(w=>{const o=findDel(w);return {wo:w,skipped:o&&o.manual&&o.delDay?'on a van — a job added by hand keeps its booking':o&&DB.orders.includes(o)&&delHidden(o)?'on hold in Cienapps — not on Deliveries':'already in Wk '+wkNum(W)+' or not movable',flags:[]};});
-    if(!ok.length&&!man.length){toast('Nothing moved — '+((rows[0]||skM[0]||{}).skipped||'nothing to move'));return;}
+    const skM=nm.concat(mv.filter(w=>!ords.includes(w)&&!man.some(o=>o.wo===w)).map(w=>({wo:w,skipped:'already in Wk '+wkNum(W),flags:[]})));
+    const nGo=ok.length+man.length; // the jobs that will actually move — every count below uses it
+    if(!nGo){toast('Nothing moved — '+((rows.find(r=>r.skipped)||skM[0]||{}).skipped||'nothing to move'));return;}
     const wl='Wk '+wkNum(W)+' (Mon '+dShort(W)+')';
-    const ask=()=>pickReason('Move '+(n===1?wos[0]:n+' jobs')+' to '+wl+' — why?',
-      n===1&&ok.length?dqSub(ok[0]):`${ok.length+man.length} job${ok.length+man.length!==1?'s':''} → <b>${escA(wl)}</b>${ok.filter(r=>r.vanPulled).length?' · <b style="color:#b45309">'+ok.filter(r=>r.vanPulled).length+' off a van → rebook</b>':''}. Recorded with your name (${escA(by)}).`,
+    const ask=()=>pickReason('Move '+(nGo===1?(ok[0]?ok[0].wo:man[0].wo):nGo+' jobs')+' to '+wl+' — why?',
+      n===1&&ok.length?dqSub(ok[0]):`${jobsN(nGo)} → <b>${escA(wl)}</b>${ok.filter(r=>r.vanPulled).length?' · <b style="color:#b45309">'+ok.filter(r=>r.vanPulled).length+' off a van → rebook</b>':''}. Recorded with your name (${escA(by)}).`,
       why=>{
         const res=moveDates(ords,{toWk:W},dqWhy(why),by,{src}).apply();
         res.moved+=wkManApply(man,W,by,why);res.skipped=(res.skipped||[]).concat(skM.map(s=>({wo:s.wo,why:s.skipped})));
