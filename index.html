@@ -8728,20 +8728,21 @@ function openHold(l,mode){
 }
 /* The waiting book, grouped by material so one delivery of board releases every job it unblocks */
 function holdBookHTML(modes){
-  const hs=lpfHolds(allHolds(modes,'hold')),pj=lpfPage&&V2(); // Cutting Lists page: the Project filter, and the project on every row
+  const hs0=allHolds(modes,'hold'),hs=lpfHolds(hs0),pj=lpfPage&&V2(); // Cutting Lists page: the Project filter, and the project on every row
+  const hid=gk=>hs0.length-hs.length?hs0.filter(x=>matKey(holdGrp(x))===gk).length-grp[gk].a.length:0; // same material, other projects (filter on)
   if(!hs.length)return `<div class="flr-none">Nothing waiting on material ✓</div>`;
   const grp={};hs.forEach(x=>{const n=holdGrp(x),gk=matKey(n);(grp[gk]=grp[gk]||{n,a:[]}).a.push(x);}); // same board, any case/spacing = one group (first spelling shown)
   return Object.keys(grp).sort().map(gk=>{const g=grp[gk].n,a=grp[gk].a;return `<div class="hold-grp">
-    <div class="hold-gh"><span>${escA(g)} — ${a.length} row${a.length!==1?'s':''} waiting</span><button class="wl-btn" data-relg="${escA(g)}" style="padding:10px 18px;font-size:15px">▶ ARRIVED — RELEASE ALL</button></div>
+    <div class="hold-gh"><span>${escA(g)} — ${a.length} row${a.length!==1?'s':''} waiting${hid(gk)?` <span class="hold-hid" style="font-size:12px;color:#b42318;font-weight:700">(${hid(gk)} more hidden in other projects — they stay parked)</span>`:''}</span><button class="wl-btn" data-relg="${escA(g)}" style="padding:10px 18px;font-size:15px">▶ ARRIVED — RELEASE ALL</button></div>
     ${a.map(x=>`<div class="wl-drow"><b>${escA(x.l.name)}</b><span class="dsh-t">${escA(x.v.item||'')} ×${escA(x.v.qty)}${x.v.L||x.v.W?' · '+escA(x.v.L)+' × '+escA(x.v.W):''}</span>${pj?lpfTag(x.l.pid?lsProjName(x.l.pid)||x.l.project:''):''}<span class="dsh-c">${escA(listCust(x.l))}</span><span class="dsh-x">since ${new Date(x.v.at).toLocaleDateString('en-IE',{day:'numeric',month:'short'})}${x.v.by?' · '+escA(x.v.by):''}${listDueKey(x.l)?' · delivers '+fmt(listDueKey(x.l)):''}</span><button class="wl-undo" data-rel1="${escA(x.l.id)}|${escA(x.k)}">Release</button></div>`).join('')}
   </div>`;}).join('');
 }
 function holdGrp(x){return x.v.m==='saw'?(String(x.v.mat||'').trim()||'(material not named)'):('🧰 '+(String(x.v.item||x.v.mat||'').trim()||'fitting'));}
 function bindHoldBook(modes,whoFn){
-  const hs=lpfHolds(allHolds(modes,'hold'));
+  const hs0=allHolds(modes,'hold'),hs=lpfHolds(hs0);
   const gname=x=>matKey(holdGrp(x));
-  const go=(items,label)=>whoFn('Released — '+label,by=>{releaseHolds(items,by);lsSched();render();toast(items.length+' row'+(items.length!==1?'s':'')+' released — back in the queue as due work');});
-  document.querySelectorAll('[data-relg]').forEach(b=>b.onclick=()=>{const items=hs.filter(x=>gname(x)===matKey(b.dataset.relg));if(items.length)go(items,b.dataset.relg);});
+  const go=(items,label,hid)=>whoFn('Released — '+label,by=>{releaseHolds(items,by);lsSched();render();toast(items.length+' row'+(items.length!==1?'s':'')+' released — back in the queue as due work'+(hid?' · '+hid+' row'+(hid!==1?'s':'')+' for other projects still waiting — ✕ All projects to see them':''));});
+  document.querySelectorAll('[data-relg]').forEach(b=>b.onclick=()=>{const k=matKey(b.dataset.relg),items=hs.filter(x=>gname(x)===k);if(items.length)go(items,b.dataset.relg,hs0.filter(x=>gname(x)===k).length-items.length);});
   document.querySelectorAll('[data-rel1]').forEach(b=>b.onclick=()=>{const v=b.dataset.rel1,i=v.indexOf('|'),id=v.slice(0,i),k=v.slice(i+1);const items=hs.filter(x=>x.l.id===id&&x.k===k);if(items.length)go(items,items[0].v.item||'row');});
 }
 const officeWhoFn=(what,cb)=>officeWho(cb);
