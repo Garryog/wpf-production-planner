@@ -1019,3 +1019,43 @@ insTpl filter · 7 L9 (after D4 is merged) · 8 L10 · 9 full suite → Tester �
 - Still to do in Job B: carry over what is useful from `parked/job-a-fixes-run-2026-11-10-1903` (esp. 77d1acd Production Manager way into Deliveries,
   bc814ba hidden on-hold jobs moved by "Move ticked", 127e933, da0f017) onto Job A; Manager verdict on Part 4; Tester on the B11 date batch; change
   requests; upload + matching (B10); Johnny's pool page; B11 d/e/f/g.
+
+### 11 Nov 2026 (scheduled run, afternoon) — Coder: Part 1 carried over from the old branch; S1, S2, L4b built
+- **Part 1 (old branch `feature/project-details`, Garry's 11 Nov answers) cherry-picked onto this branch:** b3d9cfe (16794ad), c25e94c (2a22f09),
+  3cca06b (30ffedd), 09854ee (b35c7bb), 793aa43 (e4861f2), f05eab3 (9db5b98); progress entries merged into Part 1's log (647f27d).
+  Conflicts: the list store keeps both `px` (project_specs) and this branch's `sq/sr/sp`; who-may-edit uses Garry's 11 Nov list plus
+  **Pre-production** (Drawing office rights, Garry 10 Nov) — sign-off stays **Project Managers only**; five Stage 3 / editor tests took the
+  11 Nov versions. SQL: the "Project details" block is now the 11 Nov version (project_specs). On a fresh throwaway Postgres 16 (Stage 1 →
+  Stage 3 → Stores dockets → Project details → PM sequence, each run twice): project-details pg-check **ALL PG CHECKS PASSED**, seq pg-check
+  **ALL SEQ PG CHECKS PASSED**, stores-docket pg-check passed, guard v2 passed, attack3-pg 0 failed of 45; attack2-pg prints the one Low it
+  printed on the old branch (FINDING 3: a spec item can point at another project's material — FK only).
+- **S1** (6eeca5b): the board step drop-down has 9. JOB SHIPPED / 10. INSTALLED TO BE INVOICE / 11. COMPLETED AND INVOICED (Cienapps' exact
+  text, shown JOB SHIPPED / INSTALLED / COMPLETED). Confirm first; then exactly like an imported shipped job (shippedAt/shippedStep — off the
+  board and week totals, a job on a van stays on Deliveries); 10 → installed, 11 → installed + Installation complete; logged "(set by hand)";
+  on Export Changes while Cienapps is behind; an import that is behind leaves it ("planner is ahead"), one that moves on takes over;
+  "↩ Bring back to board" puts the step from before back. tests/seq/s12-ship-steps 20/20.
+- **S2** (code in 6eeca5b, test 202111e): Shipped tab Project + PM filters on both lists, remembered per device, full width / 16 px at 360 px,
+  names escaped; hidden and not applied with the lists off or the sequence tables missing. The PM view has its own 📦 Shipped tab.
+  tests/seq/s13-ship-filters 23/23.
+- **L4b** (2973ddd): import preview "🔗 P-numbers that now have a Cienapps WO" using the B0 key (keyMatch / jobKey / pKindsMeet — no new
+  matching). Pre-ticked only when "same" and one-to-one; "not sure" shown unticked with the reason; one P ticked for two WOs (or two for one)
+  refused before anything is imported. Ticked: live list moves (refused when both have one — database asked), history / date history /
+  booking / planner week / hand hours / notes onto the WO where it has none, higher step, sequence row handed over (same row), P-job off the
+  job list with a full copy on the WO (`pFrom`, permanent) and in settings `pMerged`. Two PCs → merged once. tests/seq/l4b-pmerge 23/23.
+  It does NOT close ACCEPTED-FAILURES attack3-editor / attack4-fold (two P-numbers for one house before Cienapps has the WO) — noted there.
+- **Tests moved to the 11 Nov rules** (found by the full suite): e5-columns (Management adds materials with no PIN), s6-pre-lists (sign-off
+  asks Pre-production for the PM PIN), attack5-carryover B8 (the PM view's new Shipped tab) — 4b684e0, 6e790e2, 14af2fc; all pass alone.
+- **Full suite** (252 test files + 4 probes, 3 at a time, at 2973ddd): **5,585 pass / 47 fail** = 24 on ACCEPTED-FAILURES (dates attack1-oldversion
+  ×3, attack3-guard ×1, project-details attack1-merge 1c, sawstores ×2, seq attack1-oldtab ×2, attack3-editor, attack4-fold, attack5-window ×2,
+  attack7 2b, stage1 t17 ×10) + 5 from the three tests above (now pass alone: e5 19/0, s6 8/0, attack5-carryover 115/0) + editor e7 redraw
+  913 ms (timing; passes alone). header-late-probe still crashes (pre-existing). No new failure outside ACCEPTED-FAILURES.
+- **ASSUMED (Garry to confirm):** (1) S1 wording Q10 rec — Completed also ticks "Installation complete". (2) A shipped job's step can't be
+  set backwards by hand ("steps only move forward"); Bring back to board also clears an "installed" mark set by hand. (3) Q11 rec — the PM
+  filter starts on this device's PM. (4) PMs get their own 📦 Shipped tab (Garry: filters "for the PMs"); they can tick Installation complete,
+  "Bring back to board" stays office-only. (5) Project filter lists only projects that have shipped / on-hold jobs, plus "No project linked";
+  PM filter has "none assigned". (6) Q8 rec — merge by tick, pre-ticked only when certain. (7) Q9 rec — planner's due date kept, Cienapps'
+  under Dates to change in Cienapps. (8) At a merge the P-job's week wins over the automatic week of a WO new in that import; hand hours
+  win over estimates; both booked → the WO's booking kept and flagged. (9) A "not sure" pair left unticked is offered again (unticked) on
+  every import — no "not the same house" memory yet (plan's pNotSame, not built). (10) Pre-production keeps spec / materials editing
+  (Drawing office rights) but, like the Drawing office, can't sign off.
+- **Left:** Tester + Manager on S1 / S2 / L4b and the Part 1 carry-over; B10 upload / matching (needs Garry's Q7 sample); pNotSame.
