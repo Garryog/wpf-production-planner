@@ -6,18 +6,36 @@ update production_planner set settings=jsonb_build_object('listStore','migrating
 update production_planner set settings=jsonb_build_object('listStore','v2') where id='main' and settings->>'listStore'='migrating';
 insert into projects(id,name) values('PS1','PS Aderrig') on conflict do nothing;
 insert into project_materials(id,project_id,name,kind) values('PSM1','PS1','18mm MFC White','sheet') on conflict do nothing;
+insert into projects(id,name) values('PS2','PS Other') on conflict do nothing;
 set role anon;
 do $$ declare r record; n int; begin
+ -- several specs per project (Garry, 11 Nov): a name once per project, a name is needed, nothing deleted
+ insert into project_specs(id,project_id,name,spec_type,updated_by) values('SK','PS1',' Kitchens ','kitchens','Ann'),('SR','PS1','Robes','robes','Ann'),('SO','PS2','Kitchens','kitchens','Ann');
+ if (select name from project_specs where id='SK')<>'Kitchens' then raise exception 'FAIL spec name not tidied'; end if;
+ begin insert into project_specs(id,project_id,name) values('SK2','PS1','KITCHENS'); raise exception 'FAIL duplicate spec name allowed'; exception when unique_violation then null; end;
+ begin insert into project_specs(id,project_id,name) values('SK3','PS1','  '); raise exception 'FAIL blank spec name allowed'; exception when raise_exception then null; end;
+ begin insert into project_specs(id,project_id,name,spec_type) values('SK4','PS1','Garage','garage'); raise exception 'FAIL bad spec type allowed'; exception when check_violation then null; end;
+ begin update project_specs set project_id='PS2' where id='SR'; raise exception 'FAIL spec moved project'; exception when raise_exception then null; end;
+ begin delete from project_specs; raise exception 'FAIL spec delete allowed'; exception when insufficient_privilege then null; end;
+ update project_specs set active=false where id='SR'; update project_specs set active=true where id='SR';
+ if (select version from project_specs where id='SR')<>3 then raise exception 'FAIL spec version'; end if;
+ -- the same item on two specs of one project is fine; an item takes its project from its spec, and stays on its spec
+ insert into project_spec_items(id,project_id,spec_id,item,value) values('R1','PS2','SR','Hinges','Blum');
+ select * into r from project_spec_items where id='R1'; if r.project_id<>'PS1' then raise exception 'FAIL item project not taken from its spec'; end if;
+ update project_spec_items set spec_id='SO' where id='R1';
+ select * into r from project_spec_items where id='R1'; if r.spec_id<>'SR' or r.project_id<>'PS1' then raise exception 'FAIL item moved spec'; end if;
+ begin insert into project_spec_items(id,project_id,item) values('R2','PS1','Handles'); raise exception 'FAIL item without a spec'; exception when not_null_violation then null; end;
+ begin insert into project_spec_items(id,project_id,spec_id,item) values('R3','PS1','NOPE','Handles'); raise exception 'FAIL item on a missing spec'; exception when not_null_violation or foreign_key_violation then null; end;
  -- TBC / blank = not specified, whatever the screen sends
- insert into project_spec_items(id,project_id,item,value,status,updated_by) values('S1','PS1','Hinges','TBC','proposed','Ann');
+ insert into project_spec_items(id,project_id,spec_id,item,value,status,updated_by) values('S1','PS1','SK','Hinges','TBC','proposed','Ann');
  select * into r from project_spec_items where id='S1'; if r.status<>'not-specified' then raise exception 'FAIL TBC is %',r.status; end if;
- insert into project_spec_items(id,project_id,item,value,updated_by) values('S2','PS1',' Handles ','  ','Ann');
+ insert into project_spec_items(id,project_id,spec_id,item,value,updated_by) values('S2','PS1','SK',' Handles ','  ','Ann');
  select * into r from project_spec_items where id='S2'; if r.status<>'not-specified' or r.value is not null or r.item<>'Handles' then raise exception 'FAIL blank %',row_to_json(r); end if;
  -- TBC can never be signed off (lower case too)
  begin update project_spec_items set status='signed-off',signed_by='Ann' where id='S1';
    select * into r from project_spec_items where id='S1'; if r.status='signed-off' then raise exception 'FAIL TBC signed off'; end if;
  end;
- begin insert into project_spec_items(id,project_id,item,value,status) values('S3','PS1','Cornice','tbc','signed-off');
+ begin insert into project_spec_items(id,project_id,spec_id,item,value,status) values('S3','PS1','SK','Cornice','tbc','signed-off');
    select * into r from project_spec_items where id='S3'; if r.status<>'not-specified' or r.signed_by is not null then raise exception 'FAIL tbc insert signed %',row_to_json(r); end if; end;
  -- a value = proposed; sign-off records who and when
  update project_spec_items set value='Hettich Stock',updated_by='Ann' where id='S1';
@@ -35,7 +53,7 @@ do $$ declare r record; n int; begin
  update project_spec_items set value='TBC' where id='S1';
  select * into r from project_spec_items where id='S1'; if r.status<>'not-specified' then raise exception 'FAIL TBC after sign %',r.status; end if;
  -- one row per item per project (case and spaces ignored)
- begin insert into project_spec_items(id,project_id,item) values('S9','PS1','HINGES '); raise exception 'FAIL duplicate item allowed';
+ begin insert into project_spec_items(id,project_id,spec_id,item) values('S9','PS1','SK','HINGES '); raise exception 'FAIL duplicate item allowed';
  exception when unique_violation then null; end;
  -- history written by the database; the app can't write or delete it, and can't delete spec rows
  select count(*) into n from project_events where entity_id='S1'; if n<6 then raise exception 'FAIL history rows %',n; end if;
@@ -60,9 +78,10 @@ update production_planner set settings=jsonb_build_object('listStore','switching
 update production_planner set settings=jsonb_build_object('listStore','v1') where id='main';
 set role anon;
 do $$ declare n int; begin
- begin insert into project_spec_items(id,project_id,item) values('S8','PS1','Sink Type'); raise exception 'FAIL insert while switched back';
+ begin insert into project_spec_items(id,project_id,spec_id,item) values('S8','PS1','SK','Sink Type'); raise exception 'FAIL insert while switched back';
  exception when insufficient_privilege then null; end;
  update project_spec_items set value='X' where id='S2'; get diagnostics n = row_count; if n<>0 then raise exception 'FAIL update while switched back'; end if;
+ begin insert into project_specs(id,project_id,name) values('SZ','PS1','Late'); raise exception 'FAIL spec insert while switched back'; exception when insufficient_privilege then null; end;
 end $$;
 reset role;
 select 'ALL PG CHECKS PASSED';

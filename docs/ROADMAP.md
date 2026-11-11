@@ -114,6 +114,7 @@ Rules: rank by the leading number. "Shipped" = step 9 only (left the factory →
 - (4 Nov, Garry) When a job's STEP is changed in the planner itself (not only on import) to 7. ASSEMBLY COMPLETE or 8. PALLETED, it is auto-ticked for delivery (delv=true, no van/day), same rule as the import. Never untags.
 
 - (4 Nov, Garry) Be more aware of SIMPLEST use, especially for production and stores. REMOVE the "Paper list issued" option. Maybe allow attaching a PHOTO of a list instead. In the cutting list rename "Colour" to "Material".
+- (11 Nov, Garry — Project details, docs/PLAN-project-details.md) Spec sign-off: PMs only. Projects stay red until every spec item is filled and signed off; a project can have several specs (rooms, house types, robes). Materials and spec values: PM, office, Management (+ Drawing office, Production Manager). Changing a job's Customer in the planner: Admin only. A spec is not applied to a cutting list — it only gives the material choices for the list (templates keep their materials).
 
 - (4 Nov, Garry, answers) Photo of a list REPLACES the paper option: on a WO with no typed list, attach a photo (phone camera or file); the saw must be able to open it; it is a stop-gap to be removed later once the typed system is in place (keep it simple, easy to switch off). Docket cancel ASKS "Did these items leave stores?" (Yes = stay got out; No = back to 'to pick'). Dockets are for FITTINGS (stores items) only for now — cutting-list (saw) items are not docketed, so no per-WO quantity split is needed.
 

@@ -53,15 +53,12 @@ const { H, D, rec, sleep } = X;
   await of.close();
 
   // ---- materials rights
-  for (const [role, ok] of [['pm', true], ['office', true], ['prod', true], ['design', true], ['saw', false], ['stores', false], ['driver', false]]) {
+  for (const [role, ok] of [['pm', true], ['office', true], ['dash', true], ['prod', true], ['design', true], ['floor', false], ['saw', false], ['stores', false], ['driver', false]]) {
     const t = await X.dev(browser, S, role);
     const r = await t.page.evaluate(() => { let asked = 0; window.prompt = () => { asked++; return null; }; const v = lsMatEditOk(); return { v, asked }; });
     rec('materials: ' + role + (ok ? ' edits without a PIN' : ' is read-only'), r.v === ok && r.asked === 0, JSON.stringify(r));
     await t.close();
   }
-  const dash = await X.dev(browser, S, 'dash');
-  rec('materials: Management keeps the PIN prompt', await dash.page.evaluate(() => { let asked = 0; window.prompt = () => { asked++; return null; }; localStorage.removeItem('wpfEditPin'); const v = lsMatEditOk(); return !v && asked === 1; }));
-  await dash.close();
   // PM adds a material from the Projects tab
   const pm = await X.dev(browser, S, 'pm');
   await pm.page.evaluate(() => { pmTab = 'projects'; render(); }); await sleep(200);
