@@ -4290,10 +4290,18 @@ function preFltHTML(all,mp){const f=PREV,pms=new Map(),pjs=new Map(),mats=new Ma
 function preSig(x){const o=x.o,r=x.r;return[o?String(o.dueDate||''):'',o?String(o.delivDate||''):'',!o&&r?String(r.req_date||''):'',r?String(+r.pos||0):''].join('|');}
 function preSeenKey(){return 'wpfSeen_pre_'+(seqMe('pre')||lqBy(''));}
 function preSeenGet(){let v;try{v=localStorage.getItem(preSeenKey());}catch(e){return false;}if(v==null)return null;try{const m=JSON.parse(v);return m&&typeof m==='object'&&!Array.isArray(m)?m:null;}catch(e){return null;}}
-function preSeenPut(m){try{localStorage.setItem(preSeenKey(),JSON.stringify(m));return true;}catch(e){return false;}}
-function preSeenAll(all){const m={};all.forEach(x=>{m[x.k]=preSig(x);});return preSeenPut(m);}
+function preSeenPut(m){try{localStorage.setItem(preSeenKey(),JSON.stringify(m));return true;}catch(e){
+  if(!PREV.seenWarn){PREV.seenWarn=true;toast('This device could not remember what you have seen (storage full or blocked) — the ↻ changed marks may stay',true);}return false;}} // attack10 4e: told once
+function preSeenAll(all){const m={_lim:all.lim||''};all.forEach(x=>{m[x.k]=preSig(x);});return preSeenPut(m);}
+/*attack10 4f: the map remembers the horizon it saw (_lim). A row not seen before whose due date is past that horizon only came into
+  view (more weeks picked, or the days moved on) — remembered quietly, not "changed". */
 function preMarkChanged(all){if(!LST.loaded||LST.loading){all.forEach(x=>{x.chg=false;});return all;} // half-loaded tables would look like changes
-  let s=preSeenGet();if(s===null){preSeenAll(all);s=preSeenGet();}all.forEach(x=>{x.chg=!!s&&s[x.k]!==preSig(x);});return all;}
+  let s=preSeenGet();if(s===null){preSeenAll(all);s=preSeenGet();}
+  if(s){const lim=String(s._lim||'');let dirty=false;
+    all.forEach(x=>{if(!(x.k in s)&&(!lim||x.due>lim)){s[x.k]=preSig(x);dirty=true;}});
+    if(all.lim&&s._lim!==all.lim){s._lim=all.lim;dirty=true;}
+    if(dirty)preSeenPut(s);}
+  all.forEach(x=>{x.chg=!!s&&s[x.k]!==preSig(x);});return all;}
 function preNoSeqTxt(rows){const g=new Map();rows.filter(x=>x.o&&!x.r).forEach(x=>{const k=x.pid||'';g.set(k,(g.get(k)||0)+1);});if(!g.size)return'';
   const n=[...g.values()].reduce((a,b)=>a+b,0);
   return `${n} job${n!==1?'s have':' has'} no PM sequence: `+[...g.entries()].sort((a,b)=>b[1]-a[1]).map(([pid,c])=>{const p=pid&&LST.p.get(pid);if(!p)return escA('no project')+' ('+c+')';const pm=seqPMs(p);return escA(p.name)+' ('+c+(pm.length?', PM '+escA(pm.join(' · ')):', no PM yet')+')';}).join(', ');}
@@ -4401,8 +4409,13 @@ async function preReset(){
    A clash (another screen inserted / changed it first) reloads that row and says so. ---------- */
 async function preWrite(sid,patch,by){
   const cur=LST.sp.get(sid),q=SUPA_URL+'/seq_pre';by=by||lqBy('');
-  const r=await fetch(cur?q+'?seq_id=eq.'+encodeURIComponent(sid)+'&version=eq.'+(+cur.version||1):q,{method:cur?'PATCH':'POST',headers:{...SUPA_HDR,'Prefer':'return=representation'},
-    body:JSON.stringify(cur?{...patch,updated_by:by}:{...patch,seq_id:sid,updated_by:by})});
+  let r;
+  try{r=await fetch(cur?q+'?seq_id=eq.'+encodeURIComponent(sid)+'&version=eq.'+(+cur.version||1):q,{method:cur?'PATCH':'POST',headers:{...SUPA_HDR,'Prefer':'return=representation'},
+    body:JSON.stringify(cur?{...patch,updated_by:by}:{...patch,seq_id:sid,updated_by:by})});}
+  catch(e){ // attack10 1e: no reply — it may have landed. Re-read the row: already as asked = saved.
+    let g=null;try{g=(await lsGet('seq_pre?select=*&seq_id=eq.'+encodeURIComponent(sid)+'&order=seq_id.asc'))[0]||null;if(g)lsPut('seq_pre',[{...g,id:g.seq_id}],true);}catch(x){}
+    if(g&&(!cur||(+g.version||0)>(+cur.version||0))&&preAsAsked(g,patch))return g;
+    throw e;}
   const d=await r.json().catch(()=>null);
   if(r.status===409||(d&&d.code==='23505')||(cur&&r.ok&&Array.isArray(d)&&!d.length)){
     try{const g=await lsGet('seq_pre?select=*&seq_id=eq.'+encodeURIComponent(sid)+'&order=seq_id.asc');lsPut('seq_pre',g.map(x=>({...x,id:x.seq_id})),true);}catch(e){}
@@ -4410,6 +4423,7 @@ async function preWrite(sid,patch,by){
   if(!r.ok||!Array.isArray(d))throw new Error((d&&d.message)||('HTTP '+r.status));
   lsPut('seq_pre',d.map(x=>({...x,id:x.seq_id})));return d[0];
 }
+function preAsAsked(g,patch){return ['processed','pre_key','note'].every(k=>!(k in patch)||(k==='pre_key'?(patch[k]==null?g[k]==null:+g[k]===+patch[k]):k==='processed'?!!g[k]===!!patch[k]:String(g[k]==null?'':g[k])===String(patch[k]==null?'':patch[k])));}
 function preFind(k){return preRows().find(x=>x.k===k)||null;}
 function preBy(){const me=seqMe('pre');if(me)return me;if(staffFor('pre').length){seqMeAsk('pre');toast('Pick your name first, then tick again');return'';}return lqBy('');}
 function preRO(){return toast('Read-only — only Pre-production (with the new cutting lists switched on) changes the pool');}
