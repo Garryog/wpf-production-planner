@@ -24,6 +24,8 @@ const DAYS = '(Mon|Tue|Wed|Thu|Fri|Sat)', MON = '(Jan|Feb|Mar|Apr|May|Jun|Jul|Au
 // screen starts with its own two buttons "🧭 Today 🚚 Deliveries" (the way to the Deliveries page). Only that exact leading pair is taken off.
 const normDates = s => norm(s).replace(/^🧭 Today 🚚 Deliveries /, '').replace(new RegExp('\\b' + DAYS + ' \\d{1,2} ' + MON + '\\b', 'g'), '$1')
   .replace(new RegExp('\\(' + VANS + ' ' + DAYS + '\\)', 'g'), '($1)')
+  // ALLOWED DIFFERENCE (Garry 11 Nov — S1 board steps confirmed): the board's step list also offers JOB SHIPPED / INSTALLED / COMPLETED
+  .replace(/PALLETED JOB SHIPPED INSTALLED COMPLETED/g, 'PALLETED')
   .replace(/planned for a day already gone, not delivered|planned earlier this week, not delivered/g, '«missed»')
   .replace(/Weeks are stored when (?:a week is closed|the board is cleared) \(/g, 'Weeks are stored «close week» (')
   // ALLOWED DIFFERENCE (Coder, 10 Nov evening — Deliveries usability DD1, Garry 10 Nov): the board's due cell is the one due tag
