@@ -749,6 +749,7 @@ create table if not exists project_spec_items(id text primary key, project_id te
   signed_by text, signed_at timestamptz, note text,
   version int not null default 1, updated_at timestamptz not null default now(), updated_by text);
 alter table project_spec_items add column if not exists spec_id text references project_specs(id); -- only matters if an earlier draft of this block was run
+do $$ begin if not exists(select 1 from project_spec_items where spec_id is null) then alter table project_spec_items alter column spec_id set not null; end if; end $$;
 alter table project_spec_items drop constraint if exists psi_signed_needs_value;
 -- TBC, T.B.C., TBA, "to be confirmed / advised" = not signed off (pasted no-break spaces, tabs and full-width letters count too)
 create or replace function psi_tbc(v text) returns boolean language sql immutable as $$
@@ -775,6 +776,8 @@ begin
   if tg_op='UPDATE' then new.spec_id := old.spec_id; end if;                         -- an item stays on its spec
   select s.project_id into new.project_id from project_specs s where s.id=new.spec_id; -- and on that spec's project
   -- nothing is saved or signed on a spec that was marked "not used any more" (another screen may have just done that)
+  -- (takes its turn with a retire happening at the same moment, so a save can't slip in just after one)
+  perform pg_advisory_xact_lock_shared(hashtext('pspec:'||new.project_id));
   if (tg_op='INSERT' or new.value is distinct from old.value or new.status is distinct from old.status or new.item is distinct from old.item)
      and exists(select 1 from project_specs s where s.id=new.spec_id and not s.active) then
     raise exception 'this spec is not used any more'; end if;
@@ -787,7 +790,7 @@ begin
   end if;
   if new.status<>'signed-off' then new.signed_by := null; new.signed_at := null;
   elsif tg_op='INSERT' or old.status<>'signed-off' then
-    new.signed_at := now(); new.signed_by := coalesce(nullif(btrim(coalesce(new.signed_by,'')),''), new.updated_by, '?');
+    new.signed_at := now(); new.signed_by := coalesce(nullif(btrim(regexp_replace(coalesce(new.signed_by,''),'[\u200B-\u200D\uFEFF]','','g')),''), new.updated_by, '?');
   else new.signed_at := old.signed_at; new.signed_by := old.signed_by; -- a sign-off can't be re-dated or re-named
   end if;
   return new;

@@ -19,7 +19,7 @@ const type = (t, k, v, pin, root) => ev(t, ([k, v, pin, root]) => { window.__pp 
   const c = await type(of, 'customer', 'Cairn Homes', null);
   rec('Cancel at the PIN: unchanged, box put back', c.asked === 1 && c.cust === 'Aderrig Homes' && c.box === 'Aderrig Homes', JSON.stringify(c));
   const b = await type(of, 'customer', '   ', '9000');
-  rec('blank customer: refused ("a job needs a customer") — note whether the Admin PIN was asked first', b.cust === 'Aderrig Homes', JSON.stringify(b) + ' (PIN asked before refusing: ' + (b.asked ? 'yes' : 'no') + ')');
+  rec('blank customer: refused ("a job needs a customer") before any PIN (round 3 fix)', b.cust === 'Aderrig Homes' && b.asked === 0, JSON.stringify(b) + ' (PIN asked before refusing: ' + (b.asked ? 'yes' : 'no') + ')');
   const s = await type(of, 'customer', '  Aderrig   Homes ', '9000');
   rec('same customer with extra spaces: no PIN asked, nothing changed', s.asked === 0 && s.cust === 'Aderrig Homes' && !s.pov, JSON.stringify(s));
   const k = await type(of, 'customer', 'ADERRIG HOMES', null);
@@ -34,6 +34,10 @@ const type = (t, k, v, pin, root) => ev(t, ([k, v, pin, root]) => { window.__pp 
   // ↺ undo of the customer override from the office screen
   const u = await ev(of, () => { window.__pp = []; window.prompt = m => { window.__pp.push(m); return null; }; const bt = document.querySelector('[data-woundo="customer"]'); if (!bt) return { nobtn: true }; bt.click(); const o = DB.orders.find(x => x.wo === 'WO-1'); return { asked: window.__pp.length, cust: o.customer, pov: o.pov ? Object.keys(o.pov).join() : '' }; });
   rec('↺ undo of a customer override (changes the customer back): needs the Admin PIN too', !u.nobtn && u.asked >= 1 && u.cust === 'Cairn Homes', JSON.stringify(u));
+  const undo = pin => ev(of, pin => { window.__pp = []; window.prompt = m => { window.__pp.push(m); return pin; }; const bt = document.querySelector('[data-woundo="customer"]'); if (!bt) return { nobtn: true }; bt.click(); const o = DB.orders.find(x => x.wo === 'WO-1'); return { asked: window.__pp.length, cust: o.customer, pov: o.pov ? Object.keys(o.pov).join() : '' }; }, pin);
+  const u2 = await undo('9000'), u3 = await undo('4321');
+  rec('↺ undo: wrong (old) Admin PIN refused; the Admin PIN puts the Cienapps customer back and clears the override', u2.cust === 'Cairn Homes' && u3.cust === 'Aderrig Homes' && !/customer/.test(u3.pov), JSON.stringify([u2, u3]));
+  const ok2 = await type(of, 'customer', 'Cairn Homes', '4321'); // put the override back for the checks below
   // Floor / Unit / Title: no PIN
   const t = await type(of, 'title', 'HOUSE 1 TYPE B (CORRECTED)', '9999');
   rec('Title still saves with no PIN', t.asked === 0 && t.val === 'HOUSE 1 TYPE B (CORRECTED)', JSON.stringify(t));

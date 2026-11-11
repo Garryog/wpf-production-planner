@@ -99,7 +99,8 @@ async function openSheet(t) { await ev(t, () => lsSpecDlg('P1')); await sleep(40
     rec('office: a Project Manager PIN (6666) lets the office sign off (plan Q1: PM sign-off PIN)', r2 === true, 'accepted=' + r2);
     // (rule changed by Garry 9/11 Nov — docs/PLAN-project-details.md): only the PM / Admin PIN signs off; the PM PIN is remembered
     const r3 = await ev(of, () => { window.prompt = () => { throw new Error('asked again'); }; let b; try { b = specSignOk(); } catch (e) { b = e.message; } localStorage.removeItem('wpfSignPin'); localStorage.removeItem('wpfEditPin'); window.prompt = () => '8888'; const a = specSignOk(); return { a, b }; });
-    rec('office: the PM PIN is remembered on the PC (info: anyone on that PC signs off afterwards); a Drawing office PIN is refused (rule changed 9/11 Nov)', r3.b === true && r3.a === false, JSON.stringify(r3));
+    // (round 3 fix, 11 Nov): the PM / Admin PIN is asked EVERY time off the PM screen — never remembered
+    rec('office: the PM PIN is NOT remembered (asked again next time); a Drawing office PIN is refused (rule changed 9/11 Nov)', r3.b === 'asked again' && r3.a === false, JSON.stringify(r3));
     await of.close();
     const dash = await X.dev(browser, S, 'dash');
     // (rule changed by Garry 9/11 Nov — docs/PLAN-project-details.md): Management fills in values with no PIN; sign-off asks the PM PIN

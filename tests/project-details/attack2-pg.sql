@@ -20,8 +20,14 @@ do $$ begin
   raise notice 'FINDING 3 a spec item on project A links to project B''s material (FK only, no same-project check)';
 exception when others then raise notice 'OK 3 cross-project material refused: %', sqlerrm; end $$;
 -- 4. every spec of a project retired (two PCs each retiring "the other one") — nothing in the database stops it
-update project_specs set active=false where id in ('XSA','XSA2');
-select case when count(*) filter (where active)=0 then 'FINDING 4 project XA has no active spec left (allowed by the database)' else 'OK 4' end from project_specs where project_id='XA';
+-- (round 3: pspec_rules now keeps one spec in use.) 4a one at a time; 4b BOTH in ONE statement (what a PATCH ?project_id=eq.XA does)
+do $$ begin update project_specs set active=false where id='XSA2'; update project_specs set active=false where id='XSA'; raise notice 'FINDING 4a last spec retired';
+exception when raise_exception then raise notice 'OK 4a the last spec in use can''t be retired: %', sqlerrm; end $$;
+update project_specs set active=true where project_id='XA';
+do $$ begin update project_specs set active=false where project_id='XA';
+  if not exists(select 1 from project_specs where project_id='XA' and active) then raise notice 'FINDING 4b one UPDATE retiring every spec of a project at once is accepted (each row''s check misses the other rows of the same statement)'; else raise notice 'OK 4b'; end if;
+exception when raise_exception then raise notice 'OK 4b one statement retiring every spec refused: %', sqlerrm; end $$;
+update project_specs set active=true where id='XSA'; update project_specs set active=false where id='XSA2';
 -- 5. an item added / signed off on a RETIRED spec
 do $$ begin
   insert into project_spec_items(id,project_id,spec_id,item,value,status,signed_by,updated_by) values('XI5','XA','XSA2','Handles','Bar','signed-off','Someone','T');
@@ -35,9 +41,9 @@ do $$ begin insert into project_specs(id,project_id,name) values('XSA3','XA','ro
 exception when unique_violation then raise notice 'INFO 7 the name of a retired spec can never be reused (only bringing it back)'; end $$;
 -- 8. bring a retired spec back (the app has no button for it — can the database?)
 update project_specs set active=true where id='XSA2';
-select case when active then 'OK 8 a retired spec can be brought back by the database (no screen does it)' else 'FINDING 8' end from project_specs where id='XSA2';
+select case when active then 'OK 8 a retired spec can be brought back (the Bring back button)' else 'FINDING 8' end from project_specs where id='XSA2';
 -- 9. the spec id itself changed (PK update) — orphaning / moving the items?
-do $$ begin update project_specs set id='XSA2-NEW' where id='XSA2'; raise notice 'FINDING 9 spec id changed (items reference the old id: %)', (select count(*) from project_spec_items where spec_id='XSA2');
+do $$ begin update project_specs set id='XSA2-NEW' where id='XSA2'; raise notice 'INFO 9 a spec with no items yet can have its id changed by a raw call (items: %) — no screen does it', (select count(*) from project_spec_items where spec_id='XSA2');
 exception when others then raise notice 'OK 9 spec id change refused: %', sqlerrm; end $$;
 -- 10. a spec name that is only an invisible character (zero-width space) / NBSP
 do $$ begin insert into project_specs(id,project_id,name) values('XS10','XA',E'​'); raise notice 'FINDING 10 a spec called only a zero-width space is accepted (looks blank)';
