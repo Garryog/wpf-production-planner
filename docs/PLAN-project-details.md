@@ -485,6 +485,41 @@ saw and stores follow the new date like any other date change.
 - **Not yet done:** Tester attack + Manager verdict on this date batch. Still to build: change requests (a PM's change inside the 14 days is
   only listed today, not sent), upload + matching, Johnny's pool page, B11 d/e/f/g (offsets, dates follow order, paste, week view).
 
+### 11 Nov 2026 (scheduled run) — B7 change requests built
+- **Branch note:** an earlier pass of this run (before a restart) had merged feature/dates-deliveries in (cb34346) and built B7 on top of
+  it. The instruction was NOT to merge Job A (it is being tested), so B7 was re-applied straight onto bd50e9b without the merge; the merged
+  version is kept only as a local branch `local-backup/b7-on-merge-0520a57` (not pushed). One conflict: the Production Manager's tab strip —
+  this branch's strip kept (no 🚚 Deliveries tab, that is Job A's), "✋ Requests (N)" added, tabs 44 px tall.
+- cafd8dd B7 a: a PM's change to a job inside the fixed window sends ONE open request (`seqReqMake`, kind 'date' or 'move'); in a mixed change
+  the free jobs change at once and the fixed ones are asked, said in the preview before Save ("✋ Send the request" / "Save dates + send
+  request"); the row shows "✋ request sent — what · “why” · who [Withdraw]" (`seqReqWithdraw`); a job already asked is not asked again
+  ("Already waiting for the Production Manager — withdraw that request first"); if another PC asked a moment before, the database refuses
+  and the PM is told in plain words. Office / Production Manager changes to fixed jobs (dates or order) write a 'direct' row (Manager
+  condition 5) — it never blocks the change.
+- f18adfe B7 b+c: Production Manager "✋ Requests (N)" tab (`seqReqPage`): waiting cards oldest first with what was asked, why, "If you
+  approve now: …" worked out on today's data and "⚠ changed since asked"; [✓ Approve] claims first (`seqDecide`: PATCH with version AND
+  status=eq.open — a second Production Manager at the same moment is told "Already approved by X — nothing done"), then makes the change
+  (`moveDates` src 'pmseq' + reqId, or `seq_move` for order changes) and records `applied`; [✗ Refuse — reason required]; claimed but not
+  applied after 2 min → "Approved — not applied yet [Apply now]"; last 30 decided below. Today banner "✋ N change requests waiting".
+- 680b601 B7 d+e: the answer goes to the PM who asked (not the project's other PMs): "✋ Your change request — … ✓ APPROVED / ✗ REFUSED by X
+  “reason”" on his screen until he taps ✓ Seen (`seen_at`). Scorecard "Late changes" column (requests asked that week: "5 (4✓ 1✗) + 2
+  direct"; withdrawn not counted), only when the sequence tables exist.
+- b7d24d8 fixes found by the new tests: approving a date request reloads the planner record first, so it is made on TODAY's data (the
+  Production Manager's screen could be up to 45 s behind; offline = "Approved — not applied yet", nothing changed); Withdraw and ✓ Seen are
+  44 px on phones.
+- 8f3bbfc tests/seq/s11-requests.test.js — 56 checks, all pass. s4 / s8 / s9 updated: their "request coming soon" checks are now real
+  requests (intended change).
+- **SQL:** none. The seq_requests table / sr_rules / sr_log in the PENDING block already support everything (open / direct inserts,
+  withdraw, claim, applied, seen_at; the fake database in tests/seq/dbs.js follows the same rules). pg-check not re-run (SQL unchanged).
+- **Full suite** (238 test files + 4 probes, 3 at a time) at 8f3bbfc: **5,045 pass / 36 fail** — the 35 on ACCEPTED-FAILURES + editor e7
+  redraw timing (passes alone). header-late-probe still crashes on the import mapping screen (pre-existing). No new failures.
+- **ASSUMED (Garry to confirm):** any PM of the project may withdraw a waiting request (not only the one who asked); only the Production
+  Manager answers requests (the office does not see the Requests tab, but can still change fixed jobs directly with a reason); approving
+  applies exactly the dates / position asked for, even if the job was moved since (the card warns first); a refused or withdrawn request
+  can be asked again; "Late changes" counts by the week the request was asked; requests exist only with the lists switch ON and the
+  sequence tables installed (switch OFF = today's app).
+- Next: Tester (B7 — see the report) → Manager.
+
 
 ---
 
