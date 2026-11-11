@@ -814,3 +814,12 @@ insTpl filter · 7 L9 (after D4 is merged) · 8 L10 · 9 full suite → Tester �
 - Screenshots (fake database, ×2): /tmp/claude-0/-home-claude/c3803803-dab5-550b-80e7-23e78ca71940/scratchpad/shots/l9-pool-card-1366.png,
   l9-readiness-add-1366.png, l9-readiness-open-1366.png.
 - Next: Tester (L9 + the merge) → Manager.
+
+### 11 Nov 2026, ~00:30 UTC — merge of the two overlapping runs (session …6KJgyRq2ks8b8ntT)
+- This run merged Job A (dates-deliveries d9d59bc) into Job B (bf37ca9) and built L9 (8c5903b, d23371e, 1199eb2, e25ea7f; full suite 4,901 / 34)
+  while the 19:03 run pushed Part 4 round-5 fixes (to 2b9b227). Merged both (e5e8cfa): one conflict in `lsNewStd` (kept `lsProjAutoId` + added
+  `lsLiveListOf` / `l9Ok`), both progress entries kept, duplicate ACCEPTED-FAILURES rows dropped. After the merge tests/seq + c10 + attack4: all pass
+  except the accepted ones (attack1-oldtab ×2, attack3-editor P-job, attack4-fold P-job, attack5-window 2 Lows). L9 tests 29/29, attack4 45/0.
+- Still to do in Job B: carry over what is useful from `parked/job-a-fixes-run-2026-11-10-1903` (esp. 77d1acd Production Manager way into Deliveries,
+  bc814ba hidden on-hold jobs moved by "Move ticked", 127e933, da0f017) onto Job A; Manager verdict on Part 4; Tester on the B11 date batch; change
+  requests; upload + matching (B10); Johnny's pool page; B11 d/e/f/g.
