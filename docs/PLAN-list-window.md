@@ -195,4 +195,11 @@ pickers are folded behind "Change job ▾" rather than removed.
     Save in the same second can still both save (the check asks the database just before saving; a true tie needs the database rule).
   - Medium fixed: phone title bar, Ctrl+S, cursor starts in the first box. Left: finder button on phones, Esc with a panel open,
     Save as template still reachable from the Lists page (question 3), one-letter customer typo (question 4).
-- Full suite: see the end-of-run line below.
+- Old tests moved to the new rules (said here as the plan asks): s3 bar order, attack3 F8 button, e9 Save as template by role, e5 /
+  stage3 attack2-screens / s1s3-screens / s4-editor (materials with no PIN — the Job B branch's versions), l3 read-only Floor box,
+  s4 waits for a template's rows; two Tester checks corrected (due "due ?" agreement, unit-block quantities).
+- **Full suite (197 files, one at a time, fake Supabase):** 3,984 pass / 75 fail, then 9 stage3 checks fixed by the test updates
+  above → **66 fail: 27 are the known ones on ACCEPTED-FAILURES (unchanged by this branch) + 39 from the Tester's new attack files**,
+  each listed in ACCEPTED-FAILURES under "Cutting-list window release", pending Garry.
+- Not done yet: steps 7–10. No Manager verdict yet, so no pull request.
+- Another scheduled run started this job at the same minute; its plan commit (15:27) was merged, no code clash.
