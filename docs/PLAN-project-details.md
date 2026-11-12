@@ -1560,3 +1560,26 @@ No Tester expectation changed. One of my own checks was moved to the new rule (b
   - attack12b-fixes **34 / 2** (only F9 / F11).
   - b10f 19 / 0, b10g 6 / 0, b10h 7 / 0, attack12-match 25 / 0.
   - All 63 tests/seq files before the L3 round-2 fix: 2,103 pass / 12 fail. That is the accepted rows (attack1-oldtab ×2, attack3-editor, attack4-fold, attack5-window ×2, attack7 2b) + F9 / F11, + F4 / F5 and b10f (all three fixed since).
+
+### 12 Nov 2026 — Manager verdict on B10
+**GO WITH CONDITIONS** (to carry on to the next Job B part; not a go-live — the whole branch still waits for the PENDING SQL and Garry's merge).
+- **Re-run at 59fc5f7 on the fake database (never real Supabase, no network-guard hits):** all 63 tests/seq files — only accepted rows fail
+  (attack1-oldtab, attack3-editor, attack4-fold, attack5-window ×2, attack7 2b, attack12b F9 / F11); b10a–h 21/11/26/27/22/19/6/7, b9e 3, b9f 4,
+  attack12-upload 32, -match 25, -confirm 30, -drag 11, attack12b 34 / 2, b0-key 329, b0-claim 8, attack3-key 149, attack4-key 99,
+  l4b-pmerge 23, attack9-pmerge 29 — all 0 fails. Job A sample: dates c1-engine 22, attack1-engine 25, c8-deliv-engine 13 — 0 fails.
+  The whole 278-file suite was NOT re-run at HEAD (last full run 470fa96); commits since touch only seq code.
+- **SQL:** no change to SUPABASE_CHANGES.md or pg-check.sql in 1a7a378..HEAD. Throwaway Postgres 16 (Stage 1, Stage 3, Stores dockets,
+  Project details, PM sequence, Merged P-numbers blocks each run twice): pg-check **ALL SEQ PG CHECKS PASSED**; attack4-jsvssql **3 / 0**
+  (3,564 house keys + 63 line keys, JS = SQL). H2's claim checked: the SQL only compares key strings (equal or not) — it has no "not sure";
+  H2 changed only the browser's "different" → "not sure", never the key strings, so the browser is only MORE careful than the database.
+- **Code:** matches the plan; no new save key / planner field / SQL; data values in the new panels go through escA; no debug left;
+  lists off / SQL not run → nothing (b10c / b10d / b10e). Deviations 1–4 and H1–H4, M5–M7, L1–L11 accepted as reasonable.
+- **Conditions:** (1) Garry answers M1 (KITCHEN ISLAND) — today safe either way (to confirm, one tap). (2) Before staff rely on it, dry-run
+  ONE real Cienapps upload file and the matching WO import through the preview (Q7 sample never came; all tests use a made-up 27-column file).
+  (3) Garry confirms Coder deviation 1 (no 🆕 rows on page open). (4) Full suite once more before the branch goes to Garry for merge.
+- **Residual risk (Note):** an upload line with a typo in floor / unit ("different" from the WO) leaves a ⏳ waiting row AND the WO gets a 🆕 row —
+  two rows for one house until the ⏳ flag (3 weeks) or a PM spots it. Nothing is guessed or merged; visible, not silent.
+- **Left in Job B:** B11 d/e/f/g (date rules per product, dates follow the order, paste the programme, week view); pNotSame ("not the same
+  house" memory for P-number merges); Garry's pending decisions in ACCEPTED-FAILURES (two P-numbers per house, inactive project spelling,
+  storage-blocked Settings, Late-changes count, KITCHEN ISLAND); B8 CNC view is later (after Job B). Then Tester → Manager on the whole branch,
+  SQL run, merge, go-live day (close every screen, incognito check).
