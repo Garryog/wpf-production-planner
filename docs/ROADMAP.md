@@ -117,6 +117,52 @@ Rules: rank by the leading number. "Shipped" = step 9 only (left the factory →
 
 - (4 Nov, Garry, answers) Photo of a list REPLACES the paper option: on a WO with no typed list, attach a photo (phone camera or file); the saw must be able to open it; it is a stop-gap to be removed later once the typed system is in place (keep it simple, easy to switch off). Docket cancel ASKS "Did these items leave stores?" (Yes = stay got out; No = back to 'to pick'). Dockets are for FITTINGS (stores items) only for now — cutting-list (saw) items are not docketed, so no per-WO quantity split is needed.
 
+<!-- Copied 12 Nov 2026 from feature/project-details-v2 for the list-window release (branch feature/list-window) -->
+### Cutting list job boxes + Cienapps WO number always (10 Nov 2026, Garry, go-live day) — add to Job B, do EARLY (staff are entering real lists now)
+Garry's words: "cutting list need to break out floor, unit and title into their own boxes. use cienapps work order number at all times. could we look for cienapps number if it not pre-populated. If cienapps wo number cannot be found force new p-number as a last resort".
+- **L1 — Separate boxes:** in the cutting list window (new list, Import Excel preview, Find old list / copy, Edit job info) Floor, Unit and Title are each their own box — never one combined text. Excel template + import: keep reading the current template; if the job info block gains Floor / Unit / Title cells, accept both layouts.
+- **L2 — Cienapps WO number at all times:** a list is always tied to the Cienapps work order number and shows it everywhere (lists home, saw, stores, dockets, prints). Pre-populate it when the list is started from a job.
+- **L3 — Look it up when it is blank:** search the planner's jobs by the matching key from B0 — project (customer name) + floor + unit (trimmed, case-insensitive). Exactly one match → fill it in and show what was matched. Several → the person picks from the short list. Typing a WO number by hand is still allowed but must exist in the planner.
+- **L4 — P-number only as a last resort:** no Cienapps job found → say so plainly and make a new P-number only after the person confirms. It is flagged (purple, "not from Cienapps"), and when a later Cienapps import brings a job with the same project + floor + unit the list moves onto the Cienapps WO and the P-number job is merged into it — NEVER two jobs for one unit (Garry: "the most important thing is to avoid duplication's"). One-list-per-WO rule unchanged.
+- Architect: confirm with Garry before building — what happens when floor or unit is blank on either side (default: no automatic match, person picks), and whether Title takes part in the match (default: no, it is only shown).
+
+### Cutting list window — Garry's first real use on the live system (10 Nov 2026, 16:11) — do with L1–L4, EARLY
+Garry's words: "i need to be able to click into delivery card and be able to add a cutting list. add new material does not see to work in cutting list. where do i add the project list of materials. you qty in the qty column same as L and W. how do you get out of the cutting list without hitting cancel. need clearer step with list is completed that list is saved and list can be closed. says it cant save". (Screenshot: New cutting list for WO-2617-4, Project = "— pick the project —", red "Pick the project.", amber "This device can't keep a backup copy … (storage full or blocked)".) Live data at the time: no real projects yet, only the two migrated example ones.
+- **L5 — Project should never block a first list:** when the WO is known, pick the project automatically from the WO's customer (customer → project link); if there is none, offer "Make project '<customer>'" in one tap right where the red message is. "Pick the project." must say what to do (e.g. "Pick the project — or ＋ New project… at the bottom of the list").
+- **L6 — Materials easy to find:** "＋ New material…" in the material drop-down must work the first time (if no project yet, lead the person through L5 then carry on, don't just refuse). The project's material list ("Materials" button) needs a clearer label, e.g. "Project materials (add / edit)". Ties in with B (materials editable from PM and office views).
+- **L7 — Qty box like L and W:** show "Qty" inside the empty box, same style as "L" and "W".
+- **L8 — Clear finish:** after Save show plainly "Saved ✓ — list is with the Saw & Stores" with a Close button; a ✕ Close at the top right of the window at all times (asks only if there are unsaved changes); "Cancel" renamed so it does not read as the only way out.
+- **L9 — From the delivery card:** tapping a job's delivery card offers "＋ Add cutting list" (and "Open list" when it has one), opening the same window with the WO, floor, unit, title pre-filled.
+- **L10 — "can't keep a backup copy" bar on Garry's office PC:** find out why (likely this browser's storage for garryog.github.io is full — the quoting tool used to be hosted on the same address and kept large local copies). The planner should say how to fix it, and Settings should show how much device storage the planner is using. Never delete another app's stored copies without asking.
+
+### Decisions 10 Nov 2026, 16:18 (Garry, testing the live list window)
+Garry's words: "customer and project will always be the same. where do we pick and set up material. there is no need for number in house / list name this could be used for a name of the list only and also searchable again if the list was saved as a template. i need to test this out".
+- **Customer = project, always.** The Cienapps customer name IS the project. Nobody should have to pick or create a project by hand when a work order is known: the project is found or made from the customer automatically (supersedes the "pick the project" step in L5; a picker is only needed for a list with no work order).
+- **House / list name:** do NOT pre-fill it with the unit number. It is a free name for the list only, and it must be searchable — in Find old list and in the template list when the list was saved as a template.
+- **Materials:** make where to set up a project's materials obvious from the list window (see L6).
+
+### Work order drop-down in the list window (10 Nov 2026, 16:24, Garry)
+Garry's words: "we only need to see the work orders that are linked to that project in the drop down not all the work orders in the system".
+- **L11** — once a project is picked (customer = project), the Work order drop-down lists ONLY that project's work orders (same customer / linked Cienapps names), in WO order, showing WO · floor · unit · title; shipped and on-hold jobs left out; jobs that already have a live list marked. With no project picked it stays empty with "pick the project first" (or a search box) — never all 650. Picking a WO first still sets the project.
+- Live note: on 10 Nov one project per customer (40) was added to the live database for Garry (name = customer, cien_names = [customer], updated_by "Claude (go-live 10 Nov, for Garry)") so every WO has a project.
+
+### Due dates prominent everywhere + WO drop-down in due-date order (10 Nov 2026, 16:27, Garry)
+Garry's words: "the work order due date are not prominent in all screens. the work orders should appear in order of due date in the work order drop down".
+- **L12** — the Work order drop-down in the list window (L11) is sorted by DUE DATE, earliest first (no date last), and each line shows the due date: "WO-2617-4 · Fl 7 · Unit 231 · due 14 Nov". (Supersedes "in WO order" in L11.)
+- **DD1** — audit EVERY screen that shows a work order (Capacity Board, Deliveries pool/cards/weeks, Shipped, Cutting Lists home + lists needed + list window header, Saw, Stores, dockets, PM views, prints) and make the due date prominent and in ONE consistent style everywhere: same badge, same format ("Fri 14 Nov · Wk 46"), red when overdue, amber when due this week, "moved N×" where it applies. Architect lists the screens where it is missing or small today; Tester checks each one at PC and phone width.
+
+### Garry 10–12 Nov (voice call 10 Nov evening + 12 Nov) — decisions not yet recorded
+- **PRIORITY (12 Nov):** the cutting list window is the NEXT job, as its own small release (target Wed 18 Nov), after the Deliveries weeks release on Mon 16 Nov. PM page, Drawing page and the rest of Job B wait. Scope = L1–L12 + DD1 (list window part) + the items below.
+- **Simplicity is the main focus** (Garry: the production manager is "old school"; buy-in depends on it). List window: ONE obvious path — open from the job, fill rows, one big Save. Templates / Import Excel / Find old list go behind a single "Start from…" choice at the top; "Save as template" only for Drawing office / Admin. Fewest buttons on every screen.
+- **Cutting lists are owned by the Drawing office and Johnny**, not PMs. "No cutting list yet" warnings go to them; the PM sees each job's list status read-only.
+- **Several PMs per project**: a project can have more than one PM; it shows in each of their views; changes logged under the PM who made them.
+- **PM marks Installed on his phone** from his sequence table; updates everywhere, goes on Export Changes.
+- **Driver confirms delivery → step JOB SHIPPED** if not already, logged under the driver, on Export Changes, shows on Shipped at once.
+- **Shipped report**: pick from/to dates → every job shipped in the period with project, PM, value, invoiced status, total, Excel download.
+- **PM sequence**: shipped rows stay but grey out and are hidden by default ("show finished"); later the base for installation management (install date, fitters, site snags, sign-off) — a separate phase, not now.
+- **Johnny's CNC Schedule (later, CNC job)**: read from SharePoint on a schedule; strike-through = office processing done (CNC files), NOT cut. Mark jobs taken into the planner with an extra "In planner" tick column — tested on a COPY of his .xlsm first, never write colours into his file.
+
+
 ## Progress log
 ### 2 Nov 2026 (scheduled run)
 - Architect confirmed the cutting-list plan against the code; build notes and build order added to docs/PLAN-cutting-lists-stage3.md (fixed garbled characters in both plan files).
