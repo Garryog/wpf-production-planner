@@ -240,6 +240,10 @@ const LIT = () => ({ prev: document.getElementById('wkb-prev').className, next: 
       const tag = listsOn ? ' [lists ON]' : ' [lists OFF]';
       if (!oldHtml) { rec('B8' + tag + ' roles unchanged (could not read ea990d4:index.html)', false); continue; }
       const now_ = await grab(null, settings), old = await grab(oldHtml, settings);
+      // ALLOWED DIFFERENCE (Garry 12 Nov — PM page filters A13): the PM page's customer drop-down became the Project / Location /
+      // Title / Search bar. Only the text between the heading and the first customer block is folded, on both sides.
+      const pmFold = x => String(x || '').replace(/(Deliveries by customer) [\s\S]*?(?= 👤|$)/, '$1 «filters»');
+      ['pm'].forEach(r => { if (now_[r] != null) now_[r] = pmFold(now_[r]); if (old[r] != null) old[r] = pmFold(old[r]); });
       const diff = roles.filter(r => r !== 'prod' && now_[r] !== old[r]);
       rec('B8' + tag + ' PM / management / drawing office / saw / stores / driver / floor screens identical to before the carry-over', !diff.length, diff.map(r => r + ': OLD "' + old[r].slice(0, 120) + '" NEW "' + now_[r].slice(0, 120) + '"').join(' || '));
       const pOld = old.prod, pNew = now_.prod, pre = listsOn ? '' : '🧭 Today 🚚 Deliveries ';
