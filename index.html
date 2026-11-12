@@ -4828,8 +4828,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
         const typed=R().some(r=>r.k==='part'&&!lsEmptyRow(r));
         if(typed)R().push(...add);else R().splice(0,R().length,...add);
         if(add.some(r=>r.k==='hdr'&&r.units!=null))st.unitsOn=true;
-        if(!String(st.name||'').trim())st.name=sh.name;
-        const m=sh.p.meta;if(!st.carcass&&m.carcass)st.carcass=m.carcass;if(!st.door&&m.door)st.door=m.door;
+        const m=sh.p.meta; // (attack2 F13) the list name is not pre-filled with the sheet name (blank = the WO number)if(!st.carcass&&m.carcass)st.carcass=m.carcass;if(!st.door&&m.door)st.door=m.door;
         // (L1b) a sheet's Floor / Unit / Title / WO cells fill the job boxes of a new list with no WO, then the WO is looked up
         let look=false;if(jbOn()&&!st.wo)['floor','unit','title','wo'].forEach(k=>{const v=String(m[k]||'').trim();if(v&&!String(st.jb[k]||'').trim()){st.jb[k]=v;look=true;}});
         const np=add.filter(r=>r.k==='part').length,nh=add.length-np,nw=sh.p.warn.length;
