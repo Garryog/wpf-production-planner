@@ -133,6 +133,13 @@ Rules: rank by the leading number. "Shipped" = step 9 only (left the factory →
 - A11 GROUP moving of due (and delivery) dates with one reason — from board group-select/groups, by project/customer, or ticked cards on the delivery page; same A3–A7 rules; summary of what moved and what was flagged.
 - Not wanted: a weekly date-changes report.
 
+### Release in small pieces + Job A answers (12 Nov 2026, Garry)
+- **Releases go out as small pieces.** Order: (1) the Cutting Lists project filter (PR #2, branch feature/lists-project-filter); (2) **Job A — Dates & deliveries on its own**, branch `release/deliveries-weeks`, for Garry to merge on **Mon 16 Nov**; (3) Job B (project details, PM sequence, pre-production pool) later, in its own pieces. This replaces the Manager's 11 Nov condition "release Job A with Job B" (decision C → Job A on its own first).
+- **A1** — the Production Manager gets the FULL Deliveries page as built (🚚 Deliveries button on his screen), Close week included.
+- **B1** — Saturday deliveries are allowed and NOT flagged, as built. Sundays and bank holidays are never delivery days.
+- **D1** — a loaded / on-the-road job ticked in a group week move still moves, stays on its van and is flagged "date moved after loading — check", as built (plan Q15).
+- Bank holidays: **Mon 3 Jan 2028** is the day off for New Year's Day (Sat 1 Jan 2028) — confirmed by Garry. The list also holds Sat 26 Dec 2026 and Sat 25 / Sun 26 Dec 2027, so no delivery lands on Christmas Day or St Stephen's Day.
+
 ## Progress log
 ### 2 Nov 2026 (scheduled run)
 - Architect confirmed the cutting-list plan against the code; build notes and build order added to docs/PLAN-cutting-lists-stage3.md (fixed garbled characters in both plan files).

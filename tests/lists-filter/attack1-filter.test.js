@@ -9,7 +9,12 @@ const { F, D, H } = X;
 const res = []; const fails = [];
 const rec = (n, ok, d) => { res.push(!!ok); if (!ok) fails.push(n); console.log((ok ? 'PASS ' : 'FAIL ') + n + (d ? '  -> ' + String(d).slice(0, 500) : '')); };
 const j = JSON.stringify;
-const MAIN = A.gitShow('origin/main');
+// Release "Deliveries weeks" (12 Nov 2026): on a branch that carries Job A (week bar on Deliveries) while origin/main does not yet,
+// "the same as before the filter" is Job A just before the filter was merged in (ba6ecd8), not origin/main — otherwise every Job A
+// screen change shows up as a filter leak. Once main has Job A the comparison is with origin/main again.
+const HEAD_A = /id="del-wkbar"/.test(require('fs').readFileSync(require('path').join(__dirname, '../../index.html'), 'utf8'));
+const MAIN0 = A.gitShow('origin/main');
+const MAIN = HEAD_A && MAIN0 && !/id="del-wkbar"/.test(MAIN0) ? (A.gitShow('ba6ecd8') || MAIN0) : MAIN0;
 const wait = (p, ms) => p.evaluate(ms => new Promise(r => setTimeout(r, ms)), ms || 80);
 
 const snap = p => p.evaluate(() => {

@@ -240,7 +240,10 @@ const LIT = () => ({ prev: document.getElementById('wkb-prev').className, next: 
       const tag = listsOn ? ' [lists ON]' : ' [lists OFF]';
       if (!oldHtml) { rec('B8' + tag + ' roles unchanged (could not read ea990d4:index.html)', false); continue; }
       const now_ = await grab(null, settings), old = await grab(oldHtml, settings);
-      const diff = roles.filter(r => r !== 'prod' && now_[r] !== old[r]);
+      // Release "Deliveries weeks" (12 Nov 2026): the Cutting Lists page gained the Project filter on purpose (PR #2, tests/lists-filter),
+      // so with the lists switch ON the drawing-office screen is no longer the ea990d4 text — left out there only when the filter exists.
+      const lpf = listsOn && /function lpfSec\(/.test(require('fs').readFileSync(path.join(ROOT, 'index.html'), 'utf8'));
+      const diff = roles.filter(r => r !== 'prod' && !(lpf && r === 'design') && now_[r] !== old[r]);
       rec('B8' + tag + ' PM / management / drawing office / saw / stores / driver / floor screens identical to before the carry-over', !diff.length, diff.map(r => r + ': OLD "' + old[r].slice(0, 120) + '" NEW "' + now_[r].slice(0, 120) + '"').join(' || '));
       const pOld = old.prod, pNew = now_.prod, pre = listsOn ? '' : '🧭 Today 🚚 Deliveries ';
       const strip = listsOn ? pNew.replace('🧭 Today 🚚 Deliveries 📋 Lists', '🧭 Today 📋 Lists') : pNew;
