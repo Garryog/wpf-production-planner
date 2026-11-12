@@ -217,6 +217,17 @@ Garry's words: "the work order due date are not prominent in all screens. the wo
 Garry's words: "this is messy they are all over lapping, you can drop the value and just put a total down the bottom. add the dues date to these cards".
 - **D4** — pool cards must never overlap: WO, Floor and Unit badges fit inside the card (wrap or shrink), nothing spills into the next card, at PC and phone width. Drop the € value from each card; show the group total value once at the bottom of the group. Add the due date to every card in the DD1 style (red overdue, amber this week). Same fix on the cards in the week grids if they share the layout. Part of the Deliveries usability pass (D1–D3), before Thursday's release.
 
+### Garry 10–12 Nov (voice call 10 Nov evening + 12 Nov) — decisions not yet recorded
+- **PRIORITY (12 Nov):** the cutting list window is the NEXT job, as its own small release (target Wed 18 Nov), after the Deliveries weeks release on Mon 16 Nov. PM page, Drawing page and the rest of Job B wait. Scope = L1–L12 + DD1 (list window part) + the items below.
+- **Simplicity is the main focus** (Garry: the production manager is "old school"; buy-in depends on it). List window: ONE obvious path — open from the job, fill rows, one big Save. Templates / Import Excel / Find old list go behind a single "Start from…" choice at the top; "Save as template" only for Drawing office / Admin. Fewest buttons on every screen.
+- **Cutting lists are owned by the Drawing office and Johnny**, not PMs. "No cutting list yet" warnings go to them; the PM sees each job's list status read-only.
+- **Several PMs per project**: a project can have more than one PM; it shows in each of their views; changes logged under the PM who made them.
+- **PM marks Installed on his phone** from his sequence table; updates everywhere, goes on Export Changes.
+- **Driver confirms delivery → step JOB SHIPPED** if not already, logged under the driver, on Export Changes, shows on Shipped at once.
+- **Shipped report**: pick from/to dates → every job shipped in the period with project, PM, value, invoiced status, total, Excel download.
+- **PM sequence**: shipped rows stay but grey out and are hidden by default ("show finished"); later the base for installation management (install date, fitters, site snags, sign-off) — a separate phase, not now.
+- **Johnny's CNC Schedule (later, CNC job)**: read from SharePoint on a schedule; strike-through = office processing done (CNC files), NOT cut. Mark jobs taken into the planner with an extra "In planner" tick column — tested on a COPY of his .xlsm first, never write colours into his file.
+
 ## Progress log
 ### 2 Nov 2026 (scheduled run)
 - Architect confirmed the cutting-list plan against the code; build notes and build order added to docs/PLAN-cutting-lists-stage3.md (fixed garbled characters in both plan files).
