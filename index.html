@@ -5451,7 +5451,9 @@ function seqAgreeKeep(pid,id,redraw){return seqCfDo(pid,redraw,async()=>{const r
 /* ⏳ not in Cienapps yet? (B10): a row still waiting for a WO number after seqWaitWks() weeks. Tap → where it came from
    ("Uploaded <date> by <name>, file <name>, row N. Check Cienapps.") → [Keep waiting] / [Remove this row…] (a reason,
    seq_remove — kept in History, never deleted). */
-function seqWaitOld(r){if(!r||r.wo||r.state!=='waiting')return false;const d=String(r.created_at||'').slice(0,10);return !!d&&d<addDayISO(todayLocal(),-7*seqWaitWks());}
+// (attack12 L10) the age by the LOCAL (Irish) date the row was saved, like today's date — not the UTC date in the timestamp
+function seqLocalDay(iso){const d=new Date(iso||'');return isNaN(d)?'':d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function seqWaitOld(r){if(!r||r.wo||r.state!=='waiting')return false;const d=seqLocalDay(r.created_at);return !!d&&d<addDayISO(todayLocal(),-7*seqWaitWks());}
 const SEQ_RM_WHY=['Not ordered / cancelled','Uploaded twice','Wrong project','Other'];
 async function seqWaitDlg(pid,id,redraw){
   const r=LST.sq.get(id);if(!r)return;const can=seqCanEdit(pid),at=r.created_at?new Date(r.created_at).toLocaleDateString('en-IE',{day:'numeric',month:'short',year:'numeric'}):'?';
