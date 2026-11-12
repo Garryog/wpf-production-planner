@@ -4815,6 +4815,13 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       }catch(e){err('Could not read '+f.name+' — is it an Excel workbook (.xlsx)?');return;}
       if(!sheets.length){err('No cutting list found in '+f.name+' — expected columns: Description | Qty | Length | Width | Material | Edging 1 | Edging 2 | Note.');return;}
       const use=sh=>{
+        // (attack2 F8) the sheet's own WO / Floor / Unit cells name ANOTHER job than this list's: asked once before any row goes in
+        const m0=sh.p.meta||{},o0=st.wo&&DB.orders.find(x=>x.wo===st.wo);
+        if(o0&&(String(m0.wo||'').trim()||keyTxt(m0.floor)||keyTxt(m0.unit))){
+          const woDiff=String(m0.wo||'').trim()&&woKey(woNorm(String(m0.wo).trim()))!==woKey(woNorm(o0.wo)),jk=jobKey(o0);
+          const hDiff=(keyTxt(m0.floor)||keyTxt(m0.unit))&&keyMatch(keyOf(jk.p,m0.floor,m0.unit,''),jk).r==='different';
+          const d=(w,f,u)=>[w,f?'Floor '+f:'',u?'Unit '+u:''].filter(Boolean).join(' · ');
+          if((woDiff||hDiff)&&!confirm('This Excel file says '+d(String(m0.wo||'').trim(),String(m0.floor||'').trim(),String(m0.unit||'').trim())+', but this list is for '+d(o0.wo,fuF(o0),fuU(o0))+'.\n\nPut the rows in anyway?\n\nOK = put them in\nCancel = nothing is added'))return;}
         const add=sh.p.rows.filter(r=>!r.info).map(r=>{const x={...r};delete x.src;delete x.total;delete x.bu;delete x.qtyErr;
           if(x.k==='part'){x.qty=x.qty===''||x.qty==null?'':String(x.qty);x.L=x.L===''?'':String(x.L);x.W=x.W===''?'':String(x.W);}return x;});
         snap();
