@@ -348,3 +348,8 @@ Garry sent the Aderrig cutting-list workbook ("a current high volume job … a n
 - (11 Nov, Garry) **Cutting Lists page: project filter, and the customer / project always visible** on the page. Released as a SMALL
   release of its own on top of the live version (branch feature/lists-project-filter), not waiting for the big release.
 - (11 Nov, Garry) **"Speed up the new system" = get features live faster**: small tested releases as each piece is ready.
+- (12 Nov, Garry, answers — Job A Deliveries) **A1** the Production Manager gets the FULL Deliveries page as built, Close week
+  included. **B1** Saturday deliveries are allowed and not flagged. **D1** a loaded / on-the-road job ticked in a group week move
+  still moves, stays on its van and is flagged. **C** superseded: releases now go out as small pieces on top of live, in this order
+  (Garry: "yes all important"): 1 Cutting Lists project filter (PR #2) · 2 Deliveries week tabs + due-date editing (Job A) ·
+  3 Shipped steps 9/10/11 + Project filter on Shipped · 4 P-number → WO merge.
