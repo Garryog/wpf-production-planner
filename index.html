@@ -1345,7 +1345,9 @@ function isOnHold(o){return !!(o&&o.cienHold);}
   kept on the ✏ Drawing page (o.drawStage = {at, why:'step'|'wod'}): off the Capacity Board, week totals, capacity, Deliveries and the
   "needs a list" lists — the same pattern as On hold. It is ONE job: when a later import shows it at step 2 or further it goes onto
   the Capacity Board by itself (never a second record). A job already on the board that goes back to DRAWING stays on the board, flagged. */
-function isDrawing(o){return !!(o&&o.drawStage);}
+// attack1 F1: a "step" marker only counts while the job's own step is not a numbered step 2 or further — so a job two PCs brought in at
+// the same moment (one at DRAWING, one further on) can never end up planned but hidden. A WO-D marker always counts.
+function isDrawing(o){if(!o||!o.drawStage)return false;if(o.drawStage.why==='wod')return true;const n=stepNo(o.step);return !(n!==null&&n>=2);}
 function isParked(o){return isOnHold(o)||isDrawing(o);} // off the board / totals / deliveries for either reason
 function stepIsDrawing(s){const n=stepNo(s);return n===1||(n===null&&/drawing/i.test(String(s||'')));}
 function drawJobs(){return DB.orders.filter(o=>isDrawing(o)&&!isShipped(o)&&!isOnHold(o));}
@@ -1897,7 +1899,7 @@ function renderBoard(app){
     <button class="btn btn-s" id="btn-fdel" style="${fDel?'background:#e8f1fd;border-color:#b0c8e8;color:#1a56db;font-weight:600':''}">🚚 On delivery board</button>
     ${(n=>n?`<button class="btn btn-s" id="btn-flate" title="Jobs whose planned week ends AFTER their Cienapps due date — dates have drifted since they were planned. Click to see only these and re-plan them." style="${fLate?'background:#fdecea;border-color:#e57368;font-weight:700;':''}border-color:#e57368;color:#c0392b">⚠ ${n} late vs due</button>`:'')(PO.filter(isLateVsDue).length)}
     <button class="btn btn-s" id="btn-clf">Clear filters</button>
-    <span style="margin-left:auto;font-size:12px;color:var(--t2)">${orders.length} shown · ${PO.filter(o=>o.plannedWeek).length} scheduled · ${unschCnt} unscheduled${PO.length<DB.orders.length?` · <a href="#" id="go-ship" style="color:var(--t2)">${DB.orders.length-PO.length} shipped</a>`:''}</span>
+    <span style="margin-left:auto;font-size:12px;color:var(--t2)">${orders.length} shown · ${PO.filter(o=>o.plannedWeek).length} scheduled · ${unschCnt} unscheduled${(n=>n?` · <a href="#" id="go-ship" style="color:var(--t2)">${n} shipped</a>`:'')(DB.orders.length-PO.length-DB.orders.filter(o=>isDrawing(o)&&!isShipped(o)&&!isOnHold(o)).length)}${(n=>n?` · ${n} at drawing`:'')(drawJobs().length)}</span>
     <button class="btn btn-g" id="btn-pwo" title="Create a work order directly in the planner — numbered P-…, it follows the same workflow as every Cienapps job but is never touched by imports">＋ New Work Order</button>
     <button class="btn btn-s" id="btn-snap" title="Save a single read-only HTML file with all current data baked in — email it or open it anywhere, no database or internet needed">📸 Offline Snapshot</button>
     <button class="btn btn-s" id="btn-clearall" style="border-color:var(--red);color:var(--red)">Clear All Orders</button>
@@ -2240,7 +2242,7 @@ function ovrHolds(ov,cs){if(!ov)return false;const a=stepRank(cs),b=stepRank(ov)
 /* Garry, 4 Nov: a job whose step is set to 7 ASSEMBLY COMPLETE or 8 PALLETED in the planner is ticked for delivery
    (pool, no van/day). Never untags; a job already tagged keeps its van/day; a hand-untag at this step or later is
    respected (same rule as the import); shipped jobs are left alone. On hold still hides it from the board (delHidden). */
-function delvAutoOk(o){const n=stepNo(o&&o.step);return !!o&&(n===7||n===8)&&!o.delv&&!o.shippedAt&&!ovrHolds(o.delvOverride,o.step);}
+function delvAutoOk(o){const n=stepNo(o&&o.step);return !!o&&!isDrawing(o)&&(n===7||n===8)&&!o.delv&&!o.shippedAt&&!ovrHolds(o.delvOverride,o.step);}
 // (10 Nov) the one-off catch-up skips old jobs: only those due on/after the cut-off (default 1 Nov 2026) — older 7/8 jobs are delivered, Cienapps just never moved them to Shipped
 const DELV_CATCHUP_FROM='2026-11-01';
 function delvCatchUpOk(o,from){return delvAutoOk(o)&&!!o.dueDate&&o.dueDate>=(from||DELV_CATCHUP_FROM);}
@@ -3675,7 +3677,7 @@ function renderDrawing(app){
   const sc=document.getElementById('drw-cust');if(sc)sc.onchange=()=>{drwCust=sc.value;render();};
   const iq=document.getElementById('drw-q');
   if(iq){if(keep){iq.value=keep.v;iq.focus();try{iq.setSelectionRange(keep.a,keep.b);}catch(e){}}
-    iq.oninput=()=>{const v=iq.value;clearTimeout(renderDrawing._t);renderDrawing._t=setTimeout(()=>{renderDrawing._t=null;drwQ=v;render();},250);};}
+    iq.oninput=()=>{const v=iq.value;clearTimeout(renderDrawing._t);renderDrawing._t=setTimeout(()=>{renderDrawing._t=null;drwQ=v;if(document.getElementById('drw-q'))render();},250);};}
 }
 function renderDesign(app){
   if(!V2()){app.innerHTML='<div class="pg"><div class="exp-panel" style="font-size:14px">The Drawing office view opens when the new cutting lists are switched on (Settings → Cutting lists store).</div></div>';return;}
@@ -8140,16 +8142,16 @@ function analyzeImport(input,source){
       let newStep=ps;
       // 12 ON HOLD is not progress: the step stays where it is, the job is held (out of week totals) until the step changes
       if(isHoldC&&!ex.cienHold){set.cienHold=true;what.push('ON HOLD in Cienapps');}
-      if(cs&&!isHoldC&&ex.cienHold){set.cienHold=false;what.push('back from on hold');flags.push('back from on hold — returns to the board (Cienapps: '+cs+')');}
+      if(cs&&!isHoldC&&ex.cienHold){set.cienHold=false;what.push('back from on hold');flags.push(ex.drawStage&&(isWOD||stepIsDrawing(cs))?'back from on hold — returns to the ✏ Drawing page (Cienapps: '+cs+')':'back from on hold — returns to the board (Cienapps: '+cs+')');}
       /*v-draw: a Drawing-page job Cienapps now has at step 2 or further (not a WO-D) goes onto the Capacity Board — the same job, moved*/
-      if(ex.drawStage&&ex.drawStage.why!=='wod'&&cs&&!isHoldC&&!stepIsDrawing(cs)&&!isWOD){set.drawStage=false;what.push('left drawing → Capacity Board');drawLeft.push(ex.wo);}
+      if(ex.drawStage&&ex.drawStage.why!=='wod'&&cs&&!isHoldC&&!isWOD&&(n=>n!==null&&n>=2&&n<=11)(stepNo(cs))){set.drawStage=false;what.push('left drawing → Capacity Board');drawLeft.push(ex.wo);}
       if(cs&&cs!==ps&&!isHoldC){
         const c=!ps||stepOnHold(ps)?1:stepCmp(cs,ps);
         if(c===null){stepDiffs.push({wo:ex.wo,title:ex.title||'',planner:ps,cien:cs,why:"can't tell which is further on — nothing moved"});}
         else if(c>0){newStep=cs;set.step=cs;what.push('step: '+sh(ps||'(none)')+' → '+sh(cs));
           if(stepForDelivery(cs)&&!ex.delv&&!ex.shippedAt){
             if(ovrHolds(ex.delvOverride,cs))flags.push('untagged from delivery by hand at '+sh(ex.delvOverride)+' — not auto-tagged');
-            else{set.delv=true;autoTag.push(ex.wo);what.push('auto-tagged for delivery');}}} // never untags
+            else if(!isDrawing(ex)||set.drawStage===false){set.delv=true;autoTag.push(ex.wo);what.push('auto-tagged for delivery');}}} // never untags (a WO-D drawing order is never a delivery)
         else if(c<0){stepDiffs.push({wo:ex.wo,title:ex.title||'',planner:ps,cien:cs,why:'planner is ahead — stays on the Export Changes list for Cienapps'});}
         else stepDiffs.push({wo:ex.wo,title:ex.title||'',planner:ps,cien:cs,why:'same stage, different wording — nothing moved'});
       }else if(cs&&cs===ps&&origStep[ex.wo]!==undefined&&origStep[ex.wo]!==cs)synced.push({wo:ex.wo,key:r.key,step:cs}); // Cienapps has caught up
@@ -8182,7 +8184,7 @@ function analyzeImport(input,source){
         const onVan=!!((ex.delv||ex.delLoadedAt||ex.delDispAt)&&!ex.delDelivAt&&!ex.delDone);
         shipped.push({wo:ex.wo,key:r.key,title:ex.title||'',customer:ex.customer||'',cs,onVan});
         if(onVan)inTransit.push({wo:ex.wo,title:ex.title||'',reason:stepInvoiced(cs)?'invoiced':'shipped',veh:vehLbl(ex.delVeh)||'',day:ex.delDay||''});
-        if(!ex.delDispAt&&!ex.delDelivAt&&!ex.delDone)dispGaps.push({wo:ex.wo,title:ex.title||'',customer:ex.customer||'',floor:ex.floor||'',unit:ex.unit||'',reason:stepInvoiced(cs)?'invoiced':'shipped'});
+        if(!ex.delDispAt&&!ex.delDelivAt&&!ex.delDone&&!isDrawing(ex))dispGaps.push({wo:ex.wo,title:ex.title||'',customer:ex.customer||'',floor:ex.floor||'',unit:ex.unit||'',reason:stepInvoiced(cs)?'invoiced':'shipped'});
       }
       // 10 INSTALLED TO BE INVOICE → marked installed on the Shipped tab; 11 COMPLETED AND INVOICED → marked complete
       if(stepInstalled(cs)&&(ex.shippedAt||shipped.some(s=>s.key===r.key))){
@@ -8281,7 +8283,8 @@ function renderImportPreview(plan){
     </div>`:''}
     ${section('⤼ Skipped — rows in the file that are not work orders','#d1d5db','#f9fafb',plan.skipped||[],s=>line(s.wo,'line '+s.line,escA(s.why)),20)}
     ${section('⚑ Flagged — check these','#e57368','#fdf3f2',plan.flagged,f=>line(f.wo,f.title,escA(f.why)),20)}
-    ${section('🆕 New work orders — will be added and scheduled to their due-date week','#b3e0c4','#f4fbf6',plan.newOrders,o=>line(o.wo,o.title,o.hours+'h · due '+(o.dueDate?fmt(o.dueDate):'—')),15)}
+    ${section('✏ At drawing stage — will be added to the Drawing page (not on the board, not scheduled)','#c9b8ef','#f6f2fd',plan.newOrders.filter(o=>o.drawStage),o=>line(o.wo,o.title,'due '+(o.dueDate?fmt(o.dueDate):'—')),15)}
+    ${section('🆕 New work orders — will be added and scheduled to their due-date week','#b3e0c4','#f4fbf6',plan.newOrders.filter(o=>!o.drawStage),o=>line(o.wo,o.title,o.hours+'h · due '+(o.dueDate?fmt(o.dueDate):'—')),15)}
     ${section('✏ Other updates to existing work orders','#f5d89b','#fffbeb',plan.updates.filter(u=>!u.dateChanged||u.what),u=>line(u.wo,u.exTitle,escA(u.what||'due date')),15)}
     <div style="display:flex;gap:10px;margin-top:6px;flex-wrap:wrap">
       <button class="btn btn-g" id="imp-apply" style="font-size:14px;padding:10px 22px">✓ Apply import — ${nChg} change${nChg!==1?'s':''}</button>
@@ -8417,7 +8420,7 @@ function applyImport(plan){
       const s=u.set||{};
       Object.keys(s).forEach(k=>{if(k!=='dueDate')ex[k]=s[k];});
       if('cienHold' in s){if(s.cienHold){ex.holdAt=at;holdUntag(ex);}else{delete ex.cienHold;delete ex.holdAt;ex.holdBack=at;}}
-      if('drawStage' in s&&!s.drawStage){delete ex.drawStage;ex.drawLeftAt=at;logEdit(ex,'Left drawing — Cienapps: '+(ex.step||'')+' — now on the Capacity Board','(import)');leftDraw.push(ex);} /*v-draw*/
+      if('drawStage' in s&&!s.drawStage){delete ex.drawStage;ex.drawLeftAt=at;logEdit(ex,'Left drawing — Cienapps: '+(ex.step||'')+(stepIsShipped(ex.step)?'':' — now on the Capacity Board'),'(import)');leftDraw.push(ex);} /*v-draw*/
       if('dueDate' in s){
         if(dec[u.wo]==='keep')ex.dueKeep=s.dueDate; // planner date kept; this Cienapps date won't be asked about again
         else{if(!ex.origDueDate)ex.origDueDate=ex.dueDate||'';ex.dueDate=s.dueDate;delete ex.dueKeep;}
@@ -8523,7 +8526,7 @@ function renderExport(app){
     const wb=XLSX.utils.book_new();
     const sorted=[...DB.orders].sort((a,b)=>{if(!a.plannedWeek&&b.plannedWeek)return 1;if(a.plannedWeek&&!b.plannedWeek)return-1;return(a.plannedWeek||'').localeCompare(b.plannedWeek||'');});
     const rows=[['WO #','Title','Customer','Hours','Planned Week','Week Start','Due Date','Step','Sales Rep','Notes','Vehicle','Delivery Day','Delivered At','Delivered By','Shipped At','Sheets (Cienapps)'],
-      ...sorted.map(o=>[o.wo,o.title,o.customer,o.hours,wkLbl(o.plannedWeek)||'Unscheduled',o.plannedWeek||'',o.dueDate||'',(o.step||'').replace(/^\d+\.\s*/,''),o.salesRep||'',o.notes||'',o.delVeh?(vehLbl(o.delVeh)||o.delVeh):'',o.delDay||'',o.delDelivAt?new Date(o.delDelivAt).toLocaleString('en-IE'):'',o.delivBy||'',o.shippedAt?new Date(o.shippedAt).toLocaleString('en-IE'):'',o.sheetsCien!=null?o.sheetsCien:''])];
+      ...sorted.map(o=>[o.wo,o.title,o.customer,o.hours,isDrawing(o)&&!isShipped(o)?'Drawing page':wkLbl(o.plannedWeek)||'Unscheduled',o.plannedWeek||'',o.dueDate||'',(o.step||'').replace(/^\d+\.\s*/,''),o.salesRep||'',o.notes||'',o.delVeh?(vehLbl(o.delVeh)||o.delVeh):'',o.delDay||'',o.delDelivAt?new Date(o.delDelivAt).toLocaleString('en-IE'):'',o.delivBy||'',o.shippedAt?new Date(o.shippedAt).toLocaleString('en-IE'):'',o.sheetsCien!=null?o.sheetsCien:''])];
     const ws=XLSX.utils.aoa_to_sheet(rows);
     ws['!cols']=[{wch:16},{wch:35},{wch:28},{wch:7},{wch:16},{wch:13},{wch:12},{wch:20},{wch:16},{wch:30},{wch:12},{wch:10},{wch:18},{wch:14},{wch:18},{wch:10}];
     XLSX.utils.book_append_sheet(wb,ws,'Full Schedule');
