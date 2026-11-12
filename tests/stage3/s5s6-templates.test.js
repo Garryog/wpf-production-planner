@@ -21,7 +21,7 @@ const lines = (S, id) => S.db.t.list_lines.filter(x => x.list_id === id && x.rem
   await off.page.evaluate(() => document.querySelector('[data-tplatt^="T1|WO-1"]').click());
   await F.sleep(400);
   const dlg = await off.page.evaluate(() => { const o = document.querySelector('.pod-ovl'); return o ? { name: o.querySelector('#tp-name').value, wos: [...o.querySelectorAll('[data-tpwo]')].map(c => c.dataset.tpwo + (c.checked ? '+' : '')).join(','), rows: o.querySelectorAll('.wl-tbl tbody tr').length } : null; });
-  rec('preview: WO-1 ticked, WO-2 (same project, no list) offered, name filled in (the unit — floor kept apart, Garry 4 Nov), template lines shown', dlg && dlg.wos === 'WO-1+,WO-2' && dlg.name === '1' && dlg.rows === 4, JSON.stringify(dlg));
+  rec('preview: WO-1 ticked, WO-2 (same project, no list) offered, name filled in with the template type (Part 4, Garry 10 Nov — was the unit "1"), template lines shown', dlg && dlg.wos === 'WO-1+,WO-2' && dlg.name === 'Type B 3-bed' && dlg.rows === 4, JSON.stringify(dlg));
   await off.page.evaluate(() => document.getElementById('tp-go').click());
   await F.sleep(600);
   const live = S.db.t.lists.find(l => l.template_id === 'T1');
@@ -40,7 +40,7 @@ const lines = (S, id) => S.db.t.list_lines.filter(x => x.list_id === id && x.rem
   const edit = async ans => off.page.evaluate(async ans => { window.__confAns = ans; window.__conf = []; const l = lists().find(x => x.templateId === 'T1'); openListEditor(l.id); const o = document.querySelector('.pod-ovl');
     o.querySelectorAll('[data-mrx]')[2].click(); const o2 = document.querySelector('.pod-ovl'); o2.querySelectorAll('[data-mrx]')[2].click(); // take out Top and Hinge
     const q = o2.querySelector('[data-mr="1|qty"]'); q.value = '1'; q.oninput(); // and one Side short
-    o2.querySelector('#me-save').click(); await new Promise(r => setTimeout(r, 600)); const err = (o2.querySelector('#me-err') || {}).textContent; const open = !!document.querySelector('.pod-ovl'); if (open) document.querySelector('.pod-ovl').remove(); return { conf: window.__conf.join('|'), err, open }; }, ans);
+    o2.querySelector('#me-save').click(); await new Promise(r => setTimeout(r, 600)); const err = (o2.querySelector('#me-err') || {}).textContent; const open = !!document.querySelector('.me-ed'); document.querySelectorAll('.pod-ovl').forEach(x => x.remove()); /* Part 4 L8: the "Saved ✓" panel is not the editor */ return { conf: window.__conf.join('|'), err, open }; }, ans);
   const n0 = lines(S, live.id).length;
   const a1 = await edit(false);
   rec('A8: the warning lists both left-out parts (and the short one); "no" saves nothing', /Top \(left out\)/.test(a1.conf) && /Hinge \(left out\)/.test(a1.conf) && /Side \(3 of 4\)/.test(a1.conf) && a1.open && /missing/.test(a1.err) && lines(S, live.id).length === n0, JSON.stringify(a1));
