@@ -7156,6 +7156,7 @@ function renderPM(app){
   const sel=pmCust&&custs.includes(pmCust)?[pmCust]:custs;
   const row=(cells)=>`<div class="dsh-row">${cells}</div>`;
   const stageLbl=o=>{const s=dStage(o);return s?dStageLbl[s]+(dStageTime(o)?' '+dStageTime(o):''):'PLANNED';};
+  const lsTxt=o=>V2()?`<span class="dsh-x pm-ls" style="white-space:normal" title="Cutting lists are made by the Drawing office — shown here for information">${escA(pmListTxt(o.wo))}</span>`:''; // list-window step 7: status only, nothing to do here
   const block=c=>{
     const mine=all.filter(o=>(o.customer||'')===c);
     const sched=mine.filter(o=>o.delDay&&dStage(o)!=='deliv').sort((a,b)=>DEL_DAYS.indexOf(a.delDay)-DEL_DAYS.indexOf(b.delDay));
@@ -7167,10 +7168,10 @@ function renderPM(app){
     if(!sched.length&&!delivWk.length&&!past.length&&!coming.length)return'';
         return `<div class="dsh-p" style="margin-bottom:14px">
       <div class="dsh-ph" style="background:#14335c;font-size:15px">👤 ${escA(c)} — ${sched.length} scheduled · ${delivWk.length} delivered this week · ${past.length?past.length+' past':'no earlier deliveries'} · ${coming.length} coming up</div>
-      ${sched.length?`<div class="pm-sec">🚚 SCHEDULED THIS WEEK</div>`+sched.map(o=>row(`<b>${escA(o.wo)}</b>${fuHTML(o,'flr-fu','font-size:12px')}<span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-x">${escA(vehLbl(o.delVeh)||'')} ${escA(o.delDay||'')} · ${stageLbl(o)}</span>`)).join(''):''}
+      ${sched.length?`<div class="pm-sec">🚚 SCHEDULED THIS WEEK</div>`+sched.map(o=>row(`<b>${escA(o.wo)}</b>${fuHTML(o,'flr-fu','font-size:12px')}<span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-x">${escA(vehLbl(o.delVeh)||'')} ${escA(o.delDay||'')} · ${stageLbl(o)}</span>${lsTxt(o)}`)).join(''):''}
       ${delivWk.length?`<div class="pm-sec" style="color:#0d6e46">✓ DELIVERED THIS WEEK</div>`+delivWk.map(o=>row(`<b>${escA(o.wo)}</b>${fuHTML(o,'flr-fu','font-size:12px')}<span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-x" style="color:#0d6e46">${o.delDelivAt?new Date(o.delDelivAt).toLocaleDateString('en-IE',{weekday:'short',day:'numeric',month:'short'})+' '+dStageTime(o):''}${o.delivBy?' · '+escA(o.delivBy):''}</span>`)).join(''):''}
       ${past.length?`<div class="pm-sec" style="color:var(--t3)">📚 DELIVERED — PAST WEEKS</div>`+past.map(j=>row(`<b>${escA(j.wo)}</b>${fuHTML(j,'flr-fu','font-size:12px')}<span class="dsh-t">${escA(j.t||'')}</span><span class="dsh-x">${new Date(j._at).toLocaleDateString('en-IE',{day:'numeric',month:'short'})}${j.vBy?' · '+escA(j.vBy):''}</span>`)).join(''):''}
-      ${coming.length?`<div class="pm-sec" style="color:#8a6d00">📅 COMING UP — due, not yet on the delivery board</div>`+coming.map(o=>row(`<b>${escA(o.wo)}</b>${fuHTML(o,'flr-fu','font-size:12px')}<span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-x">due ${fmt(o.dueDate)}${o.plannedWeek?' · build '+wkLbl(o.plannedWeek):''}</span>`)).join(''):''}
+      ${coming.length?`<div class="pm-sec" style="color:#8a6d00">📅 COMING UP — due, not yet on the delivery board</div>`+coming.map(o=>row(`<b>${escA(o.wo)}</b>${fuHTML(o,'flr-fu','font-size:12px')}<span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-x">due ${fmt(o.dueDate)}${o.plannedWeek?' · build '+wkLbl(o.plannedWeek):''}</span>${lsTxt(o)}`)).join(''):''}
     </div>`;
   };
   app.innerHTML=`<div class="dsh">
@@ -7220,6 +7221,11 @@ function sideChipHTML(mode,st,at,big){
   if(st==='unset')return`<span class="ls-hold"${fs}>${mode==='saw'?'🪚 no saw rows — confirm "no cutting"':'🧰 no fittings listed — confirm "no fittings"'}</span>`;
   return`<span class="ls-no"${fs}>${mode==='saw'?'🪚 NOT CUT':'🧰 NOT PICKED'}</span>`;
 }
+/* (list-window step 7, Garry 12 Nov) cutting lists are owned by the Drawing office, not PMs: the PM screen shows each job's
+   list status as plain text — no "make a list" prompt, no button, no count. */
+function pmListTxt(wo){const s=woListStat(wo);if(!s)return'📋 no cutting list yet';
+  const w={done:' · cut ✓',hold:' · waiting on material',open:' · not cut yet'},f={done:' · picked ✓',hold:' · waiting on stock',open:' · not picked yet'};
+  return'📋 cutting list made'+(w[s.saw]||'')+(f[s.fit]||'');}
 function listStatHTML(wo){
   const s=woListStat(wo);
   if(!s)return`<div class="drv-ls"><span class="ls-none">📋 no cutting list linked</span></div>`;
