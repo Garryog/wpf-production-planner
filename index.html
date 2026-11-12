@@ -5319,9 +5319,12 @@ function seqJobsNoRow(pid){
   "2796-15-2-APT 51") first, as a suggestion — not sure; else what its title / floor gives; nothing at all when there is no unit
   anywhere (then only "add at the bottom").*/
 function seqNoHouse(o){return !keyFloor(seqNoMulti(fuF(o))).t||!keyUnit(seqNoMulti(fuU(o)));}
-// attack12b L3: read from the RIGHT — the last part is the unit, the one before it the floor, and only when the part before those
-// two is digits (the order-line number): "2796-15-2-APT 51" and "WPF-2796-15-2-APT 51" → 2 / APT 51; "A-B-C-D" → nothing
-function seqRefHouse(o){const p=String(o&&o.ref||'').split('-').map(s=>s.trim()),n=p.length;return n>=3&&p[n-1]&&p[n-2]&&/^[0-9]+$/.test(p[n-3])?{floor:p[n-2],unit:p[n-1]}:null;}
+// attack12b L3: "order-line-floor-unit" anchored on the order and line NUMBERS (two digit parts in a row, anything in front of them
+// is a prefix): "2796-15-2-APT 51" and "WPF-2796-15-2-APT 51" → 2 / APT 51; "2796-15-T12-APT-51" → T12 / APT-51 (a unit may hold a
+// "-"); "A-B-C-D", "2604-WO-50", "2796-15-0-" → nothing
+function seqRefHouse(o){const p=String(o&&o.ref||'').split('-').map(s=>s.trim());
+  for(let i=0;i+3<p.length;i++)if(/^[0-9]+$/.test(p[i])&&/^[0-9]+$/.test(p[i+1])){const f=p[i+2],u=p.slice(i+3).join('-');return f&&u?{floor:f,unit:u}:null;}
+  return null;}
 // a waiting row with no unit (a "TOTAL" / note line saved before attack12 H4) is never part of a certain match and blocks nobody
 const seqRowNoHouse=r=>!keyUnit(seqNoMulti(r.unit));
 function seqWOCands(o,wait){

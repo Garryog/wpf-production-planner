@@ -39,7 +39,7 @@ function server() {
     const pm = await X.dev(browser, S, 'pm', { me: { pm: 'John Burke' } }), p = pm.page;
     await p.evaluate(() => { pmTab = 'seq'; render(); }); await sleep(1200);
     const ag = await p.evaluate(() => { const e = document.getElementById('seq-agree'); return e ? e.innerText.replace(/\s+/g, ' ') : ''; });
-    rec('Dates to agree (3): WO-3 "Row asked 11 Dec · Cienapps no delivery date", WO-4 "27 Nov · Cienapps 25 Nov"; WO-2 (same date) not listed', /Dates to agree \(3\)/.test(ag) && /WO-3.*Row asked 11 Dec · Cienapps no delivery date/.test(ag) && /WO-4.*Row asked 27 Nov · Cienapps 25 Nov/.test(ag) && /Use 11 Dec/.test(ag) && /Keep 25 Nov/.test(ag) && !/WO-2/.test(ag), ag);
+    rec('Dates to agree (3): WO-3 "Row asked 11 Dec · Cienapps no delivery date", WO-4 "27 Nov · Cienapps 25 Nov"; WO-2 (same date) not listed', /Dates to agree \(3\)/.test(ag) && /WO-3.*Row asked 11 Dec · Cienapps no delivery date/.test(ag) && /WO-4.*Row asked 27 Nov · Cienapps 25 Nov/.test(ag) && /Use Fri 11 Dec/.test(ag) && /Keep 25 Nov/.test(ag) && !/WO-2/.test(ag), ag);
     // Use 11 Dec: through the date engine
     await tap(p, '[data-sequse="A1"]'); await sleep(300);
     const o3 = await p.evaluate(() => { const o = DB.orders.find(x => x.wo === 'WO-3'); return { d: o.delivDate, due: o.dueDate, h: (o.dueHist || []).map(x => x.f + ':' + x.to + ':' + x.why + ':' + x.src) }; });
