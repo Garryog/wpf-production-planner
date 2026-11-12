@@ -176,6 +176,10 @@ says yes or no, and it is run **AFTER** the new code is live (step 8) — never 
 9. **Close and reopen, in person, every screen:** every office PC, the Production Manager's PC, the saw and stores screens, the
    floor screen, and **every driver's phone** (Chrome). A screen left open on the old version can still "Clear Week" every week's
    bookings, shows next week's Tuesday as this Tuesday on the driver screen, and drops the answer to the old-bookings question.
+   It can also (Tester attack 6, 12 Nov): **move a next-week booking to another day and land it on the wrong Friday** — the person
+   on the old screen sees "this Friday", every new screen files it under next week's Friday; and its save **puts Settings →
+   Delivery dates back to 3 / 5 / 14** for any PC opened afterwards. So: do not change the Delivery dates numbers until every
+   screen has been reopened (or old-screen guard v2 is on — it refuses every old screen's save).
 10. The person who plans the vans answers the one-time question on Deliveries: bookings from before the week tabs are for
     **This week** or **Next week**.
 11. Spot-check on the Production Manager's own PC and one Android phone in Chrome: tap the due date, "→ Wk N", drag a card onto
