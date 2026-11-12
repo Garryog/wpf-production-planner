@@ -1442,3 +1442,60 @@ Start-first, position, Save. 4 `seqReconcile` + import hook + page-open + 🆕 a
 nudge. 6 Dates to agree + ⏳ dialog. 7 360 px pass, full suite → Tester → Manager.
 
 ## Progress log — Part 6
+
+### 12 Nov 2026 (scheduled run) — Coder: B10 steps 1–6 built
+Built on `feature/project-details-v2`, one commit per step, all pushed. **No SQL, no new save key, no planner-record field** — it uses
+`seq_insert` / `seq_match` / `seq_remove` / `seq_restore` from the PENDING PM-sequence block and the existing `project_seq` columns
+(`children`, `upload_id`, `line_no`, `why`, `is_new`, `req_date`). The fake database already had every route; nothing added to it.
+- **7815e86 step 1** `seqReadUpload(aoa, r0)` + `seqUpBook(file bytes)`: header found by its words in the first 10 rows (≥4 of Qty /
+  Floor / Unit / Product / Name / Description / Price; trailing spaces, any order / case; CHILDREN n QTY / PRODUCT / NAME / DESCRIPTION /
+  PRICE), else the fixed 27-column layout only when most rows have a number in A and a product code in D; CHILDREN kept on the line
+  as info (K8 + fitting kit + door kit = ONE line); blank rows dropped; kind = `seqKind(name + description)`; Qty ≠ 1 warned; Floor /
+  Unit "Multiple / Various / All" flagged. The Cienapps **work-order export** is refused with its own message. .xlsx / .xls / .csv.
+  tests/seq/b10a-read **21 / 0** (fixture tests/seq/b10fix.js: the create-cienapps-upload 27-column shape, 5 lines per house).
+- **a3fa460 step 2** `seqClaimPreview(pid, lines, extra)` = the `seq_insert` claim rule in the browser (line key, else a no-line-key
+  row of the same house + kind, island only island) → Will be added / Skipped / ❓ (keyMatch "unsure", same kind, rows not already
+  claimed by another line of the file); `extra` = the rows "Start first" is about to make; `seqUpRows`, `seqStartRows` (seqStart now
+  uses it). tests/seq/b10b-preview **11 / 0**: preview counts = fake-DB `seq_insert` counts (Start then upload, same file twice = 0,
+  two identical W2 BED 2 = 2 then 0, three = 1 more, "T09" vs "GF" ❓).
+- **db41859 step 3** "⬆ Cienapps file" in the sequence page's top bar (editors only; hub / office reach it through the page they open).
+  Preview window: project, file, line count; "Start the sequence from today's jobs first (N)" ticked by default when the project has no
+  sequence; the three groups (❓ with "Add anyway"); ⚠ Qty; "Put them: at the bottom / under row #"; Cancel / Save N rows. Save →
+  `seq_insert` (src upload, one upload_id, line_no, why "Cienapps upload: <file>"); toast uses the database's counts ("another screen
+  added some meanwhile — N skipped"); a lost reply keeps the window ("Nothing is added twice if you press Save again" — same row ids).
+  tests/seq/b10c-upload-ui **26 / 0** (incl. lists off, SQL not run, stores look-only, escaping, 360 px).
+- **f0f68f6 step 4** `seqReconcile(pids, fresh)` (one run at a time per screen; re-reads the rows first): certain → `seq_match(…'auto')`;
+  a WO NEW in this import with no possible row → `seq_insert` 🆕 (is_new, src import) at the bottom; anything else nothing written. Hook:
+  after `PMERGE_RUN` in `applyImport` (`SEQ_REC_RUN`), result line on the import screen "🔢 Sequence: N matched · N added as 🆕 · N to
+  confirm [Open <project>]"; and when an editor opens a sequence page (office window / PM tab, at most once a minute per project).
+  tests/seq/b10d-reconcile **27 / 0**.
+- **db79c34 step 5** "📌 To place / confirm" (`seqConfirmHTML`, worked out each time): "which row is it?" (row whose Name = WO title
+  first, then "same", then position; never chosen on its own) → `seq_match(…'confirmed')` version-checked; ➕ None of these → 🆕 row;
+  "Not in the sequence yet (N)" → ➕ one / ➕ all at the bottom; possible doubles → [Use the waiting row] (`seq_remove` "double", then
+  `seq_match`; on failure `seq_restore`). PM nudge chip "N to place / confirm". tests/seq/b10e-confirm **22 / 0**.
+- **60d92ef step 6** "📅 Dates to agree" (live matched jobs whose row date ≠ the job's delivery date): [Use 12 Dec] → `seqDatesSave`
+  (moveDates src 'pmseq', fixed window → a PM's change request) with reason "Sequence date — set before the WO existed", [Keep 19 Dec];
+  both clear `req_date` (version-checked PATCH). "⏳ not in Cienapps yet?" on rows waiting > `seqWaitWks()` weeks → "Uploaded <date> by
+  <name>, file <name>, row N … check Cienapps" (file from the row's note, else its "add" line in History) → Keep waiting / Remove this
+  row… (Not ordered / cancelled, Uploaded twice, Wrong project, Other → `seq_remove`, kept). tests/seq/b10f-dates-wait **19 / 0**.
+- **c9cdb31 Manager B9 note 3**: a job Johnny ticked processed while Cienapps is below 5 → preview flag "processed by pre-production —
+  take it out of the nest" (and the due-moved window says the same); a real step-5 job keeps "programmed (step 5)". tests/seq/b9f-progmsg **4 / 0**.
+- **Deviations (Coder calls — Garry / Manager to confirm):**
+  1. **Opening a page never adds rows; 🆕 rows only for WOs that are NEW in this import** (plan: every job of the project with no row, on
+     import and on page open). Key question 5 says "a new WO"; adding on page open also broke 13 checks in 8 existing test files whose
+     sequences deliberately don't hold every WO, and would re-add rows a PM had taken out. Older WOs with no row are listed under
+     To place / confirm "Not in the sequence yet" (➕ one / all). Matching (certain → auto) still runs on import and on page open.
+  2. A WO whose row was **taken out** (removed, kept) is never matched or added again by B10.
+  3. The nudge is its own chip "N to place / confirm" (confirm + not in the sequence + possible doubles); "N new rows to place" (🆕) unchanged.
+  4. `line_no` = the row number in Excel; the ⏳ window says "row N".
+  5. Dates to agree also lists a job with **no** delivery date ("Cienapps no delivery date"); if the date engine skips the job (e.g.
+     delivered) the row keeps its date. Only live jobs are listed.
+  6. The ⏳ flag shows on look-only screens too (their window has no buttons). Qty 0 is warned like Qty 2.
+  7. Upload / confirm writes are by the screen's own name (`lqBy`), no extra "who are you?" step; Use (dates) asks like the date tools (`seqBy`).
+- **ASSUMED answers used as written:** Q1–Q4, Q6–Q8 (Q5 as in deviation 1).
+- **Full suite** (272 test files + 4 probes, 3 at a time, at c9cdb31): **6,131 pass / 37 fail** = the ACCEPTED-FAILURES rows (dates
+  attack1-oldversion ×3, attack3-guard, attack1-merge 1c, sawstores ×2, seq attack1-oldtab ×2, attack3-editor, attack4-fold,
+  attack5-window ×2, attack7 2b, stage1 t17 ×10, t13 ×4, t14 ×3, t3, attack-poll P5, c4-queue A5) + t16 ×2 "WITH proposed guard"
+  (informational) + **seq attack9-pmerge M8** — timing under load (its 6 s wait for the merge ran out; passes alone, 29 / 0 twice).
+  editor e7 and stage1 t4 passed in the run. header-late-probe still crashes (pre-existing). **No new failure.**
+- **Left:** step 7 (360 px pass over the whole page — each new piece already checked at 360 px in its own test) → Tester → Manager.
