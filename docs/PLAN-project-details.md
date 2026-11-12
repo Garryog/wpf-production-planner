@@ -1545,3 +1545,18 @@ No Tester expectation changed. One of my own checks was moved to the new rule (b
   - After 5fd2d5a all 55 tests/seq files were re-run: only accepted rows fail. header-late-probe still crashes (pre-existing).
   - **No new failure.**
 - **Left:** Tester re-run → Manager.
+
+### 12 Nov 2026 (scheduled run, later still) — Coder: attack12b Lows
+- ca6faa6 **L1**: the nudge's "over N wks" count uses `seqWaitOld` (Irish local date).
+- 5e7455c **L2**: the Dates to agree button names the real day, e.g. "Use Tue 29 Dec (26 Dec is a bank holiday)".
+- fc14276 + latest **L3**: the Reference is anchored on the order-line number pair (two digit parts in a row). Anything in front of them is a prefix; the next part is the floor and the rest is the unit.
+  - "WPF-2796-15-2-APT 51" → 2 / APT 51; "2796-15-T12-APT-51" → T12 / APT-51; "A-B-C-D", "2604-WO-50" and "2796-15-0-" → no suggestion.
+  - "Read from the right" alone would have broken attack12b F4 / F5, so I used the order-line anchor (ASSUMED).
+- 5c09d99 **L4**: 📜 History is 36 px on phones.
+- **M1 (F9 / F11) left as built.** A "KITCHEN ISLAND" line is a kitchen, so the house's kitchen WO goes to To confirm (safe, one extra tap).
+  Added to ACCEPTED-FAILURES as "pending Garry: is a 'KITCHEN ISLAND' line an island or a kitchen?".
+- My b10f check follows the L2 wording ("Use Fri 11 Dec").
+- **Numbers:**
+  - attack12b-fixes **34 / 2** (only F9 / F11).
+  - b10f 19 / 0, b10g 6 / 0, b10h 7 / 0, attack12-match 25 / 0.
+  - All 63 tests/seq files before the L3 round-2 fix: 2,103 pass / 12 fail. That is the accepted rows (attack1-oldtab ×2, attack3-editor, attack4-fold, attack5-window ×2, attack7 2b) + F9 / F11, + F4 / F5 and b10f (all three fixed since).
