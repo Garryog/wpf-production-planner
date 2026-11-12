@@ -364,6 +364,27 @@ const donep = p => p.evaluate(() => { const d = document.querySelector('.me-dov'
     rec('switch OFF: the old list window — no ✕ Close bar, no project message, old name pre-fill and "Cancel"', await o0.page.evaluate(() => !document.getElementById('me-x0') && !document.getElementById('me-pm') && /Cancel/.test((document.getElementById('pod-x') || {}).textContent || '')));
     rec('switch OFF: no page errors', !(S0.errors || []).length, JSON.stringify(S0.errors));
     await o0.close();
+
+    // ---- (round 5) two P-numbers for one house: flagged on the saw and stores cards and in either P-job's list window
+    {
+      const r2 = X.v2Row(); const pj = wo => H.order({ wo, customer: 'Aderrig Homes', pid: 'P1', floor: 'T09', unit: '77', title: 'HOUSE TYPE K', step: 'Planner WO', dueDate: '2026-10-22', origDueDate: '2026-10-22', log: [{ at: '2026-10-21T08:00:00Z', by: 'Op', what: 'Work order created with a typed cutting list' }] });
+      r2.orders.push(pj('P-1001'), pj('P-1002'));
+      const S2 = X.makeServer(r2);
+      X.F3.seedList(S2, 'LP1', { wos: ['P-1001'], name: 'House 77 A' }); X.F3.seedList(S2, 'LP2', { wos: ['P-1002'], name: 'House 77 B' });
+      for (const role of ['saw', 'stores']) {
+        const sv = await X.dev(browser, S2, role); await sleep(400);
+        const n = await sv.page.evaluate(() => [...document.querySelectorAll('.wl-card .p-twin')].filter(e => /Two P-numbers for one house — P-1001 \/ P-1002/.test(e.textContent)).length);
+        rec('round 5: ' + role + ' — both P-job list cards carry "⚠ Two P-numbers for one house — P-1001 / P-1002"', n === 2, n);
+        await sv.close();
+      }
+      const ofc = await X.dev(browser, S2, 'office');
+      for (const id of ['LP1', 'LP2']) { await ofc.page.evaluate(id => openListEditor(id), id); await sleep(500);
+        rec('round 5: list window of ' + id + ' shows the two-P-numbers warning', await ofc.page.evaluate(() => /Two P-numbers for one house — P-1001 \/ P-1002/.test((document.querySelector('.me-ed .p-twin') || {}).textContent || '')));
+        await closeAll(ofc.page); }
+      await ofc.page.evaluate(() => openListEditor(null, 'WO-2')); await sleep(400);
+      rec('round 5: an ordinary WO has no such warning', await ofc.page.evaluate(() => !document.querySelector('.me-ed .p-twin')));
+      await ofc.close();
+    }
     // phone 360 px: the Qty card box has the placeholder too
     const ph = await X.dev(browser, S, 'office', { viewport: { width: 360, height: 740 } });
     await ph.page.evaluate(() => openListEditor(null, 'WO-2')); await sleep(300);
