@@ -5154,7 +5154,7 @@ const SEQ_UP_NOT='This doesn\'t look like a Cienapps upload file — nothing loa
    Excel; r0 = the sheet's first row index). No header → the fixed 27-column layout, only when most rows have a number in A
    (Qty) and a product code in D. Each line: {line_no, qty, floor, unit, product, name, descr, price, children[], kind, multi, warn[]}. */
 function seqReadUpload(aoa,r0){
-  aoa=Array.isArray(aoa)?aoa:[];r0=+r0||0;const out={lines:[],warn:[],err:'',hdr:false};
+  aoa=Array.isArray(aoa)?aoa:[];r0=+r0||0;const out={lines:[],warn:[],err:'',hdr:false,notRead:[]};
   const blank=r=>!(r||[]).some(c=>seqUpTxt(c)!=='');
   if(!aoa.some(r=>!blank(r))){out.err='The file is empty — nothing loaded.';return out;}
   if(seqUpIsWOExport(aoa)){out.err='This is the Cienapps work-order export, not the upload file — nothing loaded. (Work-order exports go in on the Import tab.)';return out;}
@@ -5168,7 +5168,10 @@ function seqReadUpload(aoa,r0){
   const g=(r,j)=>j==null?'':seqUpTxt(r[j]);let noName=0;
   for(let i=start;i<aoa.length;i++){const r=aoa[i]||[];if(blank(r))continue;
     const L={line_no:r0+i+1,qty:seqUpNum(g(r,h.map.qty)),floor:g(r,h.map.floor),unit:g(r,h.map.unit),product:g(r,h.map.product),name:g(r,h.map.name),descr:g(r,h.map.descr),price:seqUpNum(g(r,h.map.price)),children:[],warn:[]};
-    if(!L.product&&!L.name&&!L.descr){noName++;continue;} // not a line (a title row, a total, children with no parent …)
+    if(!L.product&&!L.name&&!L.descr){noName++;out.notRead.push({line_no:L.line_no,text:r.map(seqUpTxt).filter(Boolean).join(' · ').slice(0,80),why:'no product, name or description'});continue;} // not a line (a title row, children with no parent …)
+    /*attack12 H4: a totals row, or a row with no floor, no unit AND no product (a note, a heading) is not a line: listed under "Not read"*/
+    const tot=/^((SUB|GRAND) ?)?TOTALS?( |$)/.test(keyTxt(L.name))||/^((SUB|GRAND) ?)?TOTALS?( |$)/.test(keyTxt(L.descr));
+    if(tot||(!L.floor&&!L.unit&&!L.product)){out.notRead.push({line_no:L.line_no,text:[L.name,L.descr].filter(Boolean).join(' · ').slice(0,80),why:tot?'a total':'no floor, unit or product'});continue;}
     h.ch.forEach(c=>{const x={qty:seqUpNum(g(r,c.qty)),product:g(r,c.product),name:g(r,c.name),descr:g(r,c.descr),price:seqUpNum(g(r,c.price))};if(x.product||x.name||x.descr)L.children.push(x);});
     L.kind=seqKinds(L.name).size?seqKind(L.name):seqKind(L.descr); /*attack12 M7: the Name decides (like a WO title); the Description only when the Name names no kind*/
     L.multi=seqUpMulti(L.floor)||seqUpMulti(L.unit);
@@ -5176,7 +5179,6 @@ function seqReadUpload(aoa,r0){
     if(L.multi)L.warn.push('Floor / Unit "'+(seqUpMulti(L.floor)?L.floor:L.unit)+'" — not one house: a WO never takes this row on its own');
     out.lines.push(L);
   }
-  if(noName)out.warn.push(noName+' row'+(noName!==1?'s':'')+' with no product, name or description left out');
   if(!out.lines.length&&!out.err)out.err=out.hdr?'The header is there but no lines under it — nothing loaded.':SEQ_UP_NOT;
   return out;
 }
@@ -5249,6 +5251,7 @@ function seqUpPreview(pid,fname,res,redraw){
       <div class="squ-sub">${escA(fname)} · ${res.lines.length} line${res.lines.length!==1?'s':''}${res.hdr?'':' (no header row — read as the standard 27 columns)'}. Check the project is right — nothing is saved until you press Save.</div>
       ${(res.warn||[]).map(w=>`<div class="squ-w">⚠ ${escA(w)}</div>`).join('')}
       ${jobs.length?`<label class="squ-start"><input type="checkbox" id="squ-start"${st.start?' checked':''}> Start the sequence from today's jobs first (${jobs.length}) — the file's lines then take those rows by house, never twice</label>`:''}
+      ${res.notRead&&res.notRead.length?`<div class="squ-g squ-nr"><div class="squ-gh">🚫 Not read (${res.notRead.length}) — not lines to add (totals, notes, rows with no floor / unit / product)</div>${lst(res.notRead,x=>`<div class="squ-l"><span class="squ-n">row ${+x.line_no}</span> ${escA(x.text||'(blank)')} <span class="squ-why">— ${escA(x.why)}</span></div>`)}</div>`:''}
       <div class="squ-g squ-add"><div class="squ-gh">✅ Will be added (${v.add.length}) — one row each, ⏳ waiting for a WO number</div>${lst(v.add,L=>`<div class="squ-l">${ln(L)}</div>`)}</div>
       ${v.skip.length?`<div class="squ-g squ-skip"><div class="squ-gh">⏭ Skipped — already in the sequence (${v.skip.length})</div>${lst(v.skip,s=>`<div class="squ-l">${ln(s.L)}<div class="squ-why">= ${escA(rowLbl(s.row))}</div></div>`)}</div>`:''}
       ${v.unsure.length?`<div class="squ-g squ-uns"><div class="squ-gh">❓ Might already be there (${v.unsure.length}) — skipped unless you tick "Add anyway"</div>${lst(v.unsure,u=>`<div class="squ-l">${ln(u.L)}<div class="squ-why">maybe ${escA(rowLbl(u.row))} — ${escA(u.why)}</div><label class="squ-fa"><input type="checkbox" data-squf="${escA(byLine.get(u.L).id)}"${st.force.has(u.L)?' checked':''}> Add anyway</label></div>`)}</div>`:''}
