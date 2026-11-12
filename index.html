@@ -4609,6 +4609,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
   const draw=()=>{
     const a=document.activeElement,fk=st.focus||(a&&ov.contains(a)&&a.dataset&&a.dataset.mr)||'',ss=a&&a.selectionStart!=null?[a.selectionStart,a.selectionEnd]:null,sc=(ov.querySelector('#me-grid')||{}).scrollTop||0;
     st.focus='';KM=null; // the job keys are worked out again (once) for this redraw
+    ['title','cust','floor','unit','due','val','hrs'].forEach(k=>{const e=ov.querySelector('#me-p'+k);if(e)st.pw[k]=e.value;}); // (attack2 F7) the new P-number's typed boxes survive every redraw (e.g. a material picked)
     const sm=sheetMats();
     if(hasUnits())st.unitsOn=true; // a list that has unit blocks always shows them
     const tbc=lsTbc(R()),chk=ex&&!ex.tpl?lsCheckInfo(ex):null;
