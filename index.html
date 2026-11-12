@@ -4493,7 +4493,7 @@ function seqFixedAt(o,to){return !!o&&dmFixedAt(o,[to],seqFixedDays());}
    BED" (not after a number). Round 3: seqKinds names every kind in a combined title.
    ISLAND (without KITCHEN) = 'other', so an island line never takes the kitchen's place. seqKinds = every kind a title names
    (the P-number duplicate check: a "KITCHEN & UTILITY" job blocks a kitchen AND a utility P-number). */
-function seqKind(t){const k=kinds(t);if(arguments[1]===true)return k;return k.has('quartz')?'quartz':k.has('kitchen')?'kitchen':k.has('other')?'other':k.has('utility')?'utility':k.has('robes')?'robes':'kitchen';function kinds(t){const s=String(t||'').toUpperCase(),w=s.split(/[^A-Z0-9]+/).filter(Boolean),k=new Set(),num=x=>/^[0-9]+$/.test(x||'');if(/QUARTZ/.test(s))k.add('quartz');if(/KITCHEN/.test(s))k.add('kitchen');if(/UTILITY/.test(s))k.add('utility');if(/\b(ROBES?|WARDROBES?)\b/.test(s)||w.some((x,i)=>/^BED(ROOM)?S?[0-9]+$/.test(x)||(/^BED(ROOM)?S?$/.test(x)&&!num(w[i-1])&&(num(w[i+1])||/^BEDROOMS?$/.test(x)||w[i-1]==='MASTER'))))k.add('robes');if(/\bISLAND\b/.test(s))k.add('other');return k;}}
+function seqKind(t){const k=kinds(t);if(arguments[1]===true)return k;return k.has('quartz')?'quartz':k.has('kitchen')?'kitchen':k.has('other')?'other':k.has('utility')?'utility':k.has('robes')?'robes':'kitchen';function kinds(t){const s=String(t||'').toUpperCase(),w=s.split(/[^A-Z0-9]+/).filter(Boolean),k=new Set(),num=x=>/^[0-9]+$/.test(x||'');const s2=s.replace(/\bKITCHEN ISLAND\b/g,' '); /*attack12 M7/K20: "KITCHEN ISLAND" is an island when the text also names an island on its own ("HOUSE TYPE B ISLAND — KITCHEN ISLAND 2400"); alone it stays a kitchen*/if(/QUARTZ/.test(s))k.add('quartz');if(/KITCHEN/.test(s2)||(s2!==s&&!/\bISLAND\b/.test(s2)))k.add('kitchen');if(/UTILITY/.test(s))k.add('utility');if(/\b(ROBES?|WARDROBES?)\b/.test(s)||w.some((x,i)=>/^BED(ROOM)?S?[0-9]+$/.test(x)||(/^BED(ROOM)?S?$/.test(x)&&!num(w[i-1])&&(num(w[i+1])||/^BEDROOMS?$/.test(x)||w[i-1]==='MASTER'))))k.add('robes');if(/\bISLAND\b/.test(s2))k.add('other');return k;}}
 // seqKinds: every kind a title names ("KITCHEN, UTILITY & ROBES" → kitchen + utility + robes)
 function seqKinds(t){return seqKind(t,true);}
 // Progress (look only): list ready · processed · cut · assembled · in store · on a van · delivered — from the planner's own fields
@@ -5170,7 +5170,7 @@ function seqReadUpload(aoa,r0){
     const L={line_no:r0+i+1,qty:seqUpNum(g(r,h.map.qty)),floor:g(r,h.map.floor),unit:g(r,h.map.unit),product:g(r,h.map.product),name:g(r,h.map.name),descr:g(r,h.map.descr),price:seqUpNum(g(r,h.map.price)),children:[],warn:[]};
     if(!L.product&&!L.name&&!L.descr){noName++;continue;} // not a line (a title row, a total, children with no parent …)
     h.ch.forEach(c=>{const x={qty:seqUpNum(g(r,c.qty)),product:g(r,c.product),name:g(r,c.name),descr:g(r,c.descr),price:seqUpNum(g(r,c.price))};if(x.product||x.name||x.descr)L.children.push(x);});
-    L.kind=seqKind(L.name+' '+L.descr);
+    L.kind=seqKinds(L.name).size?seqKind(L.name):seqKind(L.descr); /*attack12 M7: the Name decides (like a WO title); the Description only when the Name names no kind*/
     L.multi=seqUpMulti(L.floor)||seqUpMulti(L.unit);
     if(L.qty!=null&&L.qty!==1)L.warn.push('Qty '+L.qty+' — one row; check how Cienapps makes the WOs');
     if(L.multi)L.warn.push('Floor / Unit "'+(seqUpMulti(L.floor)?L.floor:L.unit)+'" — not one house: a WO never takes this row on its own');
