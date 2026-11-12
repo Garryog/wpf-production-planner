@@ -5215,6 +5215,10 @@ function seqClaimPreview(pid,lines,extra){
     const lk=keyOf(pid,L.floor,L.unit,'');let why='';
     const u=live.find(r=>{if(claimed.has(r.id)||r.kind!==kd)return false;const m=keyMatch(lk,seqRowKeyJ(r));if(m.r!=='unsure')return false;why=m.why;return true;});
     if(u){out.unsure.push({L,row:u,why});return;}
+    /*attack12 M6: the same house and kind is already in the sequence under another Name (LH → RH, a re-typed line) → ❓ "revised
+      line?", skipped unless a person taps Add anyway*/
+    const rv=live.find(r=>!claimed.has(r.id)&&r.kind===kd&&keyMatch(lk,seqRowKeyJ(r)).r==='same'&&keyTxt(r.name||r.descr||'')!==keyTxt(L.name||''));
+    if(rv){out.unsure.push({L,row:rv,why:'revised line? — this house already has "'+(rv.name||rv.descr||'')+'" ('+kd+')',rev:true});return;}
     out.add.push(L);});
   return out;
 }

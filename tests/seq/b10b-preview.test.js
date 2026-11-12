@@ -52,7 +52,7 @@ const { H, D, rec, sleep } = X;
     const e = await p.evaluate(() => { const ex = [{ id: 'x1', wo: 'WO-X', floor: 'T09', unit: '40', descr: 'HOUSE TYPE B', kind: 'kitchen' }];
       const L = [{ line_no: 1, floor: 'T09', unit: '40', product: 'K9', name: 'HOUSE TYPE B ISLAND', descr: '', kind: 'kitchen' }, { line_no: 2, floor: '', unit: '40', product: 'K8', name: 'HOUSE TYPE B', descr: '', kind: 'kitchen' }];
       const v = seqClaimPreview('P2', L, ex); return { add: v.add.map(l => l.line_no), uns: v.unsure.map(s => s.L.line_no + ':' + s.why) }; });
-    rec('an island line never claims a kitchen Start row (added); a blank floor is ❓ "floor blank"', JSON.stringify(e.add) === '[1]' && e.uns.length === 1 && /^2:.*floor blank/.test(e.uns[0]), JSON.stringify(e));
+    rec('an island line never claims a kitchen Start row (❓ "revised line?" since attack12 M6, never added silently); a blank floor is ❓ "floor blank"', JSON.stringify(e.add) === '[]' && e.uns.length === 2 && /^1:revised line\?/.test(e.uns[0]) && /^2:.*floor blank/.test(e.uns[1]), JSON.stringify(e));
     rec('no page errors', !(S.errors || []).length, JSON.stringify(S.errors));
     await a.close();
   } finally { await browser.close(); }
