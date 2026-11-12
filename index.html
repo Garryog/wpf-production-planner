@@ -5436,14 +5436,16 @@ function seqAgreeHTML(pid){
 }
 async function seqAgreeClear(r,why){const x=LST.sq.get(r.id)||r;await lsWrite('project_seq',x,{req_date:null,why});}
 function seqAgreeUse(pid,id,redraw){const r=LST.sq.get(id),o=r&&seqJob(r);if(!r||!o||!r.req_date)return toast('Changed on another screen — look again',true);
-  if(!seqCanEdit(pid)||SEQ_DLG.busy)return;const X=String(r.req_date).slice(0,10);
+  if(!seqCanEdit(pid)||SEQ_DLG.busy)return;const X0=String(r.req_date).slice(0,10);
+  let X=X0;for(let i=0;i<14&&!isDelivDay(X);i++)X=addDayISO(X,1); /*attack12 L9: like the 📅 Set tool — a Sunday / bank holiday → the next delivery day*/
   seqBy(async by=>{SEQ_DLG.busy=true;let res=null;
     try{res=await seqDatesSave(pid,{per:{[o.wo]:seqJobDates(X)},wos:[o.wo],wait:[],none:[]},{why:SEQ_AGREE_WHY,note:''},by);
       const row=(res.rows||[]).find(x=>x.wo===o.wo),asked=(res.needReq||[]).some(x=>x.wo===o.wo)&&res.req&&res.req.ok,done=row&&!row.skipped&&!row.needReq;
       if(done||asked)await seqAgreeClear(r,SEQ_AGREE_WHY);
       else if(row&&row.skipped)toast(o.wo+' not changed — '+row.skipped+' (the row\'s date is kept)',true);
     }catch(e){toast('Not saved — '+e.message,true);}
-    finally{SEQ_DLG.busy=false;try{await seqFresh(pid);}catch(e){}if(redraw)redraw();if(res&&((res.rows||[]).some(x=>!x.skipped)||res.req))seqResult(res);}});}
+    finally{SEQ_DLG.busy=false;try{await seqFresh(pid);}catch(e){}if(redraw)redraw();if(res&&((res.rows||[]).some(x=>!x.skipped)||res.req))seqResult(res);
+      if(X!==X0&&res)toast(dShort(X0)+' is a bank holiday / Sunday — '+o.wo+' set to '+dShort(X)+' instead');}});}
 function seqAgreeKeep(pid,id,redraw){return seqCfDo(pid,redraw,async()=>{const r=LST.sq.get(id);if(!r)return toast('That row is gone',true);
   await seqAgreeClear(r,'Cienapps date kept');toast((r.wo||'')+': Cienapps\' date kept');});}
 /* ⏳ not in Cienapps yet? (B10): a row still waiting for a WO number after seqWaitWks() weeks. Tap → where it came from
