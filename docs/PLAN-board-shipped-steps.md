@@ -25,3 +25,11 @@ Project / PM filters (S2) stay with Job B because they need the PM tables.
 
 ## Merge note
 Job B already has the same code; when Job B is merged after this, the S1 lines are identical (keep Job B's version).
+
+## 12 Nov 2026 — progress
+- Full suite on this branch (180 files): only the three ACCEPTED-FAILURES files fail (sawstores attack-devices, attack-regress, stage1 t17).
+- **Manager: GO WITH CONDITIONS.** Code is the same as Job B's S1 (minus the date stamp that only exists on the dates branch). No database change.
+  Known small gap (same on Job B): after an import is undone, "Bring back to board" can leave the job showing JOB SHIPPED on the board.
+- Conditions: [ ] close and reopen every screen after release · [ ] incognito check: set a test job to JOB SHIPPED, then bring it back ·
+  [ ] tell the office that Cienapps still has to be updated (Export Changes) · rollback = main at 32d4568.
+- Merge note: when main is later merged into the dates / Job B branches the step drop-down line clashes — keep `storeStamp` and 11 steps.
