@@ -4272,11 +4272,15 @@ function keyLineStr(f,u,p,n){const pp=keyTxt(p),nn=keyTxt(n);return !pp&&!nn?nul
    st: 'noproj' | 'blank' (no search) | 'none' | 'one' (exactly one same, nothing unsure) | 'pick'. Unsure jobs are listed
    only when their unit is the same (a blank unit on a job is no reason to offer it). */
 function keyJobs(){return DB.orders.filter(o=>o&&o.wo&&!isShipped(o)&&!o.delDone&&!o.delDelivAt).map(o=>({o,k:jobKey(o)}));}
-function keyFind(pid,floor,unit,km){
-  const t=keyOf(pid,floor,unit,''),same=[],unsure=[];
+// (attack2 F1) the block a title names ("BLOCK B APT 12" → "B"), '' when it names none
+function keyBlk(title){const f=keyTitleBits(title).floor;return /^BLOCK /.test(f)?keyFloor(f).k:'';}
+function keyFind(pid,floor,unit,km,title){ // title: the typed Title — a job whose title names ANOTHER block is never filled by itself
+  const t=keyOf(pid,floor,unit,''),same=[],unsure=[],tb=keyBlk(title);
   if(!t.p)return{st:'noproj',same,unsure};
   if(!t.f.t||!t.u)return{st:'blank',same,unsure};
-  (typeof km==='function'?km():km||keyJobs()).forEach(({o,k})=>{const m=keyMatch(t,k);if(m.r==='same')same.push({o,why:m.why});else if(m.r==='unsure'&&k.u&&k.u===t.u)unsure.push({o,why:m.why});});
+  (typeof km==='function'?km():km||keyJobs()).forEach(({o,k})=>{const m=keyMatch(t,k),ob=tb&&keyBlk(o.title);
+    if(m.r==='same'&&ob&&ob!==tb){unsure.push({o,why:'the title says block '+ob+', not block '+tb});return;}
+    if(m.r==='same')same.push({o,why:m.why});else if(m.r==='unsure'&&k.u&&k.u===t.u)unsure.push({o,why:m.why});});
   const c=(a,b)=>woCmp(a.o,b.o);same.sort(c);unsure.sort(c);
   return{st:same.length===1&&!unsure.length?'one':same.length||unsure.length?'pick':'none',same,unsure};
 }
@@ -4457,7 +4461,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       return jbChoose(o.wo,'typed');}
     b.last=keyHouseStr(b.floor,b.unit)||'';
     if(!st.pid){b.res={st:'noproj'};draw();return;}
-    const r=keyFind(st.pid,b.floor,b.unit,kmap);
+    const r=keyFind(st.pid,b.floor,b.unit,kmap,b.title);
     if(r.st==='one'&&!b.not.includes(r.same[0].o.wo)){b.res=null;return jbChoose(r.same[0].o.wo,'auto');}
     if(r.st==='one')r.st='pick'; // "Not this one" was pressed for it: offer it, never fill it again by itself
     b.res=r;b.pmsg=false;draw();
@@ -4465,7 +4469,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
   // L4a: a P-number only as the last resort — the lookup runs first (a job found → pick it), then the person confirms
   const jbMakeP=force=>{ // force: 'none' (the search found nothing) or 'pick' (none of the jobs found is it) — no second look
     keep();const b=st.jb,f=String(b.floor||'').trim(),u=String(b.unit||'').trim(),both=!!(keyTxt(f)&&keyTxt(u));
-    if(!force&&st.pid&&both){const r=keyFind(st.pid,f,u,kmap);
+    if(!force&&st.pid&&both){const r=keyFind(st.pid,f,u,kmap,b.title);
       if(r.st!=='none'){if(r.st==='one')r.st='pick';b.res=r;b.pmsg=true;draw();return;}}
     const where=both?'Floor '+f+' · Unit '+u+(st.pid?' on '+lsProjName(st.pid):''):'';
     if(!confirm((force==='pick'?'You picked none of the work orders found for '+where+'.\n\n':where?'No Cienapps work order was found for '+where+'.\n\n':'No Floor and Unit typed — the planner can\'t look for the Cienapps WO, and can\'t match this P-number to it later.\n\n')
@@ -4929,7 +4933,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     const e=manualListValidate({...d,name:d.name||(st.newWO?'(the new P-number)':''),rows:onlyBuy?[{k:'saw',item:'x',qty:1,L:1,W:1}]:chk,noCut:onlyBuy?false:d.noCut,noFit:onlyBuy?false:d.noFit,wo:st.tpl?'(template)':d.wo});if(e)return err(e.replace(/saw row/g,'saw row (with a length or width)').replace(/fittings row/g,'Stores row (no length or width)'));
     if(st.newWO){ // (L4a) looked up again on Save: another PC or an import may have brought the job meanwhile — never a second job for one house
       const pf=g('me-pfloor').value,pu=g('me-punit').value,kind=seqKind(g('me-ptitle').value);
-      if(st.pid&&keyTxt(pf)&&keyTxt(pu)){const r=keyFind(st.pid,pf,pu,keyJobs()),fu='Floor '+String(pf).trim()+' · Unit '+String(pu).trim();
+      if(st.pid&&keyTxt(pf)&&keyTxt(pu)){const r=keyFind(st.pid,pf,pu,keyJobs(),g('me-ptitle').value),fu='Floor '+String(pf).trim()+' · Unit '+String(pu).trim();
         const dup=r.same.find(x=>seqKind(x.o.title)===kind);
         if(dup){const w0=dup.o.wo,isP=/^P-\d+$/.test(w0),m=isP?w0+' already exists for '+fu+' ('+kind+') — use it':w0+' from Cienapps is in the planner for '+fu+' ('+kind+') — use it';
           if(confirm(m+'.\n\nNo second job is made for one house.\n\nOK = use '+w0+' for this list\nCancel = go back')){st.newWO=false;jbChoose(w0,'picked');}else err('Not saved — '+m+'.');return;}
