@@ -3804,7 +3804,7 @@ function ltiExcelSugg(){
 }
 function ltiRows(){
   const today=todayLocal(),xl=V2()?ltiExcelSugg():new Map();
-  return listsNeeded().map(o=>{const n=lsNeedInfo(o,today),s=lsSuggest(o),pk=LTI.pick[o.wo]&&lsList(LTI.pick[o.wo])?LTI.pick[o.wo]:'',x=xl.get(o.wo)||[];
+  return listsNeeded().filter(o=>!pListUnder(o)).map(o=>{const n=lsNeedInfo(o,today),s=lsSuggest(o),pk=LTI.pick[o.wo]&&lsList(LTI.pick[o.wo])?LTI.pick[o.wo]:'',x=xl.get(o.wo)||[];
     let lvl=pk&&pk!==s.tid?'pick':s.level;if(x.length&&lvl==='strong')lvl='weak'; // an Excel list fits too: a person picks — never "Confirm all"
     return Object.assign(n,{s,xl:x,tid:pk||s.tid,lvl});})
     .sort((a,b)=>(b.onDel-a.onDel)||(b.late-a.late)||(a.due||'9999').localeCompare(b.due||'9999')||woCmp(a.o,b.o));
@@ -3836,7 +3836,7 @@ function ltiInner(){
   const wrow=l=>{const t=lsTbc(lsView(l.id).rows),due=listDueKey(l);return `<div class="lti-row lti-wc" data-ltiwc="${escA(l.id)}" style="border-left:5px solid #e0a43a">
       <div class="lti-top"><span class="chk-wait">Waiting for check</span><b class="lti-wo">${escA(l.name)}</b><span class="lti-t">${escA(l.project||'')}${(+l.rev||1)>1?' · Rev '+(+l.rev):''}</span><span class="lti-c">${(l.wos||[]).map(escA).join(' · ')||'no work order'}</span>${due?`<span class="lti-b" style="background:#eef1f5;color:#14335c">delivers ${fmt(due)}</span>`:''}${lsTbcChip(t)}</div>
       <div class="lti-act"><button class="btn btn-g" data-ltichk="${escA(l.id)}" style="${btn}">✓ Check</button><button class="btn btn-s" data-ltiview="${escA(l.id)}" style="${btn}">View</button><button class="btn btn-s" data-ltiedit="${escA(l.id)}" style="${btn}">✎ Edit</button><span class="lti-why">made by ${escA(l.createdBy||'?')} — the saw sees it once it is checked</span></div></div>`;};
-  const nAll=rows.length+wc.length;
+  const nAll=rows.length+wc.length,under=V2()?[...new Set(listsNeeded().map(pListUnder).filter(Boolean))]:[]; // (attack2 F2) said, not asked
   return `<div class="exp-panel lti" id="lti" style="border:2px solid ${rows.some(r=>r.late||r.onDel)?'#c0392b':nAll?'#d4880f':'#9fd8b4'};background:${nAll?'#fffdf7':'#f4fbf6'}">
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
       <div style="font-size:16px;font-weight:800;color:#14335c">📋 Cutting lists to issue — ${nAll}</div>${wc.length?`<span class="chk-wait">${wc.length} waiting for check</span>`:''}
@@ -3848,6 +3848,7 @@ function ltiInner(){
     <div style="font-size:12px;color:var(--t3);margin-bottom:8px">${rows.length?'Each processed work order needs its cutting list. Check the suggested template and tap ✓ Confirm. <b>Nothing reaches the saw until it is confirmed.</b> Green = strong match · amber = a guess · grey = no suggestion.':'✓ Every processed work order has a cutting list.'}</div>
     ${LTI.done.length?`<div class="lti-done">${LTI.done.slice(0,12).map(d=>`<div>✓ <b>${escA(d.wo)}</b> — "${escA(d.name)}"${d.tpl?' from '+escA(d.tpl):''}${d.already?' <i>(already made on another screen — no second list)</i>':''}</div>`).join('')}${LTI.done.length>12?`<div>…and ${LTI.done.length-12} more</div>`:''}<button class="btn btn-s" id="lti-dx" style="font-size:11px;padding:2px 8px;margin-top:4px">Clear</button></div>`:''}
     ${show.map(row).join('')}
+    ${under.map(w=>`<div class="lti-nar" style="font-size:12px;color:#14335c;margin-top:4px">ℹ List already made under ${escA(w)} — the new Cienapps WO for that house needs no second list</div>`).join('')}
     ${rows.length>show.length?`<button class="btn btn-s" id="lti-more" style="font-size:12px;margin-top:6px">Show all ${rows.length}</button>`:''}
     ${phs.length?`<div style="margin-top:8px;font-size:12px"><button class="btn btn-s" id="lti-ph" style="font-size:11px;padding:3px 9px">${LTI.showPh?'▲':'▼'} 📷 Photo lists (${phs.length})</button>
       ${LTI.showPh?phs.map(o=>`<div class="lti-nar"><b>${escA(o.wo)}</b> ${escA(o.title||'')} — ${phList(o).length} photo${phList(o).length!==1?'s':''} · ${escA(phList(o)[0].by||'')} ${fmt(phList(o)[0].at)} <button class="btn btn-s" data-phwo="${escA(o.wo)}" style="font-size:11px;padding:2px 8px">Open</button></div>`).join(''):''}</div>`:''}
@@ -8719,13 +8720,15 @@ function renderImportPreview(plan){
   const nProc=V2()?(()=>{const tg=new Set();lists().forEach(l=>(l.wos||[]).forEach(w=>tg.add(woKey(w))));
     // (10 Nov) with "Only jobs ticked for delivery need a list" on, count only jobs that are (or come in) ticked for delivery
     const dOnly=DB.listDelOnly===true,delvOf=u=>{const ex=DB.orders.find(x=>woKey(x.wo)===u.key);return !!((u.set&&u.set.delv)||(ex&&ex.delv));};
-    return plan.newOrders.filter(o=>lsProcessed(o)&&!o.cienHold&&(!dOnly||o.delv)).length+plan.updates.filter(u=>u.set&&u.set.step&&lsProcessed({step:u.set.step})&&!lsProcessed({step:(DB.orders.find(x=>woKey(x.wo)===u.key)||{}).step})&&!tg.has(u.key)&&(!dOnly||delvOf(u))).length;})():0;
+    return plan.newOrders.filter(o=>lsProcessed(o)&&!o.cienHold&&(!dOnly||o.delv)&&!pListUnder(o)).length+plan.updates.filter(u=>u.set&&u.set.step&&lsProcessed({step:u.set.step})&&!lsProcessed({step:(DB.orders.find(x=>woKey(x.wo)===u.key)||{}).step})&&!tg.has(u.key)&&(!dOnly||delvOf(u))&&!pListUnder(DB.orders.find(x=>woKey(x.wo)===u.key))).length;})():0;
+  const pUnder=V2()?plan.newOrders.map(o=>[o.wo,pListUnder(o)]).filter(x=>x[1]):[]; // (attack2 F2) a new WO for a house whose list is on a P-number: said, not asked
   el.innerHTML=`<div style="margin-top:14px">
     <div style="background:#eaf2ff;border:2px solid #1a56db;border-radius:8px;padding:12px 15px;margin-bottom:12px">
       <div style="font-size:14px;font-weight:800;color:#14335c;margin-bottom:4px">Import preview — nothing has changed yet</div>
       <div style="font-size:13px;color:#14335c">${c.added} new · ${c.updated} updated · ${c.skipped} unchanged · ${plan.shipped.length} to 📦 Shipped${c.folded?` · ${c.folded} addition${c.folded!==1?'s':''} folded in`:''}${(plan.autoTag||[]).length?` · <b>${plan.autoTag.length} auto-tagged for delivery</b>`:''}${(plan.marks||[]).length?` · ${plan.marks.length} marked installed/complete (Cienapps 10/11)`:''}${plan.flagged.length?` · <b>${plan.flagged.length} flagged</b>`:''} · <b>nothing is removed</b></div>
       ${skips.length?`<div style="font-size:12px;color:#14335c;opacity:.8;margin-top:3px">${skips.join(' · ')}</div>`:''}
       ${nProc?`<div id="imp-proc" style="font-size:13px;color:#7a4a00;font-weight:700;margin-top:4px">📋 ${nProc} work order${nProc!==1?'s':''} newly processed with no cutting list — after Apply you'll be asked to issue ${nProc!==1?'them':'it'}</div>`:''}
+      ${pUnder.map(([w,p])=>`<div class="imp-punder" style="font-size:13px;color:#14335c;margin-top:4px">📋 ${escA(w)} — list already made under ${escA(p)} (same house): no new list asked</div>`).join('')}
     </div>
     ${plan.changedNote?`<div id="imp-changed" style="background:#fdecea;border:2px solid #e57368;border-radius:8px;padding:12px 15px;margin-bottom:12px">
       <div style="font-size:13px;font-weight:800;color:#8a1c10;margin-bottom:4px">⚠ The plan changed while you were reviewing — ${plan.changedNote.added.length} difference${plan.changedNote.added.length!==1?'s':''}. Nothing was applied.</div>
@@ -9321,6 +9324,11 @@ function pSameHouse(o,jobs){return pSameHouseAll(o,jobs)[0]||null;}
 // pairs of live P-jobs for one house + kind (flagged on Lists home); a Cienapps WO that now exists for a P-job's house
 function pTwins(){const ps=DB.orders.filter(o=>pIsP(o.wo)&&pLive(o)),out=[],seen=new Set();
   ps.forEach(o=>pSameHouseAll(o,ps).forEach(x=>{const k=[o.wo,x.wo].sort().join('|');if(!seen.has(k)){seen.add(k);out.push([o,x].sort((a,b)=>woCmp(a,b)));}}));return out;}
+// (attack2 F2, until the L4b merge) a Cienapps WO whose house already has a cutting list on a live P-number → that P-number ('' if none).
+// Only a flag: nothing is moved, renumbered or deleted; no second list is asked for.
+function pListUnder(o){if(!V2()||!o||pIsP(o.wo))return'';const tg=new Set();lists().forEach(l=>{if(!l.archived&&!l.tpl)(l.wos||[]).forEach(w=>{if(pIsP(w))tg.add(w);});});
+  const ps=tg.size?DB.orders.filter(x=>tg.has(x.wo)):[];if(!ps.length)return''; // usually none: no house keys worked out at all
+  const x=pSameHouseAll(o,ps)[0];return x?x.wo:'';}
 function pCienFor(){const out=[];DB.orders.filter(o=>pIsP(o.wo)&&pLive(o)).forEach(o=>{const w=pSameHouseAll(o).filter(x=>!pIsP(x.wo));if(w.length)out.push({p:o,w});});return out;}
 // what is on a job that "Keep one…" would drop — anything at all and it is refused (left for the L4b merge)
 async function pBare(o){const why=[];
