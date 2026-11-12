@@ -4830,12 +4830,11 @@ function openListEditor2(listId,presetWo,presetPid,opt){
         // (round 2 E1/E3) the window already has a job and the file's WO or Floor / Unit name another one: asked ONCE before any
         // row goes in. Cancel = nothing changes; OK = the rows go in, the job stays the window's, the name is not taken from the sheet.
         // A blank cell in the file never counts as a disagreement.
-        const m0=sh.p.meta||{},fw=String(m0.wo||'').trim();let other=false;
+        const m0=sh.p.meta||{},fw=String(m0.wo||'').trim();
         if(!st.tpl&&!st.newWO&&st.wo){const o=DB.orders.find(x=>x.wo===st.wo),wk=w=>woKey(woNorm(w));
           const woDiff=!!fw&&wk(fw)!==wk(st.wo),huDiff=!!o&&keyMatch(keyOf('',m0.floor,m0.unit,''),keyOf('',fuF(o),fuU(o),'')).r==='different';
           if(woDiff||huDiff){const d=(w,f,u)=>[w,keyTxt(f)?'Floor '+String(f).trim():'',keyTxt(u)?'Unit '+String(u).trim():''].filter(Boolean).join(' · ');
-            if(!confirm('This Excel file says '+d(fw,m0.floor,m0.unit)+', but this list is for '+d(st.wo,o&&fuF(o),o&&fuU(o))+'.\n\nPut its rows into this list anyway?\n\nOK = put the rows in (the list stays on '+st.wo+')\nCancel = nothing changes'))return;
-            other=true;}}
+            if(!confirm('This Excel file says '+d(fw,m0.floor,m0.unit)+', but this list is for '+d(st.wo,o&&fuF(o),o&&fuU(o))+'.\n\nPut its rows into this list anyway?\n\nOK = put the rows in (the list stays on '+st.wo+')\nCancel = nothing changes'))return;}}
         const add=sh.p.rows.filter(r=>!r.info).map(r=>{const x={...r};delete x.src;delete x.total;delete x.bu;delete x.qtyErr;
           if(x.k==='part'){x.qty=x.qty===''||x.qty==null?'':String(x.qty);x.L=x.L===''?'':String(x.L);x.W=x.W===''?'':String(x.W);}return x;});
         snap();
