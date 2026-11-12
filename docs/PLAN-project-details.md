@@ -1377,3 +1377,68 @@ the pool writes `seq_pre` only (no `project_seq`, `seq_move`, `seq_insert`, no d
 a Tester check (A1b) himself — justified here, but it should be flagged to the Tester for sign-off rather than changed in the fix commit.
 
 - 12 Nov (Manager issue 1, cde4bde): pointercancel no longer ends a pool drag (real Chrome fires it at drag start) — new tests/seq/b9e-realdrag.test.js (real mouse) 3 / 0 (fails on the old code); b9a–d, attack10 ×2, attack11 and the Manager's probes pass.
+
+---
+
+# Part 6 — B10 Cienapps upload file → sequence table + WO matching
+*(Architect, unattended scheduled run 12 Nov 2026 — every key question uses the recommended answer, marked ASSUMED, Garry to confirm.)*
+
+**Plain English for Garry.** A PM opens his project's 🔢 Sequence page, taps **⬆ Cienapps file** and picks the same 27-column file the
+office uploads to Cienapps. Before anything is saved the planner shows: each line → one row "⏳ waiting for a WO number"; lines already
+in the sequence → skipped and listed; lines it isn't sure about → skipped unless he taps "Add anyway". When the Cienapps import later
+brings the WO numbers, each WO takes over its row on its own only when there is exactly one possible row; any doubt → a "To place /
+confirm" list, one tap. A WO is never added twice, never guessed, never merged quietly. Rows still waiting after 3 weeks get
+"⏳ not in Cienapps yet?". **No new SQL** — it uses the PM sequence block already waiting to be run.
+
+## Already exists (not rebuilt)
+B0 key family (`keyFloor`, `keyUnit`, `seqRowKey`, `jobKey`, `keyMatch`, `keyHouseStr`, `keyLineStr`), `seqKind`; PENDING SQL
+`seq_insert` (claim rule, skips a WO already on a row), `seq_match` (refuses a WO on another live row / a row no longer waiting),
+`seq_remove`, DB-worked `house_key` / `line_key`; app `seqStart`, `seqWaitWks`, nudge counts, 🆕 badge; hook point `applyImport`
+(`PMERGE_RUN`). Not built: `seqReadUpload`, preview, `seqReconcile`, To place / confirm, date hand-over; imports never set `is_new`.
+
+## Key questions — ASSUMED
+1. **Q7 (no sample came):** match by the B0 key as built. WO Floor "T12" = row "T12" → automatic; Cienapps "0" / "GF" / blank against
+   a block code → "not sure", a person taps. **[rec]**
+2. Floor/Unit "Multiple" / "Various" / "All": never certain (browser-only guard; key and SQL unchanged). **[rec]**
+3. Project with no sequence yet: preview offers "☑ Start the sequence from today's jobs first (N)", ticked by default; upload lines then claim those rows by house — no double. **[rec]**
+4. Qty above 1: one row, preview warns "Qty 2 — one row; check how Cienapps makes the WOs". **[rec]**
+5. A new WO with no possible row in a project that has a sequence: added at the bottom "🆕 new — place in sequence"; a project with no sequence is left alone. **[rec]**
+6. P-numbers never take a waiting row (the L4b merge runs first and hands their row over). **[rec]**
+7. Several candidate rows that are IDENTICAL lines (two "W2 BED 2"): taken in position order, one WO each. Different names in the same house + kind (BED 1 / BED 2): a person decides; the row whose Name equals the WO Title is listed first, never chosen on its own. **[rec]**
+8. ⏳ row tap → "Uploaded <date> by <name>, file <name>, line N. Check Cienapps." [Keep waiting] / [Remove this row…] (reason, `seq_remove`, kept in History, never deleted). **[rec]**
+
+## What changes (index.html, V2 only, hidden unless `seqVis()`)
+- **⬆ Cienapps file** in the `seqPageHTML` top bar when `seqCanEdit(pid)`; from the hub/office the project is picked first. .xlsx/.xls/.csv.
+- **`seqReadUpload(aoa)`** → `{lines,warn,err}`: header found by content in the first 10 rows (≥4 of Qty/Floor/Unit/Product/Name/Description/Price, trimmed, NFKC); no header → fixed 27-column layout only if most rows have a number in A and a Product in D, else "This doesn't look like a Cienapps upload file — nothing loaded."; CHILDREN 1–4 kept as info, never rows; blank rows dropped; kind = `seqKind(name+' '+descr)`.
+- **`seqClaimPreview(pid,lines)`**: the `seq_insert` claim rule in the browser → Will be added / Skipped — already there / ❓ might already be there (keyMatch "unsure", same kind).
+- **Preview** (dialog; cards at 360 px): header with project, file name, line count; Start-first tick; the three groups; ⚠ Qty lines; "Put them: ◉ at the bottom ○ under row #"; [Cancel] [Save N rows]. Save → `seq_insert(pid, rows, p_after, by)` src 'upload', upload_id, line_no, why "Cienapps upload: <file>"; toast uses the database's counts ("another screen added some meanwhile — N skipped" if they differ).
+- **`seqReconcile(pids)`** after `PMERGE_RUN` in `applyImport` and when a sequence page opens (editors only): re-read rows; every live, not-shipped, non-P job of a project with ≥1 row and no row of its own; candidates = waiting rows, same project + `seqKind`, keyMatch ≠ different. Certain (one "same" and no "unsure", or an identical-line group in order; no Multiple; no title-sourced key; no other WO in the run wants the row) → `seq_match(…'auto')`. No candidates → `seq_insert` with the WO, `is_new:true`, src 'import'. Else nothing written → To place / confirm. A database refusal = another PC did it: re-read, no error. Import result: "Sequence: 5 matched · 2 added as 🆕 · 3 to confirm [Open]".
+- **To place / confirm** (`seqConfirmHTML(pid)`, worked out each time, nothing stored) at the top of the sequence page; one tap → `seq_match(…'confirmed')` or `seq_insert` is_new; version-checked, stale → "changed on another screen". **Possible doubles** (a 🆕 row + a same/unsure waiting row): [Use the waiting row] retires the 🆕 row (`seq_remove`, "double") then matches; on failure `seq_restore`. Counted in the nudge `place`.
+- **Dates to agree:** matched row whose `req_date` ≠ the job's delivery date → "Row asked 12 Dec · Cienapps 19 Dec — [Use 12 Dec] [Keep 19 Dec]"; [Use] goes through `moveDates(…{src:'pmseq', requestOnly: ROLE==='pm'})` with reason "Sequence date — set before the WO existed"; either button clears `req_date`.
+- **⏳ flag:** waiting row older than `seqWaitWks()` weeks → "⏳ not in Cienapps yet?" → Q8 dialog.
+- **Data / SQL:** NONE new. No planner-record field, no top-level save key.
+
+## Must NOT change
+Lists OFF / SQL not run = today's app (no button, no panel, `seqReconcile` does nothing); `applyImport` counts and rules; no import
+removes a job or row; B0 key, `woKey`/`woNorm`, JS = SQL fixtures; `seq_insert` / `seq_match` SQL; L4b merge; Johnny's pool; Job A
+date rules (only `moveDates` moves a date); B7 fixed window; rows never deleted.
+
+## Risks
+Two PCs (re-read + DB refusals; leftovers show as possible doubles) · Cienapps layout differs (falls back to a person) · header words
+/ trailing spaces (content + trim) · wrong project picked (preview names it; nothing saved before Save) · big files (keys once) · phones: Chrome, 360 px.
+
+## Acceptance checks
+1 Same file twice → second adds 0, all "Skipped". 2 Two identical "W2 BED 2" in one house → 2 rows; again → 0. 3 No header = same
+result; trailing spaces read; the WO export file refused. 4 K8 with children → one row. 5 Start then upload → claims by house, no
+double; "0" vs "T09" under ❓. 6 One WO / two different-name rows → confirm; two WOs / one row → both listed, first confirmed takes it;
+one WO / two identical rows → auto, first by position. 7 "Apt 7" = "APT07" = "7" automatic; blank floor → confirm; same unit T09 vs
+T10 never matched. 8 "Multiple" never automatic; P never takes a waiting row; after P→WO merge no second row. 9 Two PCs reconcile the
+same import → each WO on exactly one row. 10 Waiting > 3 weeks → ⏳; Remove asks a reason, row stays in History. 11 Lists OFF / SQL
+not run → nothing new. 12 360 px usable, no sideways scroll. 13 Full suite: nothing new outside ACCEPTED-FAILURES.
+
+## Build steps (one commit each)
+1 `seqReadUpload` + tests/seq/b10a-read.test.js. 2 `seqClaimPreview` + preview counts = fake-DB `seq_insert` counts. 3 Button, preview,
+Start-first, position, Save. 4 `seqReconcile` + import hook + page-open + 🆕 at the bottom. 5 To place / confirm + possible doubles +
+nudge. 6 Dates to agree + ⏳ dialog. 7 360 px pass, full suite → Tester → Manager.
+
+## Progress log — Part 6
