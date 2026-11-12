@@ -35,7 +35,7 @@ function server(on) {
     await saw.page.evaluate(() => document.getElementById('wait-tog').click());
     w = await saw.page.evaluate(() => ({ rows: [...document.querySelectorAll('#wait-amber [data-waitwo]')].map(r => r.dataset.waitwo + (r.style.background ? ':late' : '')), t: document.getElementById('wait-amber').innerText }));
     rec('saw AMBER: a tap opens it — the four jobs, the late one red', ['WO-LATE:late', 'WO-POOL', 'WO-DAY', 'WO-NEW'].every(x => w.rows.includes(x)) && w.rows.length === 4, JSON.stringify(w.rows));
-    rec('saw: rows say list due by (2 working days after processed) and owner', /WO-NEW[\s\S]*list due by 23 Oct 26[\s\S]*owner Production Manager/.test(w.t), w.t.slice(0, 400));
+    rec('saw: rows say list due by (2 working days after processed) and owner', /WO-NEW[\s\S]*list due by 23 Oct 26[\s\S]*owner Drawing office/.test(w.t), w.t.slice(0, 400));
     await saw.page.evaluate(() => document.getElementById('wait-tog').click());
     rec('saw AMBER: a second tap closes it', (await saw.page.evaluate(() => document.querySelectorAll('#wait-amber [data-waitwo]').length)) === 0);
     // ---- board chip
@@ -47,7 +47,7 @@ function server(on) {
     const pr = await F.dev(browser, S, 'prod');
     const pm = await pr.page.evaluate(() => { const t = [...document.querySelectorAll('.dsh-tile')].map(e => e.innerText.replace(/\s+/g, ' ')); return { t, body: document.body.innerText }; });
     rec('Production Manager Today: "Lists late" 2 (WO-LATE, and WO-RED whose saw day has passed) and "Lists to issue" 3', pm.t.some(x => /^2 LISTS LATE/.test(x)) && pm.t.some(x => /^3 LISTS TO ISSUE/.test(x)), JSON.stringify(pm.t));
-    rec('Production Manager Today: rows with owner and due-by', /WO-LATE[\s\S]*LATE · was due 20 Oct 26 · owner Production Manager/.test(pm.body), pm.body.slice(pm.body.indexOf('CUTTING LISTS'), pm.body.indexOf('CUTTING LISTS') + 300));
+    rec('Production Manager Today: rows with owner and due-by', /WO-LATE[\s\S]*LATE · was due 20 Oct 26 · owner Drawing office/.test(pm.body), pm.body.slice(pm.body.indexOf('CUTTING LISTS'), pm.body.indexOf('CUTTING LISTS') + 300));
     await pr.page.evaluate(() => document.querySelector('[data-pmlists="late"]').click());
     rec('tapping a tile opens the Lists tab with the panel', await pr.page.evaluate(() => prodTab === 'lists' && !!document.getElementById('lti')));
     // ---- management dashboard
