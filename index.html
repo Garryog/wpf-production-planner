@@ -7223,7 +7223,7 @@ function woListStat(wo){ // per side: 'none' (not applicable) | 'unset' (no rows
   const r=woReady(wo);
   const when=m=>{if(po)return(phDone(po,m)||{}).at||'';let t='';ls2.forEach(l=>{const d=listDone(l.id)[m];if(d&&d.at>t)t=d.at;});return t;};
   const m=x=>x==='na'?'none':x;
-  return{saw:m(r.saw),fit:m(r.fit),sawAt:when('saw'),fitAt:when('fit'),lvl:r.lvl,why:r.why};
+  return{saw:m(r.saw),fit:m(r.fit),sawAt:when('saw'),fitAt:when('fit'),lvl:r.lvl,why:r.why,photo:!ls2.length}; // photo: a photo list only (no typed list)
 }
 function sideChipHTML(mode,st,at,big){
   const fs=big?' style="font-size:13px"':'';
@@ -7237,7 +7237,7 @@ function sideChipHTML(mode,st,at,big){
    list status as plain text — no "make a list" prompt, no button, no count. */
 function pmListTxt(wo){const s=woListStat(wo);if(!s)return'📋 no cutting list yet';
   const w={done:' · cut ✓',hold:' · waiting on material',open:' · not cut yet'},f={done:' · picked ✓',hold:' · waiting on stock',open:' · not picked yet'};
-  return'📋 cutting list made'+(w[s.saw]||'')+(f[s.fit]||'');}
+  return'📋 '+(s.photo?'photo list made':'cutting list made')+(w[s.saw]||'')+(f[s.fit]||'');}
 function listStatHTML(wo){
   const s=woListStat(wo);
   if(!s)return`<div class="drv-ls"><span class="ls-none">📋 no cutting list linked</span></div>`;
