@@ -423,6 +423,12 @@ details.lti-other{margin-bottom:14px}details.lti-other>summary{cursor:pointer;fo
 .me-top{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end}
 .me-top label{display:block;font-size:11px;color:var(--t2);font-weight:600;margin-bottom:3px}
 .me-newwo{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px;background:#f6f2ff;border:1px solid #d9ccff;border-radius:8px;padding:8px}
+/* L1/L3 (Job B part 3): Floor | Unit | Title boxes on a new list with no WO, and the Cienapps WO lookup */
+.me-jb{margin-top:8px;background:#f1f6fd;border:1px solid #c9dbf3;border-radius:8px;padding:8px}.me-jbt{font-size:12px;color:var(--t2);font-weight:700;margin-bottom:4px}
+.me-jbr{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end}.me-jbr label{display:flex;flex-direction:column;font-size:11px;color:var(--t2);font-weight:700;gap:2px}
+.me-jbr input{padding:6px 7px;border:1px solid var(--b2);border-radius:6px;font-size:13px;width:90px}.me-jbr .me-jbtt input{width:220px;max-width:70vw}
+.me-jbm{font-size:12px;margin-top:6px;color:var(--t2)}.me-jbm .me-jbw{color:#8a5a00;font-weight:700}.me-jbm button[data-jpick]{display:block;width:100%;text-align:left;margin-top:4px;font-size:12px}
+.me-jbok{margin-top:8px;font-size:13px;color:#0d6e46;background:#e7f6ee;border:1px solid #a6dcbf;border-radius:8px;padding:6px 8px}
 .me-tbl{width:100%;border-collapse:collapse;font-size:13px}
 .me-tbl th{font-size:10px;text-transform:uppercase;color:var(--t3);text-align:left;padding:4px;border-bottom:1px solid var(--border)}
 .me-tbl td{padding:3px 4px;border-bottom:1px solid #eef1f5}
@@ -4161,6 +4167,20 @@ function keyMatch(a,b){
 function keyHouseStr(f,u){const fs=keyFloorStr(keyFloor(f)),us=keyUnit(u);return fs&&us?fs+'|'+us:null;}
 function keyLineStr(f,u,p,n){const pp=keyTxt(p),nn=keyTxt(n);return !pp&&!nn?null:[keyFloorStr(keyFloor(f)),keyUnit(u),pp,nn].join('|');}
 /* b0key:end */
+/* L3 (Job B part 3): look a house up among the planner's LIVE jobs (not shipped, not delivered) by project + floor + unit.
+   keyJobs() works every job's key out once — the cutting-list window builds it once per redraw and passes it in (km = the
+   list, or a function giving it: only called when a search is made).
+   st: 'noproj' | 'blank' (no search) | 'none' | 'one' (exactly one same, nothing unsure) | 'pick'. Unsure jobs are listed
+   only when their unit is the same (a blank unit on a job is no reason to offer it). */
+function keyJobs(){return DB.orders.filter(o=>o&&o.wo&&!isShipped(o)&&!o.delDone&&!o.delDelivAt).map(o=>({o,k:jobKey(o)}));}
+function keyFind(pid,floor,unit,km){
+  const t=keyOf(pid,floor,unit,''),same=[],unsure=[];
+  if(!t.p)return{st:'noproj',same,unsure};
+  if(!t.f.t||!t.u)return{st:'blank',same,unsure};
+  (typeof km==='function'?km():km||keyJobs()).forEach(({o,k})=>{const m=keyMatch(t,k);if(m.r==='same')same.push({o,why:m.why});else if(m.r==='unsure'&&k.u&&k.u===t.u)unsure.push({o,why:m.why});});
+  const c=(a,b)=>woCmp(a.o,b.o);same.sort(c);unsure.sort(c);
+  return{st:same.length===1&&!unsure.length?'one':same.length||unsure.length?'pick':'none',same,unsure};
+}
 /* ---------- The list editor (V2) — works like WPF's Excel sheets ----------
    Columns: Description | Qty | Length | Width | Colour | Edging | Note. No Saw / Stores column: a row with a length or width
    goes to the Saw, a row without goes to Stores (decided at save; shown with a grey "Stores" tag).
@@ -4218,12 +4238,68 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     wo:ex?((ex.wos||[])[0]||''):(presetWo||''),name:ex?ex.name:(opt.name||''),pid:ex?ex.pid:(presetPid||((lsProjForCust(o0&&o0.customer)||{}).id)||''),
     ltype:ex?(ex.ltype||'house'):(opt.ltype||(opt.tpl?'kitchen':'house')),tname:ex?ex.typeName:(opt.tname||''),tpl:ex?ex.tpl:!!opt.tpl,noCut:ex?!!ex.noCut:false,noFit:ex?!!ex.noFit:false,newWO:false,pw:{title:'',cust:'',floor:'',unit:'',due:'',val:'',hrs:''},
     carcass:'',door:'',undo:[],cur:'',focus:'',snapKey:'',note:opt.note||'',from:!ex&&opt.from&&opt.from.id?opt.from:null,
-    newId:ex?'':opt.pendId||uid('L'),landed:!!opt.landed,unitsOn:!!opt.unitsOn,moreOpen:false,help:false}; // a new list keeps ONE id for this editor: Save pressed again after a lost reply is the same list, never a second one
+    newId:ex?'':opt.pendId||uid('L'),landed:!!opt.landed,unitsOn:!!opt.unitsOn,moreOpen:false,help:false,
+    jb:{floor:'',unit:'',title:'',wo:'',res:null,not:[],last:''},jm:null}; // jb = the Floor / Unit / Title boxes of a new list with no WO (L1); jm = the WO they found (L3) // a new list keeps ONE id for this editor: Save pressed again after a lost reply is the same list, never a second one
   let sawStarted=!!ex&&!ex.tpl&&lsTicked(ex.id); // set on a refused save too (a tick landed while the editor was open)
   const prevId=ex?(ex.tpl?'':lsReplOf(ex.id)):st.from?st.from.id:''; // the list this one replaces: "already cut on old list (n)"
   const prevCut=r=>prevId&&(lsNum(r.L)>0||lsNum(r.W)>0)?lsPrevCutHTML(prevId,r.item,r.L,r.W,r.mat):'';
   const live=()=>DB.orders.filter(o=>!o.delDone&&!o.delDelivAt).slice().sort(woCmp);
   const defName=wo=>{const o=DB.orders.find(x=>x.wo===wo);return o?(fuU(o)||o.title||wo):'';};
+  // ---- L1 + L3 (Job B part 3): a new list with no WO gets Floor | Unit | Title boxes and "🔎 Find the Cienapps WO" (also when
+  // the Unit box is left). The planner's live jobs are keyed ONCE per redraw (KM). One certain match fills the WO (green, with
+  // "Not this one"); several / not sure → a short pick list; a blank floor or unit → no search. A WO typed by hand must exist.
+  let KM=null;const kmap=()=>KM||(KM=keyJobs());
+  const jbOn=()=>!ex&&!st.tpl&&!st.newWO;
+  const jbLive=wo=>lsCache().all.find(l=>!l.tpl&&!l.archived&&(l.wos||[]).includes(wo));
+  const jbChoose=(wo,how)=>{
+    const o=DB.orders.find(x=>x.wo===wo);if(!o)return;
+    const l=jbLive(wo);
+    if(l){if(confirm(wo+' already has a cutting list: "'+l.name+'".\n\nOpen it instead?\n\nOK = open "'+l.name+'" (this new list is closed — nothing in it is saved)\nCancel = stay here (a work order has only one live list)')){ov.remove();openListEditor(l.id);return;}
+      st.jb.res={st:'haslist',wo,name:l.name};draw();return;}
+    st.wo=wo;st.jm={wo,how};st.jb.res=null;
+    if(!String(st.name||'').trim())st.name=defName(wo);
+    if(!st.pid){const p=lsProjForCust(o.customer);if(p){st.pid=p.id;edges=lsProjEdges(p.id);}}
+    draw();
+  };
+  const jbFind=()=>{
+    keep();const b=st.jb,typed=String(b.wo||'').trim();
+    if(typed){ // typed by hand: it must be a job in the planner, and still live
+      const o=DB.orders.find(x=>woKey(x.wo)===woKey(typed))||DB.orders.find(x=>woKey(woNorm(x.wo))===woKey(woNorm(typed)));
+      if(!o){b.res={st:'nowo',wo:typed};draw();return;}
+      if(isShipped(o)||o.delDone||o.delDelivAt){b.res={st:'gone',wo:o.wo};draw();return;}
+      return jbChoose(o.wo,'typed');}
+    b.last=keyHouseStr(b.floor,b.unit)||'';
+    if(!st.pid){b.res={st:'noproj'};draw();return;}
+    const r=keyFind(st.pid,b.floor,b.unit,kmap);
+    if(r.st==='one'&&!b.not.includes(r.same[0].o.wo)){b.res=null;return jbChoose(r.same[0].o.wo,'auto');}
+    if(r.st==='one')r.st='pick'; // "Not this one" was pressed for it: offer it, never fill it again by itself
+    b.res=r;draw();
+  };
+  const jbHTML=()=>{
+    if(!jbOn())return'';
+    const b=st.jb,E=escA,fu=o=>[fuF(o)?'Floor '+fuF(o):'',fuU(o)?'Unit '+fuU(o):''].filter(Boolean).join(' · ');
+    if(st.wo&&st.jm&&st.jm.wo===st.wo){const o=DB.orders.find(x=>x.wo===st.wo)||{};
+      return `<div class="me-jbok" id="me-jbok">✓ Matched <b>${E(st.wo)}</b>${fu(o)?' · '+E(fu(o)):''}${o.title?' · '+E(o.title):''}${st.jm.how==='auto'?' <span style="color:var(--t3);font-size:12px">— found by project + floor + unit</span>':''} <button class="btn btn-s" id="me-jnot" style="font-size:12px;padding:2px 9px">Not this one</button></div>`;}
+    if(st.wo)return'';
+    const r=b.res,blank=!keyTxt(b.floor)||!keyTxt(b.unit),where=' for Floor '+E(String(b.floor).trim())+' · Unit '+E(String(b.unit).trim())+(st.pid?' on '+E(lsProjName(st.pid)):'');
+    const opt=(x,ok)=>`<button class="btn btn-s" data-jpick="${E(x.o.wo)}"><b>${E(x.o.wo)}</b>${fu(x.o)?' · '+E(fu(x.o)):''}${x.o.title?' · '+E(x.o.title):''} <span style="color:var(--t3)">${E(x.o.customer||'')}</span> — ${ok?'<span style="color:#0d6e46">same house</span>':'<span class="me-jbw">not sure: '+E(x.why)+'</span>'}</button>`;
+    const msg=!r?(blank?'Type the Floor and the Unit (both) — the Cienapps WO is looked up by project + floor + unit. No search while either is blank.':'Press 🔎 Find the Cienapps WO (or leave the Unit box).')
+      :r.st==='noproj'?'<span class="me-jbw">Pick the project first — the work order is looked up inside the project.</span>'
+      :r.st==='blank'?'<span class="me-jbw">Floor and Unit are both needed to look it up — no search was made.</span>'
+      :r.st==='none'?'<span class="me-jbw">No Cienapps work order found'+where+'.</span> Check the floor and unit — or Cienapps may not have it yet.'
+      :r.st==='nowo'?'<span class="me-jbw">'+E(r.wo)+' is not in the planner</span> — check the number (a new Cienapps WO arrives with the next import).'
+      :r.st==='gone'?'<span class="me-jbw">'+E(r.wo)+' is shipped or delivered</span> — a cutting list needs a live job.'
+      :r.st==='haslist'?'<span class="me-jbw">'+E(r.wo)+' already has a live cutting list "'+E(r.name)+'"</span> — open it from Lists, or pick another job.'
+      :`<span class="me-jbw">${(n=>n+' work order'+(n!==1?'s':'')+' could be this house')(r.same.length+r.unsure.length)}</span>${where} — pick ${r.same.length+r.unsure.length!==1?'one':'it if it is'}:`+[...r.same.map(x=>opt(x,true)),...r.unsure.map(x=>opt(x,false))].slice(0,8).join('')
+        +(r.same.length+r.unsure.length>8?`<div>…${r.same.length+r.unsure.length-8} more — type the WO number</div>`:'');
+    return `<div class="me-jb" id="me-jb"><div class="me-jbt">This list's job — Floor, Unit and Title, each in its own box</div>
+      <div class="me-jbr"><label>Floor<input id="me-jf" value="${E(b.floor)}" placeholder="e.g. T09" autocomplete="off"></label>
+        <label>Unit<input id="me-ju" value="${E(b.unit)}" placeholder="e.g. 12" autocomplete="off"></label>
+        <label class="me-jbtt">Title<input id="me-jt" value="${E(b.title)}" placeholder="e.g. HOUSE TYPE B" autocomplete="off"></label>
+        <label>WO number<input id="me-jwo" value="${E(b.wo)}" placeholder="if you know it" autocomplete="off" style="width:120px"></label>
+        <button class="btn btn-s" id="me-find" style="white-space:nowrap">🔎 Find the Cienapps WO</button></div>
+      <div class="me-jbm" id="me-jbm">${msg}</div></div>`;
+  };
   if(!ex&&st.wo&&!st.name)st.name=defName(st.wo);
   if(st.tpl&&!lsEditOk())return; // templates: Production Manager, Drawing office or Admin
   const sheetMats=()=>lsMats(st.pid,'sheet').map(m=>m.name),fitMats=()=>lsMats(st.pid,'other').map(m=>m.name);
@@ -4318,7 +4394,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     const s=ov.querySelector('[data-mr="'+i+'|mat"]');if(s&&r&&r.matAuto&&String(r.mat||'')===String(r.matAuto)){const w=lsAutoHidden(r)?'':String(r.mat);if(s.value!==w&&(w===''||[...s.options].some(x=>x.value===w)))s.value=w;}};
   const draw=()=>{
     const a=document.activeElement,fk=st.focus||(a&&ov.contains(a)&&a.dataset&&a.dataset.mr)||'',ss=a&&a.selectionStart!=null?[a.selectionStart,a.selectionEnd]:null,sc=(ov.querySelector('#me-grid')||{}).scrollTop||0;
-    st.focus='';
+    st.focus='';KM=null; // the job keys are worked out again (once) for this redraw
     const sm=sheetMats();
     if(hasUnits())st.unitsOn=true; // a list that has unit blocks always shows them
     const tbc=lsTbc(R()),chk=ex&&!ex.tpl?lsCheckInfo(ex):null;
@@ -4341,6 +4417,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
         <div><label>Type</label><select id="me-type" style="${inp}">${['kitchen','house','room','other'].map(k=>`<option value="${k}"${st.ltype===k?' selected':''}>${LS_KINDS[k]}</option>`).join('')}</select>
           <input id="me-tname" value="${escA(st.tname||'')}" placeholder="e.g. Type B 3-bed" style="${inp};width:140px"></div>
       </div>
+      ${jbHTML()}
       ${st.newWO?`<div class="me-newwo">
         <input id="me-ptitle" placeholder="Title *" value="${escA(st.pw.title)}" style="${inp};flex:1;min-width:200px"><input id="me-pcust" placeholder="Customer" value="${escA(st.pw.cust||(LST.p.get(st.pid)||{}).customer||'')}" style="${inp};width:170px">
         <input id="me-pfloor" placeholder="Floor" value="${escA(st.pw.floor)}" style="${inp};width:70px"><input id="me-punit" placeholder="Unit" value="${escA(st.pw.unit)}" style="${inp};width:70px">
@@ -4417,7 +4494,15 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       const tr=e.closest('[data-row]');if(tr)tr.classList.toggle('me-buy',!!r.buy);updTag(i);});
     const g=id=>ov.querySelector('#'+id);
     const on=(id,fn)=>{const e=g(id);if(e)e.onclick=fn;};
-    on('me-new',()=>{keep();st.newWO=true;draw();});
+    on('me-new',()=>{keep();st.newWO=true;['floor','unit','title'].forEach(k=>{if(!String(st.pw[k]||'').trim())st.pw[k]=String(st.jb[k]||'').trim();});draw();}); // the P-number panel starts from the Floor / Unit / Title boxes
+    // L1 / L3: the job boxes
+    [['me-jf','floor'],['me-ju','unit'],['me-jt','title'],['me-jwo','wo']].forEach(([id,k])=>{const e=g(id);if(e)e.oninput=()=>{st.jb[k]=e.value;};});
+    on('me-find',()=>jbFind());
+    {const u=g('me-ju');if(u)u.onblur=()=>{const b=st.jb;if(!keyTxt(b.floor)||!keyTxt(b.unit)||String(b.wo||'').trim()||(keyHouseStr(b.floor,b.unit)||'')===b.last)return;
+      setTimeout(()=>{if(!document.body.contains(ov)||st.wo)return;const a=document.activeElement,id=a&&ov.contains(a)&&a.id?a.id:'';jbFind();
+        if(id&&!st.wo){const e=ov.querySelector('#'+id);if(e){e.focus();if(e.select)e.select();}}},0);};}
+    ov.querySelectorAll('[data-jpick]').forEach(b=>b.onclick=()=>jbChoose(b.dataset.jpick,'picked'));
+    on('me-jnot',()=>{keep();const w=st.wo;if(w&&!st.jb.not.includes(w))st.jb.not.push(w);st.wo='';st.jm=null;st.jb.res=null;st.jb.last='';draw();});
     on('me-pick',()=>{keep();st.newWO=false;draw();});
     on('me-addsaw',()=>addRow());
     on('me-addhdr',()=>addHdr(false));
@@ -4446,7 +4531,8 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     const w=g('me-wo');if(w)w.onchange=()=>{const prev=st.wo;st.wo=w.value;const wi=g('me-woinfo');if(wi)wi.innerHTML=woInfoHTML(DB.orders.find(x=>x.wo===st.wo));const ne=g('me-name');if(ne&&(!ne.value||ne.value===defName(prev))){ne.value=defName(st.wo);st.name=ne.value;}
       const h0=R()[0];if(opt.std&&h0&&h0.k==='hdr'&&!h0.sub&&(!String(h0.item||'').trim()||h0.item===lsStdHouse(DB.orders.find(x=>x.wo===prev)))){ // standard layout: the house heading follows the work order
         h0.item=lsStdHouse(DB.orders.find(x=>x.wo===st.wo));const hi=ov.querySelector('[data-mr="0|item"]');if(hi)hi.value=h0.item;}
-      const o=DB.orders.find(x=>x.wo===st.wo),p=o&&lsProjForCust(o.customer);if(!st.pid&&p){keep();st.pid=p.id;edges=lsProjEdges(p.id);draw();}};
+      const o=DB.orders.find(x=>x.wo===st.wo),p=o&&lsProjForCust(o.customer);if(!st.pid&&p){keep();st.pid=p.id;edges=lsProjEdges(p.id);draw();}
+      else if(jbOn()&&(!st.wo||!prev||(st.jm&&st.jm.wo!==st.wo))){if(st.jm&&st.jm.wo!==st.wo)st.jm=null;keep();draw();}}; // the job boxes come and go with the WO
     g('me-save').onclick=()=>save();
   };
   const addRow=(at)=>{keep();snap();const c=curRow();const i=at!=null?at:c<0?R().length:R()[c].k==='hdr'?c+1:c+1;R().splice(i,0,blank(i));st.focus=i+'|item';draw();};
@@ -4553,7 +4639,8 @@ function openListEditor2(listId,presetWo,presetPid,opt){
   };
   const keep=()=>{const g=id=>ov.querySelector('#'+id);const n=g('me-name');if(n)st.name=n.value;const w=g('me-wo');if(w)st.wo=w.value;
     const t=g('me-type');if(t)st.ltype=t.value;const tn=g('me-tname');if(tn)st.tname=tn.value;
-    ['title','cust','floor','unit','due','val','hrs'].forEach(k=>{const e=g('me-p'+k);if(e)st.pw[k]=e.value;});};
+    ['title','cust','floor','unit','due','val','hrs'].forEach(k=>{const e=g('me-p'+k);if(e)st.pw[k]=e.value;});
+    [['me-jf','floor'],['me-ju','unit'],['me-jt','title'],['me-jwo','wo']].forEach(([id,k])=>{const e=g(id);if(e)st.jb[k]=e.value;});};
   const save=()=>{
     keep();const g=id=>ov.querySelector('#'+id),err=t=>{g('me-err').textContent=t;};
     if(!st.pid)return err('Pick the project.');
