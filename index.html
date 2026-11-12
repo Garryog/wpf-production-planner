@@ -5120,6 +5120,68 @@ async function seqStart(pid,redraw){
   }catch(e){try{await seqFresh(pid);}catch(e2){}toast('Not started — '+e.message,true);}
   finally{SEQ_DLG.busy=false;if(redraw)redraw();}
 }
+/* ---------- B10 (Job B part 6): the Cienapps UPLOAD file → sequence rows "⏳ waiting for a WO number". The same 27-column file the
+   office uploads to Cienapps (Qty, Floor, Unit, Product, Name, Description, Price, CHILDREN 1–4 QTY / PRODUCT / NAME / DESCRIPTION /
+   PRICE); the header row may be missing; header words and cells may carry trailing spaces. CHILDREN are kept as info on the line,
+   never rows of their own. No new SQL: seq_insert / seq_match / seq_remove / seq_restore of the PM sequence block. ---------- */
+const SEQ_UP_F={qty:'qty',quantity:'qty',floor:'floor',unit:'unit',product:'product',name:'name',description:'descr',descr:'descr',price:'price'};
+const seqUpTxt=v=>v==null?'':String(v instanceof Date?v.toISOString().slice(0,10):v).normalize('NFKC').replace(/\s+/g,' ').trim();
+const seqUpH=v=>seqUpTxt(v).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim(); // a header word: "CHILDREN 1 QTY " → "children 1 qty", "WO #" → "wo"
+const seqUpNum=v=>{const s=seqUpTxt(v);return /^-?[0-9]+(\.[0-9]+)?$/.test(s)?+s:null;};
+// Floor / Unit "Multiple" / "Various" / "All": never one house — a WO never takes such a row on its own (browser only; key and SQL unchanged)
+function seqUpMulti(s){return /^(MULTIPLE|MULTI|VARIOUS|ALL|MIXED|SEVERAL)$/.test(keyTxt(s));}
+// the header: the first of the first 10 rows naming at least 4 of Qty / Floor / Unit / Product / Name / Description / Price
+function seqUpHeader(aoa){
+  for(let i=0;i<Math.min(10,aoa.length);i++){const map={},ch=[];let n=0;
+    (aoa[i]||[]).forEach((c,j)=>{const h=seqUpH(c);let m;
+      if((m=/^children ?([1-9]) ?(qty|quantity|product|name|description|descr|price)$/.exec(h))){const k=+m[1]-1;(ch[k]=ch[k]||{})[SEQ_UP_F[m[2]]]=j;return;}
+      const f=SEQ_UP_F[h];if(f&&map[f]==null){map[f]=j;n++;}});
+    if(n>=4)return{i,map,ch:ch.filter(Boolean)};}
+  return null;
+}
+// the Cienapps WORK-ORDER export (WO #, Title, Step, Due Date …) is not an upload file
+function seqUpIsWOExport(aoa){return aoa.slice(0,10).some(r=>{const h=(r||[]).map(seqUpH);return h.some(x=>/^(wo|wo no|wo number|work order|work order no)$/.test(x))&&h.some(x=>/^(step|due date|title)$/.test(x));});}
+const SEQ_UP_NOT='This doesn\'t look like a Cienapps upload file — nothing loaded.';
+/* seqReadUpload(aoa, r0) → {lines, warn, err, hdr}. aoa = the sheet's rows (blank rows included, so line_no is the row number in
+   Excel; r0 = the sheet's first row index). No header → the fixed 27-column layout, only when most rows have a number in A
+   (Qty) and a product code in D. Each line: {line_no, qty, floor, unit, product, name, descr, price, children[], kind, multi, warn[]}. */
+function seqReadUpload(aoa,r0){
+  aoa=Array.isArray(aoa)?aoa:[];r0=+r0||0;const out={lines:[],warn:[],err:'',hdr:false};
+  const blank=r=>!(r||[]).some(c=>seqUpTxt(c)!=='');
+  if(!aoa.some(r=>!blank(r))){out.err='The file is empty — nothing loaded.';return out;}
+  if(seqUpIsWOExport(aoa)){out.err='This is the Cienapps work-order export, not the upload file — nothing loaded. (Work-order exports go in on the Import tab.)';return out;}
+  let h=seqUpHeader(aoa),start=0;
+  if(h){out.hdr=true;start=h.i+1;}
+  else{ // no header: Qty, Floor, Unit, Product, Name, Description, Price, then 4 × CHILDREN (QTY, PRODUCT, NAME, DESCRIPTION, PRICE)
+    h={map:{qty:0,floor:1,unit:2,product:3,name:4,descr:5,price:6},ch:[0,1,2,3].map(k=>({qty:7+5*k,product:8+5*k,name:9+5*k,descr:10+5*k,price:11+5*k}))};
+    const rs=aoa.filter(r=>!blank(r)),good=rs.filter(r=>seqUpNum(r[0])!=null&&/[A-Za-z]/.test(seqUpTxt(r[3]))&&seqUpNum(r[3])==null);
+    if(!good.length||good.length*2<=rs.length){out.err=SEQ_UP_NOT;return out;}
+  }
+  const g=(r,j)=>j==null?'':seqUpTxt(r[j]);let noName=0;
+  for(let i=start;i<aoa.length;i++){const r=aoa[i]||[];if(blank(r))continue;
+    const L={line_no:r0+i+1,qty:seqUpNum(g(r,h.map.qty)),floor:g(r,h.map.floor),unit:g(r,h.map.unit),product:g(r,h.map.product),name:g(r,h.map.name),descr:g(r,h.map.descr),price:seqUpNum(g(r,h.map.price)),children:[],warn:[]};
+    if(!L.product&&!L.name&&!L.descr){noName++;continue;} // not a line (a title row, a total, children with no parent …)
+    h.ch.forEach(c=>{const x={qty:seqUpNum(g(r,c.qty)),product:g(r,c.product),name:g(r,c.name),descr:g(r,c.descr),price:seqUpNum(g(r,c.price))};if(x.product||x.name||x.descr)L.children.push(x);});
+    L.kind=seqKind(L.name+' '+L.descr);
+    L.multi=seqUpMulti(L.floor)||seqUpMulti(L.unit);
+    if(L.qty!=null&&L.qty!==1)L.warn.push('Qty '+L.qty+' — one row; check how Cienapps makes the WOs');
+    if(L.multi)L.warn.push('Floor / Unit "'+(seqUpMulti(L.floor)?L.floor:L.unit)+'" — not one house: a WO never takes this row on its own');
+    out.lines.push(L);
+  }
+  if(noName)out.warn.push(noName+' row'+(noName!==1?'s':'')+' with no product, name or description left out');
+  if(!out.lines.length&&!out.err)out.err=out.hdr?'The header is there but no lines under it — nothing loaded.':SEQ_UP_NOT;
+  return out;
+}
+// a picked file (.xlsx / .xls / .csv, as an ArrayBuffer) → the first sheet that reads as an upload file (else the first sheet's answer)
+function seqUpBook(data){
+  if(typeof XLSX==='undefined')return{lines:[],warn:[],err:'The Excel reader did not load — reload the page and try again.'};
+  let wb;try{wb=XLSX.read(data,{type:'array',raw:true});}catch(e){return{lines:[],warn:[],err:'That file could not be read — '+SEQ_UP_NOT};}
+  let first=null;
+  for(const sn of wb.SheetNames){const ws=wb.Sheets[sn];if(!ws||!ws['!ref'])continue;
+    const aoa=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:'',blankrows:true}),r0=XLSX.utils.decode_range(ws['!ref']).s.r;
+    const res=seqReadUpload(aoa,r0);res.sheet=sn;if(!res.err)return res;if(!first)first=res;}
+  return first||{lines:[],warn:[],err:'The file is empty — nothing loaded.'};
+}
 // Office / Production Manager (and anyone from the project hub): the page in a window over the current screen
 function seqOpen(pid){
   if(!seqVis()||!LST.p.has(pid))return;
