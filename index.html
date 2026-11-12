@@ -455,6 +455,8 @@ details.lti-other{margin-bottom:14px}details.lti-other>summary{cursor:pointer;fo
 .me-done{text-align:center;min-width:min(520px,92vw)}.me-done .me-dok{font-size:20px;font-weight:800;color:#0d6e46;margin:6px 0 8px}.me-done .me-dok.me-dw{color:#8a5a00}.me-done .me-dl{font-size:14px;color:var(--t2);margin-bottom:14px}.me-done .btn{font-size:16px;padding:10px 22px;min-height:44px;margin:4px}
 /* Simple lists (Garry, 4 Nov): headings first, fewer buttons (the rest under More), bigger type, Bought in */
 .me-ed .me-grid,.me-ed .me-grid input,.me-ed .me-grid select{font-size:15px}.me-ed .me-grid input,.me-ed .me-grid select{min-height:34px}
+.lw-due{display:inline-block;font-size:13px;font-weight:700;border-radius:6px;padding:4px 10px;border:1px solid;white-space:nowrap}.lw-due.red{background:#fde8e8;color:#b42318;border-color:#e57368}.lw-due.amber{background:#fff4d6;color:#7a4a00;border-color:#e0a43a}.lw-due.grey{background:#f1f4f8;color:#3b4c63;border-color:#cdd5e0}
+.me-hwo{font-family:'DM Mono',monospace;background:#eef4ff;border:1px solid #c7d7f5;border-radius:6px;padding:1px 8px;margin-left:6px;white-space:nowrap}.me-start .me-morep{left:auto;right:0}@media(max-width:699px){.me-tb{flex-wrap:wrap}.me-tb .lw-due{order:3}.me-start .me-morep{left:0;right:auto}}.me-ed .me-save-big{font-size:17px;padding:12px 30px;min-height:48px}
 .me-bar{display:flex;gap:8px;margin:10px 0 6px;flex-wrap:wrap;align-items:flex-start}.me-big{font-size:15px;padding:8px 16px;min-height:38px}
 .me-more{position:relative}.me-more>summary{list-style:none;cursor:pointer;display:inline-block}.me-more>summary::-webkit-details-marker{display:none}
 .me-morep{position:absolute;z-index:5;left:0;top:44px;background:#fff;border:1px solid var(--b2);border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.15);padding:10px 12px;display:flex;flex-direction:column;gap:8px;min-width:280px}
@@ -3484,28 +3486,34 @@ async function lsCopyToNew(id,pid){
     note:'Copied from "'+l.name+'"'+(other?' ('+lsProjName(l.pid)+')':'')+' — pick the work order and change anything. Nothing is saved until you press Save; "'+l.name+'" is not changed.'+(other?' Materials not on this project are flagged ⚠.':'')});
 }
 // 🔍 Find old list: every list (not templates), any project, any state — newest first; View or Copy to start a new list
-function lsFindDlg(pid){
+function lsFindDlg(pid,onUse){ // onUse(rows,list): called from the list window's "Start from…" — the rows go into that window
   const ov=lsDlg('<div id="fo-body"></div>',900);let q='',all=false;
+  if(onUse)ov.onclick=e=>{if(e.target===ov||e.target.id==='pod-x')ov.remove();}; // over the list window: closing it leaves that window as it was
   const draw=()=>{
     const k=q.trim().toLowerCase(),ws=k.split(/\s+/).filter(Boolean);
     const hit=l=>{const t=[l.name,lsProjName(l.pid),l.typeName,(l.wos||[]).join(' '),...(l.wos||[]).map(w=>{const o=DB.orders.find(x=>x.wo===w);return o?[o.title,o.customer,fuLbl(o)].join(' '):'';})].join(' ').toLowerCase();return ws.every(w=>t.includes(w));};
     const ls=lsCache().all.filter(l=>!l.tpl&&(all||!pid||l.pid===pid)&&hit(l)).sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||''))||String(b.id).localeCompare(String(a.id)));
     const body=ov.querySelector('#fo-body'),had=body.querySelector('#fo-q');
     body.innerHTML=`<div style="font-weight:800;color:#14335c;font-size:17px;margin-bottom:2px">🔍 Find an old list</div>
-      <div style="font-size:12px;color:var(--t3);margin-bottom:8px">Search by house, project, work order, title or type — done and archived lists included. <b>⧉ Copy to new list</b> opens its rows in a new list for ${pid?'<b>'+escA(lsProjName(pid))+'</b>':'its own project'}; the old list is never changed.</div>
+      <div style="font-size:12px;color:var(--t3);margin-bottom:8px">Search by house, project, work order, title or type — done and archived lists included. ${onUse?'<b>Use these rows</b> puts its rows into the list you are making':'<b>⧉ Copy to new list</b> opens its rows in a new list for '+(pid?'<b>'+escA(lsProjName(pid))+'</b>':'its own project')}; the old list is never changed.</div>
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px"><input id="fo-q" value="${escA(q)}" placeholder="e.g. House 18, Type B, Aderrig, WO-2557" style="${LS_INP};flex:1;min-width:200px">
         ${pid?`<label style="font-size:12px;white-space:nowrap"><input type="checkbox" id="fo-all"${all?' checked':''}> All projects</label>`:''}</div>
       <div style="max-height:56vh;overflow:auto"><table class="lst-tbl"><thead><tr><th>List</th><th>Project</th><th>Work orders</th><th>Type</th><th>State</th><th>Made</th><th></th></tr></thead><tbody>
       ${ls.slice(0,80).map(l=>`<tr><td><b>${escA(l.name)}</b></td><td>${escA(lsProjName(l.pid))}</td><td>${(l.wos||[]).map(w=>woChip(w)).join('')||'—'}</td><td>${escA(l.typeName||LS_KINDS[l.ltype]||'')}</td>
         <td>${escA((LS_STATE[lsState(l)]||[''])[0])}</td><td style="white-space:nowrap">${l.created_at?fmt(String(l.created_at).slice(0,10)):'—'}</td>
-        <td style="white-space:nowrap"><button class="btn btn-s" data-fov="${escA(l.id)}" style="padding:2px 8px;font-size:11px">View</button> <button class="btn btn-g" data-foc="${escA(l.id)}" style="padding:2px 8px;font-size:11px">⧉ Copy to new list</button></td></tr>`).join('')
+        <td style="white-space:nowrap"><button class="btn btn-s" data-fov="${escA(l.id)}" style="padding:2px 8px;font-size:11px">View</button> <button class="btn btn-g" data-foc="${escA(l.id)}" style="padding:2px 8px;font-size:11px">${onUse?'Use these rows':'⧉ Copy to new list'}</button></td></tr>`).join('')
         ||`<tr><td colspan="7" style="color:var(--t3)">${k?'No list matches "'+escA(q)+'"'+(pid&&!all?' on this project — tick All projects to search everywhere':''):'No lists yet.'}</td></tr>`}
       ${ls.length>80?`<tr><td colspan="7" style="color:var(--t3)">…${ls.length-80} more — type more of the name to narrow it down</td></tr>`:''}</tbody></table></div>`;
     const qi=body.querySelector('#fo-q');qi.oninput=()=>{q=qi.value;const pos=qi.selectionStart;draw();const n=ov.querySelector('#fo-q');n.focus();try{n.setSelectionRange(pos,pos);}catch(e){}};
     if(!had)setTimeout(()=>qi.focus(),0);
     const fa=body.querySelector('#fo-all');if(fa)fa.onchange=()=>{all=fa.checked;draw();};
     body.querySelectorAll('[data-fov]').forEach(b=>b.onclick=()=>lsViewDlg(b.dataset.fov));
-    body.querySelectorAll('[data-foc]').forEach(b=>b.onclick=()=>{ov.remove();lsCopyToNew(b.dataset.foc,pid);});
+    body.querySelectorAll('[data-foc]').forEach(b=>b.onclick=async()=>{const id=b.dataset.foc;
+      if(!onUse){ov.remove();lsCopyToNew(id,pid);return;}
+      const l=lsList(id);if(!l)return;
+      try{if(!LST.full.has(id))await lsReloadList(id);}catch(e){toast('Could not load "'+l.name+'" — '+e.message);return;}
+      const rows=lsEditRows(id).filter(r=>!lsEmptyRow(r));if(!rows.length){toast('"'+l.name+'" has no rows to use');return;}
+      ov.remove();onUse(rows,l);});
   };
   draw();
 }
@@ -4288,6 +4296,15 @@ function lsTicked(id){return !!id&&Object.keys(lsView(id).ticks).length>0;} // t
 const MAT_ED=['pm','office','dash','prod','design'];
 function lsMatEditOk(){if(MAT_ED.includes(ROLE))return true;toast('Materials are read-only on this screen');return false;}
 function lsMatCan(){return MAT_ED.includes(ROLE);}
+/* List window, simple layout (Garry 12 Nov — "simplicity is the main focus"): opened from a job the window shows the job, the rows and
+   one big Save. The Project / Work order pickers sit behind "Change job", templates / Excel / old lists behind ONE "Start from…",
+   Type and the rarely used switches under More, and "Save as template" shows only for the Drawing office or the Admin PIN. */
+function lsTplSaveOk(){if(ROLE==='design')return true;const p=pins(),v=ls.get('wpfEditPin');return !!v&&[p.design,p.admin].includes(v);}
+/* DD1 (list window part): the due date as ONE tag — red = overdue, amber = due this week, grey = later. */
+function lwDueTag(o){if(!o)return'';const m=/^(\d{4}-\d{2}-\d{2})/.exec(String(o.dueDate==null?'':o.dueDate).trim()),d=m?new Date(m[1]+'T12:00:00'):null;
+  if(!d||isNaN(d))return'<span class="lw-due grey" id="me-due">no due date</span>';
+  const t=todayLocal(),cls=m[1]<t?'red':wkKey(d)===wkKey(new Date(t+'T12:00:00'))?'amber':'grey';
+  return `<span class="lw-due ${cls}" id="me-due" title="${cls==='red'?'Overdue':cls==='amber'?'Due this week':'Due date'}">${cls==='red'?'OVERDUE · ':''}Due ${d.toLocaleDateString('en-IE',{weekday:'short',day:'numeric',month:'short'}).replace(/,/g,'')} · Wk ${wkNum(d)}</span>`;}
 function lsHasEditPin(){if(['prod','design'].includes(ROLE))return true;const p=pins(),v=ls.get('wpfEditPin');return !!v&&[p.prod,p.design,p.admin].includes(v);}
 const LS_LOCK_MSG='Saw has started — make a new list for a different number of units';
 /* lsTbc:start */
@@ -4569,8 +4586,13 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     const sm=sheetMats();
     if(hasUnits())st.unitsOn=true; // a list that has unit blocks always shows them
     const tbc=lsTbc(R()),chk=ex&&!ex.tpl?lsCheckInfo(ex):null;
+    const hdWo=!st.tpl&&!st.newWO&&!!st.wo; // the WO number (and its due date) in the title bar, at all times (L2 / DD1)
+    const sim=hdWo&&!!st.pid&&!st.jobOpen&&st.matAfter==null&&!(st.pmsg&&['busy','many','ask','off','err'].includes(st.pmsg.st)); // the job is settled: the pickers are folded away
+    const pjN=lsProjName(st.pid)||'',o1=hdWo?DB.orders.find(x=>x.wo===st.wo):null,pjDiff=sim&&pjN.trim().toLowerCase()!==String((o1&&o1.customer)||'').trim().toLowerCase();
+    const typeHTML=`<div><label>Type</label><select id="me-type" style="${inp}">${['kitchen','house','room','other'].map(k=>`<option value="${k}"${st.ltype===k?' selected':''}>${LS_KINDS[k]}</option>`).join('')}</select>
+          <input id="me-tname" value="${escA(st.tname||'')}" placeholder="e.g. Type B 3-bed" style="${inp};width:140px"></div>`;
     ov.innerHTML=`<div class="pod-in me-ed" style="min-width:min(1180px,97vw)">
-      <div class="me-tb"><div style="font-weight:800;color:#14335c;font-size:17px;flex:1;min-width:0">✍ ${ex?'Edit':'New'} ${st.tpl?'template':'cutting list'}${ex&&(+ex.rev||1)>1?' · Rev '+(+ex.rev):''}</div><button class="btn btn-s me-x0" id="me-x0" title="Close this window (asks first if anything is not saved)">✕ Close</button></div>
+      <div class="me-tb"><div style="font-weight:800;color:#14335c;font-size:17px;flex:1;min-width:0">✍ ${ex?'Edit':'New'} ${st.tpl?'template':'cutting list'}${ex&&(+ex.rev||1)>1?' · Rev '+(+ex.rev):''}${hdWo?`<span class="me-hwo" id="me-hwo" title="The Cienapps work order this list is for">${escA(st.wo)}</span>`:''}</div>${hdWo?lwDueTag(DB.orders.find(x=>x.wo===st.wo)):''}<button class="btn btn-s me-x0" id="me-x0" title="Close this window (asks first if anything is not saved)">✕ Close</button></div>
       ${ex&&ex.templateId?`<div style="font-size:12px;color:#5b21b6;font-weight:700;margin-bottom:4px">📐 ${escA(lsTplInfo(ex))}</div>`:''}
       ${st.note?`<div style="font-size:12px;color:#1a56db;font-weight:700;margin-bottom:4px">${escA(st.note)}</div>`:''}
       ${!st.tpl&&st.wo&&!st.newWO?pTwinWarn([st.wo]):''}
@@ -4578,16 +4600,22 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       ${chk&&chk.ok?`<div style="font-size:13px;color:#0d6e46;font-weight:700;margin-bottom:4px">✓ Checked by ${escA(chk.by)} — saving a change takes the check away: it must be checked again before the saw sees it.</div>`:''}
       ${tbc.length?`<div style="margin-bottom:6px">${lsTbcChip(tbc,true)}</div>`:''}
       <div class="me-top">
-        <div><label>Project</label><div style="display:flex;gap:6px;flex-wrap:wrap"><select id="me-pid" style="${inp};max-width:230px"><option value="">— pick the project —</option>${lsProjects().map(p=>`<option value="${escA(p.id)}"${p.id===st.pid?' selected':''}>${escA(p.name)}</option>`).join('')}<option value="__new">＋ New project…</option></select>
-          <button class="btn btn-s" id="me-mats" style="font-size:12px;white-space:nowrap" title="The project's boards, materials and fittings — add or change them here">🧱 Project materials (add / edit)</button></div>${pmsgHTML()}</div>
-        ${st.tpl?'':`<div><label>Work order</label>
+        <div${sim?' hidden':''}><label>Project</label><div style="display:flex;gap:6px;flex-wrap:wrap"><select id="me-pid" style="${inp};max-width:230px"><option value="">— pick the project —</option>${lsProjects().map(p=>`<option value="${escA(p.id)}"${p.id===st.pid?' selected':''}>${escA(p.name)}</option>`).join('')}<option value="__new">＋ New project…</option></select></div>${pmsgHTML()}</div>
+        ${st.tpl?'':`<div${sim?' hidden':''}><label>Work order</label>
           ${st.newWO?`<div style="font-size:12px;color:#5b21b6;font-weight:700;padding:7px 0">New work order ${escA(nextPNumber())} <button class="btn btn-s" id="me-pick" style="font-size:11px;padding:2px 8px">use an existing WO instead</button></div>`
           :`<div style="display:flex;gap:6px"><select id="me-wo" style="${inp};max-width:340px">${woOpts()}</select>
             ${ex?'':`<button class="btn btn-s" id="me-new" style="font-size:12px;white-space:nowrap">＋ New P-number</button>`}</div>`}</div>
         ${st.newWO?'':`<div class="wo-info" id="me-woinfo">${woInfoHTML(DB.orders.find(x=>x.wo===st.wo))}</div>`}`}
+        ${pjDiff?`<div class="wo-info"><div class="wc"><label>Project</label><div class="wo-ro" id="me-pjro" title="${escA(pjN)}">${escA(pjN)}</div></div></div>`:''}
         <div><label>${st.tpl?'Template name':'List name (optional)'}</label><input id="me-name" value="${escA(st.name)}" placeholder="e.g. Kitchen — Type B" title="${st.tpl?'The template\'s name':'A name for this list — any words, searchable later. Left blank, the list is named after its work order'}" style="${inp};width:170px"></div>
-        <div><label>Type</label><select id="me-type" style="${inp}">${['kitchen','house','room','other'].map(k=>`<option value="${k}"${st.ltype===k?' selected':''}>${LS_KINDS[k]}</option>`).join('')}</select>
-          <input id="me-tname" value="${escA(st.tname||'')}" placeholder="e.g. Type B 3-bed" style="${inp};width:140px"></div>
+        ${st.tpl?typeHTML:''}
+        <span style="flex:1"></span>
+        ${sim?'<button class="btn btn-s" id="me-jobtog" style="font-size:12px;white-space:nowrap" title="Pick a different work order or project for this list">Change job ▾</button>':''}
+        <details class="me-more me-start" id="me-start"${st.startOpen?' open':''}><summary class="btn btn-s" style="font-size:13px;white-space:nowrap" title="Fill this list from a template, an Excel file or an old list — or just type the rows below">Start from… ▾</summary><div class="me-morep">
+          <button class="btn btn-s me-big" id="me-instpl" title="Adds the rows of one of the project's templates (a house type) — change anything for this house">📐 A template…</button>
+          <button class="btn btn-s me-big" id="me-impxl" title="Fill this list from one sheet of an Excel cutting list (the WPF template or your own layout). Check the rows, then Save">📥 An Excel file…</button><input type="file" id="me-xlfile" accept=".xlsx,.xls" style="display:none">
+          <button class="btn btn-s me-big" id="me-findold" title="Search every old list by name, house, work order or project and use its rows here — the old list is never changed">🔍 An old list…</button>
+        </div></details>
       </div>
       ${jbHTML()}
       ${st.newWO?`<div class="me-newwo">
@@ -4599,12 +4627,12 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       <datalist id="me-edg">${edges.map(e=>`<option value="${escA(e)}">`).join('')}</datalist>
       <div id="me-grid" style="${window.innerWidth<700?'':'max-height:50vh;overflow:auto;'}margin-top:10px">${gridHTML()}</div>
       <div class="me-bar">
-        <button class="btn btn-g me-big" id="me-addhdr" title="A heading (e.g. House nr 103) or a sub-heading under it (Fillers and Kickers, ISLAND, Utility, Doors FU)">＋ Heading</button>
-        <button class="btn btn-s me-big" id="me-addsaw" title="Adds a row under the one you are on">＋ Row</button>
-        <button class="btn btn-s me-big" id="me-instpl" title="Adds the rows of one of the project's templates (a house type) — change anything for this house">📐 Insert from template…</button>
-        <button class="btn btn-s me-big" id="me-impxl" title="Fill this list from one sheet of an Excel cutting list (the WPF template or your own layout). Check the rows, then Save">📥 Import from Excel…</button><input type="file" id="me-xlfile" accept=".xlsx,.xls" style="display:none">
+        <button class="btn btn-g me-big" id="me-addsaw" title="Adds a row under the one you are on">＋ Row</button>
+        <button class="btn btn-s me-big" id="me-addhdr" title="A heading (e.g. House nr 103) or a sub-heading under it (Fillers and Kickers, ISLAND, Utility, Doors FU)">＋ Heading</button>
+        <button class="btn btn-s me-big" id="me-mats" style="white-space:nowrap" title="The project's boards, materials and fittings — add or change them here">🧱 Project materials (add / edit)</button>
         <details class="me-more" id="me-more"${st.moreOpen?' open':''}><summary class="btn btn-s me-big">More ▾</summary><div class="me-morep">
           ${st.undo.length?'<button class="btn btn-s" id="me-undo" title="Ctrl+Z">↶ Undo</button>':''}
+          ${st.tpl?'':typeHTML.replace('<div>','<div class="me-defc" style="display:block">')}
           <label class="me-flag"><input type="checkbox" id="me-nocut"${st.noCut?' checked':''}> No cutting on this job</label>
           <label class="me-flag"><input type="checkbox" id="me-nofit"${st.noFit?' checked':''}> No fittings on this job</label>
           <label class="me-flag" title="${hasUnits()?'This list has unit blocks, so they are shown':'Robe jobs: a unit heading with the number of units, then the parts for ONE unit'}"><input type="checkbox" id="me-units"${st.unitsOn?' checked':''}${hasUnits()?' disabled':''}> Unit blocks (robe jobs)</label>
@@ -4617,7 +4645,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       </div>
       <div class="me-keys"${st.help?'':' hidden'}>Rows with a length or width go to the <b>Saw</b>; rows without go to <b>Stores</b>; <b>Bought in</b> rows are never cut or picked. Materials come from the project's list — pick <b>＋ Add new material…</b> if one is missing. A new row starts with the material of the saw row above.<br>Works like Excel: <b>Tab</b> / <b>Shift+Tab</b> across · <b>Enter</b> down (a new row at the bottom) · arrow keys · <b>Ctrl+D</b> copies the cell above · <b>Insert</b> adds a row · <b>Ctrl+Delete</b> deletes the row · <b>Ctrl+Z</b> undo · paste rows straight from Excel</div>
       <div id="me-err" style="color:#b42318;font-weight:700;font-size:13px;min-height:18px"></div>
-      <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">${ex&&st.tpl?'<button class="btn btn-s" id="me-hist">🕘 History</button>':''}${st.tpl?'':'<button class="btn btn-s" id="me-astpl" title="Save these rows as a template of the project (unsaved changes included)">📐 Save as template</button>'}<span style="flex:1"></span><button class="btn btn-s" id="pod-x" title="Close this window (asks first if anything is not saved)">Close</button><button class="btn btn-g" id="me-save" style="font-size:14px;padding:9px 20px">${ex?'Save changes':st.tpl?'Save template':'Save list → Saw & Stores'}</button></div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">${ex&&st.tpl?'<button class="btn btn-s" id="me-hist">🕘 History</button>':''}${st.tpl||!lsTplSaveOk()?'':'<button class="btn btn-s" id="me-astpl" title="Save these rows as a template of the project (unsaved changes included)">📐 Save as template</button>'}<span style="flex:1"></span><button class="btn btn-s" id="pod-x" title="Close this window (asks first if anything is not saved)">Close</button><button class="btn btn-g me-save-big" id="me-save">${ex?'Save changes':st.tpl?'Save template':'Save list → Saw & Stores'}</button></div>
     </div>`;
     bind();
     const g=ov.querySelector('#me-grid');if(g&&sc)g.scrollTop=sc;
@@ -4694,7 +4722,10 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     const un=g('me-units');if(un)un.onchange=()=>{keep();st.unitsOn=un.checked||hasUnits();draw();};
     on('me-astpl',()=>{keep();lsSaveAsTpl({pid:st.pid,name:st.name,ltype:st.ltype,tname:st.tname,lines:lsEdLines(R().filter(r=>!lsEmptyRow(r)).map(r=>{const x={...noAutoStores(r)};delete x.lid;return x;}))});});
     on('me-hist',()=>{if(ex)lsTplHistory(ex.id);});
-    on('me-instpl',()=>{keep();insTpl();});
+    on('me-instpl',()=>{keep();st.startOpen=false;insTpl();});
+    on('me-jobtog',()=>{keep();st.jobOpen=true;draw();const w=g('me-wo');if(w)w.focus();});
+    on('me-findold',()=>{keep();st.startOpen=false;lsFindDlg(st.pid||'',useOld);});
+    {const sd=g('me-start');if(sd)sd.ontoggle=()=>{st.startOpen=sd.open;};}
     on('me-impxl',()=>{keep();const fx=g('me-xlfile');if(fx){fx.value='';fx.click();}});
     const xf=g('me-xlfile');if(xf)xf.onchange=()=>{const f=xf.files[0];if(f)impXl(f);};
     ov.querySelectorAll('[data-mecopy]').forEach(b=>b.onclick=()=>copyToNew());
@@ -4783,6 +4814,12 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       body.querySelectorAll('[data-ixs]').forEach(b=>b.onclick=()=>{dl.remove();use(sheets[+b.dataset.ixs]);});
     };
     rd.readAsArrayBuffer(f);
+  };
+  const useOld=(rows,l)=>{ // 🔍 An old list…: its rows come into THIS list (the old list is never changed)
+    const add=rows.map(fresh);if(!add.length)return;
+    snap();const drop=R().length===1&&lsEmptyRow(R()[0])?1:0,at=drop?0:R().length;
+    R().splice(at,drop,...add);if(add.some(r=>r.k==='hdr'&&r.units!=null))st.unitsOn=true;st.focus=at+'|item';draw();
+    toast('Added '+add.length+' row'+(add.length!==1?'s':'')+' from "'+l.name+'" — change anything for this job, then Save');
   };
   const insTpl=()=>{
     if(!st.pid){ov.querySelector('#me-err').textContent='Pick the project first — templates belong to a project.';return;}
