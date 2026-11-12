@@ -5127,7 +5127,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       const x=top.querySelector('#pod-x');if(x){e.preventDefault();x.click();}return;}
     e.preventDefault();if(ov.classList.contains('me-dov')){ov.remove();return;}
     const pn=['me-start','me-more'].map(id=>ov.querySelector('#'+id)).find(d=>d&&d.open); /*list-window step 9: Esc closes the little "Start from…" / "More" panel first*/
-    if(pn){pn.open=false;st.startOpen=st.moreOpen=false;const s=pn.querySelector('summary');if(s)s.focus();return;}
+    if(pn){const inP=pn.contains(document.activeElement);pn.open=false;st.startOpen=st.moreOpen=false;if(inP){const s=pn.querySelector('summary');if(s)s.focus();}return;} // the cursor goes to the panel button only if it was in the panel (else it stays in the row)
     closeEd();};
   document.addEventListener('keydown',escH);
   document.querySelectorAll('.pod-ovl.me-dov').forEach(x=>x.remove()); // a "Saved ✓" panel still open: that list is saved — it goes
