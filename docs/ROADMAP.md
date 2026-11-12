@@ -261,3 +261,9 @@ further on steps it can go on capacity board"; seen by Office + Drawing office +
 Garry: "if a new work order is created in planner a warning is also needed for having no value. if there is not value on work orders PM
 need to be warned. management need to be able to have a view of wo's with no values. if the work order are free of charge we can ticked
 FOC. a report list of FOC wo's needs to be available for management to keep control". Plan + 4 open questions: docs/PLAN-no-value-foc.md.
+
+### Saw tasks for planner work orders — snags and bulk stock (12 Nov 2026, Garry) — plan written, not built
+Garry: "there are some jobs, a lot of snag orders and bulk project stock components go through the beam saw and don't appear on Johnny's
+CNC list. They will not have a Cienapps work order most of the time. for these planner work orders we need to be able to generate a task
+for the saw (edger down the line) so they can appear on the saw screen as a cutting list to be done. some of these types of work orders
+will be going on a delivery and some will be going into a factory stock". Plan + 4 open questions: docs/PLAN-saw-tasks.md.
