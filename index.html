@@ -4851,9 +4851,11 @@ function openListEditor2(listId,presetWo,presetPid,opt){
   };
   const useOld=(rows,l)=>{ // 🔍 An old list…: its rows come into THIS list (the old list is never changed)
     const add=rows.map(fresh);if(!add.length)return;
-    st.oldUsed=st.oldUsed||{};const again=!!st.oldUsed[l.id]; /*list-window step 9: a second "Use these rows" for the same old list asks first*/
+    // list-window step 9: a second "Use these rows" for the same old list asks first — (attack2 F14) only while those rows are still in the list (not after Ctrl+Z took them out)
+    const rs=r=>JSON.stringify([r.k,r.item,r.qty,r.L,r.W,r.mat]),now=new Set(R().map(rs));
+    st.oldUsed=st.oldUsed||{};const was=st.oldUsed[l.id],again=!!was&&was.every(s=>now.has(s));
     if(again&&!confirm('The rows of "'+String(l.name||'that list')+'" are already in this list.\n\nAdd them a second time?'))return;
-    st.oldUsed[l.id]=1;
+    st.oldUsed[l.id]=add.map(rs);
     const inUnits=!add.some(r=>r.k==='hdr'&&r.units!=null)&&(()=>{for(let j=R().length-1;j>=0;j--)if(R()[j].k==='hdr')return R()[j].units!=null;return false;})();
     if(inUnits&&add[0].k!=='hdr')add.unshift({k:'hdr',item:'From "'+String(l.name||'old list')+'"',note:''}); // a plain heading ends the unit block: the quantities stay as they were on the old list (never × units)
     snap();const drop=R().length===1&&lsEmptyRow(R()[0])?1:0,at=drop?0:R().length;
