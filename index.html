@@ -4800,13 +4800,22 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       }catch(e){err('Could not read '+f.name+' — is it an Excel workbook (.xlsx)?');return;}
       if(!sheets.length){err('No cutting list found in '+f.name+' — expected columns: Description | Qty | Length | Width | Material | Edging 1 | Edging 2 | Note.');return;}
       const use=sh=>{
+        // (round 2 E1/E3) the window already has a job and the file's WO or Floor / Unit name another one: asked ONCE before any
+        // row goes in. Cancel = nothing changes; OK = the rows go in, the job stays the window's, the name is not taken from the sheet.
+        // A blank cell in the file never counts as a disagreement.
+        const m0=sh.p.meta||{},fw=String(m0.wo||'').trim();let other=false;
+        if(!st.tpl&&!st.newWO&&st.wo){const o=DB.orders.find(x=>x.wo===st.wo),wk=w=>woKey(woNorm(w));
+          const woDiff=!!fw&&wk(fw)!==wk(st.wo),huDiff=!!o&&keyMatch(keyOf('',m0.floor,m0.unit,''),keyOf('',fuF(o),fuU(o),'')).r==='different';
+          if(woDiff||huDiff){const d=(w,f,u)=>[w,keyTxt(f)?'Floor '+String(f).trim():'',keyTxt(u)?'Unit '+String(u).trim():''].filter(Boolean).join(' · ');
+            if(!confirm('This Excel file says '+d(fw,m0.floor,m0.unit)+', but this list is for '+d(st.wo,o&&fuF(o),o&&fuU(o))+'.\n\nPut its rows into this list anyway?\n\nOK = put the rows in (the list stays on '+st.wo+')\nCancel = nothing changes'))return;
+            other=true;}}
         const add=sh.p.rows.filter(r=>!r.info).map(r=>{const x={...r};delete x.src;delete x.total;delete x.bu;delete x.qtyErr;
           if(x.k==='part'){x.qty=x.qty===''||x.qty==null?'':String(x.qty);x.L=x.L===''?'':String(x.L);x.W=x.W===''?'':String(x.W);}return x;});
         snap();
         const typed=R().some(r=>r.k==='part'&&!lsEmptyRow(r));
         if(typed)R().push(...add);else R().splice(0,R().length,...add);
         if(add.some(r=>r.k==='hdr'&&r.units!=null))st.unitsOn=true;
-        if(!String(st.name||'').trim())st.name=sh.name;
+        if(!other&&!String(st.name||'').trim())st.name=sh.name;
         const m=sh.p.meta;if(!st.carcass&&m.carcass)st.carcass=m.carcass;if(!st.door&&m.door)st.door=m.door;
         // (L1b) a sheet's Floor / Unit / Title / WO cells fill the job boxes of a new list with no WO, then the WO is looked up
         let look=false;if(jbOn()&&!st.wo)['floor','unit','title','wo'].forEach(k=>{const v=String(m[k]||'').trim();if(v&&!String(st.jb[k]||'').trim()){st.jb[k]=v;look=true;}});
