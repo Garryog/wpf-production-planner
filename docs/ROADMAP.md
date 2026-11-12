@@ -241,3 +241,12 @@ Garry's words: "this is messy they are all over lapping, you can drop the value 
 - **D4** — pool cards must never overlap: WO, Floor and Unit badges fit inside the card (wrap or shrink), nothing spills into the next card, at PC and phone width. Drop the € value from each card; show the group total value once at the bottom of the group. Add the due date to every card in the DD1 style (red overdue, amber this week). Same fix on the cards in the week grids if they share the layout. Part of the Deliveries usability pass (D1–D3), before Thursday's release.
 
 
+### 11 Nov 2026 (branch feature/lists-project-filter — small release on top of the live version)
+- Garry's request (11 Nov): "the cutting list page need project filters and make sure customer/project is always visible on the cutting list page."
+- Built (lists switch ON only; no database changes): one **Project** drop-down at the top of the Cutting Lists page (Office, Drawing office, Production Manager → Lists). It narrows every section — lists to issue, waiting for check, lists needed, waiting on material, the lists and the templates. Projects A–Z with counts, "No project" for anything not linked, a type-to-find box once there are 40+ projects, "✕ All projects" to reset, "N of M shown". The pick is remembered on that device; a project that no longer exists falls back to All projects. Jobs are matched to a project through its Cienapps customer names (customer = project, Garry 10 Nov).
+- The project name is now on every row and card of the page (templates too), and wraps on a phone instead of being cut off. The "lists needed" table stacks on a phone (it used to scroll sideways).
+- The filter only applies on the Cutting Lists page: the Import page's "lists to issue" panel, the tab badge, the Saw and Stores always show every project. Lists switch OFF: the page is byte-for-byte the same as before (checked against main).
+- Tests: tests/lists-filter/f1-project-filter.test.js — 75 checks, all pass. Full suite (181 files): 3,293 pass / 23 fail, every failure already on ACCEPTED-FAILURES; main gives the same failures file by file (main fails 2 more in stage1 t17). Two timing checks (editor e7 redraw, stage3 attack4-states) fail only when two suites run at once and pass alone, on main too.
+- Assumed: the project sits under the list name (not a new column) so the lists table keeps its width; the old "All projects" drop-down inside the Lists panel moved to the top bar rather than having two.
+- Next: Tester to attack; Manager review; only Garry merges.
+
