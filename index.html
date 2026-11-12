@@ -6431,7 +6431,8 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       if(st.pid&&jk.p&&jk.p!==st.pid)warn.push(o.wo+' belongs to project '+(lsProjName(jk.p)||jk.p)+', not '+lsProjName(st.pid)+'.');
       else if(st.pid&&!jk.p)warn.push(o.wo+'\'s customer "'+(o.customer||'')+'" is not linked to any project — check it is a '+lsProjName(st.pid)+' job.');
       if(keyTxt(b.floor)||keyTxt(b.unit)){const t=keyOf(jk.p,b.floor,b.unit,'');
-        if(keyMatch(t,Object.assign({},jk,{p:jk.p})).r==='different')warn.push(o.wo+' is '+([fuLbl(o),o.title].filter(Boolean).join(' · ')||'(no floor / unit)')+' — the boxes say Floor '+String(b.floor).trim()+' · Unit '+String(b.unit).trim()+'.');}
+        const km=keyMatch(t,Object.assign({},jk,{p:jk.p})).r; /*attack12 H2: "G" vs "T09" is now "not sure" — with floor and unit on both sides, still asked*/
+        if(km==='different'||(km==='unsure'&&t.f.t&&t.u&&jk.f.t&&jk.u))warn.push(o.wo+' is '+([fuLbl(o),o.title].filter(Boolean).join(' · ')||'(no floor / unit)')+' — the boxes say Floor '+String(b.floor).trim()+' · Unit '+String(b.unit).trim()+'.');}
       if(warn.length&&!confirm(warn.join('\n\n')+'\n\nUse '+o.wo+' for this list anyway?\n\nOK = use '+o.wo+'\nCancel = go back')){b.res={st:'typedno',wo:o.wo,why:warn.join(' ')};draw();return;}
       return jbChoose(o.wo,'typed');}
     b.last=keyHouseStr(b.floor,b.unit)||'';
