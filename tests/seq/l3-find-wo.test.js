@@ -50,9 +50,12 @@ const closeEd = p => p.evaluate(() => document.querySelectorAll('.pod-ovl').forE
     rec('blank unit: "both needed — no search was made", nothing filled, no job keys worked out', /both needed/.test(s.msg) && !s.wo && await p.evaluate(() => window.__kj === 0), JSON.stringify(s));
     // T9 / 12 → WO-7 (Block T09 / Apt 012) found when leaving the Unit box
     await fill(p, 't9', '22');
+    // (coder, F1 gap) going on from Unit into the Title box waits for the Title; leaving the Title box looks the WO up
     await p.evaluate(() => { const u = document.getElementById('me-ju'); u.focus(); document.getElementById('me-jt').focus(); }); await sleep(250);
+    rec('Unit → Title box: not looked up yet (the Title may name the block)', !(await st(p)).wo, JSON.stringify(await st(p)));
+    await p.evaluate(() => document.getElementById('me-jt').blur()); await sleep(250);
     s = await st(p);
-    rec('leaving the Unit box: T9 / 22 finds WO-7 (Block T09 / Apt 022) — filled, green "Matched"', s.wo === 'WO-7' && /Matched WO-7/.test(s.ok) && /Floor Block T09/.test(s.ok) && /Unit Apt 022/.test(s.ok) && /HOUSE TYPE B/.test(s.ok) && !s.jb, JSON.stringify(s));
+    rec('leaving the Unit box then the Title box: T9 / 22 finds WO-7 (Block T09 / Apt 022) — filled, green "Matched"', s.wo === 'WO-7' && /Matched WO-7/.test(s.ok) && /Floor Block T09/.test(s.ok) && /Unit Apt 022/.test(s.ok) && /HOUSE TYPE B/.test(s.ok) && !s.jb, JSON.stringify(s));
     rec('the job keys were worked out once for that search', await p.evaluate(() => window.__kj === 1), await p.evaluate(() => window.__kj));
     rec('list name NOT pre-filled from the job (Garry 10 Nov: a free name; blank = the WO number)', s.name === '', s.name); // was: filled with the unit "Apt 022" — changed by Part 4
     rec('the Floor box shows the matched WO\'s floor (read-only on this branch — editing job info, B2, is Job B)', await p.evaluate(() => ((document.querySelector('#me-woinfo [data-woi="Floor"]') || {}).textContent || '').trim() === 'Block T09'));

@@ -4744,9 +4744,12 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     // L1 / L3: the job boxes
     [['me-jf','floor'],['me-ju','unit'],['me-jt','title'],['me-jwo','wo']].forEach(([id,k])=>{const e=g(id);if(e)e.oninput=()=>{st.jb[k]=e.value;};});
     on('me-find',()=>jbFind());
-    {const u=g('me-ju');if(u)u.onblur=()=>{const b=st.jb;if(!keyTxt(b.floor)||!keyTxt(b.unit)||String(b.wo||'').trim()||(keyHouseStr(b.floor,b.unit)||'')===b.last)return;
-      setTimeout(()=>{if(!document.body.contains(ov)||st.wo)return;const a=document.activeElement,id=a&&ov.contains(a)&&a.id?a.id:'';jbFind();
-        if(id&&!st.wo){const e=ov.querySelector('#'+id);if(e){e.focus();if(e.select)e.select();}}},0);};}
+    // the WO is looked up when the person leaves the Unit box — (F1 gap) but NOT while they go on into the Title box: then it is
+    // looked up when they leave the Title box, so a block named in the Title (BLOCK B) is known before anything is filled in
+    {const auto=()=>{const b=st.jb;if(!keyTxt(b.floor)||!keyTxt(b.unit)||String(b.wo||'').trim()||(keyHouseStr(b.floor,b.unit)||'')===b.last)return;
+      setTimeout(()=>{if(!document.body.contains(ov)||st.wo)return;const a=document.activeElement,id=a&&ov.contains(a)&&a.id?a.id:'';if(id==='me-jt')return;jbFind();
+        if(id&&!st.wo){const e=ov.querySelector('#'+id);if(e){e.focus();if(e.select)e.select();}}},0);};
+      ['me-ju','me-jt'].forEach(id=>{const e=g(id);if(e)e.onblur=auto;});}
     ov.querySelectorAll('[data-jpick]').forEach(b=>b.onclick=()=>jbChoose(b.dataset.jpick,'picked'));
     on('me-jnot',()=>{keep();const w=st.wo;if(w&&!st.jb.not.includes(w))st.jb.not.push(w);st.wo='';st.jm=null;st.jb.res=null;st.jb.last='';draw();});
     on('me-pick',()=>{keep();st.newWO=false;draw();});
