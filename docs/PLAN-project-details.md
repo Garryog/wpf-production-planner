@@ -1499,3 +1499,49 @@ Built on `feature/project-details-v2`, one commit per step, all pushed. **No SQL
   (informational) + **seq attack9-pmerge M8** — timing under load (its 6 s wait for the merge ran out; passes alone, 29 / 0 twice).
   editor e7 and stage1 t4 passed in the run. header-late-probe still crashes (pre-existing). **No new failure.**
 - **Left:** step 7 (360 px pass over the whole page — each new piece already checked at 360 px in its own test) → Tester → Manager.
+
+### 12 Nov 2026 (scheduled run, later) — Coder: attack12 fixes + step 7
+Tester attack12 (d15d436) fixed on `feature/project-details-v2`, one commit each, pushed. **No SQL change, no new save key, no planner-record field.**
+attack12-upload **32 / 0** (was 28 / 4), attack12-match **25 / 0** (was 14 / 11), attack12-confirm **30 / 0** (was 24 / 6), attack12-drag 11 / 0.
+No Tester expectation changed. One of my own checks was moved to the new rule (b10b island line → ❓ "revised line?", M6).
+- **c400f0e H2** — "G", "LGF", "UGF", "FF", "SF", "TF" and "1F" against a block code are now "not sure", never "different" (plan Q3).
+  `keyFloor` marks them as "level or block" and `keyFlr` asks a person. G against T09 changes from different to not sure; L1 against L2 and FF against 2 stay different.
+  **SQL: no change needed.** The house and line key strings are unchanged (LGF still keys as "LGF"). The database never answers "not sure"; it only works out keys.
+  On a throwaway Postgres 16 (blocks run twice in go-live order): pg-check **ALL SEQ PG CHECKS PASSED**, attack4-jsvssql **3 / 0** (3,564 house-key and 63 line-key cases, JS = SQL).
+  b0-pairs.json: pair 57 is now "unsure", plus 9 new pairs. b0-key 329 / 0, attack3-key 149 / 0, attack4-key 99 / 0.
+  **5fd2d5a follow-up:** a WO typed in the cutting-list window whose house is now "not sure" against the boxes (G / 13 against T09 / 13) is still asked about. This was caught by attack4-fold in the full suite.
+- **4ef0a0d H1 + H3**
+  - A WO with no usable house (Floor or Unit blank, or "Multiple") stays out of the `want` map, so it never blocks certain matches. It goes to To confirm on its own.
+  - Its "which row" list: the house in its Reference ("order-line-floor-unit") first, shown as "suggestion … — not sure". Otherwise its title / floor gives the list. With no unit anywhere there is no list, only "➕ Add at the bottom". It never gets a 🆕 row by itself.
+  - A waiting row with no unit (a TOTAL row saved earlier) never takes part in a certain match and blocks nobody.
+  - **H3:** a row whose Name differs from the WO title (after keyTxt normalising) is never taken automatically. A blank title keeps the single-candidate automatic match.
+- **b3bcf66 M7** — an upload line's kind comes from its Name first, the Description only when the Name names no kind.
+  `seqKind`: "KITCHEN ISLAND" counts as an island when the text also names an island on its own. "KITCHEN ISLAND" alone stays a kitchen, which keeps attack4-key passing.
+- **58518ab H4** — totals (TOTAL / SUBTOTAL / GRAND TOTAL) and rows with no floor, no unit and no product (notes, headings, children with no parent line) are not lines. The preview lists them under "🚫 Not read (N)" with their row numbers.
+- **4b9e8c4 L8** — the headers "Product Code" and "Code" are read as Product.
+- **30a037b M6** — an upload line for a house + kind the sequence already has under another Name shows as ❓ "revised line? — this house already has …", skipped unless a person ticks Add anyway.
+- **d7f7616 M5**
+  - The "taken out" list is now per project.
+  - A row retired by "Use the waiting row" (reason "double …") no longer hides its WO: a WO left with no live row is offered again under "Not in the sequence yet".
+  - A row taken out by hand stays out of that list. It shows as a grey line "WO taken out by <name> <date> — "reason" [Put back]", which uses `seq_restore`.
+- **705c89c L9** — "Use <date>" moves a Sunday or bank holiday to the next delivery day, like the 📅 Set tool, and a toast says so. A Saturday is kept.
+- **86b5d6e L10** — the ⏳ age counts from the Irish local date the row was saved.
+- **b8457ab L11** — the Close button is at least 36 px, only in the upload and ⏳ windows.
+- **d3489ab** tests/seq/b10g-fixes **6 / 0** (H1 no-house WO, H4 Not read, M5 Put back, M6 revised line).
+- **470fa96 step 7** — a 360 px pass with every B10 panel on screen at once: nudge, confirm (long names, a suggestion, a double, a taken-out line), Dates to agree, ⏳ and its window, the upload preview and the refusal window.
+  On phones the nudge chips, ⬆ Cienapps file and the ⏳ flag are 36 px, and confirm buttons are 40 px. tests/seq/b10h-360 **7 / 0**.
+- **ASSUMED (lead's plan amendments, Garry to confirm):** H1, H2, H3, H4, M5, M6, M7, L8–L11 as written above.
+  Coder calls within them:
+  - LGF / UGF are "level or block" with no level number, so they are "not sure" against any level as well.
+  - The Reference is read only when it has at least 4 "-" parts.
+  - The "Put back" line is shown only while the WO is still live and has no other live row.
+  - Phone sizes raised as listed.
+- **Re-runs:** b10a 21, b10b 11, b10c 26, b10d 27, b10e 22, b10f 19, b10g 6, b10h 7, b9f 4, b0-key 329, b0-claim 8, l4b-pmerge 23, attack9-pmerge 29 — all with 0 failures.
+- **Full suite** (278 test files + 4 probes, 3 at a time, at 470fa96): **6,268 pass / 38 fail**.
+  - The ACCEPTED-FAILURES rows, as before.
+  - t16 ×2 "WITH proposed guard" (informational).
+  - **seq attack4-fold "typed WO-3 with boxes G / 13: asked"** — caused by H2, fixed in 5fd2d5a. attack4-fold is now 16 / 1, only its accepted row.
+  - **stage3 attack4-states M3** — timing under load; passes alone (33 / 0).
+  - After 5fd2d5a all 55 tests/seq files were re-run: only accepted rows fail. header-late-probe still crashes (pre-existing).
+  - **No new failure.**
+- **Left:** Tester re-run → Manager.
