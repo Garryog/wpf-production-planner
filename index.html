@@ -2353,8 +2353,10 @@ function delSelPrune(){[...delSel].forEach(w=>{if(!delOnPage(findDel(w)))delSel.
   in place but greyed, so you still see how full each van is (Garry's choice). Prints, run sheets and the export are always the whole week. */
 const DCF_KEY='wpfDelCF';
 function dcfNorm(c){return String(c==null?'':c).replace(/\s+/g,' ').trim().toLowerCase();}
-function dcfCur(){const v=ls.get(DCF_KEY);if(!v)return null;try{const o=JSON.parse(v);return o&&typeof o.k==='string'&&o.k?o:null;}catch(e){return null;}}
-function dcfSet(k,lbl){ls.set(DCF_KEY,k?JSON.stringify({k,lbl:String(lbl||'')}):'');}
+let DCF_MEM=null; // used when this browser won't store it (private window, storage blocked or full) — the pick still works until a refresh
+function dcfCur(){let v='';try{v=localStorage.getItem(DCF_KEY)||'';}catch(e){v='';}if(DCF_MEM!==null&&v!==DCF_MEM.v)v=DCF_MEM.v;if(!v)return null;
+  try{const o=JSON.parse(v);return o&&typeof o.k==='string'&&/^(p:.+|c:.*)$/.test(o.k)?o:null;}catch(e){return null;}}
+function dcfSet(k,lbl){const v=k?JSON.stringify({k,lbl:String(lbl||'')}):'';let ok=false;try{localStorage.setItem(DCF_KEY,v);ok=localStorage.getItem(DCF_KEY)===v;}catch(e){ok=false;}DCF_MEM=ok?null:{v};}
 function dcfProjOk(){return typeof V2==='function'&&V2()&&LST.loaded;}
 function dcfJob(){ // job → {p: project id or '', c: 'c:'+customer}; cached per customer for one draw
   const m=new Map();
@@ -2364,7 +2366,7 @@ function dcfJob(){ // job → {p: project id or '', c: 'c:'+customer}; cached pe
 function dcfKeyOf(j){return j.p?'p:'+j.p:j.c;}
 // does a job pass the picked filter? 'c:' keys match on the customer name itself, so they keep working whether or not projects are loaded
 function dcfHit(f,j){if(!f)return true;return f.k.startsWith('p:')?j.p===f.k.slice(2):j.c===f.k;}
-function dcfLabelFor(k,raw){if(k.startsWith('p:')){const n=dcfProjOk()?lsProjName(k.slice(2)):'';return n?'🏗 '+n:'';}return raw||'(no customer)';}
+function dcfLabelFor(k,raw){if(k.startsWith('p:')){const n=dcfProjOk()?lsProjName(k.slice(2)):'';return n?'🏗 '+n:'';}return raw||'(blank — no customer)';}
 
 function woCmp(a,b){
   const na=(String(a.wo).match(/\d+/g)||[]).map(Number),nb=(String(b.wo).match(/\d+/g)||[]).map(Number);
@@ -7037,7 +7039,8 @@ function renderDeliveries(app){
   // the pool: each job sits in its due week; overdue, no date and manual jobs sit in This week; past W+3 = Later
   const poolWk=delPoolWk;
   /*v-dcf*/const dcfF=dcfCur(),dcfJ=dcfJob(),dcfOk=o=>dcfHit(dcfF,dcfJ(o));
-  if(dcfF&&!dcfProjOk()&&V2()&&!LST.loaded&&!renderDeliveries._dcfLoad){renderDeliveries._dcfLoad=1;lsLoad().then(()=>{if(LST.loaded&&document.getElementById('dpool'))render();}).catch(()=>{});} // projects needed for a project pick
+  if(dcfF&&!dcfProjOk()&&V2()&&!LST.loaded&&!renderDeliveries._dcfLoad){renderDeliveries._dcfLoad=1;lsLoad().then(()=>{if(LST.loaded){if(document.getElementById('dpool'))render();}else setTimeout(()=>{renderDeliveries._dcfLoad=0;},30000);}).catch(()=>{setTimeout(()=>{renderDeliveries._dcfLoad=0;},30000);});} // a failed load is tried again on a redraw 30 s later // projects needed for a project pick
+  if(dcfF)[...delSel].forEach(w=>{const o=findDel(w);if(o&&!o.delDay&&!dcfOk(o))delSel.delete(w);}); // attack6 F1: a ticked job the filter now hides (customer changed elsewhere, another tab changed the pick) is never taken along unseen
   const poolAll=tagged.filter(o=>!o.delDay&&dcfOk(o));
   const poolOf=t=>t==='later'?poolAll.filter(o=>poolWk(o)>W3):(w=>w<W0?[]:poolAll.filter(o=>poolWk(o)===w))(delTabWk(t));
   const pool=poolOf(delTab);
@@ -7047,10 +7050,10 @@ function renderDeliveries(app){
   const tabN=t=>t==='later'?poolOf(t).length:tagged.filter(o=>slotIn(o,delTabWk(t))&&dcfOk(o)).length+poolOf(t).length; /*v-dcf: counts follow the filter*/
   // pool groups: "date moved — rebook" first, then by customer (Later: by due week), WO-number order inside each
   const rebook=pool.filter(o=>o.delRebook).sort(woCmp),rest=pool.filter(o=>!o.delRebook);
-  const grps={};rest.forEach(o=>{const c=later?poolWk(o):(o.customer||'(no customer)');(grps[c]=grps[c]||[]).push(o);});
+  const grps={},gLbl={};rest.forEach(o=>{const raw=String(o.customer||'').replace(/\s+/g,' ').trim(),c=later?poolWk(o):(dcfNorm(raw)||'(no customer)');if(!later&&!gLbl[c])gLbl[c]=raw||'(no customer)';(grps[c]=grps[c]||[]).push(o);}); // attack6 F8: "ASPECT" and "Aspect  " are one group
   const gkeys=Object.keys(grps).sort((a,b)=>a.localeCompare(b));
   gkeys.forEach(k=>grps[k].sort(later?((a,b)=>(a.customer||'').localeCompare(b.customer||'')||woCmp(a,b)):woCmp));
-  const gName=k=>later?'Wk '+wkNum(k)+' — due from '+dShort(k):k;
+  const gName=k=>later?'Wk '+wkNum(k)+' — due from '+dShort(k):(gLbl[k]||k);
   const gHTML=(k,lbl,list,sty)=>`<div class="dgrp">
         <div class="dgrp-h" data-grp="${escA(k)}"${sty?` style="${sty}"`:''}><span class="dgrp-n">${escA(lbl)}</span><span class="gcnt">${list.length} job${list.length!==1?'s':''} · click to select all</span></div>
         <div class="dpool-chips">${list.map(o=>dchip(o,later||k==='__rebook')).join('')}</div>
@@ -7061,6 +7064,7 @@ function renderDeliveries(app){
   const store=inStoreJobs().filter(x=>dcfOk(x.o)),storeOld=store.filter(x=>x.n!=null&&x.n>14).length; /*v-dcf*/
   /*v-dcf: the picker — every customer / project with a job on this page (tagged, any week, or in store)*/
   const dcfOpts=new Map();[...tagged,...inStoreJobs().map(x=>x.o)].forEach(o=>{const j=dcfJ(o),k=dcfKeyOf(j);if(!dcfOpts.has(k))dcfOpts.set(k,{k,lbl:dcfLabelFor(k,String(o.customer||'').trim()),ids:new Set()});dcfOpts.get(k).ids.add(o.wo);});
+  if(dcfF&&dcfF.k.startsWith('c:')){const all=[...tagged,...inStoreJobs().map(x=>x.o)].filter(o=>dcfOk(o));if(all.length&&!dcfOpts.has(dcfF.k))dcfOpts.set(dcfF.k,{k:dcfF.k,lbl:dcfF.lbl||dcfLabelFor(dcfF.k,''),ids:new Set()});if(dcfOpts.has(dcfF.k))all.forEach(o=>dcfOpts.get(dcfF.k).ids.add(o.wo));} // attack6 F2: a picked customer since linked to a project keeps its true count
   if(dcfF&&!dcfOpts.has(dcfF.k))dcfOpts.set(dcfF.k,{k:dcfF.k,lbl:(dcfF.k.startsWith('p:')&&dcfLabelFor(dcfF.k,''))||dcfF.lbl||'(gone)',ids:new Set()}); // kept, shown with 0, never switched off silently
   const dcfArr=[...dcfOpts.values()].sort((a,b)=>a.lbl.replace(/^🏗 /,'').localeCompare(b.lbl.replace(/^🏗 /,''),'en',{sensitivity:'base'}));
   const dcfP=dcfArr.filter(x=>x.k.startsWith('p:')),dcfC=dcfArr.filter(x=>!x.k.startsWith('p:'));
@@ -7069,7 +7073,7 @@ function renderDeliveries(app){
   const dcfHTML=`<div class="dcf${dcfF?' dcf-on':''}" id="dcf"><span class="dcf-l">Customer / project</span>
     <select id="dcf-sel" aria-label="Show one customer or project"><option value="">All customers (${new Set([...tagged,...inStoreJobs().map(x=>x.o)].map(o=>o.wo)).size} jobs)</option>
       ${dcfP.length?`<optgroup label="Projects">${dcfP.map(dcfOptH).join('')}</optgroup>`:''}${dcfC.length?`<optgroup label="${dcfP.length?'Customers with no project':'Customers'}">${dcfC.map(dcfOptH).join('')}</optgroup>`:''}</select>
-    ${dcfF?`<button class="dcf-x" id="dcf-all">✕ Show all</button><span class="dcf-n">Showing <b>${escA((dcfOpts.get(dcfF.k)||dcfF).lbl)}</b> only · ${dcfHid} other job${dcfHid!==1?'s':''} hidden from the pool and In store, greyed on the vans. Prints and exports still show the whole week.</span>`:''}
+    ${dcfF?`<button class="dcf-x" id="dcf-all">✕ Show all</button><span class="dcf-n">Showing <b>${escA((t=>t.length>60?t.slice(0,58)+'…':t)((dcfOpts.get(dcfF.k)||dcfF).lbl))}</b> only${dcfF.k.startsWith('p:')&&!dcfProjOk()?` <b style="color:#b42318">— projects are ${V2()?'still loading':'off (the cutting-lists switch is off)'}, so no jobs can be matched to it yet: pick the customer instead</b>`:''} · ${dcfHid} other job${dcfHid!==1?'s':''} hidden from the pool and In store, greyed on the vans. Prints and exports still show the whole week.</span>`:''}
   </div>`;
 
   app.innerHTML=`<div class="pg">
