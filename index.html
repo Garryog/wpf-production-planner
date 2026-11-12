@@ -5319,7 +5319,9 @@ function seqJobsNoRow(pid){
   "2796-15-2-APT 51") first, as a suggestion — not sure; else what its title / floor gives; nothing at all when there is no unit
   anywhere (then only "add at the bottom").*/
 function seqNoHouse(o){return !keyFloor(seqNoMulti(fuF(o))).t||!keyUnit(seqNoMulti(fuU(o)));}
-function seqRefHouse(o){const p=String(o&&o.ref||'').split('-').map(s=>s.trim());return p.length>=4&&p[2]&&p.slice(3).join('-')?{floor:p[2],unit:p.slice(3).join('-')}:null;}
+// attack12b L3: read from the RIGHT — the last part is the unit, the one before it the floor, and only when the part before those
+// two is digits (the order-line number): "2796-15-2-APT 51" and "WPF-2796-15-2-APT 51" → 2 / APT 51; "A-B-C-D" → nothing
+function seqRefHouse(o){const p=String(o&&o.ref||'').split('-').map(s=>s.trim()),n=p.length;return n>=3&&p[n-1]&&p[n-2]&&/^[0-9]+$/.test(p[n-3])?{floor:p[n-2],unit:p[n-1]}:null;}
 // a waiting row with no unit (a "TOTAL" / note line saved before attack12 H4) is never part of a certain match and blocks nobody
 const seqRowNoHouse=r=>!keyUnit(seqNoMulti(r.unit));
 function seqWOCands(o,wait){
