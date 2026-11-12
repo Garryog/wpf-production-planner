@@ -6150,6 +6150,10 @@ function keyFloor(s){
   if(x==='BASEMENT')return lv('-1');
   if(x==='G')return{k:'G',t:'amb',lvl:'0'};
   if((m=/^(L|F|FL) ?([0-9]+)$/.exec(x)))return{k:keyCode(x),t:'amb',lvl:keyZ(m[2])};
+  /*attack12 H2: level words sites write (LGF / UGF lower / upper ground, FF / SF / TF first … third floor, "1F") may be a level OR a
+    block code: 'amb' — "not sure" against a block, never "different". Their key string is still their code (house keys and the SQL
+    are unchanged).*/
+  if((m=/^(L ?G ?F?|U ?G ?F?|LOWER GROUND|UPPER GROUND|F ?F|S ?F|T ?F|([0-9]+) ?F)$/.exec(x)))return{k:keyCode(x),t:'amb',lvl:m[2]?keyZ(m[2]):/^F ?F$/.test(x)?'1':/^S ?F$/.test(x)?'2':/^T ?F$/.test(x)?'3':'?'};
   return{k:keyCode(x),t:'code'};
 }
 // the floor part of a house / line key: a level is "#n" ("#-1" below ground); a code (or an ambiguous "G" / "L1") is its code
@@ -6204,9 +6208,10 @@ const KEY_FW=/^(BLOCK|BLK|FLOOR|FLR|LEVEL|LVL|STOREY)$/,keyFTok=k=>/^-/.test(k)?
 const keyFlr=(a,b)=>{ // two present floors → 'same' | 'different' | 'unsure'
   const ta=a.t,tb=b.t;
   if(ta==='lvl'&&tb==='lvl')return a.k===b.k?'same':'different';
-  if(ta==='lvl'||tb==='lvl'){const o=ta==='lvl'?b:a,l=ta==='lvl'?a:b;return o.t==='code'?'unsure':o.lvl===l.k?'unsure':'different';}
+  if(ta==='lvl'||tb==='lvl'){const o=ta==='lvl'?b:a,l=ta==='lvl'?a:b;return o.t==='code'||o.lvl==='?'?'unsure':o.lvl===l.k?'unsure':'different';}
   if(a.k===b.k)return'same';
-  if(ta==='amb'&&tb==='amb'&&a.lvl===b.lvl)return'unsure';
+  if(ta==='amb'&&tb==='amb')return a.lvl===b.lvl||a.lvl==='?'||b.lvl==='?'?'unsure':'different';
+  if(ta==='amb'||tb==='amb')return'unsure'; /*attack12 H2 (plan Q3): "G" / "LGF" / "FF" / "L1" — a level or a block — against a block code: a person decides*/
   return ta==='code'&&tb==='code'&&keyFTok(a.k)===keyFTok(b.k)?'unsure':'different'; // "Floor 1 Block A" / "Block A Floor 1"
 };
 // same / different / unsure, and why. Different beats unsure. A blank, an ambiguous floor or a value read from a title is
