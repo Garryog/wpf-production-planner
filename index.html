@@ -5107,11 +5107,12 @@ async function seqHistDlg(pid){
     b.innerHTML=ev.length?`<table class="lst-tbl seq-htbl"><thead><tr><th>When</th><th>Who</th><th>What</th><th>Row</th><th>Position</th><th>Why</th></tr></thead><tbody>${ev.map(e=>`<tr><td data-l="When">${escA(e.at?new Date(e.at).toLocaleString('en-IE',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'')}</td><td data-l="Who">${escA(e.by||'')}</td><td data-l="What">${escA(ACT[e.act]||e.act||'')}</td><td data-l="Row">${escA(lbl(e))}</td><td data-l="Position">${escA(pos(e))}</td><td data-l="Why">${escA((e.new&&e.new.why)||'')}</td></tr>`).join('')}</tbody></table>${ev.length>=300?'<div style="color:var(--t3);font-size:12px">Newest 300 shown.</div>':''}`:'<div style="color:var(--t3)">Nothing yet.</div>';
   }catch(e){const b=ov.querySelector('#seq-hb');if(b)b.textContent='Could not load the history — '+e.message;}
 }
+function seqStartRows(jobs){return jobs.map((o,i)=>({id:uid('Q'),wo:o.wo,floor:o.floor||null,unit:o.unit||null,descr:o.title||null,kind:seqKind(o.title),src:'start',match_how:'start',line_no:i+1}));}
 async function seqStart(pid,redraw){
   if(!seqCanEdit(pid))return toast('Only the project\'s PM, the office or the Production Manager can start the sequence');
   const jobs=seqJobsToStart(pid);if(!jobs.length)return toast('No live work orders to add');
   if(!confirm('Start the sequence for '+lsProjName(pid)+' with '+jobs.length+' work order'+(jobs.length!==1?'s':'')+' in due-date order?\n\nYou can reorder them after.'))return;
-  const rows=jobs.map((o,i)=>({id:uid('Q'),wo:o.wo,floor:o.floor||null,unit:o.unit||null,descr:o.title||null,kind:seqKind(o.title),src:'start',match_how:'start',line_no:i+1}));
+  const rows=seqStartRows(jobs);
   SEQ_DLG.busy=true;
   try{const r=await lsRpc('seq_insert',{p_project:pid,p_rows:rows,p_after:null,p_by:lqBy('')});
     if(!r||!r.ok)throw new Error((r&&r.err)||'not saved');
@@ -5182,6 +5183,37 @@ function seqUpBook(data){
     const res=seqReadUpload(aoa,r0);res.sheet=sn;if(!res.err)return res;if(!first)first=res;}
   return first||{lines:[],warn:[],err:'The file is empty — nothing loaded.'};
 }
+/* seqClaimPreview(pid, lines, extra) — the seq_insert CLAIM RULE worked out in the browser for the preview (the database decides
+   again on Save, so another screen adding rows meanwhile can only make it skip more). Lines in file order each claim the first
+   unclaimed live row with the same line key (floor + unit + product + name); else the first unclaimed row with NO line key in the
+   same house and of the same kind (an island only an island) — a "Start the sequence" row. A line that claims a row is SKIPPED.
+   A line that would be added while a live row of the same kind MIGHT be the same house (keyMatch "unsure": "0" vs "T09", a blank
+   floor …) is ❓ — left out unless a person taps "Add anyway". extra = rows "Start the sequence first" is about to make.
+   → {add:[L], skip:[{L,row,by}], unsure:[{L,row,why}]} */
+const seqIsl=(...v)=>/ ISLAND /.test(' '+keyTxt(v.filter(z=>z!=null).join(' '))+' ');
+const seqLk=r=>r.line_key!==undefined?r.line_key:keyLineStr(r.floor,r.unit,r.product,r.name); // the database's key when it sent one
+const seqHk=r=>r.house_key!==undefined?r.house_key:keyHouseStr(r.floor,r.unit);
+// a row's house for the "might be" check: its own floor / unit, else its job's
+function seqRowKeyJ(r){const o=seqJob(r);return keyOf(r.project_id||r.pid,r.floor||(o?fuF(o):''),r.unit||(o?fuU(o):''),'');}
+function seqClaimPreview(pid,lines,extra){
+  const live=seqRows(pid).concat((extra||[]).map(r=>({project_id:pid,...r}))),claimed=new Set(),out={add:[],skip:[],unsure:[]};
+  (lines||[]).forEach(L=>{
+    const k=keyLineStr(L.floor,L.unit,L.product,L.name),h=keyHouseStr(L.floor,L.unit),kd=L.kind||'kitchen',isl=seqIsl(L.name,L.product,L.descr);
+    let ex=null,by='line';
+    if(k!=null)ex=live.find(r=>!claimed.has(r.id)&&seqLk(r)===k)||null;
+    if(!ex&&h!=null){by='house';ex=live.find(r=>!claimed.has(r.id)&&seqLk(r)==null&&seqHk(r)===h&&r.kind===kd&&seqIsl(r.descr,r.name,r.product)===isl)||null;}
+    if(ex){claimed.add(ex.id);out.skip.push({L,row:ex,by});return;}
+    const lk=keyOf(pid,L.floor,L.unit,'');let why='';
+    const u=live.find(r=>{if(claimed.has(r.id)||r.kind!==kd)return false;const m=keyMatch(lk,seqRowKeyJ(r));if(m.r!=='unsure')return false;why=m.why;return true;});
+    if(u){out.unsure.push({L,row:u,why});return;}
+    out.add.push(L);});
+  return out;
+}
+// the rows seq_insert gets for upload lines (one row per line, waiting for a WO number)
+function seqUpRows(lines,file,upId){return(lines||[]).map(L=>({id:uid('Q'),floor:L.floor||null,unit:L.unit||null,product:L.product||null,name:L.name||null,descr:L.descr||null,kind:L.kind||'kitchen',
+  children:(L.children||[]).map(c=>({qty:c.qty,product:c.product||'',name:c.name||'',descr:c.descr||''})),src:'upload',upload_id:upId,line_no:L.line_no,why:'Cienapps upload: '+String(file||'file').slice(0,120)}));}
+// a short label for a line or row: "T09 · 12 · K8 HOUSE TYPE B LH"
+function seqLineLbl(x){return[x.floor,x.unit,[x.product,x.name||x.descr].filter(Boolean).join(' ')].filter(Boolean).join(' · ')||'(no floor / unit / name)';}
 // Office / Production Manager (and anyone from the project hub): the page in a window over the current screen
 function seqOpen(pid){
   if(!seqVis()||!LST.p.has(pid))return;
