@@ -30,6 +30,7 @@ const donep = p => p.evaluate(() => { const d = document.querySelector('.me-dov'
     const S = X.makeServer(row());
     D.insert(S.db, 'projects', { id: 'P3', name: 'Twin North', customer: 'Twin Homes', cien_names: [] });
     D.insert(S.db, 'projects', { id: 'P4', name: 'Twin South', customer: 'Twin Homes', cien_names: [] });
+    ['Type A', 'Type B', 'Type C', 'Type D', 'Type E', 'Type F', 'Larch Type Q'].forEach((n, i) => X.F3.seedList(S, 'T' + (i + 1), { wos: [], name: n, list: { is_template: true, type_name: n, list_type: 'kitchen' } }));
     const t = await X.dev(browser, S, 'office'), p = t.page;
     let w;
 
@@ -213,6 +214,83 @@ const donep = p => p.evaluate(() => { const d = document.querySelector('.me-dov'
     rec('L6: two projects fit → still "pick one", nothing asked yet', await p.evaluate(() => /fits more than one project/.test(document.getElementById('me-pm').innerText) && !window.__mq.length));
     await p.evaluate(() => document.querySelector('[data-mepp="P3"]').click()); await sleep(900);
     rec('L6: …"Twin North" tapped → name asked once, added, picked', (await mq()) === 1 && mats('P3').includes('Elm 18') && await p.evaluate(() => document.querySelector('.me-ed [data-mr="0|mat"]').value === 'Elm 18'), JSON.stringify(mats('P3')));
+    await closeAll(p);
+
+    // ---- L11 + L12: the Work order drop-down = this project's live jobs, soonest due first, "WO · Fl · Unit · due · has a list"
+    const opts = () => p.evaluate(() => [...document.querySelectorAll('.me-ed #me-wo option')].map(o => ({ v: o.value, t: o.textContent, d: o.disabled, s: o.selected })));
+    await p.evaluate(() => openListEditor(null, '', 'P1')); await sleep(400);
+    let os = await opts();
+    const wv = os.filter(o => o.v).map(o => o.v);
+    rec('L11: Aderrig only — shipped WO-5, on-hold WO-24 and Lucan\'s WO-6 left out', !wv.some(v => ['WO-5', 'WO-24', 'WO-6', 'WO-20', 'WO-26'].includes(v)) && wv.includes('WO-1') && wv.includes('WO-3'), JSON.stringify(wv));
+    rec('L12: sorted by due date, soonest first, no due date last (WO-1, WO-2 22 Oct · WO-4 20 Nov · WO-3 3 Dec · WO-25 none)', JSON.stringify(wv) === JSON.stringify(['WO-1', 'WO-2', 'WO-4', 'WO-3', 'WO-25']), JSON.stringify(wv));
+    const o1 = os.find(o => o.v === 'WO-1'), o4 = os.find(o => o.v === 'WO-4'), o25 = os.find(o => o.v === 'WO-25');
+    rec('L12: line "WO-1 · Fl GF · Unit 12 · due 22 Oct · has a list"', o1 && o1.t === 'WO-1 · Fl GF · Unit 12 · due 22 Oct · has a list', o1 && o1.t);
+    rec('L12: a job with no list has no "has a list"; no due date says so', o4 && o4.t === 'WO-4 · Fl T09 · Unit 13 · due 20 Nov' && o25 && o25.t === 'WO-25 · Fl T09 · Unit 31 · no due date', JSON.stringify([o4, o25]));
+    await closeAll(p);
+    // no project: one disabled line, never all the jobs
+    await p.evaluate(() => openListEditor(null, '', '')); await sleep(400);
+    os = await opts();
+    rec('L11: no project → one disabled line "— pick the project first (or type the WO number below) —"', os.length === 1 && os[0].d && os[0].t === '— pick the project first (or type the WO number below) —', JSON.stringify(os));
+    // typed WO sets the project and the list
+    await p.evaluate(() => { const e = document.getElementById('me-jwo'); e.value = 'WO-20'; e.dispatchEvent(new Event('input')); document.getElementById('me-find').click(); }); await sleep(900);
+    os = await opts();
+    w = await pst();
+    rec('L11: typed WO-20 → its project (Brand New Homes) set; the drop-down = WO-21 (12 Nov), WO-20 (14 Nov)', w.pid === bn[0].id && JSON.stringify(os.filter(o => o.v).map(o => o.v)) === '["WO-21","WO-20"]' && os.find(o => o.v === 'WO-20').s, JSON.stringify([w, os]));
+    await closeAll(p);
+    // a shipped WO chosen: stays an option, marked, never wiped by a redraw
+    await p.evaluate(() => openListEditor(null, 'WO-5')); await sleep(500);
+    await p.evaluate(() => document.getElementById('me-addsaw').click()); await sleep(150);
+    os = await opts();
+    rec('L11: chosen shipped WO-5 stays the chosen option, marked "(shipped)", after a redraw', await p.evaluate(() => document.getElementById('me-wo').value === 'WO-5') && /\(shipped\)$/.test((os.find(o => o.v === 'WO-5') || {}).t || ''), JSON.stringify(os.find(o => o.v === 'WO-5')));
+    await closeAll(p);
+    // NEW list: changing the project clears a WO of another project, says why
+    await p.evaluate(() => openListEditor(null, 'WO-4')); await sleep(500);
+    await p.evaluate(() => { const s = document.getElementById('me-pid'); s.value = 'P2'; s.dispatchEvent(new Event('change')); }); await sleep(200);
+    w = await p.evaluate(() => ({ wo: document.getElementById('me-wo').value, err: document.getElementById('me-err').textContent, opts: [...document.querySelectorAll('#me-wo option')].map(o => o.value).filter(Boolean) }));
+    rec('L11: new list, project changed to Lucan → WO-4 (Aderrig) taken off, said why; drop-down = Lucan\'s WO-6', !w.wo && /WO-4 is a Aderrig job, not Lucan — it was taken off this list/.test(w.err) && JSON.stringify(w.opts) === '["WO-6"]', JSON.stringify(w));
+    await closeAll(p);
+    // EXISTING list: the WO is kept, marked "(other project)"
+    await p.evaluate(() => openListEditor('L1')); await sleep(500);
+    await p.evaluate(() => { const s = document.getElementById('me-pid'); s.value = 'P2'; s.dispatchEvent(new Event('change')); }); await sleep(200);
+    w = await p.evaluate(() => ({ wo: document.getElementById('me-wo').value, t: (document.querySelector('#me-wo option[value="WO-1"]') || {}).textContent }));
+    rec('L11: existing list, project changed → WO-1 kept, marked "(other project)"', w.wo === 'WO-1' && /\(other project\)$/.test(w.t || ''), JSON.stringify(w));
+    await closeAll(p);
+    // the WO's text is escaped (title in the tooltip)
+    await p.evaluate(() => openListEditor(null, 'WO-24')); await sleep(500);
+    rec('L11: an on-hold WO chosen is marked "(on hold)", its title escaped', await p.evaluate(() => { const o = document.querySelector('#me-wo option[value="WO-24"]'); return !!o && /\(on hold\)$/.test(o.textContent) && /<b>x<\/b>/.test(o.title) && !document.querySelector('#me-wo b'); }));
+    await closeAll(p);
+
+    // ---- names: not pre-filled; blank → the WO number; a typed name is found again
+    await p.evaluate(() => openListEditor(null, 'WO-4')); await sleep(500);
+    w = await p.evaluate(() => { const n = document.getElementById('me-name'); return { v: n.value, ph: n.placeholder, lab: n.previousElementSibling.textContent }; });
+    rec('names: a new list for WO-4 (Unit 13) → name box EMPTY, "List name (optional)", "e.g. Kitchen — Type B"', w.v === '' && w.lab === 'List name (optional)' && w.ph === 'e.g. Kitchen — Type B', JSON.stringify(w));
+    await fillSaw(p, 0, 'Side', '1', '700', '500', 'MFC White');
+    await p.evaluate(() => document.getElementById('me-save').click()); await sleep(1000);
+    rec('names: saved with the name blank → the list is named "WO-4"', S.db.t.lists.some(l => !l.archived && (l.wos || []).includes('WO-4') && l.name === 'WO-4'), JSON.stringify(S.db.t.lists.filter(l => (l.wos || []).includes('WO-4')).map(l => l.name)));
+    await closeAll(p);
+    await p.evaluate(() => openListEditor(null, 'WO-25')); await sleep(500);
+    await fillSaw(p, 0, 'Side', '1', '700', '500', 'MFC White');
+    await p.evaluate(() => { const n = document.getElementById('me-name'); n.value = 'Larch special kitchen'; n.dispatchEvent(new Event('input')); document.getElementById('me-save').click(); }); await sleep(1000);
+    await closeAll(p);
+    await p.evaluate(() => lsFindDlg('P1')); await sleep(300);
+    await p.evaluate(() => { const q = document.getElementById('fo-q'); q.value = 'larch special'; q.dispatchEvent(new Event('input')); }); await sleep(300);
+    rec('names: the typed name is found in 🔍 Find old list', await p.evaluate(() => /Larch special kitchen/.test(document.getElementById('fo-body').innerText)));
+    await closeAll(p);
+    await p.evaluate(() => { LH.q = 'larch special'; showTab('l'); }); await sleep(400);
+    rec('names: …and in the Lists search', await p.evaluate(() => /Larch special kitchen/.test(document.getElementById('content') ? document.getElementById('content').innerText : document.body.innerText)));
+    await p.evaluate(() => { LH.q = ''; });
+    // Insert from template: > 6 templates → a find box; the template's name is found
+    await p.evaluate(() => openListEditor(null, 'WO-3')); await sleep(500);
+    await p.evaluate(() => document.getElementById('me-instpl').click()); await sleep(300);
+    w = await p.evaluate(() => { const q = document.getElementById('it-q'); if (!q) return null; q.value = 'larch'; q.dispatchEvent(new Event('input'));
+      return [...document.querySelectorAll('[data-itq]')].filter(r => r.style.display !== 'none').map(r => r.querySelector('b').textContent); });
+    rec('names: Insert from template (8 templates) has a find box; "larch" → only "Larch Type Q"', JSON.stringify(w) === '["Larch Type Q"]', JSON.stringify(w));
+    await closeAll(p);
+    // templates still need a name
+    await p.evaluate(() => { localStorage.setItem('wpfEditPin', pins().prod || pins().admin); openListEditor(null, '', 'P1', { tpl: true }); }); await sleep(400);
+    await fillSaw(p, 0, 'Side', '1', '700', '500', 'MFC White');
+    await p.evaluate(() => document.getElementById('me-save').click()); await sleep(300);
+    rec('names: a template with no name → "Give the template a name."', await p.evaluate(() => document.getElementById('me-err').textContent === 'Give the template a name.' && !!document.querySelector('.me-ed')));
     await closeAll(p);
 
     rec('no page errors', !(S.errors || []).length, JSON.stringify(S.errors));
