@@ -6821,7 +6821,7 @@ function renderPM(app){
     if(!byC.has(k)){byC.set(k,{live:[],arc:[]});cLbl.set(k,raw.replace(/\s+/g,' ').trim());}byC.get(k)[isArc?'arc':'live'].push(o);};
   live.filter(pmOk).forEach(o=>addC(o,false));arc.filter(pmOk).forEach(j=>addC(j,true));
   const custs=[...byC.keys()].sort((a,b)=>cLbl.get(a).localeCompare(cLbl.get(b)));
-  const lim=n=>anyF?60:n; // with a filter on, up to 60 per list (was newest 15 / 12); more → a "+N more — narrow the filters" line (speed: thousands of archived jobs)
+  const lim=n=>(F.k||F.fl||F.ti||qq.length>=2)?60:n; // attack7 speed: a one-letter search keeps the normal caps // with a filter on, up to 60 per list (was newest 15 / 12); more → a "+N more — narrow the filters" line (speed: thousands of archived jobs)
   const more=(all,n)=>all>n?`<div class="dsh-row" style="color:var(--t3);font-size:12px">+ ${all-n} more — narrow the filters or search to see them</div>`:'';
   const sel=custs;
   const row=(cells)=>`<div class="dsh-row">${cells}</div>`;
