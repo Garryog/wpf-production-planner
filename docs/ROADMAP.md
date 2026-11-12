@@ -251,3 +251,13 @@ Garry: "the deliveries page need a filter by customer/project option also".
 Garry: "The project manager page needs to have project filtering by locations and title also a search function".
 - Location = **Floor / block** (unit numbers found through the search). Filters: **Project, Location, Title, Search box**. (Garry, 12 Nov)
 - Goes out with the Deliveries release. Plan: docs/PLAN-dates-deliveries.md, addendum A13.
+
+### Drawing page (12 Nov 2026, Garry) — plan written, not built
+Garry: "on import any drawing or drawing stage work orders need to be put into a drawing page. drawing management is a area for future
+development down the line". Answers (12 Nov): ONLY 1. DRAWING (and WO-D) go to the Drawing page — "if step is at no site measure or
+further on steps it can go on capacity board"; seen by Office + Drawing office + PMs. Plan + 2 open questions: docs/PLAN-drawing-page.md.
+
+### Work orders with no value + FOC (12 Nov 2026, Garry) — plan written, not built
+Garry: "if a new work order is created in planner a warning is also needed for having no value. if there is not value on work orders PM
+need to be warned. management need to be able to have a view of wo's with no values. if the work order are free of charge we can ticked
+FOC. a report list of FOC wo's needs to be available for management to keep control". Plan + 4 open questions: docs/PLAN-no-value-foc.md.
