@@ -3883,6 +3883,21 @@ async function ltiLink(o,pid){ // add the customer heading to the project's Cien
   const has=(p.cien_names||[]).some(n=>sgNorm(n)===sgNorm(c));if(has&&p.active!==false)return p;
   return lsWrite('projects',p,{...(has?{}:{cien_names:[...(p.cien_names||[]),c]}),...(p.active===false?{active:true}:{})}); // an inactive project picked here is made active again
 }
+/* L5 (Garry 10 Nov: "customer and project will always be the same"): the project of a WO, found or made from its customer —
+   no PIN (same as the 3 Nov link rule). The projects are read fresh first (another PC may have made it a moment ago); a
+   project with the customer's name is linked; otherwise one is made {name = customer, cien_names [customer]}; the database
+   refusing a duplicate name (two PCs at once) → read again and use that one. Two projects fitting the customer equally →
+   {st:'many'} (a person picks — never guessed); no customer → {st:'nocust'}. opt.make: skip the "fits" look (the
+   "＋ New project" button on Lists: the person asked for that project). */
+async function lsEnsureCustProj(o,opt){
+  opt=opt||{};const c=String(o&&o.customer||'').trim();if(!c)return{st:'nocust'};
+  lsPut('projects',await lsGet('projects?select=*'));
+  if(!opt.make){const many=[],p0=projForCust(c,lsProjects(),many);if(p0)return{st:'ok',p:p0};if(many.length>1)return{st:'many',ps:many};}
+  const ex=lsProjFind(c); // already a project of that name (maybe inactive, maybe made on another PC a moment ago): link to it
+  if(ex)return{st:'ok',p:await ltiLink(o,ex.id)};
+  try{return{st:'ok',p:await lsWrite('projects',{id:uid('P'),name:c,customer:c,cien_names:[c]}),made:true};}
+  catch(x){lsPut('projects',await lsGet('projects?select=*'));const p=lsProjFind(c);if(p)return{st:'ok',p:await ltiLink(o,p.id)};throw x;}
+}
 function ltiLinkBind(){
   // Garry (3 Nov, answer 9): anyone in the office links a customer to a project — no PIN. A failure's ↻ Retry does the same link again.
   const fail=(w,e,again)=>{LTI.res[w]={err:e.message,again};ltiAfter();};
@@ -3891,11 +3906,7 @@ function ltiLinkBind(){
   const newp=(w,b)=>{const o=DB.orders.find(x=>x.wo===w);if(!o)return;
     const c=String(o.customer||'').trim();if(!c)return;
     delete LTI.res[w];if(b)b.disabled=true;
-    (async()=>{lsPut('projects',await lsGet('projects?select=*'));
-      const ex=lsProjFind(c); // already a project of that name (maybe made on another PC a moment ago): link to it
-      if(ex)return ltiLink(o,ex.id);
-      try{return await lsWrite('projects',{id:uid('P'),name:c,customer:c,cien_names:[c]});}
-      catch(x){lsPut('projects',await lsGet('projects?select=*'));const p=lsProjFind(c);if(p)return ltiLink(o,p.id);throw x;}})()
+    lsEnsureCustProj(o,{make:true}).then(r=>r.p) // one copy of the rule (L5)
       .then(p=>{toast('Project "'+p.name+'" added — add its templates under Lists → Templates');ltiAfter();}).catch(x=>fail(w,x,()=>newp(w)));};
   document.querySelectorAll('[data-ltitype]').forEach(b=>b.onclick=()=>openListEditor(null,b.dataset.ltitype));
   document.querySelectorAll('[data-ltilink]').forEach(e=>e.onchange=()=>link(e.dataset.ltilink,e.value));
@@ -3920,10 +3931,10 @@ function sgNorm(s){return String(s==null?'':s).toLowerCase().replace(/&/g,' and 
 const SG_CO=new Set(['ltd','limited','homes','home','developments','development','dev','devs','construction','constructions','builders','builder','building','group','properties','property','plc','dac','uc','co','company','contractors','contracting','estates','and','the','of','ireland','t','a','ie']);
 function sgPh(n){return String(n||'').replace(/\b(?:ph|phase) ?(\d+)\b/g,'phase $1');}
 function sgPhN(n){const m=/\bphase (\d+)\b/.exec(n);return m?String(+m[1]):'';}
-function projForCust(c,projects){
+function projForCust(c,projects,many){ // many (optional array): filled with the projects when two or more fit equally (L5, 10 Nov)
   const h=sgPh(sgNorm(c));if(!h)return null;
   const ps=(projects||[]).filter(p=>p&&p.active!==false);
-  const one=a=>{const u=[...new Set(a.map(p=>p.id))];return u.length===1?a[0]:null;};
+  const one=a=>{const u=[...new Set(a.map(p=>p.id))];if(u.length>1&&Array.isArray(many))u.forEach(id=>many.push(a.find(p=>p.id===id)));return u.length===1?a[0]:null;};
   const ex=ps.filter(p=>[p.name,p.customer,...(p.cien_names||[])].some(n=>n&&sgPh(sgNorm(n))===h));
   if(ex.length)return one(ex);
   const hp=sgPhN(h),base=k=>k.replace(/\bphase \d+\b/g,' ').replace(/ +/g,' ').trim();
@@ -4293,7 +4304,8 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     ltype:ex?(ex.ltype||'house'):(opt.ltype||(opt.tpl?'kitchen':'house')),tname:ex?ex.typeName:(opt.tname||''),tpl:ex?ex.tpl:!!opt.tpl,noCut:ex?!!ex.noCut:false,noFit:ex?!!ex.noFit:false,newWO:false,pw:{title:'',cust:'',floor:'',unit:'',due:'',val:'',hrs:''},
     carcass:'',door:'',undo:[],cur:'',focus:'',snapKey:'',note:opt.note||'',from:!ex&&opt.from&&opt.from.id?opt.from:null,
     newId:ex?'':opt.pendId||uid('L'),landed:!!opt.landed,unitsOn:!!opt.unitsOn,moreOpen:false,help:false,
-    jb:{floor:'',unit:'',title:'',wo:'',res:null,not:[],last:''},jm:null}; // jb = the Floor / Unit / Title boxes of a new list with no WO (L1); jm = the WO they found (L3) // a new list keeps ONE id for this editor: Save pressed again after a lost reply is the same list, never a second one
+    jb:{floor:'',unit:'',title:'',wo:'',res:null,not:[],last:''},jm:null,pauto:false,pmsg:null}; // jb = the Floor / Unit / Title boxes of a new list with no WO (L1); jm = the WO they found (L3) // a new list keeps ONE id for this editor: Save pressed again after a lost reply is the same list, never a second one
+  if(!ex&&!presetPid&&st.pid)st.pauto=true; // the project came from the WO's customer (L5)
   let sawStarted=!!ex&&!ex.tpl&&lsTicked(ex.id); // set on a refused save too (a tick landed while the editor was open)
   const prevId=ex?(ex.tpl?'':lsReplOf(ex.id)):st.from?st.from.id:''; // the list this one replaces: "already cut on old list (n)"
   const prevCut=r=>prevId&&(lsNum(r.L)>0||lsNum(r.W)>0)?lsPrevCutHTML(prevId,r.item,r.L,r.W,r.mat):'';
@@ -4312,8 +4324,39 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       st.jb.res={st:'haslist',wo,name:l.name};draw();return;}
     st.wo=wo;st.jm={wo,how};st.jb.res=null;
     if(!String(st.name||'').trim())st.name=defName(wo);
-    if(!st.pid){const p=lsProjForCust(o.customer);if(p){st.pid=p.id;edges=lsProjEdges(p.id);}}
-    draw();
+    if(!st.pid){const p=lsProjForCust(o.customer);if(p){st.pid=p.id;st.pauto=true;edges=lsProjEdges(p.id);}}
+    draw();autoProj();
+  };
+  // ---- L5 (Garry 10 Nov: customer = project, always): a WO is known and no project yet → the project is found or made from the
+  //      WO's customer straight away (no PIN). Two projects fit → the person picks; no customer → said plainly. then(): carry on
+  //      (e.g. the new material that was asked for).
+  const autoProj=then=>{
+    if(st.pid||!st.wo||st.tpl||st.newWO||(st.pmsg&&st.pmsg.st==='busy'))return;
+    const o=DB.orders.find(x=>x.wo===st.wo);if(!o)return;
+    const c=String(o.customer||'').trim(),wo0=st.wo;
+    if(!c){st.pmsg={st:'nocust'};keep();draw();return;}
+    st.pmsg={st:'busy',c};keep();draw();
+    lsEnsureCustProj(o).then(r=>{
+      if(!document.body.contains(ov)||ov.classList.contains('me-dov'))return;
+      keep();const clean=sig()===st.sig0;st.pmsg=null;
+      if(st.pid){draw();return;} // a project was picked meanwhile: theirs stands
+      if(st.wo!==wo0){draw();autoProj(then);return;} // another WO was picked meanwhile: its customer
+      if(r.st==='many'){st.pmsg={st:'many',c,ps:r.ps};draw();return;}
+      if(r.st!=='ok'){st.pmsg={st:'nocust'};draw();return;}
+      st.pid=r.p.id;st.pauto=true;edges=lsProjEdges(st.pid);draw();if(clean)st.sig0=sig(); // set by the app, not typed: closing doesn't ask
+      if(r.made)toast('Project "'+r.p.name+'" set up from the WO\'s customer ✓');
+      if(then)then();
+    }).catch(x=>{if(!document.body.contains(ov))return;keep();st.pmsg={st:'err',c,m:x.message};draw();});
+  };
+  const pmsgHTML=()=>{
+    if(st.tpl)return'';const pm=st.pmsg,E=escA,o=st.wo?DB.orders.find(x=>x.wo===st.wo):null,pick='Pick the project — or ＋ New project… at the bottom of the list';
+    const box=(t,warn)=>`<div class="me-pm" id="me-pm" style="font-size:12px;margin-top:3px;max-width:420px;${warn?'color:#8a5a00;font-weight:700':'color:var(--t3)'}">${t}</div>`;
+    if(pm&&pm.st==='busy')return box('Setting up project \''+E(pm.c)+'\'…');
+    if(st.pid)return st.pauto&&o?box('Project: <b>'+E(lsProjName(st.pid))+'</b> — from the WO\'s customer'):'';
+    if(pm&&pm.st==='many')return box('\''+E(pm.c)+'\' fits more than one project — pick one: '+pm.ps.map(p=>`<button class="btn btn-s" data-mepp="${E(p.id)}" style="font-size:12px;padding:2px 9px;margin:2px 4px 0 0">${E(p.name)}</button>`).join(''),true);
+    if(pm&&pm.st==='err')return box('Project \''+E(pm.c)+'\' could not be set up ('+E(pm.m)+') — '+pick+'.',true);
+    if(o&&!String(o.customer||'').trim())return box('This WO has no customer in Cienapps — pick the project, or ＋ New project… at the bottom of the list.',true);
+    return box(pick+'.',true);
   };
   const jbFind=()=>{
     keep();const b=st.jb,typed=String(b.wo||'').trim();
@@ -4481,7 +4524,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       ${tbc.length?`<div style="margin-bottom:6px">${lsTbcChip(tbc,true)}</div>`:''}
       <div class="me-top">
         <div><label>Project</label><div style="display:flex;gap:6px;flex-wrap:wrap"><select id="me-pid" style="${inp};max-width:230px"><option value="">— pick the project —</option>${lsProjects().map(p=>`<option value="${escA(p.id)}"${p.id===st.pid?' selected':''}>${escA(p.name)}</option>`).join('')}<option value="__new">＋ New project…</option></select>
-          <button class="btn btn-s" id="me-mats" style="font-size:12px;white-space:nowrap" title="The project's boards, colours and fittings — add or change them here">🧱 Project materials (add / edit)</button></div></div>
+          <button class="btn btn-s" id="me-mats" style="font-size:12px;white-space:nowrap" title="The project's boards, colours and fittings — add or change them here">🧱 Project materials (add / edit)</button></div>${pmsgHTML()}</div>
         ${st.tpl?'':`<div><label>Work order</label>
           ${st.newWO?`<div style="font-size:12px;color:#5b21b6;font-weight:700;padding:7px 0">New work order ${escA(nextPNumber())} <button class="btn btn-s" id="me-pick" style="font-size:11px;padding:2px 8px">use an existing WO instead</button></div>`
           :`<div style="display:flex;gap:6px"><select id="me-wo" style="${inp};max-width:190px"><option value="">— pick a work order —</option>${live().map(o=>`<option value="${escA(o.wo)}"${o.wo===st.wo?' selected':''} title="${escA([fuLbl(o),o.title,o.customer].filter(Boolean).join(' · '))}">${escA(woShort(o))}</option>`).join('')}</select>
@@ -4596,18 +4639,23 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     g('me-nofit').onchange=e=>{keep();st.noFit=e.target.checked;draw();};
     g('me-carc').onchange=e=>{st.carcass=e.target.value;};
     g('me-door').onchange=e=>{st.door=e.target.value;};
-    g('me-mats').onclick=()=>{keep();if(st.pid)lsMaterialsDlg(st.pid,()=>draw());else{const e=g('me-err');if(e)e.textContent='Pick the project first — materials belong to a project.';}}; /*L6: never greyed*/
+    g('me-mats').onclick=()=>{keep();if(st.pid)return lsMaterialsDlg(st.pid,()=>draw()); /*L6: never greyed — with a WO the project is set up first (L5)*/
+      if(st.wo&&!st.tpl&&!st.newWO&&String((DB.orders.find(x=>x.wo===st.wo)||{}).customer||'').trim())return autoProj(()=>lsMaterialsDlg(st.pid,()=>draw()));
+      const e=g('me-err');if(e)e.textContent='Pick the project first — materials belong to a project.';const s=g('me-pid');if(s)s.focus();};
+    ov.querySelectorAll('[data-mepp]').forEach(b=>b.onclick=()=>{keep();st.pid=b.dataset.mepp;st.pauto=false;st.pmsg=null;edges=lsProjEdges(st.pid);draw();});
     on('me-matsnow',()=>{keep();if(st.pid)lsMaterialsDlg(st.pid,()=>draw());});
     g('me-pid').onchange=e=>{keep();
-      if(e.target.value==='__new'){if(!lsEditOk()){draw();return;}const n=prompt('New project name:','');if(!n||!n.trim()){draw();return;}
-        lsProject(n.trim()).then(id=>{st.pid=id;edges=lsProjEdges(id);draw();}).catch(x=>{draw();g('me-err').textContent='Project not added — '+x.message;});return;}
-      st.pid=e.target.value;edges=lsProjEdges(st.pid);draw();};
+      if(e.target.value==='__new'){const o=st.wo?DB.orders.find(x=>x.wo===st.wo):null; // (L5) no PIN — the customer = project rule
+        const n=prompt('New project name:',String(o&&o.customer||'').trim());if(!n||!n.trim()){draw();return;}
+        lsProject(n.trim()).then(id=>{keep();st.pid=id;st.pauto=false;st.pmsg=null;edges=lsProjEdges(id);draw();}).catch(x=>{draw();g('me-err').textContent='Project not added — '+x.message;});return;}
+      st.pid=e.target.value;st.pauto=false;if(st.pid)st.pmsg=null;edges=lsProjEdges(st.pid);draw();};
     // the name boxes keep st up to date as you type: a redraw (picking a colour, adding a row) no longer puts back the old name
     const nm=g('me-name');if(nm)nm.oninput=()=>{st.name=nm.value;};const tn0=g('me-tname');if(tn0)tn0.oninput=()=>{st.tname=tn0.value;};
-    const w=g('me-wo');if(w)w.onchange=()=>{const prev=st.wo;st.wo=w.value;const wi=g('me-woinfo');if(wi)wi.innerHTML=woInfoHTML(DB.orders.find(x=>x.wo===st.wo));const ne=g('me-name');if(ne&&(!ne.value||ne.value===defName(prev))){ne.value=defName(st.wo);st.name=ne.value;}
+    const w=g('me-wo');if(w)w.onchange=()=>{const prev=st.wo;st.wo=w.value;if(st.pmsg&&st.pmsg.st!=='busy')st.pmsg=null;const wi=g('me-woinfo');if(wi)wi.innerHTML=woInfoHTML(DB.orders.find(x=>x.wo===st.wo));const ne=g('me-name');if(ne&&(!ne.value||ne.value===defName(prev))){ne.value=defName(st.wo);st.name=ne.value;}
       const h0=R()[0];if(opt.std&&h0&&h0.k==='hdr'&&!h0.sub&&(!String(h0.item||'').trim()||h0.item===lsStdHouse(DB.orders.find(x=>x.wo===prev)))){ // standard layout: the house heading follows the work order
         h0.item=lsStdHouse(DB.orders.find(x=>x.wo===st.wo));const hi=ov.querySelector('[data-mr="0|item"]');if(hi)hi.value=h0.item;}
-      const o=DB.orders.find(x=>x.wo===st.wo),p=o&&lsProjForCust(o.customer);if(!st.pid&&p){keep();st.pid=p.id;edges=lsProjEdges(p.id);draw();}
+      const o=DB.orders.find(x=>x.wo===st.wo),p=o&&lsProjForCust(o.customer);if(!st.pid&&p){keep();st.pid=p.id;st.pauto=true;edges=lsProjEdges(p.id);draw();}
+      else if(!st.pid&&o){st.pmsg=null;keep();draw();autoProj();}
       else if(jbOn()&&(!st.wo||!prev||(st.jm&&st.jm.wo!==st.wo))){if(st.jm&&st.jm.wo!==st.wo)st.jm=null;keep();draw();}}; // the job boxes come and go with the WO
     g('me-save').onclick=()=>save();
     on('me-x0',()=>closeEd());on('pod-x',()=>closeEd());
@@ -4723,7 +4771,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     [['me-jf','floor'],['me-ju','unit'],['me-jt','title'],['me-jwo','wo']].forEach(([id,k])=>{const e=g(id);if(e)st.jb[k]=e.value;});};
   const save=()=>{
     keep();const g=id=>ov.querySelector('#'+id),err=t=>{g('me-err').textContent=t+(st.chkNote&&t&&!/^Checking/.test(t)?' '+st.chkNote:'');}; // chkNote: the house check couldn't be made (round 3)
-    if(!st.pid)return err('Pick the project.');
+    if(!st.pid)return err('Pick the project — or ＋ New project… at the bottom of the list.');
     let rows=R().filter(r=>!lsEmptyRow(r)); // empty rows (nothing typed) are left out, as in Excel
     const
       b=(()=>{const U=[];let u=null;rows.forEach(r=>{if(r.k==='hdr'){u=r.units!==undefined&&r.units!==null?r.units:null;U.push(null);}else U.push(u);});return U;})();
@@ -4917,7 +4965,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     e.preventDefault();if(ov.classList.contains('me-dov'))ov.remove();else closeEd();};
   document.addEventListener('keydown',escH);
   document.querySelectorAll('.pod-ovl.me-dov').forEach(x=>x.remove()); // a "Saved ✓" panel still open: that list is saved — it goes
-  document.body.appendChild(ov);draw();st.sig0=sig();
+  document.body.appendChild(ov);draw();st.sig0=sig();autoProj();
   return{st,draw};
 }
 /* ---------- Save as template / Update template / History (V2; Production Manager, Drawing office or Admin PIN) ----------
