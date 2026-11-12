@@ -4735,11 +4735,12 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     const un=g('me-units');if(un)un.onchange=()=>{keep();st.unitsOn=un.checked||hasUnits();draw();};
     on('me-astpl',()=>{keep();lsSaveAsTpl({pid:st.pid,name:st.name,ltype:st.ltype,tname:st.tname,lines:lsEdLines(R().filter(r=>!lsEmptyRow(r)).map(r=>{const x={...noAutoStores(r)};delete x.lid;return x;}))});});
     on('me-hist',()=>{if(ex)lsTplHistory(ex.id);});
-    on('me-instpl',()=>{keep();st.startOpen=false;insTpl();});
+    const stOff=()=>{st.startOpen=false;const d=g('me-start');if(d)d.open=false;}; // a choice made in "Start from…" closes it (round 2 K1/K2)
+    on('me-instpl',()=>{keep();stOff();insTpl();});
     on('me-jobtog',()=>{keep();st.jobOpen=true;draw();const w=g('me-wo');if(w)w.focus();});
-    on('me-findold',()=>{keep();st.startOpen=false;lsFindDlg(st.pid||'',useOld);});
+    on('me-findold',()=>{keep();stOff();lsFindDlg(st.pid||'',useOld);});
     {const sd=g('me-start');if(sd)sd.ontoggle=()=>{st.startOpen=sd.open;};}
-    on('me-impxl',()=>{keep();const fx=g('me-xlfile');if(fx){fx.value='';fx.click();}});
+    on('me-impxl',()=>{keep();const fx=g('me-xlfile');if(fx){fx.value='';fx.click();}stOff();});
     const xf=g('me-xlfile');if(xf)xf.onchange=()=>{const f=xf.files[0];if(f)impXl(f);};
     ov.querySelectorAll('[data-mecopy]').forEach(b=>b.onclick=()=>copyToNew());
     g('me-nocut').onchange=e=>{keep();st.noCut=e.target.checked;draw();};
