@@ -545,3 +545,15 @@ Search box**. Built on this branch so it goes out with the Deliveries release (t
 
 ### Build + test
 - Code: `index.html` `pmf*` functions and `renderPM` (tag `/*v-pmf*/`). Test: `tests/dates/c12-pm-filters.test.js` (21 checks × 2 widths = 42).
+
+### 12 Nov 2026 — progress (A12 Deliveries filter, A13 PM page filters)
+- Tester: attack6 (Deliveries filter) 31/31 and attack7 (PM filters) 40/40 after fixes. Two Criticals found and fixed: a ticked job hidden
+  by the filter could still be placed on a van; "✓ Site ready for all" confirmed jobs the PM filter was hiding.
+- The Deliveries filter sits on the "To plan" line (it added height above the van grid and broke a real mouse drag onto a low van cell).
+- Full suite on 0a1ec2d (210 files): only ACCEPTED-FAILURES rows fail, plus attack5-carryover B5 / B8 — fixed in 32264a6 (B8 = allowed
+  difference: the PM page's filter bar). All tests/dates files re-run after 32264a6; other folders not re-run after the last small commits
+  (Manager re-ran the two that touch these screens: pass).
+- **Manager: GO WITH CONDITIONS** — goes out with the Deliveries release only. All 11 Nov Job A conditions still stand. New: on the Job B
+  merge combine the PM's own-projects rule (pmCustOk) with these filters and attack them together; tell the PMs their customer drop-down
+  is now Project / Location / Title / Search.
+- Not tested: real phone keyboard, the real 2-minute refresh, real Android Chrome.
