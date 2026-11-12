@@ -456,7 +456,7 @@ details.lti-other{margin-bottom:14px}details.lti-other>summary{cursor:pointer;fo
 /* Simple lists (Garry, 4 Nov): headings first, fewer buttons (the rest under More), bigger type, Bought in */
 .me-ed .me-grid,.me-ed .me-grid input,.me-ed .me-grid select{font-size:15px}.me-ed .me-grid input,.me-ed .me-grid select{min-height:34px}
 .lw-due{display:inline-block;font-size:13px;font-weight:700;border-radius:6px;padding:4px 10px;border:1px solid;white-space:nowrap}.lw-due.red{background:#fde8e8;color:#b42318;border-color:#e57368}.lw-due.amber{background:#fff4d6;color:#7a4a00;border-color:#e0a43a}.lw-due.grey{background:#f1f4f8;color:#3b4c63;border-color:#cdd5e0}
-.me-hwo{font-family:'DM Mono',monospace;background:#eef4ff;border:1px solid #c7d7f5;border-radius:6px;padding:1px 8px;margin-left:6px;white-space:nowrap}.me-start .me-morep{left:auto;right:0}@media(max-width:699px){.me-tb{flex-wrap:wrap}.me-tb .lw-due{order:3}.me-start .me-morep{left:0;right:auto}}.me-ed .me-save-big{font-size:17px;padding:12px 30px;min-height:48px}
+.me-hwo{font-family:'DM Mono',monospace;background:#eef4ff;border:1px solid #c7d7f5;border-radius:6px;padding:1px 8px;margin-left:6px;white-space:nowrap}.me-start .me-morep{left:auto;right:0}@media(max-width:699px){.me-tb{flex-wrap:wrap}.me-tb>div:first-child{font-size:15px!important}.me-tb .lw-due{order:3;flex:1 0 100%;text-align:center}.me-hwo{display:inline-block;margin-left:0;white-space:normal;word-break:break-all}.me-start .me-morep{left:0;right:auto}}.me-ed .me-save-big{font-size:17px;padding:12px 30px;min-height:48px}
 .me-bar{display:flex;gap:8px;margin:10px 0 6px;flex-wrap:wrap;align-items:flex-start}.me-big{font-size:15px;padding:8px 16px;min-height:38px}
 .me-more{position:relative}.me-more>summary{list-style:none;cursor:pointer;display:inline-block}.me-more>summary::-webkit-details-marker{display:none}
 .me-morep{position:absolute;z-index:5;left:0;top:44px;background:#fff;border:1px solid var(--b2);border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.15);padding:10px 12px;display:flex;flex-direction:column;gap:8px;min-width:280px}
@@ -4302,7 +4302,8 @@ function lsMatCan(){return MAT_ED.includes(ROLE);}
 function lsTplSaveOk(){if(ROLE==='design')return true;const p=pins(),v=ls.get('wpfEditPin');return !!v&&[p.design,p.admin].includes(v);}
 /* DD1 (list window part): the due date as ONE tag — red = overdue, amber = due this week, grey = later. */
 function lwDueTag(o){if(!o)return'';const m=/^(\d{4}-\d{2}-\d{2})/.exec(String(o.dueDate==null?'':o.dueDate).trim()),d=m?new Date(m[1]+'T12:00:00'):null;
-  if(!d||isNaN(d))return'<span class="lw-due grey" id="me-due">no due date</span>';
+  if(m&&d&&!isNaN(d)&&(d.getMonth()+1!==+m[1].slice(5,7)||d.getDate()!==+m[1].slice(8,10)))return'<span class="lw-due grey" id="me-due">due ?</span>';
+  if(!d||isNaN(d))return'<span class="lw-due grey" id="me-due">'+(String(o.dueDate==null?'':o.dueDate).trim()?'due ?':'no due date')+'</span>';
   const t=todayLocal(),cls=m[1]<t?'red':wkKey(d)===wkKey(new Date(t+'T12:00:00'))?'amber':'grey';
   return `<span class="lw-due ${cls}" id="me-due" title="${cls==='red'?'Overdue':cls==='amber'?'Due this week':'Due date'}">${cls==='red'?'OVERDUE · ':''}Due ${d.toLocaleDateString('en-IE',{weekday:'short',day:'numeric',month:'short'}).replace(/,/g,'')} · Wk ${wkNum(d)}</span>`;}
 function lsHasEditPin(){if(['prod','design'].includes(ROLE))return true;const p=pins(),v=ls.get('wpfEditPin');return !!v&&[p.prod,p.design,p.admin].includes(v);}
@@ -4333,6 +4334,11 @@ function lsNum(v){const x=parseFloat(String(v==null?'':v).replace(/\s*mm$/i,''))
 function lsEmptyRow(r){return r.k==='part'&&['item','qty','L','W','edging','edging2','note'].every(f=>String(r[f]==null?'':r[f]).trim()==='');}
 function openListEditor2(listId,presetWo,presetPid,opt){
   opt=opt||{};
+  if(listId&&lsList(listId)&&!LST.full.has(listId)&&!opt._ld){ // (Tester 12 Nov, Critical) rows not loaded yet (template / archived / shipped job): fetch them first — never open it looking empty
+    toast('Loading the list…');
+    lsReloadList(listId).then(()=>{if(LST.full.has(listId))openListEditor2(listId,presetWo,presetPid,{...opt,_ld:true});else toast('Could not load the list — nothing was opened. Try again.');})
+      .catch(e=>toast('Could not load the list — '+((e&&e.message)||'no connection')+'. Nothing was opened.'));
+    return null;}
   const ex=listId?lsList(listId):null;
   if(!ex&&!opt.tpl&&!opt.pendId&&presetWo){const pe=lsPendFor(presetWo);
     if(pe){const nm='"'+pe.name+'"';
@@ -4643,7 +4649,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
         <span style="flex:1"></span>
         <button class="btn btn-s me-big" id="me-help" title="How the editor works, and the keyboard">?</button>
       </div>
-      <div class="me-keys"${st.help?'':' hidden'}>Rows with a length or width go to the <b>Saw</b>; rows without go to <b>Stores</b>; <b>Bought in</b> rows are never cut or picked. Materials come from the project's list — pick <b>＋ Add new material…</b> if one is missing. A new row starts with the material of the saw row above.<br>Works like Excel: <b>Tab</b> / <b>Shift+Tab</b> across · <b>Enter</b> down (a new row at the bottom) · arrow keys · <b>Ctrl+D</b> copies the cell above · <b>Insert</b> adds a row · <b>Ctrl+Delete</b> deletes the row · <b>Ctrl+Z</b> undo · paste rows straight from Excel</div>
+      <div class="me-keys"${st.help?'':' hidden'}>Rows with a length or width go to the <b>Saw</b>; rows without go to <b>Stores</b>; <b>Bought in</b> rows are never cut or picked. Materials come from the project's list — pick <b>＋ Add new material…</b> if one is missing. A new row starts with the material of the saw row above.<br>Works like Excel: <b>Tab</b> / <b>Shift+Tab</b> across · <b>Enter</b> down (a new row at the bottom) · arrow keys · <b>Ctrl+D</b> copies the cell above · <b>Insert</b> adds a row · <b>Ctrl+Delete</b> deletes the row · <b>Ctrl+Z</b> undo · <b>Ctrl+S</b> save · paste rows straight from Excel</div>
       <div id="me-err" style="color:#b42318;font-weight:700;font-size:13px;min-height:18px"></div>
       <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">${ex&&st.tpl?'<button class="btn btn-s" id="me-hist">🕘 History</button>':''}${st.tpl||!lsTplSaveOk()?'':'<button class="btn btn-s" id="me-astpl" title="Save these rows as a template of the project (unsaved changes included)">📐 Save as template</button>'}<span style="flex:1"></span><button class="btn btn-s" id="pod-x" title="Close this window (asks first if anything is not saved)">Close</button><button class="btn btn-g me-save-big" id="me-save">${ex?'Save changes':st.tpl?'Save template':'Save list → Saw & Stores'}</button></div>
     </div>`;
@@ -4751,7 +4757,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       draw();if(cl){const er=g('me-err');if(er)er.textContent=cl;}projSet();};
     // the name boxes keep st up to date as you type: a redraw (picking a colour, adding a row) no longer puts back the old name
     const nm=g('me-name');if(nm)nm.oninput=()=>{st.name=nm.value;};const tn0=g('me-tname');if(tn0)tn0.oninput=()=>{st.tname=tn0.value;};
-    const w=g('me-wo');if(w)w.onchange=()=>{const prev=st.wo;st.wo=w.value;if(st.pmsg&&st.pmsg.st!=='busy')st.pmsg=null;const wi=g('me-woinfo');if(wi)wi.innerHTML=woInfoHTML(DB.orders.find(x=>x.wo===st.wo));
+    const w=g('me-wo');if(w)w.onchange=()=>{const prev=st.wo;st.wo=w.value;{const hw=g('me-hwo'),hd=g('me-due'),oo=DB.orders.find(x=>x.wo===st.wo);if(hw&&st.wo){hw.textContent=st.wo;if(hd)hd.outerHTML=lwDueTag(oo)||'<span id="me-due"></span>';}else if(!!hw!==!!st.wo)setTimeout(()=>{keep();draw();},0);} /*the title bar always shows the WO the list is for*/if(st.pmsg&&st.pmsg.st!=='busy')st.pmsg=null;const wi=g('me-woinfo');if(wi)wi.innerHTML=woInfoHTML(DB.orders.find(x=>x.wo===st.wo));
       const h0=R()[0];if(opt.std&&h0&&h0.k==='hdr'&&!h0.sub&&(!String(h0.item||'').trim()||h0.item===lsStdHouse(DB.orders.find(x=>x.wo===prev)))){ // standard layout: the house heading follows the work order
         h0.item=lsStdHouse(DB.orders.find(x=>x.wo===st.wo));const hi=ov.querySelector('[data-mr="0|item"]');if(hi)hi.value=h0.item;}
       const o=DB.orders.find(x=>x.wo===st.wo),p=o&&lsProjAuto(o.customer).p;if(!st.pid&&p){keep();st.pid=p.id;st.pauto=true;edges=lsProjEdges(p.id);draw();}
@@ -4817,6 +4823,8 @@ function openListEditor2(listId,presetWo,presetPid,opt){
   };
   const useOld=(rows,l)=>{ // 🔍 An old list…: its rows come into THIS list (the old list is never changed)
     const add=rows.map(fresh);if(!add.length)return;
+    const inUnits=!add.some(r=>r.k==='hdr'&&r.units!=null)&&(()=>{for(let j=R().length-1;j>=0;j--)if(R()[j].k==='hdr')return R()[j].units!=null;return false;})();
+    if(inUnits&&add[0].k!=='hdr')add.unshift({k:'hdr',item:'From "'+String(l.name||'old list')+'"',note:''}); // a plain heading ends the unit block: the quantities stay as they were on the old list (never × units)
     snap();const drop=R().length===1&&lsEmptyRow(R()[0])?1:0,at=drop?0:R().length;
     R().splice(at,drop,...add);if(add.some(r=>r.k==='hdr'&&r.units!=null))st.unitsOn=true;st.focus=at+'|item';draw();
     toast('Added '+add.length+' row'+(add.length!==1?'s':'')+' from "'+l.name+'" — change anything for this job, then Save');
@@ -4826,7 +4834,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     const tps=lsTemplatesFor(st.pid).filter(t=>!ex||t.id!==ex.id);
     const dl=lsDlg('<div id="it-body"></div>',640);const body=dl.querySelector('#it-body');
     dl.onclick=e=>{if(e.target===dl||e.target.id==='pod-x')dl.remove();}; // closing it leaves the editor as it was
-    if(!tps.length){body.innerHTML=`<div style="font-weight:800;color:#14335c;font-size:16px;margin-bottom:6px">📐 Insert unit from template</div><div style="font-size:13px;color:var(--t2)">${escA(lsProjName(st.pid))} has no templates yet. Make one with <b>📐 Save as template</b> on any list (needs the Production Manager, Drawing office or Admin PIN).</div>`;return;}
+    if(!tps.length){body.innerHTML=`<div style="font-weight:800;color:#14335c;font-size:16px;margin-bottom:6px">📐 Insert unit from template</div><div style="font-size:13px;color:var(--t2)">${escA(lsProjName(st.pid))} has no templates yet. Templates are made by the Drawing office (📐 Save as template on a list).</div>`;return;}
     const pick=async tid=>{
       body.innerHTML='Loading…';
       try{if(!LST.full.has(tid))await lsReloadList(tid);}catch(e){body.innerHTML='<span style="color:var(--red)">Could not load the template — '+escA(e.message)+'</span>';return;}
@@ -4936,7 +4944,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
         .catch(()=>{if(sb)sb.disabled=false;st.chkNote='⚠ This house could not be checked against the database (offline?) — it is checked again on the next Save.';again();});
         return;}}
     officeWho(by=>{
-     const go=()=>{
+     const go0=()=>{
       if(st.newWO){
         const pwo=nextPNumber(),val=parseFloat(g('me-pval').value)||0;
         let hours=parseFloat(g('me-phrs').value),hoursEstimated=false;
@@ -4969,6 +4977,21 @@ function openListEditor2(listId,presetWo,presetPid,opt){
               err('✓ Saved — the reply was lost, but '+nm+' is in the database.'+old+' Close this, or change rows and press Save again (it updates the same list — never a second one).');}
             else if(s==='not')err('Not saved — the connection failed ('+x.message+') and '+nm+' is not in the database. Press Save again.');
             else err('May have saved — the reply was lost ('+x.message+') and the database could not be checked. Press Save again when the connection is back: it saves to the same list, never a second one.');});});
+     };
+     /* (Tester 12 Nov, High) ONE work order, ONE live list: before a list goes onto a WO the database is asked whether that WO
+        already has one (made on another PC a moment ago, or picked with "Change job"). Never silent: the person is told and chooses. */
+     const go=()=>{
+      const tgt=st.newWO?'':String(d.wo||'');
+      if(st.tpl||!tgt||st.dupOk===tgt||(ex&&(ex.wos||[]).includes(tgt)))return go0();
+      const sb=g('me-save');if(sb)sb.disabled=true;err('Checking '+tgt+' for a list…');
+      lsLiveFor(tgt).then(found=>{if(sb)sb.disabled=false;err('');
+        const other=found.filter(l=>l.id!==(ex?ex.id:d.newId)&&!(d.replaces&&d.replaces.id===l.id));
+        if(!other.length)return go0();
+        const nm='"'+other[0].name+'"'+(other.length>1?' (and '+(other.length-1)+' more)':'');
+        if(confirm(tgt+' already has a cutting list: '+nm+'.\n\nOne work order should have ONE list — with two, the saw could cut the job twice.\n\nOK = do NOT save this one (your rows stay on screen)\nCancel = save it anyway as a second list for '+tgt))
+          return err(tgt+' already has the list '+nm+' — NOT saved. Your rows are still here. Open that list to change it, or use Change job to pick another work order.');
+        st.dupOk=tgt;go0();
+      }).catch(()=>{if(sb)sb.disabled=false;err('');go0();}); // offline: the save itself says so
      };
       if(st.newWO){ // (round 2) ask the database first: another screen may have made this house's job a moment ago
         const pf=g('me-pfloor').value,pu=g('me-punit').value,pt=g('me-ptitle').value;
@@ -5017,6 +5040,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       if(!R().length)R().push(blank(0)); // the grid never goes empty: one empty row, the cursor in it
       st.focus=Math.min(i,R().length-1)+'|'+f;draw();return;}
     if(ctrl&&(e.key==='z'||e.key==='Z')&&!e.shiftKey){stop();undo();return;}
+    if(ctrl&&(e.key==='s'||e.key==='S')){stop();t.blur();const sb=ov.querySelector('#me-save');if(sb&&!sb.disabled)sb.click();return;} // Ctrl+S = the big Save (no mouse needed)
   });
   // ---- paste from Excel (not on phones). One cell → the browser pastes it as usual. Rows copied from a sheet with the
   //      cursor in Description → read by lsParseGrid (header row skipped, text-only rows = headings, "N total nr of units"
@@ -5081,6 +5105,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
   document.addEventListener('keydown',escH);
   document.querySelectorAll('.pod-ovl.me-dov').forEach(x=>x.remove()); // a "Saved ✓" panel still open: that list is saved — it goes
   document.body.appendChild(ov);draw();st.sig0=sig();autoProj();
+  if(!ex&&!st.tpl&&st.wo&&window.innerWidth>=700&&R().length===1&&lsEmptyRow(R()[0]))setTimeout(()=>{const a=document.activeElement;if(document.body.contains(ov)&&!(a&&ov.contains(a)&&a!==ov))go(0,'item');},60); // opened from a job: the cursor is in the first Description box — just type
   return{st,draw};
 }
 /* ---------- Save as template / Update template / History (V2; Production Manager, Drawing office or Admin PIN) ----------
