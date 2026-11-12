@@ -550,3 +550,49 @@ Garry, 12 Nov: releases go out as small pieces; answers **A1, B1, D1** (all "as 
 - **Not done / for others:** no Tester re-attack on this merged branch yet; real PC drag and Android Chrome never checked on hardware
   (checklist step 11). The code comments at the Saturday and on-the-road rules still say "ASSUMED" — the answers are in the docs.
 - Next: Tester attacks `release/deliveries-weeks`; Manager GO / NO-GO; only Garry merges.
+
+### 12 Nov 2026 — Tester attack 6 + Manager verdict on the "Deliveries weeks" release (`release/deliveries-weeks`, 3adb928)
+**Verdict: GO WITH CONDITIONS** for Garry to merge on Mon 16 Nov.
+
+**What was run (fake database only):** every `tests/dates/*.test.js` and `tests/lists-filter/*.test.js` by the Manager: **909 pass / 6 fail**,
+the 6 all on ACCEPTED-FAILURES (attack1-oldversion ×3, attack3-guard ×1, attack4-usability L12 ×2). New
+`tests/dates/attack6-release.test.js` (commit 7114dd6): **100 pass / 5 fail** — the 5 are the findings below. The full 213-file suite
+was NOT re-run by the Manager (Coder's figure: 4,126 / 30).
+
+**Checked and fine**
+- The two hand-merged spots (10c64f7): lists-to-issue row shows the project tag AND "moved out — don't cut early", in view at 1280 and
+  360 px, filter on or off; the lists-needed table has the Project column and the van label with its date (next week, 3 weeks out, old booking).
+- The three test edits are right and no wider than needed: retest-nov only adds 3 Jan 2028; lists-filter check 11 uses ba6ecd8 only while
+  main has no week bar; attack5 B8 skips only the drawing office, only with lists ON. (That screen differs from PR #2 by one thing —
+  the date on the van badge — now pinned by attack6 B4.)
+- **No SQL needed, no new top-level save key** (save sends orders, settings, nid, version, updated_by; same database tables as main).
+- **Lists switch OFF: the Deliveries weeks DO apply** — the release is not behind the lists switch. Screens that differ from live, all
+  intended: Board, Deliveries, Export Changes, Settings, PM, management, Production Manager, driver, floor, and one label on the Cutting
+  Lists page ("On delivery board (Volvo Wed 11 Nov)"). Import, History, saw, stores, drawing office: word for word as live.
+- Week edges (Sat 23:30, Sunday, Mon 00:30, summer time, clocks back, Wk 53 → Wk 1, 3 Jan 2028): Board and Deliveries agree.
+- Fresh database (Clear All Orders + new import on the live code, then the release): opens clean; the one-time question does not appear
+  unless a hand-added job is still on a van, and answering it changes no work order.
+- Catch-up cut-off and Export Changes after a date move: correct (1 Nov in, 31 Oct out; HTML in a reason shown as text).
+- An old live screen's save keeps every date move, history, "Cienapps has" date, next-week booking and closed week. An old-screen import does not undo a date move.
+
+**Findings (none Critical)**
+1. **Medium — old screen only.** A screen still on today's version that moves a NEXT-week booking to another day: its user sees "this
+   Friday", the new screens file it under next Friday (attack6 C2a).
+2. **Medium/Low — old screen only.** An old screen's save resets Settings → Delivery dates (3 / 5 / 14) to the defaults for PCs opened
+   afterwards, if the numbers were changed (C1k). Same cause as the already-accepted "old-bookings answer dropped".
+3. **Low.** Booking a van by hand on Sat 26 Dec 2026 (St Stephen's Day) gives no "bank holiday" question; Fri 25 and Mon 28 Dec do (F).
+4. **Low.** Two PCs answering the one-time question differently: both end on the same week, but the old day notes are copied into both weeks (D1b).
+5. **Low (same as live today).** An old day note ("Tue: …") with no old bookings shows on every following week's Tuesday until someone edits it (G6).
+
+**Conditions**
+1. **Garry — go-live day:** close and reopen every screen (step 9) — findings 1 and 2 and the three accepted old-screen risks only exist
+   while an old screen is open. **Recommended: say yes to old-screen guard v2** and run it straight after step 8; it refuses every old screen's save.
+2. **Garry:** do not change Settings → Delivery dates until every screen has been reopened (or guard v2 is on).
+3. **Garry:** merge PR #2 (project filter) first with "Create a merge commit", not squash. If GitHub shows a conflict on this release on Monday, stop — back to the Coder.
+4. **Coder — before Monday, docs only:** add to checklist step 9 what an old screen can also do (findings 1 and 2), and put the 5
+   attack6 fails on ACCEPTED-FAILURES for Garry's yes/no.
+5. **Coder — before 1 Dec, small:** finding 3 (ask on a bank-holiday Saturday); findings 4 and 5 when convenient. Tester re-tests.
+6. **Garry — after today's Clear All Orders:** on Monday, if the question appears it is for hand-added jobs still on a van — answer "This week"; re-type or clear any old day notes.
+7. **Not verified:** real PC drag and Android Chrome (step 11); the full suite on this exact commit.
+
+Rollback, "who to tell" and the rest of the checklist are right for a release on its own.
