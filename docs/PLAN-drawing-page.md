@@ -57,3 +57,18 @@ become real WO numbers, 2,500 jobs, two PCs importing at once, phone at 360 px.
 - Go-live note: a screen still on the old version does not know the marker and would show drawing jobs on its board — close and reopen
   every screen on go-live day (same rule as every release).
 - Merge note for Job B: renderPMV2's strip and the render() lines for the PM / Drawing office roles will clash — keep both buttons.
+
+## 12 Nov 2026 — progress
+- Tester attack (tests/draw/attack1-drawing.test.js): 8 findings, all Medium / Low, fixed; 45/45. d1: 21/21.
+- Full suite on the final code (182 files): only the three ACCEPTED-FAILURES files fail (sawstores attack-devices, attack-regress, stage1 t17).
+- **Manager: GO WITH CONDITIONS.** No database change.
+- Left as Low: the Plan Snapshot header counts drawing jobs (as it already does shipped ones); the import's summary line says
+  "left drawing → Capacity Board" for a job that went straight from 1 to 9.
+- Go-live checklist: [ ] look at the purple "At drawing stage" count in the first import preview before Apply (jobs that used to be
+  skipped now come in) · [ ] close and reopen every screen (an old screen shows drawing jobs as unscheduled on its board) ·
+  [ ] incognito check · [ ] tell the Drawing office and the PMs about the ✏ Drawing button. Rollback = main at cf70ab9 (drawing jobs
+  already saved would then show as unscheduled on the board; nothing is lost; never delete them).
+- **Merge note (must do):** the Deliveries branch adds filters that only skip On-hold jobs (PM page "coming up", In store). Whichever
+  merges second must change those to skip drawing jobs too (`isOnHold` → `isParked`) and re-run tests/draw.
+- For Garry: "Bring back to board" on a shipped WO-D returns it to the Drawing page (recommended, as built) or the board?
+  Q2 (amber "due within 4 weeks — still at drawing") is built as assumed.
