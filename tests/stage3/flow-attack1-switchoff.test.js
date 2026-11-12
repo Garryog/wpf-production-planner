@@ -14,7 +14,9 @@ function row() {
   r.orders = [o('WO-1', '5. WORK ORDER PROCESSED', { delv: true, delVeh: 'VOLVO', delDay: 'Thu' }), o('WO-2', '6. JOB CUT COMPLETE'), o('WO-3', '3. READY FOR UPLOAD'), o('WO-4', '7. ASSEMBLY COMPLETE', { delv: true })];
   return r;
 }
-const norm = s => String(s).replace(/\d{1,2}:\d{2}(:\d{2})?/g, 'HH:MM').replace(/\s+/g, ' ').trim();
+const norm = s => String(s).replace(/\d{1,2}:\d{2}(:\d{2})?/g, 'HH:MM').replace(/\s+/g, ' ').trim()
+  // ALLOWED DIFFERENCE (Garry 11 / 12 Nov — S1 board steps): the board's step list also offers JOB SHIPPED / INSTALLED / COMPLETED
+  .replace(/PALLETED JOB SHIPPED INSTALLED COMPLETED/g, 'PALLETED');
 (async () => {
   if (!OLD) { rec('origin/feature/stage2-imports index.html readable from git (run git fetch)', false); done(); process.exit(1); }
   const browser = await H.chromium.launch();
