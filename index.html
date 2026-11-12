@@ -4633,8 +4633,8 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       <datalist id="me-edg">${edges.map(e=>`<option value="${escA(e)}">`).join('')}</datalist>
       <div id="me-grid" style="${window.innerWidth<700?'':'max-height:50vh;overflow:auto;'}margin-top:10px">${gridHTML()}</div>
       <div class="me-bar">
-        <button class="btn btn-g me-big" id="me-addsaw" title="Adds a row under the one you are on">＋ Row</button>
-        <button class="btn btn-s me-big" id="me-addhdr" title="A heading (e.g. House nr 103) or a sub-heading under it (Fillers and Kickers, ISLAND, Utility, Doors FU)">＋ Heading</button>
+        <button class="btn btn-g me-big" id="me-addhdr" title="A heading (e.g. House nr 103) or a sub-heading under it (Fillers and Kickers, ISLAND, Utility, Doors FU)">＋ Heading</button>
+        <button class="btn btn-s me-big" id="me-addsaw" title="Adds a row under the one you are on">＋ Row</button>
         <button class="btn btn-s me-big" id="me-mats" style="white-space:nowrap" title="The project's boards, materials and fittings — add or change them here">🧱 Project materials (add / edit)</button>
         <details class="me-more" id="me-more"${st.moreOpen?' open':''}><summary class="btn btn-s me-big">More ▾</summary><div class="me-morep">
           ${st.undo.length?'<button class="btn btn-s" id="me-undo" title="Ctrl+Z">↶ Undo</button>':''}
@@ -4982,13 +4982,13 @@ function openListEditor2(listId,presetWo,presetPid,opt){
         already has one (made on another PC a moment ago, or picked with "Change job"). Never silent: the person is told and chooses. */
      const go=()=>{
       const tgt=st.newWO?'':String(d.wo||'');
-      if(st.tpl||!tgt||st.dupOk===tgt||(ex&&(ex.wos||[]).includes(tgt)))return go0();
+      if(st.tpl||!tgt||st.dupOk===tgt||(ex&&(ex.wos||[]).includes(tgt))||(d.replaces&&d.replaces.id))return go0(); // "Make new list from this" has its own rules for the list it replaces
       const sb=g('me-save');if(sb)sb.disabled=true;err('Checking '+tgt+' for a list…');
       lsLiveFor(tgt).then(found=>{if(sb)sb.disabled=false;err('');
         const other=found.filter(l=>l.id!==(ex?ex.id:d.newId)&&!(d.replaces&&d.replaces.id===l.id));
         if(!other.length)return go0();
         const nm='"'+other[0].name+'"'+(other.length>1?' (and '+(other.length-1)+' more)':'');
-        if(confirm(tgt+' already has a cutting list: '+nm+'.\n\nOne work order should have ONE list — with two, the saw could cut the job twice.\n\nOK = do NOT save this one (your rows stay on screen)\nCancel = save it anyway as a second list for '+tgt))
+        if(!confirm('⚠ '+tgt+' ALREADY HAS a cutting list: '+nm+'.\n\nOne work order should have ONE list — with two, the saw could cut the job twice.\n\nSave this as a SECOND list for '+tgt+' anyway?\n\nOK = yes, save a second list\nCancel = do not save (your rows stay on screen)'))
           return err(tgt+' already has the list '+nm+' — NOT saved. Your rows are still here. Open that list to change it, or use Change job to pick another work order.');
         st.dupOk=tgt;go0();
       }).catch(()=>{if(sb)sb.disabled=false;err('');go0();}); // offline: the save itself says so

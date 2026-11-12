@@ -20,10 +20,10 @@ const wait = async (fn, ms = 4000) => { for (let i = 0; i < ms / 100; i++) { if 
   // ---- from the editor, with an unsaved extra row
   await pg.evaluate(() => { openListEditor('L1'); document.querySelector('.pod-ovl [data-mr="3|item"]').focus(); document.getElementById('me-addsaw').click();
     const s = (k, v) => { const e = document.querySelector('.pod-ovl [data-mr="' + k + '"]'); e.value = v; e.oninput(); }; s('4|item', 'Batten'); s('4|qty', '1'); s('4|L', '864'); s('4|W', '70'); });
-  await pg.evaluate(() => { window.__ans = ['nope']; document.getElementById('me-astpl').click(); });
-  const noPin = await pg.evaluate(() => ({ dlg: !!document.getElementById('at-ok'), toast: document.getElementById('toast').textContent }));
-  rec('Save as template needs the PM / Drawing office / Admin PIN (wrong PIN: nothing opens)', !noPin.dlg && /Wrong PIN/.test(noPin.toast), JSON.stringify(noPin));
-  await pg.evaluate(() => { window.__ans = ['7777']; document.getElementById('me-astpl').click(); });
+  // (12 Nov, Garry) "Save as template" in the list window: Drawing office screen or the Drawing office / Admin PIN only
+  const noPin = await pg.evaluate(() => ({ btn: !!document.getElementById('me-astpl') }));
+  rec('office, no PIN: the list window has no "Save as template" button (Drawing office / Admin only)', !noPin.btn, JSON.stringify(noPin));
+  await pg.evaluate(() => { localStorage.setItem('wpfEditPin', pins().admin); document.getElementById('me-help').click(); document.getElementById('me-astpl').click(); });
   await wait(() => pg.evaluate(() => !!document.getElementById('at-ok')));
   const d1 = await pg.evaluate(() => { const b = document.getElementById('at-body'); return { txt: b.innerText, name: b.querySelector('#at-name').value, radios: b.querySelectorAll('[name="at-mode"]').length }; });
   rec('the dialog says what is copied (ticks never) and offers type + name (default: the list name)', /4 parts, 1 unit block/.test(d1.txt) && /ticks never are/.test(d1.txt) && d1.name === 'House 1' && d1.radios === 0, JSON.stringify(d1));

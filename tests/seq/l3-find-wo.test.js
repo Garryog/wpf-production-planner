@@ -55,7 +55,7 @@ const closeEd = p => p.evaluate(() => document.querySelectorAll('.pod-ovl').forE
     rec('leaving the Unit box: T9 / 22 finds WO-7 (Block T09 / Apt 022) — filled, green "Matched"', s.wo === 'WO-7' && /Matched WO-7/.test(s.ok) && /Floor Block T09/.test(s.ok) && /Unit Apt 022/.test(s.ok) && /HOUSE TYPE B/.test(s.ok) && !s.jb, JSON.stringify(s));
     rec('the job keys were worked out once for that search', await p.evaluate(() => window.__kj === 1), await p.evaluate(() => window.__kj));
     rec('list name NOT pre-filled from the job (Garry 10 Nov: a free name; blank = the WO number)', s.name === '', s.name); // was: filled with the unit "Apt 022" — changed by Part 4
-    rec('B2 job-info boxes show for the matched WO', await p.evaluate(() => (document.querySelector('#me-woinfo [data-woe="floor"]') || {}).value === 'Block T09'));
+    rec('the Floor box shows the matched WO\'s floor (read-only on this branch — editing job info, B2, is Job B)', await p.evaluate(() => ((document.querySelector('#me-woinfo [data-woi="Floor"]') || {}).textContent || '').trim() === 'Block T09'));
     // Not this one → boxes back; Find again offers WO-7 in a list, never fills it again by itself
     await p.evaluate(() => document.getElementById('me-jnot').click()); await sleep(150);
     s = await st(p);

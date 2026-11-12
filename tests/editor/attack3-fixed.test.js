@@ -63,7 +63,7 @@ const rowsOf = (p, id) => p.evaluate(async id => { await lsReloadList(id); retur
     const out = await pg.evaluate(async () => {
       await lsPoll(); await lsReloadList('TT'); openListEditor('LI');
       const ov = document.querySelector('.pod-ovl');
-      const ins = [...ov.querySelectorAll('button')].find(b => /template/i.test(b.textContent) && /unit|insert/i.test(b.textContent));
+      const ins = ov.querySelector('#me-instpl'); // (12 Nov) under "Start from…": 📐 A template…
       if (!ins) return { err: 'no insert-from-template button: ' + [...ov.querySelectorAll('button')].map(b => b.textContent.trim()).join(' / ') };
       ins.click(); await new Promise(r => setTimeout(r, 200));
       const dl = [...document.querySelectorAll('.pod-ovl')].pop();
