@@ -117,7 +117,7 @@ Rules: rank by the leading number. "Shipped" = step 9 only (left the factory →
 
 - (4 Nov, Garry, answers) Photo of a list REPLACES the paper option: on a WO with no typed list, attach a photo (phone camera or file); the saw must be able to open it; it is a stop-gap to be removed later once the typed system is in place (keep it simple, easy to switch off). Docket cancel ASKS "Did these items leave stores?" (Yes = stay got out; No = back to 'to pick'). Dockets are for FITTINGS (stores items) only for now — cutting-list (saw) items are not docketed, so no per-WO quantity split is needed.
 
-<!-- The sections below were copied from feature/project-details-v2 on 12 Nov 2026 for the cutting-list window release (branch feature/list-window, plan docs/PLAN-list-window.md). -->
+<!-- Copied 12 Nov 2026 from feature/project-details-v2 for the list-window release (branch feature/list-window) -->
 ### Cutting list job boxes + Cienapps WO number always (10 Nov 2026, Garry, go-live day) — add to Job B, do EARLY (staff are entering real lists now)
 Garry's words: "cutting list need to break out floor, unit and title into their own boxes. use cienapps work order number at all times. could we look for cienapps number if it not pre-populated. If cienapps wo number cannot be found force new p-number as a last resort".
 - **L1 — Separate boxes:** in the cutting list window (new list, Import Excel preview, Find old list / copy, Edit job info) Floor, Unit and Title are each their own box — never one combined text. Excel template + import: keep reading the current template; if the job info block gains Floor / Unit / Title cells, accept both layouts.
@@ -161,6 +161,7 @@ Garry's words: "the work order due date are not prominent in all screens. the wo
 - **Shipped report**: pick from/to dates → every job shipped in the period with project, PM, value, invoiced status, total, Excel download.
 - **PM sequence**: shipped rows stay but grey out and are hidden by default ("show finished"); later the base for installation management (install date, fitters, site snags, sign-off) — a separate phase, not now.
 - **Johnny's CNC Schedule (later, CNC job)**: read from SharePoint on a schedule; strike-through = office processing done (CNC files), NOT cut. Mark jobs taken into the planner with an extra "In planner" tick column — tested on a COPY of his .xlsm first, never write colours into his file.
+
 
 ## Progress log
 ### 2 Nov 2026 (scheduled run)
