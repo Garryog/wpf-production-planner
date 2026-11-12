@@ -11440,6 +11440,7 @@ function dmFixedAt(o,tos,days){const ds=[o&&o.dueDate,o&&(o.delivDate||o.dueDate
   return !!ds.length&&ds.sort()[0]<=addDayISO(todayLocal(),days);}
 function dmDays(a,b){return Math.round((new Date(b+'T12:00:00')-new Date(a+'T12:00:00'))/86400000);}
 function dmFlagTxt(f,r){
+  if(f==='programmed'&&r&&r.progPre)return 'processed by pre-production — take it out of the nest'; /*Manager B9 note 3*/
   if(f==='moved-out'&&r&&r.outDays)return 'moved out '+r.outDays+' days, not cut yet — "don\'t cut early" shows on the saw, stores, board and lists';
   if(f==='bank-hol'&&r&&r.to){const d=new Date(r.to+'T12:00:00').getDay();return (d===0||d===6?'a '+(d===0?'Sunday':'Saturday'):'a bank holiday')+' — working day before is '+fmt(prevWorkDay(r.to));}
   return DM_FLAG[f]||f;
@@ -11471,7 +11472,7 @@ function dmRow(o,ch,opts){
   if(r.dueCh&&!opts.keepWeek){
     const wk=dueWeekFor(to);
     if(woCut(o)){if(wk!==r.wkFrom){r.weekKept=true;r.flags.push('cut-week-kept');}}
-    else{r.wkTo=wk;if(wk===''&&r.wkFrom!=='')r.flags.push('beyond-8wks');if(woProgrammed(o)&&wk!==r.wkFrom)r.flags.push('programmed');}
+    else{r.wkTo=wk;if(wk===''&&r.wkFrom!=='')r.flags.push('beyond-8wks');if(woProgrammed(o)&&wk!==r.wkFrom){r.flags.push('programmed');if(stepNo(o.step)!==5)r.progPre=true;}} /*Manager B9 note 3: progPre = Johnny's tick, not Cienapps step 5*/
   }
   if(r.dueCh&&!isWorkDay(to))r.flags.push('bank-hol');
   if(r.dueCh&&to<todayLocal())r.flags.push('past');
@@ -11587,7 +11588,7 @@ function dmCheckDlg(wo){
   const ov=document.createElement('div');ov.className='pod-ovl';
   ov.innerHTML=`<div class="pod-in" style="min-width:min(460px,92vw)"><div style="font-weight:800;color:#14335c;font-size:16px;margin-bottom:4px">${escA(o.wo)} — due date moved</div>
     <div style="font-size:13px;color:var(--t2);margin-bottom:10px">Due ${escA(mv.from?fmt(mv.from):'—')} → <b>${escA(fmt(o.dueDate))}</b>${mv.by?' by '+escA(mv.by):''}. Build week now: <b>${o.plannedWeek?escA(wkLbl(o.plannedWeek)):'Unscheduled'}</b>.
-      ${mv.prog?'<br><b style="color:#b42318">It was already programmed (step 5) — take it out of the nest.</b>':mv.loaded?'<br><b style="color:#b42318">It was already loaded on a van — check the delivery.</b>':'<br>It was already cut, so the build week was not moved.'}</div>
+      ${mv.prog?'<br><b style="color:#b42318">'+(stepNo(o.step)===5?'It was already programmed (step 5)':'It was already processed by pre-production')+' — take it out of the nest.</b>':mv.loaded?'<br><b style="color:#b42318">It was already loaded on a van — check the delivery.</b>':'<br>It was already cut, so the build week was not moved.'}</div>
     ${!mv.prog&&wk!==(o.plannedWeek||'')?`<button class="rbtn" id="dmc-move" style="justify-content:center">Move to the due week — ${wk?escA(wkLbl(wk)):'Unscheduled'}</button>`:''}
     <button class="rbtn" id="dmc-keep" style="justify-content:center">${mv.prog?'Done — taken out of the nest':'Keep it, it\'s fine'}</button>
     <div style="margin-top:6px;text-align:right"><button class="btn btn-s" id="pod-x">Cancel</button></div></div>`;
