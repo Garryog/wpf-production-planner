@@ -565,7 +565,10 @@ let DB={orders:[],nid:1,weekCaps:{}};
 // Default value-to-hours scale (editable in Settings tab)
 // Board step dropdown: Cienapps steps 1–8 only (exact Cienapps wording). Shipped / installed / invoiced / on hold
 // (9–12) only ever come from a Cienapps import. A job already at another step keeps it (shown as its own option).
-const MANUAL_STEPS=['1. DRAWING','2. NO SITE MEASURE DONE','3. READY FOR UPLOAD','4. READY FOR PRODUCTION','5. WORK ORDER PROCESSED','6. JOB CUT COMPLETE','7. ASSEMBLY COMPLETE','8. PALLETED'];
+const MANUAL_STEPS=['1. DRAWING','2. NO SITE MEASURE DONE','3. READY FOR UPLOAD','4. READY FOR PRODUCTION','5. WORK ORDER PROCESSED','6. JOB CUT COMPLETE','7. ASSEMBLY COMPLETE','8. PALLETED','9. JOB SHIPPED','10. INSTALLED TO BE INVOICE','11. COMPLETED AND INVOICED'];
+/*S1 (Garry 10 Nov, small release 12 Nov): steps 9-11 can be set by hand on the board; stored as Cienapps' exact text, shown short*/
+const STEP_SHORT={'9. JOB SHIPPED':'JOB SHIPPED','10. INSTALLED TO BE INVOICE':'INSTALLED','11. COMPLETED AND INVOICED':'COMPLETED'};
+function stepShort(s){const t=String(s||'').trim();return STEP_SHORT[t]||t.replace(/^\d+\.\s*/,'');}
 function getSteps(){return MANUAL_STEPS.slice();}
 let HOUR_SCALE=[
   {maxVal:1000,  hours:1},
@@ -1782,8 +1785,8 @@ function renderBoard(app){
           <td>${dueBadge(o.dueDate,o.plannedWeek,o.origDueDate)}</td>
           <td style="text-align:right;font-size:12px;color:var(--t2)">€${Math.round(o.value||0).toLocaleString()}</td>
           <td><select class="step-sel" data-stepsel="${escA(o.wo)}" style="font-size:11px;padding:3px 4px;border-radius:6px;border:1px solid var(--b2);background:#fff;color:var(--text);max-width:120px">
-            ${getSteps().map(s=>`<option value="${escA(s)}"${(o.step||'')===s?' selected':''}>${escA(s.replace(/^\d+\.\s*/,''))}</option>`).join('')}
-            ${getSteps().includes(o.step||'')||!(o.step||'')?'':`<option value="${escA(o.step)}" selected>${escA(o.step.replace(/^\d+\.\s*/,''))}</option>`}
+            ${getSteps().map(s=>`<option value="${escA(s)}"${String(o.step||'').trim()===s?' selected':''}>${escA(stepShort(s))}</option>`).join('')}
+            ${getSteps().includes(String(o.step||'').trim())||!(o.step||'')?'':`<option value="${escA(o.step)}" selected>${escA(stepShort(o.step))}</option>`}
           </select></td>
           <td><select class="week-sel" data-wsel="${escA(o.wo)}">${weekOpts(o.plannedWeek||'',false)}</select></td>
           <td style="text-align:center"><button style="background:none;border:none;color:var(--t3);font-size:14px;padding:0 2px;cursor:pointer;line-height:1" data-del="${escA(o.wo)}" title="Delete order">🗑</button></td>
@@ -2072,7 +2075,9 @@ function renderBoard(app){
   document.querySelectorAll('[data-s]').forEach(th=>th.onclick=()=>{const s=th.dataset.s;if(sortCol===s)sortDir*=-1;else{sortCol=s;sortDir=1;}render();});
   // Every board edit is stamped with the person at this machine (asked once per tab)
   document.querySelectorAll('[data-wsel]').forEach(sel=>sel.onchange=function(){const o=DB.orders.find(x=>x.wo===this.dataset.wsel);const v=this.value;if(o)officeWho(by=>{const was=o.plannedWeek||'';o.plannedWeek=v;logEdit(o,'Build week '+(was?wkLbl(was):'unscheduled')+' → '+(v?wkLbl(v):'unscheduled'),by);sched();render();},()=>render());});
-  document.querySelectorAll('[data-stepsel]').forEach(sel=>sel.onchange=function(){const o=DB.orders.find(x=>x.wo===this.dataset.stepsel);const v=this.value;if(o)officeWho(by=>{logEdit(o,'Step '+(o.step||'—')+' → '+v,by);o.step=v;const tg=delvAuto(o,by);if(tg)updDelBadge();sched();render();toast(tg?'Step updated — ticked for delivery':'Step updated');},()=>render());});
+  document.querySelectorAll('[data-stepsel]').forEach(sel=>sel.onchange=function(){const o=DB.orders.find(x=>x.wo===this.dataset.stepsel);const v=this.value;if(!o)return;
+    if(stepIsShipped(v)){stepShipHand(o,v);return;} /*S1: 9 / 10 / 11 by hand — confirmed, then off the board like an imported one*/
+    officeWho(by=>{logEdit(o,'Step '+(o.step||'—')+' → '+v,by);o.step=v;const tg=delvAuto(o,by);if(tg)updDelBadge();sched();render();toast(tg?'Step updated — ticked for delivery':'Step updated');},()=>render());});
   document.querySelectorAll('[data-hl]').forEach(el=>el.onclick=function(){const o=DB.orders.find(x=>x.wo===this.dataset.hl);if(o){o.hl=!o.hl;sched();render();}});
   document.querySelectorAll('[data-hi]').forEach(inp=>inp.onchange=function(){const o=DB.orders.find(x=>x.wo===this.dataset.hi);const v=parseFloat(this.value)||0;if(o)officeWho(by=>{logEdit(o,'Hours '+o.hours+' → '+v,by);o.hours=v;o.hoursEstimated=false;o.hoursSrc='hand';sched();render();},()=>render());});
   document.querySelectorAll('[data-del]').forEach(btn=>btn.onclick=()=>{
@@ -2108,6 +2113,25 @@ function renderBoard(app){
 /* ---------- 📦 Shipped tab: jobs Cienapps calls shipped/invoiced. Off the Capacity Board, kept here until the
    planner marks installation complete. Searchable; a job can be brought back to the board. Works on a phone (Chrome). ---------- */
 let shSrch='',shDel='',shDone=false,shHoldQ='';
+/* S1 (Garry 10 Nov; "Need to be able to update on capacity board to shipped or installed or completed. The job drops off
+   capacity board after shipping", 12 Nov): the office moves a job to 9. JOB SHIPPED / 10. INSTALLED TO BE INVOICE /
+   11. COMPLETED AND INVOICED by hand. Confirmed first. The job then leaves the board and the week totals exactly like one
+   Cienapps called shipped (shippedAt / shippedStep); 10 and 11 mark it installed. "Installation complete" stays its own button
+   (Garry 11 Nov). A job on a van stays on Deliveries until the driver confirms (same rule as an import). The step holds until a
+   Cienapps import moves the job on (steps only move forward; while Cienapps is behind it is listed in Export Changes). Logged in
+   the job's history; stepHand = what it was, so "↩ Bring back to board" can put the old step back. Never deletes anything. */
+function stepShipHand(o,v){
+  const n=stepNo(v),was=String(o.step||'').trim(),c=was?stepCmp(v,was):1;
+  if(c!==null&&c<0&&isShipped(o)){toast('Steps only move forward — '+o.wo+' is already at '+stepShort(was));render();return;}
+  const what=n===9?'Job shipped':n===10?'Installed (to be invoiced)':'Completed and invoiced';
+  if(!confirm('Set '+o.wo+' to "'+v+'"?\n\n'+what+(isShipped(o)?'.':' — it leaves the Capacity Board and the week totals and goes to the 📦 Shipped tab'+(o.delv&&!o.delDelivAt&&!o.delDone?' (it stays on 🚚 Deliveries until the driver confirms)':'')+'.')
+    +'\n\nCienapps is not changed — it is listed in Export Changes until Cienapps has it.')){render();return;}
+  officeWho(by=>{const at=nowISO(),p0=o.stepHand&&String(o.step||'').trim()===o.stepHand.to?o.stepHand:null,h={from:p0?p0.from:was,to:v,at,by,...(p0&&p0.inst?{inst:true}:{})}; // 9 then 10 by hand: ↩ still goes back to the step before 9
+    logEdit(o,'Step '+(was||'—')+' → '+v+' (set by hand)',by);o.step=v;
+    if(!isShipped(o)){o.shippedAt=at;o.shippedStep=v;delete o.shipBack;logEdit(o,'Moved to Shipped — set by hand: '+v,by);}
+    if(n>=10&&!o.installedAt){o.installedAt=at;h.inst=true;logEdit(o,'Installed — set by hand',by);}
+    o.stepHand=h;sched();render();toast(o.wo+' — '+stepShort(v).toLowerCase()+(isShipped(o)?' · now on the 📦 Shipped tab':''));},()=>render());
+}
 function renderShipped(app){
   const am=attnMap();
   const all=DB.orders.filter(isShipped);
@@ -2170,7 +2194,10 @@ function renderShipped(app){
     officeWho(by=>{delete o.completeAt;delete o.completeBy;o.completeOverride=o.cienStep||o.shippedStep||o.step||'(none)';logEdit(o,'Installation complete undone',by);sched();render();});});
   app.querySelectorAll('[data-shb]').forEach(b=>b.onclick=()=>{const o=find(b.dataset.shb);if(!o)return;
     if(!confirm('Bring '+o.wo+' back to the Capacity Board?\n\nIt stays there even though Cienapps says shipped — until Cienapps moves it on (e.g. to invoiced).'))return;
-    officeWho(by=>{o.shipBack={at:nowISO(),by,cs:o.cienStep||o.shippedStep||''};delete o.shippedAt;delete o.completeAt;delete o.completeBy;logEdit(o,'Brought back to the board from Shipped',by);sched();render();toast(o.wo+' is back on the Capacity Board');});});
+    officeWho(by=>{o.shipBack={at:nowISO(),by,cs:o.cienStep||o.shippedStep||''};delete o.shippedAt;delete o.completeAt;delete o.completeBy;
+      /*S1: a step set by hand to 9/10/11 goes back to the step it had before (only while it is still the hand-set one)*/
+      const h=o.stepHand;if(h&&String(o.step||'').trim()===h.to){o.step=h.from||'';if(h.inst)delete o.installedAt;logEdit(o,'Step '+h.to+' → '+(h.from||'—')+' (the step set by hand undone)',by);}
+      delete o.stepHand;logEdit(o,'Brought back to the board from Shipped',by);sched();render();toast(o.wo+' is back on the Capacity Board');});});
 }
 
 /* ---------- Deliveries: plan next week's deliveries by vehicle and day (v2) ---------- */
@@ -8062,6 +8089,7 @@ function analyzeImport(input,source){
       if(cs&&ex.cienStep!==cs)fill.cienStep=cs;
       if(cs&&ex.delvOverride&&!ovrHolds(ex.delvOverride,cs))fill.delvOverride=undefined;     // Cienapps has moved beyond the planner's untag
       if(cs&&ex.completeOverride&&!ovrHolds(ex.completeOverride,cs))fill.completeOverride=undefined;
+      if(cs&&ex.stepHand&&(stepCmp(cs,ex.stepHand.to)??-1)>=0)fill.stepHand=undefined; /*S1: Cienapps has caught up with a step set by hand — it is Cienapps' now*/
       // hours: planner-set hours always win
       const src=hSrc(ex);
       if(src!=='hand'&&!(src==='cien'&&!r.has.hours&&!/assembly\s*complete|pallet/i.test(newStep))){

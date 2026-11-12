@@ -206,3 +206,8 @@ Rules: rank by the leading number. "Shipped" = step 9 only (left the factory →
 - Last full suite (feature/stores-dockets, 176 files): 3,163 pass / 27 fail — 23 on ACCEPTED-FAILURES, 4 timing-only (pass alone).
 - **Manager (4 Nov): stage2-imports go-live GO WITH CONDITIONS (same conditions as 3 Nov + press the catch-up delivery button once + tell drivers/office that step 7/8 jobs land in the delivery pool). Carry cutting-lists-flow + stores-dockets with the lists switch OFF: GO WITH CONDITIONS (run Stage 3 + dockets SQL before merging, or the docket buttons stay hidden). Switch lists ON: NO-GO until rehearsed on a Supabase test project with real data, real WO titles and real workbooks tested, real Android phone + saw PC.**
 - Waiting on Garry: sign off ACCEPTED-FAILURES; go-live date for stage2-imports; a Supabase test project; 50–100 real WO titles + 3–4 real workbooks; answer: can a delivered docket be cancelled / address editable after making (currently no).
+
+### Capacity Board: Shipped / Installed / Completed steps as a small release now (12 Nov 2026, Garry)
+Garry: "Shipped step is gone from capacity board. It is still needed" — "Need to be able to update on capacity board to shipped or
+installed or completed. The job drops off capacity board after shipping". S1 (built on Job B) is lifted onto the live version as its
+own small release, branch feature/board-shipped-steps. Plan: docs/PLAN-board-shipped-steps.md.
