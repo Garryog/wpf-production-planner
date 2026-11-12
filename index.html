@@ -4345,13 +4345,15 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       if(r.st!=='ok'){st.pmsg={st:'nocust'};draw();return;}
       st.pid=r.p.id;st.pauto=true;edges=lsProjEdges(st.pid);draw();if(clean)st.sig0=sig(); // set by the app, not typed: closing doesn't ask
       if(r.made)toast('Project "'+r.p.name+'" set up from the WO\'s customer ✓');
-      if(then)then();
+      if(then)then();projSet();
     }).catch(x=>{if(!document.body.contains(ov))return;keep();st.pmsg={st:'err',c,m:x.message};draw();});
   };
+  const projSet=()=>{if(st.pid&&st.matAfter!=null){const j=st.matAfter;st.matAfter=null;if(R()[j])setTimeout(()=>{if(document.body.contains(ov)&&st.pid)addMat(j);},0);}}; // (L6) the new material asked for before the project was set
   const pmsgHTML=()=>{
     if(st.tpl)return'';const pm=st.pmsg,E=escA,o=st.wo?DB.orders.find(x=>x.wo===st.wo):null,pick='Pick the project — or ＋ New project… at the bottom of the list';
     const box=(t,warn)=>`<div class="me-pm" id="me-pm" style="font-size:12px;margin-top:3px;max-width:420px;${warn?'color:#8a5a00;font-weight:700':'color:var(--t3)'}">${t}</div>`;
     if(pm&&pm.st==='busy')return box('Setting up project \''+E(pm.c)+'\'…');
+    if(!st.pid&&st.matAfter!=null&&!(pm&&(pm.st==='busy'||pm.st==='many')))return box('Pick the project — then the new material is added. (Or ＋ New project… at the bottom of the list.)',true);
     if(st.pid)return st.pauto&&o?box('Project: <b>'+E(lsProjName(st.pid))+'</b> — from the WO\'s customer'):'';
     if(pm&&pm.st==='many')return box('\''+E(pm.c)+'\' fits more than one project — pick one: '+pm.ps.map(p=>`<button class="btn btn-s" data-mepp="${E(p.id)}" style="font-size:12px;padding:2px 9px;margin:2px 4px 0 0">${E(p.name)}</button>`).join(''),true);
     if(pm&&pm.st==='err')return box('Project \''+E(pm.c)+'\' could not be set up ('+E(pm.m)+') — '+pick+'.',true);
@@ -4571,7 +4573,11 @@ function openListEditor2(listId,presetWo,presetPid,opt){
   };
   const addMat=i=>{ // "+ Add new material…": on the project's list if the person has the PIN, otherwise on this row only, flagged
     const r=R()[i],pname=lsProjName(st.pid)||'this project',kind=lsNum(r.L)>0||lsNum(r.W)>0||!String(r.item||'').trim()?'sheet':'other';
-    if(!st.pid){draw();ov.querySelector('#me-err').textContent='Pick the project first — materials belong to a project.';return;}
+    if(!st.pid){ // (L6) lead the person through the project, then carry on with the new material — never just refused
+      keep();st.matAfter=i;const o=st.wo?DB.orders.find(x=>x.wo===st.wo):null;
+      if(o&&String(o.customer||'').trim()&&!st.tpl&&!st.newWO&&!(st.pmsg&&st.pmsg.st==='many')){autoProj();return;}
+      draw();const s=ov.querySelector('#me-pid');if(s)s.focus();return;}
+    st.matAfter=null;
     const n0=prompt('New material for '+pname+' (e.g. W/W, UD96, WHB):','');
     const n=String(n0||'').trim();if(!n){st.focus=i+'|mat';draw();return;}
     const flag=why=>{snap();r.mat=n;delete r.matAuto;st.focus=i+'|mat';draw();toast('"'+n+'" is used on this row only and flagged for the Production Manager'+(why?' — '+why:'')+'. They can add it to the project\'s materials.');};
@@ -4601,7 +4607,8 @@ function openListEditor2(listId,presetWo,presetPid,opt){
           if(!edges.some(e=>e.toLowerCase()===v.toLowerCase()))edges=edges.concat([v]);} // offered on every row of this list from now on
         snap();r[f]=v;st.focus=i+'|'+f;updTag(i);draw();};return;}
       if(el.tagName==='SELECT'){el.onchange=el.oninput=()=>{const r=R()[i];if(!r||!ov.contains(el)||el.value===r.mat)return; // input + change both fire: act once
-        if(el.value==='__add'){addMat(i);return;}snap();r.mat=el.value;delete r.matAuto;st.focus=i+'|mat';draw();};return;}
+        if(el.value==='__add'){if(el._asked)return;el._asked=true;addMat(i);return;} // (L6) asked once: input and change both fire
+        snap();r.mat=el.value;delete r.matAuto;st.focus=i+'|mat';draw();};return;}
       el.oninput=()=>{const r=R()[i];if(!r)return;if(st.snapKey!==el.dataset.mr){snap();st.snapKey=el.dataset.mr;}r[f]=el.value;if(f==='qty')delete r.fixed;
         if(f==='qty'||f==='units')updTotals();if(f==='L'||f==='W'||f==='item'||f==='qty'||f==='edging'||f==='edging2'||f==='note')updTag(i);};
     });
@@ -4642,13 +4649,13 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     g('me-mats').onclick=()=>{keep();if(st.pid)return lsMaterialsDlg(st.pid,()=>draw()); /*L6: never greyed — with a WO the project is set up first (L5)*/
       if(st.wo&&!st.tpl&&!st.newWO&&String((DB.orders.find(x=>x.wo===st.wo)||{}).customer||'').trim())return autoProj(()=>lsMaterialsDlg(st.pid,()=>draw()));
       const e=g('me-err');if(e)e.textContent='Pick the project first — materials belong to a project.';const s=g('me-pid');if(s)s.focus();};
-    ov.querySelectorAll('[data-mepp]').forEach(b=>b.onclick=()=>{keep();st.pid=b.dataset.mepp;st.pauto=false;st.pmsg=null;edges=lsProjEdges(st.pid);draw();});
+    ov.querySelectorAll('[data-mepp]').forEach(b=>b.onclick=()=>{keep();st.pid=b.dataset.mepp;st.pauto=false;st.pmsg=null;edges=lsProjEdges(st.pid);draw();projSet();});
     on('me-matsnow',()=>{keep();if(st.pid)lsMaterialsDlg(st.pid,()=>draw());});
     g('me-pid').onchange=e=>{keep();
       if(e.target.value==='__new'){const o=st.wo?DB.orders.find(x=>x.wo===st.wo):null; // (L5) no PIN — the customer = project rule
         const n=prompt('New project name:',String(o&&o.customer||'').trim());if(!n||!n.trim()){draw();return;}
-        lsProject(n.trim()).then(id=>{keep();st.pid=id;st.pauto=false;st.pmsg=null;edges=lsProjEdges(id);draw();}).catch(x=>{draw();g('me-err').textContent='Project not added — '+x.message;});return;}
-      st.pid=e.target.value;st.pauto=false;if(st.pid)st.pmsg=null;edges=lsProjEdges(st.pid);draw();};
+        lsProject(n.trim()).then(id=>{keep();st.pid=id;st.pauto=false;st.pmsg=null;edges=lsProjEdges(id);draw();projSet();}).catch(x=>{draw();g('me-err').textContent='Project not added — '+x.message;});return;}
+      st.pid=e.target.value;st.pauto=false;if(st.pid)st.pmsg=null;edges=lsProjEdges(st.pid);draw();projSet();};
     // the name boxes keep st up to date as you type: a redraw (picking a colour, adding a row) no longer puts back the old name
     const nm=g('me-name');if(nm)nm.oninput=()=>{st.name=nm.value;};const tn0=g('me-tname');if(tn0)tn0.oninput=()=>{st.tname=tn0.value;};
     const w=g('me-wo');if(w)w.onchange=()=>{const prev=st.wo;st.wo=w.value;if(st.pmsg&&st.pmsg.st!=='busy')st.pmsg=null;const wi=g('me-woinfo');if(wi)wi.innerHTML=woInfoHTML(DB.orders.find(x=>x.wo===st.wo));const ne=g('me-name');if(ne&&(!ne.value||ne.value===defName(prev))){ne.value=defName(st.wo);st.name=ne.value;}
