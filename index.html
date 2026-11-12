@@ -4093,8 +4093,8 @@ function lsProjForCust(c){return projForCust(c,lsProjects());}
    unaccent needed); a minus in front of a level is kept ("-1" = basement ≠ 1); placeholders (TBC, N/A, TBA, a bare "Apt",
    "Block", …) count as BLANK (so never 'same'); a dot between digits stays in a unit ("2.05"); "7 (Type B)" → 7; "A Block" =
    "Block A"; superscript digits are kept apart ("7²" is not 72). */
-const KEY_ZW=/[­᠎​-‏⁠﻿]/g,KEY_SUP=/[²³¹⁰-⁹₀-₉]/g;
-const KEY_ACF='ÀÁÂÃÄÅàáâãäåÇçÈÉÊËèéêëÌÍÎÏìíîïÑñÒÓÔÕÖØòóôõöøÙÚÛÜùúûüÝýÿŸ',KEY_ACT='AAAAAAaaaaaaCcEEEEeeeeIIIIiiiiNnOOOOOOooooooUUUUuuuuYyyY';
+const KEY_ZW=/[\u00AD\u180E\u200B-\u200F\u2060\uFEFF]/g,KEY_SUP=/[\u00B2\u00B3\u00B9\u2070-\u2079\u2080-\u2089]/g;
+const KEY_ACF='ÀÁÂÃÄÅàáâãäåÇçÈÉÊËèéêëÌÍÎÏìíîïÑñÒÓÔÕÖØòóôõöøÙÚÛÜùúûüÝýÿŸ\u2010\u2011\u2012\u2013\u2014\u2015\u2212\uFE58',KEY_ACT='AAAAAAaaaaaaCcEEEEeeeeIIIIiiiiNnOOOOOOooooooUUUUuuuuYyyY--------'; // (round 3) every dash / minus → '-'
 // superscripts apart → NFKC → zero-width out → accents to base letters (fixed list), ß → ss. Case and punctuation kept.
 function keyNorm(s){return String(s==null?'':s).replace(KEY_SUP,' $&').normalize('NFKC').replace(KEY_ZW,'').replace(/[^\x00-\x7F]/g,ch=>{const i=KEY_ACF.indexOf(ch);return i>=0?KEY_ACT[i]:ch==='ß'?'ss':ch;});}
 // every run of non A-Z/0-9 → one space (BEFORE upper-casing, so JS and Postgres agree) → trim → upper
@@ -4106,13 +4106,18 @@ const keyZ=d=>d.replace(/^0+(?=[0-9])/,''); // leading zeros off a digit run (a 
 function keyCodeOf(x){return (String(x).match(/[A-Z]+|[0-9]+(?:\.[0-9]+)?/g)||[]).map(t=>/^[0-9]/.test(t)?keyZ(t):t).join('-');}
 function keyCode(t){return keyCodeOf(keyTxt(t));}
 const KEY_ORD={FIRST:'1',SECOND:'2',THIRD:'3',FOURTH:'4',FIFTH:'5',SIXTH:'6',SEVENTH:'7',EIGHTH:'8',NINTH:'9',TENTH:'10'};
-const KEY_NONE=/^(TBC|TBA|TBD|TO BE CONFIRMED|N A|NA|NONE|NIL|UNKNOWN)$/; // a placeholder is a blank, never a value
+const KEY_NONE=/^(T ?B ?[CAD]( .*)?|TO BE (CONFIRMED|ADVISED|DECIDED)( .*)?|N ?A|NONE|NIL|UNKNOWN|NOT KNOWN|XX+)$/; // a placeholder is a blank, never a value (round 3: T.B.C., "TBC 2", NOT KNOWN, XX)
+// (round 3) a floor / unit that still holds a letter outside the fixed accent list (Ł, Œ, İ …) or a superscript ("7²") can't be
+// keyed safely: it counts as blank (so a person decides), never as a value that might equal another
+const keyOdd=s=>{KEY_SUP.lastIndex=0;return KEY_SUP.test(String(s==null?'':s))||/[^\x00-\x7F]/.test(keyNorm(s));};
 // a floor → {k, t, lvl}: t 'lvl' (a level number), 'code' (a block / code), 'amb' ("G", "L1", "F1": a level OR a block — .lvl
 // is the level it could be), '' blank. BLOCK x / x BLOCK is always a code.
 function keyFloor(s){
   const lv=n=>({k:n,t:'lvl',lvl:n}),B={k:'',t:''};
-  let m=/^\s*(?:(?:LEVEL|FLOOR|LVL|FLR|STOREY)\s*)?[-−–]\s*([0-9]+)\s*$/i.exec(keyNorm(s)); // "-1", "Level -1": below ground
+  if(keyOdd(s))return B;
+  let m=/^\s*(?:(?:LEVEL|FLOOR|LVL|FLR|STOREY)\s*)?-\s*([0-9]+)\s*$/i.exec(keyNorm(s)); // "-1", "—1", "Level -1": below ground
   if(m){const n=keyZ(m[1]);return lv(n==='0'?'0':'-'+n);}
+  if((m=/^\s*(?:BLOCK|BLK)\s*-\s*([0-9]+)\s*$/i.exec(keyNorm(s))))return{k:'-'+keyZ(m[1]),t:'code'}; // "Block -1" is not "Block 1"
   let x=keyTxt(s);if(!x||KEY_NONE.test(x)||/^(BLOCK|BLK|FLOOR|FLR|LEVEL|LVL|STOREY)$/.test(x))return B;
   if((m=/^(BLOCK|BLK) (.+)$/.exec(x)||/^(BLOCK|BLK)([0-9].*)$/.exec(x)))return KEY_NONE.test(m[2])?B:{k:keyCode(m[2]),t:'code'};
   if((m=/^(.+) (BLOCK|BLK)$/.exec(x)))return KEY_NONE.test(m[1])?B:{k:keyCode(m[1]),t:'code'}; // "A Block" = "Block A"
@@ -4135,6 +4140,7 @@ const KEY_UBARE=/^(APARTMENT|APT|UNIT|NUMBER|NO|NR|HOUSE|HSE|PLOT|POSITION|POS)$
 // a unit → its key: "Apt 7" = "APT07" = "No. 7" = "Unit 007" = "7" = "7 (Type B)"; "7 a" = "7A"; "2.05" kept; "12-14" → "12-14";
 // '' blank (also TBC / N/A / a bare "Apt")
 function keyUnit(s){
+  if(keyOdd(s))return'';
   let x=keyTxtD(keyNorm(s).replace(/\(\s*TYPE[^)]*\)/gi,' ')),m;
   for(let i=0;i<5;i++){m=KEY_UPRE.exec(x)||KEY_UPRE2.exec(x);if(!m)break;x=m[2];}
   if(!x||KEY_NONE.test(x)||KEY_UBARE.test(x))return'';
@@ -4175,7 +4181,7 @@ function keyOf(p,floor,unit,title){
 function jobKey(o){return keyOf(keyProj(o),typeof fuF==='function'?fuF(o):o&&o.floor,typeof fuU==='function'?fuU(o):o&&o.unit,o&&o.title);}
 // a sequence / upload row (seqRowKey: the name rowKey is the saw/stores line key) (never reads a title — the database can't either)
 function seqRowKey(r){return keyOf(r&&(r.project_id||r.pid),r&&r.floor,r&&r.unit,'');}
-const KEY_FW=/^(BLOCK|BLK|FLOOR|FLR|LEVEL|LVL|STOREY)$/,keyFTok=k=>k.split('-').filter(t=>t&&!KEY_FW.test(t)).sort().join('-');
+const KEY_FW=/^(BLOCK|BLK|FLOOR|FLR|LEVEL|LVL|STOREY)$/,keyFTok=k=>/^-/.test(k)?k:k.split('-').filter(t=>t&&!KEY_FW.test(t)).sort().join('-'); // a block "-1" keeps its minus
 const keyFlr=(a,b)=>{ // two present floors → 'same' | 'different' | 'unsure'
   const ta=a.t,tb=b.t;
   if(ta==='lvl'&&tb==='lvl')return a.k===b.k?'same':'different';
@@ -4218,10 +4224,13 @@ function keyFind(pid,floor,unit,km){
 // The kind of a job from its title (kitchen / utility / quartz / robes) — the P-number "one job per house" check compares
 // kinds. (List window release: lifted out of the PM sequence code on feature/project-details-v2, which is not in this release.)
 /* The kind of a job / line from its title. (Round 2) KITCHEN wins: "3 BED SEMI - KITCHEN", "KITCHEN & UTILITY" are kitchens.
-   "n BED" is the size of a house, not a wardrobe: robes = ROBE(S) / WARDROBE(S), or "BED n" (bedroom n) not after a number.
+   "n BED" / "3BED" is the size of a house, not a wardrobe: robes = ROBE(S) / WARDROBE(S), "BED n" / "BED2" / "BEDROOM" / "MASTER
+   BED" (not after a number). Round 3: seqKinds names every kind in a combined title.
    ISLAND (without KITCHEN) = 'other', so an island line never takes the kitchen's place. seqKinds = every kind a title names
    (the P-number duplicate check: a "KITCHEN & UTILITY" job blocks a kitchen AND a utility P-number). */
-function seqKind(t){const k=seqKinds(t);return k.has('quartz')?'quartz':k.has('kitchen')?'kitchen':k.has('other')?'other':k.has('utility')?'utility':k.has('robes')?'robes':'kitchen';function seqKinds(t){const s=String(t||'').toUpperCase(),w=s.split(/[^A-Z0-9]+/).filter(Boolean),k=new Set();if(/QUARTZ/.test(s))k.add('quartz');if(/KITCHEN/.test(s))k.add('kitchen');if(/UTILITY/.test(s))k.add('utility');if(/\b(ROBES?|WARDROBES?)\b/.test(s)||w.some((x,i)=>/^BED(ROOM)?$/.test(x)&&/^[0-9]+$/.test(w[i+1]||'')&&!/^[0-9]+$/.test(w[i-1]||'')))k.add('robes');if(/\bISLAND\b/.test(s))k.add('other');return k;}}
+function seqKind(t){const k=kinds(t);if(arguments[1]===true)return k;return k.has('quartz')?'quartz':k.has('kitchen')?'kitchen':k.has('other')?'other':k.has('utility')?'utility':k.has('robes')?'robes':'kitchen';function kinds(t){const s=String(t||'').toUpperCase(),w=s.split(/[^A-Z0-9]+/).filter(Boolean),k=new Set(),num=x=>/^[0-9]+$/.test(x||'');if(/QUARTZ/.test(s))k.add('quartz');if(/KITCHEN/.test(s))k.add('kitchen');if(/UTILITY/.test(s))k.add('utility');if(/\b(ROBES?|WARDROBES?)\b/.test(s)||w.some((x,i)=>/^BED(ROOM)?S?[0-9]+$/.test(x)||(/^BED(ROOM)?S?$/.test(x)&&!num(w[i-1])&&(num(w[i+1])||/^BEDROOMS?$/.test(x)||w[i-1]==='MASTER'))))k.add('robes');if(/\bISLAND\b/.test(s))k.add('other');return k;}}
+// seqKinds: every kind a title names ("KITCHEN, UTILITY & ROBES" → kitchen + utility + robes)
+function seqKinds(t){return seqKind(t,true);}
 function seqKinds(t){const k=new Set(),s=String(t||'').toUpperCase();['quartz','kitchen','utility','robes','other'].forEach(x=>{if(x===seqKind(s)||(x==='utility'&&/UTILITY/.test(s))||(x==='kitchen'&&/KITCHEN/.test(s)))k.add(x);});return k;}
 /* ---------- The list editor (V2) — works like WPF's Excel sheets ----------
    Columns: Description | Qty | Length | Width | Colour | Edging | Note. No Saw / Stores column: a row with a length or width
