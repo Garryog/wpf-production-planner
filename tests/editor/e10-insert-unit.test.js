@@ -47,7 +47,7 @@ const grid = pg => pg.evaluate(() => [...document.querySelectorAll('.pod-ovl .me
   const l = S.db.t.lists.find(x => x.name === 'House 5'), ln = S.db.t.list_lines.filter(x => x.list_id === l.id).sort((a, b) => a.seq - b.seq);
   rec('saved: Side Panel 6 to cut (2 × 3), Gable 4 (2 × 2), Hinge 16; not linked to the templates', ln.map(x => x.qty).join(',') === '3,6,3,2,4,16' && !l.template_id && ln.every(x => !x.src_line_id), ln.map(x => x.part + ':' + x.qty).join(','));
   // a project with no templates
-  await pg.evaluate(() => { openListEditor(null, 'WO-1'); const p = document.querySelector('.pod-ovl #me-pid'); p.value = ''; p.onchange({ target: p }); });
+  await pg.evaluate(() => { openListEditor(null, 'WO-1'); const p = document.querySelector('.pod-ovl #me-pid'); if (p) { p.value = ''; p.onchange({ target: p }); } }); // list-window release: no project drop-down when opened for a WO
   D.insert(S.db, 'projects', { id: 'P9', name: 'Empty project' });
   await pg.evaluate(async () => { await lsPoll(); document.querySelectorAll('.pod-ovl').forEach(o => o.remove()); openListEditor(null, '', 'P9'); document.getElementById('me-instpl').click(); });
   const none = await pg.evaluate(() => document.querySelectorAll('.pod-ovl')[1].innerText);

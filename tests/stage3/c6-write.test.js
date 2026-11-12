@@ -62,7 +62,7 @@ const HOUSE7 = [['Aderrig', null, null, null, null, null], ['Item', 'Qty', 'Leng
     await off.page.evaluate(() => { openListEditor(null, 'WO-8'); });
     await off.page.evaluate(() => {
       const ov = document.querySelector('.pod-ovl');
-      const pk = ov.querySelector('#me-pid'); pk.value = 'P1'; pk.onchange({ target: pk }); // the project first: its materials fill the dropdown
+      const pk = ov.querySelector('#me-pid'); if (pk) { pk.value = 'P1'; pk.onchange({ target: pk }); } // (list-window release: no drop-down when the WO gives the project) the project first: its materials fill the dropdown
       const set = (k, v) => { const e = ov.querySelector('[data-mr="' + k + '"]'); if (e.tagName === 'SELECT' && ![...e.options].some(o => o.value === v)) e.add(new Option(v, v)); /* an edging code not in the drop-down = the user's "Other…" (9 Nov) */ e.value = v; e.oninput(); };
       set('0|item', 'Gable'); set('0|qty', '2'); set('0|L', '900'); set('0|W', '560'); set('0|mat', 'MFC White'); set('0|edging', '2mm PVC'); set('0|note', 'grain up');
       ov.querySelector('#me-name').value = 'House 1 typed';
@@ -84,7 +84,7 @@ const HOUSE7 = [['Aderrig', null, null, null, null, null], ['Item', 'Qty', 'Leng
     await F.sleep(600);
     rec('typed list edited after a tick: rev 2 with the reason, tick kept, fittings line added', D.find(S.db, 'lists', tl.id).rev === 2 && L(S, tl.id + ':1').status === 'cut' && S.db.t.list_lines.some(x => x.list_id === tl.id && x.part === 'Handle' && x.added_rev === 2) && S.db.t.list_revisions.some(r => r.list_id === tl.id && r.reason === 'Tester'), JSON.stringify(D.find(S.db, 'lists', tl.id).log.map(x => x.what)));
     // a typed list for WO-9 is superseded by the workbook sheet for unit 9 — same id, ticks kept, becomes an Excel list
-    await off.page.evaluate(() => { openListEditor(null, 'WO-9'); const ov = document.querySelector('.pod-ovl'); const pk = ov.querySelector('#me-pid'); pk.value = 'P1'; pk.onchange({ target: pk }); const s = (k, v) => { const e = ov.querySelector('[data-mr="' + k + '"]'); if (e.tagName === 'SELECT' && ![...e.options].some(o => o.value === v)) e.add(new Option(v, v)); /* an edging code not in the drop-down = the user's "Other…" (9 Nov) */ e.value = v; e.oninput(); }; s('0|item', 'Side'); s('0|qty', '2'); s('0|L', '720'); s('0|W', '560'); s('0|mat', 'MFC White'); s('0|edging', '1mm ABS'); ov.querySelector('#me-name').value = 'Typed 9'; ov.querySelector('#me-save').click(); });
+    await off.page.evaluate(() => { openListEditor(null, 'WO-9'); const ov = document.querySelector('.pod-ovl'); const pk = ov.querySelector('#me-pid'); if (pk) { pk.value = 'P1'; pk.onchange({ target: pk }); } const s = (k, v) => { const e = ov.querySelector('[data-mr="' + k + '"]'); if (e.tagName === 'SELECT' && ![...e.options].some(o => o.value === v)) e.add(new Option(v, v)); /* an edging code not in the drop-down = the user's "Other…" (9 Nov) */ e.value = v; e.oninput(); }; s('0|item', 'Side'); s('0|qty', '2'); s('0|L', '720'); s('0|W', '560'); s('0|mat', 'MFC White'); s('0|edging', '1mm ABS'); ov.querySelector('#me-name').value = 'Typed 9'; ov.querySelector('#me-save').click(); });
     await F.sleep(600);
     const m9 = S.db.t.lists.find(l => l.name === 'Typed 9');
     D.applyLineChanges(S.db, [{ id: m9.id + ':1', status: 'cut', cid: 'd', rev: 1 }], 'Sean');

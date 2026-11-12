@@ -119,7 +119,7 @@ let pass = 0, fail = 0; const rec = (n, ok, d) => { ok ? pass++ : fail++; consol
   const r2 = lti.find(r => r.wo === 'WO-2');
   rec('lists to issue: a WO with no template shows "＋ New list – standard layout"; Floor / Unit as separate badges', r2 && r2.std && !r2.conf && r2.fl === 'Floor 0' && r2.un === 'Unit 7', JSON.stringify(lti));
   const op = await p.evaluate(async () => { document.querySelector('[data-ltistd="WO-2"]').click(); await new Promise(r => setTimeout(r, 150));
-    return { h: document.querySelector('[data-mr="0|item"]').value, wo: document.getElementById('me-wo').value, pid: document.getElementById('me-pid').value, n: document.querySelectorAll('.me-grid tbody tr').length }; });
+    return { h: document.querySelector('[data-mr="0|item"]').value, wo: (e => e ? e.value : (document.querySelector('#me-wol > b') || {}).textContent)(document.getElementById('me-wo')), pid: (e => e ? e.value : (document.getElementById('me-ptxt') || { dataset: {} }).dataset.pid)(document.getElementById('me-pid')), n: document.querySelectorAll('.me-grid tbody tr').length }; });
   rec('…it opens the editor for WO-2: "House 7", the project picked, 10 rows', op.h === 'House 7' && op.wo === 'WO-2' && op.pid === 'P1' && op.n === 10, JSON.stringify(op));
   await p.evaluate(() => { const o = document.querySelector('.pod-ovl'); if (o) o.remove(); });
   rec('no page errors', !(S.errors || []).length, (S.errors || []).join(' | '));

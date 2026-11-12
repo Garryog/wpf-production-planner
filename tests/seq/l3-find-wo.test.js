@@ -19,7 +19,7 @@ function row() {
   return r;
 }
 const st = p => p.evaluate(() => { const q = s => document.querySelector('.me-ed ' + s);
-  return { jb: !!q('#me-jb'), ok: (q('#me-jbok') || {}).innerText || '', msg: (q('#me-jbm') || {}).innerText || '', wo: (q('#me-wo') || {}).value, name: (q('#me-name') || {}).value,
+  return { jb: !!q('#me-jb'), ok: (q('#me-jbok') || {}).innerText || '', msg: (q('#me-jbm') || {}).innerText || '', wo: q('#me-wo') ? q('#me-wo').value : (q('#me-wol > b') || {}).textContent /* list-window release: a known WO is text in the WO line */, name: (q('#me-name') || {}).value,
     picks: [...document.querySelectorAll('.me-ed [data-jpick]')].map(b => b.dataset.jpick), img: !!document.querySelector('.me-ed #me-jbm img'), open: !!document.querySelector('.me-ed') }; });
 const fill = (p, f, u, wo) => p.evaluate(({ f, u, wo }) => { const s = (id, v) => { const e = document.getElementById(id); e.value = v; e.dispatchEvent(new Event('input')); };
   s('me-jf', f); s('me-ju', u); if (wo != null) s('me-jwo', wo); }, { f, u, wo });

@@ -29,7 +29,8 @@ const LONG = 'Job – Kitchen and utility fit-out, Type B 3-bed end of terrace w
   const off = await F.dev(browser, S, 'office', { viewport: { width: 1400, height: 900 } });
   const p = off.page;
   // ---- editor
-  const ed = await p.evaluate(async () => { showTab('l'); openListEditor(null, 'WO-3', 'P1'); await new Promise(r => setTimeout(r, 120));
+  const ed = await p.evaluate(async () => { showTab('l'); openListEditor(null, '', 'P1'); await new Promise(r => setTimeout(r, 120));
+    { const w = document.getElementById('me-wo'); w.value = 'WO-3'; w.onchange(); } // list-window release: the Work order drop-down is only in a window opened with no WO
     const s = document.getElementById('me-wo'), f = () => Object.fromEntries([...document.querySelectorAll('#me-woinfo [data-woi]')].map(e => [e.dataset.woi, e.textContent.trim()]));
     const r = { sel: s.options[s.selectedIndex].textContent, opts: [...s.options].map(o => o.textContent), info: f(), tt: document.querySelector('[data-woi="Title"]').title };
     s.value = 'WO-1'; s.onchange(); r.info2 = f(); s.value = 'WO-3'; s.onchange(); return r; });
@@ -42,7 +43,7 @@ const LONG = 'Job – Kitchen and utility fit-out, Type B 3-bed end of terrace w
   await p.evaluate(() => { const o = document.querySelector('.pod-ovl'); if (o) o.remove(); });
   await p.setViewportSize({ width: 360, height: 800 }); await p.evaluate(async () => { openListEditor(null, 'WO-3', 'P1'); await new Promise(r => setTimeout(r, 150)); });
   const ph = await p.evaluate(() => { const ov = document.querySelector('.pod-ovl'), b = document.getElementById('me-woinfo').getBoundingClientRect();
-    const wide = [...document.querySelectorAll('#me-woinfo *, #me-wo')].filter(e => e.getBoundingClientRect().right > 362).map(e => e.className || e.id);
+    const wide = [...document.querySelectorAll('#me-woinfo *, #me-wo, #me-wol, #me-wol *')].filter(e => e.getBoundingClientRect().right > 362).map(e => e.className || e.id);
     return { right: Math.round(b.right), wide }; });
   rec('editor at 360 px: the Floor/Unit/Title/Customer boxes wrap inside the screen', ph.right <= 362 && !ph.wide.length, JSON.stringify(ph));
   if (SHOTS) await p.screenshot({ path: SHOTS + '/editor-header-360.png' });

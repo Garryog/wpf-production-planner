@@ -63,7 +63,7 @@ const val = k => `(()=>{const e=document.querySelector('.pod-ovl [data-mr="${k}"
   // Make new list from this: copy without ticks, nothing saved until Save, old list unchanged
   const before = S.db.t.lists.length;
   await pg.evaluate(async () => { await lsPoll(); const l = lists().find(x => x.name === 'House 2'); openListEditor(l.id); document.querySelector('[data-mecopy]').click(); });
-  const cp = await pg.evaluate(() => { const ov = document.querySelector('.pod-ovl'); return { title: ov.querySelector('div').textContent, name: ov.querySelector('#me-name').value, note: ov.innerText.includes('Copied from "House 2"'), u: ov.querySelector('[data-mr="0|units"]').value, dis: ov.querySelector('[data-mr="0|units"]').disabled, wo: ov.querySelector('#me-wo').value }; });
+  const cp = await pg.evaluate(() => { const ov = document.querySelector('.pod-ovl'); return { title: ov.querySelector('div').textContent, name: ov.querySelector('#me-name').value, note: ov.innerText.includes('Copied from "House 2"'), u: ov.querySelector('[data-mr="0|units"]').value, dis: ov.querySelector('[data-mr="0|units"]').disabled, wo: (e => e ? e.value : (document.querySelector('#me-wol > b') || {}).textContent)(document.getElementById('me-wo')) }; });
   rec('"Make new list from this" opens a NEW list with the rows copied, Units unlocked, nothing saved yet', /New cutting list/.test(cp.title) && cp.name === 'House 2 (new)' && cp.note && cp.u === '5' && !cp.dis && cp.wo === 'WO-2' && S.db.t.lists.length === before, JSON.stringify(cp));
   await pg.evaluate(set('0|units', '6')); await pg.evaluate(() => document.getElementById('me-save').click());
   for (let i = 0; i < 30 && !S.db.t.lists.some(l => l.name === 'House 2 (new)'); i++) await F.sleep(100);

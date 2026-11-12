@@ -422,6 +422,7 @@ details.lti-other{margin-bottom:14px}details.lti-other>summary{cursor:pointer;fo
 .man-b{font-size:10px;font-weight:700;color:#5b21b6;background:#f1ebff;border-radius:4px;padding:1px 5px}
 .na-flag{font-size:11px;color:var(--t2);white-space:nowrap;cursor:pointer}
 .me-top{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end}
+.me-wol{font-size:15px;color:#14335c;margin:0 0 6px;overflow-wrap:anywhere}.me-wol .me-wodue{margin-left:6px;white-space:nowrap}
 .me-top label{display:block;font-size:11px;color:var(--t2);font-weight:600;margin-bottom:3px}
 .me-newwo{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px;background:#f6f2ff;border:1px solid #d9ccff;border-radius:8px;padding:8px}
 /* L1/L3 (Job B part 3): Floor | Unit | Title boxes on a new list with no WO, and the Cienapps WO lookup */
@@ -4378,6 +4379,17 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     newId:ex?'':opt.pendId||uid('L'),landed:!!opt.landed,unitsOn:!!opt.unitsOn,moreOpen:false,help:false,
     jb:{floor:'',unit:'',title:'',wo:'',res:null,not:[],last:''},jm:null,pauto:false,pmsg:null}; // jb = the Floor / Unit / Title boxes of a new list with no WO (L1); jm = the WO they found (L3) // a new list keeps ONE id for this editor: Save pressed again after a lost reply is the same list, never a second one
   if(!ex&&!presetPid&&st.pid)st.pauto=true; // the project came from the WO's customer (L5)
+  /*list-window release, item 6 (Garry 12 Nov): opened for a known work order (from a job, or an existing list) → the WO and the
+    project are plain text — no Project or Work order drop-down, never "Pick the project". The project is the WO's customer,
+    found or made by lsEnsureCustProj (L5). The drop-downs are only for a window opened with NO work order (＋ New list), and as a
+    fallback when the WO gives no project (not in the planner, no customer in Cienapps, or the project could not be made). */
+  const woMode=!st.tpl&&(ex?!!(ex.wos||[]).length:!!presetWo);
+  const woFallback=()=>{if(!woMode||st.pid)return false;const o=DB.orders.find(x=>x.wo===st.wo),pm=st.pmsg;return !o||!String(o.customer||'').trim()||!!(pm&&pm.st==='err');};
+  const pickOn=()=>!woMode||woFallback();
+  const dueHd=o=>{const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(String(o&&o.dueDate||'').trim());if(!m)return'';const d=new Date(+m[1],+m[2]-1,+m[3],12);
+    return d.getDate()===+m[3]&&d.getMonth()===+m[2]-1?'Due '+d.toLocaleDateString('en-IE',{weekday:'short',day:'numeric',month:'short'})+' · Wk '+wkNum(d):'';};
+  const woLineHTML=()=>{if(!woMode)return'';const o=DB.orders.find(x=>x.wo===st.wo)||{},E=escA,more=ex?(ex.wos||[]).length-1:0,du=dueHd(o);
+    return `<div class="me-wol" id="me-wol"><b>${E(st.wo)}</b>${woIsP(st.wo)?' <span style="color:#5b21b6;font-size:12px">· not from Cienapps</span>':''}${more>0?' <span style="font-size:12px;color:var(--t3)">+'+more+' more</span>':''}${o.customer?' · '+E(o.customer):''}${du?` <b class="me-wodue">${E(du)}</b>`:''}</div>`;};
   let sawStarted=!!ex&&!ex.tpl&&lsTicked(ex.id); // set on a refused save too (a tick landed while the editor was open)
   const prevId=ex?(ex.tpl?'':lsReplOf(ex.id)):st.from?st.from.id:''; // the list this one replaces: "already cut on old list (n)"
   const prevCut=r=>prevId&&(lsNum(r.L)>0||lsNum(r.W)>0)?lsPrevCutHTML(prevId,r.item,r.L,r.W,r.mat):'';
@@ -4451,11 +4463,13 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     if(pm&&pm.st==='busy')return box('Setting up project \''+E(pm.c)+'\'…');
     if(!st.pid&&pm&&pm.st==='ask')return box('Is this project \''+E(pm.p.name)+'\'? <span style="font-weight:400">(the WO\'s customer is \''+E(pm.c)+'\')</span><br><button class="btn btn-s" id="me-pyes" style="font-size:12px;padding:3px 10px;margin:3px 4px 0 0">Yes, use it</button><button class="btn btn-s" id="me-pno" style="font-size:12px;padding:3px 10px;margin-top:3px">No — make project \''+E(pm.c)+'\'</button>',true);
     if(!st.pid&&pm&&pm.st==='off')return box('No connection — the project couldn\'t be set up. Check the internet and try again; you can still type the list. <button class="btn btn-s" id="me-pretry" style="font-size:12px;padding:2px 9px">Try again</button>',true);
-    if(!st.pid&&st.matAfter!=null&&!(pm&&['busy','many','ask','off'].includes(pm.st)))return box('Pick the project — then the new material is added. (Or ＋ New project… at the bottom of the list.)',true);
-    if(st.pid)return st.pauto&&o?box('Project: <b>'+E(lsProjName(st.pid))+'</b> — from the WO\'s customer'):'';
+    if(!st.pid&&st.matAfter!=null&&!(pm&&['busy','many','ask','off'].includes(pm.st)))return box(woMode?'Choose the project here — then the new material is added. (Or ＋ New project… at the bottom of the list.)':'Pick the project — then the new material is added. (Or ＋ New project… at the bottom of the list.)',true);
+    if(st.pid)return st.pauto&&o?box(woMode?'from the WO\'s customer':'Project: <b>'+E(lsProjName(st.pid))+'</b> — from the WO\'s customer'):'';
     if(pm&&pm.st==='many')return box('\''+E(pm.c)+'\' fits more than one project — pick one: '+pm.ps.map(p=>`<button class="btn btn-s" data-mepp="${E(p.id)}" style="font-size:12px;padding:2px 9px;margin:2px 4px 0 0">${E(p.name)}</button>`).join(''),true);
-    if(pm&&pm.st==='err')return box('Project \''+E(pm.c)+'\' could not be set up ('+E(pm.m)+') — '+pick+'.',true);
-    if(o&&!String(o.customer||'').trim())return box('This WO has no customer in Cienapps — pick the project, or ＋ New project… at the bottom of the list.',true);
+    if(pm&&pm.st==='err')return box('Project \''+E(pm.c)+'\' could not be set up ('+E(pm.m)+') — '+(woMode?'choose it here, or ＋ New project… at the bottom of the list':pick)+'.',true);
+    if(o&&!String(o.customer||'').trim())return box('This WO has no customer in Cienapps — '+(woMode?'choose its project here':'pick the project')+', or ＋ New project… at the bottom of the list.',true);
+    if(woMode&&!o)return box(E(st.wo)+' is not in the planner — choose the project here, or ＋ New project… at the bottom of the list.',true);
+    if(woMode)return box('Setting up the project from the WO\'s customer…');
     return box(pick+'.',true);
   };
   const jbFind=()=>{
@@ -4617,6 +4631,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     const tbc=lsTbc(R()),chk=ex&&!ex.tpl?lsCheckInfo(ex):null;
     ov.innerHTML=`<div class="pod-in me-ed" style="min-width:min(1180px,97vw)">
       <div class="me-tb"><div style="font-weight:800;color:#14335c;font-size:17px;flex:1;min-width:0">✍ ${ex?'Edit':'New'} ${st.tpl?'template':'cutting list'}${ex&&(+ex.rev||1)>1?' · Rev '+(+ex.rev):''}</div><button class="btn btn-s me-x0" id="me-x0" title="Close this window (asks first if anything is not saved)">✕ Close</button></div>
+      ${woLineHTML()}
       ${ex&&ex.templateId?`<div style="font-size:12px;color:#5b21b6;font-weight:700;margin-bottom:4px">📐 ${escA(lsTplInfo(ex))}</div>`:''}
       ${st.note?`<div style="font-size:12px;color:#1a56db;font-weight:700;margin-bottom:4px">${escA(st.note)}</div>`:''}
       ${!st.tpl&&st.wo&&!st.newWO?pTwinWarn([st.wo]):''}
@@ -4624,13 +4639,15 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       ${chk&&chk.ok?`<div style="font-size:13px;color:#0d6e46;font-weight:700;margin-bottom:4px">✓ Checked by ${escA(chk.by)} — saving a change takes the check away: it must be checked again before the saw sees it.</div>`:''}
       ${tbc.length?`<div style="margin-bottom:6px">${lsTbcChip(tbc,true)}</div>`:''}
       <div class="me-top">
-        <div><label>Project</label><div style="display:flex;gap:6px;flex-wrap:wrap"><select id="me-pid" style="${inp};max-width:230px"><option value="">— pick the project —</option>${lsProjects().map(p=>`<option value="${escA(p.id)}"${p.id===st.pid?' selected':''}>${escA(p.name)}</option>`).join('')}<option value="__new">＋ New project…</option></select>
+        <div><label>Project</label><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">${pickOn()?`<select id="me-pid" style="${inp};max-width:230px"><option value="">— pick the project —</option>${lsProjects().map(p=>`<option value="${escA(p.id)}"${p.id===st.pid?' selected':''}>${escA(p.name)}</option>`).join('')}<option value="__new">＋ New project…</option></select>`
+            :`<b id="me-ptxt" data-pid="${escA(st.pid)}" style="font-size:14px;color:#14335c;padding:6px 0">${st.pid?escA(lsProjName(st.pid)):'—'}</b>`}
           <button class="btn btn-s" id="me-mats" style="font-size:12px;white-space:nowrap" title="The project's boards, materials and fittings — add or change them here">🧱 Project materials (add / edit)</button></div>${pmsgHTML()}</div>
-        ${st.tpl?'':`<div><label>Work order</label>
+        ${st.tpl||woMode?'':`<div><label>Work order</label>
           ${st.newWO?`<div style="font-size:12px;color:#5b21b6;font-weight:700;padding:7px 0">New work order ${escA(nextPNumber())} <button class="btn btn-s" id="me-pick" style="font-size:11px;padding:2px 8px">use an existing WO instead</button></div>`
           :`<div style="display:flex;gap:6px"><select id="me-wo" style="${inp};max-width:340px">${woOpts()}</select>
             ${ex?'':`<button class="btn btn-s" id="me-new" style="font-size:12px;white-space:nowrap">＋ New P-number</button>`}</div>`}</div>
         ${st.newWO?'':`<div class="wo-info" id="me-woinfo">${woInfoHTML(DB.orders.find(x=>x.wo===st.wo))}</div>`}`}
+        ${woMode&&!st.newWO?`<div class="wo-info" id="me-woinfo">${woInfoHTML(DB.orders.find(x=>x.wo===st.wo))}</div>`:''}
         <div><label>${st.tpl?'Template name':'List name (optional)'}</label><input id="me-name" value="${escA(st.name)}" placeholder="e.g. Kitchen — Type B" title="${st.tpl?'The template\'s name':'A name for this list — any words, searchable later. Left blank, the list is named after its work order'}" style="${inp};width:170px"></div>
         <div><label>Type</label><select id="me-type" style="${inp}">${['kitchen','house','room','other'].map(k=>`<option value="${k}"${st.ltype===k?' selected':''}>${LS_KINDS[k]}</option>`).join('')}</select>
           <input id="me-tname" value="${escA(st.tname||'')}" placeholder="e.g. Type B 3-bed" style="${inp};width:140px"></div>
@@ -4747,13 +4764,13 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     g('me-door').onchange=e=>{st.door=e.target.value;};
     g('me-mats').onclick=()=>{keep();if(st.pid)return lsMaterialsDlg(st.pid,()=>draw()); /*L6: never greyed — with a WO the project is set up first (L5)*/
       if(st.wo&&!st.tpl&&!st.newWO&&String((DB.orders.find(x=>x.wo===st.wo)||{}).customer||'').trim())return autoProj(()=>lsMaterialsDlg(st.pid,()=>draw()));
-      const e=g('me-err');if(e)e.textContent='Pick the project first — materials belong to a project.';const s=g('me-pid');if(s)s.focus();};
+      const e=g('me-err');if(e)e.textContent=pickOn()?'Pick the project first — materials belong to a project.':'The project is still being set up from the WO\'s customer — try again in a moment.';const s=g('me-pid');if(s)s.focus();};
     on('me-pyes',()=>{const pm=st.pmsg;if(!pm||pm.st!=='ask')return;keep();st.pmsg=null;autoProj(pm.then,o=>ltiLink(o,pm.p.id).then(p=>({st:'ok',p})));}); // the customer is added to that project's Cienapps names: certain next time
     on('me-pno',()=>{const pm=st.pmsg;if(!pm||pm.st!=='ask')return;keep();st.pmsg=null;autoProj(pm.then,o=>lsEnsureCustProj(o,{noAsk:true}));});
     on('me-pretry',()=>{keep();st.pmsg=null;autoProj();});
     ov.querySelectorAll('[data-mepp]').forEach(b=>b.onclick=()=>{keep();st.pid=b.dataset.mepp;st.pauto=false;st.pmsg=null;edges=lsProjEdges(st.pid);draw();projSet();});
     on('me-matsnow',()=>{keep();if(st.pid)lsMaterialsDlg(st.pid,()=>draw());});
-    g('me-pid').onchange=e=>{keep();
+    const pk0=g('me-pid');if(pk0)pk0.onchange=e=>{keep();
       if(e.target.value==='__new'){const o=st.wo?DB.orders.find(x=>x.wo===st.wo):null; // (L5) no PIN — the customer = project rule
         const n=prompt('New project name:',String(o&&o.customer||'').trim());if(!n||!n.trim()){draw();return;}
         lsProject(n.trim()).then(id=>{keep();st.pid=id;st.pauto=false;st.pmsg=null;edges=lsProjEdges(id);draw();projSet();}).catch(x=>{draw();g('me-err').textContent='Project not added — '+x.message;});return;}
@@ -4885,7 +4902,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     [['me-jf','floor'],['me-ju','unit'],['me-jt','title'],['me-jwo','wo']].forEach(([id,k])=>{const e=g(id);if(e)st.jb[k]=e.value;});};
   const save=()=>{
     keep();const g=id=>ov.querySelector('#'+id),err=t=>{g('me-err').textContent=t+(st.chkNote&&t&&!/^Checking/.test(t)?' '+st.chkNote:'');}; // chkNote: the house check couldn't be made (round 3)
-    if(!st.pid)return err('Pick the project — or ＋ New project… at the bottom of the list.');
+    if(!st.pid)return err(!pickOn()?(st.pmsg&&['many','ask'].includes(st.pmsg.st)?'Answer the project question above first.':st.pmsg&&st.pmsg.st==='off'?'No connection — the project could not be set up yet. Press Try again above.':'Wait a moment — the project is still being set up from the WO\'s customer.'):woMode?'Choose the project above — or ＋ New project… at the bottom of the list.':'Pick the project — or ＋ New project… at the bottom of the list.');
     if(st.tpl&&!String(st.name||'').trim())return err('Give the template a name.');
     let rows=R().filter(r=>!lsEmptyRow(r)); // empty rows (nothing typed) are left out, as in Excel
     const

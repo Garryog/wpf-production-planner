@@ -24,14 +24,16 @@ const res = []; const rec = (n, ok, d) => { res.push(ok); console.log((ok ? 'PAS
   await off.page.evaluate(() => { window.prompt = (m, d) => /PIN/.test(m) ? '7777' : 'Tester'; });
   // new list from WO-1: project from the WO's customer
   const a = await off.page.evaluate(() => { openListEditor(null, 'WO-1'); const o = document.querySelector('.pod-ovl'), m = o.querySelector('[data-mr="0|mat"]');
-    return { pid: o.querySelector('#me-pid').value, tag: m.tagName, opts: [...m.options].map(x => x.value).join('|'), dl: !!m.getAttribute('list'), type: o.querySelector('#me-type').value }; });
+    return { pid: (e => e ? e.value : (document.getElementById('me-ptxt') || { dataset: {} }).dataset.pid)(document.getElementById('me-pid')), nodd: !o.querySelector('#me-pid'), tag: m.tagName, opts: [...m.options].map(x => x.value).join('|'), dl: !!m.getAttribute('list'), type: o.querySelector('#me-type').value }; });
   // editor step 5 (Garry, 3 Nov): Colour = the project's materials (boards; fittings too on a row with no size) + "+ Add new material…"
-  rec('new list: project picked from the WO customer; Colour is a dropdown of the project\'s materials + "Add new material…" (no free typing)', a.pid === 'P1' && a.tag === 'SELECT' && a.opts === '|MFC White|Blum hinge|__add' && !a.dl && a.type === 'house', JSON.stringify(a));
-  const b = await off.page.evaluate(() => { const o = document.querySelector('.pod-ovl'), p = o.querySelector('#me-pid'); p.value = 'P2'; p.onchange({ target: p }); return [...o.querySelector('[data-mr="0|mat"]').options].map(x => x.value).join('|'); });
-  rec('changing the project changes the materials offered', b === '|Birch ply|__add', b);
+  rec('new list: project picked from the WO customer; Colour is a dropdown of the project\'s materials + "Add new material…" (no free typing)', a.pid === 'P1' && a.nodd /* list-window release: shown as text, no drop-down */ && a.tag === 'SELECT' && a.opts === '|MFC White|Blum hinge|__add' && !a.dl && a.type === 'house', JSON.stringify(a));
+  // (list-window release) the project can only be changed in a window opened with no WO (＋ New list); the WO-1 window is opened again after
+  const b = await off.page.evaluate(() => { document.querySelectorAll('.pod-ovl').forEach(x => x.remove()); openListEditor(null, '', 'P1'); const o = document.querySelector('.pod-ovl'), p = o.querySelector('#me-pid'); p.value = 'P2'; p.onchange({ target: p });
+    const r = [...o.querySelector('[data-mr="0|mat"]').options].map(x => x.value).join('|'); document.querySelectorAll('.pod-ovl').forEach(x => x.remove()); openListEditor(null, 'WO-1'); return r; });
+  rec('changing the project changes the materials offered (no-WO window)', b === '|Birch ply|__add', b);
   // validation, fittings Other…
-  const c = await off.page.evaluate(() => { const o = document.querySelector('.pod-ovl'), p = o.querySelector('#me-pid'); p.value = 'P1'; p.onchange({ target: p });
-    { const w = o.querySelector('#me-wo'); w.value = 'WO-1'; w.onchange(); } // Part 4 (L11, 10 Nov): moving a NEW list to Crown took WO-1 (an Aderrig job) off it — picked again
+  const c = await off.page.evaluate(() => { const o = document.querySelector('.pod-ovl'), p = o.querySelector('#me-pid'); if (p) { p.value = 'P1'; p.onchange({ target: p }); }
+    { const w = o.querySelector('#me-wo'); if (w) { w.value = 'WO-1'; w.onchange(); } } // Part 4 (L11, 10 Nov): moving a NEW list to Crown took WO-1 (an Aderrig job) off it — picked again
     const s = (k, v) => { const e = o.querySelector('[data-mr="' + k + '"]'); if (e.tagName === 'SELECT' && ![...e.options].some(o => o.value === v)) e.add(new Option(v, v)); /* an edging code not in the drop-down = the user's "Other…" (9 Nov) */ e.value = v; (e.oninput || e.onchange)(); };
     s('0|item', 'Gable'); s('0|qty', '2'); s('0|L', '900'); s('0|W', '560'); s('0|edging', '1mm');
     o.querySelector('#me-save').click(); return o.querySelector('#me-err').textContent; });

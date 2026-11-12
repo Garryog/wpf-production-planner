@@ -140,12 +140,12 @@ const donep = p => p.evaluate(() => { const d = document.querySelector('.me-dov'
 
     // ---- L5: the project fills itself from the WO's customer
     const projs = n => S.db.t.projects.filter(x => String(x.name).toLowerCase() === n.toLowerCase());
-    const pst = () => p.evaluate(() => ({ pid: (document.getElementById('me-pid') || {}).value, pm: (document.getElementById('me-pm') || {}).innerText || '', open: !!document.querySelector('.me-ed') }));
+    const pst = () => p.evaluate(() => ({ pid: (e => e ? e.value : ((document.getElementById('me-ptxt') || { dataset: {} }).dataset.pid || ''))(document.getElementById('me-pid')), pm: (document.getElementById('me-pm') || {}).innerText || '', open: !!document.querySelector('.me-ed') }));
     await asks(p);
     await p.evaluate(() => openListEditor(null, 'WO-20')); await sleep(900);
     w = await pst();
     const bn = projs('Brand New Homes');
-    rec('L5: WO-20 (customer "Brand New Homes", no project) → project made at once, picked, grey "from the WO\'s customer"', bn.length === 1 && w.pid === bn[0].id && /Project: Brand New Homes — from the WO's customer/.test(w.pm) && JSON.stringify(bn[0].cien_names) === '["Brand New Homes"]' && bn[0].customer === 'Brand New Homes', JSON.stringify([w, bn]));
+    rec('L5: WO-20 (customer "Brand New Homes", no project) → project made at once, picked, grey "from the WO\'s customer"', bn.length === 1 && w.pid === bn[0].id && /from the WO's customer/.test(w.pm) && await p.evaluate(() => (document.getElementById('me-ptxt') || {}).textContent === 'Brand New Homes' && !document.getElementById('me-pid')) /* list-window release: the project is text, no drop-down */ && JSON.stringify(bn[0].cien_names) === '["Brand New Homes"]' && bn[0].customer === 'Brand New Homes', JSON.stringify([w, bn]));
     rec('L5: no PIN asked to make it', await p.evaluate(() => !window.__asked.length));
     await p.evaluate(() => document.getElementById('me-x0').click()); await sleep(100);
     rec('L5: the project set by the app is not "typed" — ✕ closes with no question', !(await ed(p)) && await p.evaluate(() => !window.__asked.length));
@@ -165,7 +165,7 @@ const donep = p => p.evaluate(() => { const d = document.querySelector('.me-dov'
     // a WO with no customer
     await p.evaluate(() => openListEditor(null, 'WO-22')); await sleep(600);
     w = await pst();
-    rec('L5: WO with no customer → "This WO has no customer in Cienapps — pick the project, or ＋ New project…"', !w.pid && /This WO has no customer in Cienapps — pick the project, or ＋ New project… at the bottom of the list/.test(w.pm) && S.db.t.projects.length === n0, JSON.stringify(w));
+    rec('L5: WO with no customer → "This WO has no customer in Cienapps — choose its project here, or ＋ New project…" (list-window release: the project drop-down shows only for this fallback)', !w.pid && /This WO has no customer in Cienapps — choose its project here, or ＋ New project… at the bottom of the list/.test(w.pm) && await p.evaluate(() => !!document.getElementById('me-pid')) && S.db.t.projects.length === n0, JSON.stringify(w));
     await closeAll(p);
     // no WO: the picker, said plainly; Save says what to do
     await p.evaluate(() => openListEditor(null, '', '')); await sleep(400);
@@ -217,7 +217,7 @@ const donep = p => p.evaluate(() => { const d = document.querySelector('.me-dov'
     await p.evaluate(() => { window.__e.st.pid = ''; window.__e.st.pauto = false; window.__e.draw(); }); // as if the project had not been set up yet
     await setv(p, '0|item', 'Side'); await setv(p, '0|L', '700');
     await addAsk('0|mat', 'Oak 18'); await sleep(1200);
-    w = await p.evaluate(() => ({ pid: document.getElementById('me-pid').value, mat: document.querySelector('.me-ed [data-mr="0|mat"]').value }));
+    w = await p.evaluate(() => ({ pid: (e => e ? e.value : ((document.getElementById('me-ptxt') || { dataset: {} }).dataset.pid || ''))(document.getElementById('me-pid')), mat: document.querySelector('.me-ed [data-mr="0|mat"]').value }));
     rec('L6: WO known, no project → project set from the customer, then the name asked ONCE, saved on the project, picked on the row', mh && w.pid === mh.id && (await mq()) === 1 && mats(mh.id).includes('Oak 18') && w.mat === 'Oak 18', JSON.stringify([w, mh && mats(mh.id)]));
     await closeAll(p);
     // (b) no WO, no project: "Pick the project — then the new material is added"; picking it carries on
@@ -322,7 +322,7 @@ const donep = p => p.evaluate(() => { const d = document.querySelector('.me-dov'
     const [a1, a2] = await Promise.all([X.dev(browser, S, 'office'), X.dev(browser, S, 'office')]);
     await Promise.all([a1.page.evaluate(() => openListEditor(null, 'WO-26')), a2.page.evaluate(() => openListEditor(null, 'WO-26'))]); await sleep(1500);
     const rh = S.db.t.projects.filter(x => /^race homes$/i.test(x.name));
-    const pids = await Promise.all([a1, a2].map(a => a.page.evaluate(() => (document.getElementById('me-pid') || {}).value)));
+    const pids = await Promise.all([a1, a2].map(a => a.page.evaluate(() => (e => e ? e.value : ((document.getElementById('me-ptxt') || { dataset: {} }).dataset.pid || ''))(document.getElementById('me-pid')))));
     rec('L5: two PCs at once → ONE project "Race Homes", both windows on it', rh.length === 1 && pids.every(x => x === rh[0].id), JSON.stringify([rh.map(x => x.id), pids]));
     await a1.close(); await a2.close();
 

@@ -94,10 +94,10 @@ const pinAsked = p => p.evaluate(() => window.__p.filter(m => /PIN/.test(m)).len
   rec('F1 saw row material is a dropdown; a typed value can\'t be put in it', ft.tag === 'SELECT' && ft.v === '' && ft.inputs === 0, JSON.stringify(ft));
   // switch project after picking a board from another project's list → saved but flagged
   D.insert(S.db, 'projects', { id: 'P3', name: 'Crown' }); D.insert(S.db, 'project_materials', { id: 'M30', project_id: 'P3', name: 'Oak veneer', kind: 'sheet' });
-  await a.page.evaluate(async () => { document.querySelectorAll('.pod-ovl').forEach(o => o.remove()); await lsPoll(); openListEditor(null, 'WO-2', 'P3'); const o = document.querySelector('.pod-ovl');
+  await a.page.evaluate(async () => { document.querySelectorAll('.pod-ovl').forEach(o => o.remove()); await lsPoll(); openListEditor(null, '', 'P3'); const o = document.querySelector('.pod-ovl'); // (list-window release) the project can only be switched in a window opened with no WO; WO-2 is picked after
     const s = (k, v) => { const e = o.querySelector('[data-mr="' + k + '"]'); e.value = v; (e.oninput || e.onchange)(); };
     s('0|item', 'Door'); s('0|qty', '1'); s('0|L', '700'); s('0|W', '400'); s('0|mat', 'Oak veneer');
-    const p = o.querySelector('#me-pid'); p.value = 'P1'; p.onchange({ target: p }); o.querySelector('#me-name').value = 'Switched'; o.querySelector('#me-save').click(); });
+    const p = o.querySelector('#me-pid'); p.value = 'P1'; p.onchange({ target: p }); const w = o.querySelector('#me-wo'); w.value = 'WO-2'; w.onchange(); o.querySelector('#me-name').value = 'Switched'; o.querySelector('#me-save').click(); });
   await F.sleep(700);
   const sw = S.db.t.lists.find(l => l.name === 'Switched'), swl = sw ? lines(S, sw.id)[0] : null;
   rec('F2 board picked on project Crown, then project switched to Aderrig: saved FLAGGED "not on project list"', !!swl && swl.material === 'Oak veneer' && swl.material_other === true, JSON.stringify(swl && { m: swl.material, flag: swl.material_other }));

@@ -17,7 +17,7 @@ const setv = (p, k, v) => p.evaluate(({ k, v }) => { const e = document.querySel
 const setid = (p, id, v, ev) => p.evaluate(({ id, v, ev }) => { const e = document.getElementById(id); e.value = v; e.dispatchEvent(new Event(ev || (e.tagName === 'SELECT' ? 'change' : 'input'))); }, { id, v, ev });
 const fillSaw = async (p, i, item, qty, L, W, mat) => { for (const [f, v] of [['item', item], ['qty', qty], ['L', L], ['W', W], ['mat', mat]]) await setv(p, i + '|' + f, v); };
 const donep = p => p.evaluate(() => { const d = document.querySelector('.me-dov'); if (!d) return null; return { h: d.querySelector('#me-dok').textContent, l: d.querySelector('.me-dl').innerText }; });
-const pst = p => p.evaluate(() => ({ pid: (document.getElementById('me-pid') || {}).value, pm: (document.getElementById('me-pm') || {}).innerText || '', err: (document.getElementById('me-err') || {}).textContent || '', open: !!document.querySelector('.me-ed') }));
+const pst = p => p.evaluate(() => ({ pid: (e => e ? e.value : ((document.getElementById('me-ptxt') || { dataset: {} }).dataset.pid || ''))(document.getElementById('me-pid')), pm: (document.getElementById('me-pm') || {}).innerText || '', err: (document.getElementById('me-err') || {}).textContent || '', open: !!document.querySelector('.me-ed') }));
 const projsNamed = (S, re) => S.db.t.projects.filter(x => re.test(String(x.name)));
 
 function row() {
@@ -57,7 +57,7 @@ function row() {
       await Promise.all(pcs.map(t => t.page.evaluate(() => openListEditor(null, 'WO-43'))));
       await sleep(400); rel(); S.hold3 = null; await sleep(2000);
       let th = projsNamed(S, /^triple homes$/i);
-      let pids = await Promise.all(pcs.map(t => t.page.evaluate(() => (document.getElementById('me-pid') || {}).value)));
+      let pids = await Promise.all(pcs.map(t => t.page.evaluate(() => (e => e ? e.value : ((document.getElementById('me-ptxt') || { dataset: {} }).dataset.pid || ''))(document.getElementById('me-pid')))));
       rec('L5 race: THREE PCs open a WO of customer "Triple Homes" at once → ONE project, all three windows on it', th.length === 1 && pids.every(x => th[0] && x === th[0].id), JSON.stringify([th.map(x => x.id), pids]));
       const errs = await Promise.all(pcs.map(t => pst(t.page)));
       rec('L5 race: …no window shows "could not be set up" (the refused duplicate is handled quietly)', errs.every(e => !/could not be set up/.test(e.pm)), JSON.stringify(errs.map(e => e.pm)));
@@ -120,9 +120,10 @@ function row() {
       await closeAll(pcs[0].page);
       // (h) apostrophe / & / <b> in the customer: escaped in the window, the project name kept as typed in Cienapps
       await pcs[0].page.evaluate(() => openListEditor(null, 'WO-49')); await sleep(900);
-      w = await pcs[0].page.evaluate(() => ({ b: !!document.querySelector('#me-pm b b, #me-pm b > b'), html: (document.getElementById('me-pm') || {}).innerHTML || '', pid: document.getElementById('me-pid').value }));
+      // (list-window release) the project name is now the text box #me-ptxt and the customer is in the WO line #me-wol — both escaped
+      w = await pcs[0].page.evaluate(() => ({ b: !!document.querySelector('#me-ptxt b, #me-wol b b, #me-pm b'), html: ((document.getElementById('me-ptxt') || {}).innerHTML || '') + ' | ' + ((document.getElementById('me-wol') || {}).innerHTML || ''), pid: (e => e ? e.value : ((document.getElementById('me-ptxt') || { dataset: {} }).dataset.pid || ''))(document.getElementById('me-pid')) }));
       const og = S.db.t.projects.find(x => x.id === w.pid);
-      rec('L5 O\'Grady & Sons <b>Ltd</b>: project made with that exact name, shown escaped (no HTML injected)', og && og.name === "O'Grady & Sons <b>Ltd</b>" && /&lt;b&gt;Ltd&lt;\/b&gt;/.test(w.html) && !w.b, JSON.stringify([og && og.name, w.html.slice(0, 200)]));
+      rec('L5 O\'Grady & Sons <b>Ltd</b>: project made with that exact name, shown escaped (no HTML injected)', og && og.name === "O'Grady & Sons <b>Ltd</b>" && /&lt;b&gt;Ltd&lt;\/b&gt;.*\|.*&lt;b&gt;Ltd&lt;\/b&gt;/.test(w.html) && !w.b, JSON.stringify([og && og.name, w.html.slice(0, 200)]));
       await closeAll(pcs[0].page);
       rec('section 1: no page errors', !(S.errors || []).length, JSON.stringify(S.errors));
       for (const t of pcs) await t.close();
@@ -338,7 +339,7 @@ function row() {
       rec('L11 speed: typing in a cell (input event) < 30 ms each (' + ms2.toFixed(1) + ' ms)', ms2 < 30, ms2.toFixed(1) + ' ms');
       const os = await p.evaluate(() => [...document.querySelectorAll('.me-ed #me-wo option')].map(o => ({ v: o.value, t: o.textContent })).filter(o => o.v));
       const exp = r.orders.filter(o => o.customer === 'Builder A Homes' && !o.shippedAt && !o.cienHold && !o.delDone).map(o => o.wo);
-      const dbg = await p.evaluate(() => ({ pid: (document.getElementById('me-pid') || {}).value, st: window.__e && window.__e.st.pid, np: lsProjects().length, no: DB.orders.length, o0: [...document.querySelectorAll('.me-ed #me-wo option')].slice(0, 2).map(o => o.textContent), kp: (lsProjForCust('Builder A Homes') || {}).id, pm: (document.getElementById('me-pm') || {}).innerText }));
+      const dbg = await p.evaluate(() => ({ pid: (e => e ? e.value : ((document.getElementById('me-ptxt') || { dataset: {} }).dataset.pid || ''))(document.getElementById('me-pid')), st: window.__e && window.__e.st.pid, np: lsProjects().length, no: DB.orders.length, o0: [...document.querySelectorAll('.me-ed #me-wo option')].slice(0, 2).map(o => o.textContent), kp: (lsProjForCust('Builder A Homes') || {}).id, pm: (document.getElementById('me-pm') || {}).innerText }));
       rec('L11: drop-down for Builder A = exactly its live jobs (shipped / on hold / delivered left out)', os.length === exp.length && exp.every(w => os.some(o => o.v === w)), JSON.stringify({ got: os.length, exp: exp.length, extra: os.filter(o => !exp.includes(o.v)).map(o => o.v).slice(0, 5), dbg }));
       const iTBC = os.findIndex(o => o.v === 'WO-ODD1'), iNull = os.findIndex(o => o.v === 'WO-ODD4'), iSlash = os.findIndex(o => o.v === 'WO-ODD3'), iBad = os.findIndex(o => o.v === 'WO-ODD2');
       const firstReal = os.findIndex(o => /^WO-3/.test(o.v));

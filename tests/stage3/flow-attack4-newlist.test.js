@@ -91,6 +91,7 @@ const saveOld = (p, fn) => p.evaluate(async fn => { await lsReloadList('OLD'); c
     const S = server(); const a = await F.dev(browser, S, 'office'); await pinUp(a.page);
     const type = () => a.page.evaluate(async () => { openListEditor(null, 'WO-1'); await new Promise(r => setTimeout(r, 100)); const ov = document.querySelector('.pod-ovl');
       ov.querySelector('#me-name').value = 'House 14 wardrobes'; const pid = ov.querySelector('#me-pid'); if (pid) { pid.value = 'P1'; pid.dispatchEvent(new Event('change', { bubbles: true })); }
+      else { const y = ov.querySelector('#me-pyes'); if (y) { y.click(); await new Promise(r => setTimeout(r, 400)); } } // list-window release: no project drop-down for a known WO — "Is this project Cherrywood Phase 2?" → Yes
       await new Promise(r => setTimeout(r, 50));
       const o2 = document.querySelector('.pod-ovl'); const set = (f, v) => { const e = o2.querySelector('[data-mr="0|' + f + '"]'); e.value = v; e.dispatchEvent(new Event('input', { bubbles: true })); e.dispatchEvent(new Event('change', { bubbles: true })); };
       o2.querySelector('#me-name').value = 'House 14 wardrobes';
