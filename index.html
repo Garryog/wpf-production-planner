@@ -4684,7 +4684,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       </div>
       <div class="me-keys"${st.help?'':' hidden'}>Rows with a length or width go to the <b>Saw</b>; rows without go to <b>Stores</b>; <b>Bought in</b> rows are never cut or picked. Materials come from the project's list — pick <b>＋ Add new material…</b> if one is missing. A new row starts with the material of the saw row above.<br>Works like Excel: <b>Tab</b> / <b>Shift+Tab</b> across · <b>Enter</b> down (a new row at the bottom) · arrow keys · <b>Ctrl+D</b> copies the cell above · <b>Insert</b> adds a row · <b>Ctrl+Delete</b> deletes the row · <b>Ctrl+Z</b> undo · <b>Ctrl+S</b> save · paste rows straight from Excel</div>
       <div id="me-err" style="color:#b42318;font-weight:700;font-size:13px;min-height:18px"></div>
-      <div class="me-foot" style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">${ex&&st.tpl?'<button class="btn btn-s" id="me-hist">🕘 History</button>':''}${st.tpl||!lsTplSaveOk()?'':'<button class="btn btn-s" id="me-astpl" title="Save these rows as a template of the project (unsaved changes included)">📐 Save as template</button>'}<span style="flex:1"></span><button class="btn btn-s" id="pod-x" title="Close this window (asks first if anything is not saved)">Close</button><button class="btn btn-g me-save-big" id="me-save">${ex?'Save changes':st.tpl?'Save template':'Save list → Saw & Stores'}</button></div>
+      <div class="me-foot" style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">${ex&&st.tpl?'<button class="btn btn-s" id="me-hist">🕘 History</button>':''}${st.tpl||!lsTplSaveOk()?'':'<button class="btn btn-s" id="me-astpl" title="Save these rows as a template of the project (unsaved changes included)">📐 Save as template</button>'}<span style="flex:1"></span><button class="btn btn-g me-save-big" id="me-save">${ex?'Save changes':st.tpl?'Save template':'Save list → Saw & Stores'}</button></div>
     </div>`;
     bind();
     const g=ov.querySelector('#me-grid');if(g&&sc)g.scrollTop=sc;
@@ -4801,7 +4801,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       else if(!st.pid&&o){st.pmsg=null;keep();draw();autoProj();}
       else if(jbOn()&&(!st.wo||!prev||(st.jm&&st.jm.wo!==st.wo))){if(st.jm&&st.jm.wo!==st.wo)st.jm=null;keep();draw();}}; // the job boxes come and go with the WO
     g('me-save').onclick=()=>save();
-    on('me-x0',()=>closeEd());on('pod-x',()=>closeEd());
+    on('me-x0',()=>closeEd()); // step 11: ONE Close (top right); the Saved ✓ panel keeps its own
   };
   const addRow=(at)=>{keep();snap();const c=curRow();const i=at!=null?at:c<0?R().length:R()[c].k==='hdr'?c+1:c+1;R().splice(i,0,blank(i));st.focus=i+'|item';draw();};
   const addHdr=unit=>{keep();snap();const c=curRow();let i=c<0?R().length:endOfBlock(c);

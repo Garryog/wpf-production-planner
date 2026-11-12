@@ -52,8 +52,8 @@ const donep = p => p.evaluate(() => { const d = document.querySelector('.me-dov'
     rec('L8: click outside the window → the window stays open', await ed(p));
     // ✕ Close at the top right, inside a sticky bar; the bottom button says Close (not Cancel)
     w = await p.evaluate(() => { const x = document.getElementById('me-x0'), b = x && x.closest('.me-tb'), r = x && x.getBoundingClientRect(), o = document.querySelector('.me-ed').getBoundingClientRect();
-      return { x: !!x, txt: x && x.textContent, sticky: b && getComputedStyle(b).position, right: r && o.right - r.right < 40, bottom: document.getElementById('pod-x').textContent }; });
-    rec('L8: "✕ Close" top right in a sticky bar; the bottom button says "Close"', w.x && /✕ Close/.test(w.txt) && w.sticky === 'sticky' && w.right && w.bottom === 'Close', JSON.stringify(w));
+      return { x: !!x, txt: x && x.textContent, sticky: b && getComputedStyle(b).position, right: r && o.right - r.right < 40, bottom: !!document.querySelector('.me-ed #pod-x') }; });
+    rec('L8: "✕ Close" top right in a sticky bar; no second Close at the bottom (step 11: one Close)', w.x && /✕ Close/.test(w.txt) && w.sticky === 'sticky' && w.right && !w.bottom, JSON.stringify(w));
     // nothing typed: ✕ closes without asking
     await asks(p);
     await p.evaluate(() => document.getElementById('me-x0').click()); await sleep(100);
@@ -63,8 +63,6 @@ const donep = p => p.evaluate(() => { const d = document.querySelector('.me-dov'
     await setv(p, '0|item', 'Side');
     await p.evaluate(() => { window.__confirm = false; document.getElementById('me-x0').click(); }); await sleep(100);
     rec('L8: ✕ Close after typing → "Close without saving?"; Cancel → stays open, row kept', await ed(p) && await p.evaluate(() => /Close without saving\?[\s\S]*What you typed in this list is lost/.test(window.__asked.pop() || '') && document.querySelector('[data-mr="0|item"]').value === 'Side'));
-    await p.evaluate(() => { window.__confirm = false; document.getElementById('pod-x').click(); }); await sleep(100);
-    rec('L8: bottom Close after typing → asked too; Cancel → stays', await ed(p) && await p.evaluate(() => /Close without saving/.test(window.__asked.pop() || '')));
     await p.evaluate(() => { window.__confirm = false; document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); }); await sleep(100);
     rec('L8: Esc after typing → asked; Cancel → stays', await ed(p) && await p.evaluate(() => /Close without saving/.test(window.__asked.pop() || '')));
     await p.evaluate(() => { window.__confirm = true; document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); }); await sleep(100);
