@@ -5028,7 +5028,9 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     const[i0,f]=m.split('|'),i=+i0,cs=cellsOf(i),ci=cs.indexOf(f),ctrl=e.ctrlKey||e.metaKey,txt=t.tagName==='INPUT';
     const stop=()=>{e.preventDefault();e.stopPropagation();};
     if(e.key==='Tab'){stop();
-      if(!e.shiftKey){if(ci<cs.length-1)go(i,cs[ci+1]);else if(i<R().length-1)go(i+1,cellsOf(i+1)[0]);else{st.cur=m;addRow(R().length);}}
+      if(!e.shiftKey){if(ci<cs.length-1)go(i,cs[ci+1]);else if(i<R().length-1)go(i+1,cellsOf(i+1)[0]);
+        else if(lsEmptyRow(R()[i])){const sb=ov.querySelector('#me-save');if(sb){st.cur=m;sb.focus();}} /*list-window step 9: Tab from an EMPTY last row goes on to Save (a filled one still adds a row)*/
+        else{st.cur=m;addRow(R().length);}}
       else{if(ci>0)go(i,cs[ci-1]);else if(i>0){const p=cellsOf(i-1);go(i-1,p[p.length-1]);}}
       return;}
     if(e.key==='Enter'&&!ctrl){stop();if(e.shiftKey){go(i-1,f);return;}
@@ -5108,7 +5110,10 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     if(top!==ov){ // (round 5) a window opened over the list (materials, insert from template, which sheet…): Esc closes THAT one only
       if(all.filter(o=>o.querySelector('.me-ed')).pop()!==ov||top.querySelector('.me-ed')||top.classList.contains('me-dov'))return; // not ours / another list window
       const x=top.querySelector('#pod-x');if(x){e.preventDefault();x.click();}return;}
-    e.preventDefault();if(ov.classList.contains('me-dov'))ov.remove();else closeEd();};
+    e.preventDefault();if(ov.classList.contains('me-dov')){ov.remove();return;}
+    const pn=['me-start','me-more'].map(id=>ov.querySelector('#'+id)).find(d=>d&&d.open); /*list-window step 9: Esc closes the little "Start from…" / "More" panel first*/
+    if(pn){pn.open=false;st.startOpen=st.moreOpen=false;const s=pn.querySelector('summary');if(s)s.focus();return;}
+    closeEd();};
   document.addEventListener('keydown',escH);
   document.querySelectorAll('.pod-ovl.me-dov').forEach(x=>x.remove()); // a "Saved ✓" panel still open: that list is saved — it goes
   document.body.appendChild(ov);draw();st.sig0=sig();autoProj();
