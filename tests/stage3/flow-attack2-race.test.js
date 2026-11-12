@@ -100,7 +100,8 @@ const settle = async (...ps) => { await F.sleep(800); for (const p of ps) await 
     F.seedList(S, 'LD3', { name: 'House 3', wos: ['WO-3'], lines: [['saw', 'Side', '2', 720, 560, 'MFC White', '', ''], ['saw', 'Pelmet Cat', '1', 2400, 60, 'MFC White', '', '']] });
     const a = await F.dev(browser, S, 'office'), b = await F.dev(browser, S, 'office'), c = await F.dev(browser, S, 'office');
     for (const x of [a, b, c]) await pinUp(x.page);
-    const open = (p, id) => p.evaluate(async id => { lsSaveAsTpl({ id }); await new Promise(r => setTimeout(r, 300)); const n = document.getElementById('at-name'); n.value = 'Type B kitchen'; n.oninput({ target: n }); return document.getElementById('at-ok').textContent; }, id);
+    // (12 Nov, list-window Q3) Save as template needs the Drawing office / Admin PIN — the Production Manager PIN (7777) no longer opens it
+    const open = (p, id) => p.evaluate(async id => { localStorage.setItem('wpfEditPin', pins().design); lsSaveAsTpl({ id }); await new Promise(r => setTimeout(r, 300)); const n = document.getElementById('at-name'); n.value = 'Type B kitchen'; n.oninput({ target: n }); return document.getElementById('at-ok').textContent; }, id);
     const parts = () => S.db.t.list_lines.filter(x => x.list_id === 'TD' && x.removed_rev == null).map(x => x.part);
     await open(a.page, 'LD1'); await open(b.page, 'LD2');
     await a.page.evaluate(() => document.getElementById('at-ok').click()); await wait(() => D.find(S.db, 'lists', 'TD').rev === 2);
