@@ -3958,7 +3958,7 @@ function lsProjCore(s){return sgPh(sgNorm(s)).split(' ').filter(w=>w&&!SG_CO.has
    A different trading word is another company until the person says so: "Lucan Developments Ltd" vs "Lucan Homes", "The Aderrig
    Group" vs "Aderrig Homes" are ASKED. A project with NO customer recorded (made by hand) still links on its name once company
    words are ignored ("Aderrig Homes" → project "Aderrig") — its name is all there is to go on. */
-const LS_LEGAL=new Set(['ltd','limited','plc','dac','uc','co','company','and','the','ireland','t','a','ie']);
+const LS_LEGAL=new Set(['ltd','limited','plc','dac','uc','co','company','and','the','ireland']); // never single letters: "Builder A Homes" ≠ "Builder T Homes"
 function lsProjLegal(s){return sgPh(sgNorm(s)).split(' ').filter(w=>w&&!LS_LEGAL.has(w)).join(' ');}
 function lsProjExact(c){const h=sgPh(sgNorm(c)),k=lsProjLegal(c),kc=lsProjCore(c);if(!h)return[];
   return lsProjects().filter(p=>{const own=[p.customer,...(p.cien_names||[])].filter(n=>String(n||'').trim());
