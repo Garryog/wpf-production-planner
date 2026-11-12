@@ -261,26 +261,28 @@ const donep = p => p.evaluate(() => { const d = document.querySelector('.me-dov'
     rec('L11: typed WO-20 → its project (Brand New Homes) set; the drop-down = WO-21 (12 Nov), WO-20 (14 Nov)', w.pid === bn[0].id && JSON.stringify(os.filter(o => o.v).map(o => o.v)) === '["WO-21","WO-20"]' && os.find(o => o.v === 'WO-20').s, JSON.stringify([w, os]));
     await closeAll(p);
     // a shipped WO chosen: stays an option, marked, never wiped by a redraw
+    // (list-window release) a window opened for a WO shows it as text — a redraw never loses it
     await p.evaluate(() => openListEditor(null, 'WO-5')); await sleep(500);
     await p.evaluate(() => document.getElementById('me-addsaw').click()); await sleep(150);
-    os = await opts();
-    rec('L11: chosen shipped WO-5 stays the chosen option, marked "(shipped)", after a redraw', await p.evaluate(() => document.getElementById('me-wo').value === 'WO-5') && /\(shipped\)$/.test((os.find(o => o.v === 'WO-5') || {}).t || ''), JSON.stringify(os.find(o => o.v === 'WO-5')));
+    rec('L11: shipped WO-5 opened from the job stays in the WO line after a redraw (no WO drop-down)', await p.evaluate(() => (document.querySelector('#me-wol > b') || {}).textContent === 'WO-5' && !document.getElementById('me-wo')));
     await closeAll(p);
     // NEW list: changing the project clears a WO of another project, says why
-    await p.evaluate(() => openListEditor(null, 'WO-4')); await sleep(500);
+    // (list-window release) the project can only be changed in a window opened with no WO: pick Aderrig, WO-4, then Lucan
+    await p.evaluate(() => openListEditor(null, '', 'P1')); await sleep(500);
+    await p.evaluate(() => { const w = document.getElementById('me-wo'); w.value = 'WO-4'; w.dispatchEvent(new Event('change')); }); await sleep(200);
     await p.evaluate(() => { const s = document.getElementById('me-pid'); s.value = 'P2'; s.dispatchEvent(new Event('change')); }); await sleep(200);
     w = await p.evaluate(() => ({ wo: document.getElementById('me-wo').value, err: document.getElementById('me-err').textContent, opts: [...document.querySelectorAll('#me-wo option')].map(o => o.value).filter(Boolean) }));
     rec('L11: new list, project changed to Lucan → WO-4 (Aderrig) taken off, said why; drop-down = Lucan\'s WO-6', !w.wo && /WO-4 is a Aderrig job, not Lucan — it was taken off this list/.test(w.err) && JSON.stringify(w.opts) === '["WO-6"]', JSON.stringify(w));
     await closeAll(p);
     // EXISTING list: the WO is kept, marked "(other project)"
+    // (list-window release) an existing list: WO and project are text — nothing to change them by mistake
     await p.evaluate(() => openListEditor('L1')); await sleep(500);
-    await p.evaluate(() => { const s = document.getElementById('me-pid'); s.value = 'P2'; s.dispatchEvent(new Event('change')); }); await sleep(200);
-    w = await p.evaluate(() => ({ wo: document.getElementById('me-wo').value, t: (document.querySelector('#me-wo option[value="WO-1"]') || {}).textContent }));
-    rec('L11: existing list, project changed → WO-1 kept, marked "(other project)"', w.wo === 'WO-1' && /\(other project\)$/.test(w.t || ''), JSON.stringify(w));
+    w = await p.evaluate(() => ({ wo: (document.querySelector('#me-wol > b') || {}).textContent, p: (document.getElementById('me-ptxt') || {}).textContent, dd: !!document.getElementById('me-pid') || !!document.getElementById('me-wo') }));
+    rec('L11: existing list → WO-1 and project Aderrig shown as text, no drop-downs', w.wo === 'WO-1' && w.p === 'Aderrig' && !w.dd, JSON.stringify(w));
     await closeAll(p);
     // the WO's text is escaped (title in the tooltip)
     await p.evaluate(() => openListEditor(null, 'WO-24')); await sleep(500);
-    rec('L11: an on-hold WO chosen is marked "(on hold)", its title escaped', await p.evaluate(() => { const o = document.querySelector('#me-wo option[value="WO-24"]'); return !!o && /\(on hold\)$/.test(o.textContent) && /<b>x<\/b>/.test(o.title) && !document.querySelector('#me-wo b'); }));
+    rec('L11: an on-hold WO opened from the job is in the WO line, its title escaped (list-window release: text, no drop-down)', await p.evaluate(() => (document.querySelector('#me-wol > b') || {}).textContent === 'WO-24' && /<b>x<\/b>/.test(document.querySelector('#me-woinfo [data-woi="Title"]').textContent) && !document.querySelector('#me-woinfo b, #me-wol b b')));
     await closeAll(p);
 
     // ---- names: not pre-filled; blank → the WO number; a typed name is found again

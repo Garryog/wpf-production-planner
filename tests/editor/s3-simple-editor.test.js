@@ -25,10 +25,11 @@ const set = (k, v) => `(()=>{const e=document.querySelector('.pod-ovl [data-mr="
     const vis = el => !!el && !el.hidden && !el.closest('details:not([open]) > div') && getComputedStyle(el).display !== 'none';
     return { first: bar.querySelector('button').id, firstCls: bar.querySelector('button').className, barBtns: [...bar.querySelectorAll(':scope > button')].map(b => b.id),
       more: !!ov.querySelector('#me-more'), moreOpen: ov.querySelector('#me-more').open, unitVis: vis(ov.querySelector('#me-addunit')), unitInDom: !!ov.querySelector('#me-addunit'),
-      keysHidden: ov.querySelector('.me-keys').hidden, carcInMore: !!ov.querySelector('#me-more #me-carc'), nocutInMore: !!ov.querySelector('#me-more #me-nocut'),
+      keysHidden: ov.querySelector('.me-keys').hidden, instInMore: !!ov.querySelector('#me-more #me-instpl') && !!ov.querySelector('#me-more #me-impxl'), carcInMore: !!ov.querySelector('#me-more #me-carc'), nocutInMore: !!ov.querySelector('#me-more #me-nocut'),
       units: ov.querySelector('#me-units').checked, font: getComputedStyle(ov.querySelector('[data-mr="0|item"]')).fontSize, longHelp: /Rows with a length or width go to the/.test(ov.querySelector('.pod-in').innerText) }; });
   rec('"＋ Heading" is the first button, and green', a.first === 'me-addhdr' && /btn-g/.test(a.firstCls), J(a));
-  rec('the bar keeps only + Heading, + Row, Insert from template, Import from Excel (Garry 9 Nov) and "?" (everything else under More)', J(a.barBtns) === J(['me-addhdr', 'me-addsaw', 'me-instpl', 'me-impxl', 'me-help']), J(a.barBtns));
+  // list-window release (Garry 12 Nov, plan item 1): Insert from template / Excel moved under More ▾ — a new list starts from the "Start from…" choice
+  rec('the bar keeps only + Heading, + Row and "?" (Insert from template / Excel rows and everything else under More)', J(a.barBtns) === J(['me-addhdr', 'me-addsaw', 'me-help']) && a.instInMore, J(a.barBtns));
   rec('More holds No cutting / No fittings, Unit blocks and the carcass / door colours; it starts closed', a.more && !a.moreOpen && a.carcInMore && a.nocutInMore, J(a));
   rec('unit blocks hidden by default on a new list (Unit blocks unticked, "+ Unit block" not shown)', !a.units && !a.unitVis && a.unitInDom, J(a));
   rec('help and keyboard hints are behind "?" (hidden until pressed); no long help text on screen', a.keysHidden && !a.longHelp, J(a));

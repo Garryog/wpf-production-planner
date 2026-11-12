@@ -422,6 +422,7 @@ details.lti-other{margin-bottom:14px}details.lti-other>summary{cursor:pointer;fo
 .man-b{font-size:10px;font-weight:700;color:#5b21b6;background:#f1ebff;border-radius:4px;padding:1px 5px}
 .na-flag{font-size:11px;color:var(--t2);white-space:nowrap;cursor:pointer}
 .me-top{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end}
+.me-start{display:flex;gap:8px;align-items:center;margin-top:8px;font-size:13px;font-weight:700;color:var(--t2)}.me-start select{font-weight:400}
 .me-wol{font-size:15px;color:#14335c;margin:0 0 6px;overflow-wrap:anywhere}.me-wol .me-wodue{margin-left:6px;white-space:nowrap}
 .me-top label{display:block;font-size:11px;color:var(--t2);font-weight:600;margin-bottom:3px}
 .me-newwo{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px;background:#f6f2ff;border:1px solid #d9ccff;border-radius:8px;padding:8px}
@@ -3485,7 +3486,7 @@ async function lsCopyToNew(id,pid){
     note:'Copied from "'+l.name+'"'+(other?' ('+lsProjName(l.pid)+')':'')+' — pick the work order and change anything. Nothing is saved until you press Save; "'+l.name+'" is not changed.'+(other?' Materials not on this project are flagged ⚠.':'')});
 }
 // 🔍 Find old list: every list (not templates), any project, any state — newest first; View or Copy to start a new list
-function lsFindDlg(pid){
+function lsFindDlg(pid,use){ // use(id): (list window "Start from → An old list…") the rows go into that window instead of a new one
   const ov=lsDlg('<div id="fo-body"></div>',900);let q='',all=false;
   const draw=()=>{
     const k=q.trim().toLowerCase(),ws=k.split(/\s+/).filter(Boolean);
@@ -3493,20 +3494,20 @@ function lsFindDlg(pid){
     const ls=lsCache().all.filter(l=>!l.tpl&&(all||!pid||l.pid===pid)&&hit(l)).sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||''))||String(b.id).localeCompare(String(a.id)));
     const body=ov.querySelector('#fo-body'),had=body.querySelector('#fo-q');
     body.innerHTML=`<div style="font-weight:800;color:#14335c;font-size:17px;margin-bottom:2px">🔍 Find an old list</div>
-      <div style="font-size:12px;color:var(--t3);margin-bottom:8px">Search by house, project, work order, title or type — done and archived lists included. <b>⧉ Copy to new list</b> opens its rows in a new list for ${pid?'<b>'+escA(lsProjName(pid))+'</b>':'its own project'}; the old list is never changed.</div>
+      <div style="font-size:12px;color:var(--t3);margin-bottom:8px">Search by house, project, work order, title or type — done and archived lists included. ${use?'<b>⧉ Use these rows</b> puts its rows into the list you are making; the old list is never changed.':`<b>⧉ Copy to new list</b> opens its rows in a new list for ${pid?'<b>'+escA(lsProjName(pid))+'</b>':'its own project'}; the old list is never changed.`}</div>
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px"><input id="fo-q" value="${escA(q)}" placeholder="e.g. House 18, Type B, Aderrig, WO-2557" style="${LS_INP};flex:1;min-width:200px">
         ${pid?`<label style="font-size:12px;white-space:nowrap"><input type="checkbox" id="fo-all"${all?' checked':''}> All projects</label>`:''}</div>
       <div style="max-height:56vh;overflow:auto"><table class="lst-tbl"><thead><tr><th>List</th><th>Project</th><th>Work orders</th><th>Type</th><th>State</th><th>Made</th><th></th></tr></thead><tbody>
       ${ls.slice(0,80).map(l=>`<tr><td><b>${escA(l.name)}</b></td><td>${escA(lsProjName(l.pid))}</td><td>${(l.wos||[]).map(w=>woChip(w)).join('')||'—'}</td><td>${escA(l.typeName||LS_KINDS[l.ltype]||'')}</td>
         <td>${escA((LS_STATE[lsState(l)]||[''])[0])}</td><td style="white-space:nowrap">${l.created_at?fmt(String(l.created_at).slice(0,10)):'—'}</td>
-        <td style="white-space:nowrap"><button class="btn btn-s" data-fov="${escA(l.id)}" style="padding:2px 8px;font-size:11px">View</button> <button class="btn btn-g" data-foc="${escA(l.id)}" style="padding:2px 8px;font-size:11px">⧉ Copy to new list</button></td></tr>`).join('')
+        <td style="white-space:nowrap"><button class="btn btn-s" data-fov="${escA(l.id)}" style="padding:2px 8px;font-size:11px">View</button> <button class="btn btn-g" data-foc="${escA(l.id)}" style="padding:2px 8px;font-size:11px">${use?'⧉ Use these rows':'⧉ Copy to new list'}</button></td></tr>`).join('')
         ||`<tr><td colspan="7" style="color:var(--t3)">${k?'No list matches "'+escA(q)+'"'+(pid&&!all?' on this project — tick All projects to search everywhere':''):'No lists yet.'}</td></tr>`}
       ${ls.length>80?`<tr><td colspan="7" style="color:var(--t3)">…${ls.length-80} more — type more of the name to narrow it down</td></tr>`:''}</tbody></table></div>`;
     const qi=body.querySelector('#fo-q');qi.oninput=()=>{q=qi.value;const pos=qi.selectionStart;draw();const n=ov.querySelector('#fo-q');n.focus();try{n.setSelectionRange(pos,pos);}catch(e){}};
     if(!had)setTimeout(()=>qi.focus(),0);
     const fa=body.querySelector('#fo-all');if(fa)fa.onchange=()=>{all=fa.checked;draw();};
     body.querySelectorAll('[data-fov]').forEach(b=>b.onclick=()=>lsViewDlg(b.dataset.fov));
-    body.querySelectorAll('[data-foc]').forEach(b=>b.onclick=()=>{ov.remove();lsCopyToNew(b.dataset.foc,pid);});
+    body.querySelectorAll('[data-foc]').forEach(b=>b.onclick=()=>{ov.remove();if(use)use(b.dataset.foc);else lsCopyToNew(b.dataset.foc,pid);});
   };
   draw();
 }
@@ -4332,6 +4333,10 @@ function lsProjEdges(pid){ // the standard edging codes plus any already used on
 }
 function lsAutoHidden(r){return !!r&&r.k==='part'&&!(lsNum(r.L)>0||lsNum(r.W)>0)&&!lsEmptyRow(r)&&!!r.matAuto&&String(r.mat||'')===String(r.matAuto);} // a typed Stores row with only the copied default colour (an empty new row still shows it)
 function lsTicked(id){return !!id&&Object.keys(lsView(id).ticks).length>0;} // the saw (or stores) has started: any line ticked
+/*list-window release, item 7 (Q2 a): "📐 Save as template" and 🕘 History in the list window are only for the Drawing office
+  (ROLE 'design') and Admin — a screen opened with the Admin PIN (as its role PIN, or the remembered edit PIN). Everyone else
+  (Saw, Stores, PM, office, Production Manager…) never sees them. Templates themselves are unchanged. */
+function lsTplRole(){if(ROLE==='design')return true;const a=pins().admin;return !!a&&(ls.get('wpfPin_'+ROLE)===a||ls.get('wpfEditPin')===a);}
 function lsHasEditPin(){if(['prod','design'].includes(ROLE))return true;const p=pins(),v=ls.get('wpfEditPin');return !!v&&[p.prod,p.design,p.admin].includes(v);}
 const LS_LOCK_MSG='Saw has started — make a new list for a different number of units';
 /* lsTbc:start */
@@ -4384,10 +4389,16 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     found or made by lsEnsureCustProj (L5). The drop-downs are only for a window opened with NO work order (＋ New list), and as a
     fallback when the WO gives no project (not in the planner, no customer in Cienapps, or the project could not be made). */
   const woMode=!st.tpl&&(ex?!!(ex.wos||[]).length:!!presetWo);
+  /*list-window release, item 7: ONE "Start from…" choice at the top of a NEW list — Standard blank list / A template… / An Excel
+    file… / An old list… — in place of the separate template / Excel buttons. It reuses the existing paths (insTpl, impXl,
+    Find old list's copy) in "replace" mode. Rows already typed → asked first (Ctrl+Z undoes it too). Not shown on a list that
+    was opened as a copy (Make new list / Copy to new list / a list being saved again), an existing list or a template.*/
+  const startOn=!ex&&!st.tpl&&!st.from&&!opt.pendId&&(!opt.rows||!!opt.std);
+  st.src=opt.std?'std':'blank';
   const woFallback=()=>{if(!woMode||st.pid)return false;const o=DB.orders.find(x=>x.wo===st.wo),pm=st.pmsg;return !o||!String(o.customer||'').trim()||!!(pm&&pm.st==='err');};
   const pickOn=()=>!woMode||woFallback();
   const dueHd=o=>{const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(String(o&&o.dueDate||'').trim());if(!m)return'';const d=new Date(+m[1],+m[2]-1,+m[3],12);
-    return d.getDate()===+m[3]&&d.getMonth()===+m[2]-1?'Due '+d.toLocaleDateString('en-IE',{weekday:'short',day:'numeric',month:'short'})+' · Wk '+wkNum(d):'';};
+    return d.getDate()===+m[3]&&d.getMonth()===+m[2]-1?'Due '+d.toLocaleDateString('en-IE',{weekday:'short'})+' '+d.toLocaleDateString('en-IE',{day:'numeric',month:'short'})+' · Wk '+wkNum(d):'';};
   const woLineHTML=()=>{if(!woMode)return'';const o=DB.orders.find(x=>x.wo===st.wo)||{},E=escA,more=ex?(ex.wos||[]).length-1:0,du=dueHd(o);
     return `<div class="me-wol" id="me-wol"><b>${E(st.wo)}</b>${woIsP(st.wo)?' <span style="color:#5b21b6;font-size:12px">· not from Cienapps</span>':''}${more>0?' <span style="font-size:12px;color:var(--t3)">+'+more+' more</span>':''}${o.customer?' · '+E(o.customer):''}${du?` <b class="me-wodue">${E(du)}</b>`:''}</div>`;};
   let sawStarted=!!ex&&!ex.tpl&&lsTicked(ex.id); // set on a refused save too (a tick landed while the editor was open)
@@ -4653,6 +4664,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
           <input id="me-tname" value="${escA(st.tname||'')}" placeholder="e.g. Type B 3-bed" style="${inp};width:140px"></div>
       </div>
       ${jbHTML()}
+      ${startHTML()}
       ${st.newWO?`<div class="me-newwo">
         <input id="me-ptitle" placeholder="Title *" value="${escA(st.pw.title)}" style="${inp};flex:1;min-width:200px"><input id="me-pcust" placeholder="Customer" value="${escA(st.pw.cust||(LST.p.get(st.pid)||{}).customer||'')}" style="${inp};width:170px">
         <input id="me-pfloor" placeholder="Floor" value="${escA(st.pw.floor)}" style="${inp};width:70px"><input id="me-punit" placeholder="Unit" value="${escA(st.pw.unit)}" style="${inp};width:70px">
@@ -4664,10 +4676,11 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       <div class="me-bar">
         <button class="btn btn-g me-big" id="me-addhdr" title="A heading (e.g. House nr 103) or a sub-heading under it (Fillers and Kickers, ISLAND, Utility, Doors FU)">＋ Heading</button>
         <button class="btn btn-s me-big" id="me-addsaw" title="Adds a row under the one you are on">＋ Row</button>
-        <button class="btn btn-s me-big" id="me-instpl" title="Adds the rows of one of the project's templates (a house type) — change anything for this house">📐 Insert from template…</button>
-        <button class="btn btn-s me-big" id="me-impxl" title="Fill this list from one sheet of an Excel cutting list (the WPF template or your own layout). Check the rows, then Save">📥 Import from Excel…</button><input type="file" id="me-xlfile" accept=".xlsx,.xls" style="display:none">
+        <input type="file" id="me-xlfile" accept=".xlsx,.xls" style="display:none">
         <details class="me-more" id="me-more"${st.moreOpen?' open':''}><summary class="btn btn-s me-big">More ▾</summary><div class="me-morep">
           ${st.undo.length?'<button class="btn btn-s" id="me-undo" title="Ctrl+Z">↶ Undo</button>':''}
+          <button class="btn btn-s" id="me-instpl" title="Adds the rows of one of the project's templates (a house type, a second unit) where you are — change anything for this house">📐 Insert from template…</button>
+          <button class="btn btn-s" id="me-impxl" title="Adds the rows of one sheet of an Excel cutting list (the WPF template or your own layout) at the bottom. Check the rows, then Save">📥 Add rows from Excel…</button>
           <label class="me-flag"><input type="checkbox" id="me-nocut"${st.noCut?' checked':''}> No cutting on this job</label>
           <label class="me-flag"><input type="checkbox" id="me-nofit"${st.noFit?' checked':''}> No fittings on this job</label>
           <label class="me-flag" title="${hasUnits()?'This list has unit blocks, so they are shown':'Robe jobs: a unit heading with the number of units, then the parts for ONE unit'}"><input type="checkbox" id="me-units"${st.unitsOn?' checked':''}${hasUnits()?' disabled':''}> Unit blocks (robe jobs)</label>
@@ -4680,7 +4693,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       </div>
       <div class="me-keys"${st.help?'':' hidden'}>Rows with a length or width go to the <b>Saw</b>; rows without go to <b>Stores</b>; <b>Bought in</b> rows are never cut or picked. Materials come from the project's list — pick <b>＋ Add new material…</b> if one is missing. A new row starts with the material of the saw row above.<br>Works like Excel: <b>Tab</b> / <b>Shift+Tab</b> across · <b>Enter</b> down (a new row at the bottom) · arrow keys · <b>Ctrl+D</b> copies the cell above · <b>Insert</b> adds a row · <b>Ctrl+Delete</b> deletes the row · <b>Ctrl+Z</b> undo · paste rows straight from Excel</div>
       <div id="me-err" style="color:#b42318;font-weight:700;font-size:13px;min-height:18px"></div>
-      <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">${ex&&st.tpl?'<button class="btn btn-s" id="me-hist">🕘 History</button>':''}${st.tpl?'':'<button class="btn btn-s" id="me-astpl" title="Save these rows as a template of the project (unsaved changes included)">📐 Save as template</button>'}<span style="flex:1"></span><button class="btn btn-s" id="pod-x" title="Close this window (asks first if anything is not saved)">Close</button><button class="btn btn-g" id="me-save" style="font-size:14px;padding:9px 20px">${ex?'Save changes':st.tpl?'Save template':'Save list → Saw & Stores'}</button></div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">${ex&&st.tpl&&lsTplRole()?'<button class="btn btn-s" id="me-hist">🕘 History</button>':''}${st.tpl||!lsTplRole()?'':'<button class="btn btn-s" id="me-astpl" title="Save these rows as a template of the project (unsaved changes included)">📐 Save as template</button>'}<span style="flex:1"></span><button class="btn btn-s" id="pod-x" title="Close this window (asks first if anything is not saved)">Close</button><button class="btn btn-g" id="me-save" style="font-size:14px;padding:9px 20px">${ex?'Save changes':st.tpl?'Save template':'Save list → Saw & Stores'}</button></div>
     </div>`;
     bind();
     const g=ov.querySelector('#me-grid');if(g&&sc)g.scrollTop=sc;
@@ -4755,8 +4768,9 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     on('me-astpl',()=>{keep();lsSaveAsTpl({pid:st.pid,name:st.name,ltype:st.ltype,tname:st.tname,lines:lsEdLines(R().filter(r=>!lsEmptyRow(r)).map(r=>{const x={...noAutoStores(r)};delete x.lid;return x;}))});});
     on('me-hist',()=>{if(ex)lsTplHistory(ex.id);});
     on('me-instpl',()=>{keep();insTpl();});
-    on('me-impxl',()=>{keep();const fx=g('me-xlfile');if(fx){fx.value='';fx.click();}});
-    const xf=g('me-xlfile');if(xf)xf.onchange=()=>{const f=xf.files[0];if(f)impXl(f);};
+    on('me-impxl',()=>{keep();const fx=g('me-xlfile');if(fx){fx.value='';fx.dataset.rep='';fx.click();}});
+    const xf=g('me-xlfile');if(xf)xf.onchange=()=>{const f=xf.files[0],rp=xf.dataset.rep==='1';xf.dataset.rep='';if(f)impXl(f,rp);};
+    {const sf=g('me-from');if(sf)sf.onchange=()=>startFrom(sf.value);}
     ov.querySelectorAll('[data-mecopy]').forEach(b=>b.onclick=()=>copyToNew());
     g('me-nocut').onchange=e=>{keep();st.noCut=e.target.checked;draw();};
     g('me-nofit').onchange=e=>{keep();st.noFit=e.target.checked;draw();};
@@ -4807,7 +4821,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
   // (9 Nov) 📥 Import from Excel: one sheet of a cutting-list workbook fills THIS list (same reader as the Lists import and paste).
   // A new list that has no parts typed yet is replaced by the sheet; otherwise the rows are added at the bottom. Nothing is saved
   // until Save; Ctrl+Z undoes it. A workbook with several house sheets asks which one.
-  const impXl=f=>{
+  const impXl=(f,rep)=>{ // rep: Start from → An Excel file… — the sheet replaces the rows (asked before the file was picked)
     const err=t=>{const e=ov.querySelector('#me-err');if(e)e.textContent=t;};
     const rd=new FileReader();
     rd.onload=()=>{
@@ -4821,8 +4835,9 @@ function openListEditor2(listId,presetWo,presetPid,opt){
         const add=sh.p.rows.filter(r=>!r.info).map(r=>{const x={...r};delete x.src;delete x.total;delete x.bu;delete x.qtyErr;
           if(x.k==='part'){x.qty=x.qty===''||x.qty==null?'':String(x.qty);x.L=x.L===''?'':String(x.L);x.W=x.W===''?'':String(x.W);}return x;});
         snap();
-        const typed=R().some(r=>r.k==='part'&&!lsEmptyRow(r));
+        const typed=!rep&&R().some(r=>r.k==='part'&&!lsEmptyRow(r));
         if(typed)R().push(...add);else R().splice(0,R().length,...add);
+        if(rep)st.src='xl';
         if(add.some(r=>r.k==='hdr'&&r.units!=null))st.unitsOn=true;
         if(!String(st.name||'').trim())st.name=sh.name;
         const m=sh.p.meta;if(!st.carcass&&m.carcass)st.carcass=m.carcass;if(!st.door&&m.door)st.door=m.door;
@@ -4844,8 +4859,8 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     };
     rd.readAsArrayBuffer(f);
   };
-  const insTpl=()=>{
-    if(!st.pid){ov.querySelector('#me-err').textContent='Pick the project first — templates belong to a project.';return;}
+  const insTpl=rep=>{ // rep: Start from → A template… — the template's rows replace the list's rows
+    if(!st.pid){ov.querySelector('#me-err').textContent=pickOn()?'Pick the project first — templates belong to a project.':'Wait a moment — the project is still being set up from the WO\'s customer.';return;}
     const tps=lsTemplatesFor(st.pid).filter(t=>!ex||t.id!==ex.id);
     const dl=lsDlg('<div id="it-body"></div>',640);const body=dl.querySelector('#it-body');
     dl.onclick=e=>{if(e.target===dl||e.target.id==='pod-x')dl.remove();}; // closing it leaves the editor as it was
@@ -4860,8 +4875,8 @@ function openListEditor2(listId,presetWo,presetPid,opt){
         const add=lines.map(x=>x.kind==='hdr'?{k:'hdr',item:x.part||'',note:x.note||'',...(String(x.section||'').trim()?{sub:true}:{})}
           :{k:'part',item:x.part||'',qty:x.qty==null?'':String(x.qty),L:x.length_mm==null?'':String(+x.length_mm),W:x.width_mm==null?'':String(+x.width_mm),mat:x.material||'',edging:x.edging||'',edging2:x.edging2||'',note:x.note||'',...(x.kind==='buy'?{buy:true}:{})});
         if(!add.length){body.innerHTML='<span style="color:var(--t2)">That template has no rows.</span>';return;}
-        snap();const c=curRow(),at=c<0?R().length:endOfBlock(c),drop=R().length===1&&lsEmptyRow(R()[0])?1:0,at2=drop?0:at;
-        R().splice(at2,drop,...add);dl.remove();st.focus=at2+'|item';draw();
+        snap();const c=curRow(),at=c<0?R().length:endOfBlock(c),drop=rep?R().length:R().length===1&&lsEmptyRow(R()[0])?1:0,at2=drop?0:at;
+        R().splice(at2,drop,...add);if(rep){st.src='tpl';if(!String(st.tname||'').trim())st.tname=t.typeName||'';}dl.remove();st.focus=at2+'|item';draw();
         toast('Added '+add.length+' row'+(add.length!==1?'s':'')+' from template '+(t.typeName||t.name)+' (Rev '+(+t.rev||1)+') — change anything for this house');
         return;}
       const opts=[...blocks0.map((b,k)=>({k,label:b.name+' ('+b.parts.length+' part'+(b.parts.length!==1?'s':'')+')',name:b.name,parts:b.parts.map(x=>{const pu=lsPerUnit(x,b.units);return{x,per:String(pu.qty),fixed:pu.fixed};})})), // the same rule as a reload (lsPerUnit)
@@ -4878,8 +4893,8 @@ function openListEditor2(listId,presetWo,presetPid,opt){
         const o=opts[+(body.querySelector('[name="it-u"]:checked')||{}).value||0];
         snap();const c=curRow(),at=c<0?R().length:endOfBlock(c);
         const add=[{k:'hdr',item:o.name,units:n,note:''},...o.parts.map(({x,per,fixed})=>({k:'part',item:x.part||'',qty:per,...(fixed?{fixed:true}:{}),L:x.length_mm==null?'':String(+x.length_mm),W:x.width_mm==null?'':String(+x.width_mm),mat:x.material||'',edging:x.edging||'',edging2:x.edging2||'',note:x.note||''}))];
-        const drop=R().length===1&&lsEmptyRow(R()[0])?1:0,at2=drop?0:at; // a brand-new list's one empty row is replaced
-        R().splice(at2,drop,...add);
+        const drop=rep?R().length:R().length===1&&lsEmptyRow(R()[0])?1:0,at2=drop?0:at; // a brand-new list's one empty row is replaced (Start from: all of them)
+        R().splice(at2,drop,...add);if(rep){st.src='tpl';if(!String(st.tname||'').trim())st.tname=t.typeName||'';}
         dl.remove();st.focus=at2+'|units';st.focusAll=true;draw();
         toast('Added "'+o.name+'" × '+n+' unit'+(n!=='1'?'s':'')+' from template '+(t.typeName||t.name)+' — change Units any time before the saw starts');
       };
@@ -4890,6 +4905,29 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     body.querySelectorAll('[data-itt]').forEach(b=>b.onclick=()=>pick(b.dataset.itt));
     {const q=body.querySelector('#it-q');if(q){q.oninput=()=>{const ws=q.value.trim().toLowerCase().split(/\s+/).filter(Boolean);body.querySelectorAll('[data-itq]').forEach(r=>{r.style.display=ws.every(w=>r.dataset.itq.includes(w))?'':'none';});};q.focus();}}
   };
+  const startFrom=v=>{
+    keep();const prev=st.src,back=()=>{st.src=prev;draw();};
+    if(!['blank','std','tpl','xl','old'].includes(v))return back();
+    const typed=R().some(r=>r.k==='part'&&!lsEmptyRow(r));
+    if(typed&&!confirm('Start this list again from '+({blank:'an empty list',std:'the standard blank list',tpl:'a template',xl:'an Excel file',old:'an old list'}[v])+'?\n\nThe rows you typed are replaced (Ctrl+Z puts them back).\n\nOK = replace them\nCancel = keep what you typed'))return back();
+    if(v==='blank'||v==='std'){snap();const o=DB.orders.find(x=>x.wo===st.wo);R().splice(0,R().length,...(v==='std'?lsStdRows(o):[{k:'part',item:'',qty:'',L:'',W:'',mat:'',edging:'',edging2:'',note:''}]));st.src=v;st.focus='';draw();return;}
+    draw(); // the drop-down shows the old choice until the new rows are in
+    if(v==='tpl')return insTpl(true);
+    if(v==='xl'){const fx=ov.querySelector('#me-xlfile');if(fx){fx.value='';fx.dataset.rep='1';fx.click();}return;}
+    lsFindDlg(st.pid||'',id=>{ // An old list…: its rows come into THIS list (the old list is never changed)
+      const l=lsList(id);if(!l||!document.body.contains(ov))return;
+      (LST.full.has(id)?Promise.resolve():lsReloadList(id)).then(()=>{
+        const rows=lsEditRows(id).filter(r=>!lsEmptyRow(r)).map(fresh);
+        if(!rows.length){toast('"'+l.name+'" has no rows to copy');return;}
+        snap();R().splice(0,R().length,...rows);st.src='old';
+        if(rows.some(r=>r.k==='hdr'&&r.units!=null))st.unitsOn=true;if(!String(st.tname||'').trim())st.tname=l.typeName||'';
+        st.note='Rows copied from "'+l.name+'"'+(l.pid&&l.pid!==st.pid?' ('+lsProjName(l.pid)+')':'')+' — change anything. "'+l.name+'" is not changed.'+(l.pid&&st.pid&&l.pid!==st.pid?' Materials not on this project are flagged ⚠.':'');
+        draw();toast('Copied '+rows.length+' row'+(rows.length!==1?'s':'')+' from "'+l.name+'" — check them, then Save. Ctrl+Z undoes it.');
+      }).catch(e=>toast('Could not load "'+l.name+'" — '+e.message));
+    });
+  };
+  const startHTML=()=>!startOn?'':`<div class="me-start"><label for="me-from">Start from</label><select id="me-from" style="${inp};max-width:260px">
+      ${st.src==='blank'?'<option value="blank" selected>Empty list</option>':''}<option value="std"${st.src==='std'?' selected':''}>Standard blank list</option><option value="tpl"${st.src==='tpl'?' selected':''}>A template…</option><option value="xl"${st.src==='xl'?' selected':''}>An Excel file…</option><option value="old"${st.src==='old'?' selected':''}>An old list…</option></select></div>`;
   const undo=()=>{if(!st.undo.length)return;st.rows=JSON.parse(st.undo.pop());st.snapKey='';if(st.cur&&!ov.querySelector('[data-mr="'+st.cur+'"]'))st.cur='';st.focus=st.cur&&+st.cur.split('|')[0]<R().length?st.cur:'';draw();};
   const copyToNew=()=>{ // the saw has started: a different number of units is a NEW list (Garry, 3 Nov) — copied without ticks
     keep();if(!confirm('Make a new list from "'+st.name+'"?\n\nThe rows are copied (no ticks) into a new list you can change. When you SAVE the new list, this one is archived (taken off the saw). Parts already cut on this list show on the new one as "already cut on old list" so the saw can check before cutting again.'))return;

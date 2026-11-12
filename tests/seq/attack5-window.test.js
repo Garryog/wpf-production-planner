@@ -358,9 +358,11 @@ function row() {
       // existing list: chosen WO kept through project changes and many redraws
       X.F3.seedList(S, 'LB', { wos: [exp[2]], name: 'Builder A list' }); await p.evaluate(async () => { lsReset(); await lsLoad(); });
       await p.evaluate(() => { window.__e = openListEditor('LB'); }); await sleep(500);
-      for (const pid of ['PB1', 'PB2', '', 'PB0']) { await p.evaluate(pid => { const s = document.getElementById('me-pid'); s.value = pid; s.dispatchEvent(new Event('change')); window.__e.draw(); }, pid); await sleep(100); }
-      w = await p.evaluate(() => document.getElementById('me-wo').value);
-      rec('L11 existing list: project changed 4 times (incl. none) + redraws → the chosen WO is still chosen', w === exp[2], w);
+      // (list-window release) an existing list shows its WO and project as text — no drop-downs to change; redraws keep the WO
+      for (let k = 0; k < 4; k++) { await p.evaluate(() => window.__e.draw()); await sleep(50); }
+      w = await p.evaluate(() => ({ wo: (document.querySelector('#me-wol > b') || {}).textContent, dd: !!document.getElementById('me-pid') || !!document.getElementById('me-wo') }));
+      rec('L11 existing list: shown as text (no project / WO drop-downs); 4 redraws → the WO is still there', w.wo === exp[2] && !w.dd, JSON.stringify(w));
+      w = w.wo;
       await closeAll(p);
       // typed WO sets the project — in lower case / with spaces round it
       await p.evaluate(() => { openListEditor(null, '', ''); }); await sleep(400);
