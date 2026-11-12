@@ -5514,7 +5514,7 @@ function seqNudges(){
   const mine=pmMineAny(); /*attack8 5b: the nudges are about HIS projects, even with "All projects" ticked*/
   lsProjects().filter(p=>mine?pmMine(p.id):pmShows(p.id)).forEach(p=>seqRows(p.id).forEach(r=>{const o=seqJob(r),d=seqRowDate(r,o),done=o&&(dStage(o)==='deliv'||o.delDone||isShipped(o));let hit=false;
     if(!d&&!done){n.nodate++;hit=true;}else if(d&&d<today&&!done){n.past++;hit=true;}
-    if(!r.wo){n.wait++;hit=true;if(String(r.created_at||'').slice(0,10)&&String(r.created_at).slice(0,10)<old)n.waitOld++;}
+    if(!r.wo){n.wait++;hit=true;if(seqWaitOld(r))n.waitOld++; /*attack12b L1: the same Irish-local-date rule as the ⏳ flag*/}
     if(r.is_new){n.place++;hit=true;}
     if(hit)by[p.id]=(by[p.id]||0)+1;}));
   lsProjects().filter(p=>mine?pmMine(p.id):pmShows(p.id)).forEach(p=>{if(!seqRows(p.id).length)return;const k=seqConfirmCount(p.id);if(k){n.conf+=k;by[p.id]=(by[p.id]||0)+k;}}); /*B10: To place / confirm*/
