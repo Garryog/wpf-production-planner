@@ -5303,21 +5303,37 @@ function seqJobsNoRow(pid){
     setTimeout(()=>{SEQ_NR=null;},0);}
   return(SEQ_NR.get(pid)||[]).slice();
 }
+/*attack12 H1: a WO with no usable house of its own (Floor or Unit blank, or "Multiple") is never automatic and never blocks
+  another WO — it goes to To confirm on its own. Its "which row" list: the house in its Reference ("order-line-floor-unit", e.g.
+  "2796-15-2-APT 51") first, as a suggestion — not sure; else what its title / floor gives; nothing at all when there is no unit
+  anywhere (then only "add at the bottom").*/
+function seqNoHouse(o){return !keyFloor(seqNoMulti(fuF(o))).t||!keyUnit(seqNoMulti(fuU(o)));}
+function seqRefHouse(o){const p=String(o&&o.ref||'').split('-').map(s=>s.trim());return p.length>=4&&p[2]&&p.slice(3).join('-')?{floor:p[2],unit:p.slice(3).join('-')}:null;}
+// a waiting row with no unit (a "TOTAL" / note line saved before attack12 H4) is never part of a certain match and blocks nobody
+const seqRowNoHouse=r=>!keyUnit(seqNoMulti(r.unit));
 function seqWOCands(o,wait){
-  const jk=keyOf(keyProj(o),seqNoMulti(fuF(o)),seqNoMulti(fuU(o)),o.title),kd=seqKind(o.title),out=[];
-  wait.forEach(r=>{if(r.kind!==kd)return;const m=keyMatch(jk,keyOf(r.project_id,seqNoMulti(r.floor),seqNoMulti(r.unit),''));if(m.r!=='different')out.push({r,m:m.r,why:m.why});});
+  const kd=seqKind(o.title),out=[],rk=r=>keyOf(r.project_id,seqNoMulti(r.floor),seqNoMulti(r.unit),'');
+  let jk=keyOf(keyProj(o),seqNoMulti(fuF(o)),seqNoMulti(fuU(o)),o.title);
+  if(seqNoHouse(o)){const rf=seqRefHouse(o);
+    if(rf){const k2=keyOf(keyProj(o),rf.floor,rf.unit,'');wait.forEach(r=>{if(r.kind!==kd||seqRowNoHouse(r))return;const m=keyMatch(k2,rk(r));if(m.r!=='different')out.push({r,m:'unsure',why:'suggestion from the Reference '+o.ref+' — not sure',sug:true});});}
+    if(!jk.u)return out; // no unit anywhere: no list of every row of the project
+  }
+  wait.forEach(r=>{if(r.kind!==kd||out.some(x=>x.r===r))return;const m=keyMatch(jk,rk(r));if(m.r!=='different')out.push({r,m:m.r,why:m.why});});
   return out;
 }
+// attack12 H3: a row named differently from the WO's title (BED 1 row / BED 2 WO) is never taken on its own
+function seqNameOk(o,r){const t=keyTxt(o&&o.title),n=keyTxt(r.name||r.descr||'');return !t||!n||t===n;}
 function seqWOPlan(pid){
   const rows=seqRows(pid),wait=rows.filter(r=>r.state==='waiting'&&!r.wo),pos=new Map(rows.map((r,i)=>[r.id,i]));
-  const jobs=seqJobsNoRow(pid).sort(woCmp).map(o=>({o,c:seqWOCands(o,wait),auto:null})),want=new Map();
-  jobs.forEach(j=>j.c.forEach(x=>{if(!want.has(x.r.id))want.set(x.r.id,[]);want.get(x.r.id).push(j);}));
-  const clean=j=>j.c.length&&j.c.every(x=>x.m==='same')&&(j.c.length===1||j.c.every(x=>seqLk(x.r)!=null&&seqLk(x.r)===seqLk(j.c[0].r)));
-  const groups=new Map();jobs.filter(clean).forEach(j=>{const s=j.c.map(x=>x.r.id).sort().join(',');if(!groups.has(s))groups.set(s,[]);groups.get(s).push(j);});
+  const jobs=seqJobsNoRow(pid).sort(woCmp).map(o=>({o,c:seqWOCands(o,wait),auto:null,noH:seqNoHouse(o)})),want=new Map();
+  const hc=j=>j.c.filter(x=>!seqRowNoHouse(x.r)); // the candidates that have a house
+  jobs.forEach(j=>{if(j.noH)return;hc(j).forEach(x=>{if(!want.has(x.r.id))want.set(x.r.id,[]);want.get(x.r.id).push(j);});});
+  const clean=j=>{const c=hc(j);return !j.noH&&c.length&&c.every(x=>x.m==='same'&&seqNameOk(j.o,x.r))&&(c.length===1||c.every(x=>seqLk(x.r)!=null&&seqLk(x.r)===seqLk(c[0].r)));};
+  const groups=new Map();jobs.filter(clean).forEach(j=>{const s=hc(j).map(x=>x.r.id).sort().join(',');if(!groups.has(s))groups.set(s,[]);groups.get(s).push(j);});
   groups.forEach((js,s)=>{const ids=s.split(','),rs=ids.map(id=>wait.find(r=>r.id===id)).sort((a,b)=>pos.get(a.id)-pos.get(b.id));
     if(ids.some(id=>want.get(id).some(j=>!js.includes(j)))||js.length>rs.length)return; // another WO wants one of these rows / more WOs than rows
     js.forEach((j,i)=>{j.auto=rs[i];});});
-  return{rows,wait,jobs,auto:jobs.filter(j=>j.auto),none:jobs.filter(j=>!j.c.length),confirm:jobs.filter(j=>j.c.length&&!j.auto)};
+  return{rows,wait,jobs,auto:jobs.filter(j=>j.auto),none:jobs.filter(j=>!j.c.length&&!j.noH),confirm:jobs.filter(j=>(j.c.length||j.noH)&&!j.auto)};
 }
 // projects that have a sequence (a project with none is left alone)
 function seqProjsWithRows(){return[...new Set([...LST.sq.values()].filter(r=>r.state!=='removed').map(r=>r.project_id))];}
@@ -5379,7 +5395,7 @@ function seqConfirmHTML(pid){
   const jl=o=>`<b>${escA(o.wo)}</b> ${escA([fuF(o),fuU(o),o.title].filter(Boolean).join(' · '))}`;
   const cand=j=>{const t=keyTxt(j.o.title);return j.c.slice().sort((a,b)=>((keyTxt(b.r.name)===t)-(keyTxt(a.r.name)===t))||((a.m==='same'?0:1)-(b.m==='same'?0:1))||(pos.get(a.r.id)-pos.get(b.r.id)));};
   return `<div class="seq-cf" id="seq-cf"><div class="seq-cfh">📌 To place / confirm (${n}) — one tap each; nothing is matched on a guess</div>
-    ${pl.confirm.slice(0,SEQ_CF_MAX).map(j=>`<div class="seq-cfr">${jl(j.o)} — which row is it?<div class="seq-cfb">${cand(j).map(x=>`<button class="btn btn-s" data-seqcf="${escA(x.r.id)}" data-seqcfwo="${escA(j.o.wo)}">${escA(rl(x.r))}${x.m==='same'?'':' <small>(❓ '+escA(x.why)+')</small>'}</button>`).join('')}<button class="btn btn-s" data-seqcfnew="${escA(j.o.wo)}">➕ None of these — add at the bottom</button></div></div>`).join('')}
+    ${pl.confirm.slice(0,SEQ_CF_MAX).map(j=>`<div class="seq-cfr">${jl(j.o)} — ${j.c.length?'which row is it?':'no floor / unit to go by — add it, then move it into place'}<div class="seq-cfb">${cand(j).map(x=>`<button class="btn btn-s" data-seqcf="${escA(x.r.id)}" data-seqcfwo="${escA(j.o.wo)}">${escA(rl(x.r))}${x.m==='same'?'':' <small>(❓ '+escA(x.why)+')</small>'}</button>`).join('')}<button class="btn btn-s" data-seqcfnew="${escA(j.o.wo)}">${j.c.length?'➕ None of these — add at the bottom':'➕ Add at the bottom'}</button></div></div>`).join('')}
     ${pl.none.length?`<div class="seq-cfr">Not in the sequence yet (${pl.none.length}): ${pl.none.slice(0,SEQ_CF_MAX).map(j=>`<span class="seq-cfn">${jl(j.o)} <button class="btn btn-s" data-seqcfnew="${escA(j.o.wo)}">➕ Add at the bottom</button></span>`).join('')}${pl.none.length>SEQ_CF_MAX?` …and ${pl.none.length-SEQ_CF_MAX} more`:''}${pl.none.length>1?` <button class="btn btn-g" id="seq-cfall">➕ Add all ${pl.none.length} at the bottom</button>`:''}</div>`:''}
     ${db.slice(0,SEQ_CF_MAX).map(d=>`<div class="seq-cfr seq-dbl">⚠ Possible double: <b>${escA(d.n.wo)}</b> 🆕 row ${escA('#'+pos.get(d.n.id))} and waiting row ${escA(rl(d.w))}${d.m==='same'?'':' <small>(❓ '+escA(d.why)+')</small>'} <button class="btn btn-s" data-seqdbl="${escA(d.n.id)}" data-seqdblw="${escA(d.w.id)}">Use the waiting row</button></div>`).join('')}
     ${pl.confirm.length>SEQ_CF_MAX?`<div class="seq-cfr">…and ${pl.confirm.length-SEQ_CF_MAX} more to confirm</div>`:''}
