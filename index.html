@@ -3805,7 +3805,8 @@ function ltiExcelSugg(){
 }
 function ltiRows(){
   const today=todayLocal(),xl=V2()?ltiExcelSugg():new Map();
-  return listsNeeded().filter(o=>!pListUnder(o)).map(o=>{const n=lsNeedInfo(o,today),s=lsSuggest(o),pk=LTI.pick[o.wo]&&lsList(LTI.pick[o.wo])?LTI.pick[o.wo]:'',x=xl.get(o.wo)||[];
+  const pps=V2()?pListPs():[];
+  return listsNeeded().filter(o=>!pListUnder(o,pps)).map(o=>{const n=lsNeedInfo(o,today),s=lsSuggest(o),pk=LTI.pick[o.wo]&&lsList(LTI.pick[o.wo])?LTI.pick[o.wo]:'',x=xl.get(o.wo)||[];
     let lvl=pk&&pk!==s.tid?'pick':s.level;if(x.length&&lvl==='strong')lvl='weak'; // an Excel list fits too: a person picks — never "Confirm all"
     return Object.assign(n,{s,xl:x,tid:pk||s.tid,lvl});})
     .sort((a,b)=>(b.onDel-a.onDel)||(b.late-a.late)||(a.due||'9999').localeCompare(b.due||'9999')||woCmp(a.o,b.o));
@@ -3837,7 +3838,7 @@ function ltiInner(){
   const wrow=l=>{const t=lsTbc(lsView(l.id).rows),due=listDueKey(l);return `<div class="lti-row lti-wc" data-ltiwc="${escA(l.id)}" style="border-left:5px solid #e0a43a">
       <div class="lti-top"><span class="chk-wait">Waiting for check</span><b class="lti-wo">${escA(l.name)}</b><span class="lti-t">${escA(l.project||'')}${(+l.rev||1)>1?' · Rev '+(+l.rev):''}</span><span class="lti-c">${(l.wos||[]).map(escA).join(' · ')||'no work order'}</span>${due?`<span class="lti-b" style="background:#eef1f5;color:#14335c">delivers ${fmt(due)}</span>`:''}${lsTbcChip(t)}</div>
       <div class="lti-act"><button class="btn btn-g" data-ltichk="${escA(l.id)}" style="${btn}">✓ Check</button><button class="btn btn-s" data-ltiview="${escA(l.id)}" style="${btn}">View</button><button class="btn btn-s" data-ltiedit="${escA(l.id)}" style="${btn}">✎ Edit</button><span class="lti-why">made by ${escA(l.createdBy||'?')} — the saw sees it once it is checked</span></div></div>`;};
-  const nAll=rows.length+wc.length,under=V2()?[...new Set(listsNeeded().map(pListUnder).filter(Boolean))]:[]; // (attack2 F2) said, not asked
+  const nAll=rows.length+wc.length,under=V2()?(ps=>ps.length?[...new Set(listsNeeded().map(o=>pListUnder(o,ps)).filter(Boolean))]:[])(pListPs()):[]; // (attack2 F2) said, not asked
   return `<div class="exp-panel lti" id="lti" style="border:2px solid ${rows.some(r=>r.late||r.onDel)?'#c0392b':nAll?'#d4880f':'#9fd8b4'};background:${nAll?'#fffdf7':'#f4fbf6'}">
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
       <div style="font-size:16px;font-weight:800;color:#14335c">📋 Cutting lists to issue — ${nAll}</div>${wc.length?`<span class="chk-wait">${wc.length} waiting for check</span>`:''}
@@ -9329,8 +9330,8 @@ function pTwins(){const ps=DB.orders.filter(o=>pIsP(o.wo)&&pLive(o)),out=[],seen
   ps.forEach(o=>pSameHouseAll(o,ps).forEach(x=>{const k=[o.wo,x.wo].sort().join('|');if(!seen.has(k)){seen.add(k);out.push([o,x].sort((a,b)=>woCmp(a,b)));}}));return out;}
 // (attack2 F2, until the L4b merge) a Cienapps WO whose house already has a cutting list on a live P-number → that P-number ('' if none).
 // Only a flag: nothing is moved, renumbered or deleted; no second list is asked for.
-function pListUnder(o){if(!V2()||!o||pIsP(o.wo))return'';const tg=new Set();lists().forEach(l=>{if(!l.archived&&!l.tpl)(l.wos||[]).forEach(w=>{if(pIsP(w))tg.add(w);});});
-  const ps=tg.size?DB.orders.filter(x=>tg.has(x.wo)):[];if(!ps.length)return''; // usually none: no house keys worked out at all
+function pListPs(){const tg=new Set();lists().forEach(l=>{if(!l.archived&&!l.tpl)(l.wos||[]).forEach(w=>{if(pIsP(w))tg.add(w);});});return tg.size?DB.orders.filter(x=>tg.has(x.wo)):[];} // the P-jobs that have a live list
+function pListUnder(o,ps){if(!V2()||!o||pIsP(o.wo))return'';ps=ps||pListPs();if(!ps.length)return''; // usually none: no house keys worked out at all
   const x=pSameHouseAll(o,ps)[0];return x?x.wo:'';}
 function pCienFor(){const out=[];DB.orders.filter(o=>pIsP(o.wo)&&pLive(o)).forEach(o=>{const w=pSameHouseAll(o).filter(x=>!pIsP(x.wo));if(w.length)out.push({p:o,w});});return out;}
 // what is on a job that "Keep one…" would drop — anything at all and it is refused (left for the L4b merge)
