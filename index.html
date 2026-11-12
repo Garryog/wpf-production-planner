@@ -4394,12 +4394,12 @@ function openListEditor2(listId,presetWo,presetPid,opt){
   let KM=null;const kmap=()=>KM||(KM=keyJobs());
   const jbOn=()=>!ex&&!st.tpl&&!st.newWO;
   const jbLive=wo=>lsCache().all.find(l=>!l.tpl&&!l.archived&&(l.wos||[]).includes(wo));
-  const jbChoose=(wo,how)=>{
+  const jbChoose=(wo,how,pid)=>{ // pid: the WO's own project (another one was picked) — the list moves to it
     const o=DB.orders.find(x=>x.wo===wo);if(!o)return;
     const l=jbLive(wo);
     if(l){if(confirm(wo+' already has a cutting list: "'+l.name+'".\n\nOpen it instead?\n\nOK = open "'+l.name+'" (this new list is closed — nothing in it is saved)\nCancel = stay here (a work order has only one live list)')){ov.remove();openListEditor(l.id);return;}
       st.jb.res={st:'haslist',wo,name:l.name};draw();return;}
-    st.wo=wo;st.jm={wo,how};st.jb.res=null; // (10 Nov) the list name is not pre-filled — a free name; blank = the WO number
+    st.wo=wo;st.jm={wo,how};st.jb.res=null;if(pid){st.pid=pid;st.pauto=true;st.pmsg=null;edges=lsProjEdges(pid);} // (10 Nov) the list name is not pre-filled — a free name; blank = the WO number
     if(!st.pid){const p=lsProjAuto(o.customer).p;if(p){st.pid=p.id;st.pauto=true;edges=lsProjEdges(p.id);}}
     draw();autoProj();
   };
@@ -4453,8 +4453,9 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       else if(st.pid&&!jk.p)warn.push(o.wo+'\'s customer "'+(o.customer||'')+'" is not linked to any project — check it is a '+lsProjName(st.pid)+' job.');
       if(keyTxt(b.floor)||keyTxt(b.unit)){const t=keyOf(jk.p,b.floor,b.unit,'');
         if(keyMatch(t,Object.assign({},jk,{p:jk.p})).r==='different')warn.push(o.wo+' is '+([fuLbl(o),o.title].filter(Boolean).join(' · ')||'(no floor / unit)')+' — the boxes say Floor '+String(b.floor).trim()+' · Unit '+String(b.unit).trim()+'.');}
-      if(warn.length&&!confirm(warn.join('\n\n')+'\n\nUse '+o.wo+' for this list anyway?\n\nOK = use '+o.wo+'\nCancel = go back')){b.res={st:'typedno',wo:o.wo,why:warn.join(' ')};draw();return;}
-      return jbChoose(o.wo,'typed');}
+      const mv=st.pid&&jk.p&&jk.p!==st.pid?jk.p:''; // (round 2 E4) customer = project, always: the list goes with its WO's project
+      if(warn.length&&!confirm(warn.join('\n\n')+'\n\nUse '+o.wo+' for this list anyway?'+(mv?' The list will be filed under project '+(lsProjName(mv)||mv)+' (the WO\'s project).':'')+'\n\nOK = use '+o.wo+(mv?' (project '+(lsProjName(mv)||mv)+')':'')+'\nCancel = go back')){b.res={st:'typedno',wo:o.wo,why:warn.join(' ')};draw();return;}
+      return jbChoose(o.wo,'typed',mv);}
     b.last=keyHouseStr(b.floor,b.unit)||'';
     if(!st.pid){b.res={st:'noproj'};draw();return;}
     const r=keyFind(st.pid,b.floor,b.unit,kmap);
