@@ -38,17 +38,25 @@ above (the same checks as before this branch) + the 39 below, all from the Teste
 
 | Test | Why it fails (plain English) | Fixed in | Accepted? |
 |---|---|---|---|
-| list-window attack1-two-pcs A, B, C, E, F, H (17 checks) | the test answers "OK — save a second list" to the new question "WO already has a cutting list — save a second one anyway?", so two lists are saved. A person now SEES the question; before 12 Nov nothing was asked. Two PCs pressing Save in the same second are still not stopped (needs a database rule), and the Cutting Lists page does not yet flag a WO with two lists | Garry's answer to question 1 in docs/PLAN-list-window.md (ask / never allow / allow) | pending |
+| list-window attack1-two-pcs A, B, C, E, F, H (15 checks) | the test answers "OK — save a second list" to the new question "WO already has a cutting list — save a second one anyway?", so two lists are saved. A person now SEES the question; before 12 Nov nothing was asked. Two PCs pressing Save in the same second are still not stopped (needs a database rule), the Cutting Lists page now flags it "⚠ 2 lists on WO-…" | Garry's answer to question 1 in docs/PLAN-list-window.md (ask / never allow / allow) | pending |
 | list-window attack1-two-pcs D2 | two PCs change the same quantity: the last Save wins and the second person is not told | later (revisions already record who changed what) | pending |
 | list-window attack1-jobs — 3 checks "P-1001 / WO-777" + 1 "not on this branch — L4b" | a P-number's house gets a second list when the Cienapps WO arrives; the automatic merge (L4b) is not in this release. The Cutting Lists page does say "A Cienapps WO now exists for the house of P-1001" | L4b small release (question 2) | pending |
 | list-window attack1-jobs "Aderig Homes" | a customer spelled one letter differently quietly makes a second project | question 4 | pending |
 | list-window attack1-jobs "(info, simplicity) filled in by itself" | several jobs share the unit number: the right one is offered first but the person must tap it | — (never wrong, one more tap) | pending |
-| list-window attack1-tpl-role (5 checks, office) | "Save as template" is gone from the list window for the office, but the Cutting Lists page rows still have it and the Production Manager PIN still opens it; the Admin PIN stays remembered on the PC | question 3 | pending |
-| list-window attack1-keyboard (4 checks) | Tab at the end of the rows adds a new row instead of reaching Save (Ctrl+S saves — added 12 Nov); Esc with "Start from…" or "More" open asks to close the whole list | next run (step 9) | pending |
-| list-window attack1-layout — 2 checks "Use these rows" on a phone | in the old-list finder on a phone the button is off to the right and small | next run (step 9) | pending |
 | list-window attack1-layout "(info) Capacity Board behind…" | not this window: the board scrolls sideways on a phone with a 64-letter customer | — | pending |
-| list-window attack1-start-from [LOW] "Use these rows pressed a second time" | the rows go in twice with no warning (Ctrl+Z undoes it) | — | pending |
 | list-window attack1-due "(info) due date moved on another PC" | the open window shows the new due date only after the next action | — | pending |
 | list-window attack1-oldscreen O4 | an old list that has NO work order can't be saved after an edit until a work order is picked ("Pick the work order…") | Coder to check next run — may be the intended rule | pending |
 | list-window attack1-unloaded "(info) the SAME thing on the older code" | shows the Critical "opens empty, Save wipes the rows" fault on the OLD code (main) on purpose; fixed on this branch | fixed here | pending |
 
+**Update 12 Nov 2026, late run.** Fixed and taken off the table above: attack1-tpl-role (5), attack1-keyboard (4), attack1-layout
+"Use these rows" on a phone (2), attack1-start-from second press (1), two-pcs "H flagged" (1). Round-1 list-window fails now 26.
+Tester round 2 (`tests/list-window/attack2-*.test.js`, 6 files, 259 checks): 1 High, 2 Medium, 4 Low all fixed; the 11 below
+are "(info)" checks left failing on purpose until Garry decides. Full suite 203 files: **4,254 pass / 64 fail = 27 long-standing +
+26 round 1 + 11 round 2.**
+
+| Test | Why it fails (plain English) | Fixed in | Accepted? |
+|---|---|---|---|
+| list-window attack2-tpl-pin "(info) … Drawing office PIN stays remembered" (5 checks: office, pm, prod, saw, stores) | once the Drawing office PIN is typed on a PC it stays remembered, so the next person at that PC can Save as template without it | Garry's answer to question 6 in docs/PLAN-list-window.md | pending |
+| list-window attack2-tpl-pin "(info, ask Garry) ＋ New template" | "＋ New template" on the Cutting Lists page still accepts the Production Manager PIN (Save as template refuses it) | question 5 | pending |
+| list-window attack2-keys K5, K7, K8, K9 (info) | small keyboard points: Tab from an empty heading adds a row; Shift+Tab from Save lands on Close; Tab past Save reaches the page behind; ✕ after ＋ Row with nothing typed still asks | next run (simplicity polish) | pending |
+| list-window attack2-finder-pm-tag "(info) O: lists OFF" | with lists switched OFF, Settings shows the new "💾 Storage on this device" section — the only difference from today's screens | question 8 | pending |

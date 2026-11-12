@@ -163,11 +163,13 @@ pickers are folded behind "Change job ▾" rather than removed.
 | 3 | Materials with no PIN for office / PM / Management / Production Manager / Drawing office | done 12 Nov |
 | 4 | Simple layout: title bar WO + due, Change job, ONE Start from…, big Save, Save as template by role | done 12 Nov |
 | 5 | Tester attack 1 + fixes | done 12 Nov (see progress) |
-| 6 | Old tests moved to the new layout; full suite; ACCEPTED-FAILURES tidied for this branch | in progress |
-| 7 | Ownership: "no list yet" warnings to the Drawing office only; PM sees list status read-only | to do |
+| 6 | Old tests moved to the new layout; full suite; ACCEPTED-FAILURES tidied for this branch | done 12 Nov |
+| 7 | Ownership: "no list yet" warnings to the Drawing office only; PM sees list status read-only | done 12 Nov — PM part; who else sees the warnings is question 7 |
 | 8 | Merge `main` once the Deliveries weeks release is in; then L9 (delivery card) and DD1 on Lists home / lists-needed | waits for Mon 16 Nov |
-| 9 | Phone: "Use these rows" button in the old-list finder; Esc closes the little panels first | to do |
-| 10 | Tester round 2, Manager GO / NO-GO, GO-LIVE doc, pull request (not merged) | to do |
+| 9 | Phone: "Use these rows" button in the old-list finder; Esc closes the little panels first | done 12 Nov |
+| 10 | Tester round 2, Manager verdict | done 12 Nov — interim GO WITH CONDITIONS |
+| 11 | Simplicity polish: one Close, Save pinned to the bottom on phones, the 4 small keyboard points; Tester re-attack of the round-2 fixes | to do (next run) |
+| 12 | After main is merged: full suite, Tester, final Manager GO, GO-LIVE doc, pull request (not merged) | waits for Mon 16 Nov |
 
 ## More questions for Garry (found by the Tester) (recommended answer first)
 1. **Two lists on one work order.** Today the window lets a second list be saved on a WO that already has one (it was allowed on
@@ -203,3 +205,35 @@ pickers are folded behind "Change job ▾" rather than removed.
   each listed in ACCEPTED-FAILURES under "Cutting-list window release", pending Garry.
 - Not done yet: steps 7–10. No Manager verdict yet, so no pull request.
 - Another scheduled run started this job at the same minute; its plan commit (15:27) was merged, no code clash.
+
+### 12 Nov 2026, late (scheduled run 2, 18:23–21:40 UTC)
+- `release/deliveries-weeks` is NOT on `main` yet, so `main` was not merged and item 8 (L9, DD1 on Lists home) is still waiting.
+- **Coder (5 commits):** "Save as template" is Drawing office / Admin only everywhere (Lists page rows too; the Production Manager
+  PIN no longer opens it) · phone: "Use these rows" in view and tap-sized; a second press asks · Esc closes the little panel first;
+  Tab from an empty last row goes to Save · PM screen shows each job's list status as plain read-only text (PMs already had no
+  list buttons or nags) · "⚠ 2 lists on WO-…" tag on the Cutting Lists page.
+- **Tester round 2** (6 new files, 259 checks): no Critical. 1 High — an Excel file for a DIFFERENT house went into the open list
+  with no warning. 2 Medium, 4 Low.
+- **Coder fixes (8 commits), all of the above:** the Excel file's WO / Floor / Unit are checked against the open job and ONE
+  question is asked before any row goes in · a WO typed from another project files the list under the WO's project (customer =
+  project) · PM status wraps on phones · the "add a second time?" question only when the rows are really there · Start from…
+  closes when a choice is made · Esc leaves the cursor in the row · the 2-lists tag ignores case / spaces · photo-only jobs say
+  "photo list made".
+- **Full suite (203 files): 4,254 pass / 64 fail** — 27 long-standing, 26 round 1, 11 round 2 "(info)"; every one is on
+  ACCEPTED-FAILURES. No file got worse.
+- **Manager: interim GO WITH CONDITIONS** for items 1–7, 9 and ownership on 18 Nov. No Blockers, no database change, nothing
+  unescaped, lists OFF unchanged apart from the Settings storage section. Conditions: main (with Deliveries) merged in and the
+  suite + Tester re-run; step 11 done; Garry's answers below. Item 8 recommended as its own small release after 18 Nov.
+  The Manager also notes: "Keep one…" removes an EMPTY duplicate P-number job (a copy is kept in settings, last 300).
+- Not a final GO, so no pull request and no GO-LIVE doc yet.
+- Left as found: an old list with NO work order can't be saved after an edit — the same on the live site today (question 9).
+
+## Questions added 12 Nov, late (recommended answer first)
+5. **"＋ New template" with the Production Manager PIN.** **A (recommended): Drawing office / Admin only**, same as Save as template. B: leave it.
+6. **Drawing office PIN remembered on a shared PC.** **A (recommended): forget it when the list window closes.** B: forget after 30 minutes. C: leave.
+7. **Who sees "Cutting lists to issue" warnings.** **A (recommended): Drawing office (Johnny) only.** B: office and Production Manager too (as built today).
+8. **Settings → "Storage on this device" when lists are OFF.** **A (recommended): show it.** B: hide it.
+9. **Old list with no work order, edited.** **A (recommended): let it save without one** (new lists still need a job). B: keep forcing a work order.
+10. **Item 8 (＋ Add cutting list on the delivery card, due badge on Lists home).** **A (recommended): its own small release right after 18 Nov** — it can't be built until Deliveries is live on the 16th, leaving one day to test. B: hold the whole release for it.
+11. **Default "list owner" name shown to the saw** ("Tell the Production Manager"). **A (recommended): change to "Drawing office".** B: leave.
+
