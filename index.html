@@ -3498,10 +3498,10 @@ function lsFindDlg(pid,onUse){ // onUse(rows,list): called from the list window'
       <div style="font-size:12px;color:var(--t3);margin-bottom:8px">Search by house, project, work order, title or type — done and archived lists included. ${onUse?'<b>Use these rows</b> puts its rows into the list you are making':'<b>⧉ Copy to new list</b> opens its rows in a new list for '+(pid?'<b>'+escA(lsProjName(pid))+'</b>':'its own project')}; the old list is never changed.</div>
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px"><input id="fo-q" value="${escA(q)}" placeholder="e.g. House 18, Type B, Aderrig, WO-2557" style="${LS_INP};flex:1;min-width:200px">
         ${pid?`<label style="font-size:12px;white-space:nowrap"><input type="checkbox" id="fo-all"${all?' checked':''}> All projects</label>`:''}</div>
-      <div style="max-height:56vh;overflow:auto"><table class="lst-tbl"><thead><tr><th>List</th><th>Project</th><th>Work orders</th><th>Type</th><th>State</th><th>Made</th><th></th></tr></thead><tbody>
-      ${ls.slice(0,80).map(l=>`<tr><td><b>${escA(l.name)}</b></td><td>${escA(lsProjName(l.pid))}</td><td>${(l.wos||[]).map(w=>woChip(w)).join('')||'—'}</td><td>${escA(l.typeName||LS_KINDS[l.ltype]||'')}</td>
+      <div style="max-height:56vh;overflow:auto"><table class="lst-tbl"><thead><tr>${onUse?'<th></th>':''}<th>List</th><th>Project</th><th>Work orders</th><th>Type</th><th>State</th><th>Made</th>${onUse?'':'<th></th>'}</tr></thead><tbody>
+      ${ls.slice(0,80).map(l=>`<tr>${onUse?`<td style="white-space:nowrap"><button class="btn btn-g" data-foc="${escA(l.id)}" style="padding:8px 12px;font-size:13px;min-height:40px">Use these rows</button> <button class="btn btn-s" data-fov="${escA(l.id)}" style="padding:8px 10px;font-size:13px;min-height:40px">View</button></td>`:''}<td><b>${escA(l.name)}</b></td><td>${escA(lsProjName(l.pid))}</td><td>${(l.wos||[]).map(w=>woChip(w)).join('')||'—'}</td><td>${escA(l.typeName||LS_KINDS[l.ltype]||'')}</td>
         <td>${escA((LS_STATE[lsState(l)]||[''])[0])}</td><td style="white-space:nowrap">${l.created_at?fmt(String(l.created_at).slice(0,10)):'—'}</td>
-        <td style="white-space:nowrap"><button class="btn btn-s" data-fov="${escA(l.id)}" style="padding:2px 8px;font-size:11px">View</button> <button class="btn btn-g" data-foc="${escA(l.id)}" style="padding:2px 8px;font-size:11px">${onUse?'Use these rows':'⧉ Copy to new list'}</button></td></tr>`).join('')
+        ${onUse?'':`<td style="white-space:nowrap"><button class="btn btn-s" data-fov="${escA(l.id)}" style="padding:2px 8px;font-size:11px">View</button> <button class="btn btn-g" data-foc="${escA(l.id)}" style="padding:2px 8px;font-size:11px">⧉ Copy to new list</button></td>`}</tr>`).join('')
         ||`<tr><td colspan="7" style="color:var(--t3)">${k?'No list matches "'+escA(q)+'"'+(pid&&!all?' on this project — tick All projects to search everywhere':''):'No lists yet.'}</td></tr>`}
       ${ls.length>80?`<tr><td colspan="7" style="color:var(--t3)">…${ls.length-80} more — type more of the name to narrow it down</td></tr>`:''}</tbody></table></div>`;
     const qi=body.querySelector('#fo-q');qi.oninput=()=>{q=qi.value;const pos=qi.selectionStart;draw();const n=ov.querySelector('#fo-q');n.focus();try{n.setSelectionRange(pos,pos);}catch(e){}};
@@ -4827,11 +4827,14 @@ function openListEditor2(listId,presetWo,presetPid,opt){
   };
   const useOld=(rows,l)=>{ // 🔍 An old list…: its rows come into THIS list (the old list is never changed)
     const add=rows.map(fresh);if(!add.length)return;
+    st.oldUsed=st.oldUsed||{};const again=!!st.oldUsed[l.id]; /*list-window step 9: a second "Use these rows" for the same old list asks first*/
+    if(again&&!confirm('The rows of "'+String(l.name||'that list')+'" are already in this list.\n\nAdd them a second time?'))return;
+    st.oldUsed[l.id]=1;
     const inUnits=!add.some(r=>r.k==='hdr'&&r.units!=null)&&(()=>{for(let j=R().length-1;j>=0;j--)if(R()[j].k==='hdr')return R()[j].units!=null;return false;})();
     if(inUnits&&add[0].k!=='hdr')add.unshift({k:'hdr',item:'From "'+String(l.name||'old list')+'"',note:''}); // a plain heading ends the unit block: the quantities stay as they were on the old list (never × units)
     snap();const drop=R().length===1&&lsEmptyRow(R()[0])?1:0,at=drop?0:R().length;
     R().splice(at,drop,...add);if(add.some(r=>r.k==='hdr'&&r.units!=null))st.unitsOn=true;st.focus=at+'|item';draw();
-    toast('Added '+add.length+' row'+(add.length!==1?'s':'')+' from "'+l.name+'" — change anything for this job, then Save');
+    toast('Added '+add.length+' row'+(add.length!==1?'s':'')+' from "'+l.name+'"'+(again?' again (now in twice — Ctrl+Z takes them out)':'')+' — change anything for this job, then Save');
   };
   const insTpl=()=>{
     if(!st.pid){ov.querySelector('#me-err').textContent='Pick the project first — templates belong to a project.';return;}
