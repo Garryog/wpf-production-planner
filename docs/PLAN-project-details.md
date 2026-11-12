@@ -1375,3 +1375,5 @@ the pool writes `seq_pre` only (no `project_seq`, `seq_move`, `seq_insert`, no d
 
 **Process notes:** Tester's real-mouse drag test recorded the mid-drag guard state but didn't assert it (missed issue 1). Coder loosened
 a Tester check (A1b) himself — justified here, but it should be flagged to the Tester for sign-off rather than changed in the fix commit.
+
+- 12 Nov (Manager issue 1, cde4bde): pointercancel no longer ends a pool drag (real Chrome fires it at drag start) — new tests/seq/b9e-realdrag.test.js (real mouse) 3 / 0 (fails on the old code); b9a–d, attack10 ×2, attack11 and the Manager's probes pass.

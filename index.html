@@ -4380,7 +4380,7 @@ function preBind(root){
   });
   if(!PREV.docBound){PREV.docBound=true;document.addEventListener('dragend',preDragOff,true); // a drag ended anywhere = nothing armed
     document.addEventListener('keydown',e=>{if(e.key==='Escape')preDragOff();},true);
-    ['mouseup','pointerup','pointercancel'].forEach(t=>document.addEventListener(t,preDragOff,true));
+    ['mouseup','pointerup'].forEach(t=>document.addEventListener(t,preDragOff,true)); // (Manager) not pointercancel: Chrome fires it at the START of a drag
     document.addEventListener('visibilitychange',()=>{if(document.hidden)preDragOff();});}
 }
 /*B9c: Johnny's order. A moved row gets pre_key = the midpoint of its new neighbours (top = first − 1, bottom = last + 1) on the
