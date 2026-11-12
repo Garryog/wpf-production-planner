@@ -30,7 +30,9 @@ FX.pairs.forEach((c, i) => {
 FX.lines.forEach((l, i) => rec('line ' + l.n + ' ' + l.what + ' → ' + JSON.stringify(l.lk), N.lines[i].lk === l.lk, JSON.stringify(N.lines[i].lk)));
 // the parts on their own
 rec('keyTxt: NFKC, zero-width out, punctuation → one space, upper', B.keyTxt(' ｔ​09 -- apt. 7 ') === 'T09 APT 7', B.keyTxt(' ｔ​09 -- apt. 7 '));
-rec('keyTxt: accents and other letters become spaces (Postgres does the same)', B.keyTxt('Ré-sidence ß') === 'R SIDENCE', B.keyTxt('Ré-sidence ß'));
+rec('keyTxt: accents → base letters, ß → SS, other letters → spaces (Postgres does the same)', B.keyTxt('Ré-sidence ß Ωx') === 'RE SIDENCE SS X', B.keyTxt('Ré-sidence ß Ωx'));
+rec('keyTxtD: a dot between digits kept, others gone; # is not kept', B.keyTxtD('Apt. 2.05 #3 1.2.3') === 'APT 2.05 3 1.2.3', B.keyTxtD('Apt. 2.05 #3 1.2.3'));
+rec('keyTitleBits: NO 2 BED APARTMENT 12 → 12; UNIT 2 OF 4 APT 9 → 9; APT 2.05 → 2.05', B.keyTitleBits('NO 2 BED APARTMENT 12').unit === '12' && B.keyTitleBits('UNIT 2 OF 4 APT 9').unit === '9' && B.keyTitleBits('APT 2.05 TYPE A 2 BED KITCHEN').unit === '2.05');
 rec('keyCode: T 09 = T09 = T9; lone 0 kept; 12-14', B.keyCode('T 09') === 'T-9' && B.keyCode('t9') === 'T-9' && B.keyCode('0') === '0' && B.keyCode('A00') === 'A-0' && B.keyCode('12-14') === '12-14');
 rec('keyCode of nothing is blank', B.keyCode('') === '' && B.keyCode(null) === '' && B.keyCode(' - ') === '');
 const fl = s => { const f = B.keyFloor(s); return f.t + ':' + f.k + (f.lvl != null && f.t === 'amb' ? '/' + f.lvl : ''); };
@@ -49,6 +51,10 @@ rec('keyProj: own pid first, then customer → project, else unknown', K2.keyPro
 rec('jobKey: planner values (fuF/fuU, old f/u rows too), title only for blanks', (k => k.p === 'P1' && k.f.k === 'T-9' && k.u === '12' && k.src.u === 'title')(K2.jobKey({ customer: 'Aderrig Homes', f: 'T09', title: 'APT 12' })));
 rec('seqRowKey: project_id, floor, unit — never a title', (k => k.p === 'P1' && k.f.k === 'T-9' && k.u === '' && !k.src.u)(K2.seqRowKey({ project_id: 'P1', floor: 'T09', unit: '', name: 'APT 12' })));
 rec('keyMatch is symmetric over the whole fixture', N.pairs.every(g => g.r === g.r2));
+// 1,200 awkward strings (tests/seq/b0-fuzz.json — pg-check.sql checks the database against the same file)
+{ const FZ = JSON.parse(fs.readFileSync(path.join(__dirname, 'b0-fuzz.json'), 'utf8'));
+  const bad = FZ.filter(x => B.keyFloorStr(B.keyFloor(x.s)) !== x.f || B.keyUnit(x.s) !== x.u || B.keyTxt(x.s) !== x.t || B.keyCode(x.s) !== x.c);
+  rec('fuzz: ' + FZ.length + ' awkward strings still give the stored keys', FZ.length >= 1000 && !bad.length, JSON.stringify(bad.slice(0, 3))); }
 
 // ---- the same answers from the functions inside the loaded app (fake Supabase, no network)
 (async () => {
