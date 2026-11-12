@@ -1324,3 +1324,54 @@ l4b-pmerge 23 / 0, attack9-pmerge 29 / 0. No Tester expectation changed.
 - attack11 **31 / 0**, attack10-pool 84 / 0, attack10-speed 16 / 0, b9a 27 / 0, b9b 20 / 0, b9c 25 / 0 (gap check moved to 1e-12), b9d 15 / 0.
 - **Full suite** (264 test files + 4 probes, at 86b50d9): **6,026 pass / 38 fail** = the same ACCEPTED-FAILURES rows + t16 ×2
   informational + editor e7 redraw timing and stage1 t4 2,500-job timing (accepted row; both timing under load). No new failure.
+
+### 12 Nov 2026 — Manager verdict on B9 (Johnny's pool)
+**Verdict: GO WITH CONDITIONS** (reviewed plan 4294cd2, code 32ba13e..e610fe1, tests b9a–b9d, attack10-pool/-speed, attack11, 8525328, 809b1a9).
+Re-run by the Manager on the fake database: b9a 27/0, b9b 20/0, b9c 25/0, b9d 15/0, attack10-pool 84/0, attack10-speed 16/0, attack11 31/0,
+l4b-pmerge 23/0, attack9-pmerge 29/0, s2-pm-assign 39/0, dates c1-engine 22/0, attack1-engine 25/0, attack2-site 30/0, c3-export-import 12/0,
+c8-deliv-engine 13/0, sawstores retest-nov 79/79, stage2 coder-r2 13/0, stage3 flow-attack1-switchoff 12/0, weeks 10/0, datasafety 11/0,
+project-details attack1-phone 10/0. Full suite not re-run by the Manager (Coder's 6,026 / 38, all on ACCEPTED-FAILURES or timing).
+Checked in the code: no new SQL (every column used — `wo`, `pre_key`, `processed*`, `note`, `version`, `updated_by` — is in the existing
+`seq_pre` block); no new top-level save key, no planner-record field written (only `localStorage` `wpfPreWks` / `wpfSeen_pre_<name>`);
+the pool writes `seq_pre` only (no `project_seq`, `seq_move`, `seq_insert`, no date writes); lists OFF → old message, no Export panel,
+`woProgrammed` unchanged; every data value in the pool / Export panel / reason dialog goes through `escA`.
+
+**Key issues**
+1. **Should fix (Coder, then Tester)** — the drag redraw guard does not work in a real Chrome drag. Chrome fires `pointercancel` the moment
+   a native drag starts; `preDragOff` listens for it, so `PREV.drag` is cleared straight away AND a redraw is forced mid-drag. Manager probe
+   (real Playwright mouse drag, headless Chromium): events `dragstart → pointercancel`, `PREV.drag` empty mid-drag, 2 redraws. The drop
+   still lands (the attack11 L2 fallback reads the row from the drag data), so the move is not lost — but the "never redraw under a drag"
+   protection is dead. Fix: don't disarm on `pointercancel` (keep Escape / dragend / page hidden / 30 s). attack10-speed D1b logs the
+   mid-drag value ("during=") without checking it — Tester to assert the guard is armed mid real drag.
+2. **Garry (adoption)** — a job with no PM sequence row can't be ticked or moved (Q1, ASSUMED). At go-live most projects won't have a sequence
+   started, so Johnny may find most of his pool greyed out. The strip names the PMs, but someone has to press "Start the sequence".
+3. **Note (safe for Job A)** — `woProgrammed` now also counts Johnny's tick (lists on, Cienapps below step 6). Its only caller is the date
+   engine's preview flag: a due move on a ticked job now says "programmed (step 5) — take it out of the nest" and marks the board chip.
+   Correct intent, nothing moved or blocked; Job A tests pass. Wording says "step 5" even when Cienapps is at step 4 — Coder may reword.
+4. **Accepted — 809b1a9 loosened attack11 A1b.** The check's title was "each project kept together"; the old regex also demanded
+   alphabetical order, which the plan never asked for. Acceptable. Side effect: projects sharing the first 2 letters on the same day sort in
+   a fixed but not alphabetical order, and about 1 in 256 such pairs share a band and interleave by PM position. Cosmetic.
+5. **Note** — 8525328 test updates match Garry's recorded 11 Nov answers (ROADMAP: Mon 3 Jan 2028 bank holiday; S1 steps 1–11). OK.
+   P-number merge carry (6f) gives the tick a new "processed" time (original in the note) — ASSUMED, acceptable.
+
+**Conditions before merge to main**
+- [ ] Issue 1 fixed + Tester re-check (mid-drag armed, drop still lands, guard still expires).
+- [ ] Garry answers the decisions below (and the Part 5 ASSUMED Q1–Q10 + Coder ASSUMED (1)–(8) stand unless he says otherwise).
+- [ ] The existing "PM sequence & pre-production" SQL block (already PENDING for earlier parts) is run in Supabase first — nothing new for B9.
+- [ ] After deploy: incognito check of Pre-production → Pool as Johnny (tick one test job at step 4, see it in Export Changes, un-tick it);
+  Chrome only on phones.
+- [ ] Tell Johnny (pool, ticks, Export Changes list) and the PMs/office ("Start the sequence" so his jobs become tickable).
+- Rollback: the pool is part of the whole Job B branch; if it misbehaves, switching the new lists off hides it (old message), or go back
+  to the previous `main` commit.
+
+**Garry's decisions**
+- D1 Jobs with no PM sequence: (a) as built — shown, not tickable until the PM presses Start **[recommended]**; (b) let Johnny tick them
+  anyway (needs a new place to store the tick — more work, maybe SQL).
+- D2 Ticked-but-not-yet-step-5 jobs whose date moves: (a) flag "programmed — take it out of the nest" as built **[recommended]**;
+  (b) only flag when Cienapps itself says step 5.
+- D3 Same-day projects with the same first letters: (a) fixed order, each project kept together, as built **[recommended]**;
+  (b) must be strictly alphabetical (more work).
+- D4 Export Changes "Processed" panel: (a) only shown when there is something to set in Cienapps, as built **[recommended]**; (b) always shown.
+
+**Process notes:** Tester's real-mouse drag test recorded the mid-drag guard state but didn't assert it (missed issue 1). Coder loosened
+a Tester check (A1b) himself — justified here, but it should be flagged to the Tester for sign-off rather than changed in the fix commit.
