@@ -1531,7 +1531,7 @@ function startAutoRefresh(){
       checkNewVersion();
       if(drvUploading)return; // never interrupt a photo upload (unsaved edits are merged by loadDB, not skipped)
       if(typeof IMPPLAN!=='undefined'&&(IMPPLAN||PEND))return; // an import review in progress must never be wiped by a refresh
-      const ae=document.activeElement;if(ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName))return; // someone is typing
+      const ae=document.activeElement;if(ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)&&!(ae.id==='pm-q'&&!renderPM._qt))return; // someone is typing (attack7: an idle PM search box doesn't freeze the page — the redraw keeps its text and cursor)
       if(document.querySelector('.pod-ovl'))return; // a dialog is open (name, reason, list editor) — its answer must land on the live objects
       loadDB().then(()=>{lsStart();if(ROLE)render();});
     },120000);
@@ -6776,20 +6776,29 @@ let pmCust='';
   All filters are AND-ed, remembered per device, never saved to the database. Works on live jobs and on the delivery archive. */
 const PMF_KEY='wpfPmF';let PMF_MEM=null;
 function pmfGet(){let v='';try{v=localStorage.getItem(PMF_KEY)||'';}catch(e){v='';}if(PMF_MEM!==null)v=PMF_MEM;let o={};try{o=JSON.parse(v||'{}')||{};}catch(e){o={};}
-  const S=x=>typeof x==='string'?x:'';return{k:/^(p:.+|c:.*)$/.test(S(o.k))?o.k:'',kl:S(o.kl),fl:S(o.fl),ti:S(o.ti),q:S(o.q)};}
+  const S=x=>typeof x==='string'?x:'';return{k:/^(p:.+|c:.*)$/.test(S(o.k))?o.k:'',kl:S(o.kl),fl:S(o.fl),fll:S(o.fll),ti:S(o.ti),til:S(o.til),q:S(o.q)};}
 function pmfPut(f){const v=JSON.stringify(f);let ok=false;try{localStorage.setItem(PMF_KEY,v);ok=localStorage.getItem(PMF_KEY)===v;}catch(e){ok=false;}PMF_MEM=ok?null:v;}
-function pmfFloorKey(f){const k=String(f==null?'':f).replace(/\s+/g,' ').trim().toUpperCase();return /^(0|00|G|GF|GRD|GROUND|GROUND FLOOR|GROUND FLR|GND)$/.test(k)?'GROUND':k;} // "GF" / "0" / "Ground" are one floor (B0 rule)
+function pmfFloorKey(f){const k=String(f==null?'':f).replace(/\s+/g,' ').trim().toUpperCase(),k2=k.replace(/[\/.\-]/g,'').replace(/ +/g,' ').trim();return /^(0|00|G|GF|GRD|GND|GROUND|GROUND ?(FLOOR|FLR|FL))$|^(G|GRD|GND) ?(FLOOR|FLR|FL|F)$/.test(k2)?'GROUND':k;}
+function pmfFold(v){return String(v==null?'':v).normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim().toLowerCase();} // fadas and case ignored // "GF" / "0" / "Ground" are one floor (B0 rule)
 function pmfTitleKey(t){return String(t==null?'':t).replace(/\s+/g,' ').trim().toUpperCase();}
 function renderPM(app){
   const all=delAll();
   const todayISO=todayLocal();
   const F=pmfGet(),J=dcfJob(); // a job (live or archived: {c,f,u,t}) → its project / customer key, as on the Deliveries page
   if(F.k.startsWith('p:')&&!dcfProjOk()&&V2()&&!LST.loaded&&!renderPM._load){renderPM._load=1;lsLoad().then(()=>{if(LST.loaded)render();else setTimeout(()=>{renderPM._load=0;},30000);}).catch(()=>{setTimeout(()=>{renderPM._load=0;},30000);});}
-  const live=DB.orders,arc=Object.values(DB.delArchive||{}).flatMap(a=>a.jobs||[]);
-  const nv=o=>({wo:o.wo,c:o.customer!=null?o.customer:o.c,f:o.floor!=null?o.floor:o.f,u:o.unit!=null?o.unit:o.u,t:o.title!=null?o.title:o.t});
-  const qq=F.q.replace(/\s+/g,' ').trim().toLowerCase();
-  const okK=x=>!F.k||dcfHit({k:F.k},J({customer:x.c})),okF=x=>!F.fl||pmfFloorKey(x.f)===F.fl,okT=x=>!F.ti||pmfTitleKey(x.t)===F.ti;
-  const okQ=x=>!qq||[x.wo,x.t,x.f,x.u,x.c].map(v=>String(v==null?'':v).replace(/\s+/g,' ').toLowerCase()).join(' | ').includes(qq);
+  const arcAll=Object.values(DB.delArchive||{}).flatMap(a=>(a&&Array.isArray(a.jobs)?a.jobs:[]).filter(j=>j&&typeof j==='object'));
+  const CN=c=>dcfNorm(c);
+  // attack7: the choices and counts come from exactly what the page can show (booked, delivered this week, archive with a delivery time,
+  // coming up), so a pick never leads to an empty page
+  const onB=o=>!!o.delv&&!delHidden(o),comingOk=o=>!o.delDay&&!o.delDone&&!isShipped(o)&&!isOnHold(o)&&!!o.dueDate&&o.dueDate>=todayISO;
+  const shown=o=>(onB(o)&&(!!o.delDay||dStage(o)==='deliv'))||comingOk(o);
+  const live=[...DB.orders.filter(o=>shown(o)),...(DB.delx||[]).filter(o=>o.delDay||dStage(o)==='deliv')],arc=arcAll.filter(j=>j.vAt);
+  const NV=new Map(),nv=o=>{let x=NV.get(o);if(!x){x={wo:o.wo,c:o.customer!=null?o.customer:o.c,f:o.floor!=null?o.floor:o.f,u:o.unit!=null?o.unit:o.u,t:o.title!=null?o.title:o.t};
+    x.fk=pmfFloorKey(x.f);x.tk=pmfTitleKey(x.t);NV.set(o,x);}return x;}; // worked out once per job per draw (speed)
+  const qw=pmfFold(F.q).split(' ').filter(Boolean); // every word must appear somewhere in the job (any field)
+  const okK=x=>!F.k||dcfHit({k:F.k},J({customer:x.c})),okF=x=>!F.fl||x.fk===F.fl,okT=x=>!F.ti||x.tk===F.ti;
+  const okQ=x=>{if(!qw.length)return true;const h=x.h||(x.h=[x.wo,x.t,x.f,x.u,x.c].map(pmfFold).join('\u0001'));return qw.every(w=>h.includes(w));};
+  const qq=qw.join(' ');
   const pmOk=o=>{const x=nv(o);return okK(x)&&okF(x)&&okT(x)&&okQ(x);};
   // the choices: each list only offers what is possible with the OTHER filters (so a pick never leads to an empty page)
   const pool=[...live,...arc].map(nv);
@@ -6799,35 +6808,45 @@ function renderPM(app){
     if(okK(x)&&okT(x)&&okQ(x)){const fk=pmfFloorKey(x.f);if(fk){if(!fOpts.has(fk))fOpts.set(fk,{k:fk,l:fk==='GROUND'?'Ground (GF / 0)':String(x.f).replace(/\s+/g,' ').trim(),n:new Set()});fOpts.get(fk).n.add(x.wo);}}
     if(okK(x)&&okF(x)&&okQ(x)){const tk=pmfTitleKey(x.t);if(tk){if(!tOpts.has(tk))tOpts.set(tk,{k:tk,l:String(x.t).replace(/\s+/g,' ').trim(),n:new Set()});tOpts.get(tk).n.add(x.wo);}}});
   if(F.k&&!kOpts.has(F.k))kOpts.set(F.k,{k:F.k,l:(F.k.startsWith('p:')&&dcfLabelFor(F.k,''))||F.kl||'(gone)',n:new Set()});
-  if(F.fl&&!fOpts.has(F.fl))fOpts.set(F.fl,{k:F.fl,l:F.fl,n:new Set()});
-  if(F.ti&&!tOpts.has(F.ti))tOpts.set(F.ti,{k:F.ti,l:F.ti,n:new Set()});
+  if(F.fl&&!fOpts.has(F.fl))fOpts.set(F.fl,{k:F.fl,l:F.fll||(F.fl==='GROUND'?'Ground (GF / 0)':F.fl),n:new Set()});
+  if(F.ti&&!tOpts.has(F.ti))tOpts.set(F.ti,{k:F.ti,l:F.til||F.ti,n:new Set()});
   const nat=(a,b)=>a.l.replace(/^🏗 /,'').localeCompare(b.l.replace(/^🏗 /,''),'en',{numeric:true,sensitivity:'base'});
   const kA=[...kOpts.values()].sort(nat),fA=[...fOpts.values()].sort(nat),tA=[...tOpts.values()].sort(nat);
   const opt=(x,cur)=>`<option value="${escA(x.k)}"${x.k===cur?' selected':''}>${escA(x.l.length>70?x.l.slice(0,68)+'…':x.l)} (${x.n.size})</option>`;
   const kP=kA.filter(x=>x.k.startsWith('p:')),kC=kA.filter(x=>!x.k.startsWith('p:'));
   const anyF=!!(F.k||F.fl||F.ti||qq);
-  // every customer seen on live orders or in the delivery archive, narrowed by the filters
-  const custs=[...new Set([...live.filter(pmOk).map(o=>o.customer||''),...arc.filter(pmOk).map(j=>j.c||'')].filter(Boolean))].sort();
+  // every customer seen on live orders or in the delivery archive, narrowed by the filters — one heading per customer
+  // whatever its case / spaces (attack7); each heading's jobs grouped once (speed with thousands of archived jobs)
+  const byC=new Map(),cLbl=new Map(),addC=(o,isArc)=>{const raw=String((isArc?o.c:o.customer)||'');const k=CN(raw);if(!k)return;
+    if(!byC.has(k)){byC.set(k,{live:[],arc:[]});cLbl.set(k,raw.replace(/\s+/g,' ').trim());}byC.get(k)[isArc?'arc':'live'].push(o);};
+  live.filter(pmOk).forEach(o=>addC(o,false));arc.filter(pmOk).forEach(j=>addC(j,true));
+  const custs=[...byC.keys()].sort((a,b)=>cLbl.get(a).localeCompare(cLbl.get(b)));
+  const lim=n=>anyF?60:n; // with a filter on, up to 60 per list (was newest 15 / 12); more → a "+N more — narrow the filters" line (speed: thousands of archived jobs)
+  const more=(all,n)=>all>n?`<div class="dsh-row" style="color:var(--t3);font-size:12px">+ ${all-n} more — narrow the filters or search to see them</div>`:'';
   const sel=custs;
   const row=(cells)=>`<div class="dsh-row">${cells}</div>`;
   const stageLbl=o=>{const s=dStage(o);return s?dStageLbl[s]+(dStageTime(o)?' '+dStageTime(o):''):'PLANNED';};
   const block=c=>{
-    const mine=all.filter(o=>(o.customer||'')===c&&pmOk(o));
+    const G=byC.get(c),cl=cLbl.get(c),mine=G.live.filter(o=>onB(o)||(DB.delx||[]).includes(o));
     const sched=mine.filter(o=>o.delDay&&dStage(o)!=='deliv').sort((a,b)=>slotDate(a).localeCompare(slotDate(b))); /*dates: by real date, any week*/
     const delivWk=mine.filter(o=>dStage(o)==='deliv').sort((a,b)=>String(b.delDelivAt||'').localeCompare(String(a.delDelivAt||'')));
-    const past=Object.values(DB.delArchive||{}).flatMap(a=>a.jobs.filter(j=>(j.c||'')===c&&j.vAt&&pmOk(j)).map(j=>({...j,_at:j.vAt})))
-      .sort((a,b)=>String(b._at).localeCompare(String(a._at))).slice(0,15);
-    const coming=DB.orders.filter(o=>(o.customer||'')===c&&pmOk(o)&&!o.delDay&&!o.delDone&&!isShipped(o)&&!isOnHold(o)&&o.dueDate&&o.dueDate>=todayISO)
-      .sort((a,b)=>a.dueDate.localeCompare(b.dueDate)).slice(0,12);
+    const pastAll=G.arc.length,past=G.arc.map(j=>({...j,_at:j.vAt}))
+      .sort((a,b)=>String(b._at).localeCompare(String(a._at))).slice(0,lim(15));
+    const comingA=G.live.filter(o=>DB.orders.includes(o)&&comingOk(o)),coming=comingA
+      .sort((a,b)=>a.dueDate.localeCompare(b.dueDate)).slice(0,lim(12));
     if(!sched.length&&!delivWk.length&&!past.length&&!coming.length)return'';
         return `<div class="dsh-p" style="margin-bottom:14px">
-      <div class="dsh-ph" style="background:#14335c;font-size:15px">👤 ${escA(c)} — ${sched.length} scheduled · ${delivWk.length} delivered this week · ${past.length?past.length+' past':'no earlier deliveries'} · ${coming.length} coming up</div>
-      ${sched.length?`<div class="pm-sec">🚚 SCHEDULED — on a van${sched.some(siteNotOk)&&siteCanOk()?` <button class="btn btn-s" data-sitecust="${escA(c)}" style="margin-left:8px;min-height:36px">✓ Site ready for all ${sched.filter(siteNotOk).length}</button>`:''}</div>`+sched.map(o=>row(`<b>${escA(o.wo)}</b>${fuHTML(o,'flr-fu','font-size:12px')}<span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-x">${escA(slotLblO(o))}${slotWk(o)!==thisWk()?' (Wk '+wkNum(slotWk(o))+')':''} · ${stageLbl(o)}</span>${siteChip(o)}`)).join(''):''}
+      <div class="dsh-ph" style="background:#14335c;font-size:15px">👤 ${escA(cl)} — ${sched.length} scheduled · ${delivWk.length} delivered this week · ${past.length?past.length+' past':'no earlier deliveries'} · ${coming.length} coming up</div>
+      ${sched.length?`<div class="pm-sec">🚚 SCHEDULED — on a van${sched.some(siteNotOk)&&siteCanOk()?` <button class="btn btn-s" data-sitecust="${escA(cl)}" data-sitewos="${escA(JSON.stringify(sched.filter(siteNotOk).map(o=>o.wo)))}" style="margin-left:8px;min-height:36px">✓ Site ready for all ${sched.filter(siteNotOk).length}</button>`:''}</div>`+sched.map(o=>row(`<b>${escA(o.wo)}</b>${fuHTML(o,'flr-fu','font-size:12px')}<span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-x">${escA(slotLblO(o))}${slotWk(o)!==thisWk()?' (Wk '+wkNum(slotWk(o))+')':''} · ${stageLbl(o)}</span>${siteChip(o)}`)).join(''):''}
       ${delivWk.length?`<div class="pm-sec" style="color:#0d6e46">✓ DELIVERED THIS WEEK</div>`+delivWk.map(o=>row(`<b>${escA(o.wo)}</b>${fuHTML(o,'flr-fu','font-size:12px')}<span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-x" style="color:#0d6e46">${o.delDelivAt?new Date(o.delDelivAt).toLocaleDateString('en-IE',{weekday:'short',day:'numeric',month:'short'})+' '+dStageTime(o):''}${o.delivBy?' · '+escA(o.delivBy):''}</span>`)).join(''):''}
-      ${past.length?`<div class="pm-sec" style="color:var(--t3)">📚 DELIVERED — PAST WEEKS</div>`+past.map(j=>row(`<b>${escA(j.wo)}</b>${fuHTML(j,'flr-fu','font-size:12px')}<span class="dsh-t">${escA(j.t||'')}</span><span class="dsh-x">${new Date(j._at).toLocaleDateString('en-IE',{day:'numeric',month:'short'})}${j.vBy?' · '+escA(j.vBy):''}</span>`)).join(''):''}
-      ${coming.length?`<div class="pm-sec" style="color:#8a6d00">📅 COMING UP — due, not yet on the delivery board</div>`+coming.map(o=>row(`<b>${escA(o.wo)}</b>${fuHTML(o,'flr-fu','font-size:12px')}<span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-x">due ${fmt(o.dueDate)}${o.plannedWeek?' · build '+wkLbl(o.plannedWeek):''}</span>`)).join(''):''}
+      ${past.length?`<div class="pm-sec" style="color:var(--t3)">📚 DELIVERED — PAST WEEKS</div>`+past.map(j=>row(`<b>${escA(j.wo)}</b>${fuHTML(j,'flr-fu','font-size:12px')}<span class="dsh-t">${escA(j.t||'')}</span><span class="dsh-x">${new Date(j._at).toLocaleDateString('en-IE',{day:'numeric',month:'short'})}${j.vBy?' · '+escA(j.vBy):''}</span>`)).join('')+more(pastAll,past.length):''}
+      ${coming.length?`<div class="pm-sec" style="color:#8a6d00">📅 COMING UP — due, not yet on the delivery board</div>`+coming.map(o=>row(`<b>${escA(o.wo)}</b>${fuHTML(o,'flr-fu','font-size:12px')}<span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-x">due ${fmt(o.dueDate)}${o.plannedWeek?' · build '+wkLbl(o.plannedWeek):''}</span>`)).join('')+more(comingA.length,coming.length):''}
     </div>`;
   };
+  const ae0=document.activeElement,qKeep=ae0&&ae0.id==='pm-q'?{v:ae0.value,a:ae0.selectionStart,b:ae0.selectionEnd}:null; // the search box being typed in survives this redraw
+  const fKeep=ae0&&/^pm-(cust|floor|title)$/.test(ae0.id)?ae0.id:''; // so does a drop-down that has focus (attack7: a late search redraw never steals it)
+  // nothing to show while searching: say if the words match jobs this page doesn't list (overdue and not booked, shipped, on hold)
+  const offPage=()=>qw.length?DB.orders.filter(o=>!shown(o)&&pmOk(o)).length:0;
   app.innerHTML=`<div class="dsh">
     <div style="display:flex;gap:12px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
       <h1 style="font-size:26px;color:#14335c;margin:0">🏗 Project Managers — Deliveries by customer</h1>
@@ -6836,23 +6855,24 @@ function renderPM(app){
       <label class="pmf-c"><span>Project</span><select id="pm-cust" aria-label="Project or customer"><option value="">All projects</option>${kP.length?`<optgroup label="Projects">${kP.map(x=>opt(x,F.k)).join('')}</optgroup>`:''}${kC.length?`<optgroup label="${kP.length?'Customers with no project':'Customers'}">${kC.map(x=>opt(x,F.k)).join('')}</optgroup>`:''}</select></label>
       <label class="pmf-c"><span>Location (floor / block)</span><select id="pm-floor" aria-label="Floor or block"><option value="">All locations</option>${fA.map(x=>opt(x,F.fl)).join('')}</select></label>
       <label class="pmf-c"><span>Title</span><select id="pm-title" aria-label="Title"><option value="">All titles</option>${tA.map(x=>opt(x,F.ti)).join('')}</select></label>
-      <label class="pmf-c pmf-q"><span>Search</span><input id="pm-q" type="search" placeholder="🔍 WO, title, floor, unit, customer…" value="${escA(renderPM._qf&&renderPM._qv!=null?renderPM._qv:F.q)}" autocomplete="off"></label>
+      <label class="pmf-c pmf-q"><span>Search</span><input id="pm-q" type="search" placeholder="🔍 WO, title, floor, unit, customer…" value="${escA(F.q)}" autocomplete="off"></label>
       ${anyF?`<button class="dcf-x" id="pm-clear">✕ Clear filters</button>`:''}
       ${F.k.startsWith('p:')&&!dcfProjOk()?`<div class="dcf-n" style="flex-basis:100%;color:#b42318;font-weight:700">Projects are ${V2()?'still loading':'off (the cutting-lists switch is off)'} — pick the customer instead.</div>`:''}
     </div>
-    ${sel.map(block).join('')||`<div class="flr-none">${anyF?'Nothing matches these filters. <button class="dcf-x" id="pm-clear2">✕ Clear filters</button>':'Nothing to show yet.'}</div>`}
+    ${sel.map(block).join('')||`<div class="flr-none">${anyF?'Nothing matches these filters.'+(n=>n?` ${n} job${n!==1?'s':''} match${n!==1?'':'es'} but ${n!==1?'are':'is'} not on this page (overdue and not on a van yet, shipped, or on hold) — see the Capacity Board.`:'')(offPage())+' <button class="dcf-x" id="pm-clear2">✕ Clear filters</button>':'Nothing to show yet.'}</div>`}
     <div class="flr-ft">Live — refreshes automatically · Last update ${hhmm(new Date().toISOString())}</div>
   </div>`;
   bindSiteOk(app); /*dates phase 2*/
   /*v-pmf*/const set=ch=>{const f=Object.assign(pmfGet(),ch);pmfPut(f);render();};
   const pc=document.getElementById('pm-cust');if(pc)pc.onchange=()=>{const op=pc.options[pc.selectedIndex];set({k:pc.value,kl:op?op.textContent.replace(/ \(\d+\)$/,''):''});};
-  const pf=document.getElementById('pm-floor');if(pf)pf.onchange=()=>set({fl:pf.value});
-  const pt=document.getElementById('pm-title');if(pt)pt.onchange=()=>set({ti:pt.value});
-  [document.getElementById('pm-clear'),document.getElementById('pm-clear2')].forEach(b=>{if(b)b.onclick=()=>{renderPM._qv=null;renderPM._qf=0;set({k:'',kl:'',fl:'',ti:'',q:''});};});
+  const lb=el=>{const op=el.options[el.selectedIndex];return op&&el.value?op.textContent.replace(/ \(\d+\)$/,''):'';};
+  const pf=document.getElementById('pm-floor');if(pf)pf.onchange=()=>set({fl:pf.value,fll:lb(pf)});
+  const pt=document.getElementById('pm-title');if(pt)pt.onchange=()=>set({ti:pt.value,til:lb(pt)});
+  [document.getElementById('pm-clear'),document.getElementById('pm-clear2')].forEach(b=>{if(b)b.onclick=()=>{clearTimeout(renderPM._qt);renderPM._qt=null;const a=document.activeElement;if(a&&a.id==='pm-q'){a.value='';a.blur();}set({k:'',kl:'',fl:'',fll:'',ti:'',til:'',q:''});};});
   const pq=document.getElementById('pm-q');
-  if(pq){if(renderPM._qf){pq.focus();try{const n=pq.value.length;pq.setSelectionRange(n,n);}catch(e){}}
-    pq.onfocus=()=>{renderPM._qf=1;};pq.onblur=()=>{setTimeout(()=>{if(document.activeElement!==document.getElementById('pm-q'))renderPM._qf=0;},0);};
-    pq.oninput=()=>{renderPM._qv=pq.value;clearTimeout(renderPM._qt);renderPM._qt=setTimeout(()=>{renderPM._qf=1;set({q:pq.value});},250);};}
+  if(fKeep){const el=document.getElementById(fKeep);if(el)el.focus();}
+  if(pq){if(qKeep){pq.value=qKeep.v;pq.focus();try{pq.setSelectionRange(qKeep.a,qKeep.b);}catch(e){}} // attack7: focus / text / cursor only come back if the box had them a moment ago
+    pq.oninput=()=>{clearTimeout(renderPM._qt);const v=pq.value;renderPM._qt=setTimeout(()=>{renderPM._qt=null;set({q:v});},250);};}
 }
 
 /* ---------- Factory floor screen: today + tomorrow's loads, big type, auto-refresh ---------- */
@@ -9339,7 +9359,10 @@ function siteOkDo(wos,done){
     sched();render();toast('Site ready — '+js.length+' deliver'+(js.length!==1?'ies':'y')+' confirmed');if(done)done();});
 }
 function bindSiteOk(root){(root||document).querySelectorAll('[data-siteok]').forEach(b=>b.onclick=e=>{e.stopPropagation();siteOkDo([b.dataset.siteok]);});
-  (root||document).querySelectorAll('[data-sitecust]').forEach(b=>b.onclick=e=>{e.stopPropagation();const c=b.dataset.sitecust;siteOkDo(delAll().filter(o=>(o.customer||'')===c&&siteNotOk(o)).map(o=>o.wo));});}
+  (root||document).querySelectorAll('[data-sitecust]').forEach(b=>b.onclick=e=>{e.stopPropagation();const c=b.dataset.sitecust;
+    // attack7 (Critical): with the PM filters on, only the jobs shown on the button (data-sitewos) — never hidden ones of that customer
+    let w=null;try{w=b.dataset.sitewos!=null?JSON.parse(b.dataset.sitewos):null;}catch(x){w=[];}
+    siteOkDo(delAll().filter(o=>(w?w.includes(o.wo):(o.customer||'')===c)&&siteNotOk(o)).map(o=>o.wo));});}
 function siteNotOk(o){if(!o||!o.delDay||o.manual||dStage(o)==='deliv')return false;const s=siteState(o);return !(s&&s.k==='ok');}
 /*dates phase 2 (A9): "⏳ moved out — don't cut early". On while the job is not cut, not dismissed and its due date is still
   more than earlyDays away. Cleared by cutting, by "OK to cut" (office / PM) or by the date coming within range. */
