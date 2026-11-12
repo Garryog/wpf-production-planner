@@ -7145,7 +7145,7 @@ function renderDeliveries(app){
   </div>
   ${later?'':`<div class="del-panel" style="overflow-x:auto">
     <table class="del-grid">
-      <thead><tr><th>Vehicle</th>${DEL_DAYS.map((d,i)=>{const dt=addDayISO(wk,i),h=!isWorkDay(dt)&&i<5;return `<th${h?' class="hol" title="Bank holiday"':''}>${d} <span style="font-weight:400">${dShort(dt)}</span>${h?'<br><span style="color:#b42318">bank holiday</span>':''}</th>`;}).join('')}</tr></thead>
+      <thead><tr><th>Vehicle</th>${DEL_DAYS.map((d,i)=>{const dt=addDayISO(wk,i),h=!isDelivDay(dt);return `<th${h?' class="hol" title="Bank holiday"':''}>${d} <span style="font-weight:400">${dShort(dt)}</span>${h?'<br><span style="color:#b42318">bank holiday</span>':''}</th>`;}).join('')}</tr></thead>
       <tbody>
         ${DEL_VEH.map((v,i)=>{const vc=tagged.filter(o=>o.delVeh===v.k&&slotIn(o,wk)).length;return `<tr${i===1?' style="border-top:3px double var(--border)"':''}>
           <td class="dveh">${v.n}<span class="dsub">${v.cat}${v.sub?' · '+v.sub:''} · ${vc} job${vc!==1?'s':''}</span></td>
@@ -9536,7 +9536,7 @@ function placeJobs(moved,veh,day,wk){
   const changing=moved.filter(o=>(o.delVeh||'')!==veh||(o.delDay||'')!==day||(!!day&&slotWk(o)!==wk));
   if(!changing.length){delSel.clear();render();return;}
   const reMoves=changing.filter(o=>o.delDay);
-  if(day){const dt=addDayISO(wk,DEL_DAYS.indexOf(day));if(day!=='Sat'&&!isWorkDay(dt)&&!confirm(day+' '+dShort(dt)+' is a bank holiday — book '+(changing.length===1?changing[0].wo:changing.length+' jobs')+' on it anyway?')){render();return;}} /*dates*/
+  if(day){const dt=addDayISO(wk,DEL_DAYS.indexOf(day));if(!isDelivDay(dt)&&!confirm(day+' '+dShort(dt)+' is a bank holiday — book '+(changing.length===1?changing[0].wo:changing.length+' jobs')+' on it anyway?')){render();return;}} /*dates*/
   const apply=(by,why)=>{
     const at=nowISO(),to=day?veh+'|'+day+'|'+wk:'';
     changing.map(o=>findDel(o.wo)).filter(Boolean).forEach(o=>{
