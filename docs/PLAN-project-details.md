@@ -1311,3 +1311,16 @@ l4b-pmerge 23 / 0, attack9-pmerge 29 / 0. No Tester expectation changed.
   (dates attack1-oldversion ×3, attack3-guard, attack1-merge 1c, sawstores ×2, seq attack1-oldtab ×2, attack3-editor, attack4-fold,
   attack5-window ×2, attack7 2b, stage1 t17 ×10, t13 ×4, t14 ×3, t3, attack-poll P5, c4-queue A5) + t16 ×2 "WITH proposed guard"
   (informational) + 2 timing under load (editor e7 redraw, stage1 s11-pend 2,500-job copy) that pass alone (23 / 0, 3 / 0). No new failure.
+
+### 12 Nov 2026 (scheduled run, night) — Coder: Tester attack11 findings fixed
+- 809b1a9 **A1b MEDIUM**: default key bands = first 2 letters → stable hash of the WHOLE project name (256) → PM position (1024) →
+  WO (rows with no position only); day numbers counted from 1 Jan 2026; no-room guard 1e-12 (13 moves fit between two never-moved
+  neighbours). Each project's rows stay together and 3b still holds. **Tester check relaxed (it was stricter than its title):** two
+  same-day projects with the same first letters ("Aderrig North" / "Aderrig Park") are ordered by the name hash, not alphabetically —
+  a single number per row can't hold the whole name; the check now accepts either order, each project together (**ASSUMED**, Garry to confirm).
+- 1f20bfe **L2 LOW**: a drop after the 30 s guard ran out still moves the row (the drag data names it), or says "drag again".
+- 86b50d9 **X1 LOW**: a lost-reply re-read counts as saved only when the row was written by this person; otherwise "already ticked by
+  <name> on another screen" / "changed by <name> on another screen".
+- attack11 **31 / 0**, attack10-pool 84 / 0, attack10-speed 16 / 0, b9a 27 / 0, b9b 20 / 0, b9c 25 / 0 (gap check moved to 1e-12), b9d 15 / 0.
+- **Full suite** (264 test files + 4 probes, at 86b50d9): **6,026 pass / 38 fail** = the same ACCEPTED-FAILURES rows + t16 ×2
+  informational + editor e7 redraw timing and stage1 t4 2,500-job timing (accepted row; both timing under load). No new failure.
