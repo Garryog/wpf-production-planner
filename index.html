@@ -280,6 +280,10 @@ details.lti-other{margin-bottom:14px}details.lti-other>summary{cursor:pointer;fo
 .dfu{font-size:10px;font-weight:700;background:#eef2f7;border:1px solid #d8dfe8;border-radius:4px;padding:1px 5px;color:#3b4c63;white-space:nowrap}
 .fu-fl+.fu-un{margin-left:4px}
 .fu-badge{font-family:monospace;font-size:11px;font-weight:600;background:#f2f5f9;border:1px solid #e0e5ec;border-radius:4px;padding:1px 6px;color:var(--t2);white-space:nowrap}
+.dcf{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;margin:0 0 8px;padding:6px 8px;border:1px solid var(--b2);border-radius:7px;background:#fff}.dcf-on{border:2px solid #1a56db;background:#f3f8ff}
+.dcf-l{font-size:13px;font-weight:800;color:#14335c}.dcf select{flex:1 1 240px;min-width:0;max-width:100%;padding:7px 9px;border:1px solid var(--b2);border-radius:6px;font-size:14px;background:#fff}
+.dcf-n{font-size:12px;color:var(--t2);overflow-wrap:anywhere;min-width:0}.dcf-x{font-size:12px;padding:5px 10px;border:1px solid #1a56db;color:#1a56db;background:#fff;border-radius:6px;cursor:pointer}
+.dchip.dcf-off{opacity:.35;filter:grayscale(1)}
 .dsrch{width:100%;max-width:420px;padding:7px 11px;border:1px solid var(--b2);border-radius:6px;font-size:12px;margin-bottom:8px}
 .dsrch:focus{border-color:#7ba7e0}
 .dchip-btns{display:flex;gap:1px;margin-left:auto;flex:0 0 auto}
@@ -2343,6 +2347,25 @@ function findDel(wo){return DB.orders.find(o=>o.wo===wo)||(DB.delx||[]).find(o=>
 function delOnPage(o){return !!o&&(DB.orders.includes(o)?(!!o.delv&&!delHidden(o)):(DB.delx||[]).includes(o));}
 function delSelLive(){return [...delSel].filter(w=>delOnPage(findDel(w)));}
 function delSelPrune(){[...delSel].forEach(w=>{if(!delOnPage(findDel(w)))delSel.delete(w);});}
+/*v-dcf (Garry, 12 Nov): Customer / project filter on the Deliveries page. A job belongs to the planner project its Cienapps customer is
+  linked to (the same rule as the cutting lists); a customer with no linked project is its own entry. Remembered per device.
+  Picked: the To plan pool, the In store list and the week-tab counts show only that project; on the van grid other jobs stay
+  in place but greyed, so you still see how full each van is (Garry's choice). Prints, run sheets and the export are always the whole week. */
+const DCF_KEY='wpfDelCF';
+function dcfNorm(c){return String(c==null?'':c).replace(/\s+/g,' ').trim().toLowerCase();}
+function dcfCur(){const v=ls.get(DCF_KEY);if(!v)return null;try{const o=JSON.parse(v);return o&&typeof o.k==='string'&&o.k?o:null;}catch(e){return null;}}
+function dcfSet(k,lbl){ls.set(DCF_KEY,k?JSON.stringify({k,lbl:String(lbl||'')}):'');}
+function dcfProjOk(){return typeof V2==='function'&&V2()&&LST.loaded;}
+function dcfJob(){ // job → {p: project id or '', c: 'c:'+customer}; cached per customer for one draw
+  const m=new Map();
+  return o=>{const raw=String((o&&o.customer)||''),c=dcfNorm(raw);if(!m.has(c)){let p=null;if(dcfProjOk()){try{p=lsProjForCust(raw);}catch(e){p=null;}}m.set(c,p?p.id:'');}
+    return {p:m.get(c),c:'c:'+c};};
+}
+function dcfKeyOf(j){return j.p?'p:'+j.p:j.c;}
+// does a job pass the picked filter? 'c:' keys match on the customer name itself, so they keep working whether or not projects are loaded
+function dcfHit(f,j){if(!f)return true;return f.k.startsWith('p:')?j.p===f.k.slice(2):j.c===f.k;}
+function dcfLabelFor(k,raw){if(k.startsWith('p:')){const n=dcfProjOk()?lsProjName(k.slice(2)):'';return n?'🏗 '+n:'';}return raw||'(no customer)';}
+
 function woCmp(a,b){
   const na=(String(a.wo).match(/\d+/g)||[]).map(Number),nb=(String(b.wo).match(/\d+/g)||[]).map(Number);
   for(let i=0;i<Math.max(na.length,nb.length);i++){
@@ -7013,13 +7036,15 @@ function renderDeliveries(app){
   const later=delTab==='later',wk=later?'':delTabWk(),past=!later&&wk<W0;
   // the pool: each job sits in its due week; overdue, no date and manual jobs sit in This week; past W+3 = Later
   const poolWk=delPoolWk;
-  const poolAll=tagged.filter(o=>!o.delDay);
+  /*v-dcf*/const dcfF=dcfCur(),dcfJ=dcfJob(),dcfOk=o=>dcfHit(dcfF,dcfJ(o));
+  if(dcfF&&!dcfProjOk()&&V2()&&!LST.loaded&&!renderDeliveries._dcfLoad){renderDeliveries._dcfLoad=1;lsLoad().then(()=>{if(LST.loaded&&document.getElementById('dpool'))render();}).catch(()=>{});} // projects needed for a project pick
+  const poolAll=tagged.filter(o=>!o.delDay&&dcfOk(o));
   const poolOf=t=>t==='later'?poolAll.filter(o=>poolWk(o)>W3):(w=>w<W0?[]:poolAll.filter(o=>poolWk(o)===w))(delTabWk(t));
   const pool=poolOf(delTab);
   const wkTot=later?0:tagged.filter(o=>slotIn(o,wk)).reduce((a,o)=>a+(+o.value||0),0);
   const legacy=ROLE==='office'?delLegacyJobs():[];
   const tabLbl=t=>{if(t==='later')return'Later';const w=delTabWk(t);return (t==='0'?'This week · ':t==='1'?'Next week · ':'')+'Wk '+wkNum(w)+' · '+dShort(w)+(w<W0?' (past)':'');};
-  const tabN=t=>t==='later'?poolOf(t).length:tagged.filter(o=>slotIn(o,delTabWk(t))).length+poolOf(t).length;
+  const tabN=t=>t==='later'?poolOf(t).length:tagged.filter(o=>slotIn(o,delTabWk(t))&&dcfOk(o)).length+poolOf(t).length; /*v-dcf: counts follow the filter*/
   // pool groups: "date moved — rebook" first, then by customer (Later: by due week), WO-number order inside each
   const rebook=pool.filter(o=>o.delRebook).sort(woCmp),rest=pool.filter(o=>!o.delRebook);
   const grps={};rest.forEach(o=>{const c=later?poolWk(o):(o.customer||'(no customer)');(grps[c]=grps[c]||[]).push(o);});
@@ -7033,7 +7058,19 @@ function renderDeliveries(app){
       </div>`;
   const nOrd=delSelLive().filter(w=>DB.orders.some(o=>o.wo===w)).length;
   const nMv=delSelLive().map(findDel).filter(wkMovable).length; /*v-deliv D3; attack5: the same rule as the move itself*/
-  const store=inStoreJobs(),storeOld=store.filter(x=>x.n!=null&&x.n>14).length;
+  const store=inStoreJobs().filter(x=>dcfOk(x.o)),storeOld=store.filter(x=>x.n!=null&&x.n>14).length; /*v-dcf*/
+  /*v-dcf: the picker — every customer / project with a job on this page (tagged, any week, or in store)*/
+  const dcfOpts=new Map();[...tagged,...inStoreJobs().map(x=>x.o)].forEach(o=>{const j=dcfJ(o),k=dcfKeyOf(j);if(!dcfOpts.has(k))dcfOpts.set(k,{k,lbl:dcfLabelFor(k,String(o.customer||'').trim()),ids:new Set()});dcfOpts.get(k).ids.add(o.wo);});
+  if(dcfF&&!dcfOpts.has(dcfF.k))dcfOpts.set(dcfF.k,{k:dcfF.k,lbl:(dcfF.k.startsWith('p:')&&dcfLabelFor(dcfF.k,''))||dcfF.lbl||'(gone)',ids:new Set()}); // kept, shown with 0, never switched off silently
+  const dcfArr=[...dcfOpts.values()].sort((a,b)=>a.lbl.replace(/^🏗 /,'').localeCompare(b.lbl.replace(/^🏗 /,''),'en',{sensitivity:'base'}));
+  const dcfP=dcfArr.filter(x=>x.k.startsWith('p:')),dcfC=dcfArr.filter(x=>!x.k.startsWith('p:'));
+  const dcfOptH=x=>`<option value="${escA(x.k)}"${dcfF&&dcfF.k===x.k?' selected':''}>${escA(x.lbl)} (${x.ids.size})</option>`;
+  const dcfHid=dcfF?[...tagged,...inStoreJobs().map(x=>x.o)].filter((o,i,a)=>a.indexOf(o)===i&&!dcfOk(o)).length:0;
+  const dcfHTML=`<div class="dcf${dcfF?' dcf-on':''}" id="dcf"><span class="dcf-l">Customer / project</span>
+    <select id="dcf-sel" aria-label="Show one customer or project"><option value="">All customers (${new Set([...tagged,...inStoreJobs().map(x=>x.o)].map(o=>o.wo)).size} jobs)</option>
+      ${dcfP.length?`<optgroup label="Projects">${dcfP.map(dcfOptH).join('')}</optgroup>`:''}${dcfC.length?`<optgroup label="${dcfP.length?'Customers with no project':'Customers'}">${dcfC.map(dcfOptH).join('')}</optgroup>`:''}</select>
+    ${dcfF?`<button class="dcf-x" id="dcf-all">✕ Show all</button><span class="dcf-n">Showing <b>${escA((dcfOpts.get(dcfF.k)||dcfF).lbl)}</b> only · ${dcfHid} other job${dcfHid!==1?'s':''} hidden from the pool and In store, greyed on the vans. Prints and exports still show the whole week.</span>`:''}
+  </div>`;
 
   app.innerHTML=`<div class="pg">
   ${later?'':missPanelHTML()}
@@ -7048,6 +7085,7 @@ function renderDeliveries(app){
     <button class="wkb-btn" id="wkb-today"${delTab==='0'?' disabled':''} title="Back to this week">This week</button>
   </div>
   <div class="del-panel">
+    ${dcfHTML}
     <div class="del-tabs" id="del-tabs">${tabs.map(t=>`<button class="del-tab${t===delTab?' on':''}${t==='0'?' cur':''}${t!=='later'&&delTabWk(t)<W0?' past':''}" data-deltab="${escA(t)}">${escA(tabLbl(t))}<span class="n">(${tabN(t)})</span></button>`).join('')}<button class="del-tab" id="btn-instore" style="${delStoreOpen?'background:#0e7490;color:#fff;border-color:#0e7490':storeOld?'border-color:#d4880f;color:#8a5a00':''}" title="Built jobs (7 / 8) sitting in store with no van booked">🏬 In store ${store.length}${storeOld?` <span class="n">(${storeOld} &gt; 14 days)</span>`:''}</button></div>
     ${delStoreOpen?inStoreHTML(store):''}
     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px">
@@ -7088,7 +7126,7 @@ function renderDeliveries(app){
       <tbody>
         ${DEL_VEH.map((v,i)=>{const vc=tagged.filter(o=>o.delVeh===v.k&&slotIn(o,wk)).length;return `<tr${i===1?' style="border-top:3px double var(--border)"':''}>
           <td class="dveh">${v.n}<span class="dsub">${v.cat}${v.sub?' · '+v.sub:''} · ${vc} job${vc!==1?'s':''}</span></td>
-          ${DEL_DAYS.map(d=>{const cj=tagged.filter(o=>o.delVeh===v.k&&slotIn(o,wk,d)).sort(woCmp);const ppk0=podKey(v.k,d,wk);const ppk=(DB.pod&&DB.pod[ppk0]&&(DB.pod[ppk0].photos||[]).length)?ppk0:null;const allDlv=cj.length&&cj.every(o=>dStage(o)==='deliv');const hol=!isWorkDay(addDayISO(wk,DEL_DAYS.indexOf(d)))&&d!=='Sat';return `<td class="dcell${allDlv?' cell-done':''}${hol?' hol':''}" data-cell="${v.k}|${d}|${wk}">${allDlv?'<div style="font-size:10px;font-weight:800;color:#0d6e46;padding:2px 0">✓ COMPLETE DELIVERY</div>':''}${cj.map(o=>dchip(o,true)).join('')}${cj.length&&cj.some(o=>!o.delDispAt&&!o.delDelivAt&&!o.delDone)?`<button class="cell-disp" data-cdisp="${v.k}|${d}|${wk}" title="Mark this whole van load as dispatched (left the factory) — runs the part-load check first">🚚→ Dispatch van</button>`:''}${ppk?`<button class="cell-disp" style="background:#eef6ff;border-color:#9cbce8;color:#1450a8" data-pod="${escA(ppk)}" title="Proof-of-delivery photos taken by the driver on site">📷 ${DB.pod[ppk].photos.length} proof photo${DB.pod[ppk].photos.length!==1?'s':''}</button>`:''}${delSel.size?`<button class="cell-disp" style="background:#eaf2ff;border-color:#1a56db;color:#1a56db" data-place="${v.k}|${d}|${wk}">⤵ Place ${delSel.size} here</button>`:''}</td>`;}).join('')}
+          ${DEL_DAYS.map(d=>{const cj=tagged.filter(o=>o.delVeh===v.k&&slotIn(o,wk,d)).sort(woCmp);const ppk0=podKey(v.k,d,wk);const ppk=(DB.pod&&DB.pod[ppk0]&&(DB.pod[ppk0].photos||[]).length)?ppk0:null;const allDlv=cj.length&&cj.every(o=>dStage(o)==='deliv');const hol=!isWorkDay(addDayISO(wk,DEL_DAYS.indexOf(d)))&&d!=='Sat';return `<td class="dcell${allDlv?' cell-done':''}${hol?' hol':''}" data-cell="${v.k}|${d}|${wk}">${allDlv?'<div style="font-size:10px;font-weight:800;color:#0d6e46;padding:2px 0">✓ COMPLETE DELIVERY</div>':''}${cj.map(o=>dcfOk(o)?dchip(o,true):dchip(o,true).replace('class="dchip','class="dchip dcf-off')).join('')}${cj.length&&cj.some(o=>!o.delDispAt&&!o.delDelivAt&&!o.delDone)?`<button class="cell-disp" data-cdisp="${v.k}|${d}|${wk}" title="Mark this whole van load as dispatched (left the factory) — runs the part-load check first">🚚→ Dispatch van</button>`:''}${ppk?`<button class="cell-disp" style="background:#eef6ff;border-color:#9cbce8;color:#1450a8" data-pod="${escA(ppk)}" title="Proof-of-delivery photos taken by the driver on site">📷 ${DB.pod[ppk].photos.length} proof photo${DB.pod[ppk].photos.length!==1?'s':''}</button>`:''}${delSel.size?`<button class="cell-disp" style="background:#eaf2ff;border-color:#1a56db;color:#1a56db" data-place="${v.k}|${d}|${wk}">⤵ Place ${delSel.size} here</button>`:''}</td>`;}).join('')}
         </tr>`;}).join('')}
         <tr><td class="dveh">Notes</td>${DEL_DAYS.map((d,i)=>{const dt=addDayISO(wk,i);return `<td style="border:1px solid var(--border);padding:4px;background:#fffef7"><input class="dnote" data-dnote="${dt}" value="${escA(delNoteGet(dt))}" placeholder="${d} ${dShort(dt)} note…"></td>`;}).join('')}</tr>
         <tr><td class="dtot" style="text-align:left">Value / day<br><span style="color:#0d6e46">Week: €${Math.round(wkTot).toLocaleString()}</span></td>
@@ -7109,6 +7147,11 @@ function renderDeliveries(app){
     const st=document.getElementById('del-tabs'),on=st&&st.querySelector('.del-tab.on');
     if(st&&on){const a=st.getBoundingClientRect(),b=on.getBoundingClientRect();if(b.left<a.left||b.right>a.right)st.scrollLeft+=(b.left-a.left)-(a.width-b.width)/2;}}catch(e){}
   document.querySelectorAll('[data-deltab]').forEach(b=>b.onclick=()=>{delTab=b.dataset.deltab;render();}); /*dates: week tabs*/
+  /*v-dcf: picking a customer / project drops ticked jobs that are now hidden from the pool, so a drag or ⤵ Place never takes an unseen job along
+    (ticked jobs already on a van stay ticked — they are still on screen, greyed)*/
+  const dcfGo=(k,lbl)=>{dcfSet(k,lbl);const f=dcfCur(),J=dcfJob();if(f)[...delSel].forEach(w=>{const o=findDel(w);if(o&&!o.delDay&&!dcfHit(f,J(o)))delSel.delete(w);});render();};
+  const dcfS=document.getElementById('dcf-sel');if(dcfS)dcfS.onchange=function(){const op=this.options[this.selectedIndex];dcfGo(this.value,op?op.textContent.replace(/ \(\d+\)$/,''):'');};
+  const dcfA=document.getElementById('dcf-all');if(dcfA)dcfA.onclick=()=>dcfGo('','');
   /*v-deliv D3: drop cards on a week tab (PC) = move their dates to that week (asks why). Later → the week picker at +4.
     Round 4: the sticky week bar is a drop target too (◀ Prev = the week before the shown one, Next ▶ = the week after, the label =
     the shown week), so a booked card low in the van grid can go to another week without scrolling up. Past weeks never light up. */

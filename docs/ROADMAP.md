@@ -240,4 +240,9 @@ Garry's words: "the work order due date are not prominent in all screens. the wo
 Garry's words: "this is messy they are all over lapping, you can drop the value and just put a total down the bottom. add the dues date to these cards".
 - **D4** — pool cards must never overlap: WO, Floor and Unit badges fit inside the card (wrap or shrink), nothing spills into the next card, at PC and phone width. Drop the € value from each card; show the group total value once at the bottom of the group. Add the due date to every card in the DD1 style (red overdue, amber this week). Same fix on the cards in the week grids if they share the layout. Part of the Deliveries usability pass (D1–D3), before Thursday's release.
 
-
+### Deliveries page: Customer / project filter (12 Nov 2026, Garry)
+Garry: "the deliveries page need a filter by customer/project option also".
+- **Release:** goes out WITH the Deliveries weeks release (Job A), not as a separate release on the live page. (Garry, 12 Nov)
+- **Van grid:** when a customer / project is picked, other customers' jobs already booked on a van stay visible but GREYED, so you
+  still see how full each van is; the To plan pool and In store show only that customer / project. (Garry, 12 Nov)
+- Plan + progress: docs/PLAN-dates-deliveries.md, addendum A12.

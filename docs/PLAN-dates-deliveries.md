@@ -498,3 +498,30 @@ Garry's decisions
 
 Process notes: the Coder changed the Tester's attack5 F2 expected result (on the lead's call, logged). The Tester should confirm it on
 the Job B merge. No Tester re-attack has been run since the attack5 fixes; that re-attack happens on the Job B merge.
+
+## Addendum, 12 Nov 2026: A12 Customer / project filter on the Deliveries page (Garry, 12 Nov)
+Garry: "the deliveries page need a filter by customer/project option also". His answers (12 Nov):
+**goes out with the Deliveries weeks release** (not a separate release on live), and **other customers' jobs already booked on a van
+stay visible but greyed** (not hidden), so the van loads still look as full as they are.
+
+### Rules (as built)
+- A "Customer / project" drop-down at the top of the Deliveries page, above the week tabs. Entries: **All customers**, then
+  **Projects** (🏗 name — a job belongs to the planner project its Cienapps customer is linked to, the same rule the cutting lists use),
+  then **Customers with no project** (the Cienapps customer name as it stands; case and extra spaces don't make a second entry),
+  and **(no customer)**. Each entry shows how many jobs it has on the page (tagged in any week, plus In store).
+- Picked: the **To plan pool**, **In store** and the **week-tab counts** show only that customer / project. On the **van grid** other
+  jobs stay where they are, greyed. A blue bar says "Showing X only · N other jobs hidden … Prints and exports still show the whole week"
+  with **✕ Show all**.
+- The text search box still works on top of it.
+- Remembered **per device** (like the Cutting Lists project filter) — never saved to the database, never changes a job.
+- Picking a customer un-ticks any ticked **pool** job that is now hidden, so a drag / ⤵ Place never takes an unseen job along.
+  Ticked jobs already on a van stay ticked (they are still on screen, greyed).
+- A remembered customer with no jobs left stays picked, shown with (0) — the page never switches the filter off on its own.
+  A damaged remembered value falls back to All.
+- Projects only come in when the lists switch is on and the projects have loaded; before that every entry is a customer name.
+  A customer pick keeps working either way.
+- Not changed: A3 poster, run sheets and Export Delivery Plan (whole week), Close week, the date engine, the database.
+
+### Build + test
+- Code: `index.html`, functions `dcf*` (tag `/*v-dcf*/`), `renderDeliveries` pool / store / tab counts / grid chips.
+- Test: `tests/dates/c11-deliv-custfilter.test.js` (20 checks at 1366 px and 360 px = 40).
