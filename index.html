@@ -3558,7 +3558,7 @@ function lsMaterialsDlg(pid,after){
         <td><button class="btn btn-g" id="mt-add" style="font-size:12px;padding:4px 10px">＋ Add</button></td></tr></tbody></table><div id="mt-msg" style="font-size:12px;color:#b42318;font-weight:700;margin-top:6px"></div>`;
     const msg=t=>{const e=ov.querySelector('#mt-msg');if(e)e.textContent=t;};
     const fresh=async()=>{try{await lsMatFresh(pid);return true;}catch(e){msg('Could not check the materials list — '+e.message);return false;}}; // check against the database, not this screen's copy
-    ov.querySelectorAll('[data-mts]').forEach(b=>b.onclick=async()=>{const id=b.dataset.mts;if(!LST.m.get(id)||!lsEditOk())return;
+    ov.querySelectorAll('[data-mts]').forEach(b=>b.onclick=async()=>{const id=b.dataset.mts;if(!LST.m.get(id)||!lsMatEditOk())return;
       const name=ov.querySelector('[data-mtn="'+id+'"]').value.trim();if(!name)return msg('A material needs a name.');
       const aliases=ov.querySelector('[data-mta="'+id+'"]').value.split(',').map(s=>s.trim()).filter(Boolean);
       const kind=ov.querySelector('[data-mtk="'+id+'"]').value,active=ov.querySelector('[data-mtv="'+id+'"]').checked;
@@ -3569,7 +3569,7 @@ function lsMaterialsDlg(pid,after){
       if(matKey(m.name)!==matKey(name)&&!aliases.some(a=>matKey(a)===matKey(m.name)))aliases.push(String(m.name).trim()); // renamed: the old name still matches
       lsWrite('project_materials',m,{name,kind,aliases,active})
         .then(()=>{toast('Material saved');draw();}).catch(e=>{draw();msg('Not saved — '+e.message);});});
-    ov.querySelector('#mt-add').onclick=async()=>{if(!lsEditOk())return;const name=ov.querySelector('#mt-new-n').value.trim();if(!name)return msg('Type the material name first.');
+    ov.querySelector('#mt-add').onclick=async()=>{if(!lsMatEditOk())return;const name=ov.querySelector('#mt-new-n').value.trim();if(!name)return msg('Type the material name first.');
       const kind=ov.querySelector('#mt-new-k').value;
       if(!await fresh())return;if(lsMatClash(pid,name,''))return msg('"'+name+'" is already used on this project.');
       lsWrite('project_materials',{id:uid('M'),project_id:pid,name,kind,sort:lsMats(pid,'',true).length}).then(()=>{toast(name+' added');draw();}).catch(e=>msg('Not added — '+e.message));};
@@ -4284,6 +4284,10 @@ function lsProjEdges(pid){ // the standard edging codes plus any already used on
 }
 function lsAutoHidden(r){return !!r&&r.k==='part'&&!(lsNum(r.L)>0||lsNum(r.W)>0)&&!lsEmptyRow(r)&&!!r.matAuto&&String(r.mat||'')===String(r.matAuto);} // a typed Stores row with only the copied default colour (an empty new row still shows it)
 function lsTicked(id){return !!id&&Object.keys(lsView(id).ticks).length>0;} // the saw (or stores) has started: any line ticked
+/* Project materials (Garry 9-11 Nov, B4 / L6): the office, Project Managers, Management, the Production Manager and the Drawing office add and change a project's materials with NO PIN; Saw, Stores, Driver and Floor screens are read-only. */
+const MAT_ED=['pm','office','dash','prod','design'];
+function lsMatEditOk(){if(MAT_ED.includes(ROLE))return true;toast('Materials are read-only on this screen');return false;}
+function lsMatCan(){return MAT_ED.includes(ROLE);}
 function lsHasEditPin(){if(['prod','design'].includes(ROLE))return true;const p=pins(),v=ls.get('wpfEditPin');return !!v&&[p.prod,p.design,p.admin].includes(v);}
 const LS_LOCK_MSG='Saw has started — make a new list for a different number of units';
 /* lsTbc:start */
@@ -4632,7 +4636,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     const flag=why=>{snap();r.mat=n;delete r.matAuto;st.focus=i+'|mat';draw();toast('"'+n+'" is used on this row only and flagged for the Production Manager'+(why?' — '+why:'')+'. They can add it to the project\'s materials.');};
     const ex0=lsMatClash(st.pid,n,'');
     if(ex0&&ex0.active!==false){snap();r.mat=ex0.name;delete r.matAuto;st.focus=i+'|mat';draw();toast('"'+ex0.name+'" is already on the project list — picked');return;}
-    if(!lsHasEditPin()){
+    if(!lsMatCan()){
       const v=prompt('Adding "'+n+'" to the '+pname+' materials needs the Production Manager, Drawing office or Admin PIN.\n\nEnter the PIN — or press Cancel to use "'+n+'" on this row only (it will be flagged for the Production Manager):','');
       const p=pins();if(v===null)return flag('');
       if(![p.prod,p.design,p.admin].includes(v.trim()))return flag('wrong PIN');
@@ -5166,7 +5170,7 @@ function lsMatchDlg(names,pid,done,opt){
   ov.querySelector('#mm-ok').onclick=async()=>{
     const pick=names.map((n,i)=>[n,ov.querySelector('[data-mm="'+i+'"]').value]);
     if(opt.noKeep&&pick.some(([,v])=>!v)){toast('Match or add every material first');return;}
-    if(pick.some(([,v])=>v)&&!lsEditOk())return;
+    if(pick.some(([,v])=>v)&&!lsMatEditOk())return;
     const map={};
     try{
       if(pick.some(([,v])=>v))await lsMatFresh(pid); // check against the database, not this screen's copy
