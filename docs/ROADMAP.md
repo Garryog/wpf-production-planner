@@ -278,3 +278,5 @@ will be going on a delivery and some will be going into a factory stock". Plan +
   later on on a cutting list for a work order. on some projects we want to have a buffer of standard component that we can pull from as
   we make deliveries". Design direction in docs/PLAN-saw-tasks.md.
 
+
+- (12 Nov 2026) **Shipped / Installed / Completed board steps are LIVE** — Garry merged PR #3 (main cf70ab9) and confirmed the live site shows them. Still to do at the next merge of main into the Deliveries / Job B branches: the step drop-down line clashes — keep `storeStamp` and the 11 steps.
