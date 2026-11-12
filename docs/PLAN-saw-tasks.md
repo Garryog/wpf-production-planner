@@ -34,3 +34,25 @@ types of work orders will be going on a delivery and some will be going into a f
 
 ## Database
 A stock list needs one new table (PENDING block in SUPABASE_CHANGES.md with GRANT lines when built). Saw jobs themselves need none.
+
+## Garry's answers (12 Nov, later)
+- **Q1 = (a):** office, Production Manager and PMs can raise a saw job.
+- **Q2 = (a):** a simple stock list first. Garry adds where it must go: "we need to develop a system that will control project
+  component stocks. the component will appear later on on a cutting list for a work order. on some projects we want to have a buffer
+  of standard component that we can pull from as we make deliveries".
+- Q3 (snag "needs cutting" makes the saw job) and Q4 (build order) not answered — ASSUMED the recommendations.
+
+## Project component stock (Garry, 12 Nov) — design direction for the Architect, to plan before the stock list is built
+So the simple list is built in a shape the full system can grow from:
+1. **Stock is per project and per component** (a standard part: description, material, size, edging — the same fields as a cutting-list
+   line), with a quantity on hand and where it is stored.
+2. **In:** a "Bulk stock" saw job, when the saw marks it done, adds its quantities to that project's stock.
+3. **Out:** when a work order's cutting list has a line that matches a stocked component, the list shows "N in stock — take from stock"
+   and the person confirms; that line is then NOT cut again, stores picks it, and the stock goes down. Never taken automatically.
+4. **Buffer:** per project and component a target buffer quantity; when stock falls below it the Production Manager and the PM see
+   "below buffer — raise a stock job" (one tap makes the bulk saw job for the shortfall).
+5. **History:** every in / out with who, when, which work order — so management can see what was made, used and what is left when the
+   project ends (left-over stock report).
+Open questions for Garry when this is planned: how a component is recognised as "the same" (exact match on description + size +
+material, confirmed by a person the first time — recommended); whether stock can be shared between projects (recommended: no, moved
+by hand with a note); who can adjust a count (recommended: stores + office, with a reason).

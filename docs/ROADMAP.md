@@ -267,3 +267,14 @@ Garry: "there are some jobs, a lot of snag orders and bulk project stock compone
 CNC list. They will not have a Cienapps work order most of the time. for these planner work orders we need to be able to generate a task
 for the saw (edger down the line) so they can appear on the saw screen as a cutting list to be done. some of these types of work orders
 will be going on a delivery and some will be going into a factory stock". Plan + 4 open questions: docs/PLAN-saw-tasks.md.
+
+### Garry's answers, 12 Nov 2026 (evening)
+- **Shipped / Installed / Completed board steps:** go live ON THEIR OWN NOW (small release, branch feature/board-shipped-steps, PR to main).
+- **Drawing page:** a job already on the board that goes back to DRAWING stays on the board, flagged. "if the same work order appears
+  in a more advanced step it need to go on capacity board".
+- **FOC:** PMs can tick it too; a reason is required.
+- **Saw jobs:** office, Production Manager and PMs can raise one.
+- **Stock:** simple list first, but: "we need to develop a system that will control project component stocks. the component will appear
+  later on on a cutting list for a work order. on some projects we want to have a buffer of standard component that we can pull from as
+  we make deliveries". Design direction in docs/PLAN-saw-tasks.md.
+

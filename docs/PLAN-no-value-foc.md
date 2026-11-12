@@ -28,3 +28,8 @@ ticked FOC. a report list of FOC wo's needs to be available for management to ke
 
 ## Database
 No new table needed: FOC is stored on the job (like the delivery tick). No SQL.
+
+## Garry's answers (12 Nov, later)
+- **Q1 = (b):** PMs can tick FOC too (office and management as well); management sees who ticked it and when.
+- **Q2 = (a):** a reason is required for FOC (Snag / remedial · Warranty · Goodwill · Sample / showhouse · Other + note).
+- Q3 (value floor) and Q4 (when it goes live) not answered — ASSUMED the recommendations: only blank / €0 counts; its own small release.

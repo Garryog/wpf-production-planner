@@ -36,3 +36,9 @@ Who is drawing it, drawing revisions, customer sign-off, link to the project spe
 ## Risks / tests the Tester must attack
 Old screens open on go-live day (a marker they don't know), re-import of the same file, a job going 1 → 2 → 1, WO-D numbers that later
 become real WO numbers, 2,500 jobs, two PCs importing at once, phone at 360 px.
+
+## Garry's answers (12 Nov, later)
+- **Q1 = (a):** a job already on the Capacity Board that Cienapps moves back to 1. DRAWING stays on the board, flagged.
+  Garry adds: "if the same work order appears in a more advanced step it need to go on capacity board" — i.e. as soon as an import
+  shows a Drawing-page job at step 2 or later it moves onto the Capacity Board (rule 2 above; one job, never a second record).
+- Q2 (amber "due soon — still at drawing") not answered yet — ASSUMED yes, 4 weeks, until Garry says otherwise.
