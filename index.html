@@ -4790,7 +4790,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
         lsProject(n.trim()).then(id=>{keep();st.pid=id;st.pauto=false;st.pmsg=null;edges=lsProjEdges(id);draw();projSet();}).catch(x=>{draw();g('me-err').textContent='Project not added — '+x.message;});return;}
       st.pid=e.target.value;st.pauto=false;if(st.pid)st.pmsg=null;edges=lsProjEdges(st.pid);
       let cl=''; // (L11) a NEW list: a WO of another project is cleared (said why); an existing list keeps its WO, marked "(other project)"
-      if(!ex&&st.pid&&st.wo){const o=DB.orders.find(x=>x.wo===st.wo),k=o&&keyProj(o);if(k&&k!==st.pid){cl=st.wo+' is a '+lsProjName(k)+' job, not '+lsProjName(st.pid)+' — it was taken off this list. Pick one of '+lsProjName(st.pid)+'\'s work orders.';st.wo='';st.jm=null;}}
+      if(!ex&&!woMode&&st.pid&&st.wo){const o=DB.orders.find(x=>x.wo===st.wo),k=o&&keyProj(o); /*list-window release: a window opened for a WO keeps it (there is no WO drop-down to pick another)*/if(k&&k!==st.pid){cl=st.wo+' is a '+lsProjName(k)+' job, not '+lsProjName(st.pid)+' — it was taken off this list. Pick one of '+lsProjName(st.pid)+'\'s work orders.';st.wo='';st.jm=null;}}
       draw();if(cl){const er=g('me-err');if(er)er.textContent=cl;}projSet();};
     // the name boxes keep st up to date as you type: a redraw (picking a colour, adding a row) no longer puts back the old name
     const nm=g('me-name');if(nm)nm.oninput=()=>{st.name=nm.value;};const tn0=g('me-tname');if(tn0)tn0.oninput=()=>{st.tname=tn0.value;};
