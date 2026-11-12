@@ -246,3 +246,8 @@ Garry: "the deliveries page need a filter by customer/project option also".
 - **Van grid:** when a customer / project is picked, other customers' jobs already booked on a van stay visible but GREYED, so you
   still see how full each van is; the To plan pool and In store show only that customer / project. (Garry, 12 Nov)
 - Plan + progress: docs/PLAN-dates-deliveries.md, addendum A12.
+
+### Project Managers page: Project / Location / Title filters + search (12 Nov 2026, Garry)
+Garry: "The project manager page needs to have project filtering by locations and title also a search function".
+- Location = **Floor / block** (unit numbers found through the search). Filters: **Project, Location, Title, Search box**. (Garry, 12 Nov)
+- Goes out with the Deliveries release. Plan: docs/PLAN-dates-deliveries.md, addendum A13.

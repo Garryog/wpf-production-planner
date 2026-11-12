@@ -284,6 +284,10 @@ details.lti-other{margin-bottom:14px}details.lti-other>summary{cursor:pointer;fo
 .dcf-l{font-size:13px;font-weight:800;color:#14335c}.dcf select{flex:1 1 240px;min-width:0;max-width:100%;padding:7px 9px;border:1px solid var(--b2);border-radius:6px;font-size:14px;background:#fff}
 .dcf-n{font-size:12px;color:var(--t2);overflow-wrap:anywhere;min-width:0}.dcf-x{font-size:12px;padding:5px 10px;border:1px solid #1a56db;color:#1a56db;background:#fff;border-radius:6px;cursor:pointer}
 .dchip.dcf-off{opacity:.35;filter:grayscale(1)}
+.pmf{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:flex-end;margin:0 0 14px;padding:8px 10px;border:1px solid var(--b2);border-radius:8px;background:#fff}
+.pmf-c{display:flex;flex-direction:column;gap:3px;flex:1 1 200px;min-width:0;font-size:12px;font-weight:700;color:#14335c}
+.pmf-c select,.pmf-c input{padding:8px 10px;border:1px solid var(--b2);border-radius:8px;font-size:14px;min-width:0;max-width:100%;width:100%;background:#fff;font-weight:400}
+.pmf-q{flex:2 1 240px}
 .dsrch{width:100%;max-width:420px;padding:7px 11px;border:1px solid var(--b2);border-radius:6px;font-size:12px;margin-bottom:8px}
 .dsrch:focus{border-color:#7ba7e0}
 .dchip-btns{display:flex;gap:1px;margin-left:auto;flex:0 0 auto}
@@ -6766,21 +6770,54 @@ function renderDash(app){
 
 /* ---------- Project Managers dashboard: deliveries per customer — past, on the road, scheduled, coming up ---------- */
 let pmCust='';
+/*v-pmf (Garry, 12 Nov): "The project manager page needs to have project filtering by locations and title also a search function".
+  Garry's answers: Project (a planner project covers all its Cienapps customer names; a customer with no project is its own entry),
+  Location = Floor / block (+ unit through the search), Title, and a search box (WO, title, floor, unit, customer).
+  All filters are AND-ed, remembered per device, never saved to the database. Works on live jobs and on the delivery archive. */
+const PMF_KEY='wpfPmF';let PMF_MEM=null;
+function pmfGet(){let v='';try{v=localStorage.getItem(PMF_KEY)||'';}catch(e){v='';}if(PMF_MEM!==null)v=PMF_MEM;let o={};try{o=JSON.parse(v||'{}')||{};}catch(e){o={};}
+  const S=x=>typeof x==='string'?x:'';return{k:/^(p:.+|c:.*)$/.test(S(o.k))?o.k:'',kl:S(o.kl),fl:S(o.fl),ti:S(o.ti),q:S(o.q)};}
+function pmfPut(f){const v=JSON.stringify(f);let ok=false;try{localStorage.setItem(PMF_KEY,v);ok=localStorage.getItem(PMF_KEY)===v;}catch(e){ok=false;}PMF_MEM=ok?null:v;}
+function pmfFloorKey(f){const k=String(f==null?'':f).replace(/\s+/g,' ').trim().toUpperCase();return /^(0|00|G|GF|GRD|GROUND|GROUND FLOOR|GROUND FLR|GND)$/.test(k)?'GROUND':k;} // "GF" / "0" / "Ground" are one floor (B0 rule)
+function pmfTitleKey(t){return String(t==null?'':t).replace(/\s+/g,' ').trim().toUpperCase();}
 function renderPM(app){
   const all=delAll();
   const todayISO=todayLocal();
-  // every customer seen on live orders or in the delivery archive
-  const custs=[...new Set([...DB.orders.map(o=>o.customer||''),...Object.values(DB.delArchive||{}).flatMap(a=>a.jobs.map(j=>j.c||''))].filter(Boolean))].sort();
-  const sel=pmCust&&custs.includes(pmCust)?[pmCust]:custs;
+  const F=pmfGet(),J=dcfJob(); // a job (live or archived: {c,f,u,t}) → its project / customer key, as on the Deliveries page
+  if(F.k.startsWith('p:')&&!dcfProjOk()&&V2()&&!LST.loaded&&!renderPM._load){renderPM._load=1;lsLoad().then(()=>{if(LST.loaded)render();else setTimeout(()=>{renderPM._load=0;},30000);}).catch(()=>{setTimeout(()=>{renderPM._load=0;},30000);});}
+  const live=DB.orders,arc=Object.values(DB.delArchive||{}).flatMap(a=>a.jobs||[]);
+  const nv=o=>({wo:o.wo,c:o.customer!=null?o.customer:o.c,f:o.floor!=null?o.floor:o.f,u:o.unit!=null?o.unit:o.u,t:o.title!=null?o.title:o.t});
+  const qq=F.q.replace(/\s+/g,' ').trim().toLowerCase();
+  const okK=x=>!F.k||dcfHit({k:F.k},J({customer:x.c})),okF=x=>!F.fl||pmfFloorKey(x.f)===F.fl,okT=x=>!F.ti||pmfTitleKey(x.t)===F.ti;
+  const okQ=x=>!qq||[x.wo,x.t,x.f,x.u,x.c].map(v=>String(v==null?'':v).replace(/\s+/g,' ').toLowerCase()).join(' | ').includes(qq);
+  const pmOk=o=>{const x=nv(o);return okK(x)&&okF(x)&&okT(x)&&okQ(x);};
+  // the choices: each list only offers what is possible with the OTHER filters (so a pick never leads to an empty page)
+  const pool=[...live,...arc].map(nv);
+  const kOpts=new Map(),fOpts=new Map(),tOpts=new Map();
+  pool.forEach(x=>{if(!String(x.c||'').trim())return;const j=J({customer:x.c}),k=j.p?'p:'+j.p:j.c;
+    if(okF(x)&&okT(x)&&okQ(x)){if(!kOpts.has(k))kOpts.set(k,{k,l:dcfLabelFor(k,String(x.c).replace(/\s+/g,' ').trim()),n:new Set()});kOpts.get(k).n.add(x.wo);}
+    if(okK(x)&&okT(x)&&okQ(x)){const fk=pmfFloorKey(x.f);if(fk){if(!fOpts.has(fk))fOpts.set(fk,{k:fk,l:fk==='GROUND'?'Ground (GF / 0)':String(x.f).replace(/\s+/g,' ').trim(),n:new Set()});fOpts.get(fk).n.add(x.wo);}}
+    if(okK(x)&&okF(x)&&okQ(x)){const tk=pmfTitleKey(x.t);if(tk){if(!tOpts.has(tk))tOpts.set(tk,{k:tk,l:String(x.t).replace(/\s+/g,' ').trim(),n:new Set()});tOpts.get(tk).n.add(x.wo);}}});
+  if(F.k&&!kOpts.has(F.k))kOpts.set(F.k,{k:F.k,l:(F.k.startsWith('p:')&&dcfLabelFor(F.k,''))||F.kl||'(gone)',n:new Set()});
+  if(F.fl&&!fOpts.has(F.fl))fOpts.set(F.fl,{k:F.fl,l:F.fl,n:new Set()});
+  if(F.ti&&!tOpts.has(F.ti))tOpts.set(F.ti,{k:F.ti,l:F.ti,n:new Set()});
+  const nat=(a,b)=>a.l.replace(/^🏗 /,'').localeCompare(b.l.replace(/^🏗 /,''),'en',{numeric:true,sensitivity:'base'});
+  const kA=[...kOpts.values()].sort(nat),fA=[...fOpts.values()].sort(nat),tA=[...tOpts.values()].sort(nat);
+  const opt=(x,cur)=>`<option value="${escA(x.k)}"${x.k===cur?' selected':''}>${escA(x.l.length>70?x.l.slice(0,68)+'…':x.l)} (${x.n.size})</option>`;
+  const kP=kA.filter(x=>x.k.startsWith('p:')),kC=kA.filter(x=>!x.k.startsWith('p:'));
+  const anyF=!!(F.k||F.fl||F.ti||qq);
+  // every customer seen on live orders or in the delivery archive, narrowed by the filters
+  const custs=[...new Set([...live.filter(pmOk).map(o=>o.customer||''),...arc.filter(pmOk).map(j=>j.c||'')].filter(Boolean))].sort();
+  const sel=custs;
   const row=(cells)=>`<div class="dsh-row">${cells}</div>`;
   const stageLbl=o=>{const s=dStage(o);return s?dStageLbl[s]+(dStageTime(o)?' '+dStageTime(o):''):'PLANNED';};
   const block=c=>{
-    const mine=all.filter(o=>(o.customer||'')===c);
+    const mine=all.filter(o=>(o.customer||'')===c&&pmOk(o));
     const sched=mine.filter(o=>o.delDay&&dStage(o)!=='deliv').sort((a,b)=>slotDate(a).localeCompare(slotDate(b))); /*dates: by real date, any week*/
     const delivWk=mine.filter(o=>dStage(o)==='deliv').sort((a,b)=>String(b.delDelivAt||'').localeCompare(String(a.delDelivAt||'')));
-    const past=Object.values(DB.delArchive||{}).flatMap(a=>a.jobs.filter(j=>(j.c||'')===c&&j.vAt).map(j=>({...j,_at:j.vAt})))
+    const past=Object.values(DB.delArchive||{}).flatMap(a=>a.jobs.filter(j=>(j.c||'')===c&&j.vAt&&pmOk(j)).map(j=>({...j,_at:j.vAt})))
       .sort((a,b)=>String(b._at).localeCompare(String(a._at))).slice(0,15);
-    const coming=DB.orders.filter(o=>(o.customer||'')===c&&!o.delDay&&!o.delDone&&!isShipped(o)&&!isOnHold(o)&&o.dueDate&&o.dueDate>=todayISO)
+    const coming=DB.orders.filter(o=>(o.customer||'')===c&&pmOk(o)&&!o.delDay&&!o.delDone&&!isShipped(o)&&!isOnHold(o)&&o.dueDate&&o.dueDate>=todayISO)
       .sort((a,b)=>a.dueDate.localeCompare(b.dueDate)).slice(0,12);
     if(!sched.length&&!delivWk.length&&!past.length&&!coming.length)return'';
         return `<div class="dsh-p" style="margin-bottom:14px">
@@ -6794,16 +6831,28 @@ function renderPM(app){
   app.innerHTML=`<div class="dsh">
     <div style="display:flex;gap:12px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
       <h1 style="font-size:26px;color:#14335c;margin:0">🏗 Project Managers — Deliveries by customer</h1>
-      <select id="pm-cust" style="padding:8px 10px;border:1px solid var(--b2);border-radius:8px;font-size:14px;max-width:260px">
-        <option value="">All customers</option>
-        ${custs.map(c=>`<option${c===pmCust?' selected':''}>${escA(c)}</option>`).join('')}
-      </select>
     </div>
-    ${sel.map(block).join('')||'<div class="flr-none">Nothing to show yet.</div>'}
+    <div class="pmf${anyF?' dcf-on':''}" id="pmf">
+      <label class="pmf-c"><span>Project</span><select id="pm-cust" aria-label="Project or customer"><option value="">All projects</option>${kP.length?`<optgroup label="Projects">${kP.map(x=>opt(x,F.k)).join('')}</optgroup>`:''}${kC.length?`<optgroup label="${kP.length?'Customers with no project':'Customers'}">${kC.map(x=>opt(x,F.k)).join('')}</optgroup>`:''}</select></label>
+      <label class="pmf-c"><span>Location (floor / block)</span><select id="pm-floor" aria-label="Floor or block"><option value="">All locations</option>${fA.map(x=>opt(x,F.fl)).join('')}</select></label>
+      <label class="pmf-c"><span>Title</span><select id="pm-title" aria-label="Title"><option value="">All titles</option>${tA.map(x=>opt(x,F.ti)).join('')}</select></label>
+      <label class="pmf-c pmf-q"><span>Search</span><input id="pm-q" type="search" placeholder="🔍 WO, title, floor, unit, customer…" value="${escA(renderPM._qf&&renderPM._qv!=null?renderPM._qv:F.q)}" autocomplete="off"></label>
+      ${anyF?`<button class="dcf-x" id="pm-clear">✕ Clear filters</button>`:''}
+      ${F.k.startsWith('p:')&&!dcfProjOk()?`<div class="dcf-n" style="flex-basis:100%;color:#b42318;font-weight:700">Projects are ${V2()?'still loading':'off (the cutting-lists switch is off)'} — pick the customer instead.</div>`:''}
+    </div>
+    ${sel.map(block).join('')||`<div class="flr-none">${anyF?'Nothing matches these filters. <button class="dcf-x" id="pm-clear2">✕ Clear filters</button>':'Nothing to show yet.'}</div>`}
     <div class="flr-ft">Live — refreshes automatically · Last update ${hhmm(new Date().toISOString())}</div>
   </div>`;
   bindSiteOk(app); /*dates phase 2*/
-  const pc=document.getElementById('pm-cust');if(pc)pc.onchange=()=>{pmCust=pc.value;render();};
+  /*v-pmf*/const set=ch=>{const f=Object.assign(pmfGet(),ch);pmfPut(f);render();};
+  const pc=document.getElementById('pm-cust');if(pc)pc.onchange=()=>{const op=pc.options[pc.selectedIndex];set({k:pc.value,kl:op?op.textContent.replace(/ \(\d+\)$/,''):''});};
+  const pf=document.getElementById('pm-floor');if(pf)pf.onchange=()=>set({fl:pf.value});
+  const pt=document.getElementById('pm-title');if(pt)pt.onchange=()=>set({ti:pt.value});
+  [document.getElementById('pm-clear'),document.getElementById('pm-clear2')].forEach(b=>{if(b)b.onclick=()=>{renderPM._qv=null;renderPM._qf=0;set({k:'',kl:'',fl:'',ti:'',q:''});};});
+  const pq=document.getElementById('pm-q');
+  if(pq){if(renderPM._qf){pq.focus();try{const n=pq.value.length;pq.setSelectionRange(n,n);}catch(e){}}
+    pq.onfocus=()=>{renderPM._qf=1;};pq.onblur=()=>{setTimeout(()=>{if(document.activeElement!==document.getElementById('pm-q'))renderPM._qf=0;},0);};
+    pq.oninput=()=>{renderPM._qv=pq.value;clearTimeout(renderPM._qt);renderPM._qt=setTimeout(()=>{renderPM._qf=1;set({q:pq.value});},250);};}
 }
 
 /* ---------- Factory floor screen: today + tomorrow's loads, big type, auto-refresh ---------- */

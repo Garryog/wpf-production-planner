@@ -525,3 +525,23 @@ stay visible but greyed** (not hidden), so the van loads still look as full as t
 ### Build + test
 - Code: `index.html`, functions `dcf*` (tag `/*v-dcf*/`), `renderDeliveries` pool / store / tab counts / grid chips.
 - Test: `tests/dates/c11-deliv-custfilter.test.js` (20 checks at 1366 px and 360 px = 40).
+
+## Addendum, 12 Nov 2026: A13 Project Managers page — Project, Location, Title filters + search (Garry, 12 Nov)
+Garry: "The project manager page needs to have project filtering by locations and title also a search function".
+His answers (12 Nov): **Location = Floor / block** (+ unit numbers through the search); filters wanted: **Project, Location, Title,
+Search box**. Built on this branch so it goes out with the Deliveries release (the PM page is the "Deliveries by customer" page).
+
+### Rules (as built)
+- A filter bar under the heading: **Project** (planner projects 🏗, then customers with no project — same rule as the Deliveries filter),
+  **Location (floor / block)**, **Title**, **Search** (WO, title, floor, unit, customer; narrows as you type, 0.25 s pause).
+- All filters together (AND). Each drop-down only offers values that still give results with the other filters, with a count.
+- Floors: case / spaces ignored; "GF", "0", "G", "Ground", "Ground floor" are one entry "Ground (GF / 0)" (the B0 key rule).
+  Titles: case / spaces ignored.
+- Covers the scheduled, delivered-this-week, past (archive) and coming-up lists.
+- ✕ Clear filters; "Nothing matches these filters" with Clear when empty. Remembered per device, never saved to the database;
+  still works when the browser won't store it. A data refresh while typing keeps the text and the cursor in the box.
+- Merge note for Job B: Job B's renderPM limits a PM to his own projects (pmCustOk); on the merge the two combine (his projects first,
+  then these filters).
+
+### Build + test
+- Code: `index.html` `pmf*` functions and `renderPM` (tag `/*v-pmf*/`). Test: `tests/dates/c12-pm-filters.test.js` (21 checks × 2 widths = 42).
