@@ -5132,7 +5132,7 @@ async function seqStart(pid,redraw){
    office uploads to Cienapps (Qty, Floor, Unit, Product, Name, Description, Price, CHILDREN 1–4 QTY / PRODUCT / NAME / DESCRIPTION /
    PRICE); the header row may be missing; header words and cells may carry trailing spaces. CHILDREN are kept as info on the line,
    never rows of their own. No new SQL: seq_insert / seq_match / seq_remove / seq_restore of the PM sequence block. ---------- */
-const SEQ_UP_F={qty:'qty',quantity:'qty',floor:'floor',unit:'unit',product:'product',name:'name',description:'descr',descr:'descr',price:'price'};
+const SEQ_UP_F={qty:'qty',quantity:'qty',floor:'floor',unit:'unit',product:'product','product code':'product',code:'product',name:'name',description:'descr',descr:'descr',price:'price'}; // (attack12 L8) "Product Code" / "Code" = Product
 const seqUpTxt=v=>v==null?'':String(v instanceof Date?v.toISOString().slice(0,10):v).normalize('NFKC').replace(/\s+/g,' ').trim();
 const seqUpH=v=>seqUpTxt(v).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim(); // a header word: "CHILDREN 1 QTY " → "children 1 qty", "WO #" → "wo"
 const seqUpNum=v=>{const s=seqUpTxt(v);return /^-?[0-9]+(\.[0-9]+)?$/.test(s)?+s:null;};
