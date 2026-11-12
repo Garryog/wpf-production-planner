@@ -738,11 +738,54 @@ function writePend(){
     us.forEach(ud=>ud.forEach(e=>{const k=JSON.stringify(e.p),pre=JSON.stringify(e.p.slice(0,2));if(has.has(k)||has.has(pre))return;has.add(k);d.push({p:e.p,b:e.b,m:valAt(mine,e.p)});}));
     if(d.length)localStorage.setItem(PEND_MY,JSON.stringify({at:Date.now(),d,us,uv:UNSURE.map(x=>USV.get(x)||0)}));
     else localStorage.removeItem(PEND_MY);
-    DB.pendFail=false;
-  }catch(e){DB.pendFail=true;console.warn('Planner: could NOT keep unsaved changes on this device',e&&e.message);
-    // say it once, in plain words: a crash or closed tab now would lose what hasn't reached the database
-    if(!DB.pendWarned){DB.pendWarned=true;toast("This device can't keep a backup copy of your changes (storage full or blocked) — keep this page open until it says Saved",true);}}
+    DB.pendFail=false;DB.pendWhy='';
+  }catch(e){DB.pendFail=true;DB.pendWhy=storeErrKind(e);console.warn('Planner: could NOT keep unsaved changes on this device',e&&e.message);
+    // say it once, in plain words: a crash or closed tab now would lose what hasn't reached the database — and (L10) why, and the fix
+    if(!DB.pendWarned){DB.pendWarned=true;toast(pendWhyMsg()||"This device can't keep a backup copy of your changes (storage full or blocked) — keep this page open until it says Saved",true);}}
   updSaveBar();
+}
+/* L10 (Garry 10 Nov, "says it cant save"): why this device can't keep its copy, and what fills its storage. The planner shares the
+   browser's storage for its web address with the old Quoting tool (once hosted on the same address), whose big copies ("wpf_…")
+   can fill it. Nothing here deletes anything. */
+function storeErrKind(e){const n=String(e&&e.name||''),m=String(e&&e.message||'');
+  return n==='QuotaExceededError'||n==='NS_ERROR_DOM_QUOTA_REACHED'||(e&&(e.code===22||e.code===1014))||/quota|exceeded/i.test(m)?'full':n==='SecurityError'||/denied|insecure|security|disabled/i.test(m)?'blocked':'other';}
+function devStoreGrp(k){return /^wpf_/.test(k)?'quote':/^wpf[A-Z]/.test(k)||/^wpfPending:/.test(k)?'plan':'other';}
+function devStore(){ // every item in this browser's storage for this address, grouped; size = characters × 2 (how browsers count it)
+  const g={plan:{n:0,b:0,keys:[]},quote:{n:0,b:0,keys:[]},other:{n:0,b:0,keys:[]}};let ok=true;
+  try{const L=window.localStorage;for(let i=0;i<L.length;i++){const k=L.key(i);if(k==null)continue;const v=L.getItem(k)||'',b=(k.length+v.length)*2,x=g[devStoreGrp(k)];x.n++;x.b+=b;x.keys.push({k,b});}}
+  catch(e){ok=false;}
+  Object.values(g).forEach(x=>x.keys.sort((a,b)=>b.b-a.b));
+  return{ok,g,total:g.plan.b+g.quote.b+g.other.b};
+}
+function fmtMB(b){b=+b||0;return b<1048576?(Math.round(b/1024*10)/10)+' KB':(Math.round(b/1048576*100)/100)+' MB';}
+function pendWhyMsg(){
+  if(DB.pendWhy==='full')return "This device's storage for the planner is full — old Quoting-tool copies use "+fmtMB(devStore().g.quote.b)+". Your work still saves to the database while this page is open and online. Fix: Settings → Storage on this device.";
+  if(DB.pendWhy==='blocked')return 'This browser is blocking storage (private window or a browser setting) — use a normal Chrome window.';
+  return '';
+}
+function devStoreHTML(){
+  const s=devStore(),G=[['plan','Planner'],['quote','Old Quoting tool copies (wpf_…)'],['other','Other']];
+  const why=DB.pendFail?'<div style="font-size:13px;font-weight:700;color:#8a5a00;margin-bottom:8px">⚠ '+escA(pendWhyMsg()||'This device could not keep a copy of your changes just now.')+'</div>':'';
+  return '<div class="exp-panel" id="set-store"><div style="font-size:14px;font-weight:600;margin-bottom:6px">💾 Storage on this device</div>'+why
+    +(s.ok?'<table class="lst-tbl" style="max-width:620px"><thead><tr><th>What</th><th style="text-align:right">Items</th><th style="text-align:right">Size</th></tr></thead><tbody>'
+      +G.map(([k,l])=>'<tr data-stg="'+k+'"><td>'+escA(l)+'</td><td style="text-align:right">'+s.g[k].n+'</td><td style="text-align:right">'+fmtMB(s.g[k].b)+'</td></tr>').join('')
+      +'<tr><td><b>Total</b></td><td style="text-align:right">'+(s.g.plan.n+s.g.quote.n+s.g.other.n)+'</td><td style="text-align:right"><b>'+fmtMB(s.total)+'</b></td></tr></tbody></table>'
+      +(s.g.quote.keys.length?'<div style="font-size:12px;color:var(--t3);margin-top:4px">Biggest old Quoting-tool copies: '+s.g.quote.keys.slice(0,4).map(x=>escA(x.k)+' '+fmtMB(x.b)).join(' · ')+'</div>':'')
+      :'<div style="font-size:13px;font-weight:700;color:#8a5a00">This browser is blocking storage (private window or a browser setting) — use a normal Chrome window.</div>')
+    +'<div id="stg-est" style="font-size:12px;color:var(--t3);margin-top:6px">Browser storage for this address: checking…</div>'
+    +'<p style="font-size:12px;color:var(--t2);margin:8px 0">Browsers give each web address about 5 MB for copies like these. If it is full, the planner can\'t keep a safety copy of your unsaved changes on this device (your work still saves to the database while the page is open and online). The old Quoting tool was once on this same address and its copies may still be here. <b>Fix:</b> download a copy of them below and send it to Garry — he will say when they can be removed. <b>Nothing is deleted here.</b></p>'
+    +(s.ok&&s.g.quote.n?'<button class="btn btn-s" id="btn-stg-dl">⬇ Download a copy of the old Quoting-tool copies</button>':'')
+    +'</div>';
+}
+function devStoreBind(){
+  const e=document.getElementById('stg-est');
+  if(e){if(navigator.storage&&navigator.storage.estimate)navigator.storage.estimate().then(r=>{if(document.body.contains(e))e.textContent='Browser storage for this address: '+fmtMB(r.usage)+' used'+(r.quota?' of '+fmtMB(r.quota)+' (all kinds of storage)':'')+'.';}).catch(()=>{e.textContent='Browser storage for this address: not known.';});
+    else e.textContent='Browser storage for this address: not known in this browser.';}
+  const b=document.getElementById('btn-stg-dl');
+  if(b)b.onclick=()=>{const out={};try{const L=window.localStorage;for(let i=0;i<L.length;i++){const k=L.key(i);if(k!=null&&devStoreGrp(k)==='quote')out[k]=L.getItem(k);}}catch(x){toast('Could not read them — '+x.message,true);return;}
+    const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify({copiedAt:new Date().toISOString(),from:location.origin,items:out})],{type:'application/json'}));
+    a.download='Old_Quoting_tool_copies_'+new Date().toISOString().slice(0,10)+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+    toast('Downloaded '+Object.keys(out).length+' old Quoting-tool cop'+(Object.keys(out).length!==1?'ies':'y')+' — nothing was removed ✓');};
 }
 function pendSoon(){clearTimeout(pendT);pendT=setTimeout(writePend,300);}
 function readPend(){try{const t=pendAll();return Object.keys(t).map(k=>({id:k,...t[k]})).filter(s=>Array.isArray(s.d)&&s.d.length).sort((a,b)=>(a.at||0)-(b.at||0));}catch(e){return[];}}
@@ -1279,7 +1322,7 @@ function updSaveBar(){
     ?'⚠ NOT KEPT ON THIS DEVICE — storage is full or blocked, so '+LQ.q.length+' tick'+(LQ.q.length!==1?'s are':' is')+' only on this open page. Keep this page open and in signal until this bar goes.'
     :/switched back/.test(LQ.err)?'⚠ THE LISTS ARE BEING SWITCHED BACK — '+LQ.q.length+' tick'+(LQ.q.length!==1?'s are':' is')+' held on this device and will go into the lists automatically when it finishes. Keep this page open.'
     :'⚠ NOT SENT YET — '+LQ.q.length+' tick'+(LQ.q.length!==1?'s':'')+' waiting for signal. '+(LQ.q.length!==1?'They are':'It is')+' kept on this device and will be sent automatically. Keep this page open.';return;}
-  const kept=DB.pendFail?'This device could NOT keep a copy of your changes (storage full or blocked) — keep this page open and in signal until this bar goes.':'Your changes are kept on this device';
+  const kept=DB.pendFail?'This device could NOT keep a copy of your changes ('+(DB.pendWhy==='full'?'its storage for the planner is full — fix: Settings → Storage on this device':DB.pendWhy==='blocked'?'this browser is blocking storage — use a normal Chrome window':'storage full or blocked')+') — keep this page open and in signal until this bar goes.':'Your changes are kept on this device';
   if(on)b.textContent=DB.remoteBroken
     ?'⚠ NOT SAVING — the planner database came back empty or damaged ('+DB.remoteBroken+'). Nothing is being written over it. '+kept+(DB.pendFail?'':'. Tell the office.')
     :'⚠ NOT SAVED YET — '+(DB.pendFail?kept:'changes are kept on this device and will be sent automatically when the connection is back. Keep this page open.');
@@ -1585,7 +1628,7 @@ function renderSettings(app){
     +'<button class="btn btn-g" id="btn-backup">⬇ Download full backup (JSON)</button>'
     +'<div id="bak-last" style="font-size:13px;font-weight:700;margin-top:12px">Last good backup: checking…</div>'
     +'<div style="font-size:11px;color:var(--t3);margin-top:3px">Automatic: the first office screen each day saves a copy to the database (kept 30 days). Clear Week and other bulk deletes take one first.</div>'
-    +'</div>'+lsPanelHTML()+'</div>';
+    +'</div>'+devStoreHTML()+lsPanelHTML()+'</div>';
 
   // staff roster: edit in place, add, remove
   const uidS=()=>'S'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
@@ -1612,7 +1655,7 @@ function renderSettings(app){
     sched();render();toast(n+' added — tick the jobs they do');
   };
   document.getElementById('st-new')?.addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('st-add').click();});
-  updBakLine();lsBindPanel();
+  updBakLine();lsBindPanel();devStoreBind();
   if(!BAK.busy)lastBackup().then(()=>{BAK.err=BAK.err||'';updBakLine();}).catch(e=>{BAK.err=e.message;updBakLine();});
   document.getElementById('btn-backup')?.addEventListener('click',()=>{
     const data={backedUpAt:new Date().toISOString(),orders:DB.orders,nid:DB.nid,settings:bakSettings()};
