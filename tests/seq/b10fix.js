@@ -29,4 +29,23 @@ async function makeFile(page, aoa, name, csv) {
     window.__upFile = new File([u8], name || 'upload.xlsx'); return u8.length;
   }, { aoa, name, csv: !!csv });
 }
-module.exports = { HDR, pad, houseB, houseC, makeFile };
+// the same file as bytes in node (for a real file chooser)
+async function fileBytes(page, aoa, csv) {
+  const a = await page.evaluate(({ aoa, csv }) => { const ws = XLSX.utils.aoa_to_sheet(aoa); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+    if (csv) return Array.from(new TextEncoder().encode(XLSX.utils.sheet_to_csv(ws)));
+    const bin = XLSX.write(wb, { type: 'binary', bookType: 'xlsx' }); const out = []; for (let i = 0; i < bin.length; i++) out.push(bin.charCodeAt(i) & 255); return out; }, { aoa, csv: !!csv });
+  return Buffer.from(a);
+}
+// press ⬆ Cienapps file and give the file chooser this file
+async function upload(page, aoa, name, sel) {
+  const buf = await fileBytes(page, aoa, /\.csv$/i.test(name || ''));
+  const [fc] = await Promise.all([page.waitForEvent('filechooser', { timeout: 5000 }), page.evaluate(s => document.querySelector(s || '#seq-up').click(), sel || null)]);
+  await fc.setFiles({ name: name || 'upload.xlsx', mimeType: 'application/octet-stream', buffer: buf });
+  await new Promise(r => setTimeout(r, 500));
+}
+// the preview window as text + its numbers
+const preview = page => page.evaluate(() => { const o = document.querySelector('.squ-dlg'); if (!o) return null; const t = o.innerText;
+  const n = re => { const m = re.exec(t); return m ? +m[1] : null; };
+  return { t, add: n(/Will be added \((\d+)\)/), skip: n(/Skipped — already in the sequence \((\d+)\)/), uns: n(/Might already be there \((\d+)\)/), ok: (o.querySelector('#squ-ok') || {}).textContent || '', dis: !!(o.querySelector('#squ-ok') || {}).disabled,
+    start: !!o.querySelector('#squ-start'), startOn: !!(o.querySelector('#squ-start') || {}).checked, err: (o.querySelector('.squ-err') || {}).textContent || '' }; });
+module.exports = { HDR, pad, houseB, houseC, makeFile, fileBytes, upload, preview };
