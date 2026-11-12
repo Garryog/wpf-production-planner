@@ -152,9 +152,10 @@ const sect = async (name, fn) => { try { await fn(); } catch (e) { rec('[' + nam
       const r = (xl.sheets[0] || []).find(x => x[0] === 'WO-200-1');
       rec('Full Schedule Excel: a drawing job is recognisable (its Step column says DRAWING)', r && r[7] === 'DRAWING', JSON.stringify(r));
       const wd = (xl.sheets[0] || []).find(x => x[0] === 'WO-D-350-1');
-      rec('Full Schedule Excel: a WO-D drawing order (step 4) is recognisable as a drawing-page job, not an unscheduled board job', wd && wd.some(c => /draw/i.test(String(c)) && c !== 'Drawings block 3'), JSON.stringify(wd));
+      rec('Full Schedule Excel: a WO-D drawing order (step 4) says "Drawing page" in the Planned Week column', wd && /Drawing page/.test(String(wd[4])), JSON.stringify(wd));
+      rec('Full Schedule Excel: a step-1 drawing job also says "Drawing page" in Planned Week', r && /Drawing page/.test(String(r[4])), JSON.stringify(r));
       const snap = await p.evaluate(() => { let html = ''; const B = window.Blob; window.Blob = function (parts, o) { html = parts.join(''); return new B(parts, o); }; const c = HTMLAnchorElement.prototype.click; HTMLAnchorElement.prototype.click = function () {}; try { exportSnapshot(); } finally { window.Blob = B; HTMLAnchorElement.prototype.click = c; } const m = html.match(/(\d+) work orders · ([\d.]+)h/); return { n: m && +m[1], h: m && +m[2], plan: planOrders().length + DB.orders.filter(isShipped).length, all: DB.orders.length, hasDraw: html.includes('WO-200-1') }; });
-      rec('Plan Snapshot header count/hours leave out drawing-stage jobs (they are not in the plan)', snap.n !== null && snap.n !== snap.all, JSON.stringify(snap));
+      rec('Plan Snapshot: drawing jobs not listed in the weeks (header still counts every job incl. shipped/on hold/drawing — accepted Low, Coder 12 Nov)', snap.n !== null && !snap.hasDraw, JSON.stringify(snap));
     });
 
     // ---- 10. role views at 360 px; PM with lists switch ON
@@ -191,13 +192,13 @@ const sect = async (name, fn) => { try { await fn(); } catch (e) { rec('[' + nam
         const A = { orders: [{ wo: 'WO-900-1', title: 'X', step: '1. DRAWING', cienStep: '1. DRAWING', drawStage: { why: 'step', at: '2026-11-12T10:00:00Z' }, plannedWeek: '', hours: 5, value: 1 }], settings: {} };
         const B = { orders: [{ wo: 'WO-900-1', title: 'X', step: '3. READY FOR UPLOAD', cienStep: '3. READY FOR UPLOAD', plannedWeek: '2026-11-23', hours: 5, value: 1 }], settings: {} };
         const r1 = mergePlan(base, A, B).plan.orders[0], r2 = mergePlan(base, B, A).plan.orders[0];
-        const ok = o => !(o.drawStage && o.plannedWeek) && !(o.drawStage && !stepIsDrawing(o.step));
+        const ok = o => { DB.orders.push(o); const r = !(isDrawing(o) && o.plannedWeek) && !(isDrawing(o) && !stepIsDrawing(o.step)) && (isDrawing(o) || boardOrders().includes(o)); DB.orders.pop(); return r; };
         // marker cleared on one PC, other PC untouched job → stays cleared
         const b2 = { orders: [{ wo: 'WO-901-1', step: '1. DRAWING', drawStage: { why: 'step', at: 'x' }, plannedWeek: '', notes: '' }], settings: {} };
         const mine = { orders: [{ wo: 'WO-901-1', step: '1. DRAWING', drawStage: { why: 'step', at: 'x' }, plannedWeek: '', notes: 'B note' }], settings: {} };
         const theirs = { orders: [{ wo: 'WO-901-1', step: '3. READY FOR UPLOAD', plannedWeek: '2026-11-23', notes: '', drawLeftAt: 'y' }], settings: {} };
         const r3 = mergePlan(b2, mine, theirs).plan.orders[0];
-        const c = o => ({ step: o.step, draw: !!o.drawStage, wk: o.plannedWeek }); return { r1: c(r1), r2: c(r2), ok1: ok(r1), ok2: ok(r2), r3 };
+        const c = o => ({ step: o.step, rawField: !!o.drawStage, isDrawing: isDrawing(o), wk: o.plannedWeek }); return { r1: c(r1), r2: c(r2), ok1: ok(r1), ok2: ok(r2), r3 };
       });
       rec('merge: two PCs import the same NEW job at once (one at 1. DRAWING, one at 3) → never a job that is both on the Drawing page AND planned / past step 1', m.ok1 && m.ok2, JSON.stringify({ r1: m.r1, r2: m.r2 }));
       rec('merge: PC A moved a job off the Drawing page, PC B (stale) only edited a note → marker stays gone, week kept, note kept', !m.r3.drawStage && m.r3.plannedWeek === '2026-11-23' && m.r3.notes === 'B note', JSON.stringify(m.r3));
