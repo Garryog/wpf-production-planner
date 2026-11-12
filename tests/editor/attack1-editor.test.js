@@ -104,7 +104,7 @@ const pinUp = p => p.evaluate(() => { window.__conf = []; window.prompt = (m, d)
     const o = await F.dev(browser, S, 'office'), pg = o.page; await pinUp(pg);
     const l = await pg.evaluate(() => lsCreateFromTpl('TE', ['WO-2'], 'House 2', 'Ann').then(x => x.id));
     const before = JSON.stringify(live(S, l).map(x => [x.part, x.qty, x.length_mm]));
-    await pg.evaluate(async () => { await lsPoll(); openListEditor('TE'); });
+    await pg.evaluate(async () => { await lsPoll(); localStorage.setItem('wpfEditPin', pins().design); openListEditor('TE'); }); // (attack2 F5, Garry Q3) editing a template: Drawing office / Admin only — the Production Manager PIN no longer opens it
     await pg.evaluate(set('0|qty', '9')); await pg.evaluate(set('2|L', '1500'));
     await pg.evaluate(() => document.getElementById('me-save').click());
     await wait(() => D.find(S.db, 'lists', 'TE').rev === 2);
