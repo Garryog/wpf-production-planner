@@ -383,6 +383,7 @@ details.lti-other{margin-bottom:14px}details.lti-other>summary{cursor:pointer;fo
 .dsh-ph{color:#fff;font-size:13px;font-weight:800;padding:8px 12px}
 .dsh-row{display:flex;gap:8px;align-items:center;padding:6px 12px;border-bottom:1px solid #eef1f5;font-size:13px}
 .dsh-row:last-child{border-bottom:none}
+@media(max-width:699px){.dsh-row.pm-lr{flex-wrap:wrap}.dsh-row.pm-lr>.pm-ls{flex:1 0 100%}.dsh-row.pm-lr>.dsh-x{white-space:normal}} /* PM screen, phone: the cutting-list status goes on its own line under the row */
 .dsh-row>b{font-family:monospace;white-space:nowrap;color:#14335c}
 .dsh-t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dsh-c{color:var(--t3);font-size:12px;white-space:nowrap;max-width:140px;overflow:hidden;text-overflow:ellipsis}
@@ -3605,14 +3606,14 @@ function lsHomeLists(){
 }
 function lsHomeHTML(){
   const ls0=lsHomeLists(),grp=new Map(),woN=new Map(); // woN: live lists per work order (list-window: a WO with two live lists is flagged)
-  lsCache().all.forEach(l=>{if(l.archived||l.tpl)return;new Set(l.wos||[]).forEach(w=>woN.set(w,(woN.get(w)||0)+1));});
+  lsCache().all.forEach(l=>{if(l.archived||l.tpl)return;new Set((l.wos||[]).map(woKey)).forEach(w=>{if(w)woN.set(w,(woN.get(w)||0)+1);});}); // WO numbers compared trimmed, any case
   ls0.forEach(l=>{const k=l.pid||'';if(!grp.has(k))grp.set(k,[]);grp.get(k).push(l);});
   if(LH.proj&&!grp.has(LH.proj))grp.set(LH.proj,[]);
   const keys=[...grp.keys()].sort((a,b)=>(a?lsProjName(a):'~').localeCompare(b?lsProjName(b):'~'));
   const sel=(id,v,opts)=>`<select id="${id}" style="${LS_INP};max-width:100%;min-width:0">${opts.map(([k,t])=>`<option value="${escA(k)}"${k===v?' selected':''}>${escA(t)}</option>`).join('')}</select>`;
   const prog=(l,m)=>{const n=m==='saw'?l.saw:l.fit;if(!n)return(m==='saw'?l.noCut:l.noFit)?'n/a':'—';if(listDone(l.id)[m])return'✓';const t=Object.values(rowTicks(l.id)).filter(x=>x.m===m).length;return t+'/'+n;};
   const row=l=>{const sup=lsSupersededBy(l);const[st,col]=sup?['Superseded (view only)','#8e99ab']:LS_STATE[lsState(l)];return `<tr data-lhrow="${escA(l.id)}"><td><b>${escA(l.name)}</b>${sup?`<div class="lh-sup" style="font-size:11px;color:#5b6b82">replaced by "${escA(sup.name)}"</div>`:''}${l.tpl?' <span class="lst-chip" style="background:#efe7ff;color:#5b21b6">TEMPLATE'+(l.typeName?' · '+escA(l.typeName):'')+'</span>':''}</td>
-    <td>${escA(LS_KINDS[l.ltype]||l.ltype||'')}${l.templateId?`<div style="font-size:11px;color:#5b21b6">${escA(lsTplInfo(l))}</div>`:''}</td><td>${(l.wos||[]).map(w=>woChip(w)+(!l.archived&&!l.tpl&&woN.get(w)>1?`<span class="lst-chip lh-two" style="background:#fdecea;color:#a31515" title="More than one live cutting list on this work order — check the saw is not cutting it twice">⚠ ${+woN.get(w)} lists on ${escA(w)}</span>`:'')).join('')||'<span style="color:var(--t3)">—</span>'}</td>${lsFuTds(l)}
+    <td>${escA(LS_KINDS[l.ltype]||l.ltype||'')}${l.templateId?`<div style="font-size:11px;color:#5b21b6">${escA(lsTplInfo(l))}</div>`:''}</td><td>${(l.wos||[]).map(w=>woChip(w)+(!l.archived&&!l.tpl&&woN.get(woKey(w))>1?`<span class="lst-chip lh-two" style="background:#fdecea;color:#a31515" title="More than one live cutting list on this work order — check the saw is not cutting it twice">⚠ ${+woN.get(woKey(w))} lists on ${escA(w)}</span>`:'')).join('')||'<span style="color:var(--t3)">—</span>'}</td>${lsFuTds(l)}
     <td>${(+l.rev||1)>1?`<span class="lst-chip" style="background:#fff4d6;color:#7a5200">Rev ${+l.rev}</span>`:'Rev 1'}</td><td><span style="color:${col};font-weight:700">${st}</span>${!l.archived&&!sup?'<div>'+(lsChkOn()&&l.tpl&&l.checkReq&&!l.checkedAt?'<span class="chk-wait">Not checked</span>':lsCheckChip(l))+'</div>':''}${(t=>t.length?'<div>'+lsTbcChip(t)+'</div>':'')(l.archived?[]:lsTbc(lsView(l.id).rows))}</td><td>🪚 ${prog(l,'saw')}</td><td>🧰 ${prog(l,'fit')}</td>
     <td class="lh-act">${!l.archived&&!sup&&lsChkOn()&&l.checkReq&&!l.checkedAt?`<button class="btn btn-g" data-lhchk="${escA(l.id)}" style="padding:2px 8px;font-size:11px" title="Drawing office / Production Manager / Admin PIN — the saw sees the list once it is checked">✓ Check</button> `:''}${sup||l.tpl&&!lsTplSaveOk()?'':`<button class="btn btn-s" data-lhedit="${escA(l.id)}" style="padding:2px 8px;font-size:11px">✎ Edit</button> `}<button class="btn btn-s" data-lhview="${escA(l.id)}" style="padding:2px 8px;font-size:11px">View</button> <button class="btn btn-s" data-lhcopy="${escA(l.id)}" style="padding:2px 8px;font-size:11px" title="Start a NEW list from this one's rows — pick the work order and change anything. This list is not changed">⧉ Copy</button>${l.archived||!lsTplSaveOk()?'':` <button class="btn btn-s" data-lhastpl="${escA(l.id)}" style="padding:2px 8px;font-size:11px" title="Save this list as a template of the project (ticks are not copied)">📐 Save as template</button>`}${l.tpl?` <button class="btn btn-s" data-lhhist="${escA(l.id)}" style="padding:2px 8px;font-size:11px">🕘 History</button>`:''}${!l.tpl&&!l.archived&&lsState(l)==='draft'?` <button class="btn btn-s" data-lhsend="${escA(l.id)}" style="padding:2px 8px;font-size:11px">➜ Send to saw</button>`:''}${l.archived||l.tpl&&!lsTplSaveOk()?'':` <button class="btn btn-s" data-lharc="${escA(l.id)}" style="padding:2px 8px;font-size:11px;color:var(--red);border-color:var(--red)">Archive</button>`}</td></tr>`;};
   return `<div class="exp-panel" id="lh">${pFlagsHTML()}
@@ -4417,12 +4418,12 @@ function openListEditor2(listId,presetWo,presetPid,opt){
   let KM=null;const kmap=()=>KM||(KM=keyJobs());
   const jbOn=()=>!ex&&!st.tpl&&!st.newWO;
   const jbLive=wo=>lsCache().all.find(l=>!l.tpl&&!l.archived&&(l.wos||[]).includes(wo));
-  const jbChoose=(wo,how)=>{
+  const jbChoose=(wo,how,pid)=>{ // pid: the WO's own project (another one was picked) — the list moves to it
     const o=DB.orders.find(x=>x.wo===wo);if(!o)return;
     const l=jbLive(wo);
     if(l){if(confirm(wo+' already has a cutting list: "'+l.name+'".\n\nOpen it instead?\n\nOK = open "'+l.name+'" (this new list is closed — nothing in it is saved)\nCancel = stay here (a work order has only one live list)')){ov.remove();openListEditor(l.id);return;}
       st.jb.res={st:'haslist',wo,name:l.name};draw();return;}
-    st.wo=wo;st.jm={wo,how};st.jb.res=null; // (10 Nov) the list name is not pre-filled — a free name; blank = the WO number
+    st.wo=wo;st.jm={wo,how};st.jb.res=null;if(pid){st.pid=pid;st.pauto=true;st.pmsg=null;edges=lsProjEdges(pid);} // (10 Nov) the list name is not pre-filled — a free name; blank = the WO number
     if(!st.pid){const p=lsProjAuto(o.customer).p;if(p){st.pid=p.id;st.pauto=true;edges=lsProjEdges(p.id);}}
     draw();autoProj();
   };
@@ -4476,8 +4477,9 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       else if(st.pid&&!jk.p)warn.push(o.wo+'\'s customer "'+(o.customer||'')+'" is not linked to any project — check it is a '+lsProjName(st.pid)+' job.');
       if(keyTxt(b.floor)||keyTxt(b.unit)){const t=keyOf(jk.p,b.floor,b.unit,'');
         if(keyMatch(t,Object.assign({},jk,{p:jk.p})).r==='different')warn.push(o.wo+' is '+([fuLbl(o),o.title].filter(Boolean).join(' · ')||'(no floor / unit)')+' — the boxes say Floor '+String(b.floor).trim()+' · Unit '+String(b.unit).trim()+'.');}
-      if(warn.length&&!confirm(warn.join('\n\n')+'\n\nUse '+o.wo+' for this list anyway?\n\nOK = use '+o.wo+'\nCancel = go back')){b.res={st:'typedno',wo:o.wo,why:warn.join(' ')};draw();return;}
-      return jbChoose(o.wo,'typed');}
+      const mv=st.pid&&jk.p&&jk.p!==st.pid?jk.p:''; // (round 2 E4) customer = project, always: the list goes with its WO's project
+      if(warn.length&&!confirm(warn.join('\n\n')+'\n\nUse '+o.wo+' for this list anyway?'+(mv?' The list will be filed under project '+(lsProjName(mv)||mv)+' (the WO\'s project).':'')+'\n\nOK = use '+o.wo+(mv?' (project '+(lsProjName(mv)||mv)+')':'')+'\nCancel = go back')){b.res={st:'typedno',wo:o.wo,why:warn.join(' ')};draw();return;}
+      return jbChoose(o.wo,'typed',mv);}
     b.last=keyHouseStr(b.floor,b.unit)||'';
     if(!st.pid){b.res={st:'noproj'};draw();return;}
     const r=keyFind(st.pid,b.floor,b.unit,kmap,b.title);
@@ -4757,11 +4759,12 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     const un=g('me-units');if(un)un.onchange=()=>{keep();st.unitsOn=un.checked||hasUnits();draw();};
     on('me-astpl',()=>{keep();lsSaveAsTpl({pid:st.pid,name:st.name,ltype:st.ltype,tname:st.tname,lines:lsEdLines(R().filter(r=>!lsEmptyRow(r)).map(r=>{const x={...noAutoStores(r)};delete x.lid;return x;}))});});
     on('me-hist',()=>{if(ex)lsTplHistory(ex.id);});
-    on('me-instpl',()=>{keep();st.startOpen=false;insTpl();});
+    const stOff=()=>{st.startOpen=false;const d=g('me-start');if(d)d.open=false;}; // a choice made in "Start from…" closes it (round 2 K1/K2)
+    on('me-instpl',()=>{keep();stOff();insTpl();});
     on('me-jobtog',()=>{keep();st.jobOpen=true;draw();const w=g('me-wo');if(w)w.focus();});
-    on('me-findold',()=>{keep();st.startOpen=false;lsFindDlg(st.pid||'',useOld);});
+    on('me-findold',()=>{keep();stOff();lsFindDlg(st.pid||'',useOld);});
     {const sd=g('me-start');if(sd)sd.ontoggle=()=>{st.startOpen=sd.open;};}
-    on('me-impxl',()=>{keep();const fx=g('me-xlfile');if(fx){fx.value='';fx.click();}});
+    on('me-impxl',()=>{keep();const fx=g('me-xlfile');if(fx){fx.value='';fx.click();}stOff();});
     const xf=g('me-xlfile');if(xf)xf.onchange=()=>{const f=xf.files[0];if(f)impXl(f);};
     ov.querySelectorAll('[data-mecopy]').forEach(b=>b.onclick=()=>copyToNew());
     g('me-nocut').onchange=e=>{keep();st.noCut=e.target.checked;draw();};
@@ -4824,20 +4827,23 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       }catch(e){err('Could not read '+f.name+' — is it an Excel workbook (.xlsx)?');return;}
       if(!sheets.length){err('No cutting list found in '+f.name+' — expected columns: Description | Qty | Length | Width | Material | Edging 1 | Edging 2 | Note.');return;}
       const use=sh=>{
-        // (attack2 F8) the sheet's own WO / Floor / Unit cells name ANOTHER job than this list's: asked once before any row goes in
-        const m0=sh.p.meta||{},o0=st.wo&&DB.orders.find(x=>x.wo===st.wo);
-        if(o0&&(String(m0.wo||'').trim()||keyTxt(m0.floor)||keyTxt(m0.unit))){
-          const woDiff=String(m0.wo||'').trim()&&woKey(woNorm(String(m0.wo).trim()))!==woKey(woNorm(o0.wo)),jk=jobKey(o0);
-          const hDiff=(keyTxt(m0.floor)||keyTxt(m0.unit))&&keyMatch(keyOf(jk.p,m0.floor,m0.unit,''),jk).r==='different';
-          const d=(w,f,u)=>[w,f?'Floor '+f:'',u?'Unit '+u:''].filter(Boolean).join(' · ');
-          if((woDiff||hDiff)&&!confirm('This Excel file says '+d(String(m0.wo||'').trim(),String(m0.floor||'').trim(),String(m0.unit||'').trim())+', but this list is for '+d(o0.wo,fuF(o0),fuU(o0))+'.\n\nPut the rows in anyway?\n\nOK = put them in\nCancel = nothing is added'))return;}
+        // (round 2 E1/E3) the window already has a job and the file's WO or Floor / Unit name another one: asked ONCE before any
+        // row goes in. Cancel = nothing changes; OK = the rows go in, the job stays the window's, the name is not taken from the sheet.
+        // A blank cell in the file never counts as a disagreement.
+        const m0=sh.p.meta||{},fw=String(m0.wo||'').trim();let other=false;
+        if(!st.tpl&&!st.newWO&&st.wo){const o=DB.orders.find(x=>x.wo===st.wo),wk=w=>woKey(woNorm(w));
+          const woDiff=!!fw&&wk(fw)!==wk(st.wo),huDiff=!!o&&keyMatch(keyOf('',m0.floor,m0.unit,''),keyOf('',fuF(o),fuU(o),'')).r==='different';
+          if(woDiff||huDiff){const d=(w,f,u)=>[w,keyTxt(f)?'Floor '+String(f).trim():'',keyTxt(u)?'Unit '+String(u).trim():''].filter(Boolean).join(' · ');
+            if(!confirm('This Excel file says '+d(fw,m0.floor,m0.unit)+', but this list is for '+d(st.wo,o&&fuF(o),o&&fuU(o))+'.\n\nPut its rows into this list anyway?\n\nOK = put the rows in (the list stays on '+st.wo+')\nCancel = nothing changes'))return;
+            other=true;}}
         const add=sh.p.rows.filter(r=>!r.info).map(r=>{const x={...r};delete x.src;delete x.total;delete x.bu;delete x.qtyErr;
           if(x.k==='part'){x.qty=x.qty===''||x.qty==null?'':String(x.qty);x.L=x.L===''?'':String(x.L);x.W=x.W===''?'':String(x.W);}return x;});
         snap();
         const typed=R().some(r=>r.k==='part'&&!lsEmptyRow(r));
         if(typed)R().push(...add);else R().splice(0,R().length,...add);
         if(add.some(r=>r.k==='hdr'&&r.units!=null))st.unitsOn=true;
-        const m=sh.p.meta; // (attack2 F13) the list name is not pre-filled with the sheet name (blank = the WO number)if(!st.carcass&&m.carcass)st.carcass=m.carcass;if(!st.door&&m.door)st.door=m.door;
+        // (attack2 F13) the list name is not pre-filled with the sheet name (blank = the WO number)
+        const m=sh.p.meta;if(!st.carcass&&m.carcass)st.carcass=m.carcass;if(!st.door&&m.door)st.door=m.door;
         // (L1b) a sheet's Floor / Unit / Title / WO cells fill the job boxes of a new list with no WO, then the WO is looked up
         let look=false;if(jbOn()&&!st.wo)['floor','unit','title','wo'].forEach(k=>{const v=String(m[k]||'').trim();if(v&&!String(st.jb[k]||'').trim()){st.jb[k]=v;look=true;}});
         const np=add.filter(r=>r.k==='part').length,nh=add.length-np,nw=sh.p.warn.length;
@@ -4858,11 +4864,11 @@ function openListEditor2(listId,presetWo,presetPid,opt){
   };
   const useOld=(rows,l)=>{ // 🔍 An old list…: its rows come into THIS list (the old list is never changed)
     const add=rows.map(fresh);if(!add.length)return;
-    // list-window step 9: a second "Use these rows" for the same old list asks first — (attack2 F14) only while those rows are still in the list (not after Ctrl+Z took them out)
-    const rs=r=>JSON.stringify([r.k,r.item,r.qty,r.L,r.W,r.mat]),now=new Set(R().map(rs));
-    st.oldUsed=st.oldUsed||{};const was=st.oldUsed[l.id],again=!!was&&was.every(s=>now.has(s));
+    // list-window step 9: a second "Use these rows" for the same old list asks first — only while rows from it are still in the
+    // window (each row brought in carries _old = the old list's id; Undo / deleting them takes the question away). Never saved.
+    const again=R().some(r=>r._old===l.id);
     if(again&&!confirm('The rows of "'+String(l.name||'that list')+'" are already in this list.\n\nAdd them a second time?'))return;
-    st.oldUsed[l.id]=add.map(rs);
+    add.forEach(r=>{r._old=l.id;});
     const inUnits=!add.some(r=>r.k==='hdr'&&r.units!=null)&&(()=>{for(let j=R().length-1;j>=0;j--)if(R()[j].k==='hdr')return R()[j].units!=null;return false;})();
     if(inUnits&&add[0].k!=='hdr')add.unshift({k:'hdr',item:'From "'+String(l.name||'old list')+'"',note:''}); // a plain heading ends the unit block: the quantities stay as they were on the old list (never × units)
     snap();const drop=R().length===1&&lsEmptyRow(R()[0])?1:0,at=drop?0:R().length;
@@ -5145,7 +5151,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       const x=top.querySelector('#pod-x');if(x){e.preventDefault();x.click();}return;}
     e.preventDefault();if(ov.classList.contains('me-dov')){ov.remove();return;}
     const pn=['me-start','me-more'].map(id=>ov.querySelector('#'+id)).find(d=>d&&d.open); /*list-window step 9: Esc closes the little "Start from…" / "More" panel first*/
-    if(pn){pn.open=false;st.startOpen=st.moreOpen=false;const s=pn.querySelector('summary');if(s)s.focus();return;}
+    if(pn){const inP=pn.contains(document.activeElement);pn.open=false;st.startOpen=st.moreOpen=false;if(inP){const s=pn.querySelector('summary');if(s)s.focus();}return;} // the cursor goes to the panel button only if it was in the panel (else it stays in the row)
     closeEd();};
   document.addEventListener('keydown',escH);
   document.querySelectorAll('.pod-ovl.me-dov').forEach(x=>x.remove()); // a "Saved ✓" panel still open: that list is saved — it goes
@@ -7187,7 +7193,7 @@ function renderPM(app){
   // every customer seen on live orders or in the delivery archive
   const custs=[...new Set([...DB.orders.map(o=>o.customer||''),...Object.values(DB.delArchive||{}).flatMap(a=>a.jobs.map(j=>j.c||''))].filter(Boolean))].sort();
   const sel=pmCust&&custs.includes(pmCust)?[pmCust]:custs;
-  const row=(cells)=>`<div class="dsh-row">${cells}</div>`;
+  const row=(cells,cls)=>`<div class="dsh-row${cls||''}">${cells}</div>`;
   const stageLbl=o=>{const s=dStage(o);return s?dStageLbl[s]+(dStageTime(o)?' '+dStageTime(o):''):'PLANNED';};
   const lsTxt=o=>V2()?`<span class="dsh-x pm-ls" style="white-space:normal" title="Cutting lists are made by the Drawing office — shown here for information">${escA(pmListTxt(o.wo))}</span>`:''; // list-window step 7: status only, nothing to do here
   const block=c=>{
@@ -7201,10 +7207,10 @@ function renderPM(app){
     if(!sched.length&&!delivWk.length&&!past.length&&!coming.length)return'';
         return `<div class="dsh-p" style="margin-bottom:14px">
       <div class="dsh-ph" style="background:#14335c;font-size:15px">👤 ${escA(c)} — ${sched.length} scheduled · ${delivWk.length} delivered this week · ${past.length?past.length+' past':'no earlier deliveries'} · ${coming.length} coming up</div>
-      ${sched.length?`<div class="pm-sec">🚚 SCHEDULED THIS WEEK</div>`+sched.map(o=>row(`<b>${escA(o.wo)}</b>${fuHTML(o,'flr-fu','font-size:12px')}<span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-x">${escA(vehLbl(o.delVeh)||'')} ${escA(o.delDay||'')} · ${stageLbl(o)}</span>${lsTxt(o)}`)).join(''):''}
+      ${sched.length?`<div class="pm-sec">🚚 SCHEDULED THIS WEEK</div>`+sched.map(o=>row(`<b>${escA(o.wo)}</b>${fuHTML(o,'flr-fu','font-size:12px')}<span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-x">${escA(vehLbl(o.delVeh)||'')} ${escA(o.delDay||'')} · ${stageLbl(o)}</span>${lsTxt(o)}`,V2()?' pm-lr':'')).join(''):''}
       ${delivWk.length?`<div class="pm-sec" style="color:#0d6e46">✓ DELIVERED THIS WEEK</div>`+delivWk.map(o=>row(`<b>${escA(o.wo)}</b>${fuHTML(o,'flr-fu','font-size:12px')}<span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-x" style="color:#0d6e46">${o.delDelivAt?new Date(o.delDelivAt).toLocaleDateString('en-IE',{weekday:'short',day:'numeric',month:'short'})+' '+dStageTime(o):''}${o.delivBy?' · '+escA(o.delivBy):''}</span>`)).join(''):''}
       ${past.length?`<div class="pm-sec" style="color:var(--t3)">📚 DELIVERED — PAST WEEKS</div>`+past.map(j=>row(`<b>${escA(j.wo)}</b>${fuHTML(j,'flr-fu','font-size:12px')}<span class="dsh-t">${escA(j.t||'')}</span><span class="dsh-x">${new Date(j._at).toLocaleDateString('en-IE',{day:'numeric',month:'short'})}${j.vBy?' · '+escA(j.vBy):''}</span>`)).join(''):''}
-      ${coming.length?`<div class="pm-sec" style="color:#8a6d00">📅 COMING UP — due, not yet on the delivery board</div>`+coming.map(o=>row(`<b>${escA(o.wo)}</b>${fuHTML(o,'flr-fu','font-size:12px')}<span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-x">due ${fmt(o.dueDate)}${o.plannedWeek?' · build '+wkLbl(o.plannedWeek):''}</span>${lsTxt(o)}`)).join(''):''}
+      ${coming.length?`<div class="pm-sec" style="color:#8a6d00">📅 COMING UP — due, not yet on the delivery board</div>`+coming.map(o=>row(`<b>${escA(o.wo)}</b>${fuHTML(o,'flr-fu','font-size:12px')}<span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-x">due ${fmt(o.dueDate)}${o.plannedWeek?' · build '+wkLbl(o.plannedWeek):''}</span>${lsTxt(o)}`,V2()?' pm-lr':'')).join(''):''}
     </div>`;
   };
   app.innerHTML=`<div class="dsh">
@@ -7244,7 +7250,7 @@ function woListStat(wo){ // per side: 'none' (not applicable) | 'unset' (no rows
   const r=woReady(wo);
   const when=m=>{if(po)return(phDone(po,m)||{}).at||'';let t='';ls2.forEach(l=>{const d=listDone(l.id)[m];if(d&&d.at>t)t=d.at;});return t;};
   const m=x=>x==='na'?'none':x;
-  return{saw:m(r.saw),fit:m(r.fit),sawAt:when('saw'),fitAt:when('fit'),lvl:r.lvl,why:r.why};
+  return{saw:m(r.saw),fit:m(r.fit),sawAt:when('saw'),fitAt:when('fit'),lvl:r.lvl,why:r.why,photo:!ls2.length}; // photo: a photo list only (no typed list)
 }
 function sideChipHTML(mode,st,at,big){
   const fs=big?' style="font-size:13px"':'';
@@ -7258,7 +7264,7 @@ function sideChipHTML(mode,st,at,big){
    list status as plain text — no "make a list" prompt, no button, no count. */
 function pmListTxt(wo){const s=woListStat(wo);if(!s)return'📋 no cutting list yet';
   const w={done:' · cut ✓',hold:' · waiting on material',open:' · not cut yet'},f={done:' · picked ✓',hold:' · waiting on stock',open:' · not picked yet'};
-  return'📋 cutting list made'+(w[s.saw]||'')+(f[s.fit]||'');}
+  return'📋 '+(s.photo?'photo list made':'cutting list made')+(w[s.saw]||'')+(f[s.fit]||'');}
 function listStatHTML(wo){
   const s=woListStat(wo);
   if(!s)return`<div class="drv-ls"><span class="ls-none">📋 no cutting list linked</span></div>`;
