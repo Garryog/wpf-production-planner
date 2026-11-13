@@ -4231,18 +4231,27 @@ function keyUnit(s){
   if((m=/^([0-9]+) ?([A-Z]{0,2})$/.exec(x)))return keyZ(m[1])+m[2];
   return keyCode(x);
 }
+// words that are never a block's name ("Apartment Block Apt 111" names no block)
+const KEY_NOTBLK=/^(APARTMENTS?|APTS?|FLATS?|UNITS?|HOUSES?|HSE|PLOTS?|NO|NR|NUMBER|POSITION|POS|TYPE|FLOORS?|FLR|LEVEL|LVL|GF|GROUND|GRD|KITCHENS?|UTILITY|WARDROBES?|BEDROOMS?|BATHROOMS?|ENSUITE|ROOMS?|HALL|ISLAND|DOORS?|PANELS?|WORKTOPS?|BLOCK|BLK|OF|AND|THE|FOR|WO|(APT|UNIT|NO|PLOT)[0-9]+[A-Z]?)$/;
 // floor / unit read from a WO title ("BLOCK T09 APT 12") — only used when the job's own Floor / Unit is blank, and a match
 // that needs them is never certain. "HOUSE TYPE B" is a house type, not a unit.
 function keyTitleBits(title){
   const w=keyTxt(title).split(' ').filter(Boolean),out={floor:'',unit:''};
   const unitTok=t=>/^[0-9]+[A-Z]{0,2}$/.test(t),lvlTok=t=>/^[0-9]+$/.test(t)||/^[0-9]+(ST|ND|RD|TH)$/.test(t)||!!KEY_ORD[t];
+  let used=-1; // the last word already taken as a type / unit value
   for(let i=0;i<w.length;i++){const t=w[i],n=w[i+1]||'';let m;
-    if(t==='TYPE'){i++;continue;}
-    if(!out.floor&&(t==='BLOCK'||t==='BLK')&&n&&n!=='TYPE'){out.floor='BLOCK '+n;i++;continue;}
+    if(t==='TYPE'){i++;used=i;continue;}
+    // (attack3b B1) the block's name is the word after BLOCK unless that word can never be one ("Block Apt 105"); then a single
+    // letter or a number just before it ("B Block Apt 105" = block B) that is not something else's value ("Apt 12 Block Kitchen").
+    // Neither → no block named (so the house is asked about / offered, never silently taken for another block)
+    if(!out.floor&&(t==='BLOCK'||t==='BLK')){const pv=w[i-1]||'';
+      if(n&&!KEY_NOTBLK.test(n)){out.floor='BLOCK '+n;i++;}
+      else if(i-1>used&&/^([A-Z]|[0-9]+)$/.test(pv)&&!KEY_NOTBLK.test(w[i-2]||''))out.floor='BLOCK '+pv;
+      continue;}
     if(!out.floor&&/^(FLOOR|FLR|LEVEL|LVL)$/.test(t)&&lvlTok(n)){out.floor=n;i++;continue;}
     if(!out.floor&&lvlTok(t)&&/^(FLOOR|FLR)$/.test(n)&&!/^[0-9]+$/.test(t)){out.floor=t;i++;continue;}
     if(!out.floor&&(t==='GF'||((t==='GROUND'||t==='GRD')&&/^(FLOOR|FLR)$/.test(n)))){out.floor='0';if(t!=='GF')i++;continue;}
-    if(!out.unit&&/^(APARTMENT|APT|UNIT|HOUSE|HSE|NO|NR|PLOT)$/.test(t)&&unitTok(n)){out.unit=n;i++;continue;}
+    if(!out.unit&&/^(APARTMENT|APT|UNIT|HOUSE|HSE|NO|NR|PLOT)$/.test(t)&&unitTok(n)){out.unit=n;i++;used=i;continue;}
     if(!out.unit&&(m=/^(APT|UNIT|NO|PLOT)([0-9]+[A-Z]?)$/.exec(t))){out.unit=m[2];continue;}
   }
   return out;
