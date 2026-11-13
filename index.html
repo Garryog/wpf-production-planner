@@ -3000,7 +3000,8 @@ async function lsSaveManual(d,by,ex){
     const repl=lsCache().all.find(x=>x.id!==oid&&x.id!==id&&!x.archived&&!x.tpl&&lsReplOf(x.id)===oid); // our own earlier save (reply lost) is not "another screen"
     if(repl)throw new Error(on+' has already been replaced by "'+repl.name+'" on another screen — nothing saved (no second list for '+(d.wo||'this job')+'). Open "'+repl.name+'" from Lists instead.');
   }
-  const lines=lsEdLines(d.rows);lsFlagMats(lines,pid); // headings, unit blocks (qty = total, unit_qty = per unit) and parts
+  try{await lsMatFresh(pid);}catch(e){} // (B2) the project's materials as the database has them now — a rename on another PC since is known before lines are compared (else a renamed line looks changed and its tick is reset)
+  const lines=lsEdLines(d.rows);lines.forEach(ln=>{const m=ln.kind!=='hdr'&&ln.material?lsMatFind(pid,ln.material):null;if(m)ln.material=m.name;});lsFlagMats(lines,pid); // (B2) saved under the current name; headings, unit blocks (qty = total, unit_qty = per unit) and parts
   const mg=ex?lsEditMerge(id,d.rows,lines):{ok:true,kept:0};
   if(!mg.ok)throw new Error('another screen changed this list meanwhile — nothing saved; close and reopen it');
   for(let i=lines.length-1;i>=0;i--)if(lines[i]._drop)lines.splice(i,1);
