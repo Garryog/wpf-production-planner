@@ -33,11 +33,11 @@ const listsPage = async (p, role) => {
       X.F3.seedList(S, 'T1', { wos: [], name: 'Template A', list: { is_template: true, type_name: 'Type A' } });
       const t = await X.dev(browser, S, role), p = t.page; await asks(p);
       await p.evaluate(() => { localStorage.removeItem('wpfEditPin'); document.querySelectorAll('.pod-ovl').forEach(x => x.remove()); });
-      const want = role === 'design' || role === 'admin';
+      const want = role === 'design' || role === 'admin' || role === 'prod'; // Garry 13 Nov (question 12, answer B): the Production Manager too
       const s0 = tplSig(S), n0 = tpls(S).length;
       await p.evaluate(() => openListEditor(null, 'WO-3')); await sleep(900);
       const w = await p.evaluate(() => !!document.getElementById('me-astpl'));
-      rec(role + ': list window from a job — "Save as template" ' + (want ? 'SHOWN (Drawing office / Admin)' : 'not shown'), w === want, String(w));
+      rec(role + ': list window from a job — "Save as template" ' + (want ? 'SHOWN (Drawing office / Production Manager / Admin)' : 'not shown'), w === want, String(w));
       await closeAll(p);
       // Lists page rows (whoever can reach the page)
       await listsPage(p, role);
@@ -45,7 +45,7 @@ const listsPage = async (p, role) => {
       if (lp.page) rec(role + ': Cutting Lists page rows — "📐 Save as template" ' + (want ? 'shown' : 'not shown'), want ? lp.btn > 0 : lp.btn === 0, JSON.stringify(lp));
       // direct call (console / a stale button): with no PIN remembered
       if (!want) {
-        for (const [lbl, pin] of [['the Production Manager PIN 7777', '7777'], ['the PM PIN 6666', '6666'], ['the office PIN 2468', '2468'], ['a blank answer', ''], ['" 8888x"', ' 8888x']]) {
+        for (const [lbl, pin] of [['the PM PIN 6666', '6666'], ['the office PIN 2468', '2468'], ['a blank answer', ''], ['" 8888x"', ' 8888x']]) {
           await p.evaluate(pin => { window.__prompted = []; window.__prompt = pin; try { lsSaveAsTpl({ id: 'L1' }); } catch (e) { window.__e = String(e); } }, pin); await sleep(900);
           const tx = await topTxt(p), asked = await p.evaluate(() => window.__prompted.length);
           rec(role + ': lsSaveAsTpl() called directly + ' + lbl + ' → asked for a PIN and refused (no template box)', asked >= 1 && !/Template name/.test(tx), JSON.stringify({ asked, tx: tx.slice(0, 80) }));
@@ -53,27 +53,37 @@ const listsPage = async (p, role) => {
         }
         rec(role + ': …no template written by any of those', tplSig(S) === s0, tplSig(S));
         rec(role + ': …and no wrong PIN was remembered on the PC', !(await p.evaluate(() => localStorage.getItem('wpfEditPin'))), await p.evaluate(() => localStorage.getItem('wpfEditPin')));
+        // Garry 13 Nov: the Production Manager PIN typed AT THAT MOMENT now opens the box (like Drawing office / Admin) — for that one action only
+        await p.evaluate(() => { window.__prompted = []; window.__prompt = '7777'; try { lsSaveAsTpl({ id: 'L1' }); } catch (e) { window.__e = String(e); } }); await sleep(900);
+        const txp = await topTxt(p), askedp = await p.evaluate(() => window.__prompted.length);
+        rec(role + ': lsSaveAsTpl() called directly + the Production Manager PIN 7777 → asked for a PIN and the template box OPENS (Garry 13 Nov)', askedp === 1 && /Template name/.test(txp), JSON.stringify({ askedp, tx: txp.slice(0, 80) }));
+        await closeAll(p);
+        rec(role + ': …opened and closed without Save → no template written; the typed Production Manager PIN is NOT remembered on the PC', tplSig(S) === s0 && !(await p.evaluate(() => localStorage.getItem('wpfEditPin'))), JSON.stringify([tplSig(S) === s0, await p.evaluate(() => localStorage.getItem('wpfEditPin'))]));
+        await p.evaluate(() => { window.__prompted = []; window.__prompt = null; try { lsSaveAsTpl({ id: 'L1' }); } catch (e) {} }); await sleep(700);
+        rec(role + ': …the very next Save as template asks for the PIN again (Cancel → no box)', (await p.evaluate(() => window.__prompted.length)) === 1 && !/Template name/.test(await topTxt(p)));
+        await closeAll(p);
       }
-      // OTHER routes that make or change a TEMPLATE (Garry Q3: "Drawing office and Admin only, everywhere")
+      // OTHER routes that make or change a TEMPLATE. Was Garry Q3 (12 Nov) "Drawing office and Admin only, everywhere";
+      // Garry 13 Nov (question 12, answer B): the Production Manager too — his screen with no PIN, his PIN typed when asked.
       if (role === 'prod' || role === 'office') {
         // (a) ＋ New template (Lists page, Templates view) — what lh-newtpl runs
         await p.evaluate(() => { window.__prompted = []; window.__prompt = pins().prod; openListEditor(null, '', 'P1', { tpl: true }); }); await sleep(900);
         let te = await ed(p);
         if (te) { await setid(p, 'me-name', 'PM new template'); await fillSaw(p, 0, 'Side', '1', '700', '500', 'MFC White'); await save(p, 2000); }
-        const made = tpls(S).some(l => l.name === 'PM new template');
-        rec('[Q3 "everywhere"] ' + role + (role === 'office' ? ' + Production Manager PIN' : ' (Production Manager screen)') + ': "＋ New template" (Lists → Templates) can NOT make a template', !made, JSON.stringify({ opened: te, asked: await p.evaluate(() => window.__prompted), templates: tpls(S).map(l => l.name) }));
+        const made = tpls(S).some(l => l.name === 'PM new template'), askedN = await p.evaluate(() => window.__prompted.filter(m => /PIN/.test(m)).length);
+        rec('[Garry 13 Nov] ' + role + (role === 'office' ? ' + Production Manager PIN typed when asked' : ' (Production Manager screen, no PIN asked)') + ': "＋ New template" (Lists → Templates) makes a template', made && askedN === (role === 'office' ? 1 : 0), JSON.stringify({ opened: te, asked: await p.evaluate(() => window.__prompted), templates: tpls(S).map(l => l.name) }));
         await closeAll(p);
         // (b) Edit an existing template and save it (changes what every future list starts from)
         const before = tplSig(S);
         await p.evaluate(() => { window.__prompt = (m) => /PIN/.test(m) ? pins().prod : 'changed by PM'; openListEditor('T1'); }); await sleep(1400);
         te = await ed(p);
         if (te) { await setv(p, '0|qty', '99'); await save(p, 2200); }
-        rec('[Q3 "everywhere"] ' + role + (role === 'office' ? ' + Production Manager PIN' : '') + ': editing an existing TEMPLATE and saving it is refused', tplSig(S) === before || !te, JSON.stringify({ opened: te, after: tplSig(S).slice(0, 200) }));
+        rec('[Garry 13 Nov] ' + role + (role === 'office' ? ' + Production Manager PIN' : '') + ': editing an existing TEMPLATE and saving it is allowed — the change (qty 99) reaches the template', te && tplSig(S) !== before && /Side:99/.test(tplSig(S)), JSON.stringify({ opened: te, after: tplSig(S).slice(0, 200) }));
         await closeAll(p);
         // (c) ⧉ Copy from another project (lsCopyDlg) — makes templates
         await p.evaluate(() => { window.__prompted = []; window.__prompt = pins().prod; try { lsCopyDlg('P2'); } catch (e) {} }); await sleep(900);
         const cp = (await topTxt(p));
-        rec('[Q3 "everywhere"] ' + role + (role === 'office' ? ' + Production Manager PIN' : '') + ': "⧉ Copy from another project" (makes templates) does not open', !/Copy/i.test(cp) || /PIN|Drawing office/.test(cp) && !/From project|from another/i.test(cp), cp.slice(0, 160));
+        rec('[Garry 13 Nov] ' + role + (role === 'office' ? ' + Production Manager PIN' : '') + ': "⧉ Copy from another project" (makes templates) opens', /Copy into .* as a template/.test(cp), cp.slice(0, 160));
         await closeAll(p);
         await p.evaluate(() => localStorage.removeItem('wpfEditPin'));
       }
@@ -253,7 +263,8 @@ const listsPage = async (p, role) => {
       rec('Drawing office: "Cutting lists to issue" shown with WO-N1 / WO-N2 in it', /Cutting lists to issue/.test(roleTxt.design) && /WO-N1/.test(roleTxt.design), roleTxt.design.slice(0, 300));
       rec('office (Lists tab): "Cutting lists to issue" shown', /Cutting lists to issue/.test(roleTxt.office), roleTxt.office.slice(0, 200));
       rec('Production Manager (Lists tab): "Cutting lists to issue" shown', /Cutting lists to issue/.test(roleTxt.prod), roleTxt.prod.slice(0, 200));
-      rec('[LOW, wording] saw screen: a job with no list does not say "Tell the Production Manager" (lists are the Drawing office\'s now)', !/Tell the Production Manager/.test(roleTxt.saw) && !/owner[^\n]*Production Manager/i.test(roleTxt.saw), (roleTxt.saw.match(/[^\n]*(Production Manager)[^\n]*/g) || []).slice(0, 3).join(' | '));
+      // Garry 13 Nov: the default list owner the saw is told is "Production Manager, Garry and Drawing office" (a project's own list owner still wins)
+      rec('[LOW, wording] saw screen: a job with no list names the default owner "Production Manager, Garry and Drawing office" (Garry 13 Nov) — and not the old "Tell the Production Manager"', !/Tell the Production Manager/.test(roleTxt.saw) && /owner Production Manager, Garry and Drawing office/.test(roleTxt.saw), (roleTxt.saw.match(/[^\n]*(Production Manager|owner)[^\n]*/g) || []).slice(0, 3).join(' | '));
     }
 
     // ======================= 5. "⚠ 2 lists on WO-…" =======================

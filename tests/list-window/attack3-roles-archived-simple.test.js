@@ -1,5 +1,7 @@
 // Tester attack ROUND 3 (list window, 13 Nov):
 //  A. templates are Drawing office / Admin only EVERYWHERE — ＋ New template, edit, archive, ⧉ Copy from another project —
+//     (UPDATED for Garry 13 Nov, question 12 answer B: the Production Manager too — his screen, or his PIN typed when asked;
+//     a PIN only remembered on the PC still never opens templates)
 //     every role, hidden buttons and the last guard (a direct call, as any other button would make), typed PINs;
 //  B. Save when the list was archived on another screen meanwhile;
 //  C. the SIMPLICITY count: what a person sees in the window opened from a job (1280 px and 360 px).
@@ -20,7 +22,7 @@ const NAME = { office: 'Office', pm: 'PM', prod: 'Production Manager', saw: 'Saw
     for (const role of ['office', 'pm', 'prod', 'saw', 'stores', 'dash', 'design']) {
       const S = X.makeServer(X.v2Row()); seed(S);
       const t = await X.dev(browser, S, role), p = t.page; await asks(p);
-      const allow = role === 'design', R = NAME[role], before = tsnap(S);
+      const allow = role === 'design' || role === 'prod', R = NAME[role], before = tsnap(S);
       // the buttons on the Cutting Lists page, Templates view, project picked
       const home = await p.evaluate(() => { try { LH.kind = 'tpl'; LH.proj = 'P1'; LH.state = ''; const d = document.createElement('div'); d.innerHTML = lsHomeHTML(); const row = d.querySelector('[data-lhrow="T1"]');
         return { newtpl: !!d.querySelector('#lh-newtpl'), copy: !!d.querySelector('#lh-copy'), row: !!row, edit: !!(row && row.querySelector('[data-lhedit]')), arc: !!(row && row.querySelector('[data-lharc]')), astpl: !!d.querySelector('[data-lhastpl]'), view: !!(row && row.querySelector('[data-lhview]')) }; } catch (e) { return { err: e.message }; } });
@@ -34,13 +36,19 @@ const NAME = { office: 'Office', pm: 'PM', prod: 'Production Manager', saw: 'Saw
         if (allow) { const r = await tryIt(label, fn, null); rec('A2 ' + R + ': ' + label + ' → opens, no PIN asked', r.open && r.asked === 0, JSON.stringify(r)); continue; }
         let r = await tryIt(label, fn, null);
         rec('A2 ' + R + ': ' + label + ' (called straight) → PIN asked; Cancel → nothing opens', !r.open && r.asked === 1, JSON.stringify(r));
-        for (const [who, pin] of [['the Production Manager PIN 7777', '7777'], ['the PM PIN 6666', '6666'], ['the Office PIN 2468', '2468'], ['this screen\'s own PIN / blank', ''], ['" 8888x"', ' 8888x']]) { r = await tryIt(label, fn, pin);
+        for (const [who, pin] of [['the PM PIN 6666', '6666'], ['the Office PIN 2468', '2468'], ['this screen\'s own PIN / blank', ''], ['" 8888x"', ' 8888x']]) { r = await tryIt(label, fn, pin);
           rec('A2 ' + R + ': ' + label + ' with ' + who + ' → refused', !r.open && r.asked === 1, JSON.stringify(r)); }
         r = await tryIt(label, fn, ' 8888 ');
         rec('A2 ' + R + ': ' + label + ' with the Drawing office PIN (spaces round it) → opens', r.open && r.asked === 1, JSON.stringify(r));
         rec('A2 ' + R + ': …that PIN is NOT remembered on the PC', !r.pin, String(r.pin));
         r = await tryIt(label, fn, null);
         rec('A2 ' + R + ': …the very next ' + label + ' asks for the PIN again', !r.open && r.asked === 1, JSON.stringify(r));
+        // Garry 13 Nov: the Production Manager PIN typed when asked opens it too — for this one action, not remembered
+        r = await tryIt(label, fn, '7777');
+        rec('A2 ' + R + ': ' + label + ' with the Production Manager PIN 7777 typed → opens (Garry 13 Nov)', r.open && r.asked === 1, JSON.stringify(r));
+        rec('A2 ' + R + ': …the Production Manager PIN is NOT remembered on the PC', !r.pin, String(r.pin));
+        r = await tryIt(label, fn, null);
+        rec('A2 ' + R + ': …the very next ' + label + ' asks for the PIN again (after the Production Manager PIN)', !r.open && r.asked === 1, JSON.stringify(r));
       }
       if (!allow) {
         // a list that IS a template opened through the ordinary "Edit it again" / openListEditor2 route
@@ -120,7 +128,8 @@ const NAME = { office: 'Office', pm: 'PM', prod: 'Production Manager', saw: 'Saw
         rec('(info) C2 ' + NAME[role] + ' @ ' + w + ' px: no more than 8 buttons outside the rows (one obvious path: rows → one big Save)', v.nBtn <= 8, v.nBtn + ' buttons');
         rec('C3 ' + NAME[role] + ' @ ' + w + ' px: exactly ONE Close and ONE Save on the screen', v.close === 1 && v.saves === 1, JSON.stringify([v.close, v.saves]));
         rec('(info) C4 ' + NAME[role] + ' @ ' + w + ' px: no typing box outside the rows except the optional List name', v.boxes.length <= 1, JSON.stringify(v.boxes));
-        rec('C5 ' + NAME[role] + ' @ ' + w + ' px: "Save as template" ' + (role === 'design' ? 'is there' : 'is NOT there'), /Save as template/.test(v.buttons.join('|')) === (role === 'design'), v.buttons.join(' | '));
+        const tplOk = role === 'design' || role === 'prod'; // Garry 13 Nov: the Production Manager too
+        rec('C5 ' + NAME[role] + ' @ ' + w + ' px: "Save as template" ' + (tplOk ? 'is there' : 'is NOT there'), /Save as template/.test(v.buttons.join('|')) === tplOk, v.buttons.join(' | '));
         const jar = (v.text.match(/Cienapps|P-number|TBC|Rev \d|undefined|null|NaN|\[object/g) || []);
         rec('(info) C6 ' + NAME[role] + ' @ ' + w + ' px: no office jargon / broken text in a plain window from a job', !jar.length, jar.join(','));
       }

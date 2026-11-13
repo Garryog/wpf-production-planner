@@ -1,6 +1,8 @@
 // Tester attack ROUND 3b (list window, 13 Nov): re-attack of the Coder's round-3 fixes —
 //  4. phones 320 / 360 / 480 px: the red reason above the pinned Save, More ▾ in the page flow, the box with the cursor never
 //     under the Save bar or the title bar; 481 / 1280 px unchanged;
+//     (UPDATED for Garry 13 Nov, question 12 answer B: the Production Manager screen shows them too, and his PIN typed when
+//     asked opens them once — a REMEMBERED PIN, his included, still never does)
 //  5. templates and a remembered PIN: only the Drawing office screen shows the template buttons; a PIN remembered from a
 //     material / ✓ Check / project edit never opens templates; nothing else asks for a PIN more often than before.
 // Fake Supabase only. Run: node tests/list-window/attack3b-phone-tplpin.test.js
@@ -108,11 +110,17 @@ const bars = p => p.evaluate(() => { const f = document.querySelector('.me-ed .m
           await closeAll(p);
           const before = tsnap(S);
           for (const [lbl, call] of [['✎ Edit a template', "openListEditor('T1')"], ['＋ New template', "openListEditor(null,'','P1',{tpl:true})"], ['⧉ Copy from another project', "lsCopyDlg('P1')"], ['📐 Save as template', "lsSaveAsTpl({id:'L1'})"]])
-            for (const [ans, a] of [['Cancel', null], ['an empty PIN', ''], ['a wrong PIN', '1234'], ['the Production Manager PIN', '7777']]) {
+            for (const [ans, a] of [['Cancel', null], ['an empty PIN', ''], ['a wrong PIN', '1234'], ['the PM PIN', '6666'], ['the Office PIN', '2468']]) {
               await closeAll(p); await p.evaluate(({ call, a }) => { window.__prompted = []; window.__prompt = a; try { (0, eval)(call); } catch (e) { window.__perr = String(e); } }, { call, a }); await sleep(500);
               const r = { open: await p.evaluate(() => !!document.querySelector('.pod-ovl')), asked: await pinAsks(p) };
               if (r.open || r.asked !== 1 || tsnap(S) !== before) rec('T4 ' + role + ' (' + how + ' remembered): ' + lbl + ' with ' + ans + ' → refused, template untouched', false, JSON.stringify(r)); }
-          rec('T4 ' + role + ' (' + how + ' remembered): Edit / New / Copy / Save as template, each with Cancel · empty · wrong · Production Manager PIN → PIN asked every time, nothing opens, templates untouched', tsnap(S) === before, '');
+          rec('T4 ' + role + ' (' + how + ' remembered): Edit / New / Copy / Save as template, each with Cancel · empty · wrong · PM · Office PIN → PIN asked every time, nothing opens, templates untouched', tsnap(S) === before, '');
+          // Garry 13 Nov: the Production Manager PIN typed AT THAT MOMENT opens each of them (nothing saved here → template untouched)
+          for (const [lbl, call] of [['✎ Edit a template', "openListEditor('T1')"], ['＋ New template', "openListEditor(null,'','P1',{tpl:true})"], ['⧉ Copy from another project', "lsCopyDlg('P1')"], ['📐 Save as template', "lsSaveAsTpl({id:'L1'})"]]) {
+            await closeAll(p); await p.evaluate(({ call }) => { window.__prompted = []; window.__prompt = '7777'; try { (0, eval)(call); } catch (e) { window.__perr = String(e); } }, { call }); await sleep(500);
+            const r = { open: await p.evaluate(() => !!document.querySelector('.pod-ovl')), asked: await pinAsks(p) };
+            await closeAll(p);
+            rec('T4 ' + role + ' (' + how + ' remembered): ' + lbl + ' with the Production Manager PIN typed → asked once and opens (Garry 13 Nov); closed without Save → template untouched', r.open && r.asked === 1 && tsnap(S) === before, JSON.stringify(r)); }
           rec('T5 ' + role + ': …and the remembered PIN is still remembered (a refused template PIN does not wipe it)', (await p.evaluate(() => localStorage.getItem('wpfEditPin'))) === pin.trim(), '');
           // regression: the things that used the remembered PIN do not ask again
           const again = await p.evaluate(() => { window.__prompted = []; window.__prompt = null; const a = lsEditOk(), b = lsPinOk('✓ Check'), c = lsHasEditPin(); return { a, b, c, asked: window.__prompted.filter(m => /PIN/.test(m)).length }; });
@@ -129,10 +137,14 @@ const bars = p => p.evaluate(() => { const f = document.querySelector('.me-ed .m
         rec('T7 ' + role + ': …the next ✎ Edit asks again', !(await ed(p)) && (await pinAsks(p)) === 1 && tsnap(S) === b4, '');
         await t.ctx.close().catch(() => {});
       }
-      // ---- the Production Manager screen: its own screen is not enough ----
+      // ---- the Production Manager screen: was "its own screen is not enough"; Garry 13 Nov — his screen opens templates ----
       { const S = mk(), t = await X.dev(browser, S, 'prod'), p = t.page; await asks(p);
+        await p.evaluate(() => localStorage.removeItem('wpfEditPin'));
         const h = await home(p);
-        rec('T8 Production Manager screen: no template buttons', none(h), JSON.stringify(h));
+        rec('T8 Production Manager screen: the Templates page shows ＋ New template, ⧉ Copy from another project, ✎ Edit and Archive (Garry 13 Nov)', !h.err && h.newtpl && h.copy && h.edit && h.arc, JSON.stringify(h));
+        await p.evaluate(() => { window.__prompted = []; window.__prompt = null; openListEditor('T1'); }); await sleep(900);
+        const e8 = await ed(p), a8 = await pinAsks(p); await closeAll(p);
+        rec('T8 Production Manager screen: ✎ Edit a template opens with no PIN question, and nothing is remembered as a PIN', e8 && a8 === 0 && !(await p.evaluate(() => localStorage.getItem('wpfEditPin'))), JSON.stringify([e8, a8]));
         const again = await p.evaluate(() => { window.__prompted = []; window.__prompt = null; const a = lsEditOk(), b = lsPinOk('✓ Check'); return { a, b, asked: window.__prompted.length }; });
         rec('T8 Production Manager screen: project / material edits and ✓ Check need no PIN there (as before)', again.a && again.b && again.asked === 0, JSON.stringify(again));
         await t.ctx.close().catch(() => {}); }
