@@ -257,3 +257,13 @@ Garry's words: "the work order due date are not prominent in all screens. the wo
 Garry: "Shipped step is gone from capacity board. It is still needed" — "Need to be able to update on capacity board to shipped or
 installed or completed. The job drops off capacity board after shipping". S1 (built on Job B) is lifted onto the live version as its
 own small release, branch feature/board-shipped-steps. Plan: docs/PLAN-board-shipped-steps.md.
+
+### List window — Garry's answers, 13 Nov 2026 (full table: docs/PLAN-list-window.md, "Garry's answers — 13 Nov")
+- P-number → Cienapps WO merge, and "＋ Add cutting list" on the delivery card + due badge on Lists home: each its own small release after the list window.
+- Accepted for this release: two PCs saving a list for one job in the same second; an old screen wiping the P-number safety copies (go-live: close every screen and phone).
+- Templates: the **Production Manager too** (with Drawing office and Admin) — replaces the 12 Nov "Drawing office and Admin only".
+- "Cutting lists to issue": office and Production Manager see them as well as the Drawing office. Default list owner told to the saw stays "Production Manager".
+- An old list with no work order must be given one (Cienapps WO or P-number) before it saves. Import Excel only under "Start from…".
+- Settings "Storage on this device": hidden while lists are OFF (shown if the device could not keep its backup copy).
+- Buttons in the list window (9): not decided — Garry to look at screenshots.
+- Deliveries weeks: Garry wants it live as soon as possible (was Mon 16 Nov).

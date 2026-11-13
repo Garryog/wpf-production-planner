@@ -89,3 +89,21 @@ A second Tester round 2 added 5 more files (`attack2-basics / -excel-phone / -fi
 | list-window attack3-phone "(info) P10" | on a Drawing office phone the pinned bar also holds "Save as template", so it is 117 px tall (110 wanted) | later (small) | pending |
 | list-window attack3-two-pcs-old "(info) O2" | an OLD screen left open can still make a second list for a house that has a P-number list, and the new screen's "⚠ 2 lists" tag only counts lists on the SAME work order | go-live step: close every screen and phone first; full fix with L4b | pending |
 
+
+## 13 Nov 2026, afternoon — checks that are OUT OF DATE because Garry changed the rule (not app faults)
+Garry answered the open questions live on 13 Nov (table in docs/PLAN-list-window.md). Two answers reverse a rule that older
+Tester files check for, so those checks now fail **because the planner does what Garry asked**. The rule as it stands is tested
+in the new file `tests/list-window/g13-prod-templates.test.js` (41 checks, all pass). The Tester rewrites the old checks in the
+final round (after Deliveries is merged in); until then they are listed here.
+
+| Test | Why it fails (plain English) | Fixed in | Accepted? |
+|---|---|---|---|
+| list-window attack2-tpl-pin — 44 checks | they expect the Production Manager screen / PIN to be REFUSED for templates; Garry, 13 Nov: the Production Manager may make and change templates | Tester rewrite, final round | pending |
+| list-window attack3-roles-archived-simple — 44 more checks ("A1" / "A2" Production Manager rows) | same | Tester rewrite, final round | pending |
+| list-window attack3b-phone-tplpin — 49 checks ("T4 … with the Production Manager PIN → refused", and the "template untouched" checks that follow them) | same | Tester rewrite, final round | pending |
+| list-window attack2-fixes — 18 checks ("Q3 everywhere", "prod:" rows) | same | Tester rewrite, final round | pending |
+| list-window attack2-fixes "[LOW, wording] saw screen … does not say Production Manager" | Garry, 13 Nov: the default list owner the saw is told stays "Production Manager" | Tester rewrite, final round | pending |
+
+**Signed off by Garry, 13 Nov 2026 (answer A to both):** two PCs saving a list for the same job in the same second (fixed
+with the database rule in the P-number release) and an old screen wiping the P-number safety copies / making a second list
+(go-live step: close every screen and phone) — the rows above for those are accepted for the list window release.

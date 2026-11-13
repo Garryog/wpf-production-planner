@@ -411,3 +411,44 @@ Checked: live Supabase logs (last 24 h: 31 list saves, 24 materials added, 2 edi
   `parked/list-window-run-2026-11-13-1310`, exactly one step ahead of `feature/list-window` as it was at 12:42 (the full
   suite was run before that 12:42 change; the template and two-PC tests were re-run on top of it — same results). The next
   run, or Garry's session, takes them in with a plain fast-forward merge.
+
+## Garry's answers — 13 Nov 2026, afternoon (live, in the session of run 6)
+Questions 1–18 above were put to Garry as one list of 17; his answers, with the old question numbers:
+| Question | Garry's answer | What it means for the code |
+|---|---|---|
+| P-number → Cienapps WO merge (key 1 / Tester 2) | **A** — its own small release straight after this one | no change |
+| ＋ Add cutting list on the delivery card + due badge on Lists home (10) | **A** — its own small release after this one | no change |
+| Two PCs saving a list for one job in the same second (13) | **A** — accept for this release; database rule in the P-number release | no change; stays on ACCEPTED-FAILURES, now signed off |
+| Old screen can wipe the P-number safety copies (14) | **A** — accept; "close every screen and phone" on the go-live list | no change; signed off |
+| Fewer buttons in the window (16) | **"don't know"** | left as built (9 buttons); Garry to look at the screenshots and say |
+| Second list on a WO that has one (Tester 1) | **A** — ask first | as built |
+| Floor or Unit blank in the look-up (key 4) | **A** — no automatic match, the person picks | as built |
+| Customer spelled a little differently (Tester 4) | **A** — ask "Is this project …?" | as built |
+| No block in the title vs a job that names one (17) | **A** — ask | as built |
+| Old list with no work order, edited (9) | **B** — "either Cienapps or a P-number": it must have a work order | as built (it was never changed) |
+| Import Excel (key 3) | **A** — only in the window under "Start from…" | as built |
+| Who may make / change templates (key 2, Tester 3, 5, 12) | **B — the Production Manager too** (changes his 12 Nov answer "Drawing office and Admin only") | **CHANGED 13 Nov:** the Production Manager screen and PIN now open Save as template, ＋ New template, edit / archive a template and ⧉ Copy from another project, like the Drawing office and Admin. A PIN remembered on a shared PC still never opens them. |
+| Who sees "Cutting lists to issue" (7) | **B** — office and Production Manager too | as built |
+| Default list owner the saw is told (11) | **B** — leave as "Production Manager" | **CHANGED BACK 13 Nov** (it had been switched to "Drawing office"); a project's own "list owner" still wins |
+| Settings → Storage on this device with lists OFF (8) | **B** — hide it | **CHANGED 13 Nov:** hidden while lists are OFF — except on a device that could not keep its backup copy, because the warning bar tells the person to go there |
+| This scheduled task (15, 18) | **A** — fewer runs | **DONE:** now once a day (19:43) instead of every 3 hours |
+| When does Deliveries go on `main`? | **"as soon as you can"** | Only Garry merges to `main` (merge = live). The release has had its Manager GO WITH CONDITIONS since 12 Nov and needs no SQL — it is ready for him to merge; the checklist's rule is Mon–Wed. |
+
+### 13 Nov 2026, 16:00 UTC (run 6 continued — Garry live in the session)
+- **Garry answered every open question** (table above). Recorded in ROADMAP too.
+- **Three small code changes from his answers** (one commit): the Production Manager may make and change templates (screen,
+  and PIN typed when asked — a remembered PIN still never opens them); the default list owner the saw is told is back to
+  "Production Manager"; Settings "Storage on this device" is hidden while lists are OFF, unless that device could not keep its
+  backup copy. Everything else he chose was already built that way.
+- **The parked fix from earlier today is now on this branch** (two PCs answering "Is this project …? Yes" together), on top of
+  the three changes Garry's own session pushed today (Cap Left / Cap Right, templates in numerical order, 🖨 Print on the View window).
+- **Tests.** New file `list-window/g13-prod-templates` — 41 checks, all pass. Full suite on the new code (221 files, fake
+  Supabase): **5,143 pass / 227 fail** = the same 71 known ones + **156 old checks that still expect the Production Manager
+  to be refused** (or the saw to be told "Drawing office"). Those 156 were compared name by name: every one is about that
+  rule, none is anything else. They are listed on ACCEPTED-FAILURES as out of date, for the Tester to rewrite in the final
+  round. The simple ones (9 files) were moved to the new rule already.
+- **Not done here:** no Tester attack round and no Manager review of today's changes — both happen in the final round after
+  Deliveries is on `main`. No pull request yet.
+- **Scheduled task:** changed from every 3 hours to once a day (19:43 Irish time), as Garry chose.
+- **Still for Garry:** (1) merge the Deliveries weeks release — only he merges to `main`; (2) look at the list window and say
+  whether "?" help and "Change job" should move under More (question 16).
