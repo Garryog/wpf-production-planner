@@ -3604,7 +3604,7 @@ function lsHomeLists(){
     const st=lsState(l);if(LH.state==='any'){}else if(LH.state?st!==LH.state:st==='archived')return false; // archived only when asked for ('any' = everything, 9 Nov)
     if(q){const hay=[l.name,l.project,LS_KINDS[l.ltype]||l.ltype,l.typeName,listCust(l),...(l.wos||[]).map(w=>{const o=DB.orders.find(x=>x.wo===w);return w+' '+(o?[o.floor,o.unit,o.title,o.customer].join(' '):'');})].join(' ').toLowerCase();if(!hay.includes(q))return false;}
     return true;
-  });
+  }).map((l,i)=>[l,i]).sort((x,y)=>x[0].tpl&&y[0].tpl?(lsTplCmp(x[0],y[0])||x[1]-y[1]):x[1]-y[1]).map(x=>x[0]); // templates in numerical order; live lists keep their order
 }
 function lsHomeHTML(){
   const ls0=lsHomeLists(),grp=new Map(),woN=new Map(); // woN: live lists per work order (list-window: a WO with two live lists is flagged)
@@ -5436,7 +5436,9 @@ async function lsCreateFromTpl(tid,wos,name,by,opt){
     throw e;
   }
 }
-function lsTemplatesFor(pid){return lsCache().all.filter(l=>l.tpl&&!l.archived&&l.pid===pid).sort((a,b)=>String(a.typeName||a.name).localeCompare(String(b.typeName||b.name)));}
+/* Templates in numerical order (Garry 13 Nov): "Type 2" before "Type 10", "House 9" before "House 12"; capitals don't matter. */
+function lsTplCmp(a,b){return String(a.typeName||a.name||'').localeCompare(String(b.typeName||b.name||''),undefined,{numeric:true,sensitivity:'base'})||String(a.name||'').localeCompare(String(b.name||''),undefined,{numeric:true,sensitivity:'base'});}
+function lsTemplatesFor(pid){return lsCache().all.filter(l=>l.tpl&&!l.archived&&l.pid===pid).sort(lsTplCmp);}
 // From a work order with no list: tap a template → preview with the WO ticked (+ other jobs of the project that need a list) → name → Create & attach
 function lsTplDlg(tid,wo){
   const t=lsList(tid);if(!t)return;
