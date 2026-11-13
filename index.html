@@ -3934,12 +3934,13 @@ function ltiLinkHTML(o){
     <select data-ltilink="${escA(w)}" style="${LS_INP};max-width:100%;margin:2px 4px 2px 0"><option value="">Link to project ▾</option>${lsProjects().map(p=>`<option value="${escA(p.id)}">${escA(p.name)}</option>`).join('')}</select>
     <button class="btn btn-s" data-ltinewp="${escA(w)}" style="${btn};overflow-wrap:anywhere;text-align:left">＋ New project "${escA(c)}"</button></div>`;
 }
-async function ltiLink(o,pid){ // add the customer heading to the project's Cienapps names
+async function ltiLink(o,pid,_n){ // add the customer heading to the project's Cienapps names
   const c=String(o.customer||'').trim();
   lsPut('projects',await lsGet('projects?select=*&id=eq.'+encodeURIComponent(pid))); // the project as it is now
   const p=LST.p.get(pid);if(!p)throw new Error('that project is no longer there');
   const has=(p.cien_names||[]).some(n=>sgNorm(n)===sgNorm(c));if(has&&p.active!==false)return p;
-  return lsWrite('projects',p,{...(has?{}:{cien_names:[...(p.cien_names||[]),c]}),...(p.active===false?{active:true}:{})}); // an inactive project picked here is made active again
+  try{return await lsWrite('projects',p,{...(has?{}:{cien_names:[...(p.cien_names||[]),c]}),...(p.active===false?{active:true}:{})});} // an inactive project picked here is made active again
+  catch(x){if((_n||0)<3&&/changed on another screen/.test(String(x&&x.message||''))){await new Promise(r=>setTimeout(r,150+Math.random()*250));return ltiLink(o,pid,(_n||0)+1);}throw x;} // two PCs linked a customer to the same project in the same split second: read it again and add this name to theirs (nothing of theirs is overwritten)
 }
 /* L5 (Garry 10 Nov: "customer and project will always be the same"): the project of a WO, found or made from its customer —
    no PIN (same as the 3 Nov link rule). The projects are read fresh first (another PC may have made it a moment ago); a
