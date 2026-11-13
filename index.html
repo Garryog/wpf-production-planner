@@ -4932,6 +4932,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     R().splice(at,drop,...add);if(add.some(r=>r.k==='hdr'&&r.units!=null))st.unitsOn=true;st.focus=at+'|item';draw();
     toast('Added '+add.length+' row'+(add.length!==1?'s':'')+' from "'+l.name+'"'+(again?' again (now in twice — Ctrl+Z takes them out)':'')+' — change anything for this job, then Save');
   };
+  const blankAll=()=>R().length>0&&R().every(r=>r.k==='hdr'?!String(r.note||'').trim():(lsEmptyRow(r)&&!String(r.mat||'').trim()&&!r.buy)); // no part row has anything typed, picked or ticked, and no heading has a note: only the blank layout is there
   const insTpl=()=>{
     if(!st.pid){ov.querySelector('#me-err').textContent='Pick the project first — templates belong to a project.';return;}
     const tps=lsTemplatesFor(st.pid).filter(t=>!ex||t.id!==ex.id);
@@ -4948,9 +4949,9 @@ function openListEditor2(listId,presetWo,presetPid,opt){
         const add=lines.map(x=>x.kind==='hdr'?{k:'hdr',item:x.part||'',note:x.note||'',...(String(x.section||'').trim()?{sub:true}:{})}
           :{k:'part',item:x.part||'',qty:x.qty==null?'':String(x.qty),L:x.length_mm==null?'':String(+x.length_mm),W:x.width_mm==null?'':String(+x.width_mm),mat:x.material||'',edging:x.edging||'',edging2:x.edging2||'',note:x.note||'',...(x.kind==='buy'?{buy:true}:{})});
         if(!add.length){body.innerHTML='<span style="color:var(--t2)">That template has no rows.</span>';return;}
-        snap();const c=curRow(),at=c<0?R().length:endOfBlock(c),drop=R().length===1&&lsEmptyRow(R()[0])?1:0,at2=drop?0:at;
+        snap();const c=curRow(),at=c<0?R().length:endOfBlock(c),drop=blankAll()?R().length:0,at2=drop?0:at; // (Garry 13 Nov) nothing typed yet — the blank standard headings and rows are replaced by the template, not left above it
         R().splice(at2,drop,...add);dl.remove();st.focus=at2+'|item';draw();
-        toast('Added '+add.length+' row'+(add.length!==1?'s':'')+' from template '+(t.typeName||t.name)+' (Rev '+(+t.rev||1)+') — change anything for this house');
+        toast('Added '+add.length+' row'+(add.length!==1?'s':'')+' from template '+(t.typeName||t.name)+' (Rev '+(+t.rev||1)+')'+(drop>1?' — the blank rows were replaced':'')+' — change anything for this house');
         return;}
       const opts=[...blocks0.map((b,k)=>({k,label:b.name+' ('+b.parts.length+' part'+(b.parts.length!==1?'s':'')+')',name:b.name,parts:b.parts.map(x=>{const pu=lsPerUnit(x,b.units);return{x,per:String(pu.qty),fixed:pu.fixed};})})), // the same rule as a reload (lsPerUnit)
         {k:'all',label:'The whole template as one unit ('+lines.filter(x=>x.kind!=='hdr').length+' parts — quantities as one unit)',name:t.typeName||t.name,parts:lines.filter(x=>x.kind!=='hdr').map(x=>({x,per:String(x.qty==null?'':x.qty)}))}];
@@ -4966,7 +4967,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
         const o=opts[+(body.querySelector('[name="it-u"]:checked')||{}).value||0];
         snap();const c=curRow(),at=c<0?R().length:endOfBlock(c);
         const add=[{k:'hdr',item:o.name,units:n,note:''},...o.parts.map(({x,per,fixed})=>({k:'part',item:x.part||'',qty:per,...(fixed?{fixed:true}:{}),L:x.length_mm==null?'':String(+x.length_mm),W:x.width_mm==null?'':String(+x.width_mm),mat:x.material||'',edging:x.edging||'',edging2:x.edging2||'',note:x.note||''}))];
-        const drop=R().length===1&&lsEmptyRow(R()[0])?1:0,at2=drop?0:at; // a brand-new list's one empty row is replaced
+        const drop=blankAll()?R().length:0,at2=drop?0:at; // a brand-new list's empty row, or the blank standard layout, is replaced
         R().splice(at2,drop,...add);
         dl.remove();st.focus=at2+'|units';st.focusAll=true;draw();
         toast('Added "'+o.name+'" × '+n+' unit'+(n!=='1'?'s':'')+' from template '+(t.typeName||t.name)+' — change Units any time before the saw starts');

@@ -456,3 +456,7 @@ Questions 1–18 above were put to Garry as one list of 17; his answers, with th
   Production Manager's late-lists rows now name all three by default — "owner Production Manager, Garry and Drawing office"
   (a project's own "list owner" still wins). It is wording on the screens only: the planner sends no messages. All three
   already see "Cutting lists to issue" on their own screens (office, Production Manager, Drawing office).
+- **Garry, 13 Nov (live, with a screenshot of WO-2648-54):** a template brought into a new list was put UNDER the blank standard
+  headings and rows. **Fixed:** when nothing has been typed, picked or ticked in the window, the template REPLACES the blank
+  layout (Undo brings it back); when anything has been typed, the template is added and what was typed stays. New test
+  `list-window/g13-template-replaces-blank` (6 checks, pass); the 11 files that use the template insert give the same results as before.
