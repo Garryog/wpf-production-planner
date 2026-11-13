@@ -461,7 +461,7 @@ details.lti-other{margin-bottom:14px}details.lti-other>summary{cursor:pointer;fo
 .me-hwo{font-family:'DM Mono',monospace;background:#eef4ff;border:1px solid #c7d7f5;border-radius:6px;padding:1px 8px;margin-left:6px;white-space:nowrap}.me-start .me-morep{left:auto;right:0}@media(max-width:699px){.me-tb{flex-wrap:wrap}.me-tb>div:first-child{font-size:15px!important}.me-tb .lw-due{order:3;flex:1 0 100%;text-align:center}.me-hwo{display:inline-block;margin-left:0;white-space:normal;word-break:break-all}.me-start .me-morep{left:0;right:auto}}.me-ed .me-save-big{font-size:17px;padding:12px 30px;min-height:48px}
 .me-bar{display:flex;gap:8px;margin:10px 0 6px;flex-wrap:wrap;align-items:flex-start}
 /* step 11: on phones the big Save stays pinned at the bottom of the window, always in reach (it keeps its own place, so it never covers the last row) */
-@media(max-width:480px){.me-ed .me-foot{position:sticky;bottom:-18px;z-index:7;background:#fff;margin:8px -18px -18px;padding:8px 18px 10px;border-top:1px solid var(--border)}.me-ed .me-foot .me-save-big{flex:1 1 100%}.me-ed #me-err:not(:empty){position:sticky;bottom:calc(var(--mefh,67px) - 18px);z-index:7;background:#fff;margin:0 -18px;padding:6px 18px;border-top:1px solid var(--border)}}.me-big{font-size:15px;padding:8px 16px;min-height:38px}
+@media(max-width:480px){.me-ed{scroll-padding:var(--meth,90px) 0 calc(var(--mefh,67px) + 12px)}.me-ed #me-more .me-morep{position:static;box-shadow:none;min-width:0;margin-top:6px}.me-ed .me-foot{position:sticky;bottom:-18px;z-index:7;background:#fff;margin:8px -18px -18px;padding:8px 18px 10px;border-top:1px solid var(--border)}.me-ed .me-foot .me-save-big{flex:1 1 100%}.me-ed #me-err:not(:empty){position:sticky;bottom:calc(var(--mefh,67px) - 18px);z-index:7;background:#fff;margin:0 -18px;padding:6px 18px;border-top:1px solid var(--border)}}.me-big{font-size:15px;padding:8px 16px;min-height:38px}
 .me-more{position:relative}.me-more>summary{list-style:none;cursor:pointer;display:inline-block}.me-more>summary::-webkit-details-marker{display:none}
 .me-morep{position:absolute;z-index:5;left:0;top:44px;background:#fff;border:1px solid var(--b2);border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.15);padding:10px 12px;display:flex;flex-direction:column;gap:8px;min-width:280px}
 .me-morep .btn[hidden]{display:none}.lh-more .me-morep{left:auto;right:0;top:40px;min-width:160px}.me-defc{display:flex;gap:8px;flex-wrap:wrap}.me-defc label{display:block;font-size:11px;color:var(--t2);font-weight:600;margin-bottom:3px}.me-defc>div{flex:1;min-width:120px}
@@ -4687,7 +4687,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       <div class="me-foot" style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">${ex&&st.tpl?'<button class="btn btn-s" id="me-hist">🕘 History</button>':''}${st.tpl||!lsTplSaveOk()?'':'<button class="btn btn-s" id="me-astpl" title="Save these rows as a template of the project (unsaved changes included)">📐 Save as template</button>'}<span style="flex:1"></span><button class="btn btn-g me-save-big" id="me-save">${ex?'Save changes':st.tpl?'Save template':'Save list → Saw & Stores'}</button></div>
     </div>`;
     bind();
-    {const ft=ov.querySelector('.me-foot');if(ft&&ft.offsetHeight)ov.style.setProperty('--mefh',ft.offsetHeight+'px');} // phones: the height of the pinned Save bar — the red reason sits right above it (attack3 P8)
+    {const ft=ov.querySelector('.me-foot');const tb=ov.querySelector('.me-tb');if(ft&&ft.offsetHeight)ov.style.setProperty('--mefh',ft.offsetHeight+'px');if(tb&&tb.offsetHeight)ov.style.setProperty('--meth',tb.offsetHeight+'px');} // phones: the heights of the pinned Save bar and the title bar — the red reason sits right above Save (attack3 P8) and the box with the cursor is never under either (P3b)
     const g=ov.querySelector('#me-grid');if(g&&sc)g.scrollTop=sc;
     if(fk){const e=ov.querySelector('[data-mr="'+fk+'"]');if(e&&!e.disabled){e.focus();if(ss&&e.setSelectionRange&&!st.focusAll)try{e.setSelectionRange(ss[0],ss[1]);}catch(x){}else if(e.select&&st.focusAll)e.select();}}
     st.focusAll=false;
@@ -4969,7 +4969,11 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     // Bought in rows: never cut or picked — they only need a description and a quantity
     for(const r of rows.filter(r=>r.k==='part'&&r.buy)){if(!String(r.item||'').trim())return err('Every Bought in row needs a description'+at(r)+'.');if(!(+totalOf(r,b[rows.indexOf(r)])>0))return err('Every Bought in row needs a quantity ("'+String(r.item).trim()+'"'+at(r)+').');}
     const onlyBuy=!chk.length&&rows.some(r=>r.k==='part'&&(r.buy||tbcHold(r)));
-    const e=manualListValidate({...d,name:d.name||(st.newWO?'(the new P-number)':''),rows:onlyBuy?[{k:'saw',item:'x',qty:1,L:1,W:1}]:chk,noCut:onlyBuy?false:d.noCut,noFit:onlyBuy?false:d.noFit,wo:st.tpl?'(template)':d.wo});if(e)return err(e.replace(/saw row/g,'saw row (with a length or width)').replace(/fittings row/g,'Stores row (no length or width)'));
+    const e=manualListValidate({...d,name:d.name||(st.newWO?'(the new P-number)':''),rows:onlyBuy?[{k:'saw',item:'x',qty:1,L:1,W:1}]:chk,noCut:onlyBuy?false:d.noCut,noFit:onlyBuy?false:d.noFit,wo:st.tpl?'(template)':d.wo});
+    if(e){err(e.replace(/saw row/g,'saw row (with a length or width)').replace(/fittings row/g,'Stores row (no length or width)'));
+      const q=/needs a quantity/.test(e)?rows.find(r=>r.k==='part'&&!r.buy&&!tbcHold(r)&&!(+totalOf(r,b[rows.indexOf(r)])>0)):null,c=q&&ov.querySelector('[data-mr="'+R().indexOf(q)+'|qty"]');
+      if(c&&!c.disabled)c.focus(); // the cursor goes to the row with no quantity (a long list: it is scrolled to)
+      return;}
     if(st.newWO){ // (L4a) looked up again on Save: another PC or an import may have brought the job meanwhile — never a second job for one house
       const pf=g('me-pfloor').value,pu=g('me-punit').value,kind=seqKind(g('me-ptitle').value);
       if(st.pid&&keyTxt(pf)&&keyTxt(pu)){const r=keyFind(st.pid,pf,pu,keyJobs(),g('me-ptitle').value),fu='Floor '+String(pf).trim()+' · Unit '+String(pu).trim();
