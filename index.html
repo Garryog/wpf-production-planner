@@ -3571,9 +3571,9 @@ function lsMatClash(pid,name,id){const k=matKey(name);return k?lsMats(pid,'',tru
 function lsMaterialsDlg(pid,after){
   const ov=lsDlg('<div id="mt-body"></div>',820);
   /*M1: what is typed but not saved survives every redraw (a Save on another row, a failed save); Close asks first*/
-  const pend={},nw={n:'',k:'sheet'};
+  const pend={},nw={n:'',k:'sheet'},seen={}; // seen[id]: the database version each row was last DRAWN from (B1: "typing" = the box differs from THAT, not from a newer copy another PC saved)
   const shown=m=>({name:String(m.name||''),kind:m.kind,al:(m.aliases||[]).join(', '),act:m.active!==false});
-  const grab=()=>{ov.querySelectorAll('[data-mtn]').forEach(e=>{const id=e.dataset.mtn,m=LST.m.get(id);if(!m)return;
+  const grab=()=>{ov.querySelectorAll('[data-mtn]').forEach(e=>{const id=e.dataset.mtn,m=seen[id]||LST.m.get(id);if(!m)return;
       const k=ov.querySelector('[data-mtk="'+id+'"]'),a=ov.querySelector('[data-mta="'+id+'"]'),v=ov.querySelector('[data-mtv="'+id+'"]');
       const t={name:e.value,kind:k?k.value:m.kind,al:a?a.value:'',act:v?v.checked:m.active!==false},s=shown(m);
       if(t.name!==s.name||t.kind!==s.kind||t.al!==s.al||t.act!==s.act)pend[id]=t;else delete pend[id];});
@@ -3585,6 +3585,7 @@ function lsMaterialsDlg(pid,after){
   const draw=done=>{
     grab();if(done==='new'){nw.n='';nw.k='sheet';}else if(done)delete pend[done]; // a row just saved shows what the database holds
     const p=LST.p.get(pid)||{name:'?'},ms=lsMats(pid,'',true);
+    ms.forEach(m=>{if(!pend[m.id]||!seen[m.id])seen[m.id]=m;}); // a row with typing keeps the version the typing started from: its Save is checked against that (never overwrites another PC's change)
     const row=m=>{const t=pend[m.id]||shown(m);return `<tr${m.active===false?' style="opacity:.6"':''}><td><input data-mtn="${escA(m.id)}" value="${escA(t.name)}" style="${LS_INP};width:100%"></td>
       <td><select data-mtk="${escA(m.id)}" style="${LS_INP}"><option value="sheet"${t.kind==='sheet'?' selected':''}>Sheet (saw)</option><option value="other"${t.kind==='other'?' selected':''}>Fitting / other</option></select></td>
       <td><input data-mta="${escA(m.id)}" value="${escA(t.al)}" placeholder="other spellings, comma-separated" style="${LS_INP};width:100%"></td>
@@ -3600,7 +3601,7 @@ function lsMaterialsDlg(pid,after){
       const name=ov.querySelector('[data-mtn="'+id+'"]').value.trim();if(!name)return msg('A material needs a name.');
       const aliases=ov.querySelector('[data-mta="'+id+'"]').value.split(',').map(s=>s.trim()).filter(Boolean);
       const kind=ov.querySelector('[data-mtk="'+id+'"]').value,active=ov.querySelector('[data-mtv="'+id+'"]').checked;
-      const m=LST.m.get(id); // the version this screen showed: if another screen changed it since, the save is refused (not overwritten)
+      const m=seen[id]||LST.m.get(id); // the version this screen showed: if another screen changed it since, the save is refused (not overwritten)
       if(!await fresh())return;
       if(lsMatClash(pid,name,id))return msg('"'+name+'" is already used on this project.');
       const clash=aliases.find(a=>lsMatClash(pid,a,id));if(clash)return msg('"'+clash+'" is already the name or another spelling of a different material on this project.');
@@ -3608,9 +3609,9 @@ function lsMaterialsDlg(pid,after){
       const off=m.active!==false&&!active,sw=kind!==m.kind; /*M3: retiring a material, or Sheet <-> Fitting, while lists use it: say so and ask first*/
       if(off||sw){const K={sheet:'Sheet (saw)',other:'Fitting / other'};let u;try{u=await lsMatUse(pid,m);}catch(e){u=null;}
         const where=!u?'It may be used on this project\'s lists or templates (could not check — '+'the database did not answer).':!u.lists&&!u.tpls?'':'It is used on '+[u.lists?u.lists+' list'+(u.lists!==1?'s':''):'',u.tpls?u.tpls+' template'+(u.tpls!==1?'s':''):''].filter(Boolean).join(' and ')+' of this project.';
-        if(where&&!confirm((off?'Retire "'+m.name+'"?':'Change "'+m.name+'" from '+K[m.kind]+' to '+K[kind]+'?')+'\n\n'+where+'\n\n'+(off?'Rows that use it keep it, but show "⚠ not on the project list" until someone picks another material.':kind==='other'?'Saw rows (with a length or width) that use it keep it, but show "⚠ a fitting — not a board" until someone picks a board.':'It will be listed with the boards from now on.')+'\n\nOK = save the change\nCancel = don\'t save'))return msg('Not saved — "'+m.name+'" is unchanged.');}
+        if(where&&!confirm((off&&sw?'Retire "'+m.name+'" and change it from '+K[m.kind]+' to '+K[kind]+'?':off?'Retire "'+m.name+'"?':'Change "'+m.name+'" from '+K[m.kind]+' to '+K[kind]+'?')+'\n\n'+where+'\n\n'+(off?'Rows that use it keep it, but show "⚠ not on the project list" until someone picks another material.':kind==='other'?'Saw rows (with a length or width) that use it keep it, but show "⚠ a fitting — not a board" until someone picks a board.':'It will be listed with the boards from now on.')+'\n\nOK = save the change\nCancel = don\'t save'))return msg('Not saved — "'+m.name+'" is unchanged.');}
       lsWrite('project_materials',m,{name,kind,aliases,active})
-        .then(()=>{toast('Material saved');draw(id);}).catch(e=>{draw();msg('Not saved — '+e.message);});});
+        .then(()=>{toast('Material saved');draw(id);}).catch(e=>{draw(/another screen/.test(e.message)?id:undefined);msg('Not saved — '+e.message);});}); // changed on another screen: that row shows it as it is now
     ov.querySelector('#mt-add').onclick=async()=>{if(!lsMatEditOk())return;const name=ov.querySelector('#mt-new-n').value.trim();if(!name)return msg('Type the material name first.');
       const kind=ov.querySelector('#mt-new-k').value;
       if(!await fresh())return;if(lsMatClash(pid,name,''))return msg('"'+name+'" is already used on this project.');
