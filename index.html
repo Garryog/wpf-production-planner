@@ -4885,7 +4885,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       if(!ex&&st.pid&&st.wo){const o=DB.orders.find(x=>x.wo===st.wo),k=o&&keyProj(o);if(k&&k!==st.pid){cl=st.wo+' is a '+lsProjName(k)+' job, not '+lsProjName(st.pid)+' — it was taken off this list. Pick one of '+lsProjName(st.pid)+'\'s work orders.';st.wo='';st.jm=null;}}
       draw();if(cl){const er=g('me-err');if(er)er.textContent=cl;}projSet();};
     // the name boxes keep st up to date as you type: a redraw (picking a colour, adding a row) no longer puts back the old name
-    const nm=g('me-name');if(nm)nm.oninput=()=>{st.name=nm.value;};const tn0=g('me-tname');if(tn0)tn0.oninput=()=>{st.tname=tn0.value;};
+    const nm=g('me-name');if(nm)nm.oninput=()=>{tplNameTo(nm.value);};const tn0=g('me-tname');if(tn0)tn0.oninput=()=>{st.tname=tn0.value;};
     const w=g('me-wo');if(w)w.onchange=()=>{const prev=st.wo;st.wo=w.value;{const hw=g('me-hwo'),hd=g('me-due'),oo=DB.orders.find(x=>x.wo===st.wo);if(hw&&st.wo){hw.textContent=st.wo;if(hd)hd.outerHTML=lwDueTag(oo)||'<span id="me-due"></span>';}else if(!!hw!==!!st.wo)setTimeout(()=>{keep();draw();},0);} /*the title bar always shows the WO the list is for*/if(st.pmsg&&st.pmsg.st!=='busy')st.pmsg=null;const wi=g('me-woinfo');if(wi)wi.innerHTML=woInfoHTML(DB.orders.find(x=>x.wo===st.wo));
       const h0=R()[0];if(opt.std&&h0&&h0.k==='hdr'&&!h0.sub&&(!String(h0.item||'').trim()||h0.item===lsStdHouse(DB.orders.find(x=>x.wo===prev)))){ // standard layout: the house heading follows the work order
         h0.item=lsStdHouse(DB.orders.find(x=>x.wo===st.wo));const hi=ov.querySelector('[data-mr="0|item"]');if(hi)hi.value=h0.item;}
@@ -5033,8 +5033,10 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     ov.remove();openListEditor2(null,st.wo,st.pid,{rows:R(),name:String(st.name||'').trim()?st.name+' (new)':'',ltype:st.ltype,tname:st.tname,from:{id:ex.id,name:ex.name,sig:lsOldSig(ex.id),lines:lsOldLines(ex.id)},
       note:'Copied from "'+st.name+'" — nothing is saved until you press Save. Saving archives "'+ex.name+'" (takes it off the saw); until then it is not changed.'});
   };
-  const keep=()=>{const g=id=>ov.querySelector('#'+id);const n=g('me-name');if(n)st.name=n.value;const w=g('me-wo');if(w)st.wo=w.value;
-    const t=g('me-type');if(t)st.ltype=t.value;const tn=g('me-tname');if(tn)st.tname=tn.value;
+  // (M5, Garry 14 Nov: A) a template's Type name that was the same as its name follows a new name; one typed differently on purpose stays
+  const tplNameTo=v=>{if(st.tpl&&v!==st.name&&matKey(st.tname)===matKey(st.name)){st.tname=v;const b=ov.querySelector('#me-tname');if(b)b.value=v;}st.name=v;};
+  const keep=()=>{const g=id=>ov.querySelector('#'+id);const tn=g('me-tname');if(tn)st.tname=tn.value;const n=g('me-name');if(n)tplNameTo(n.value);const w=g('me-wo');if(w)st.wo=w.value;
+    const t=g('me-type');if(t)st.ltype=t.value;
     ['title','cust','floor','unit','due','val','hrs'].forEach(k=>{const e=g('me-p'+k);if(e)st.pw[k]=e.value;});
     [['me-jf','floor'],['me-ju','unit'],['me-jt','title'],['me-jwo','wo']].forEach(([id,k])=>{const e=g(id);if(e)st.jb[k]=e.value;});};
   const save=()=>{
