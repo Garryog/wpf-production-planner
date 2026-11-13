@@ -4760,14 +4760,14 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     on('me-find',()=>jbFind());
     // the WO is looked up when the person leaves the Unit box — (F1 gap) but NOT while they go on into the Title box: then it is
     // looked up when they leave the Title box, so a block named in the Title (BLOCK B) is known before anything is filled in
-    {const auto=()=>{const b=st.jb;if(!keyTxt(b.floor)||!keyTxt(b.unit)||String(b.wo||'').trim()||(keyHouseStr(b.floor,b.unit)||'')===b.last)return;
-      setTimeout(()=>{if(!document.body.contains(ov)||st.wo)return;const a=document.activeElement,id=a&&ov.contains(a)&&a.id?a.id:'';if(id==='me-jt')return;
+    {const auto=ev=>{const b=st.jb,from=ev&&ev.target?ev.target.id:'';if(!keyTxt(b.floor)||!keyTxt(b.unit)||String(b.wo||'').trim()||(keyHouseStr(b.floor,b.unit)||'')===b.last)return;
+      setTimeout(()=>{if(!document.body.contains(ov)||st.wo)return;const a=document.activeElement,id=a&&ov.contains(a)&&a.id?a.id:'';if(id==='me-jt'||(from==='me-jf'&&id==='me-ju'))return;
         const sb0=Date.now()-(st.savePress||0)<1500?ov.querySelector('#me-save'):null;st.savePress=0;jbFind();
         // (attack3 W5, W6) Save pressed straight from the Floor / Unit / Title box: the look-up redrew the window under the press — the
         // press still counts, once. (attack3b S6) …but only when the mouse is let go on Save: dragged off and let go saves nothing
         if(sb0&&!document.body.contains(sb0)){if(st.saveUp===true){st.saveUp=null;save();}else if(st.saveUp==null)st.savePend=Date.now();return;}
         if(id&&!st.wo){const e=ov.querySelector('#'+id);if(e){e.focus();if(e.select)e.select();}}},0);};
-      ['me-ju','me-jt'].forEach(id=>{const e=g(id);if(e)e.onblur=auto;});}
+      ['me-jf','me-ju','me-jt'].forEach(id=>{const e=g(id);if(e)e.onblur=auto;});} // (attack3b S4) the Floor box too: Unit typed first, then Floor, then Save
     ov.querySelectorAll('[data-jpick]').forEach(b=>b.onclick=()=>jbChoose(b.dataset.jpick,'picked'));
     on('me-jnot',()=>{keep();const w=st.wo;if(w&&!st.jb.not.includes(w))st.jb.not.push(w);st.wo='';st.jm=null;st.jb.res=null;st.jb.last='';draw();});
     on('me-pick',()=>{keep();st.newWO=false;draw();});
@@ -4990,7 +4990,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     for(const r of rows.filter(r=>r.k==='part'&&r.buy)){if(!String(r.item||'').trim())return err('Every Bought in row needs a description'+at(r)+'.');if(!(+totalOf(r,b[rows.indexOf(r)])>0))return err('Every Bought in row needs a quantity ("'+String(r.item).trim()+'"'+at(r)+').');}
     const onlyBuy=!chk.length&&rows.some(r=>r.k==='part'&&(r.buy||tbcHold(r)));
     let e=manualListValidate({...d,name:d.name||(st.newWO?'(the new P-number)':''),rows:onlyBuy?[{k:'saw',item:'x',qty:1,L:1,W:1}]:chk,noCut:onlyBuy?false:d.noCut,noFit:onlyBuy?false:d.noFit,wo:st.tpl?'(template)':d.wo});
-    if(e==='Give the list a house / name.'&&!st.tpl&&!d.wo)e=jbOn()?(st.jb.res&&st.jb.res.st==='pick'?'No work order yet — pick one of the work orders offered above.':'No work order yet — type the Floor and the Unit, then press 🔎 Find the Cienapps WO.'):'Pick the work order (or create a new P-number).'; // (attack3 W7) name the real gap: the name is only blank because there is no WO
+    if(e==='Give the list a house / name.'&&!st.tpl&&!d.wo)e=jbOn()?(st.jb.res&&st.jb.res.st==='pick'?'No work order yet — pick one of the work orders offered above.':st.jb.res&&st.jb.res.st==='none'&&keyTxt(st.jb.floor)&&keyTxt(st.jb.unit)?'No Cienapps work order found for Floor '+String(st.jb.floor).trim()+' · Unit '+String(st.jb.unit).trim()+' — check the floor and unit, or press "Make a P-number instead…" above.':'No work order yet — type the Floor and the Unit, then press 🔎 Find the Cienapps WO.'):'Pick the work order (or create a new P-number).'; // (attack3 W7) name the real gap: the name is only blank because there is no WO
     if(e){err(e.replace(/saw row/g,'saw row (with a length or width)').replace(/fittings row/g,'Stores row (no length or width)'));
       const q=/needs a quantity/.test(e)?rows.find(r=>r.k==='part'&&!r.buy&&!tbcHold(r)&&!(+totalOf(r,b[rows.indexOf(r)])>0)):null,c=q&&ov.querySelector('[data-mr="'+R().indexOf(q)+'|qty"]');
       if(c&&!c.disabled)c.focus(); // the cursor goes to the row with no quantity (a long list: it is scrolled to)
