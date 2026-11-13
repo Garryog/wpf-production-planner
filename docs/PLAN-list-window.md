@@ -489,7 +489,7 @@ capping on the opposite side. These types might be named with and with a 'H' or 
   a handed unit with only the un-handed template, two templates that differ only by hand.
 
 
-### 14 Nov 2026, 00:30 UTC (scheduled run 7, started 19:43 on the 13th)
+### 13 Nov 2026, 23:00 UTC (scheduled run 7, started 19:43)
 - **Still waiting for Deliveries.** `release/deliveries-weeks` is NOT on `main` yet, so no merge, no final round, no pull request.
   No other run was working (last push 16:46).
 - **Garry's bug check (M1–M5 above) — M1 to M4 FIXED, each with its own test:**
