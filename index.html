@@ -3529,7 +3529,7 @@ function lsProjectsDlg(){
       <div style="font-size:12px;color:var(--t3);margin-bottom:10px">Rename, change the customer or who owns the lists, set the site address (the default "deliver to" on stores dockets), or set a project inactive. Projects are never deleted.</div>
       <table class="lst-tbl"><thead><tr><th>Project</th><th>Customer (Cienapps)</th><th>Lists owned by</th><th>Site address (dockets)</th><th>Active</th><th></th></tr></thead><tbody>
       ${ps.map(p=>`<tr${p.active===false?' style="opacity:.6"':''}><td><input data-pjn="${escA(p.id)}" value="${escA(p.name)}" style="${LS_INP};width:100%"></td><td><input data-pjc="${escA(p.id)}" value="${escA(p.customer||'')}" style="${LS_INP};width:100%"></td>
-        <td><input data-pjo="${escA(p.id)}" value="${escA(p.list_owner||'')}" placeholder="Production Manager" style="${LS_INP};width:100%"></td><td><textarea data-pjsa="${escA(p.id)}" rows="1" placeholder="Default 'deliver to' on dockets" style="${LS_INP};width:100%;min-width:160px;font-family:inherit">${escA(p.site_address||'')}</textarea></td><td><input type="checkbox" data-pja="${escA(p.id)}"${p.active!==false?' checked':''}></td>
+        <td><input data-pjo="${escA(p.id)}" value="${escA(p.list_owner||'')}" placeholder="Production Manager, Garry and Drawing office" style="${LS_INP};width:100%"></td><td><textarea data-pjsa="${escA(p.id)}" rows="1" placeholder="Default 'deliver to' on dockets" style="${LS_INP};width:100%;min-width:160px;font-family:inherit">${escA(p.site_address||'')}</textarea></td><td><input type="checkbox" data-pja="${escA(p.id)}"${p.active!==false?' checked':''}></td>
         <td style="white-space:nowrap"><button class="btn btn-g" data-pjs="${escA(p.id)}" style="font-size:12px;padding:4px 10px">Save</button> <button class="btn btn-s" data-pjm="${escA(p.id)}" style="font-size:12px;padding:4px 10px">Materials</button></td></tr>`).join('')}
       <tr><td><input id="pj-new-n" placeholder="New project name" style="${LS_INP};width:100%"></td><td><input id="pj-new-c" placeholder="Customer" style="${LS_INP};width:100%"></td><td><input id="pj-new-o" placeholder="Production Manager" style="${LS_INP};width:100%"></td><td><textarea id="pj-new-sa" rows="1" placeholder="Site address" style="${LS_INP};width:100%;min-width:160px;font-family:inherit"></textarea></td><td></td>
         <td><button class="btn btn-g" id="pj-add" style="font-size:12px;padding:4px 10px">＋ Add</button></td></tr></tbody></table><div id="pj-msg" style="font-size:12px;color:#b42318;font-weight:700;margin-top:6px"></div>`;
@@ -3737,7 +3737,7 @@ function lsSawDay(cut){return !cut?'':isWorkDay(cut)?cut:prevWorkDay(cut);}
 function lsAddWorkDays(iso,n){let d=iso;for(let i=0;i<n;i++)d=nextWorkDay(d);return d;}
 function lsOwnerFor(o){
   const p=lsProjForCust(o&&o.customer);
-  return(p&&String(p.list_owner||'').trim())||'Production Manager'; // (Garry 13 Nov, question 14 answer B) left as the Production Manager; a project's own "list owner" still wins
+  return(p&&String(p.list_owner||'').trim())||'Production Manager, Garry and Drawing office'; // (Garry 13 Nov: "send to Production Manager and me and drawings") all three named; a project's own "list owner" still wins
 }
 // Saw (Garry, 3 Nov): RED, always open — "ON DELIVERY – NO CUTTING LIST": jobs dragged onto the delivery schedule (a van
 // AND a day) with no list. The undated delivery pool and the automatic step 7/8 tag don't count for red. AMBER, one line —

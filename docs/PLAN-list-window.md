@@ -452,3 +452,7 @@ Questions 1–18 above were put to Garry as one list of 17; his answers, with th
 - **Scheduled task:** changed from every 3 hours to once a day (19:43 Irish time), as Garry chose.
 - **Still for Garry:** (1) merge the Deliveries weeks release — only he merges to `main`; (2) look at the list window and say
   whether "?" help and "Change job" should move under More (question 16).
+- **Garry, 13 Nov (later, live): "can we send to Production Manager and me and drawings".** The saw's "no list yet" line and the
+  Production Manager's late-lists rows now name all three by default — "owner Production Manager, Garry and Drawing office"
+  (a project's own "list owner" still wins). It is wording on the screens only: the planner sends no messages. All three
+  already see "Cutting lists to issue" on their own screens (office, Production Manager, Drawing office).
