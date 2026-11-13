@@ -4974,7 +4974,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     for(const r of rows.filter(r=>r.k==='part'&&r.buy)){if(!String(r.item||'').trim())return err('Every Bought in row needs a description'+at(r)+'.');if(!(+totalOf(r,b[rows.indexOf(r)])>0))return err('Every Bought in row needs a quantity ("'+String(r.item).trim()+'"'+at(r)+').');}
     const onlyBuy=!chk.length&&rows.some(r=>r.k==='part'&&(r.buy||tbcHold(r)));
     let e=manualListValidate({...d,name:d.name||(st.newWO?'(the new P-number)':''),rows:onlyBuy?[{k:'saw',item:'x',qty:1,L:1,W:1}]:chk,noCut:onlyBuy?false:d.noCut,noFit:onlyBuy?false:d.noFit,wo:st.tpl?'(template)':d.wo});
-    if(e==='Give the list a house / name.'&&!st.tpl&&!d.wo)e=jbOn()?'No work order yet — type the Floor and the Unit, then press 🔎 Find the Cienapps WO.':'Pick the work order (or create a new P-number).'; // (attack3 W7) name the real gap: the name is only blank because there is no WO
+    if(e==='Give the list a house / name.'&&!st.tpl&&!d.wo)e=jbOn()?(st.jb.res&&st.jb.res.st==='pick'?'No work order yet — pick one of the work orders offered above.':'No work order yet — type the Floor and the Unit, then press 🔎 Find the Cienapps WO.'):'Pick the work order (or create a new P-number).'; // (attack3 W7) name the real gap: the name is only blank because there is no WO
     if(e){err(e.replace(/saw row/g,'saw row (with a length or width)').replace(/fittings row/g,'Stores row (no length or width)'));
       const q=/needs a quantity/.test(e)?rows.find(r=>r.k==='part'&&!r.buy&&!tbcHold(r)&&!(+totalOf(r,b[rows.indexOf(r)])>0)):null,c=q&&ov.querySelector('[data-mr="'+R().indexOf(q)+'|qty"]');
       if(c&&!c.disabled)c.focus(); // the cursor goes to the row with no quantity (a long list: it is scrolled to)
