@@ -99,3 +99,4 @@ component will need a code to ID them as a project stock component so the stock 
   consumes it; taking the line off the list releases it. Asking for more than is free is refused with what is left and offers "raise
   a stock job for the shortfall". Buffer flag works on free stock (on hand − reserved).
 - Kanban columns now: To cut → Being cut → In stock → Reserved for a WO → Picked / sent.
+- **Code format agreed (Garry, 13 Nov 09:12):** project short code + running number, e.g. "ASP-C014" — "that code is fine".
