@@ -3599,7 +3599,7 @@ function lsMaterialsDlg(pid,after){
     const fresh=async()=>{try{await lsMatFresh(pid);return true;}catch(e){msg('Could not check the materials list — '+e.message);return false;}}; // check against the database, not this screen's copy
     ov.querySelectorAll('[data-mts]').forEach(b=>b.onclick=async()=>{const id=b.dataset.mts;if(!LST.m.get(id)||!lsMatEditOk())return;
       const name=ov.querySelector('[data-mtn="'+id+'"]').value.trim();if(!name)return msg('A material needs a name.');
-      const aliases=ov.querySelector('[data-mta="'+id+'"]').value.split(',').map(s=>s.trim()).filter(Boolean);
+      const aliases=ov.querySelector('[data-mta="'+id+'"]').value.split(',').map(s=>s.trim()).filter(a=>a&&matKey(a)!==matKey(name)); // its own name is never an "other spelling" (renamed back)
       const kind=ov.querySelector('[data-mtk="'+id+'"]').value,active=ov.querySelector('[data-mtv="'+id+'"]').checked;
       const m=seen[id]||LST.m.get(id); // the version this screen showed: if another screen changed it since, the save is refused (not overwritten)
       if(!await fresh())return;
