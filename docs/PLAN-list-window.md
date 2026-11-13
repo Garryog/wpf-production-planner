@@ -277,6 +277,8 @@ pickers are folded behind "Change job ▾" rather than removed.
 ## Questions added 13 Nov (recommended answer first) — 1–11 above are still open; built on the recommended answers
 12. **Drawing office PIN on a shared PC (replaces 6).** **A (recommended): only the Drawing office / Admin screen, or the PIN
     typed at that moment, opens templates — a remembered PIN never does.** B: leave as built.
+    As built (answer A): templates are made and changed on the Drawing office screen only (Admin: open the Drawing office
+    screen with the Admin PIN).
 13. **Two PCs saving a list for the same job in the same second.** **A (recommended): accept for 18 Nov; fix with the database
     rule in the L4b release.** B: hold this release.
 14. **An old screen left open can wipe the duplicate-P-number safety copies.** **A (recommended): accept, with "close every
