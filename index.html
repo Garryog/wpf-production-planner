@@ -4797,6 +4797,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     (async()=>{
       try{await lsMatFresh(st.pid);const cl=lsMatClash(st.pid,n,'');
         if(cl&&cl.kind==='other'&&(lsNum(r.L)>0||lsNum(r.W)>0)){notFit(cl);return;} // made a fitting on another screen meanwhile (M4)
+        if(cl&&cl.active===false&&!confirm('"'+cl.name+'" was retired from the '+pname+' materials.\n\nBring it back and use it on this row?\n\nOK = bring it back\nCancel = leave it retired (this row is not changed)')){st.focus=i+'|mat';draw();return;} // (B3) never brought back without asking
         if(cl){if(cl.active===false)await lsWrite('project_materials',cl,{active:true});snap();r.mat=cl.name;}
         else{await lsWrite('project_materials',{id:uid('M'),project_id:st.pid,name:n,kind,sort:lsMats(st.pid,'',true).length});snap();r.mat=n;}
         delete r.matAuto;

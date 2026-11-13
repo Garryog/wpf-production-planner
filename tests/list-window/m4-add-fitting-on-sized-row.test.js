@@ -46,6 +46,17 @@ const clearToast = p => p.evaluate(() => document.querySelectorAll('.toast,#toas
     await setv(p, i + '|mat', '__add'); await sleep(1200);
     tt = await toasts(p); r = (await rows(p))[i];
     rec('a retired fitting typed on a saw row: plain message, not brought back, row unchanged', /is a fitting/.test(tt) && S.db.t.project_materials.find(m => m.id === 'M2').active === false && r && r.mat === 'MFC White', JSON.stringify([tt, r]));
+    // 5. (Tester round 4 B3) the retired fitting typed on a Stores row: asked first; Cancel leaves it retired and the row unchanged
+    i = await idx(p, 'Tap');
+    await p.evaluate(() => { window.__asked = []; window.__confirm = false; });
+    await setv(p, i + '|mat', '__add'); await sleep(1200);
+    let q5 = await p.evaluate(() => window.__asked.join('|')); r = (await rows(p))[i];
+    rec('a retired fitting on a Stores row: asked "bring it back?" first', /was retired/.test(q5) && /Bring it back/.test(q5), q5);
+    rec('… Cancel: stays retired, the row keeps its material', S.db.t.project_materials.find(m => m.id === 'M2').active === false && r && r.mat === 'Chrome mixer', JSON.stringify(r));
+    await p.evaluate(() => { window.__asked = []; window.__confirm = true; });
+    await setv(p, i + '|mat', '__add'); await sleep(1200);
+    r = (await rows(p))[i];
+    rec('… OK: brought back and picked', S.db.t.project_materials.find(m => m.id === 'M2').active === true && r && r.mat === 'Blum hinge', JSON.stringify(r));
     await closeAll(p);
     rec('no page errors', !(S.errors || []).length, JSON.stringify(S.errors));
   } catch (e) { rec('test ran to the end', false, e.stack); }
