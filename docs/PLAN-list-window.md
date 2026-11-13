@@ -522,3 +522,8 @@ capping on the opposite side. These types might be named with and with a 'H' or 
    A (recommended) — when the template name is changed and the type name was the same as the old name, the type name follows.
    B — nothing now; "one name per template" in the next release fixes it. C — hide the Type name box now.
    (The live Emmet Road "4C" template still needs its type name retyped by hand either way.)
+
+**Garry, 14 Nov (live): question 19 = A.** Built: when a template is renamed and its type name was the same as the old name, the
+type name follows (on screen and on Save); a type name typed differently on purpose is kept; templates that already disagree
+(live "4C" / "4B") are not touched. Test `list-window/m5-template-name-follows` 17 of 17; the 41 files that touch templates give
+the same results as before. Not yet attacked by the Tester — final round.
