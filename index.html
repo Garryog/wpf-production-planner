@@ -4499,6 +4499,8 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       +'Make a new planner P-number instead?\n\nUse it only when Cienapps has no WO for this house yet. It shows purple, "not from Cienapps".\n\nOK = make a P-number\nCancel = go back'))return;
     st.newWO=true;['floor','unit','title'].forEach(k=>{if(!String(st.pw[k]||'').trim())st.pw[k]=String(b[k]||'').trim();});draw();
   };
+  // (attack3 N7) a NEW list on a Cienapps WO whose house already has a live list under a P-number (block rule included) → that P-number
+  const pUnder=()=>ex||st.tpl||st.newWO||!st.wo||st.from?'':pListUnder(DB.orders.find(x=>x.wo===st.wo));
   const jbHTML=()=>{
     if(!jbOn())return'';
     const b=st.jb,E=escA,fu=o=>[fuF(o)?'Floor '+fuF(o):'',fuU(o)?'Unit '+fuU(o):''].filter(Boolean).join(' · ');
@@ -4656,7 +4658,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
           <button class="btn btn-s me-big" id="me-findold" title="Search every old list by name, house, work order or project and use its rows here — the old list is never changed">🔍 An old list…</button>
         </div></details>
       </div>
-      ${jbHTML()}
+      ${jbHTML()}${(pu=>pu?`<div class="me-jbw" id="me-punder" style="font-size:13px;margin:4px 0">⚠ This house already has a cutting list, under ${escA(pu)} — open that list to change it.</div>`:'')(pUnder())}
       ${st.newWO?`<div class="me-newwo">
         <input id="me-ptitle" placeholder="Title *" value="${escA(st.pw.title)}" style="${inp};flex:1;min-width:200px"><input id="me-pcust" placeholder="Customer" value="${escA(st.pw.cust||(LST.p.get(st.pid)||{}).customer||'')}" style="${inp};width:170px">
         <input id="me-pfloor" placeholder="Floor" value="${escA(st.pw.floor)}" style="${inp};width:70px"><input id="me-punit" placeholder="Unit" value="${escA(st.pw.unit)}" style="${inp};width:70px">
@@ -5043,6 +5045,11 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       const sb=g('me-save');if(sb)sb.disabled=true;err('Checking '+tgt+' for a list…');
       lsLiveFor(tgt).then(found=>{if(sb)sb.disabled=false;err('');
         const other=found.filter(l=>l.id!==(ex?ex.id:d.newId)&&!(d.replaces&&d.replaces.id===l.id));
+        const pu=other.length?'':pUnder();
+        if(pu&&st.dupOk!==tgt+'|'+pu){ // (attack3 N7b) the same question as for a WO that already has a list
+          if(!confirm('⚠ This house ALREADY HAS a cutting list, under '+pu+'.\n\nOne house should have ONE list — with two, the saw could cut the job twice.\n\nSave this as a SECOND list anyway?\n\nOK = yes, save a second list\nCancel = do not save (your rows stay on screen)'))
+            return err('This house already has a list under '+pu+' — NOT saved. Your rows are still here. Open that list to change it.');
+          st.dupOk=tgt+'|'+pu;}
         if(!other.length)return go0();
         const nm='"'+other[0].name+'"'+(other.length>1?' (and '+(other.length-1)+' more)':'');
         if(!confirm('⚠ '+tgt+' ALREADY HAS a cutting list: '+nm+'.\n\nOne work order should have ONE list — with two, the saw could cut the job twice.\n\nSave this as a SECOND list for '+tgt+' anyway?\n\nOK = yes, save a second list\nCancel = do not save (your rows stay on screen)'))
