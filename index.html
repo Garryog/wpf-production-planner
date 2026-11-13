@@ -4509,7 +4509,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     if(st.wo)return'';
     const r=b.res,blank=!keyTxt(b.floor)||!keyTxt(b.unit),where=' for Floor '+E(String(b.floor).trim())+' · Unit '+E(String(b.unit).trim())+(st.pid?' on '+E(lsProjName(st.pid)):'');
     const opt=(x,ok)=>`<button class="btn btn-s" data-jpick="${E(x.o.wo)}"><b>${E(x.o.wo)}</b>${fu(x.o)?' · '+E(fu(x.o)):''}${x.o.title?' · '+E(x.o.title):''} <span style="color:var(--t3)">${E(x.o.customer||'')}</span> — ${ok?'<span style="color:#0d6e46">same house</span>':'<span class="me-jbw">not sure: '+E(x.why)+'</span>'}</button>`;
-    const msg=!r?(blank?'Type the Floor and the Unit (both) — the Cienapps WO is looked up by project + floor + unit. No search while either is blank.':'Press 🔎 Find the Cienapps WO (or leave the Unit box).')
+    const msg=!r?(blank?'Type the Floor and the Unit (both) — the Cienapps WO is looked up by project + floor + unit. No search while either is blank.':'Press 🔎 Find the Cienapps WO (or leave the Title box).')
       :r.st==='noproj'?'<span class="me-jbw">Pick the project first — the work order is looked up inside the project.</span>'
       :r.st==='blank'?'<span class="me-jbw">Floor and Unit are both needed to look it up — no search was made.</span>'
       :r.st==='none'?'<span class="me-jbw">No Cienapps work order found'+where+'.</span> Check the floor and unit — or Cienapps may not have it yet. <button class="btn btn-s" id="me-jmkp" style="font-size:12px;padding:2px 9px;color:#5b21b6">Make a P-number instead…</button>'
@@ -4973,7 +4973,8 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     // Bought in rows: never cut or picked — they only need a description and a quantity
     for(const r of rows.filter(r=>r.k==='part'&&r.buy)){if(!String(r.item||'').trim())return err('Every Bought in row needs a description'+at(r)+'.');if(!(+totalOf(r,b[rows.indexOf(r)])>0))return err('Every Bought in row needs a quantity ("'+String(r.item).trim()+'"'+at(r)+').');}
     const onlyBuy=!chk.length&&rows.some(r=>r.k==='part'&&(r.buy||tbcHold(r)));
-    const e=manualListValidate({...d,name:d.name||(st.newWO?'(the new P-number)':''),rows:onlyBuy?[{k:'saw',item:'x',qty:1,L:1,W:1}]:chk,noCut:onlyBuy?false:d.noCut,noFit:onlyBuy?false:d.noFit,wo:st.tpl?'(template)':d.wo});
+    let e=manualListValidate({...d,name:d.name||(st.newWO?'(the new P-number)':''),rows:onlyBuy?[{k:'saw',item:'x',qty:1,L:1,W:1}]:chk,noCut:onlyBuy?false:d.noCut,noFit:onlyBuy?false:d.noFit,wo:st.tpl?'(template)':d.wo});
+    if(e==='Give the list a house / name.'&&!st.tpl&&!d.wo)e=jbOn()?'No work order yet — type the Floor and the Unit, then press 🔎 Find the Cienapps WO.':'Pick the work order (or create a new P-number).'; // (attack3 W7) name the real gap: the name is only blank because there is no WO
     if(e){err(e.replace(/saw row/g,'saw row (with a length or width)').replace(/fittings row/g,'Stores row (no length or width)'));
       const q=/needs a quantity/.test(e)?rows.find(r=>r.k==='part'&&!r.buy&&!tbcHold(r)&&!(+totalOf(r,b[rows.indexOf(r)])>0)):null,c=q&&ov.querySelector('[data-mr="'+R().indexOf(q)+'|qty"]');
       if(c&&!c.disabled)c.focus(); // the cursor goes to the row with no quantity (a long list: it is scrolled to)
