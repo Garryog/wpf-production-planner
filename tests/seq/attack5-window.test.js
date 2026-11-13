@@ -145,11 +145,11 @@ function row() {
         await closeAll(p);
       };
       await escNoAsk('existing seeded list L1 opened, nothing touched', () => openListEditor('L1'));
-      await escNoAsk('existing TEMPLATE opened, nothing touched', () => { (o => { window.prompt = (m, d) => /Enter the Drawing office or Admin PIN/.test(m) ? pins().design : o(m, d); })(window.prompt); /* a remembered PIN no longer opens templates (plan question 12): the PIN is typed when asked */ openListEditor('T1'); });
+      await escNoAsk('existing TEMPLATE opened, nothing touched', () => { (o => { window.prompt = (m, d) => /Enter the Drawing office, Production Manager or Admin PIN/.test(m) ? pins().design : o(m, d); })(window.prompt); /* a remembered PIN no longer opens templates (plan question 12): the PIN is typed when asked */ openListEditor('T1'); });
       await escNoAsk('new list, WO with a linked customer (project found at once)', () => openListEditor(null, 'WO-3'));
       await escNoAsk('new list, project MADE from the customer (async)', () => openListEditor(null, 'WO-50'));
       await escNoAsk('new list with no WO and no project', () => openListEditor(null, '', ''));
-      await escNoAsk('new template (blank)', () => { (o => { window.prompt = (m, d) => /Enter the Drawing office or Admin PIN/.test(m) ? pins().design : o(m, d); })(window.prompt); /* a remembered PIN no longer opens templates (plan question 12): the PIN is typed when asked */ openListEditor(null, '', 'P1', { tpl: true }); });
+      await escNoAsk('new template (blank)', () => { (o => { window.prompt = (m, d) => /Enter the Drawing office, Production Manager or Admin PIN/.test(m) ? pins().design : o(m, d); })(window.prompt); /* a remembered PIN no longer opens templates (plan question 12): the PIN is typed when asked */ openListEditor(null, '', 'P1', { tpl: true }); });
 
       // another PC changes things while the window is open: the 30 s poll + the planner reload; then a redraw the person didn't cause
       await closeAll(p); await p.evaluate(() => { window.__asked = []; window.__confirm = false; window.__e = openListEditor('L1'); }); await sleep(600);

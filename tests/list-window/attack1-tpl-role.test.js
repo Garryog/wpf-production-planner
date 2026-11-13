@@ -22,7 +22,7 @@ const topTxt = p => p.evaluate(() => { const o = [...document.querySelectorAll('
       await p.evaluate(() => openListEditor('L1')); await sleep(800);
       const b = await p.evaluate(() => ({ ed: !!document.querySelector('.me-ed'), btn: !!document.getElementById('me-astpl') }));
       await closeAll(p);
-      const want = role === 'design';
+      const want = role === 'design' || role === 'prod'; // (Garry 13 Nov, question 12 answer B) the Production Manager too
       rec(role + ': list window (new + existing) — "Save as template" ' + (want ? 'SHOWN' : 'absent'), a.btn === want && b.btn === want, JSON.stringify({ new: a, existing: b }));
       // (2) the Cutting Lists page: is there another "Save as template" there, and does it work with no PIN / the wrong PIN?
       const lp = await p.evaluate(async () => { try { showTab('l'); } catch (e) {} await new Promise(r => setTimeout(r, 500)); const bs = [...document.querySelectorAll('[data-lhastpl]')]; return { n: bs.length, vis: bs.filter(x => x.getBoundingClientRect().width > 0).length }; });

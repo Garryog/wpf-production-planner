@@ -106,7 +106,7 @@ const donep = p => p.evaluate(() => { const d = document.querySelector('.me-dov'
     await p.evaluate(() => { DB.listChk = false; document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); }); await sleep(100);
     rec('L8: Esc closes the finish panel', await p.evaluate(() => !document.querySelector('.pod-ovl')));
     // a template
-    await p.evaluate(() => { (o => { window.prompt = (m, d) => /Enter the Drawing office or Admin PIN/.test(m) ? pins().design : o(m, d); })(window.prompt); /* a remembered PIN no longer opens templates (plan question 12): the PIN is typed when asked */ /* attack2 F5 (Garry Q3): templates are Drawing office / Admin only */ openListEditor(null, '', 'P1', { tpl: true }); }); await sleep(400);
+    await p.evaluate(() => { (o => { window.prompt = (m, d) => /Enter the Drawing office, Production Manager or Admin PIN/.test(m) ? pins().design : o(m, d); })(window.prompt); /* a remembered PIN no longer opens templates (plan question 12): the PIN is typed when asked */ /* attack2 F5 (Garry Q3): templates are Drawing office / Admin only */ openListEditor(null, '', 'P1', { tpl: true }); }); await sleep(400);
     await p.evaluate(() => { const n = document.getElementById('me-name'); n.value = 'Type Z'; n.dispatchEvent(new Event('input')); });
     await fillSaw(p, 0, 'Side', '1', '700', '500', 'MFC White');
     await p.evaluate(() => document.getElementById('me-save').click()); await sleep(1000);
@@ -304,7 +304,7 @@ const donep = p => p.evaluate(() => { const d = document.querySelector('.me-dov'
     rec('names: Insert from template (8 templates) has a find box; "larch" → only "Larch Type Q"', JSON.stringify(w) === '["Larch Type Q"]', JSON.stringify(w));
     await closeAll(p);
     // templates still need a name
-    await p.evaluate(() => { (o => { window.prompt = (m, d) => /Enter the Drawing office or Admin PIN/.test(m) ? pins().design : o(m, d); })(window.prompt); /* a remembered PIN no longer opens templates (plan question 12): the PIN is typed when asked */ /* attack2 F5 (Garry Q3): templates are Drawing office / Admin only */ openListEditor(null, '', 'P1', { tpl: true }); }); await sleep(400);
+    await p.evaluate(() => { (o => { window.prompt = (m, d) => /Enter the Drawing office, Production Manager or Admin PIN/.test(m) ? pins().design : o(m, d); })(window.prompt); /* a remembered PIN no longer opens templates (plan question 12): the PIN is typed when asked */ /* attack2 F5 (Garry Q3): templates are Drawing office / Admin only */ openListEditor(null, '', 'P1', { tpl: true }); }); await sleep(400);
     await fillSaw(p, 0, 'Side', '1', '700', '500', 'MFC White');
     await p.evaluate(() => document.getElementById('me-save').click()); await sleep(300);
     rec('names: a template with no name → "Give the template a name."', await p.evaluate(() => document.getElementById('me-err').textContent === 'Give the template a name.' && !!document.querySelector('.me-ed')));
@@ -353,7 +353,7 @@ const donep = p => p.evaluate(() => { const d = document.querySelector('.me-dov'
     const S0 = X.makeServer(X.v1Row());
     const o0 = await X.dev(browser, S0, 'office');
     await o0.page.evaluate(() => showTab('s')); await sleep(300);
-    rec('switch OFF: Settings has "💾 Storage on this device"', await o0.page.evaluate(() => !!document.getElementById('set-store')));
+    rec('switch OFF: Settings does NOT show "💾 Storage on this device" (Garry 13 Nov, question 15 answer B)', await o0.page.evaluate(() => !document.getElementById('set-store')));
     await o0.page.evaluate(() => openListEditor(null, 'WO-2')); await sleep(200);
     rec('switch OFF: the old list window — no ✕ Close bar, no project message, old name pre-fill and "Cancel"', await o0.page.evaluate(() => !document.getElementById('me-x0') && !document.getElementById('me-pm') && /Cancel/.test((document.getElementById('pod-x') || {}).textContent || '')));
     rec('switch OFF: no page errors', !(S0.errors || []).length, JSON.stringify(S0.errors));

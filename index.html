@@ -1634,7 +1634,7 @@ function renderSettings(app){
     +'<button class="btn btn-g" id="btn-backup">⬇ Download full backup (JSON)</button>'
     +'<div id="bak-last" style="font-size:13px;font-weight:700;margin-top:12px">Last good backup: checking…</div>'
     +'<div style="font-size:11px;color:var(--t3);margin-top:3px">Automatic: the first office screen each day saves a copy to the database (kept 30 days). Clear Week and other bulk deletes take one first.</div>'
-    +'</div>'+devStoreHTML()+lsPanelHTML()+'</div>';
+    +'</div>'+(V2()||DB.pendFail?devStoreHTML():'')+lsPanelHTML()+'</div>'; // (Garry 13 Nov, question 15 answer B) hidden while lists are OFF, except when this device could not keep its copy
 
   // staff roster: edit in place, add, remove
   const uidS=()=>'S'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
@@ -3737,7 +3737,7 @@ function lsSawDay(cut){return !cut?'':isWorkDay(cut)?cut:prevWorkDay(cut);}
 function lsAddWorkDays(iso,n){let d=iso;for(let i=0;i<n;i++)d=nextWorkDay(d);return d;}
 function lsOwnerFor(o){
   const p=lsProjForCust(o&&o.customer);
-  return(p&&String(p.list_owner||'').trim())||'Drawing office'; // (attack2 F15) cutting lists are the Drawing office's now
+  return(p&&String(p.list_owner||'').trim())||'Production Manager'; // (Garry 13 Nov, question 14 answer B) left as the Production Manager; a project's own "list owner" still wins
 }
 // Saw (Garry, 3 Nov): RED, always open — "ON DELIVERY – NO CUTTING LIST": jobs dragged onto the delivery schedule (a van
 // AND a day) with no list. The undated delivery pool and the automatic step 7/8 tag don't count for red. AMBER, one line —
@@ -4357,12 +4357,12 @@ function lsMatCan(){return MAT_ED.includes(ROLE);}
 /* List window, simple layout (Garry 12 Nov — "simplicity is the main focus"): opened from a job the window shows the job, the rows and
    one big Save. The Project / Work order pickers sit behind "Change job", templates / Excel / old lists behind ONE "Start from…",
    Type and the rarely used switches under More, and "Save as template" shows only for the Drawing office or the Admin PIN. */
-function lsTplSaveOk(){return ROLE==='design'||ROLE==='admin';} // (attack2 F11) the Admin view counts. (plan question 12, answer A) a PIN remembered on the PC from another action (✓ Check, a project edit) never opens templates — only this screen, or the PIN typed at that moment (lsTplPinOk)
+function lsTplSaveOk(){return ROLE==='design'||ROLE==='admin'||ROLE==='prod';} // (Garry 13 Nov, question 12 answer B) the Production Manager too // (attack2 F11) the Admin view counts. (plan question 12, answer A) a PIN remembered on the PC from another action (✓ Check, a project edit) never opens templates — only this screen, or the PIN typed at that moment (lsTplPinOk)
 /* (Garry Q3, 12 Nov: "Drawing office and Admin only, everywhere") the ONE guard for making or changing a template: Save as template,
    ＋ New template, editing / archiving a template, ⧉ Copy from another project. (attack2 F12) a PIN typed here is good for this one
    action only — never remembered on the PC. */
-function lsTplPinOk(){if(lsTplSaveOk())return true;const p=pins(),ok=v=>!!v&&[p.design,p.admin].includes(v); // the buttons are hidden for everyone else; this is the last guard
-  const v=prompt('Templates are made and changed by the Drawing office or Admin.\n\nEnter the Drawing office or Admin PIN:','');
+function lsTplPinOk(){if(lsTplSaveOk())return true;const p=pins(),ok=v=>!!v&&[p.design,p.prod,p.admin].includes(v); // the buttons are hidden for everyone else; this is the last guard
+  const v=prompt('Templates are made and changed by the Drawing office, Production Manager or Admin.\n\nEnter the Drawing office, Production Manager or Admin PIN:','');
   if(v===null)return false;if(!ok(v.trim())){toast('Wrong PIN — no template changed');return false;}
   return true;}
 /* DD1 (list window part): the due date as ONE tag — red = overdue, amber = due this week, grey = later. */
@@ -4937,7 +4937,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     const tps=lsTemplatesFor(st.pid).filter(t=>!ex||t.id!==ex.id);
     const dl=lsDlg('<div id="it-body"></div>',640);const body=dl.querySelector('#it-body');
     dl.onclick=e=>{if(e.target===dl||e.target.id==='pod-x')dl.remove();}; // closing it leaves the editor as it was
-    if(!tps.length){body.innerHTML=`<div style="font-weight:800;color:#14335c;font-size:16px;margin-bottom:6px">📐 Insert unit from template</div><div style="font-size:13px;color:var(--t2)">${escA(lsProjName(st.pid))} has no templates yet. Templates are made by the Drawing office (📐 Save as template on a list).</div>`;return;}
+    if(!tps.length){body.innerHTML=`<div style="font-weight:800;color:#14335c;font-size:16px;margin-bottom:6px">📐 Insert unit from template</div><div style="font-size:13px;color:var(--t2)">${escA(lsProjName(st.pid))} has no templates yet. Templates are made by the Drawing office or Production Manager (📐 Save as template on a list).</div>`;return;}
     const pick=async tid=>{
       body.innerHTML='Loading…';
       try{if(!LST.full.has(tid))await lsReloadList(tid);}catch(e){body.innerHTML='<span style="color:var(--red)">Could not load the template — '+escA(e.message)+'</span>';return;}

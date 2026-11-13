@@ -87,7 +87,7 @@ const pinUp = p => p.evaluate(() => { window.__conf = []; window.prompt = (m, d)
     const a = await F.dev(browser, S, 'office'), b = await F.dev(browser, S, 'office');
     await pinUp(a.page); await pinUp(b.page);
     // (12 Nov, list-window Q3) Save as template needs the Drawing office / Admin PIN — the Production Manager PIN (7777) no longer opens it
-    const open = (p, id) => p.evaluate(async id => { (o => { window.prompt = (m, d) => /Enter the Drawing office or Admin PIN/.test(m) ? pins().design : o(m, d); })(window.prompt); /* a remembered PIN no longer opens templates (plan question 12): the PIN is typed when asked */ lsSaveAsTpl({ id }); await new Promise(r => setTimeout(r, 300)); const n = document.getElementById('at-name'); n.value = 'Type B kitchen'; n.oninput({ target: n }); return document.getElementById('at-ok').textContent; }, id);
+    const open = (p, id) => p.evaluate(async id => { (o => { window.prompt = (m, d) => /Enter the Drawing office, Production Manager or Admin PIN/.test(m) ? pins().design : o(m, d); })(window.prompt); /* a remembered PIN no longer opens templates (plan question 12): the PIN is typed when asked */ lsSaveAsTpl({ id }); await new Promise(r => setTimeout(r, 300)); const n = document.getElementById('at-name'); n.value = 'Type B kitchen'; n.oninput({ target: n }); return document.getElementById('at-ok').textContent; }, id);
     const ta = await open(a.page, 'LD1'), tb0 = await open(b.page, 'LD2');
     await a.page.evaluate(() => document.getElementById('at-ok').click()); await wait(() => D.find(S.db, 'lists', 'TD').rev === 2);
     await b.page.evaluate(() => document.getElementById('at-ok').click()); await F.sleep(1200);
@@ -104,7 +104,7 @@ const pinUp = p => p.evaluate(() => { window.__conf = []; window.prompt = (m, d)
     const o = await F.dev(browser, S, 'office'), pg = o.page; await pinUp(pg);
     const l = await pg.evaluate(() => lsCreateFromTpl('TE', ['WO-2'], 'House 2', 'Ann').then(x => x.id));
     const before = JSON.stringify(live(S, l).map(x => [x.part, x.qty, x.length_mm]));
-    await pg.evaluate(async () => { await lsPoll(); (o => { window.prompt = (m, d) => /Enter the Drawing office or Admin PIN/.test(m) ? pins().design : o(m, d); })(window.prompt); /* a remembered PIN no longer opens templates (plan question 12): the PIN is typed when asked */ openListEditor('TE'); }); // (attack2 F5, Garry Q3) editing a template: Drawing office / Admin only — the Production Manager PIN no longer opens it
+    await pg.evaluate(async () => { await lsPoll(); (o => { window.prompt = (m, d) => /Enter the Drawing office, Production Manager or Admin PIN/.test(m) ? pins().design : o(m, d); })(window.prompt); /* a remembered PIN no longer opens templates (plan question 12): the PIN is typed when asked */ openListEditor('TE'); }); // (attack2 F5, Garry Q3) editing a template: Drawing office / Admin only — the Production Manager PIN no longer opens it
     await pg.evaluate(set('0|qty', '9')); await pg.evaluate(set('2|L', '1500'));
     await pg.evaluate(() => document.getElementById('me-save').click());
     await wait(() => D.find(S.db, 'lists', 'TE').rev === 2);
