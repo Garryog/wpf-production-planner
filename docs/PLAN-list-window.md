@@ -387,3 +387,27 @@ Checked: live Supabase logs (last 24 h: 31 list saves, 24 materials added, 2 edi
 - **M5 (Low, live data) A template has two names — its name and its "type name" — and they can disagree.** Live: Emmet Road
   template named "4C" has type "4B" (made by copying 4B), so two templates show as "4B" in the pickers. Fix: copying a template
   sets the type name to the new name; show ONE name in pickers (Simplicity). Garry told to retype it by hand meanwhile.
+
+### 13 Nov 2026, 13:10 UTC (scheduled run 6, started 12:23)
+- **Still waiting for Deliveries.** `release/deliveries-weeks` is NOT on `main` yet (main unchanged since 12 Nov), so the merge,
+  the final Tester round and the final Manager review cannot be done. No other run was working.
+- **One new commit by someone else since run 5** (10:56, Garry's own session): "Cap Left" and "Cap Right" added to the edging
+  drop-downs. Checked here with the full suite — nothing broken by it.
+- **Fixed the unsteady two-PC check from run 5** (`list-window/attack3-two-pcs-old` T1): when two PCs answer "Is this project
+  Aderrig? — Yes" in the same split second, the second PC used to be told "changed on another screen" and its job was left
+  with no project. Now the planner reads the project again and adds the second customer spelling beside the first — up to
+  three tries, nothing of the other PC's is overwritten. The test was run 6 times in a row: steady, T1 / T1b / T1c all pass
+  (its one remaining fail is "(info) O2", already on ACCEPTED-FAILURES). One small function changed (`ltiLink`), 3 lines.
+- **Full suite after both changes (219 files, fake Supabase): 5,183 pass / 71 fail** — the same 71 as run 4, file by file; all
+  on ACCEPTED-FAILURES. No new failing test.
+- **Read Garry's 13 Nov notes on `feature/dates-deliveries`** (P-work order categories, project stock components with
+  "FROM STOCK" lines on the cutting list, build order: cutting list module before the PM sequence). They are plans for the
+  release AFTER this one and are not built here — "＋ New P-number" in the list window will ask for the category when that is
+  built. Nothing in them changes this release.
+- Manager: no new review (interim GO WITH CONDITIONS from run 4 stands; the T1 fix is for the final review to look at). No
+  pull request, no GO-LIVE doc yet. Questions 1–18 still open; nothing new. Next real work: the run after Deliveries is on `main`.
+- **Parked, not pushed to this branch.** While this run was working, Garry's own session pushed again (12:42, templates in
+  numerical order — Type 2 before Type 10). One run at a time: these two commits sit on
+  `parked/list-window-run-2026-11-13-1310`, exactly one step ahead of `feature/list-window` as it was at 12:42 (the full
+  suite was run before that 12:42 change; the template and two-PC tests were re-run on top of it — same results). The next
+  run, or Garry's session, takes them in with a plain fast-forward merge.
