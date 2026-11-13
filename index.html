@@ -2857,7 +2857,7 @@ async function lsSaveList(pl,lines,by,reason,opt){
   opt=opt||{};
   for(let i=0;;i++){
     if(LST.l.has(pl.id)&&!LST.full.has(pl.id))await lsReloadList(pl.id);
-    const cur=LST.l.get(pl.id),df=diffLines(cur?lsLinesOf(pl.id):[],lines,{listId:pl.id});
+    const cur=LST.l.get(pl.id),df=diffLines(cur?lsLinesOf(pl.id):[],lines,{listId:pl.id,mat:lsMatCanon(pl.project_id||(cur&&cur.project_id))});
     if(cur&&lsSame(cur,pl,df))return{list:cur,diff:df,same:true}; // nothing changed: no save, no new revision for the saw
     try{
       const out=await lsRpc('save_list_revision',{p_list:{...pl,check_req:lsChkOn()},p_lines:df.lines,p_expect:opt.expect!=null?opt.expect:cur?cur.version:null,p_by:lqBy(by),p_reason:reason||null});
@@ -3553,6 +3553,11 @@ function lsProjectsDlg(){
 // A project's materials straight from the database (another screen may have just changed them)
 async function lsMatFresh(pid){lsPut('project_materials',await lsGet('project_materials?select=*&project_id=eq.'+encodeURIComponent(pid)));}
 // The material (other than `id`) that already answers to `name` — by its name or one of its other spellings, ignoring case and spaces
+// (M2) the project's ACTIVE material that answers to `v` by its name or an other spelling / old name (a rename keeps the old name)
+function lsMatFind(pid,v){const k=matKey(v);return k?lsMats(pid,'').find(m=>[m.name,...(m.aliases||[])].some(a=>matKey(a)===k))||null:null;}
+// (M2) for comparing lines: an old name and the current name of one material are the same material (no tick is reset)
+function lsMatCanon(pid){if(!pid)return null;const mp=new Map();lsMats(pid,'',true).forEach(m=>[m.name,...(m.aliases||[])].forEach(a=>{const k=matKey(a);if(k&&!mp.has(k))mp.set(k,'#'+m.id);}));
+  return v=>{const k=matKey(v);return mp.get(k)||k;};}
 function lsMatClash(pid,name,id){const k=matKey(name);return k?lsMats(pid,'',true).find(m=>m.id!==id&&[m.name,...(m.aliases||[])].some(a=>matKey(a)===k)):null;}
 function lsMaterialsDlg(pid,after){
   const ov=lsDlg('<div id="mt-body"></div>',820);
@@ -4585,6 +4590,8 @@ function openListEditor2(listId,presetWo,presetPid,opt){
   };
   if(st.tpl&&!lsTplPinOk())return; // templates: Drawing office or Admin only (Garry Q3)
   const sheetMats=()=>lsMats(st.pid,'sheet').map(m=>m.name),fitMats=()=>lsMats(st.pid,'other').map(m=>m.name);
+  const matOf=v=>lsMatFind(st.pid,v); /*M2: a material is found by its name OR an old name / other spelling (a rename keeps the old name)*/
+  const curMat=r=>{const m=r&&r.k!=='hdr'&&String(r.mat||'').trim()?matOf(r.mat):null;return m&&m.name!==String(r.mat).trim()?{...r,mat:m.name}:r;}; // saved under the current name
   let edges=lsProjEdges(st.pid);
   const ov=document.createElement('div');ov.className='pod-ovl';
   const inp='padding:6px 7px;border:1px solid var(--b2);border-radius:6px;font-size:13px';
@@ -4623,7 +4630,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     const sized=lsNum(r.L)>0||lsNum(r.W)>0;
     // a Stores row still carrying only the copied default colour is saved with NO colour — so it shows none (pick one to keep it)
     const v=!id&&lsAutoHidden(r)?'':String(r.mat||'').trim();
-    const sm=sheetMats(),fm=fitMats(),all=[...sm,...fm],on=all.find(n=>n.toLowerCase()===v.toLowerCase());
+    const sm=sheetMats(),fm=fitMats(),all=[...sm,...fm],hit=v?matOf(v):null,on=hit?all.find(n=>n===hit.name):undefined;
     const o=n=>`<option value="${escA(n)}"${on===n?' selected':''}>${escA(n)}</option>`;
     return `<select ${id?'id="'+id+'"':'data-mr="'+i+'|mat"'} class="me-c"${id?` style="${inp};width:100%${v&&!on?';'+amber:''}"`:v&&!on?` style="${amber}"`:''}${v&&!on?' title="Not on the project\'s materials — flagged for the Production Manager"':''}><option value="">${id?'— none —':!id&&isStores(r)?'— item / spec —':'— material —'}</option>
       ${sm.length?`<optgroup label="Boards / materials">${sm.map(o).join('')}</optgroup>`:''}${fm.length&&!sized&&!id?`<optgroup label="Fittings &amp; hardware">${fm.map(o).join('')}</optgroup>`:''}
@@ -4826,7 +4833,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     on('me-help',()=>{keep();st.help=!st.help;draw();});
     const mo=g('me-more');if(mo)mo.ontoggle=()=>{st.moreOpen=mo.open;};
     const un=g('me-units');if(un)un.onchange=()=>{keep();st.unitsOn=un.checked||hasUnits();draw();};
-    on('me-astpl',()=>{keep();lsSaveAsTpl({pid:st.pid,name:st.name,ltype:st.ltype,tname:st.tname,lines:lsEdLines(R().filter(r=>!lsEmptyRow(r)).map(r=>{const x={...noAutoStores(r)};delete x.lid;return x;}))});});
+    on('me-astpl',()=>{keep();lsSaveAsTpl({pid:st.pid,name:st.name,ltype:st.ltype,tname:st.tname,lines:lsEdLines(R().filter(r=>!lsEmptyRow(r)).map(r=>{const x={...curMat(noAutoStores(r))};delete x.lid;return x;}))});});
     on('me-hist',()=>{if(ex)lsTplHistory(ex.id);});
     const stOff=()=>{st.startOpen=false;const d=g('me-start');if(d)d.open=false;}; // a choice made in "Start from…" closes it (round 2 K1/K2)
     on('me-instpl',()=>{keep();stOff();insTpl();});
@@ -5029,7 +5036,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     const neg=rows.find(r=>r.k==='part'&&/^\s*-/.test(String(r.qty==null?'':r.qty)));
     if(neg)return err('A quantity can\'t be negative ("'+(String(neg.item||'').trim()||'unnamed')+'"'+at(neg)+') — type the number to cut.');
     if(sawStarted&&rows.some(lsUnitsChanged))return err(LS_LOCK_MSG+'.');
-    rows=rows.map(noAutoStores); // a Stores row keeps no colour unless someone picked one
+    rows=rows.map(noAutoStores).map(curMat); // a Stores row keeps no colour unless someone picked one; a renamed material is saved under its current name (M2)
     rows.forEach(r=>{if(r.k==='part')r.matOther=!sized(r)&&!!String(r.mat||'').trim()&&all.size>0&&!all.has(matKey(r.mat));});
     let wo=st.wo;
     if(st.newWO){const title=(g('me-ptitle').value||'').trim(),due=g('me-pdue').value;
@@ -5714,7 +5721,8 @@ function diffLines(old,nw,opt){
   opt=opt||{};old=old||[];nw=nw||[];
   const T=v=>String(v==null?'':v).trim().replace(/\s+/g,' ').toLowerCase();
   const N=v=>{const s=String(v==null?'':v).trim().replace(/\s*mm$/i,'');if(s==='')return'';const n=Number(s);return isNaN(n)?s.toLowerCase().replace(/\s+/g,' '):String(n);};
-  const key=x=>[T(x.kind),T(x.part),N(x.length_mm),N(x.width_mm),N(x.qty),T(x.material),T(x.edging),T(x.edging2)].join('|');
+  const M=typeof opt.mat==='function'?opt.mat:T; // opt.mat (M2): one material under its old or current name compares the same
+  const key=x=>[T(x.kind),T(x.part),N(x.length_mm),N(x.width_mm),N(x.qty),M(x.material),T(x.edging),T(x.edging2)].join('|');
   const pk=x=>[T(x.kind),T(x.part),T(x.section)].join('|');
   const isDone=x=>x.status==='cut'||x.status==='got-out';
   const sq=x=>+x.seq||0;
