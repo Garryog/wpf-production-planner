@@ -60,3 +60,18 @@ are "(info)" checks left failing on purpose until Garry decides. Full suite 203 
 | list-window attack2-tpl-pin "(info, ask Garry) ＋ New template" | "＋ New template" on the Cutting Lists page still accepts the Production Manager PIN (Save as template refuses it) | question 5 | pending |
 | list-window attack2-keys K5, K7, K8, K9 (info) | small keyboard points: Tab from an empty heading adds a row; Shift+Tab from Save lands on Close; Tab past Save reaches the page behind; ✕ after ＋ Row with nothing typed still asks | next run (simplicity polish) | pending |
 | list-window attack2-finder-pm-tag "(info) O: lists OFF" | with lists switched OFF, Settings shows the new "💾 Storage on this device" section — the only difference from today's screens | question 8 | pending |
+
+**Update 13 Nov 2026, 00:40 (run 3).** Now passing and off the table above: attack2-tpl-pin (6 checks — templates are Drawing
+office / Admin only on every route and a PIN typed there is not remembered) and attack2-keys K5, K7, K8, K9 (fixed).
+A second Tester round 2 added 5 more files (`attack2-basics / -excel-phone / -fixes / -match / -two-pcs`, 248 checks): 2 High,
+8 Medium, 6 Low — 14 fixed, 5 checks left failing (below). Full suite 209 files: **4,490 pass / 57 fail = 25 long-standing
+(t17-exportbase gives 8 or 10 from run to run) + 26 round 1 + 6 round 2.** No older file got worse; three stage3 files
+(s4-editor, s5s6-templates, attack2-screens) stop early with 0 fails exactly as on the baseline.
+
+| Test | Why it fails (plain English) | Fixed in | Accepted? |
+|---|---|---|---|
+| list-window attack2-two-pcs (2 checks) "old screen saved the plan → settings.pMerged" | an OLD planner screen left open that saves the plan wipes the safety copies kept of merged-away duplicate P-number jobs (F6) | go-live step: close every screen and phone first | pending |
+| list-window attack2-excel-phone (2 checks) "[already on main]" | an Excel sheet with Width before Length, or Qty first, is read in the wrong columns — the same on the live site today (F10) | later (read the column headings) | pending |
+| list-window attack2-fixes "[LOW] used, then taken out again with Ctrl+Z" | the test presses Ctrl+Z at phone width, where keyboard shortcuts are off on purpose, so the rows are still there and asking is right; with the ↶ Undo button the question goes away | Tester to correct the test | pending |
+| list-window attack2-finder-pm-tag "(info) O: lists OFF" | (still open, as above) Settings shows "💾 Storage on this device" with lists OFF | question 8 | pending |
+

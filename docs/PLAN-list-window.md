@@ -168,7 +168,7 @@ pickers are folded behind "Change job ▾" rather than removed.
 | 8 | Merge `main` once the Deliveries weeks release is in; then L9 (delivery card) and DD1 on Lists home / lists-needed | waits for Mon 16 Nov |
 | 9 | Phone: "Use these rows" button in the old-list finder; Esc closes the little panels first | done 12 Nov |
 | 10 | Tester round 2, Manager verdict | done 12 Nov — interim GO WITH CONDITIONS |
-| 11 | Simplicity polish: one Close, Save pinned to the bottom on phones, the 4 small keyboard points; Tester re-attack of the round-2 fixes | to do (next run) |
+| 11 | Simplicity polish: one Close, Save pinned to the bottom on phones, the 4 small keyboard points; Tester re-attack of the round-2 fixes | polish done 13 Nov; Tester re-attack to do (next run) |
 | 12 | After main is merged: full suite, Tester, final Manager GO, GO-LIVE doc, pull request (not merged) | waits for Mon 16 Nov |
 
 ## More questions for Garry (found by the Tester) (recommended answer first)
@@ -236,4 +236,51 @@ pickers are folded behind "Change job ▾" rather than removed.
 9. **Old list with no work order, edited.** **A (recommended): let it save without one** (new lists still need a job). B: keep forcing a work order.
 10. **Item 8 (＋ Add cutting list on the delivery card, due badge on Lists home).** **A (recommended): its own small release right after 18 Nov** — it can't be built until Deliveries is live on the 16th, leaving one day to test. B: hold the whole release for it.
 11. **Default "list owner" name shown to the saw** ("Tell the Production Manager"). **A (recommended): change to "Drawing office".** B: leave.
+
+### 13 Nov 2026, 00:40 UTC (scheduled run 3, started 21:24 on the 12th)
+- **Two runs overlapped again.** Run 2 was still working when this one started (its last push was 3 hours old, so the
+  "pushed in the last 30 minutes" check let this run through). Both did a Tester round 2. Run 2's 10 commits were merged in
+  (8b4d379): its Excel "different house" question and its old-list marker kept; this run's "list name never filled from the
+  sheet name" kept. Nothing lost. `release/deliveries-weeks` is still NOT on `main`, so item 8 still waits.
+- **Tester round 2b** (5 new files, 248 checks): 2 High, 8 Medium, 6 Low.
+- **Coder — fixed (21 commits):**
+  - F1 High: Floor 1 · Unit 12 with Title "BLOCK B…" filled in Block A's work order by itself. Now a job whose title names
+    another block is never filled in — it is offered as "not sure"; the look-up waits until the Title box is left.
+  - F2 High (flag only, no merge): a house that already has a list under a P-number is no longer put on "Cutting lists to
+    issue" when its Cienapps WO arrives — it says "List already made under P-…"; the import preview says the same.
+  - F3/F4: customer → project is asked, never assumed ("Lucan Developments Ltd" vs project Lucan; "Aderrig Park Homes" vs
+    Aderrig). Links by itself only when it is the same customer once Ltd / PLC / The… are ignored.
+  - F5/F11/F12: templates (new, edit, archive, copy from another project) Drawing office / Admin only; Admin not asked twice;
+    a PIN typed at that question is not remembered.
+  - F7 (already live): a new P-number's typed due date, value and hours are no longer blanked when a material is picked.
+  - F9: saving a list that was archived on another screen says so instead of "list is with the Saw & Stores".
+  - F13 list name not taken from the Excel sheet name · F14 · F15 saw screen says "Tell the Drawing office" · F16 phone button size.
+  - Step 11: Tab / Shift+Tab stay inside the window and reach Save; ✕ with only empty rows closes without asking; on phones the
+    big Save is pinned to the bottom; ONE Close (top right — the second Close beside Save is gone).
+- **Not fixed, on purpose:** two PCs pressing Save in the same second (needs a database rule — with L4b); F6 an old screen wipes
+  the duplicate-P-number safety copies (go-live step: close every screen); F10 Excel columns in an unusual order (already live).
+- **Test expectations changed by the Coder (each follows a deliberate change):** stage3/flow5-saw + s1s3-screens (owner wording),
+  editor/x1-excel-template (name blank), editor/attack1-editor E + seq/l5-l12-window + seq/attack5-window (Drawing office PIN for
+  templates; no bottom Close), seq/l3-find-wo (look-up on leaving Title).
+- **Full suite (209 files): 4,490 pass / 57 fail** — 25 long-standing, 26 round 1, 6 round 2; all on ACCEPTED-FAILURES. No older
+  file worse than before this run.
+- **Manager: GO WITH CONDITIONS (interim)** — no Blockers, no database change, everything escaped, lists OFF unchanged, test
+  changes legitimate, main path has no pop-up questions. Two "should fix" for the next run:
+  1. The F2 flag matches on house + job type only — a P-number list for Block A could hide Block B's WO (same floor / unit) from
+     "Cutting lists to issue", and the Lists tab count then disagrees with the panel. Use the block-in-title check there too.
+  2. A Drawing office PIN typed for something else (✓ Check, materials) on a shared PC is still remembered and still opens the
+     template buttons (Garry decision 2 below).
+  Conditions for the final GO: those two; Tester re-attack of this run's fixes and step 11; `main` merged in after Deliveries
+  goes live Mon 16 Nov + full suite + final review; go-live day: close every screen first.
+- Not a final GO, so no pull request and no GO-LIVE doc yet.
+
+## Questions added 13 Nov (recommended answer first) — 1–11 above are still open; built on the recommended answers
+12. **Drawing office PIN on a shared PC (replaces 6).** **A (recommended): only the Drawing office / Admin screen, or the PIN
+    typed at that moment, opens templates — a remembered PIN never does.** B: leave as built.
+13. **Two PCs saving a list for the same job in the same second.** **A (recommended): accept for 18 Nov; fix with the database
+    rule in the L4b release.** B: hold this release.
+14. **An old screen left open can wipe the duplicate-P-number safety copies.** **A (recommended): accept, with "close every
+    screen" on the go-live list.** B: fix first.
+15. **This scheduled task has now run twice at once on two days.** **A (recommended): keep ONE schedule for this job, at least
+    4 hours apart.** B: leave it.
 
