@@ -92,7 +92,8 @@ const res = []; const rec = (n, ok, d) => { res.push(ok); console.log((ok ? 'PAS
   rec('3: back from hold → on the board, delivery tag not restored', !back.cienHold && !back.delv && !back.delVeh, JSON.stringify([back.cienHold, back.delv, back.delVeh]));
   // woFinished + dropdown
   const wf = await ev(() => ({ a: woFinished({ step: '9. JOB SHIPPED' }), b: woFinished({ step: '9. JOB SHIPPED', shipBack: { at: '2026-10-19T09:00:00Z' } }), c: woFinished({ step: 'Job shipped' }), d: getSteps().includes('Job shipped'), n: getSteps().length }));
-  rec('4: woFinished by the ladder; brought back = not finished; dropdown 1-8 only', wf.a && !wf.b && !wf.c && !wf.d && wf.n === 8, JSON.stringify(wf));
+  // (11 Nov 2026) Garry confirmed the S1 board steps: the dropdown now also has 9 JOB SHIPPED, 10 INSTALLED, 11 COMPLETED (1-11)
+  rec('4: woFinished by the ladder; brought back = not finished; dropdown 1-11 (S1 steps, Garry 11 Nov)', wf.a && !wf.b && !wf.c && !wf.d && wf.n === 11, JSON.stringify(wf));
   rec('no page errors', !(t.server.errors || []).length, (t.server.errors || []).join(' | '));
   await t.close();
   console.log(res.filter(x => !x).length + ' failed of ' + res.length);

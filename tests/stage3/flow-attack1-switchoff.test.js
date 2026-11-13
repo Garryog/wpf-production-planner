@@ -14,7 +14,9 @@ function row() {
   r.orders = [o('WO-1', '5. WORK ORDER PROCESSED', { delv: true, delVeh: 'VOLVO', delDay: 'Thu' }), o('WO-2', '6. JOB CUT COMPLETE'), o('WO-3', '3. READY FOR UPLOAD'), o('WO-4', '7. ASSEMBLY COMPLETE', { delv: true })];
   return r;
 }
-const norm = s => String(s).replace(/\d{1,2}:\d{2}(:\d{2})?/g, 'HH:MM').replace(/\s+/g, ' ').trim();
+const norm = s => String(s).replace(/\d{1,2}:\d{2}(:\d{2})?/g, 'HH:MM').replace(/\s+/g, ' ').trim()
+  // ALLOWED DIFFERENCE (Garry 11 / 12 Nov — S1 board steps): the board's step list also offers JOB SHIPPED / INSTALLED / COMPLETED
+  .replace(/PALLETED JOB SHIPPED INSTALLED COMPLETED/g, 'PALLETED');
 // ALLOWED DIFFERENCE (Tester, 10 Nov — dates & deliveries, Garry 9 Nov): van bookings now belong to a real week, so a
 // booking label carries its date ("Volvo Thu 12 Nov", the board's "(Volvo Thu 12 Nov)" for stage2's "(Thu)"), and the
 // dashboard's missed count reads "planned for a day already gone" (missed = by real date, any open week) for stage2's

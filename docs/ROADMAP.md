@@ -257,3 +257,7 @@ Garry's words: "this is messy they are all over lapping, you can drop the value 
 - Assumed: the project sits under the list name (not a new column) so the lists table keeps its width; the old "All projects" drop-down inside the Lists panel moved to the top bar rather than having two.
 - Next: Tester to attack; Manager review; only Garry merges.
 
+### Capacity Board: Shipped / Installed / Completed steps as a small release now (12 Nov 2026, Garry)
+Garry: "Shipped step is gone from capacity board. It is still needed" — "Need to be able to update on capacity board to shipped or
+installed or completed. The job drops off capacity board after shipping". S1 (built on Job B) is lifted onto the live version as its
+own small release, branch feature/board-shipped-steps. Plan: docs/PLAN-board-shipped-steps.md.
