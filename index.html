@@ -5740,7 +5740,7 @@ function lsParseGrid(aoa,opt){
   const HOUSE=/^\s*(house|block|apt\.?|apartment|plot)\b|\bhouse\s*(nr|no\.?|number)\b/i;let seenHouse=false;
   const heading=(item,note,r)=>{const h={k:'hdr',item,note,src:r+1};if(HOUSE.test(item)){seenHouse=true;}else if(seenHouse)h.sub=true;return h;};
   const BOUGHT=/^\s*bought[\s-]*in\s*\.?\s*$/i,TBCW=/(^|[^a-z0-9])(t\.?\s?b\.?\s?c\.?|to be confirmed|none chosen|not chosen)(?=$|[^a-z0-9])/i; // TBCW: the same words as lsTbc // the whole Edging or Note cell says "Bought in" (never a note like "Cut down bought in doors")
-  const nRows=aoa.length;let e2col=false,jobLbl=false; // a column-header row with "Edging 2" in G: G is always Edging 2, H the note
+  const nRows=aoa.length;let e2col=false,jobLbl=false,colRow=false; // a column-header row with "Edging 2" in G: G is always Edging 2, H the note
   for(let r=0;r<nRows;r++){
     const cells=[0,1,2,3,4,5,6,7].map(c=>val(r,c));
     if(cells.every(v=>v==null||str(v)===''))continue;
@@ -5750,8 +5750,9 @@ function lsParseGrid(aoa,opt){
     const pd=/^\s*project( name)?\s*:\s*(.+?)(?:\s+date\s*:\s*(.+))?$/i.exec(A);
     if(pd&&texts.slice(1).every(t=>t==='')){meta.project=pd[2].trim();if(pd[3])meta.date=isoDate(pd[3].trim());continue;}
     const wasJob=jobLbl;jobLbl=false;
-    // (attack3 E5b) "WO" / "Floor" with its box left blank is an empty label, not a heading; a lone "Unit" only straight after WO / Floor
-    if(JOB.test(A)&&texts.slice(1).every(t=>t==='')&&(!/^unit/i.test(A)||wasJob)){jobLbl=true;continue;}
+    // (attack3 E5b) "WO" / "Floor" with its box left blank is an empty label, not a heading; a lone "Unit" only straight after WO / Floor.
+    // (attack3b E4) Only in the job block at the top — after the column-header row or the first row, "Floor" is a real heading
+    if(!colRow&&!rows.length&&JOB.test(A)&&texts.slice(1).every(t=>t==='')&&(!/^unit/i.test(A)||wasJob)){jobLbl=true;continue;}
     if(LBL.test(A)||(JOB.test(A)&&pairsOnly(texts)&&texts.some(t=>t&&!isLbl(t)))){ // a lone "Unit" heading stays a heading
       jobLbl=texts.some(t=>JOB.test(t));
       for(let c0=0;c0<7;c0++){if(!isLbl(texts[c0]))continue;
@@ -5764,7 +5765,7 @@ function lsParseGrid(aoa,opt){
     }
     // 2. the column-header row ("Description | Qty | Length …") is labels, not a part
     // ("Description:", "Item Description", " DESCRIPTION " too)
-    if(/^(item\s+)?(description|item|part( name)?)\s*:?$/i.test(A)&&texts.slice(1).some(t=>/^(qty|nr|no\.?|quantity|length|width|dimension|colou?r|material)\s*:?$/i.test(t))){e2col=/edg/i.test(texts[6]);continue;}
+    if(/^(item\s+)?(description|item|part( name)?)\s*:?$/i.test(A)&&texts.slice(1).some(t=>/^(qty|nr|no\.?|quantity|length|width|dimension|colou?r|material)\s*:?$/i.test(t))){e2col=/edg/i.test(texts[6]);colRow=true;continue;}
     // 3. "2 | total nr of units" sets the units of the block above
     const ui=texts.findIndex(t=>UNITS.test(t));
     if(ui>=0){
