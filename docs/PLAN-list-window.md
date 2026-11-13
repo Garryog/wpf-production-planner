@@ -469,3 +469,21 @@ Questions 1–18 above were put to Garry as one list of 17; his answers, with th
   **The project picker was NOT built here on purpose:** the Deliveries weeks release already has one for the whole Cutting
   Lists page ("All projects ▾" — every section follows it, this panel included). It arrives when Deliveries is merged in;
   building a second one here would only clash with it. Until then, typing the customer in the search box does the same job.
+
+## AFTER this release — Garry, 13 Nov 16:41–16:46 (not in the 18 Nov scope)
+Garry agreed to: (1) issue lists for MANY units in one go (tick several work orders of the same house type → one template → all go
+to the saw), (2) copy a project's materials from another project, (3) one name per template (see M5). Also offered, not yet chosen:
+paste rows from Excel, a standard stores kit per project, search in the Material drop-down.
+**HANDING — Garry's warning (his words):** "we just need to be careful with handing of types. A different hand may have worktop
+capping on the opposite side. These types might be named with and with a 'H' or LH or RH".
+- Bulk issue must NEVER put an un-handed template on a handed unit, or the wrong hand on a unit. A unit's type is read WITH its hand:
+  "1A", "1A H", "1AH", "1A LH", "1A RH", "Type 1 RH", "HANDED" in the Cienapps title are different types. Normalise spacing/case only
+  ("1A H" = "1AH"); never strip the hand.
+- In the bulk screen, units are grouped by type INCLUDING hand; each group needs its own template. A group with no exact-hand
+  template is NOT issued — it says "no template for 1A H — make one" and offers "Make handed copy of 1A".
+- "Make handed copy": copies the template and swaps Cap Left ↔ Cap Right (and L/R words in notes are flagged, not changed); the copy
+  opens for a person to check and save — never issued unchecked. This is why Cap Left / Cap Right were added to the edging list.
+- If a unit's hand cannot be read from the work order, it is left out of the bulk issue and listed "hand not known — issue singly".
+- The preview before issuing shows, per unit: WO, floor, unit, title, the template and its hand, so a wrong hand is visible.
+- Tester: mixed hands in one selection, "H" inside a word (e.g. "HOUSE", "4H BLOCK"), LH/RH vs H naming on the same project,
+  a handed unit with only the un-handed template, two templates that differ only by hand.
