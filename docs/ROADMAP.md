@@ -270,6 +270,8 @@ will be going on a delivery and some will be going into a factory stock". Plan +
 
 - **13 Nov (Garry):** every new P-work order must be given a category — For delivery (project required) / Factory project stock (project required + project component kanban: to cut, being cut, cut, picked for delivery) / Toilet cubicles. Details and open questions: docs/PLAN-saw-tasks.md. The list window's "＋ New P-number" asks for it once this is built.
 
+- **BUILD ORDER (Garry, 13 Nov):** "the cutting list module is more important that the PM sequence to roll out first" — list window, Deliveries weeks, then P-work order categories + project component stock (docs/PLAN-saw-tasks.md), THEN the PM sequence / Job B.
+
 ### Garry's answers, 12 Nov 2026 (evening)
 - **Shipped / Installed / Completed board steps:** go live ON THEIR OWN NOW (small release, branch feature/board-shipped-steps, PR to main).
 - **Drawing page:** a job already on the board that goes back to DRAWING stays on the board, flagged. "if the same work order appears

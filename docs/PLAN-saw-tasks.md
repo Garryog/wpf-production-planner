@@ -100,3 +100,13 @@ component will need a code to ID them as a project stock component so the stock 
   a stock job for the shortfall". Buffer flag works on free stock (on hand − reserved).
 - Kanban columns now: To cut → Being cut → In stock → Reserved for a WO → Picked / sent.
 - **Code format agreed (Garry, 13 Nov 09:12):** project short code + running number, e.g. "ASP-C014" — "that code is fine".
+
+## Garry, 13 Nov 2026 (09:15) — what goes in the first version, and the build order
+Garry's words: "yes labels, stock correction important, yes buffer important. yes build first and add labels afterward. the cutting
+list module is more important that the PM sequence to roll out first".
+- **First version:** P-work order categories, component codes, FROM STOCK lines on the WO cutting list, the project kanban with on hand /
+  reserved / consumed, **storage location** per component (shown on the stores pick list), **stock correction** by stores / office with a
+  reason (important), **below-buffer warning** with one-tap stock job (important).
+- **Second version:** printed labels with the code (then phone scanning), and the leftover-stock report at project end.
+- **BUILD ORDER (Garry):** the cutting list module rolls out BEFORE the PM sequence. Order now: 1) list window release, 2) Deliveries
+  weeks, 3) this plan (categories + project stock, it is part of the cutting list module), 4) PM sequence / project details (Job B).
