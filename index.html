@@ -4317,7 +4317,7 @@ function keyFind(pid,floor,unit,km,title){ // title: the typed Title — a job w
    goes to the Saw, a row without goes to Stores (decided at save; shown with a grey "Stores" tag).
    Row types: part, heading, unit heading (with Units). Inside a unit block Qty is for ONE unit and the total is shown.
    Colour is a dropdown of the project's materials with "+ Add new material…". New rows take the previous row's colour. */
-const LS_EDGES=['L1LE 1mm','L2LE 1mm','L2S1LE','L1L2SE 1mm','L4S 1mm','L4S 2mm','L4S 2mm R','No edge','No Cap']; // (9 Nov) the codes on WPF's own Excel lists; anything else via "Other…"
+const LS_EDGES=['L1LE 1mm','L2LE 1mm','L2S1LE','L1L2SE 1mm','L4S 1mm','L4S 2mm','L4S 2mm R','No edge','No Cap','Cap Left','Cap Right']; // Cap Left / Cap Right: Garry 13 Nov // (9 Nov) the codes on WPF's own Excel lists; anything else via "Other…"
 function lsProjEdges(pid){ // the standard edging codes plus any already used on this project's lists
   const seen=new Set(LS_EDGES.map(x=>x.toLowerCase())),out=LS_EDGES.slice();
   LST.ln.forEach(x=>{const l=LST.l.get(x.list_id);if(!l||l.project_id!==pid)return;[x.edging,x.edging2].forEach(e0=>{const e=String(e0||'').trim();if(e&&!seen.has(e.toLowerCase())){seen.add(e.toLowerCase());out.push(e);}});});

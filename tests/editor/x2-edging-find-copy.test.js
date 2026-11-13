@@ -17,7 +17,7 @@ const J = JSON.stringify;
   await p.evaluate(async () => { setWho('Ann'); showTab('l'); LH.proj = 'P1'; render(); await new Promise(r => setTimeout(r, 100)); document.getElementById('lh-blank').click(); await new Promise(r => setTimeout(r, 200)); });
   const e = await p.evaluate(() => { const a = document.querySelector('[data-mr="0|edging"]'), b = document.querySelector('[data-mr="0|edging2"]'); return { a: a.tagName, b: b.tagName, opts: [...a.options].map(o => o.value) }; });
   rec('Edging 1 and Edging 2 are drop-downs', e.a === 'SELECT' && e.b === 'SELECT', J(e));
-  rec('codes from WPF\'s lists are offered, plus the project\'s own (1mm ABS) and Other…', ['L1LE 1mm', 'L2LE 1mm', 'L2S1LE', 'L1L2SE 1mm', 'L4S 1mm', 'L4S 2mm', 'L4S 2mm R', 'No edge', 'No Cap', '1mm ABS', '__other'].every(x => e.opts.includes(x)), J(e.opts));
+  rec('codes from WPF\'s lists are offered, plus the project\'s own (1mm ABS) and Other…', ['L1LE 1mm', 'L2LE 1mm', 'L2S1LE', 'L1L2SE 1mm', 'L4S 1mm', 'L4S 2mm', 'L4S 2mm R', 'No edge', 'No Cap', 'Cap Left', 'Cap Right', '1mm ABS', '__other'].every(x => e.opts.includes(x)), J(e.opts));
   await p.evaluate(() => { const a = document.querySelector('[data-mr="0|edging"]'); a.value = 'L4S 2mm'; a.dispatchEvent(new Event('change', { bubbles: true })); });
   await p.evaluate(() => { window.__ans = ['L2LE 1mm Blue']; const b = document.querySelector('[data-mr="0|edging2"]'); b.value = '__other'; b.dispatchEvent(new Event('change', { bubbles: true })); });
   await F.sleep(100);
