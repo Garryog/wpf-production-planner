@@ -23,7 +23,7 @@ const wait = async (fn, ms = 4000) => { for (let i = 0; i < ms / 100; i++) { if 
   // (12 Nov, Garry) "Save as template" in the list window: Drawing office screen or the Drawing office / Admin PIN only
   const noPin = await pg.evaluate(() => ({ btn: !!document.getElementById('me-astpl') }));
   rec('office, no PIN: the list window has no "Save as template" button (Drawing office / Admin only)', !noPin.btn, JSON.stringify(noPin));
-  await pg.evaluate(() => { localStorage.setItem('wpfEditPin', pins().admin); document.getElementById('me-help').click(); document.getElementById('me-astpl').click(); });
+  await pg.evaluate(() => { localStorage.setItem('wpfPin_design', pins().design); localStorage.setItem('wpfRole', 'design'); ROLE = 'design'; /* (plan question 12) a remembered PIN no longer shows Save as template: it is on the Drawing office screen only — the screen is switched here, the open window and its unsaved row stay */ document.getElementById('me-help').click(); document.getElementById('me-astpl').click(); });
   await wait(() => pg.evaluate(() => !!document.getElementById('at-ok')));
   const d1 = await pg.evaluate(() => { const b = document.getElementById('at-body'); return { txt: b.innerText, name: b.querySelector('#at-name').value, radios: b.querySelectorAll('[name="at-mode"]').length }; });
   rec('the dialog says what is copied (ticks never) and offers type + name (default: the list name)', /4 parts, 1 unit block/.test(d1.txt) && /ticks never are/.test(d1.txt) && d1.name === 'House 1' && d1.radios === 0, JSON.stringify(d1));

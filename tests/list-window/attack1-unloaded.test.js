@@ -22,8 +22,8 @@ const editBtn = (p, id, f) => p.evaluate(({ id, f }) => { Object.assign(LH, { q:
   try {
     for (const [id, what, f] of CASES) {
       const S = mk();
-      const t = await X.dev(browser, S, 'office'), p = t.page; await asks(p);
-      await p.evaluate(() => { localStorage.setItem('wpfEditPin', pins().admin); window.__prompt = 'tidy up'; });
+      const t = await X.dev(browser, S, 'design') /* Drawing office screen: a remembered PIN no longer shows the template buttons on other screens (plan question 12) */, p = t.page; await asks(p);
+      await p.evaluate(() => { (o => { window.prompt = (m, d) => /Enter the Drawing office or Admin PIN/.test(m) ? pins().design : o(m, d); })(window.prompt); /* a remembered PIN no longer opens templates (plan question 12): the PIN is typed when asked */ window.__prompt = 'tidy up'; });
       const n = linesOf(S, id).length;
       const b = await editBtn(p, id, f); await sleep(1500);
       let rs = await rows(p);
@@ -40,8 +40,8 @@ const editBtn = (p, id, f) => p.evaluate(({ id, f }) => { Object.assign(LH, { q:
       }
       await closeAll(p);
       // the same list after "View" was pressed first (which loads its rows): Edit is then right
-      const S2 = mk(); const t2 = await X.dev(browser, S2, 'office'), p2 = t2.page; await asks(p2);
-      await p2.evaluate(() => { localStorage.setItem('wpfEditPin', pins().admin); });
+      const S2 = mk(); const t2 = await X.dev(browser, S2, 'design'), p2 = t2.page; await asks(p2);
+      await p2.evaluate(() => { (o => { window.prompt = (m, d) => /Enter the Drawing office or Admin PIN/.test(m) ? pins().design : o(m, d); })(window.prompt); /* a remembered PIN no longer opens templates (plan question 12): the PIN is typed when asked */ });
       await p2.evaluate(({ id, f }) => { Object.assign(LH, { q: '', proj: '', type: '', rev: '' }, f); showTab('l'); render(); const v = document.querySelector('[data-lhview="' + id + '"]'); if (v) v.click(); }, { id, f }); await sleep(1500);
       await closeAll(p2); await editBtn(p2, id, f); await sleep(1200);
       rs = await rows(p2);
@@ -53,7 +53,7 @@ const editBtn = (p, id, f) => p.evaluate(({ id, f }) => { Object.assign(LH, { q:
     for (const ref of ['main', 'HEAD~1']) {
       const html = A.gitShow(ref); if (!html) { rec('(info) older code "' + ref + '" could be read', false); continue; }
       const S = mk(); const old = await A.openOld(browser, S, html);
-      const o = await old.page.evaluate(async () => { const o = {}; try { localStorage.setItem('wpfEditPin', pins().admin); if (typeof lsReset === 'function') lsReset(); await lsLoad();
+      const o = await old.page.evaluate(async () => { const o = {}; try { (o => { window.prompt = (m, d) => /Enter the Drawing office or Admin PIN/.test(m) ? pins().design : o(m, d); })(window.prompt); /* a remembered PIN no longer opens templates (plan question 12): the PIN is typed when asked */ if (typeof lsReset === 'function') lsReset(); await lsLoad();
         for (const id of ['SHIP', 'TPL']) { openListEditor(id); await new Promise(r => setTimeout(r, 1200)); o[id] = document.querySelectorAll('.me-ed [data-row]').length; document.querySelectorAll('.pod-ovl').forEach(x => x.remove()); } } catch (e) { o.err = e.message; } return o; });
       rec('(info) the SAME thing on the older code "' + ref + '" (not new in this layout if this FAILS too): shipped-job list and template open with their 4 rows', o.SHIP === 4 && o.TPL === 4, JSON.stringify(o));
       await old.close();

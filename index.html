@@ -4323,7 +4323,7 @@ function lsMatCan(){return MAT_ED.includes(ROLE);}
 /* List window, simple layout (Garry 12 Nov — "simplicity is the main focus"): opened from a job the window shows the job, the rows and
    one big Save. The Project / Work order pickers sit behind "Change job", templates / Excel / old lists behind ONE "Start from…",
    Type and the rarely used switches under More, and "Save as template" shows only for the Drawing office or the Admin PIN. */
-function lsTplSaveOk(){if(ROLE==='design'||ROLE==='admin')return true;const p=pins(),v=ls.get('wpfEditPin');return !!v&&[p.design,p.admin].includes(v);} // (attack2 F11) the Admin view counts
+function lsTplSaveOk(){return ROLE==='design'||ROLE==='admin';} // (attack2 F11) the Admin view counts. (plan question 12, answer A) a PIN remembered on the PC from another action (✓ Check, a project edit) never opens templates — only this screen, or the PIN typed at that moment (lsTplPinOk)
 /* (Garry Q3, 12 Nov: "Drawing office and Admin only, everywhere") the ONE guard for making or changing a template: Save as template,
    ＋ New template, editing / archiving a template, ⧉ Copy from another project. (attack2 F12) a PIN typed here is good for this one
    action only — never remembered on the PC. */

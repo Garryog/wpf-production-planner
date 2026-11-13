@@ -106,7 +106,7 @@ const donep = p => p.evaluate(() => { const d = document.querySelector('.me-dov'
     await p.evaluate(() => { DB.listChk = false; document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); }); await sleep(100);
     rec('L8: Esc closes the finish panel', await p.evaluate(() => !document.querySelector('.pod-ovl')));
     // a template
-    await p.evaluate(() => { localStorage.setItem('wpfEditPin', pins().design); /* attack2 F5 (Garry Q3): templates are Drawing office / Admin only */ openListEditor(null, '', 'P1', { tpl: true }); }); await sleep(400);
+    await p.evaluate(() => { (o => { window.prompt = (m, d) => /Enter the Drawing office or Admin PIN/.test(m) ? pins().design : o(m, d); })(window.prompt); /* a remembered PIN no longer opens templates (plan question 12): the PIN is typed when asked */ /* attack2 F5 (Garry Q3): templates are Drawing office / Admin only */ openListEditor(null, '', 'P1', { tpl: true }); }); await sleep(400);
     await p.evaluate(() => { const n = document.getElementById('me-name'); n.value = 'Type Z'; n.dispatchEvent(new Event('input')); });
     await fillSaw(p, 0, 'Side', '1', '700', '500', 'MFC White');
     await p.evaluate(() => document.getElementById('me-save').click()); await sleep(1000);
@@ -304,7 +304,7 @@ const donep = p => p.evaluate(() => { const d = document.querySelector('.me-dov'
     rec('names: Insert from template (8 templates) has a find box; "larch" → only "Larch Type Q"', JSON.stringify(w) === '["Larch Type Q"]', JSON.stringify(w));
     await closeAll(p);
     // templates still need a name
-    await p.evaluate(() => { localStorage.setItem('wpfEditPin', pins().design); /* attack2 F5 (Garry Q3): templates are Drawing office / Admin only */ openListEditor(null, '', 'P1', { tpl: true }); }); await sleep(400);
+    await p.evaluate(() => { (o => { window.prompt = (m, d) => /Enter the Drawing office or Admin PIN/.test(m) ? pins().design : o(m, d); })(window.prompt); /* a remembered PIN no longer opens templates (plan question 12): the PIN is typed when asked */ /* attack2 F5 (Garry Q3): templates are Drawing office / Admin only */ openListEditor(null, '', 'P1', { tpl: true }); }); await sleep(400);
     await fillSaw(p, 0, 'Side', '1', '700', '500', 'MFC White');
     await p.evaluate(() => document.getElementById('me-save').click()); await sleep(300);
     rec('names: a template with no name → "Give the template a name."', await p.evaluate(() => document.getElementById('me-err').textContent === 'Give the template a name.' && !!document.querySelector('.me-ed')));
