@@ -3678,6 +3678,30 @@ function lsViewDlg(id){const l=lsList(id);if(!l)return;const c=lsCheckInfo(l),t=
     ${V2()&&!l.archived&&(c.need||c.ok)?`<div style="margin-bottom:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">${l.tpl&&!c.ok?'<span class="chk-wait">Not checked</span>':lsCheckChip(l)}${c.ok&&l.createdBy?'<span style="font-size:12px;color:var(--t2)">issued by '+escA(l.createdBy)+'</span>':''}${c.ok?`<button class="btn btn-s" data-vchk="0" style="font-size:11px;padding:2px 8px">Take check away</button>`:`<button class="btn btn-g" data-vchk="1" style="font-size:12px;padding:3px 10px">✓ Check</button>`}</div>`:''}
     ${t.length?'<div style="margin-bottom:6px">'+lsTbcChip(t,true)+'</div>':''}${listTableHTML(l,'all')}`);
   ov.querySelectorAll('[data-vchk]').forEach(b=>b.onclick=()=>{ov.remove();lsCheck(l.id,b.dataset.vchk==='1');});
+  const x=ov.querySelector('#pod-x');if(x){const b=document.createElement('button');b.className='btn btn-s';b.id='lv-print';b.textContent='🖨 Print';b.style.marginRight='8px';b.onclick=()=>lsPrintList(l.id);x.parentNode.insertBefore(b,x);}
+}
+/* Print one cutting list from its View window (Garry 13 Nov): the whole list (saw + stores rows) on A4, with its work orders,
+   floor / unit / title and due date at the top, and a signature line. Opens the browser's print box in a new tab. */
+function lsPrintList(id){const l=lsList(id);if(!l)return;
+  const due=k=>{if(!k)return'';const d=new Date(k+'T12:00:00');return isNaN(d)?k:d.toLocaleDateString('en-IE',{weekday:'short',day:'numeric',month:'short',year:'numeric'});};
+  const wos=(l.wos||[]).map(w=>{const o=DB.orders.find(x=>x.wo===w);return `<div class="wo"><b>${escA(w)}</b>${o?` · ${escA(fuLbl(o))}${fuLbl(o)?' · ':''}${escA(o.title||'')}${o.dueDate?` · <b>due ${escA(due(o.dueDate))}</b>`:''}`:''}</div>`;}).join('');
+  const w=window.open('','_blank');
+  if(!w){toast('Pop-up blocked — allow pop-ups for this site to print');return;}
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>WPF cutting list — ${escA(l.name||'')}</title><style>
+  *{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;padding:8mm;color:#111;font-size:12px}
+  h1{font-size:18px;color:#14335c;display:flex;justify-content:space-between;gap:10px;border-bottom:3px solid #14335c;padding-bottom:4px;margin-bottom:4px}
+  .wo{font-size:12px;margin:1mm 0}.tag{display:inline-block;border:1px solid #5b21b6;color:#5b21b6;border-radius:3px;padding:0 5px;font-size:11px;font-weight:700;margin-left:6px}
+  table{width:100%;border-collapse:collapse;margin-top:3mm}th,td{border:1px solid #888;padding:4px 5px;text-align:left;vertical-align:top}th{background:#eef1f6;font-size:10px;text-transform:uppercase}
+  thead{display:table-header-group}tr{page-break-inside:avoid}
+  tr.wl-sec td{background:#14335c;color:#fff;font-weight:800;font-size:13px}tr.wl-sec.wl-sub td{background:#e6ebf2;color:#14335c;padding-left:14px}
+  tr.wl-held td{background:#f3f3f3;color:#666}.sig{margin-top:6mm;font-size:12px}button{display:none}
+  @media print{@page{size:A4 portrait;margin:8mm}body{padding:0}}
+  </style></head><body><h1><span>${escA(l.project||'')} — ${escA(l.name||'')}${l.tpl?'<span class="tag">TEMPLATE</span>':''}</span><span>Rev ${+l.rev||1}</span></h1>
+  ${wos}<div class="wo" style="color:#555">Printed ${escA(due(todayLocal()))}${l.archived?' · ARCHIVED LIST':''}</div>
+  ${listTableHTML(l,'all')}
+  <div class="sig">Cut / picked — signed: ______________________ &nbsp; date: ____________</div>
+  <script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script></body></html>`);
+  w.document.close();
 }
 function lsHomeMount(){ // office Lists tab with the switch on: the library becomes Lists home
   const lib=document.getElementById('lst-filter');const p=lib&&lib.closest('.exp-panel');if(!p)return;
