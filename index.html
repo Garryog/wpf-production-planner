@@ -2895,11 +2895,13 @@ function lsEditMerge(id,rows,lines){
   const nm=x=>(x.part||x.material||'line')+' ×'+(x.qty==null?'':x.qty);
   const asLine=x=>({id:x.id,kind:x.kind,section:x.section,part:x.part,length_mm:x.length_mm,width_mm:x.width_mm,qty:x.qty,unit_qty:x.unit_qty,material:x.material,material_other:!!x.material_other,edging:x.edging,edging2:x.edging2,note:x.note});
   const over=[];let kept=0;
+  // (M2) a material's old name and its current name are one material: saving a line under the current name is not "a change"
+  const cn=lsMatCanon((LST.l.get(id)||{}).project_id),cs=s=>{if(!cn)return s;try{const a=JSON.parse(s);a[6]=cn(a[6]);return JSON.stringify(a);}catch(e){return s;}},sig0=r=>cs(r.sig);
   rows.forEach((r,i)=>{
     if(!r.lid||!r.sig)return;
-    const x=byId.get(r.lid),meChanged=lsLineSig(lines[i])!==r.sig;
+    const x=byId.get(r.lid),meChanged=cs(lsLineSig(lines[i]))!==sig0(r);
     if(!x){if(lsLinesOf(id).some(y=>y.id===r.lid&&y.removed_rev!=null)){if(meChanged)over.push('they removed '+nm(lines[i])+', which you changed — your save puts it back');else{lines[i]._drop=true;kept++;}}return;} // removed by them, untouched here: stays removed
-    if(lsLineSig(x)===r.sig)return;                                  // they didn't change it
+    if(cs(lsLineSig(x))===sig0(r))return;                            // they didn't change it
     if(!meChanged){lines[i]=asLine(x);kept++;return;}               // only they changed it: keep theirs
     over.push(nm(x)+' was changed on the other screen — yours ('+nm(lines[i])+') replaces it');
   });
