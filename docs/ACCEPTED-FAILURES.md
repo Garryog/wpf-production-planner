@@ -75,3 +75,17 @@ A second Tester round 2 added 5 more files (`attack2-basics / -excel-phone / -fi
 | list-window attack2-fixes "[LOW] used, then taken out again with Ctrl+Z" | the test presses Ctrl+Z at phone width, where keyboard shortcuts are off on purpose, so the rows are still there and asking is right; with the ↶ Undo button the question goes away | Tester to correct the test | pending |
 | list-window attack2-finder-pm-tag "(info) O: lists OFF" | (still open, as above) Settings shows "💾 Storage on this device" with lists OFF | question 8 | pending |
 
+**Update 13 Nov 2026, 05:10 (run 4).** Tester rounds 3 and 3b added 10 files (`tests/list-window/attack3-*` and `attack3b-*`,
+709 checks): 3 High, 6 Medium, 12 Low — all fixed. 13 "(info)" checks are left failing on purpose (below). Full suite 219 files:
+**5,183 pass / 71 fail = 27 long-standing (t17-exportbase gave 10 this run) + 25 round 1 (attack1-jobs now 5, was 6) + 6 round 2
++ 13 round 3.** No older file got worse.
+
+| Test | Why it fails (plain English) | Fixed in | Accepted? |
+|---|---|---|---|
+| list-window attack3-roles-archived-simple "(info) C2" (6 checks: Production Manager, Office, Drawing office at 1280 and 360 px) | the Tester wanted at most 8 buttons outside the rows; there are 9 (Drawing office 10) | question 16 in docs/PLAN-list-window.md | pending |
+| list-window attack3-roles-archived-simple "(info) A7" | an Office screen unlocked with the Admin PIN shows no template buttons — templates are on the Drawing office screen only (Admin opens that screen with the Admin PIN) | question 12 (built on answer A) | pending |
+| list-window attack3-custproj "(info)" (3 checks: "OGrady & Sons", "Aderig Homes", "Co. Kildare Homes") | a customer spelled without its apostrophe or one letter out is not offered the existing project; "Co. Kildare Homes" links itself to "Kildare Homes" | question 4 | pending |
+| list-window attack3-excel "(info) E5" | an Excel file that says "WO-26114" when the planner calls the job "26114" is asked about ("different job?") instead of going straight in — one extra OK, never wrong | later | pending |
+| list-window attack3-phone "(info) P10" | on a Drawing office phone the pinned bar also holds "Save as template", so it is 117 px tall (110 wanted) | later (small) | pending |
+| list-window attack3-two-pcs-old "(info) O2" | an OLD screen left open can still make a second list for a house that has a P-number list, and the new screen's "⚠ 2 lists" tag only counts lists on the SAME work order | go-live step: close every screen and phone first; full fix with L4b | pending |
+

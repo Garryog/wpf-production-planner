@@ -168,7 +168,7 @@ pickers are folded behind "Change job ▾" rather than removed.
 | 8 | Merge `main` once the Deliveries weeks release is in; then L9 (delivery card) and DD1 on Lists home / lists-needed | waits for Mon 16 Nov |
 | 9 | Phone: "Use these rows" button in the old-list finder; Esc closes the little panels first | done 12 Nov |
 | 10 | Tester round 2, Manager verdict | done 12 Nov — interim GO WITH CONDITIONS |
-| 11 | Simplicity polish: one Close, Save pinned to the bottom on phones, the 4 small keyboard points; Tester re-attack of the round-2 fixes | polish done 13 Nov; Tester re-attack to do (next run) |
+| 11 | Simplicity polish: one Close, Save pinned to the bottom on phones, the 4 small keyboard points; Tester re-attack of the round-2 fixes | done 13 Nov (polish run 3; Tester rounds 3 + 3b and fixes run 4) |
 | 12 | After main is merged: full suite, Tester, final Manager GO, GO-LIVE doc, pull request (not merged) | waits for Mon 16 Nov |
 
 ## More questions for Garry (found by the Tester) (recommended answer first)
@@ -286,3 +286,56 @@ pickers are folded behind "Change job ▾" rather than removed.
 15. **This scheduled task has now run twice at once on two days.** **A (recommended): keep ONE schedule for this job, at least
     4 hours apart.** B: leave it.
 
+### 13 Nov 2026, 05:10 UTC (scheduled run 4, started 00:23)
+- **Overlap again, no harm.** Run 3 was still finishing when this run started (its last code push was 66 minutes old, so the
+  30-minute check let this run through; it pushed its progress entry at 00:38). This run did only what run 3 left for "next
+  run" — the Tester re-attack — on top of run 3's work. Nothing clashed. `release/deliveries-weeks` is still NOT on `main`, so
+  item 8 (L9, DD1 on Lists home) and the merge of `main` still wait.
+- **Tester round 3** (7 files `attack3-*`, 465 checks) on run 3's unreviewed changes: no Critical, 3 High, 4 Medium, 8 Low.
+- **Coder — fixed (10 commits):**
+  - High: a flat in BLOCK B could not get a P-number when BLOCK A had the same floor / unit numbers — Save kept pushing the
+    list onto Block A's work order. And a P-number list for Block B hid Block A's job from "Cutting lists to issue". One shared
+    block rule now covers both (this was also the Manager's "should fix 1"); the Lists tab count agrees with the panel.
+  - High (phones): when the pinned Save refused (e.g. a missing quantity) the red reason was off the screen, so Save looked
+    dead. The reason now shows right above Save and the cursor goes to the row.
+  - Medium: Save pressed straight from the Floor / Unit / Title box was silently lost — it now looks the WO up and saves in one
+    press · phone More ▾ no longer sits under the Save bar · the box being typed in is never under the Save bar · a window
+    opened from a Cienapps WO whose house already has a list under a P-number says so and asks before saving a second list.
+  - Low: ✕ asks when only a material was picked or "Bought in" ticked · Tab / Shift+Tab stay inside the finder and the Saved ✓
+    panel · clearer wording when no work order is found · blank Floor / Unit labels in an Excel file no longer make junk
+    headings · a template archived on another PC says so.
+  - Templates and a remembered PIN (Manager's "should fix 2", question 12 answer A): templates are made and changed on the
+    **Drawing office screen only**. A PIN remembered from something else never opens them. Admin: open the Drawing office
+    screen with the Admin PIN. Using a template (Start from…) is still open to everyone.
+- **Tester round 3b** (3 files `attack3b-*`, 244 checks) on those fixes: no Critical or High; 2 Medium, 4 Low — **all fixed
+  (6 commits):** a real heading that says just "Floor" in an Excel list was being dropped (caused by the fix above) · "B Block
+  Apt 105" was read as a different block from "BLOCK B APT 105" · press Save and drag off no longer saves · Ctrl+S works from
+  the Floor / Unit / Title / List name boxes · "No Cienapps work order found for Floor 9 · Unit 99 — check the floor and unit,
+  or press Make a P-number instead" · Save from the Floor box saves in one press.
+- **Test expectations changed by the Coder (each follows the deliberate template-PIN change):** editor/attack1-editor,
+  list-window/attack1-layout, seq/attack5-window, seq/l5-l12-window, stage3/flow-attack2-race type the PIN when asked;
+  editor/e9-templates and list-window/attack1-unloaded use the Drawing office screen. One Tester check (attack3 N2b) had its
+  set-up corrected; the Manager read it and agrees.
+- **Full suite on the final code (219 files, one at a time, fake Supabase): 5,183 pass / 71 fail.** Compared file by file with
+  the run-3 code (4,490 / 57, re-run at the start of this run and matching): no older file is worse — attack1-jobs has one
+  fail fewer (5), stage1 t17-exportbase gave 10 this time (it gives 8 or 10 from run to run, already noted). The other 13 are
+  new "(info)" checks from round 3, listed on ACCEPTED-FAILURES for Garry. All 10 new attack3 / attack3b files: 0 real fails.
+- **Manager (reviewed the round-3 fixes; the six small 3b fixes after it were re-attacked by the suite only): interim GO WITH
+  CONDITIONS** for items 1–7, 9 and ownership. No Blockers; both earlier "should fix" items closed; no database change;
+  everything escaped; lists OFF unchanged; no test weakened. Notes: a job whose title names NO block can still be taken for the
+  same house as one that names a block (it is asked / offered, never two jobs made silently).
+  Conditions left for the final GO: Deliveries live and `main` merged in, then full suite + Tester + final review; Garry's
+  answers; go-live day: close every screen and phone first.
+- **Simplicity count.** Opened from a job the window has 9 buttons outside the rows (Drawing office 10): ✕ Close · Change job ▾ ·
+  Start from… ▾ · ＋ Heading · ＋ Row · 🧱 Project materials · More ▾ · ? · Save. See question 16.
+- Not a final GO, so no pull request and no GO-LIVE doc yet. **Nothing is left to build until Deliveries is on `main`** — a run
+  before then has nothing to do.
+
+## Questions added 13 Nov, run 4 (recommended answer first)
+16. **Fewer buttons in the list window (9 today).** **A (recommended): move "?" help and "Change job" under More ▾ — leaves 7;
+    "🧱 Project materials" stays in view because you asked for it to be obvious (L6).** B: also move Project materials under
+    More ▾ (6 buttons; "＋ New material…" is still in every row's Material list). C: leave as it is.
+17. **A job with no block in its title, same floor and unit as a job that names a block** (e.g. "APT 12 KITCHEN" and "BLOCK B
+    APT 12"). **A (recommended / built): treat as possibly the same flat — the person is asked.** B: treat as different flats.
+18. **This task keeps starting while the last run is still working (three times now; runs take 3–5 hours).** **A
+    (recommended): pause it until Deliveries is merged on Mon 16 Nov, then run it once a day.** B: leave it.
