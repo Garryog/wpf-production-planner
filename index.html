@@ -5170,11 +5170,11 @@ function openListEditor2(listId,presetWo,presetPid,opt){
   const closeEd=()=>{if(!document.body.contains(ov))return;if(dirty()&&!confirm('Close without saving?\n\nWhat you typed in this list is lost.\n\nOK = close without saving\nCancel = stay and Save'))return;ov.remove();};
   const done=(l,d)=>{ // the finish panel: matches what happened, [Close] (big, focused) and [Edit it again]
     if([...document.querySelectorAll('.pod-ovl .me-ed')].some(e=>!ov.contains(e))){ov.remove();return;} // another list window is already open: the toast says it was saved
-    const lv=lsList(l.id)||l,arc=!st.tpl&&!!(lv.archived||l.archived),wait=!arc&&!st.tpl&&lsWaitCheck(lv),rev=+lv.rev||1,wo=d.wo&&!st.tpl&&d.wo!=='__NEW__'?d.wo:'';
-    const h=arc?'Saved, but this list was archived on another screen — the saw will not see it':st.tpl?'Template saved ✓':wait?'Saved ✓ — waiting to be checked before the saw sees it':ex&&rev>(+ex.rev||1)?'Saved ✓ — Rev '+rev+' is with the Saw &amp; Stores':'Saved ✓ — list is with the Saw &amp; Stores';
+    const lv=lsList(l.id)||l,arc=!st.tpl&&!!(lv.archived||l.archived),tarc=!!st.tpl&&!!(lv.archived||l.archived),wait=!arc&&!st.tpl&&lsWaitCheck(lv),rev=+lv.rev||1,wo=d.wo&&!st.tpl&&d.wo!=='__NEW__'?d.wo:'';
+    const h=arc?'Saved, but this list was archived on another screen — the saw will not see it':tarc?'Saved, but this template was archived on another screen — it cannot be picked':st.tpl?'Template saved ✓':wait?'Saved ✓ — waiting to be checked before the saw sees it':ex&&rev>(+ex.rev||1)?'Saved ✓ — Rev '+rev+' is with the Saw &amp; Stores':'Saved ✓ — list is with the Saw &amp; Stores';
     const cnt=st.tpl?'':[(+l.saw?l.saw+' saw row'+(+l.saw!==1?'s':''):'no cutting'),(+l.fit?l.fit+' Stores row'+(+l.fit!==1?'s':''):'no Stores'),wo?escA(wo):''].filter(Boolean).join(' · ');
     ov.classList.add('me-dov');
-    ov.innerHTML=`<div class="pod-in me-done"><div class="me-dok${wait||arc?' me-dw':''}" id="me-dok">${h}</div><div class="me-dl"><b>${escA(l.name||'')}</b>${cnt?'<br>'+cnt:''}${arc?'<br>If the saw needs it: Lists → Archived → ⧉ Copy.':''}${d.retiredMsg?'<br>'+escA(d.retiredMsg):''}</div>
+    ov.innerHTML=`<div class="pod-in me-done"><div class="me-dok${wait||arc||tarc?' me-dw':''}" id="me-dok">${h}</div><div class="me-dl"><b>${escA(l.name||'')}</b>${cnt?'<br>'+cnt:''}${arc?'<br>If the saw needs it: Lists → Archived → ⧉ Copy.':''}${d.retiredMsg?'<br>'+escA(d.retiredMsg):''}</div>
       <button class="btn btn-g" id="me-dclose">Close</button><button class="btn btn-s" id="me-dagain">Edit it again</button></div>`;
     const c=ov.querySelector('#me-dclose');c.onclick=()=>ov.remove();c.focus();
     ov.querySelector('#me-dagain').onclick=()=>{ov.remove();openListEditor(l.id);};
@@ -5740,7 +5740,7 @@ function lsParseGrid(aoa,opt){
   const HOUSE=/^\s*(house|block|apt\.?|apartment|plot)\b|\bhouse\s*(nr|no\.?|number)\b/i;let seenHouse=false;
   const heading=(item,note,r)=>{const h={k:'hdr',item,note,src:r+1};if(HOUSE.test(item)){seenHouse=true;}else if(seenHouse)h.sub=true;return h;};
   const BOUGHT=/^\s*bought[\s-]*in\s*\.?\s*$/i,TBCW=/(^|[^a-z0-9])(t\.?\s?b\.?\s?c\.?|to be confirmed|none chosen|not chosen)(?=$|[^a-z0-9])/i; // TBCW: the same words as lsTbc // the whole Edging or Note cell says "Bought in" (never a note like "Cut down bought in doors")
-  const nRows=aoa.length;let e2col=false; // a column-header row with "Edging 2" in G: G is always Edging 2, H the note
+  const nRows=aoa.length;let e2col=false,jobLbl=false; // a column-header row with "Edging 2" in G: G is always Edging 2, H the note
   for(let r=0;r<nRows;r++){
     const cells=[0,1,2,3,4,5,6,7].map(c=>val(r,c));
     if(cells.every(v=>v==null||str(v)===''))continue;
@@ -5749,7 +5749,11 @@ function lsParseGrid(aoa,opt){
     //    Several on one row ("Project | Customer B | | Date | 12/10/2026") are all read; so is "Project: X  Date: Y" in one cell.
     const pd=/^\s*project( name)?\s*:\s*(.+?)(?:\s+date\s*:\s*(.+))?$/i.exec(A);
     if(pd&&texts.slice(1).every(t=>t==='')){meta.project=pd[2].trim();if(pd[3])meta.date=isoDate(pd[3].trim());continue;}
+    const wasJob=jobLbl;jobLbl=false;
+    // (attack3 E5b) "WO" / "Floor" with its box left blank is an empty label, not a heading; a lone "Unit" only straight after WO / Floor
+    if(JOB.test(A)&&texts.slice(1).every(t=>t==='')&&(!/^unit/i.test(A)||wasJob)){jobLbl=true;continue;}
     if(LBL.test(A)||(JOB.test(A)&&pairsOnly(texts)&&texts.some(t=>t&&!isLbl(t)))){ // a lone "Unit" heading stays a heading
+      jobLbl=texts.some(t=>JOB.test(t));
       for(let c0=0;c0<7;c0++){if(!isLbl(texts[c0]))continue;
         const k=texts[c0].toLowerCase(),vi=cells.findIndex((v,c)=>c>c0&&v!=null&&str(v)!=='');const v=vi>0&&!isLbl(texts[vi])?cells[vi]:null;
         if(JOB.test(texts[c0])){const f=/^floor/.test(k)?'floor':/^unit/.test(k)?'unit':'wo';meta[f]=str(v);}
