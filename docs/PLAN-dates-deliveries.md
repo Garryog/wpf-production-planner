@@ -600,3 +600,16 @@ was NOT re-run by the Manager (Coder's figure: 4,126 / 30).
 7. **Not verified:** real PC drag and Android Chrome (step 11); the full suite on this exact commit.
 
 Rollback, "who to tell" and the rest of the checklist are right for a release on its own.
+
+
+### 14 Nov 2026 — main merged in, ready for Garry's Merge button
+- Garry asked (13 Nov, late) for the merge to be done. `main` had moved on since this branch was cut (the Shipped / Installed /
+  Completed board steps went live 12 Nov), so `main` was merged INTO this branch first. 3 clashes, each settled keeping both sides:
+  the Capacity Board step box (stamps the store time AND sends steps 9–11 through the "ship?" question), the roadmap, one test.
+- **Tester attacked where the two releases meet** (tests/ship/merge-*.test.js, 162 checks): van bookings in past / this / future
+  weeks then shipped by hand, bring back, import behind / ahead, close week, two PCs, old screen + new screen, phone. **Nothing
+  broken by the merge.** 3 checks fail and fail the same way on today's live version (see ACCEPTED-FAILURES, pending Garry).
+- **Full suite on the merged code (216 files, fake database): 4,406 pass / 37 fail** = the same 30 as before + the 4 attack6 rows
+  + those 3. No new failure from the merge. No database change, no SQL.
+- Pull request opened: release/deliveries-weeks → main. NOT merged. Go-live checklist above still applies (Mon–Wed; close and
+  reopen every screen and phone — step 9).
