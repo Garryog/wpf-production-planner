@@ -339,3 +339,33 @@ pickers are folded behind "Change job ▾" rather than removed.
     APT 12"). **A (recommended / built): treat as possibly the same flat — the person is asked.** B: treat as different flats.
 18. **This task keeps starting while the last run is still working (three times now; runs take 3–5 hours).** **A
     (recommended): pause it until Deliveries is merged on Mon 16 Nov, then run it once a day.** B: leave it.
+
+### 13 Nov 2026, 07:45 UTC (scheduled run 5, started 06:23)
+- **Nothing new to build.** `release/deliveries-weeks` is still NOT on `main` (main unchanged since 12 Nov), no other run was
+  working, no new requests from Garry on any branch. **No app code changed on this branch in this run.**
+- **Used the time for a rehearsal of Monday's merge** (kept off this branch — parked as
+  `parked/list-window-plus-deliveries-rehearsal-2026-11-13`, NOT for merging or release): this branch + the Deliveries weeks
+  release put together, to find out in advance how well they fit.
+  - They clash in **11 places in 3 files** (8 in `index.html`, 2 in ROADMAP, 1 test). All small, all "both sides added
+    something to the same line" — each was settled by keeping BOTH changes:
+    saved settings keep the Deliveries release marker and the P-number safety copies · the step drop-down keeps the Shipped
+    question and the Deliveries store stamp · Cutting Lists rows keep the project name under the list and the "⚠ 2 lists" tag ·
+    template buttons keep "Drawing office only" and the new project filter · "lists to issue" keeps the project filter and the
+    P-number rule · the saw card shows both the P-number warning and the "job has moved" banner · the PM row shows both the
+    site-ready chip and the list status.
+  - **Full suite on the rehearsal (250 files, fake Supabase): 6,176 pass / 98 fail. No page errors, nothing real broken by
+    the merge.** The 98 = this branch's known ~71 + the Deliveries release's own 10 (on its list) + 13 checks that compare a
+    screen "with lists OFF" against `main` and so cannot pass until Deliveries is ON `main` (list-window attack2-basics 7,
+    attack2-finder-pm-tag 2, lists-filter attack1 "11" 2, dates attack5 B8 / B9 2) + one unsteady check (next point).
+    After the real merge: the first 9 of those 13 should pass by themselves; the last 4 compare with a saved copy of the old
+    screens and will need their expectation moved for the PM's read-only list status (a deliberate change) — Coder to say so.
+- **Found, not fixed (for the Tester / Coder on the next run):** `list-window/attack3-two-pcs-old` T1 is unsteady — 2 fails
+  on most runs, 5 on about one run in three, the same on this branch as on the rehearsal (so not caused by the merge).
+  When two PCs answer "Is this project Aderrig? — Yes" in the same split second, PC A's job is sometimes left with no project
+  and the customer spelling is not remembered. Nothing is lost (the person is asked again), but the "[LOW] T1 … PC B" check
+  is failing and is NOT yet on ACCEPTED-FAILURES — to be fixed or listed next run. Not touched now so the code the Manager
+  reviewed stays exactly as reviewed.
+- **So Monday is not a one-click job but it is a known one:** merge `main`, settle the same 11 places the same way (the parked
+  branch shows how), full suite, Tester, final Manager review. About one run. L9 / the due badge on Lists home (item 8) come
+  after that — question 10 still stands.
+- No Manager GO yet (conditions unchanged), so no pull request and no GO-LIVE doc. Questions 1–18 are still open; nothing new.
