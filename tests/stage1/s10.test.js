@@ -11,7 +11,8 @@ const res = []; const rec = (n, ok, d) => { res.push(ok); console.log((ok ? 'PAS
     return seen;
   });
   rec('confirm texts mention backup', msgs.length >= 2 && msgs.every(m => /backup/i.test(m)), msgs.map(m => m.slice(0, 60)).join(' || '));
-  rec('backup rows taken before Clear Week and Clear all', S.backups.length === 2 && S.backups[0].orders_count === 2 && /Clear Week/.test(S.backups[0].reason) && /Clear all/.test(S.backups[1].reason), S.backups.map(b => b.reason + ':' + b.orders_count).join());
+  // (Tester, 10 Nov — "Close week" replaces "Clear Week — Start Fresh", Garry 9 Nov: the backup reason names the week)
+  rec('backup rows taken before Close week and Clear all', S.backups.length === 2 && S.backups[0].orders_count === 2 && /Close week Wk \d+/.test(S.backups[0].reason) && /Clear all/.test(S.backups[1].reason), S.backups.map(b => b.reason + ':' + b.orders_count).join());
   await A.page.waitForTimeout(1500);
   rec('clear all still works', S.row.orders.length === 0, S.row.orders.length + '');
   // backup failure -> asked, can cancel

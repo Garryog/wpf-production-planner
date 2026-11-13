@@ -19,13 +19,13 @@ const NOW = '2026-10-19T10:00:00Z';
       for (const tb of ['b', 'd', 'h', 'l', 'i', 'x', 's']) { try { showTab(tb); r[tb] = /NaN|undefined/.test(document.getElementById('app').innerText) ? 'shows NaN/undefined' : 'ok'; } catch (e) { r[tb] = 'ERR ' + e.message; } }
       showTab('b'); srch = 'leg'; render(); r.search = document.querySelectorAll('tr[data-wo]').length; srch = ''; render();
       let rows; const o = XLSX.writeFile; XLSX.writeFile = wb => { rows = XLSX.utils.sheet_to_json(wb.Sheets['Full Schedule'], { header: 1 }); };
-      try { showTab('x'); document.getElementById('btn-xfull').click(); r.fullExport = rows ? 'ok' : 'no file'; r.hdr = rows[0].slice(-2).join('|'); } catch (e) { r.fullExport = 'ERR ' + e.message; } finally { XLSX.writeFile = o; }
+      try { showTab('x'); document.getElementById('btn-xfull').click(); r.fullExport = rows ? 'ok' : 'no file'; r.hdr = rows[0].slice(-4).join('|'); } catch (e) { r.fullExport = 'ERR ' + e.message; } finally { XLSX.writeFile = o; }
       return r;
     });
     const errs = (t.server.errors || []).join(' | ');
     rec('AC18 old orders render on every tab (incl. Shipped) with no NaN/undefined', ['b', 'd', 'h', 'l', 'i', 'x', 's'].every(k => out[k] === 'ok') && !errs, JSON.stringify(out) + ' ' + errs);
     rec('AC18 board search works with a missing title', out.search === 1, 'rows=' + out.search);
-    rec('AC18 Full Schedule export works without a step; new columns only at the end', out.fullExport === 'ok' && out.hdr === 'Shipped At|Sheets (Cienapps)', JSON.stringify(out));
+    rec('AC18 Full Schedule export works without a step; new columns only at the end', out.fullExport === 'ok' && out.hdr === 'Shipped At|Sheets (Cienapps)|Orig due|Moved ×', JSON.stringify(out)); // (Tester, 10 Nov — dates plan adds Orig due / Moved × after the stage-2 columns, still at the end)
     await t.close();
   }
 

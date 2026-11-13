@@ -163,6 +163,29 @@ Garry's words: "the work order due date are not prominent in all screens. the wo
 - **Johnny's CNC Schedule (later, CNC job)**: read from SharePoint on a schedule; strike-through = office processing done (CNC files), NOT cut. Mark jobs taken into the planner with an extra "In planner" tick column — tested on a COPY of his .xlsm first, never write colours into his file.
 
 
+### Dates & deliveries decisions (9 Nov 2026, Garry) — Job A, plan docs/PLAN-dates-deliveries.md
+- Order of work: "Dates & deliveries first"; PM sequence, Cienapps upload and Johnny's pool go WITH project details (Job B); CNC view after both.
+- Already built 4 Nov: step 7 ASSEMBLY COMPLETE / 8 PALLETED (planner or import) ticks the job for delivery, logged; one-off catch-up button.
+- A1 Deliveries page in WEEKS: tabs This week / Next week / +2 / +3 / Later, each with its own vehicle × Mon–Sat grid and day notes; past weeks keep working. To Plan pool grouped by due week. "In store — ready, no delivery date" section (assembled/palleted, not on a van, days in store, amber after 14 days). A3 poster and Excel export per week.
+- A2 Due date editable on the Capacity Board row AND the delivery card/pool: date picker + reason (Customer delay · Site not ready · Production · Materials · Design/drawings · Other + note). One change moves the job on both pages.
+- A3 Planned week follows the new due week UNLESS already cut (step 6+ or saw ticks): week stays, flagged "due date moved — check week".
+- A4 A job booked on a van/day whose due date changes comes OFF the van, back into the To Plan pool of its new week, flagged "date moved — rebook" (logged). Never silently keep the old booking.
+- A5 Every date change stores who/when/old/new/reason; original due date kept (origDueDate); "moved N×" badge on board row and delivery card.
+- A6 Every planner date change is listed in Export Changes; a re-import still carrying the old Cienapps date does NOT put it back (planner date wins until Cienapps matches, then the override clears).
+- A7 Knock-on: cutting-list due date, saw cut-by and stores pick date move with it; saw and stores show "this job has moved" on the card for a day.
+- A8 Delivery date per job (Cienapps column L "Delivery/install date" when present, else set in the planner); build due date works back from it (default 3 working days, Settings). Changing the delivery date moves the build dates; changing the build date alone still allowed (flag if after delivery).
+- A9 "Don't build too early": a not-yet-cut job whose due date moves out by more than 14 days is flagged (and suggested to move out of the current planned week).
+- A10 Site-ready confirmation by PM or office; jobs on the delivery board within N working days (Settings, default 5) without it show amber "site not confirmed"; who/when logged.
+- A11 GROUP moving of due (and delivery) dates with one reason — from board group-select/groups, by project/customer, or ticked cards on the delivery page; same A3–A7 rules; summary of what moved and what was flagged.
+- Not wanted: a weekly date-changes report.
+
+### Release in small pieces + Job A answers (12 Nov 2026, Garry)
+- **Releases go out as small pieces.** Order: (1) the Cutting Lists project filter (PR #2, branch feature/lists-project-filter); (2) **Job A — Dates & deliveries on its own**, branch `release/deliveries-weeks`, for Garry to merge on **Mon 16 Nov**; (3) Job B (project details, PM sequence, pre-production pool) later, in its own pieces. This replaces the Manager's 11 Nov condition "release Job A with Job B" (decision C → Job A on its own first).
+- **A1** — the Production Manager gets the FULL Deliveries page as built (🚚 Deliveries button on his screen), Close week included.
+- **B1** — Saturday deliveries are allowed and NOT flagged, as built. Sundays and bank holidays are never delivery days.
+- **D1** — a loaded / on-the-road job ticked in a group week move still moves, stays on its van and is flagged "date moved after loading — check", as built (plan Q15).
+- Bank holidays: **Mon 3 Jan 2028** is the day off for New Year's Day (Sat 1 Jan 2028) — confirmed by Garry. The list also holds Sat 26 Dec 2026 and Sat 25 / Sun 26 Dec 2027, so no delivery lands on Christmas Day or St Stephen's Day.
+
 ## Progress log
 ### 2 Nov 2026 (scheduled run)
 - Architect confirmed the cutting-list plan against the code; build notes and build order added to docs/PLAN-cutting-lists-stage3.md (fixed garbled characters in both plan files).
@@ -257,3 +280,31 @@ Garry's words: "the work order due date are not prominent in all screens. the wo
 Garry: "Shipped step is gone from capacity board. It is still needed" — "Need to be able to update on capacity board to shipped or
 installed or completed. The job drops off capacity board after shipping". S1 (built on Job B) is lifted onto the live version as its
 own small release, branch feature/board-shipped-steps. Plan: docs/PLAN-board-shipped-steps.md.
+
+### Delivery page usability — TOP PRIORITY for buy-in (10 Nov 2026, Garry, go-live day)
+Garry's words: "for the delivery planner due date of jobs need to be edit able in the pool of jobs down for delivery. i need very clear week navigation between week in the delivery page. make it very easy for job in the delivery pool to be moved to other weeks. the easy usability of this page is very important for buy in of the whole planner system wit hthe production manager".
+- Job A (A1 weeks, A2 due date on card/pool, A11 group move) already covers the function. Before it is released, Architect + Tester review the Deliveries page as the Production Manager would use it, and the Coder closes any gap:
+  - **D1** due date editable straight on every To Plan pool card (one tap → date → reason), not only inside a dialog.
+  - **D2** week navigation impossible to miss: big ◀ Prev / Next ▶ plus the week tabs, the week number and Monday date always visible ("Wk 46 · 9 Nov"), "This week" button, the current week highlighted, job count per week on each tab.
+  - **D3** moving a pool job to another week in one or two taps: "→ Next week" / "Move to week…" on each card, tick several + "Move ticked to week…", and drag onto a week tab on a PC. Same A3–A7 rules and reason.
+- Test with the Production Manager's real use in mind (PC first, then phone). This page decides whether he adopts the planner.
+
+### Due dates prominent everywhere + WO drop-down in due-date order (10 Nov 2026, 16:27, Garry)
+Garry's words: "the work order due date are not prominent in all screens. the work orders should appear in order of due date in the work order drop down".
+- **L12** — the Work order drop-down in the list window (L11) is sorted by DUE DATE, earliest first (no date last), and each line shows the due date: "WO-2617-4 · Fl 7 · Unit 231 · due 14 Nov". (Supersedes "in WO order" in L11.)
+- **DD1** — audit EVERY screen that shows a work order (Capacity Board, Deliveries pool/cards/weeks, Shipped, Cutting Lists home + lists needed + list window header, Saw, Stores, dockets, PM views, prints) and make the due date prominent and in ONE consistent style everywhere: same badge, same format ("Fri 14 Nov · Wk 46"), red when overdue, amber when due this week, "moved N×" where it applies. Architect lists the screens where it is missing or small today; Tester checks each one at PC and phone width.
+
+### Delivery pool cards are messy (10 Nov 2026, 16:30, Garry — screenshot of the ASPECT ATHENRY group in the To Plan pool)
+Garry's words: "this is messy they are all over lapping, you can drop the value and just put a total down the bottom. add the dues date to these cards".
+- **D4** — pool cards must never overlap: WO, Floor and Unit badges fit inside the card (wrap or shrink), nothing spills into the next card, at PC and phone width. Drop the € value from each card; show the group total value once at the bottom of the group. Add the due date to every card in the DD1 style (red overdue, amber this week). Same fix on the cards in the week grids if they share the layout. Part of the Deliveries usability pass (D1–D3), before Thursday's release.
+
+
+### 11 Nov 2026 (branch feature/lists-project-filter — small release on top of the live version)
+- Garry's request (11 Nov): "the cutting list page need project filters and make sure customer/project is always visible on the cutting list page."
+- Built (lists switch ON only; no database changes): one **Project** drop-down at the top of the Cutting Lists page (Office, Drawing office, Production Manager → Lists). It narrows every section — lists to issue, waiting for check, lists needed, waiting on material, the lists and the templates. Projects A–Z with counts, "No project" for anything not linked, a type-to-find box once there are 40+ projects, "✕ All projects" to reset, "N of M shown". The pick is remembered on that device; a project that no longer exists falls back to All projects. Jobs are matched to a project through its Cienapps customer names (customer = project, Garry 10 Nov).
+- The project name is now on every row and card of the page (templates too), and wraps on a phone instead of being cut off. The "lists needed" table stacks on a phone (it used to scroll sideways).
+- The filter only applies on the Cutting Lists page: the Import page's "lists to issue" panel, the tab badge, the Saw and Stores always show every project. Lists switch OFF: the page is byte-for-byte the same as before (checked against main).
+- Tests: tests/lists-filter/f1-project-filter.test.js — 75 checks, all pass. Full suite (181 files): 3,293 pass / 23 fail, every failure already on ACCEPTED-FAILURES; main gives the same failures file by file (main fails 2 more in stage1 t17). Two timing checks (editor e7 redraw, stage3 attack4-states) fail only when two suites run at once and pass alone, on main too.
+- Assumed: the project sits under the list name (not a new column) so the lists table keeps its width; the old "All projects" drop-down inside the Lists panel moved to the top bar rather than having two.
+- Next: Tester to attack; Manager review; only Garry merges.
+
