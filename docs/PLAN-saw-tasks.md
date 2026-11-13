@@ -56,3 +56,25 @@ So the simple list is built in a shape the full system can grow from:
 Open questions for Garry when this is planned: how a component is recognised as "the same" (exact match on description + size +
 material, confirmed by a person the first time — recommended); whether stock can be shared between projects (recommended: no, moved
 by hand with a note); who can adjust a count (recommended: stores + office, with a reason).
+
+## Garry, 13 Nov 2026 — every new P-work order gets a CATEGORY
+Garry's words: "when we create a new P-work order in planner. we need to give it a category. 1. for delivery - must be linked to a
+project 2. for factory project stock must be linked to a project and a project kanban system that manages the project compenent, the
+component that are being cut, cut and picked for delivery & 3. toilet cubicles."
+- **Category is asked every time a P-number is made** (＋ New P-number in the list window, ＋ Saw job, New Work Order on the board) and
+  cannot be skipped. It replaces "where it goes when cut" in rule 3 above. Shown as a badge wherever the job shows; changeable by
+  office / Production Manager with a logged reason until the job is cut.
+  1. **For delivery** — a project MUST be picked (customer = project). When done it is ticked for delivery and lands in the Deliveries pool.
+  2. **Factory project stock** — a project MUST be picked. Never on Deliveries. Its components go onto that project's **component
+     kanban board** (below).
+  3. **Toilet cubicles** — its own category. ASSUMED until Garry answers: project optional (cubicle jobs are often one-off customers),
+     goes on Deliveries when done like category 1, filterable on the board, saw and Shipped; uses the cubicles cutting list layout.
+- **Project component kanban** (per project; this IS the "project component stock" system above, shown as a board): one card per
+  component (description, material, size, edging, qty), columns **To cut → Being cut → Cut (in stock) → Picked for delivery**.
+  Cards move by themselves from what people already do: the stock job's list sent to the saw = To cut; first saw tick = Being cut;
+  saw marks the line cut = Cut (in stock), qty on hand goes up; stores picks it for a work order / docket = Picked for delivery, qty
+  goes down, with the WO and docket number on the card. Buffer target and "below buffer" flag per card as in point 4 above. Read-only
+  for PMs on site; office, Production Manager, saw and stores move cards only through their normal screens (no free dragging — ASSUMED).
+- Existing P-numbers with no category: shown as "no category — pick one" to the office; never guessed.
+- Questions for Garry: (1) cubicles — is a project needed, and do they go on the delivery board? (2) may anyone drag a kanban card by
+  hand, or only through saw / stores ticks (recommended)? (3) can a "For delivery" P-job later be switched to stock, and the reverse?
