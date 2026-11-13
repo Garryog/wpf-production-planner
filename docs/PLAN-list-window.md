@@ -460,3 +460,12 @@ Questions 1–18 above were put to Garry as one list of 17; his answers, with th
   headings and rows. **Fixed:** when nothing has been typed, picked or ticked in the window, the template REPLACES the blank
   layout (Undo brings it back); when anything has been typed, the template is added and what was typed stays. New test
   `list-window/g13-template-replaces-blank` (6 checks, pass); the 11 files that use the template insert give the same results as before.
+- **Garry, 13 Nov (live): "where are all these jobs — not in cutting list to issue"** (Aspect Athenry jobs due 16–18 Nov). They
+  were in the panel but out of sight: live has about 366 jobs waiting for a list (the "only jobs ticked for delivery" switch is
+  off), the panel shows the first 40, late and earliest first, with "Show all N" at the bottom. Garry said yes to a picker and
+  search. **Built: a search box on the "Cutting lists to issue" panel** — type a customer, WO, floor, unit or title (several
+  words allowed, e.g. "aspect 71") and it looks through EVERY job waiting for a list, shows "3 of 64", ✕ Clear puts the first
+  40 back. New test `stage3/g13-lti-search` (12 checks, pass); the 13 files that use the panel give the same results as before.
+  **The project picker was NOT built here on purpose:** the Deliveries weeks release already has one for the whole Cutting
+  Lists page ("All projects ▾" — every section follows it, this panel included). It arrives when Deliveries is merged in;
+  building a second one here would only clash with it. Until then, typing the customer in the search box does the same job.

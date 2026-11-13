@@ -3803,6 +3803,9 @@ function lsCheck(id,on){
    nothing reaches the saw — until someone confirms. Shown after an import's Apply, on the office Lists tab, the
    Production Manager's Lists tab and the Drawing office home. */
 const LTI={pick:{},open:'',res:{},busy:new Set(),done:[],all:false,showNA:false,showPh:false};
+LTI.q=''; // (Garry 13 Nov) the search box on "Cutting lists to issue": words typed here pick out jobs from the WHOLE list, not only the first 40
+function ltiQMatch(){const ws=String(LTI.q||'').toLowerCase().split(/\s+/).filter(Boolean);if(!ws.length)return null;
+  return r=>{const o=r.o,p=lsProjForCust(o.customer),t=[o.wo,o.customer,fuF(o),fuU(o),o.floor,o.unit,o.title,p&&p.name].map(x=>String(x==null?'':x)).join(' ').toLowerCase();return ws.every(w=>t.includes(w));};}
 function lsSuggest(o){return suggestTpl(o,lsCache().all.filter(l=>l.tpl&&!l.archived),lsProjects());}
 function lsFuTds(l){ // Lists home: the tagged jobs' Floor and Unit in their own columns (Garry, 4 Nov)
   const os=(l.wos||[]).map(w=>DB.orders.find(x=>x.wo===w)).filter(Boolean),u=f=>[...new Set(os.map(f).filter(Boolean))].map(escA).join(', ')||'<span style="color:var(--t3)">—</span>';
@@ -3843,6 +3846,7 @@ function ltiTplName(id){const t=lsList(id);return t?(t.typeName||t.name)+' · Re
 function ltiInner(){
   const rows=ltiRows(),green=rows.filter(r=>r.lvl==='strong'&&r.tid&&!LTI.busy.has(r.o.wo)),wc=lsWaitCheckLists().sort((a,b)=>(listDueKey(a)||'9999').localeCompare(listDueKey(b)||'9999'));
   const na=DB.orders.filter(o=>lsNA(o)&&!woFinished(o)),phs=phJobs(),show=LTI.all?rows:rows.slice(0,40);
+  const qm=ltiQMatch(),shown=qm?rows.filter(qm):show; // searching looks through every job, not only the first 40
   const btn='font-size:12px;padding:6px 10px;margin:2px 4px 2px 0';
   const row=r=>{const o=r.o,w=o.wo,[c,bg,bd,lbl]=LTI_COL[r.lvl],busy=LTI.busy.has(w),err=(LTI.res[w]||{}).err;
     const pid=r.s.pid,alts=pid?(r.s.alts.length?r.s.alts:lsTemplatesFor(pid).map(t=>t.id)):[];
@@ -3876,9 +3880,11 @@ function ltiInner(){
     ${wc.map(wrow).join('')}
     <div style="font-size:12px;color:var(--t3);margin-bottom:8px">${rows.length?'Each processed work order needs its cutting list. Check the suggested template and tap ✓ Confirm. <b>Nothing reaches the saw until it is confirmed.</b> Green = strong match · amber = a guess · grey = no suggestion.':'✓ Every processed work order has a cutting list.'}</div>
     ${LTI.done.length?`<div class="lti-done">${LTI.done.slice(0,12).map(d=>`<div>✓ <b>${escA(d.wo)}</b> — "${escA(d.name)}"${d.tpl?' from '+escA(d.tpl):''}${d.already?' <i>(already made on another screen — no second list)</i>':''}</div>`).join('')}${LTI.done.length>12?`<div>…and ${LTI.done.length-12} more</div>`:''}<button class="btn btn-s" id="lti-dx" style="font-size:11px;padding:2px 8px;margin-top:4px">Clear</button></div>`:''}
-    ${show.map(row).join('')}
+    ${rows.length>5||qm?`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px"><input id="lti-q" value="${escA(LTI.q||'')}" placeholder="🔍 Find a job here — customer, WO, floor, unit or title (e.g. aspect 71)" autocomplete="off" style="${LS_INP};flex:1;min-width:200px;font-size:14px">${qm?`<span id="lti-qn" style="font-size:13px;font-weight:700;color:#14335c">${shown.length} of ${rows.length}</span><button class="btn btn-s" id="lti-qx" style="font-size:12px;padding:4px 10px">✕ Clear</button>`:''}</div>`:''}
+    ${qm&&!shown.length?`<div id="lti-q0" style="font-size:13px;color:var(--t2);margin-bottom:6px">No job waiting for a list matches "${escA(LTI.q)}". A job that already has a list is on the Cutting Lists table, not here.</div>`:''}
+    ${shown.map(row).join('')}
     ${under.map(w=>`<div class="lti-nar" style="font-size:12px;color:#14335c;margin-top:4px">ℹ List already made under ${escA(w)} — the new Cienapps WO for that house needs no second list</div>`).join('')}
-    ${rows.length>show.length?`<button class="btn btn-s" id="lti-more" style="font-size:12px;margin-top:6px">Show all ${rows.length}</button>`:''}
+    ${!qm&&rows.length>show.length?`<button class="btn btn-s" id="lti-more" style="font-size:12px;margin-top:6px">Show all ${rows.length}</button>`:''}
     ${phs.length?`<div style="margin-top:8px;font-size:12px"><button class="btn btn-s" id="lti-ph" style="font-size:11px;padding:3px 9px">${LTI.showPh?'▲':'▼'} 📷 Photo lists (${phs.length})</button>
       ${LTI.showPh?phs.map(o=>`<div class="lti-nar"><b>${escA(o.wo)}</b> ${escA(o.title||'')} — ${phList(o).length} photo${phList(o).length!==1?'s':''} · ${escA(phList(o)[0].by||'')} ${fmt(phList(o)[0].at)} <button class="btn btn-s" data-phwo="${escA(o.wo)}" style="font-size:11px;padding:2px 8px">Open</button></div>`).join(''):''}</div>`:''}
     ${na.length?`<div style="margin-top:8px;font-size:12px"><button class="btn btn-s" id="lti-na" style="font-size:11px;padding:3px 9px">${LTI.showNA?'▲':'▼'} Cleared without a planner list (${na.length})</button>
@@ -3942,6 +3948,8 @@ function ltiBind(){
   q('[data-ltiundo]',b=>b.onclick=()=>{const o=DB.orders.find(x=>x.wo===b.dataset.ltiundo);if(!o)return;
     officeWho(by=>{delete o.listNA;logEdit(o,'Cutting list: "no list needed" undone',by);sched();ltiAfter();});});
   q('#lti-more',b=>b.onclick=()=>{LTI.all=true;ltiAfter();});
+  q('#lti-q',b=>b.oninput=()=>{LTI.q=b.value;const at=b.selectionStart;ltiAfter();const n=document.getElementById('lti-q');if(n){n.focus();try{n.setSelectionRange(at,at);}catch(e){}}}); // the panel is drawn again with the matches; the cursor stays in the box
+  q('#lti-qx',b=>b.onclick=()=>{LTI.q='';ltiAfter();const n=document.getElementById('lti-q');if(n)n.focus();});
   q('#lti-na',b=>b.onclick=()=>{LTI.showNA=!LTI.showNA;ltiAfter();});
   q('#lti-ph',b=>b.onclick=()=>{LTI.showPh=!LTI.showPh;ltiAfter();});
   q('[data-ltiph]',b=>b.onclick=()=>phPick(b.dataset.ltiph,ltiAfter));
