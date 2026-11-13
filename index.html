@@ -5075,6 +5075,10 @@ function openListEditor2(listId,presetWo,presetPid,opt){
   ov.addEventListener('focusin',e=>{const m=e.target&&e.target.dataset&&e.target.dataset.mr;if(m){st.cur=m;if(st.snapKey!==m)st.snapKey='';}});
   // ---- keyboard, like Excel (not on phones): Tab / Shift+Tab, Enter down (a new row at the bottom), arrows, Ctrl+D fill
   //      down, Insert adds a row, Ctrl+Delete deletes the row, Ctrl+Z undoes. The cursor stays where it was after a redraw.
+  const tabStops=box=>[...box.querySelectorAll('button,input,select,textarea,summary,a[href]')].filter(x=>!x.disabled&&x.type!=='hidden'&&x.tabIndex>=0&&x.getClientRects().length&&(d=>!d||(x.tagName==='SUMMARY'&&x.parentElement===d))(x.closest('details:not([open])'))); // not what is inside a closed Start from… / More panel
+  const tabWrap=(box,e)=>{const fs=tabStops(box);if(!fs.length)return;const a=fs.indexOf(e.target); // Tab goes round inside the box — never on to what is behind it
+    if(!e.shiftKey&&(a===fs.length-1||a<0)){e.preventDefault();fs[0].focus();}
+    else if(e.shiftKey&&a<=0){e.preventDefault();fs[fs.length-1].focus();}};
   const COL={item:0,qty:1,units:1,L:2,W:3,mat:4,edging:5,edging2:6,note:7};
   const cellsOf=i=>{const r=R()[i];if(!r)return[];if(r.k!=='hdr')return['item','qty','L','W','mat','edging','edging2','note'];
     return r.units!==undefined&&r.units!==null&&!(sawStarted&&r.lid)?['item','units','note']:['item','note'];};
@@ -5089,7 +5093,8 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       if(!e.shiftKey){if(ci<cs.length-1)go(i,cs[ci+1]);else if(i<R().length-1)go(i+1,cellsOf(i+1)[0]);
         else if(lsEmptyRow(R()[i])||(R()[i].k==='hdr'&&!String(R()[i].item||'').trim()&&!String(R()[i].note||'').trim()&&!String(R()[i].units==null?'':R()[i].units).trim())){const sb=ov.querySelector('#me-save');if(sb){st.cur=m;sb.focus();}} /*list-window step 9: Tab from an EMPTY last row (or an empty heading, step 11) goes on to Save (a filled one still adds a row)*/
         else{st.cur=m;addRow(R().length);}}
-      else{if(ci>0)go(i,cs[ci-1]);else if(i>0){const p=cellsOf(i-1);go(i-1,p[p.length-1]);}}
+      else{if(ci>0)go(i,cs[ci-1]);else if(i>0){const p=cellsOf(i-1);go(i-1,p[p.length-1]);}
+        else{const fs=tabStops(ov),a=fs.indexOf(t);if(a>0)fs[a-1].focus();}} // (attack3 T9) from the very first cell: back to the boxes above the rows
       return;}
     if(e.key==='Enter'&&!ctrl){stop();if(e.shiftKey){go(i-1,f);return;}
       if(i<R().length-1)go(i+1,f);else{keep();snap();R().push(blank(R().length));st.focus=(R().length-1)+'|'+(f==='units'?'qty':f);st.focusAll=true;draw();}
@@ -5112,14 +5117,11 @@ function openListEditor2(listId,presetWo,presetPid,opt){
   // ---- (step 11, K7/K8) Shift+Tab from the big Save goes back to the cell Tab came from (else the last row's last cell); Tab and
   //      Shift+Tab go round INSIDE the window — never on to the page behind it
   ov.addEventListener('keydown',e=>{
-    if(e.key!=='Tab'||e.defaultPrevented||ov.classList.contains('me-dov'))return;const t=e.target;
+    if(e.key!=='Tab'||e.defaultPrevented)return;const t=e.target; // (attack3 S3) the Saved ✓ panel too: Tab stays on its two buttons
     if(t&&t.id==='me-save'&&e.shiftKey){let c=st.cur&&ov.querySelector('[data-mr="'+st.cur+'"]');
       if(!c){const rs=[...ov.querySelectorAll('[data-row]')],l=rs[rs.length-1];c=l&&[...l.querySelectorAll('[data-mr]')].filter(x=>!x.disabled).pop();}
       if(c){e.preventDefault();c.focus();return;}}
-    const fs=[...ov.querySelectorAll('button,input,select,textarea,summary,a[href]')].filter(x=>!x.disabled&&x.type!=='hidden'&&x.tabIndex>=0&&x.getClientRects().length);
-    if(!fs.length)return;const a=fs.indexOf(t);
-    if(!e.shiftKey&&(a===fs.length-1||a<0)){e.preventDefault();fs[0].focus();}
-    else if(e.shiftKey&&a===0){e.preventDefault();fs[fs.length-1].focus();}
+    tabWrap(ov,e);
   });
   // ---- paste from Excel (not on phones). One cell → the browser pastes it as usual. Rows copied from a sheet with the
   //      cursor in Description → read by lsParseGrid (header row skipped, text-only rows = headings, "N total nr of units"
@@ -5161,7 +5163,9 @@ function openListEditor2(listId,presetWo,presetPid,opt){
   });
   // ---- L8 (10 Nov): ✕ Close (top right, always in view), Close (bottom) and Esc close the window — asking first only if something
   //      was typed since it opened. A click on the grey area outside does nothing. After Save the window says plainly what happened.
-  const sig=()=>JSON.stringify([R().filter(r=>!lsEmptyRow(r)),st.name,st.wo,st.pid,st.ltype,st.tname,st.noCut,st.noFit,st.jb.floor,st.jb.unit,st.jb.title,st.jb.wo,st.pw,st.newWO]);
+  const sigRow=r=>r.k==='hdr'?!!(String(r.item||'').trim()||String(r.note||'').trim()||String(r.units==null?'':r.units).trim()) // an empty heading is nothing to lose
+    :!lsEmptyRow(r)||!!r.buy||(!!String(r.mat||'').trim()&&String(r.mat)!==String(r.matAuto||'')); // (attack3 C7) a material PICKED (not the copied one) or Bought in ticked is something typed
+  const sig=()=>JSON.stringify([R().filter(sigRow),st.name,st.wo,st.pid,st.ltype,st.tname,st.noCut,st.noFit,st.jb.floor,st.jb.unit,st.jb.title,st.jb.wo,st.pw,st.newWO]);
   const dirty=()=>{if(ov.classList.contains('me-dov'))return false;keep();return sig()!==st.sig0;};
   const closeEd=()=>{if(!document.body.contains(ov))return;if(dirty()&&!confirm('Close without saving?\n\nWhat you typed in this list is lost.\n\nOK = close without saving\nCancel = stay and Save'))return;ov.remove();};
   const done=(l,d)=>{ // the finish panel: matches what happened, [Close] (big, focused) and [Edit it again]
@@ -5176,6 +5180,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     ov.querySelector('#me-dagain').onclick=()=>{ov.remove();openListEditor(l.id);};
   };
   const escH=e=>{if(!document.body.contains(ov)){document.removeEventListener('keydown',escH);return;}
+    if(e.key==='Tab'&&!e.defaultPrevented){const os=[...document.querySelectorAll('.pod-ovl')],tp=os.pop();if(tp!==ov&&os.pop()===ov)tabWrap(tp,e);return;} // (attack3 F1) a little window open over the list (old-list finder, materials…): Tab stays in IT
     if(e.key!=='Escape')return;const all=[...document.querySelectorAll('.pod-ovl')],top=all.pop();
     if(top!==ov){ // (round 5) a window opened over the list (materials, insert from template, which sheet…): Esc closes THAT one only
       if(all.filter(o=>o.querySelector('.me-ed')).pop()!==ov||top.querySelector('.me-ed')||top.classList.contains('me-dov'))return; // not ours / another list window
