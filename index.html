@@ -1563,7 +1563,7 @@ function updDelBadge(){
   const n=DB.orders.filter(o=>o.delv&&!o.delDone&&!delHidden(o)).length+(DB.delx||[]).filter(o=>!o.delDone).length;
   el.textContent=n;el.style.display=n?'inline':'none';
   const el2=document.getElementById('listcnt');
-  if(el2){const m=listsNeeded().length+lsWaitCheckLists().length;el2.textContent=m;el2.style.display=m?'inline':'none';}
+  if(el2){const pps=V2()?pListPs():[],m=listsNeeded().filter(o=>!pListUnder(o,pps)).length+lsWaitCheckLists().length; /* the same jobs the 'Cutting lists to issue' panel asks for */el2.textContent=m;el2.style.display=m?'inline':'none';}
   const el3=document.getElementById('shipcnt');
   if(el3){const am=attnMap(),k=DB.orders.filter(o=>isShipped(o)&&!o.completeAt&&am.get(o.wo)).length;el3.textContent=k;el3.style.display=k?'inline':'none';}
 }
@@ -9350,7 +9350,9 @@ function pKindsMeet(a,b){const ka=seqKinds(a),kb=seqKinds(b);if(!ka.size)ka.add(
 const pIsP=w=>/^P-\d+$/.test(String(w||''));
 const pLive=x=>x&&!isShipped(x)&&!x.delDone&&!x.delDelivAt;
 // other live jobs for the same house + kind as job o (same project, floor and unit — 'same' only); P-jobs and Cienapps WOs
-function pSameHouseAll(o,jobs){const k=jobKey(o);return (jobs||DB.orders).filter(x=>pLive(x)&&x.wo!==o.wo&&keyMatch(k,jobKey(x)).r==='same'&&pKindsMeet(o.title,x.title));}
+// (attack3 N2/N5) the block rule keyFind() has: two titles that name DIFFERENT blocks ("BLOCK A APT 12" / "BLOCK B APT 12") are never one house
+function pBlkMeet(a,b){const x=keyBlk(a),y=keyBlk(b);return !x||!y||x===y;}
+function pSameHouseAll(o,jobs){const k=jobKey(o);return (jobs||DB.orders).filter(x=>pLive(x)&&x.wo!==o.wo&&keyMatch(k,jobKey(x)).r==='same'&&pKindsMeet(o.title,x.title)&&pBlkMeet(o.title,x.title));}
 function pSameHouse(o,jobs){return pSameHouseAll(o,jobs)[0]||null;}
 // pairs of live P-jobs for one house + kind (flagged on Lists home); a Cienapps WO that now exists for a P-job's house
 function pTwins(){const ps=DB.orders.filter(o=>pIsP(o.wo)&&pLive(o)),out=[],seen=new Set();

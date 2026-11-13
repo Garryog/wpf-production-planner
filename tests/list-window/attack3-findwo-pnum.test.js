@@ -100,6 +100,10 @@ function row() { const r = X.v2Row();
     rec('[HIGH] N2: …and BLOCK B\'s list did NOT land on WO-TA (BLOCK A\'s job)', liveFor(S, 'WO-TA').length === 0, JSON.stringify(liveFor(S, 'WO-TA').map(l => l.name)));
     // Cancel on that third question: is there any way through?
     await p.evaluate(() => { window.__confirm = m => !/No second job is made for one house/.test(m); });
+    // (Coder, after the N2 fix) the P-number N2 has just made for this very flat is taken away first — with it there, "use it" is the
+    // RIGHT question (same house, same block) and Cancel rightly saves nothing; the check is about WO-TA (block A) only
+    if (b.wo) { S.row.orders = S.row.orders.filter(x => x.wo !== b.wo); S.db.t.lists.filter(l => (l.wos || []).includes(b.wo)).forEach(l => { l.archived = true; });
+      await p.evaluate(async () => { await loadDB(); lsReset(); await lsLoad(); render(); }); await sleep(800); }
     const b2 = await mkP('1', '12', 'BLOCK B APT 12 KITCHEN');
     rec('[HIGH] N2b: …answering Cancel to "use WO-TA" → the P-number for BLOCK B is made (today: "Not saved" — a dead end, block B can get no list at all until Cienapps has its WO)', !!b2.wo, JSON.stringify([b2.wo, b2.dn, b2.er]));
     await p.evaluate(() => { window.__confirm = true; });
