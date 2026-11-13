@@ -4779,7 +4779,9 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     const n0=prompt('New material for '+pname+' (e.g. W/W, UD96, WHB):','');
     const n=String(n0||'').trim();if(!n){st.focus=i+'|mat';draw();return;}
     const flag=why=>{snap();r.mat=n;delete r.matAuto;st.focus=i+'|mat';draw();toast('"'+n+'" is used on this row only and flagged for the Production Manager'+(why?' — '+why:'')+'. They can add it to the project\'s materials.');};
-    const ex0=lsMatClash(st.pid,n,'');
+    const ex0=lsMatClash(st.pid,n,''),sized=lsNum(r.L)>0||lsNum(r.W)>0;
+    const notFit=m=>{st.focus=i+'|mat';draw();toast('"'+m.name+'" is a fitting on the project list, so it can\'t go on a row with a length or width (those rows go to the saw). Pick a board — or clear the sizes to make it a Stores row.');}; /*M4*/
+    if(ex0&&ex0.kind==='other'&&sized)return notFit(ex0);
     if(ex0&&ex0.active!==false){snap();r.mat=ex0.name;delete r.matAuto;st.focus=i+'|mat';draw();toast('"'+ex0.name+'" is already on the project list — picked');return;}
     if(!lsMatCan()){
       const v=prompt('Adding "'+n+'" to the '+pname+' materials needs the Production Manager, Drawing office or Admin PIN.\n\nEnter the PIN — or press Cancel to use "'+n+'" on this row only (it will be flagged for the Production Manager):','');
@@ -4790,6 +4792,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     st.addBusy=(st.addBusy||0)+1;{const sb=ov.querySelector('#me-save');if(sb)sb.disabled=true;} // Save waits for the new material (else the row saves with no material)
     (async()=>{
       try{await lsMatFresh(st.pid);const cl=lsMatClash(st.pid,n,'');
+        if(cl&&cl.kind==='other'&&(lsNum(r.L)>0||lsNum(r.W)>0)){notFit(cl);return;} // made a fitting on another screen meanwhile (M4)
         if(cl){if(cl.active===false)await lsWrite('project_materials',cl,{active:true});snap();r.mat=cl.name;}
         else{await lsWrite('project_materials',{id:uid('M'),project_id:st.pid,name:n,kind,sort:lsMats(st.pid,'',true).length});snap();r.mat=n;}
         delete r.matAuto;
