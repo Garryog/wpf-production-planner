@@ -443,7 +443,7 @@ details.lti-other{margin-bottom:14px}details.lti-other>summary{cursor:pointer;fo
 .me-h td{background:#f5f6f8}.me-u td{background:#eef3fb}.me-u .me-ht{background:#14335c;color:#fff}.me-inu td:nth-child(2){padding-left:14px}
 .pc-b{display:inline-block;margin-top:2px;font-size:11px;font-weight:700;color:#8a5a00;background:#fff4d6;border:1px solid #e0a43a;border-radius:4px;padding:0 5px}
 .me-q{white-space:nowrap}.me-tot{font-size:12px;font-weight:800;color:#14335c;margin-left:4px}.me-fx{font-size:11px;font-weight:600;color:var(--t3)}.me-ul{font-size:12px;font-weight:700;color:#14335c}.me-hint{font-size:11px;color:var(--t3)}.me-lock{font-size:12px;font-weight:700;color:#8a5a00}
-.me-x{color:var(--red);border-color:var(--red);padding:3px 8px}.lh-act{white-space:normal;min-width:120px}.lh-act .btn{margin:1px 0}
+.me-x{color:var(--red);border-color:var(--red);padding:3px 8px}.me-tbl td:last-child{white-space:nowrap}.me-mv{display:inline-flex;gap:2px;margin-right:4px;vertical-align:middle}.me-mv .btn{padding:3px 6px;font-size:11px;line-height:1}.me-mv .btn:disabled{opacity:.3}.me-chd .me-mv .btn{min-height:36px;min-width:36px}.lh-act{white-space:normal;min-width:120px}.lh-act .btn{margin:1px 0}
 .me-keys{font-size:11px;color:var(--t3);margin:2px 0 4px}@media(max-width:699px){.me-keys{display:none}}
 .me-cards{display:flex;flex-direction:column;gap:8px}.me-card{border:1px solid var(--b2);border-radius:8px;padding:8px;background:#fff}.me-card.me-ch{background:#f5f6f8}.me-card.me-cu{background:#eef3fb;border-color:#9db5d8}.me-card.me-cinu{margin-left:10px;border-left:3px solid #9db5d8}
 .me-chd{display:flex;align-items:center;gap:6px;margin-bottom:4px;font-size:13px;color:#14335c}.me-chd .me-x{margin-left:auto;min-height:36px;min-width:40px}
@@ -4609,6 +4609,8 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       ${v&&!on?`<option value="${escA(v)}" selected>⚠ ${escA(v)} (not on the project list)</option>`:''}${id?'':'<option value="__add">＋ Add new material…</option>'}</select>`;};
   const edgSel=(r,i,f,ph)=>{const v=String(r[f]||'').trim(),on=edges.find(e=>e.toLowerCase()===v.toLowerCase());
     return `<select data-mr="${i}|${f}" class="me-c me-edg" title="${ph}"><option value="">${ph}</option>${edges.map(e=>`<option value="${escA(e)}"${on===e?' selected':''}>${escA(e)}</option>`).join('')}${v&&!on?`<option value="${escA(v)}" selected>${escA(v)}</option>`:''}<option value="__other">Other…</option></select>`;};
+  // ▲ ▼ move a row (or a heading) one place up or down (Garry 13 Nov: "move around line in the cutting lists")
+  const mvB=i=>`<span class="me-mv"><button class="btn btn-s" data-mup="${i}" title="Move this row up"${i<=0?' disabled':''}>▲</button><button class="btn btn-s" data-mdn="${i}" title="Move this row down"${i>=R().length-1?' disabled':''}>▼</button></span>`;
   const rowHTML=(r,i,b)=>{
     if(r.k==='hdr'){const unit=r.units!==undefined&&r.units!==null,sub=!unit&&!!r.sub;
       return `<tr data-row="${i}" class="me-h${unit?' me-u':''}${sub?' me-hs':''}"><td class="me-n">${i+1}<span class="me-ht">${unit?'Unit':sub?'Sub':'Heading'}</span></td>
@@ -4617,7 +4619,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
           <td colspan="5">${sawStarted&&r.lid?`<span class="me-lock">🔒 ${escA(LS_LOCK_MSG)}</span> <button class="btn btn-s" data-mecopy="1" style="font-size:12px;padding:3px 9px">Make new list from this</button>`:'<span class="me-hint">Qty below is for ONE unit — the total to cut is shown beside it</span>'}</td>`
           :`<td colspan="6"><select data-mhs="${i}" class="me-hsel" title="A heading (the house) or a sub-heading under it (Fillers and Kickers, ISLAND, Utility, Doors FU)"><option value="">Heading</option><option value="sub"${sub?' selected':''}>Sub-heading</option></select></td>`}
         <td><input data-mr="${i}|note" value="${escA(r.note||'')}" placeholder="Note" ></td><td></td>
-        <td><button class="btn btn-s me-x" data-mrx="${i}" title="Delete row">✕</button></td></tr>`;}
+        <td>${mvB(i)}<button class="btn btn-s me-x" data-mrx="${i}" title="Delete row">✕</button></td></tr>`;}
     const u=b.U[i],tg=tagTxt(r);
     return `<tr data-row="${i}" class="me-p${u!=null?' me-inu':''}${r.buy?' me-buy':''}"><td class="me-n">${i+1}<span class="me-st" data-tag="${i}"${tg?'':' hidden'}>${tg}</span></td>
       <td><input data-mr="${i}|item" value="${escA(r.item)}" placeholder="Description" >${prevCut(r)}</td>
@@ -4629,11 +4631,11 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       <td>${edgSel(r,i,'edging2','Edging 2')}</td>
       <td><input data-mr="${i}|note" value="${escA(r.note||'')}" placeholder="Note" ></td>
       <td class="me-bi"><input type="checkbox" data-mbuy="${i}"${r.buy?' checked':''} title="Bought in — never cut, never picked: shows on the list for checking and delivery"></td>
-      <td><button class="btn btn-s me-x" data-mrx="${i}" title="Delete row">✕</button></td></tr>`;
+      <td>${mvB(i)}<button class="btn btn-s me-x" data-mrx="${i}" title="Delete row">✕</button></td></tr>`;
   };
   // phones (under 700 px wide): one card per row, the same boxes, big enough to tap; no shortcuts or paste
   const cardHTML=(r,i,b)=>{
-    const lab=(t,h)=>`<label class="me-cl"><span>${t}</span>${h}</label>`,x=`<button class="btn btn-s me-x" data-mrx="${i}" title="Delete row">✕</button>`;
+    const lab=(t,h)=>`<label class="me-cl"><span>${t}</span>${h}</label>`,x=`${mvB(i)}<button class="btn btn-s me-x" data-mrx="${i}" title="Delete row">✕</button>`;
     if(r.k==='hdr'){const unit=r.units!==undefined&&r.units!==null,lock=sawStarted&&r.lid,sub=!unit&&!!r.sub;
       return `<div class="me-card me-ch${unit?' me-cu':''}${sub?' me-chs':''}" data-row="${i}"><div class="me-chd"><b>${i+1} · ${unit?'Unit':sub?'Sub-heading':'Heading'}</b>${unit?'':`<select data-mhs="${i}" class="me-hsel"><option value="">Heading</option><option value="sub"${sub?' selected':''}>Sub-heading</option></select>`}${x}</div>
         ${lab(unit?'Unit name':sub?'Sub-heading':'Heading',`<input data-mr="${i}|item" value="${escA(r.item)}" class="me-b">`)}
@@ -4649,7 +4651,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
   };
   const gridHTML=()=>{const b=blocks();
     if(window.innerWidth<700)return `<div class="me-cards">${R().map((r,i)=>cardHTML(r,i,b)).join('')||'<div style="color:var(--t3);padding:10px">No rows yet — press ＋ Row.</div>'}</div>`;
-    return `<table class="me-tbl me-grid"><colgroup><col style="width:84px"><col><col style="width:104px"><col style="width:70px"><col style="width:70px"><col style="width:150px"><col style="width:92px"><col style="width:92px"><col style="width:12%"><col style="width:58px"><col style="width:42px"></colgroup><thead><tr><th></th><th>Description</th><th>Qty</th><th>Length</th><th>Width</th><th>Material</th><th>Edging 1</th><th>Edging 2</th><th>Note</th><th title="Bought in — never cut or picked">Bought in</th><th></th></tr></thead><tbody>${R().map((r,i)=>rowHTML(r,i,b)).join('')||'<tr><td colspan="11" style="color:var(--t3);padding:10px">No rows yet — press ＋ Heading or ＋ Row.</td></tr>'}</tbody></table>`;};
+    return `<table class="me-tbl me-grid"><colgroup><col style="width:84px"><col><col style="width:104px"><col style="width:70px"><col style="width:70px"><col style="width:150px"><col style="width:92px"><col style="width:92px"><col style="width:12%"><col style="width:58px"><col style="width:100px"></colgroup><thead><tr><th></th><th>Description</th><th>Qty</th><th>Length</th><th>Width</th><th>Material</th><th>Edging 1</th><th>Edging 2</th><th>Note</th><th title="Bought in — never cut or picked">Bought in</th><th></th></tr></thead><tbody>${R().map((r,i)=>rowHTML(r,i,b)).join('')||'<tr><td colspan="11" style="color:var(--t3);padding:10px">No rows yet — press ＋ Heading or ＋ Row.</td></tr>'}</tbody></table>`;};
   const updTotals=()=>{const b=blocks();ov.querySelectorAll('[data-tot]').forEach(e=>{const i=+e.dataset.tot,r=R()[i];if(r&&b.U[i]!=null)e.innerHTML=totHTML(r,b.U[i]);});};
   const updTag=i=>{const t=ov.querySelector('[data-tag="'+i+'"]'),r=R()[i];if(t&&r){const tg=tagTxt(r);t.textContent=tg;t.hidden=!tg;}
     const s=ov.querySelector('[data-mr="'+i+'|mat"]');if(s&&r&&r.matAuto&&String(r.mat||'')===String(r.matAuto)){const w=lsAutoHidden(r)?'':String(r.mat);if(s.value!==w&&(w===''||[...s.options].some(x=>x.value===w)))s.value=w;}};
@@ -4772,6 +4774,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
         if(f==='qty'||f==='units')updTotals();if(f==='L'||f==='W'||f==='item'||f==='qty'||f==='edging'||f==='edging2'||f==='note')updTag(i);};
     });
     ov.querySelectorAll('[data-mrx]').forEach(b=>b.onclick=()=>delRow(+b.dataset.mrx));
+    ov.querySelectorAll('[data-mup]').forEach(b=>b.onclick=()=>moveRow(+b.dataset.mup,-1));ov.querySelectorAll('[data-mdn]').forEach(b=>b.onclick=()=>moveRow(+b.dataset.mdn,1));
     ov.querySelectorAll('[data-mhs]').forEach(e=>e.onchange=()=>{const i=+e.dataset.mhs,r=R()[i];if(!r)return;keep();snap();if(e.value==='sub')r.sub=true;else delete r.sub;st.focus=i+'|item';draw();});
     ov.querySelectorAll('[data-mbuy]').forEach(e=>e.onchange=()=>{const i=+e.dataset.mbuy,r=R()[i];if(!r)return;snap();if(e.checked)r.buy=true;else delete r.buy;
       const tr=e.closest('[data-row]');if(tr)tr.classList.toggle('me-buy',!!r.buy);updTag(i);});
@@ -4857,6 +4860,10 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     if(!unit&&R().length===1&&lsEmptyRow(R()[0])&&c<=0){keepTotals(()=>R().splice(0,0,h));st.focus='0|item';draw();return;} // a brand-new list: the heading goes first
     if(!unit&&!st.unitsOn&&R().slice(0,i).some(x=>x.k==='hdr'&&!x.sub&&(x.units===undefined||x.units===null)))h.sub=true;
     keepTotals(()=>{R().splice(i,0,h);if(unit)R().splice(i+1,0,blank(i+1));});st.focus=i+'|item';draw();};
+  // one place up or down; the row keeps everything (ticks, sizes, its saved id) — only the order changes. Ctrl+Z undoes it.
+  const moveRow=(i,d)=>{keep();const j=i+d;if(!R()[i]||j<0||j>=R().length)return;snap();
+    keepTotals(()=>{const a=R();const t=a[i];a[i]=a[j];a[j]=t;});
+    st.cur=j+'|item';st.focus=j+'|item';draw();};
   const delRow=i=>{keep();const r=R()[i];if(!r)return;snap();
     keepTotals(()=>R().splice(i,1));
     if(r.k==='hdr'&&r.units!=null)toast('Unit heading deleted — its parts keep their totals');
