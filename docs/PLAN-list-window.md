@@ -369,3 +369,21 @@ pickers are folded behind "Change job ▾" rather than removed.
   branch shows how), full suite, Tester, final Manager review. About one run. L9 / the due badge on Lists home (item 8) come
   after that — question 10 still stands.
 - No Manager GO yet (conditions unchanged), so no pull request and no GO-LIVE doc. Questions 1–18 are still open; nothing new.
+
+## Bug check asked for by Garry, 13 Nov 15:20 — "check for any bugs in relations to the editing of project material or making any changes to material or lists"
+Checked: live Supabase logs (last 24 h: 31 list saves, 24 materials added, 2 edited — no failed request), live data consistency
+(counts, duplicates, two live lists per WO, n_saw/n_fit: all clean), and probes on this branch with the fake database
+(/tmp probes, not committed). Found — to FIX IN THIS RELEASE, each with a test:
+- **M1 (High) Materials window loses typing.** Each row has its own Save; pressing Save on one row redraws the window and throws
+  away unsaved edits on every other row and a half-typed new material. Closing the window with unsaved edits gives no warning.
+  Fix: keep unsaved row edits across a redraw (or one "Save all changes" button), and ask before closing with unsaved edits.
+- **M2 (High) Renamed material shows as "⚠ not on the project list".** The rename keeps the old name as an alias, but the list
+  window's material box matches by exact name only, so every existing list and template row using the old name turns amber, and
+  the old name stays on the saw's list. Fix: match through aliases (show and save the current name), on lists and templates.
+- **M3 (Medium) No warning when a material in use is retired (Active unticked) or changed Sheet ↔ Fitting.** Rows using it turn
+  amber "not on the project list" with no notice. Fix: say "used on N lists / templates" and ask first; a sized row keeps showing it.
+- **M4 (Low) "＋ Add new material…" with the name of an existing FITTING on a row that has sizes** says "already on the project
+  list — picked" but the box stays empty. Fix: say it is a fitting and cannot go on a sized row (or pick it).
+- **M5 (Low, live data) A template has two names — its name and its "type name" — and they can disagree.** Live: Emmet Road
+  template named "4C" has type "4B" (made by copying 4B), so two templates show as "4B" in the pickers. Fix: copying a template
+  sets the type name to the new name; show ONE name in pickers (Simplicity). Garry told to retype it by hand meanwhile.
