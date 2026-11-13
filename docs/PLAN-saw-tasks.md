@@ -78,3 +78,24 @@ component that are being cut, cut and picked for delivery & 3. toilet cubicles."
 - Existing P-numbers with no category: shown as "no category — pick one" to the office; never guessed.
 - Questions for Garry: (1) cubicles — is a project needed, and do they go on the delivery board? (2) may anyone drag a kanban card by
   hand, or only through saw / stores ticks (recommended)? (3) can a "For delivery" P-job later be switched to stock, and the reverse?
+
+## Garry, 13 Nov 2026 (09:09) — how project stock components are used and identified
+Garry's words: "the project kanban items will appear on a cutting list down the line when they are being delivered, the saw and
+dispatch will need to know they are down for delivery and need to be picked and sent on truck. they will be put on the WO cutting
+list for the job that is going. the kanban stock will need to manage what is in stock and what is being consumed be wo. the project
+component will need a code to ID them as a project stock component so the stock can be managed".
+- **Component code:** every project stock component gets its own code, unique within the project, made by the planner when the
+  component is first set up and never reused (proposed form: project short code + running number, e.g. "ASP-C014"; Architect to
+  confirm with Garry). The code — not the description — is what identifies a stock component everywhere (replaces "exact match on
+  description + size + material" above). Printed on the stock job's saw list and on the label for the stored parts.
+- **On the WO cutting list:** when the work order that is going out needs a stocked component, the component is put on THAT work
+  order's cutting list as a **"FROM STOCK"** line carrying its code and quantity (picked from the project's stock list in the list
+  window, not typed). Supersedes point 3 "Out" above.
+- **Saw:** sees the line marked "FROM STOCK — do not cut", so the saw knows it is already made and is going with this job.
+- **Stores / dispatch:** the line is on their pick list for that work order as "pick from project stock" with the code and where it
+  is stored; picked → goes on the docket and the truck with the rest of the job. The delivery card shows "includes project stock".
+- **Stock control by work order:** kanban card per code shows on hand, **reserved** (on a WO list, not yet picked) and **consumed**
+  (picked), with the list of work orders that took it and when. Putting a FROM STOCK line on a list reserves the quantity; the pick
+  consumes it; taking the line off the list releases it. Asking for more than is free is refused with what is left and offers "raise
+  a stock job for the shortfall". Buffer flag works on free stock (on hand − reserved).
+- Kanban columns now: To cut → Being cut → In stock → Reserved for a WO → Picked / sent.
