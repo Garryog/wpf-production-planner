@@ -107,3 +107,10 @@ final round (after Deliveries is merged in); until then they are listed here.
 **Signed off by Garry, 13 Nov 2026 (answer A to both):** two PCs saving a list for the same job in the same second (fixed
 with the database rule in the P-number release) and an old screen wiping the P-number safety copies / making a second list
 (go-live step: close every screen and phone) — the rows above for those are accepted for the list window release.
+
+
+## 14 Nov 2026 — the 156 out-of-date checks above are DONE (nothing for Garry to sign)
+The Tester rewrote them to Garry's 13 Nov rule (Production Manager screen / typed PIN open templates; a remembered PIN, PM, office,
+saw and stores are still refused; the saw is told "owner Production Manager, Garry and Drawing office"). All 156 pass; the five rows
+in the 13 Nov afternoon table no longer apply. Full suite on this code (232 files): **5,488 pass / 68 fail** — every one of the 68 is
+on the lists above (t17-exportbase gave 8 this run; s5s6-templates stops early with 0 fails as before). No new failing test.

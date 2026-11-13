@@ -487,3 +487,38 @@ capping on the opposite side. These types might be named with and with a 'H' or 
 - The preview before issuing shows, per unit: WO, floor, unit, title, the template and its hand, so a wrong hand is visible.
 - Tester: mixed hands in one selection, "H" inside a word (e.g. "HOUSE", "4H BLOCK"), LH/RH vs H naming on the same project,
   a handed unit with only the un-handed template, two templates that differ only by hand.
+
+
+### 14 Nov 2026, 00:30 UTC (scheduled run 7, started 19:43 on the 13th)
+- **Still waiting for Deliveries.** `release/deliveries-weeks` is NOT on `main` yet, so no merge, no final round, no pull request.
+  No other run was working (last push 16:46).
+- **Garry's bug check (M1–M5 above) — M1 to M4 FIXED, each with its own test:**
+  - M1 Materials window keeps what was typed on the other rows and the half-typed new material when one row is saved; Close
+    (and Esc) asks "Close without saving?" only when something is unsaved. No new buttons.
+  - M2 a renamed material is found by its old name: the list window and templates show the current name with no ⚠, and the
+    list is stored under the new name the next time it is saved. Cut ticks are kept. No bulk rewrite of stored lists.
+  - M3 retiring a material, or switching it Sheet ↔ Fitting, says "used on N lists and N templates" and asks first; rows that
+    use it keep showing it.
+  - M4 typing an existing fitting's name on a row with sizes says plainly it is a fitting and can't go on a saw row.
+  - **M5 NOT built** — the Coder found no copy route that can make the two template names disagree; the only way is the
+    template editor's two boxes (name changed to "4C", type name left at "4B"). Question for Garry below.
+- **Tester round 4** (4 new files, 110 checks) attacked those fixes and found: **B1 High** — the Materials window could put back
+  another PC's rename or retire (caused by the M1 fix); **B2 Medium** — a cut tick lost on a note-only edit if this PC had not yet
+  picked up a rename; B3–B5 Low (a retired material typed on a row came back without asking; one question for retire + switch;
+  Materials window cramped on a phone). **All five fixed**; the four attack files now pass 109 of 109.
+- **The 156 out-of-date checks** (Production Manager and templates) were rewritten to Garry's 13 Nov rule — all pass.
+- **Full suite on the final code (232 files, fake Supabase): 5,488 pass / 68 fail** — all 68 on ACCEPTED-FAILURES; no new fail.
+- **Manager, interim: GO WITH CONDITIONS** to carry these into the final round. To check in the final round:
+  1. (Major, not yet checked on screen) after a rename, lists nobody has re-saved keep the old name, so the saw sheets and the
+     "sheets needed" totals may show ONE board under TWO names until each list is saved again. Tester to prove it; if real, the
+     Coder makes the totals treat old and new name as one board.
+  2. (Minor) every list Save now reads the project's materials first — time it on a slow phone connection.
+  3. (Minor) does "what changed" / the history show a material change nobody made when a save only re-labels a name?
+  4. Re-attack the B1–B5 fixes (two PCs in the Materials window; "was retired — bring it back?").
+- No database change. No SQL. Nothing pushed to `main`.
+
+## Question added 14 Nov (recommended answer first)
+19. **A template's two names ("Template name" and "Type name") can disagree — how to stop the next "4C / 4B"?**
+   A (recommended) — when the template name is changed and the type name was the same as the old name, the type name follows.
+   B — nothing now; "one name per template" in the next release fixes it. C — hide the Type name box now.
+   (The live Emmet Road "4C" template still needs its type name retyped by hand either way.)
