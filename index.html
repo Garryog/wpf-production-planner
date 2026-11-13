@@ -5102,6 +5102,10 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     const e=ov.querySelector('[data-mr="'+i+'|'+f+'"]');if(!e)return false;e.focus();if(e.select&&all!==false)e.select();return true;};
   ov.addEventListener('keydown',e=>{
     if(window.innerWidth<700)return;
+    // (attack3b S5) Ctrl+S from the Floor / Unit / Title / List name box = pressing Save: leaving the box looks the work order up
+    // first (the same path as a Save pressed from that box), then the Save button is pressed
+    if((e.ctrlKey||e.metaKey)&&(e.key==='s'||e.key==='S')&&e.target&&/^me-(jf|ju|jt|jwo|name)$/.test(e.target.id||'')){e.preventDefault();e.stopPropagation();e.target.blur();
+      setTimeout(()=>{if(!document.body.contains(ov))return;const sb=ov.querySelector('#me-save');if(sb&&!sb.disabled)sb.click();},0);return;}
     const t=e.target,m=t&&t.dataset&&t.dataset.mr;if(!m)return;
     const[i0,f]=m.split('|'),i=+i0,cs=cellsOf(i),ci=cs.indexOf(f),ctrl=e.ctrlKey||e.metaKey,txt=t.tagName==='INPUT';
     const stop=()=>{e.preventDefault();e.stopPropagation();};
