@@ -3558,6 +3558,13 @@ function lsMatFind(pid,v){const k=matKey(v);return k?lsMats(pid,'').find(m=>[m.n
 // (M2) for comparing lines: an old name and the current name of one material are the same material (no tick is reset)
 function lsMatCanon(pid){if(!pid)return null;const mp=new Map();lsMats(pid,'',true).forEach(m=>[m.name,...(m.aliases||[])].forEach(a=>{const k=matKey(a);if(k&&!mp.has(k))mp.set(k,'#'+m.id);}));
   return v=>{const k=matKey(v);return mp.get(k)||k;};}
+// (M3) how many of the project's lists / templates (not archived) have a line using material m, by its name or other spellings — asked of the database
+async function lsMatUse(pid,m){
+  const ks=new Set([m.name,...(m.aliases||[])].map(matKey).filter(Boolean)),ls=lsCache().all.filter(l=>l.pid===pid&&!l.archived),hit=new Set();
+  for(let i=0;i<ls.length;i+=60){const ch=ls.slice(i,i+60);
+    (await lsGet('list_lines?select=list_id,material,removed_rev&list_id=in.('+ch.map(l=>'"'+encodeURIComponent(l.id)+'"').join(',')+')')).forEach(x=>{if(x.removed_rev==null&&ks.has(matKey(x.material)))hit.add(x.list_id);});}
+  const u=ls.filter(l=>hit.has(l.id));return{lists:u.filter(l=>!l.tpl).length,tpls:u.filter(l=>l.tpl).length};
+}
 function lsMatClash(pid,name,id){const k=matKey(name);return k?lsMats(pid,'',true).find(m=>m.id!==id&&[m.name,...(m.aliases||[])].some(a=>matKey(a)===k)):null;}
 function lsMaterialsDlg(pid,after){
   const ov=lsDlg('<div id="mt-body"></div>',820);
@@ -3596,6 +3603,10 @@ function lsMaterialsDlg(pid,after){
       if(lsMatClash(pid,name,id))return msg('"'+name+'" is already used on this project.');
       const clash=aliases.find(a=>lsMatClash(pid,a,id));if(clash)return msg('"'+clash+'" is already the name or another spelling of a different material on this project.');
       if(matKey(m.name)!==matKey(name)&&!aliases.some(a=>matKey(a)===matKey(m.name)))aliases.push(String(m.name).trim()); // renamed: the old name still matches
+      const off=m.active!==false&&!active,sw=kind!==m.kind; /*M3: retiring a material, or Sheet <-> Fitting, while lists use it: say so and ask first*/
+      if(off||sw){const K={sheet:'Sheet (saw)',other:'Fitting / other'};let u;try{u=await lsMatUse(pid,m);}catch(e){u=null;}
+        const where=!u?'It may be used on this project\'s lists or templates (could not check — '+'the database did not answer).':!u.lists&&!u.tpls?'':'It is used on '+[u.lists?u.lists+' list'+(u.lists!==1?'s':''):'',u.tpls?u.tpls+' template'+(u.tpls!==1?'s':''):''].filter(Boolean).join(' and ')+' of this project.';
+        if(where&&!confirm((off?'Retire "'+m.name+'"?':'Change "'+m.name+'" from '+K[m.kind]+' to '+K[kind]+'?')+'\n\n'+where+'\n\n'+(off?'Rows that use it keep it, but show "⚠ not on the project list" until someone picks another material.':kind==='other'?'Saw rows (with a length or width) that use it keep it, but show "⚠ a fitting — not a board" until someone picks a board.':'It will be listed with the boards from now on.')+'\n\nOK = save the change\nCancel = don\'t save'))return msg('Not saved — "'+m.name+'" is unchanged.');}
       lsWrite('project_materials',m,{name,kind,aliases,active})
         .then(()=>{toast('Material saved');draw(id);}).catch(e=>{draw();msg('Not saved — '+e.message);});});
     ov.querySelector('#mt-add').onclick=async()=>{if(!lsMatEditOk())return;const name=ov.querySelector('#mt-new-n').value.trim();if(!name)return msg('Type the material name first.');
@@ -4630,11 +4641,12 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     const sized=lsNum(r.L)>0||lsNum(r.W)>0;
     // a Stores row still carrying only the copied default colour is saved with NO colour — so it shows none (pick one to keep it)
     const v=!id&&lsAutoHidden(r)?'':String(r.mat||'').trim();
-    const sm=sheetMats(),fm=fitMats(),all=[...sm,...fm],hit=v?matOf(v):null,on=hit?all.find(n=>n===hit.name):undefined;
+    const sm=sheetMats(),fm=fitMats(),all=sized||id?sm:[...sm,...fm],hit=v?matOf(v):null,on=hit?all.find(n=>n===hit.name):undefined; // only what the box lists can be selected (M3/M4: a fitting on a row with sizes stays visible, flagged)
+    const why=v&&!on&&hit&&hit.kind==='other'?'a fitting — not a board':'not on the project list';
     const o=n=>`<option value="${escA(n)}"${on===n?' selected':''}>${escA(n)}</option>`;
     return `<select ${id?'id="'+id+'"':'data-mr="'+i+'|mat"'} class="me-c"${id?` style="${inp};width:100%${v&&!on?';'+amber:''}"`:v&&!on?` style="${amber}"`:''}${v&&!on?' title="Not on the project\'s materials — flagged for the Production Manager"':''}><option value="">${id?'— none —':!id&&isStores(r)?'— item / spec —':'— material —'}</option>
       ${sm.length?`<optgroup label="Boards / materials">${sm.map(o).join('')}</optgroup>`:''}${fm.length&&!sized&&!id?`<optgroup label="Fittings &amp; hardware">${fm.map(o).join('')}</optgroup>`:''}
-      ${v&&!on?`<option value="${escA(v)}" selected>⚠ ${escA(v)} (not on the project list)</option>`:''}${id?'':'<option value="__add">＋ Add new material…</option>'}</select>`;};
+      ${v&&!on?`<option value="${escA(v)}" selected>⚠ ${escA(v)} (${why})</option>`:''}${id?'':'<option value="__add">＋ Add new material…</option>'}</select>`;};
   const edgSel=(r,i,f,ph)=>{const v=String(r[f]||'').trim(),on=edges.find(e=>e.toLowerCase()===v.toLowerCase());
     return `<select data-mr="${i}|${f}" class="me-c me-edg" title="${ph}"><option value="">${ph}</option>${edges.map(e=>`<option value="${escA(e)}"${on===e?' selected':''}>${escA(e)}</option>`).join('')}${v&&!on?`<option value="${escA(v)}" selected>${escA(v)}</option>`:''}<option value="__other">Other…</option></select>`;};
   // ▲ ▼ move a row (or a heading) one place up or down (Garry 13 Nov: "move around line in the cutting lists")
