@@ -5291,8 +5291,8 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     if(st.newWO){const title=(g('me-ptitle').value||'').trim(),due=g('me-pdue').value;
       if(!title)return err('The new work order needs a title.');if(!due)return err('The new work order needs a due date — it drives the cutting deadline.');wo='__NEW__';}
     // (final round) what is saved is a COPY of the rows as they were checked here — a box changed while "Saving…" is on screen can't slip into the save unchecked
-    rows=rows.map(r=>({...r}));const live0=JSON.stringify(R());
-    const d={...st,rows,wo,project:(LST.p.get(st.pid)||{}).name||'',replaces:!ex&&!st.tpl&&st.from?st.from:null};
+    const live0=JSON.stringify(R());
+    const d={...st,rows:rows.map(r=>({...r})),wo,project:(LST.p.get(st.pid)||{}).name||'',replaces:!ex&&!st.tpl&&st.from?st.from:null};
     if(!st.tpl&&!String(d.name||'').trim())d.name=wo==='__NEW__'?'':wo; // (10 Nov) list name left blank = the WO number (a new P-number: set when it is made)
     // a spec placeholder ("Worktops — None chosen / TBC", no quantity, no size) never blocks the save: it stays on the list, red
     const tbcHold=r=>!sized(r)&&String(r.qty==null?'':r.qty).trim()===''&&lsTbc([r]).length>0;
