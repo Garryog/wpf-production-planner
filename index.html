@@ -4584,7 +4584,7 @@ function keyLineStr(f,u,p,n){const pp=keyTxt(p),nn=keyTxt(n);return !pp&&!nn?nul
    list, or a function giving it: only called when a search is made).
    st: 'noproj' | 'blank' (no search) | 'none' | 'one' (exactly one same, nothing unsure) | 'pick'. Unsure jobs are listed
    only when their unit is the same (a blank unit on a job is no reason to offer it). */
-function keyJobs(){return DB.orders.filter(o=>o&&o.wo&&!isShipped(o)&&!o.delDone&&!o.delDelivAt).map(o=>({o,k:jobKey(o)}));}
+function keyJobs(hold){return DB.orders.filter(o=>o&&o.wo&&!isShipped(o)&&(hold||!isOnHold(o))&&!o.delDone&&!o.delDelivAt).map(o=>({o,k:jobKey(o)}));} // on-hold jobs are left out, like the Work order drop-down (hold = true: the "never a second job for one house" check still sees them)
 // (attack2 F1) the block a title names ("BLOCK B APT 12" → "B"), '' when it names none
 function keyBlk(title){const f=keyTitleBits(title).floor;return /^BLOCK /.test(f)?keyFloor(f).k:'';}
 function keyFind(pid,floor,unit,km,title){ // title: the typed Title — a job whose title names ANOTHER block is never filled by itself
@@ -5305,7 +5305,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       return;}
     if(st.newWO){ // (L4a) looked up again on Save: another PC or an import may have brought the job meanwhile — never a second job for one house
       const pf=g('me-pfloor').value,pu=g('me-punit').value,kind=seqKind(g('me-ptitle').value);
-      if(st.pid&&keyTxt(pf)&&keyTxt(pu)){const r=keyFind(st.pid,pf,pu,keyJobs(),g('me-ptitle').value),fu='Floor '+String(pf).trim()+' · Unit '+String(pu).trim();
+      if(st.pid&&keyTxt(pf)&&keyTxt(pu)){const r=keyFind(st.pid,pf,pu,keyJobs(true),g('me-ptitle').value),fu='Floor '+String(pf).trim()+' · Unit '+String(pu).trim();
         const dup=r.same.find(x=>seqKind(x.o.title)===kind);
         if(dup){const w0=dup.o.wo,isP=/^P-\d+$/.test(w0),m=isP?w0+' already exists for '+fu+' ('+kind+') — use it':w0+' from Cienapps is in the planner for '+fu+' ('+kind+') — use it';
           if(confirm(m+'.\n\nNo second job is made for one house.\n\nOK = use '+w0+' for this list\nCancel = go back')){st.newWO=false;jbChoose(w0,'picked');}else err('Not saved — '+m+'.');return;}
