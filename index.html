@@ -4127,13 +4127,13 @@ function ltiInner(){
       <div style="font-size:16px;font-weight:800;color:#14335c">📋 Cutting lists to issue — ${nAll}</div>${pf?`<span class="lpf-n" id="lti-of">of ${pfAll} — only ${escA(lpfName(pf))}</span>${(h=>h.n?`<span class="lti-b" id="lti-hid" style="background:#c0392b;color:#fff;white-space:normal">⚠ ${escA(h.txt)} in other projects</span>`:'')(lpfHidden())}`:''}${wc.length?`<span class="chk-wait">${wc.length} waiting for check</span>`:''}
       ${rows.filter(r=>r.late).length?`<span class="lti-b" style="background:#c0392b;color:#fff">${rows.filter(r=>r.late).length} late</span>`:''}
       <span style="flex:1"></span>
-      ${green.length?`<button class="btn btn-g" id="lti-all" style="font-size:13px;padding:8px 14px">✓ Confirm all green (${green.length})</button>`:''}
+      ${(qm?green.filter(qm):green).length?`<button class="btn btn-g" id="lti-all" style="font-size:13px;padding:8px 14px"${qm?' title="Only the green jobs the search is showing"':''}>✓ Confirm all green (${(qm?green.filter(qm):green).length})</button>`:''}
     </div>
     ${wc.map(wrow).join('')}
     <div style="font-size:12px;color:var(--t3);margin-bottom:8px">${rows.length?'Each processed work order needs its cutting list. Check the suggested template and tap ✓ Confirm. <b>Nothing reaches the saw until it is confirmed.</b> Green = strong match · amber = a guess · grey = no suggestion.':pf?'✓ Nothing to issue for '+escA(lpfName(pf))+'.':'✓ Every processed work order has a cutting list.'}</div>
     ${LTI.done.length?`<div class="lti-done">${LTI.done.slice(0,12).map(d=>`<div>✓ <b>${escA(d.wo)}</b> — "${escA(d.name)}"${d.tpl?' from '+escA(d.tpl):''}${d.already?' <i>(already made on another screen — no second list)</i>':''}</div>`).join('')}${LTI.done.length>12?`<div>…and ${LTI.done.length-12} more</div>`:''}<button class="btn btn-s" id="lti-dx" style="font-size:11px;padding:2px 8px;margin-top:4px">Clear</button></div>`:''}
     ${rows.length>5||qm?`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px"><input id="lti-q" value="${escA(LTI.q||'')}" placeholder="🔍 Find a job here — customer, WO, floor, unit or title (e.g. aspect 71)" autocomplete="off" style="${LS_INP};flex:1;min-width:200px;font-size:14px">${qm?`<span id="lti-qn" style="font-size:13px;font-weight:700;color:#14335c">${shown.length} of ${rows.length}</span><button class="btn btn-s" id="lti-qx" style="font-size:12px;padding:4px 10px">✕ Clear</button>`:''}</div>`:''}
-    ${qm&&!shown.length?`<div id="lti-q0" style="font-size:13px;color:var(--t2);margin-bottom:6px">No job waiting for a list matches "${escA(LTI.q)}". A job that already has a list is on the Cutting Lists table, not here.</div>`:''}
+    ${qm&&!shown.length?`<div id="lti-q0" style="font-size:13px;color:var(--t2);margin-bottom:6px">No job waiting for a list${pf?' in '+escA(lpfName(pf)):''} matches "${escA(LTI.q)}".${pf?' Other projects are hidden — pick All projects to look in every project.':''} A job that already has a list is on the Cutting Lists table, not here.</div>`:''}
     ${shown.map(row).join('')}
     ${under.map(w=>`<div class="lti-nar" style="font-size:12px;color:#14335c;margin-top:4px">ℹ List already made under ${escA(w)} — the new Cienapps WO for that house needs no second list</div>`).join('')}
     ${!qm&&rows.length>show.length?`<button class="btn btn-s" id="lti-more" style="font-size:12px;margin-top:6px">Show all ${rows.length}</button>`:''}
@@ -4186,7 +4186,7 @@ function ltiBind(){
   q('[data-ltiedit]',b=>b.onclick=()=>openListEditor(b.dataset.ltiedit));
   q('[data-ltiview]',b=>b.onclick=()=>lsViewDlg(b.dataset.ltiview));
   q('[data-ltiretry]',b=>b.onclick=()=>{const w=b.dataset.ltiretry,r=LTI.res[w]||{};if(r.again)r.again();else ltiConfirm([w]);}); // ↻ Retry does the SAME thing again: an Excel list stays that Excel list, a link stays that link
-  q('#lti-all',b=>b.onclick=()=>ltiConfirm(ltiRows().filter(r=>r.lvl==='strong'&&r.tid).map(r=>r.o.wo)));
+  q('#lti-all',b=>b.onclick=()=>{const qm=ltiQMatch();ltiConfirm(ltiRows().filter(r=>r.lvl==='strong'&&r.tid&&(!qm||qm(r))).map(r=>r.o.wo));}); // with a search on: only the green jobs the search is showing (the number on the button)
   q('[data-ltixl]',b=>b.onclick=()=>{const i=b.dataset.ltixl.indexOf('|');ltiUse(b.dataset.ltixl.slice(0,i),b.dataset.ltixl.slice(i+1));});
   q('[data-ltistd]',b=>b.onclick=()=>lsNewStd(b.dataset.ltistd));
   q('[data-ltichg]',b=>b.onclick=()=>{LTI.open=LTI.open===b.dataset.ltichg?'':b.dataset.ltichg;ltiAfter();});
