@@ -5284,6 +5284,8 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     let wo=st.wo;
     if(st.newWO){const title=(g('me-ptitle').value||'').trim(),due=g('me-pdue').value;
       if(!title)return err('The new work order needs a title.');if(!due)return err('The new work order needs a due date — it drives the cutting deadline.');wo='__NEW__';}
+    // (final round) what is saved is a COPY of the rows as they were checked here — a box changed while "Saving…" is on screen can't slip into the save unchecked
+    rows=rows.map(r=>({...r}));const live0=JSON.stringify(R());
     const d={...st,rows,wo,project:(LST.p.get(st.pid)||{}).name||'',replaces:!ex&&!st.tpl&&st.from?st.from:null};
     if(!st.tpl&&!String(d.name||'').trim())d.name=wo==='__NEW__'?'':wo; // (10 Nov) list name left blank = the WO number (a new P-number: set when it is made)
     // a spec placeholder ("Worktops — None chosen / TBC", no quantity, no size) never blocks the save: it stays on the list, red
@@ -5340,6 +5342,9 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       lsSaveManual(d,by,ex).then(async l=>{sched();render();if(d.newId)lsPendDrop(d.newId);setTimeout(()=>pMineFix(),0);
         let t=(ex?'List updated':'List saved')+' — '+l.name+' → '+(l.saw?l.saw+' saw row'+(l.saw!==1?'s':''):'no cutting')+' · '+(l.fit?l.fit+' Stores':'no Stores')+(d.wo&&!st.tpl?' · tagged '+d.wo:'');
         if(d.retiredMsg)t+='.'+d.retiredMsg; // the database archived the old list in the same step as the save
+        if(JSON.stringify(R())!==live0){ // a box was changed WHILE it was saving: that change is not in the saved list — never a plain "Saved ✓" over it
+          toast('⚠ '+t+'. What you changed WHILE it was saving was NOT saved — the saved list is open again: make that change again and press Save',true);
+          const other=[...document.querySelectorAll('.pod-ovl .me-ed')].some(e=>!ov.contains(e));ov.remove();if(!other)openListEditor(l.id);return;}
         toast(t);done(l,d);})
         .catch(x=>{if(sb)sb.disabled=false;if(/already been replaced/.test(x.message))toast(x.message,true);
           if(x.message===LS_LOCK_MSG&&ex&&!ex.tpl&&!sawStarted){sawStarted=true;draw();} // lock the Units box now and offer "Make new list from this"
