@@ -5263,7 +5263,8 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     ['title','cust','floor','unit','due','val','hrs'].forEach(k=>{const e=g('me-p'+k);if(e)st.pw[k]=e.value;});
     [['me-jf','floor'],['me-ju','unit'],['me-jt','title'],['me-jwo','wo']].forEach(([id,k])=>{const e=g(id);if(e)st.jb[k]=e.value;});};
   const save=()=>{
-    keep();const g=id=>ov.querySelector('#'+id),err=t=>{g('me-err').textContent=t+(st.chkNote&&t&&!/^Checking/.test(t)?' '+st.chkNote:'');}; // chkNote: the house check couldn't be made (round 3)
+    keep();const g=id=>ov.querySelector('#'+id),err=t=>{const e=g('me-err'),m=t+(st.chkNote&&t&&!/^Checking/.test(t)?' '+st.chkNote:'');
+      if(e&&document.body.contains(ov)&&!ov.classList.contains('me-dov'))e.textContent=m;else if(t&&!/^(Saving|Checking)/.test(t))toast(m,true);}; // the window is gone (closed meanwhile): the person is still told, on the page. chkNote: the house check couldn't be made (round 3)
     if(st.addBusy)return err('Wait a moment — the new material is still being added to the project.');
     if(!st.pid&&st.pmsg&&st.pmsg.st==='ask')return err('Answer the question above first — is this project \''+String(st.pmsg.p.name)+'\'? Press Yes or No.');
     if(!st.pid)return err('Pick the project — or ＋ New project… at the bottom of the list.');
@@ -5317,9 +5318,9 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     if(ex&&ex.tpl){const w=prompt('What changed in this template? (optional — shown in its History; it becomes Rev '+((+ex.rev||1)+1)+')','');if(w===null)return;d.why=w.trim()?w.trim():'Template edited';}
     // (round 3) our P-number was made while the database couldn't be asked: ask now, before this Save goes on
     if(!ex&&!st.newWO&&st.pUnchecked&&st.wo===st.pUnchecked&&!st.reChk){const own=DB.orders.find(x=>x.wo===st.wo);
-      if(own){const sb=g('me-save');if(sb)sb.disabled=true;err('Checking the planner for this house…');
+      if(own){const sb=g('me-save');if(sb)sb.disabled=true;st.saving=Date.now();err('Checking the planner for this house…');
         const again=()=>{st.reChk=true;try{save();}finally{st.reChk=false;}};
-        pFreshDup(st.pid,fuF(own),fuU(own),own.title,own.wo).then(async dup=>{if(sb)sb.disabled=false;st.pUnchecked='';st.chkNote='';err('');
+        pFreshDup(st.pid,fuF(own),fuU(own),own.title,own.wo).then(async dup=>{st.saving=0;if(sb)sb.disabled=false;st.pUnchecked='';st.chkNote='';err('');
           if(!dup)return again();
           if(!DB.orders.some(x=>x.wo===dup.wo))DB.orders.push(JSON.parse(JSON.stringify(dup)));
           const why=await pBare(own);
@@ -5327,7 +5328,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
           const by=lqBy('');DB.pMerged=(DB.pMerged||[]).concat([{at:nowISO(),by,wo:own.wo,into:dup.wo,why:'made offline; the house already had '+dup.wo,job:JSON.parse(JSON.stringify(own))}]).slice(-300);
           const i=DB.orders.indexOf(own);if(i>=0)DB.orders.splice(i,1);sched();
           st.wo='';st.jm=null;jbChoose(dup.wo,'picked');})
-        .catch(()=>{if(sb)sb.disabled=false;st.chkNote='⚠ This house could not be checked against the database (offline?) — it is checked again on the next Save.';again();});
+        .catch(()=>{st.saving=0;if(sb)sb.disabled=false;st.chkNote='⚠ This house could not be checked against the database (offline?) — it is checked again on the next Save.';again();});
         return;}}
     officeWho(by=>{
      const go0=()=>{
@@ -5343,15 +5344,15 @@ function openListEditor2(listId,presetWo,presetPid,opt){
         if(d.newId)pMineAdd(pwo,d.newId); // (round 2) this screen's list for this P-number — moved with it if a merge renumbers it
         if(st.chkFail){st.pUnchecked=pwo;st.chkFail=false;} // (round 3) made without the database check: checked again on the next Save
       }
-      const sb=g('me-save');if(sb)sb.disabled=true;err('Saving…');
-      lsSaveManual(d,by,ex).then(async l=>{sched();render();if(d.newId)lsPendDrop(d.newId);setTimeout(()=>pMineFix(),0);
+      const sb=g('me-save');if(sb)sb.disabled=true;err('Saving…');st.saving=Date.now();
+      lsSaveManual(d,by,ex).then(async l=>{st.saving=0;sched();render();if(d.newId)lsPendDrop(d.newId);setTimeout(()=>pMineFix(),0);
         let t=(ex?'List updated':'List saved')+' — '+l.name+' → '+(l.saw?l.saw+' saw row'+(l.saw!==1?'s':''):'no cutting')+' · '+(l.fit?l.fit+' Stores':'no Stores')+(d.wo&&!st.tpl?' · tagged '+d.wo:'');
         if(d.retiredMsg)t+='.'+d.retiredMsg; // the database archived the old list in the same step as the save
         if(JSON.stringify(R())!==live0){ // a box was changed WHILE it was saving: that change is not in the saved list — never a plain "Saved ✓" over it
           toast('⚠ '+t+'. What you changed WHILE it was saving was NOT saved — the saved list is open again: make that change again and press Save',true);
           const other=[...document.querySelectorAll('.pod-ovl .me-ed')].some(e=>!ov.contains(e));ov.remove();if(!other)openListEditor(l.id);return;}
         toast(t);done(l,d);})
-        .catch(x=>{if(sb)sb.disabled=false;if(/already been replaced/.test(x.message))toast(x.message,true);
+        .catch(x=>{st.saving=0;if(sb)sb.disabled=false;if(/already been replaced/.test(x.message))toast(x.message,true);
           if(x.message===LS_LOCK_MSG&&ex&&!ex.tpl&&!sawStarted){sawStarted=true;draw();} // lock the Units box now and offer "Make new list from this"
           if(ex||st.tpl||!d.newId||!lsLost(x))return err('Not saved — '+x.message);
           // a new list and the reply was lost: it may have reached the database. Keep its id on this device, then ask.
@@ -5372,8 +5373,8 @@ function openListEditor2(listId,presetWo,presetPid,opt){
      const go=()=>{
       const tgt=st.newWO?'':String(d.wo||'');
       if(st.tpl||!tgt||st.dupOk===tgt||(ex&&(ex.wos||[]).includes(tgt))||(d.replaces&&d.replaces.id))return go0(); // "Make new list from this" has its own rules for the list it replaces
-      const sb=g('me-save');if(sb)sb.disabled=true;err('Checking '+tgt+' for a list…');
-      lsLiveFor(tgt).then(found=>{if(sb)sb.disabled=false;err('');
+      const sb=g('me-save');if(sb)sb.disabled=true;st.saving=Date.now();err('Checking '+tgt+' for a list…');
+      lsLiveFor(tgt).then(found=>{st.saving=0;if(sb)sb.disabled=false;err('');
         const other=found.filter(l=>l.id!==(ex?ex.id:d.newId)&&!(d.replaces&&d.replaces.id===l.id));
         const pu=other.length?'':pUnder();
         if(pu&&st.dupOk!==tgt+'|'+pu){ // (attack3 N7b) the same question as for a WO that already has a list
@@ -5385,17 +5386,17 @@ function openListEditor2(listId,presetWo,presetPid,opt){
         if(!confirm('⚠ '+tgt+' ALREADY HAS a cutting list: '+nm+'.\n\nOne work order should have ONE list — with two, the saw could cut the job twice.\n\nSave this as a SECOND list for '+tgt+' anyway?\n\nOK = yes, save a second list\nCancel = do not save (your rows stay on screen)'))
           return err(tgt+' already has the list '+nm+' — NOT saved. Your rows are still here. Open that list to change it, or use Change job to pick another work order.');
         st.dupOk=tgt;go0();
-      }).catch(()=>{if(sb)sb.disabled=false;err('');go0();}); // offline: the save itself says so
+      }).catch(()=>{st.saving=0;if(sb)sb.disabled=false;err('');go0();}); // offline: the save itself says so
      };
       if(st.newWO){ // (round 2) ask the database first: another screen may have made this house's job a moment ago
         const pf=g('me-pfloor').value,pu=g('me-punit').value,pt=g('me-ptitle').value;
-        if(st.pid&&keyTxt(pf)&&keyTxt(pu)){const sb=g('me-save');if(sb)sb.disabled=true;err('Checking the planner for this house…');
-          pFreshDup(st.pid,pf,pu,pt).then(dup=>{if(sb)sb.disabled=false;err('');
+        if(st.pid&&keyTxt(pf)&&keyTxt(pu)){const sb=g('me-save');if(sb)sb.disabled=true;st.saving=Date.now();err('Checking the planner for this house…');
+          pFreshDup(st.pid,pf,pu,pt).then(dup=>{st.saving=0;if(sb)sb.disabled=false;err('');
             if(dup){const m=dup.wo+(/^P-\d+$/.test(dup.wo)?' (made on another screen)':' from Cienapps')+' is in the planner now for Floor '+pf.trim()+' · Unit '+pu.trim()+' — use it';
               if(!DB.orders.some(x=>x.wo===dup.wo))DB.orders.push(JSON.parse(JSON.stringify(dup))); // brought in now; the next refresh has it anyway
               if(confirm(m+'.\n\nNo second job is made for one house.\n\nOK = use '+dup.wo+' for this list\nCancel = go back')){st.newWO=false;jbChoose(dup.wo,'picked');}else err('Not saved — '+m+'.');return;}
             go();})
-          .catch(()=>{if(sb)sb.disabled=false;st.chkFail=true;st.chkNote='⚠ This house could not be checked against the database (offline?) — only this screen\'s jobs were checked; it is checked again on the next Save.';err('');go();}); // offline: the local check above stands
+          .catch(()=>{st.saving=0;if(sb)sb.disabled=false;st.chkFail=true;st.chkNote='⚠ This house could not be checked against the database (offline?) — only this screen\'s jobs were checked; it is checked again on the next Save.';err('');go();}); // offline: the local check above stands
           return;}
       }
       go();
@@ -5500,7 +5501,11 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     :!lsEmptyRow(r)||!!r.buy||(!!String(r.mat||'').trim()&&String(r.mat)!==String(r.matAuto||'')); // (attack3 C7) a material PICKED (not the copied one) or Bought in ticked is something typed
   const sig=()=>JSON.stringify([R().filter(sigRow),st.name,st.wo,st.pid,st.ltype,st.tname,st.noCut,st.noFit,st.jb.floor,st.jb.unit,st.jb.title,st.jb.wo,st.pw,st.newWO]);
   const dirty=()=>{if(ov.classList.contains('me-dov'))return false;keep();return sig()!==st.sig0;};
-  const closeEd=()=>{if(!document.body.contains(ov))return;if(dirty()&&!confirm('Close without saving?\n\nWhat you typed in this list is lost.\n\nOK = close without saving\nCancel = stay and Save'))return;ov.remove();};
+  const closeEd=()=>{if(!document.body.contains(ov))return;
+    // (final round) ✕ while the save is on its way: it does not close (after 20 s with no answer the person may leave — told the list may have saved)
+    if(st.saving){if(Date.now()-st.saving<20000){const e=ov.querySelector('#me-err');if(e)e.textContent='Still saving — wait a moment.';return;}
+      if(!confirm('Still saving — no answer from the database yet.\n\nClose anyway? The list may or may not have been saved: look for it on Lists before typing it again.\n\nOK = close\nCancel = keep waiting'))return;ov.remove();return;}
+    if(dirty()&&!confirm('Close without saving?\n\nWhat you typed in this list is lost.\n\nOK = close without saving\nCancel = stay and Save'))return;ov.remove();};
   const done=(l,d)=>{ // the finish panel: matches what happened, [Close] (big, focused) and [Edit it again]
     if([...document.querySelectorAll('.pod-ovl .me-ed')].some(e=>!ov.contains(e))){ov.remove();return;} // another list window is already open: the toast says it was saved
     const lv=lsList(l.id)||l,arc=!st.tpl&&!!(lv.archived||l.archived),tarc=!!st.tpl&&!!(lv.archived||l.archived),wait=!arc&&!st.tpl&&lsWaitCheck(lv),rev=+lv.rev||1,wo=d.wo&&!st.tpl&&d.wo!=='__NEW__'?d.wo:'';

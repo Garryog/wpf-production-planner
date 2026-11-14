@@ -93,7 +93,9 @@ const newFromJob = async (p, wo) => { await closeAll(p); await p.evaluate(wo => 
       // ✕ Close while it hangs: asks (rows not saved)?
       await p.evaluate(() => { window.__asked = []; window.__confirm = false; const x = document.querySelector('.me-ed #me-x,.me-ed [data-mex],.me-tb button'); if (x) x.click(); }); await sleep(400);
       const asked = await p.evaluate(() => window.__asked.join(' | ')), still = (await state(p)).open;
-      rec('D3 ✕ Close while the save is hanging asks before throwing the rows away (answer Cancel keeps the window)', still && /without saving|not saved|unsaved/i.test(asked), JSON.stringify([still, asked.slice(0, 200)]));
+      // (Coder, fix round 14 Nov — item 8b) re-pointed: ✕ while the save is on its way no longer asks "Close without saving?" — the window stays and says "Still saving — wait a moment".
+      const err3 = (await state(p)).err;
+      rec('D3 ✕ Close while the save is hanging never throws the rows away: the window stays and says "Still saving" (or it asks first)', still && (/Still saving/i.test(err3) || /without saving|not saved|unsaved/i.test(asked)), JSON.stringify([still, err3, asked.slice(0, 200)]));
       await p.evaluate(() => { window.__confirm = true; });
       S.matRelease && S.matRelease(); await sleep(3000);
       const st2 = await state(p);
@@ -151,7 +153,9 @@ const newFromJob = async (p, wo) => { await closeAll(p); await p.evaluate(wo => 
       const asked = await p.evaluate(() => window.__asked.join(' | ')), open1 = (await state(p)).open;
       await sleep(4500);
       const st = await state(p), n = liveFor(S, 'WO-3').length, toast = await L.toasts(p);
-      rec('H2 set-up: ✕ during the wait asked "Close without saving?" and OK closed the window', !open1 && /without saving/i.test(asked), JSON.stringify([open1, asked.slice(0, 80)]));
+      // (Coder, fix round 14 Nov — item 8b) this check used to expect the OLD behaviour (✕ asked "Close without saving?" and closed the window mid-save).
+      // The rule is now: ✕ while "Saving…" does NOT close and asks nothing — it says "Still saving — wait a moment".
+      rec('H2 ✕ during the wait: the window stays open, no "Close without saving?" is asked, the save goes on', open1 && !/without saving/i.test(asked), JSON.stringify([open1, asked.slice(0, 80)]));
       rec('[MEDIUM] H3 the person chose "close without saving — what you typed is lost": either nothing is saved, or they are told it WAS saved (panel / toast)', n === 0 || st.done || /saved/i.test(toast), JSON.stringify({ listsOnWO3: n, done: st.done, toast: toast.slice(0, 200) }));
       await closeAll(p); S.mat = null; }
   } catch (e) { rec('test ran to the end', false, e.stack); }
