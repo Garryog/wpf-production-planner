@@ -3148,7 +3148,7 @@ async function lsSaveManual(d,by,ex){
     if(repl)throw new Error(on+' has already been replaced by "'+repl.name+'" on another screen — nothing saved (no second list for '+(d.wo||'this job')+'). Open "'+repl.name+'" from Lists instead.');
   }
   try{await lsMatFresh(pid);}catch(e){} // (B2) the project's materials as the database has them now — a rename on another PC since is known before lines are compared (else a renamed line looks changed and its tick is reset)
-  const lines=lsEdLines(d.rows);lines.forEach(ln=>{const m=ln.kind!=='hdr'&&ln.material?lsMatFind(pid,ln.material):null;if(m)ln.material=m.name;});lsFlagMats(lines,pid); // (B2) saved under the current name; headings, unit blocks (qty = total, unit_qty = per unit) and parts
+  const lines=lsEdLines(d.rows);lines.forEach(ln=>{const m=ln.kind!=='hdr'&&ln.material?lsMatFind(pid,ln.material,lsLineMk(ln.kind)):null;if(m)ln.material=m.name;});lsFlagMats(lines,pid); // (B2) saved under the current name; headings, unit blocks (qty = total, unit_qty = per unit) and parts
   const mg=ex?lsEditMerge(id,d.rows,lines):{ok:true,kept:0};
   if(!mg.ok)throw new Error('another screen changed this list meanwhile — nothing saved; close and reopen it');
   for(let i=lines.length-1;i>=0;i--)if(lines[i]._drop)lines.splice(i,1);
@@ -4822,8 +4822,9 @@ function openListEditor2(listId,presetWo,presetPid,opt){
   };
   if(st.tpl&&!lsTplPinOk())return; // templates: Drawing office or Admin only (Garry Q3)
   const sheetMats=()=>lsMats(st.pid,'sheet').map(m=>m.name),fitMats=()=>lsMats(st.pid,'other').map(m=>m.name);
-  const matOf=v=>lsMatFind(st.pid,v); /*M2: a material is found by its name OR an old name / other spelling (a rename keeps the old name)*/
-  const curMat=r=>{const m=r&&r.k!=='hdr'&&String(r.mat||'').trim()?matOf(r.mat):null;return m&&m.name!==String(r.mat).trim()?{...r,mat:m.name}:r;}; // saved under the current name
+  const matOf=(v,mk)=>lsMatFind(st.pid,v,mk); /*M2: a material is found by its name OR an old name / other spelling (a rename keeps the old name)*/
+  const rowMk=r=>!r.buy&&r.k!=='buy'&&r.k!=='fit'&&(r.k==='saw'||lsNum(r.L)>0||lsNum(r.W)>0)?'sheet':'other'; // a saw row can only be a sheet; a Stores or bought-in row only a fitting — its text is never re-labelled to a board's name
+  const curMat=r=>{const m=r&&r.k!=='hdr'&&String(r.mat||'').trim()?matOf(r.mat,rowMk(r)):null;return m&&m.name!==String(r.mat).trim()?{...r,mat:m.name}:r;}; // saved under the current name
   let edges=lsProjEdges(st.pid);
   const ov=document.createElement('div');ov.className='pod-ovl';
   const inp='padding:6px 7px;border:1px solid var(--b2);border-radius:6px;font-size:13px';
@@ -4862,7 +4863,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     const sized=lsNum(r.L)>0||lsNum(r.W)>0;
     // a Stores row still carrying only the copied default colour is saved with NO colour — so it shows none (pick one to keep it)
     const v=!id&&lsAutoHidden(r)?'':String(r.mat||'').trim();
-    const sm=sheetMats(),fm=fitMats(),all=sized||id?sm:[...sm,...fm],hit=v?matOf(v):null,on=hit?all.find(n=>n===hit.name):undefined; // only what the box lists can be selected (M3/M4: a fitting on a row with sizes stays visible, flagged)
+    const sm=sheetMats(),fm=fitMats(),all=sized||id?sm:[...sm,...fm],hit=v?matOf(v):null,hk=v?matOf(v,id?'sheet':rowMk(r)):null,on=hk&&all.includes(hk.name)?hk.name:v?all.find(n=>matKey(n)===matKey(v)):undefined; // only what the box lists can be selected (M3/M4: a fitting on a row with sizes stays visible, flagged)
     const why=v&&!on&&hit&&hit.kind==='other'?'a fitting — not a board':'not on the project list';
     const o=n=>`<option value="${escA(n)}"${on===n?' selected':''}>${escA(n)}</option>`;
     return `<select ${id?'id="'+id+'"':'data-mr="'+i+'|mat"'} class="me-c"${id?` style="${inp};width:100%${v&&!on?';'+amber:''}"`:v&&!on?` style="${amber}"`:''}${v&&!on?' title="Not on the project\'s materials — flagged for the Production Manager"':''}><option value="">${id?'— none —':!id&&isStores(r)?'— item / spec —':'— material —'}</option>
