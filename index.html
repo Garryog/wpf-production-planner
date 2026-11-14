@@ -5265,6 +5265,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
   const save=()=>{
     keep();const g=id=>ov.querySelector('#'+id),err=t=>{g('me-err').textContent=t+(st.chkNote&&t&&!/^Checking/.test(t)?' '+st.chkNote:'');}; // chkNote: the house check couldn't be made (round 3)
     if(st.addBusy)return err('Wait a moment — the new material is still being added to the project.');
+    if(!st.pid&&st.pmsg&&st.pmsg.st==='ask')return err('Answer the question above first — is this project \''+String(st.pmsg.p.name)+'\'? Press Yes or No.');
     if(!st.pid)return err('Pick the project — or ＋ New project… at the bottom of the list.');
     if(st.tpl&&!String(st.name||'').trim())return err('Give the template a name.');
     let rows=R().filter(r=>!lsEmptyRow(r)); // empty rows (nothing typed) are left out, as in Excel
