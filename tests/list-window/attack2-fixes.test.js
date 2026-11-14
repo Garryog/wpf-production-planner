@@ -264,7 +264,7 @@ const listsPage = async (p, role) => {
       rec('office (Lists tab): "Cutting lists to issue" shown', /Cutting lists to issue/.test(roleTxt.office), roleTxt.office.slice(0, 200));
       rec('Production Manager (Lists tab): "Cutting lists to issue" shown', /Cutting lists to issue/.test(roleTxt.prod), roleTxt.prod.slice(0, 200));
       // Garry 13 Nov: the default list owner the saw is told is "Production Manager, Garry and Drawing office" (a project's own list owner still wins)
-      rec('[LOW, wording] saw screen: a job with no list names the default owner "Production Manager, Garry and Drawing office" (Garry 13 Nov) — and not the old "Tell the Production Manager"', !/Tell the Production Manager/.test(roleTxt.saw) && /owner Production Manager, Garry and Drawing office/.test(roleTxt.saw), (roleTxt.saw.match(/[^\n]*(Production Manager|owner)[^\n]*/g) || []).slice(0, 3).join(' | '));
+      rec('[LOW, wording] saw screen: a job with no list names the default owner "Production Manager, Garry and Drawing office" (Garry 13 Nov) — and not the old "Tell the Production Manager"', !/Tell the Production Manager(?!, Garry and Drawing office)/.test(roleTxt.saw) && /owner Production Manager, Garry and Drawing office/.test(roleTxt.saw), (roleTxt.saw.match(/[^\n]*(Production Manager|owner)[^\n]*/g) || []).slice(0, 3).join(' | '));
     }
 
     // ======================= 5. "⚠ 2 lists on WO-…" =======================
