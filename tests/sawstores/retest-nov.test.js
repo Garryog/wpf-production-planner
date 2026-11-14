@@ -243,7 +243,8 @@ const dev = async (browser, S, role, o) => { const t = await open(browser, S, Ob
     const S = makeServer(mk(ROWS));
     const t = await H.open({ now: '2026-11-02T10:00:00Z', row: S.row });
     const r = await t.page.evaluate(() => {
-      const want = ['2028-01-01', '2028-02-07', '2028-03-17', '2028-04-17', '2028-05-01', '2028-06-05', '2028-08-07', '2028-10-30', '2028-12-25', '2028-12-26'];
+      // (12 Nov 2026) Garry confirmed Mon 3 Jan 2028 as the bank holiday for New Year's Day falling on a Saturday
+      const want = ['2028-01-01', '2028-01-03', '2028-02-07', '2028-03-17', '2028-04-17', '2028-05-01', '2028-06-05', '2028-08-07', '2028-10-30', '2028-12-25', '2028-12-26'];
       return { missing: want.filter(d => !IE_BANK_HOLS.includes(d)), extra: IE_BANK_HOLS.filter(d => d.startsWith('2028') && !want.includes(d)),
         nov30: bankHolsStale('2028-11-30'), dec1: bankHolsStale('2028-12-01'), y29: bankHolsStale('2029-03-01'), now: bankHolsStale(),
         easter: nextWorkDay('2028-04-13'), xmas: nextWorkDay('2028-12-22'), oct: nextWorkDay('2028-10-27') };
