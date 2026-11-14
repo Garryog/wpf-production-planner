@@ -2630,11 +2630,12 @@ function lsView(id,open){ // rows / ticks / holds of one list, in the old shapes
   const c=lsCache();let v=c.view.get(id);if(v)return v;
   v={rows:[],ticks:{},holds:{}};c.view.set(id,v);
   if(!LST.full.has(id))return v;
+  const pj=(LST.l.get(id)||{}).project_id||'',mnow=x=>x.material?lsMatNow(pj,lsLineMk(x.kind))(x.material):''; // a renamed material shows under its CURRENT name on every screen, sheet and total (the stored line is not rewritten)
   lsLinesOf(id).forEach(x=>{
     if(x.removed_rev!=null||x.status==='na')return; // removed and not-needed lines never reach the bench
     const L=x.length_mm==null||x.length_mm===''?'':+x.length_mm,W=x.width_mm==null||x.width_mm===''?'':+x.width_mm;
     const r=x.kind==='hdr'?{id:x.id,k:'hdr',item:lsHdrName(x),note:[x.material,x.note].filter(s=>String(s||'').trim()).join(' · '),...(String(x.section||'').trim()?{sub:true}:{})} // a heading with a section = a sub-heading under that house heading
-      :{id:x.id,k:x.kind,item:x.part||'',qty:lsQty(x.qty),L,W,mat:x.material||'',note:[lsEdgeTxt(x),x.note].filter(s=>String(s||'').trim()).join(' · '),sec:x.section||''};
+      :{id:x.id,k:x.kind,item:x.part||'',qty:lsQty(x.qty),L,W,mat:mnow(x),note:[lsEdgeTxt(x),x.note].filter(s=>String(s||'').trim()).join(' · '),sec:x.section||''};
     if(x.kind==='fit'){delete r.L;delete r.W;}
     v.rows.push(r);
     if(x.kind==='hdr')return;
@@ -3703,7 +3704,18 @@ function lsProjectsDlg(){
 async function lsMatFresh(pid){lsPut('project_materials',await lsGet('project_materials?select=*&project_id=eq.'+encodeURIComponent(pid)));}
 // The material (other than `id`) that already answers to `name` — by its name or one of its other spellings, ignoring case and spaces
 // (M2) the project's ACTIVE material that answers to `v` by its name or an other spelling / old name (a rename keeps the old name)
-function lsMatFind(pid,v){const k=matKey(v);return k?lsMats(pid,'').find(m=>[m.name,...(m.aliases||[])].some(a=>matKey(a)===k))||null:null;}
+// kind 'sheet' | 'other' (final round): only a material of THAT kind answers — a Stores spec "White" is never taken for a board also called "White"
+function lsMatFind(pid,v,kind){const k=matKey(v);return k?lsMats(pid,kind||'').find(m=>[m.name,...(m.aliases||[])].some(a=>matKey(a)===k))||null:null;}
+// which kind of material a line can be: a saw line = a sheet; a Stores or bought-in line = a fitting
+function lsLineMk(kind){return kind==='saw'?'sheet':'other';}
+// (final round) read-time only: v => the CURRENT name of the project's material of that kind that answers to v (its name, an old name
+// or another spelling) — anything else comes back exactly as typed. Nothing stored is rewritten; totals, sheets and dockets show ONE name.
+function lsMatNow(pid,kind){
+  const c=lsCache(),ck=pid+'|'+kind;c.mn=c.mn||new Map();let f=c.mn.get(ck);if(f)return f;
+  const mp=new Map(),ms=pid?lsMats(pid,kind,true):[],put=(a,m)=>{const k=matKey(a);if(k&&!mp.has(k))mp.set(k,String(m.name));};
+  [true,false].forEach(act=>{const g=ms.filter(m=>(m.active!==false)===act&&String(m.name||'').trim());g.forEach(m=>put(m.name,m));g.forEach(m=>(m.aliases||[]).forEach(a=>put(a,m)));}); // a material's own name beats another's old name; in use beats retired
+  f=v=>{const k=matKey(v);return k&&mp.has(k)?mp.get(k):v;};c.mn.set(ck,f);return f;
+}
 // (M2) for comparing lines: an old name and the current name of one material are the same material (no tick is reset)
 function lsMatCanon(pid){if(!pid)return null;const mp=new Map();lsMats(pid,'',true).forEach(m=>[m.name,...(m.aliases||[])].forEach(a=>{const k=matKey(a);if(k&&!mp.has(k))mp.set(k,'#'+m.id);}));
   return v=>{const k=matKey(v);return mp.get(k)||k;};}
@@ -7360,7 +7372,8 @@ function dkProjLines(pid){
   [...LST.l.values()].filter(r=>r.project_id===pid&&!r.archived&&!r.is_template)
     .sort((a,b)=>String(a.name).localeCompare(String(b.name))||String(a.id).localeCompare(String(b.id))).forEach(r=>{
     const l=lsList(r.id);if(!l)return;const info=dkWoInfo(l.wos);
-    lsLinesOf(r.id).forEach(x=>{if(!['fit','buy'].includes(x.kind)||x.removed_rev!=null)return;const st=lnSt(x);if(['na','got-out','cut'].includes(st))return;out.push({x,l,st,info});});
+    const mn=lsMatNow(pid,'other'); // a renamed fitting is offered under its current name (a copy for the screen — the stored line is not changed)
+    lsLinesOf(r.id).forEach(x=>{if(!['fit','buy'].includes(x.kind)||x.removed_rev!=null)return;const st=lnSt(x);if(['na','got-out','cut'].includes(st))return;const m=x.material?mn(x.material):x.material;out.push({x:m!==x.material?{...x,material:m}:x,l,st,info});});
   });
   return out;
 }
