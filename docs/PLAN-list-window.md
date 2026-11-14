@@ -527,3 +527,19 @@ capping on the opposite side. These types might be named with and with a 'H' or 
 type name follows (on screen and on Save); a type name typed differently on purpose is kept; templates that already disagree
 (live "4C" / "4B") are not touched. Test `list-window/m5-template-name-follows` 17 of 17; the 41 files that touch templates give
 the same results as before. Not yet attacked by the Tester — final round.
+
+
+### 14 Nov 2026, 01:40 UTC (run 7 continued — Garry live in the session)
+- **Deliveries weeks is LIVE.** Garry asked for the merge and chose "merge now": `main` was first merged into
+  `release/deliveries-weeks` (3 clashes with the Shipped steps release, settled keeping both; Tester attack where the two meet —
+  nothing broken by the merge; full suite 4,406 / 37, none new), then pull request #4 was merged to `main` at 23:57 on 13 Nov
+  on Garry's instruction. No database change. Garry to close and reopen every screen and phone and check in incognito.
+- **Live `main` is now merged into this branch** (commit 2de1d26; 8 clashes in index.html, 2 in docs, each settled keeping both
+  sides). ONE project picker on the Cutting Lists page (main's "All projects ▾"); the "Cutting lists to issue" search looks inside
+  the picked project. The Capacity Board step box is exactly as live.
+- **Full suite on the merged code (269 files, fake database): 6,663 pass / about 87 fail** — the same ones as each side had on
+  its own (68 here + main's) plus **3 checks that fail only because the two releases now sit together** (listed on
+  ACCEPTED-FAILURES for the Tester to re-point; they compare lists-ON screens with a version from before the list window).
+  5 timing fails when three test groups ran at once all pass when run alone.
+- **Still to do before a pull request (next run):** final Tester round on the merged code (the plan's attack list + the Manager's
+  four points from the entry above + B1–B5 and M5 re-attack), Coder fixes, Manager GO / NO-GO, GO-LIVE doc, screenshots.

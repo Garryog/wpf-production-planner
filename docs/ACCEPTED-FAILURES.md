@@ -131,3 +131,10 @@ on the lists above (t17-exportbase gave 8 this run; s5s6-templates stops early w
 | ship merge-b-import A8 (Medium/Low) | a job added by hand (no Cienapps step on record), set to JOB SHIPPED by hand, then "Bring back", then imported as shipped: it stays on the board instead of going to the Shipped tab | small fix after this release | pending |
 | ship merge-e-edges E2 (Low/Medium) | after "Bring back" on a job Cienapps had at 10 INSTALLED, the step box lets it go back to 9 JOB SHIPPED and puts that on Export Changes | small fix after this release | pending |
 | ship merge-e-edges E1 (Low) | old data with a space after the step name shows as a "change" on Export Changes after ship + bring back | small fix after this release | pending |
+
+
+## 14 Nov 2026 — after merging the live version (Deliveries weeks) into the list window branch: 3 checks to RE-POINT (not app faults)
+| Test | Why it fails (plain English) | Fixed in | Accepted? |
+|---|---|---|---|
+| dates attack5-carryover B8 and B9 [lists ON] | they compare the PM / saw / Production Manager screens with a version from BEFORE the list window; the list window adds the PM's read-only list status and the saw's "no list yet" wording on purpose | Tester re-points them, final round | pending |
+| lists-filter attack1-filter "11 lists switch ON … character-for-character the same as origin/main" | same reason | Tester re-points it, final round | pending |
