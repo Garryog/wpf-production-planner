@@ -4,6 +4,75 @@ Newest at the top. Each block must be run in Supabase BEFORE the matching code g
 
 ---
 
+## 2026-11-10 — Old-screen guard v2 — PENDING, NOT YET RUN — proposal for Garry: run on the dates-and-deliveries go-live day AFTER the new code is live
+
+**Garry decides yes or no.** Not needed for the 10 Nov release.
+
+**Why (plain English):** the 3 Nov guard only refuses screens from before Stage 1. A screen still running the **10 Nov version** after
+dates-and-deliveries goes live can still save. Its "Clear Week — Start Fresh" button would take every week's bookings off the vans,
+and its drivers' screens show next week's Tuesday as this Tuesday. The new code now writes a marker inside the planner settings
+(`appRel` = 2) on every save. The 10 Nov code doesn't know that setting and drops it, so its saves arrive without it.
+This SQL makes the database refuse those saves once the new code has saved once. The old screen shows "Save failed".
+Whoever is using it refreshes the page and gets the new version. Anything typed on that old screen since its last good save is lost
+and has to be typed again — better than it silently wiping the vans.
+
+**What it changes:** only the `production_planner_bump` function (the same one the 3 Nov guard replaced). It keeps the 3 Nov rule (a save must
+ask for exactly the next version number) and adds the marker rule. No table, no column, no data is touched, so no GRANT lines.
+Works whether `settings` is stored as json or jsonb. A missing or unreadable marker counts as 0.
+
+**Order matters:**
+1. The dates-and-deliveries code is live (check in an incognito window: week tabs on Deliveries, "Synced").
+2. Make one normal save from that new screen (e.g. type a note on a job). That writes the marker.
+3. Run this SQL (below).
+4. Close and reopen every PC, saw, stores, floor screen and driver's phone anyway.
+**Never run it before the new code is live**: until a new screen has saved, nothing is refused (step 2 is what switches it on). But if
+the website is then rolled back, every screen is refused (see Rollback).
+
+### Steps for Garry
+1. Supabase → WPF project → **SQL Editor** → **New query**. Copy everything in the grey box below, paste, **Run**.
+2. Expected result: **"Success. No rows returned"**. A red error: stop and send a screenshot.
+3. Check straight away: on the new site, type a note on a job, refresh the page, the note is still there ("Synced").
+4. If an old screen is still open somewhere, it will now show "Save failed" when it saves — refresh it.
+5. Safe to run twice (it only replaces the function).
+
+```sql
+-- Same as the 3 Nov guard (a save must ask for exactly the next version) PLUS: once the planner record has been saved by
+-- the dates-and-deliveries code (settings.appRel 2 or more), a save without that marker (an older screen still open) is refused.
+create or replace function production_planner_bump() returns trigger language plpgsql as $$
+declare
+  old_rel int := 0;
+  new_rel int := 0;
+  t text;
+begin
+  if old.id = 'main' and new.version is distinct from old.version + 1 then
+    raise exception 'This planner screen is out of date - refresh the page' using errcode = 'P0001';
+  end if;
+  if old.id = 'main' then
+    t := to_jsonb(old.settings)->>'appRel'; if t ~ '^[0-9]{1,6}$' then old_rel := t::int; end if;
+    t := to_jsonb(new.settings)->>'appRel'; if t ~ '^[0-9]{1,6}$' then new_rel := t::int; end if;
+    if old_rel >= 2 and new_rel < 2 then
+      raise exception 'This planner screen is out of date - refresh the page' using errcode = 'P0001';
+    end if;
+  end if;
+  new.version := old.version + 1;
+  new.updated_at := now();
+  return new;
+end $$;
+```
+
+**Rollback order (important):** if the website ever has to go back to an older version, FIRST undo this guard by running the
+**3 Nov guard** grey box (below, "2026-11-03 — Old-screen guard") again — that removes only the marker rule and keeps the 3 Nov rule —
+THEN put the older code back. The other way round, no screen can save.
+
+**Tested:** on a throwaway local Postgres (`tests/dates/pg-guard-v2.sql`, run twice, json and jsonb settings): a new-code save
+goes through; a 10-Nov-style save (next version, no marker) is refused with "This planner screen is out of date - refresh the page"
+once the record has the marker; before any new-code save nothing is refused; a wrong or missing version is still refused; a save that
+leaves settings alone is fine; rolling back to the 3 Nov guard lets the older code save again. The app shows "NOT SAVED — the database
+refused this screen because it is out of date. Refresh the page" when refused (`tests/dates/c9-guard-v2.test.js`).
+**Also try it once on a Supabase TEST project before going live.**
+
+---
+
 ## 2026-11-04 — Photo of a list (Storage bucket `list-photos`) — PENDING, NOT YET RUN — Garry runs this BEFORE merging `feature/stores-dockets`
 
 **What it does (plain English):**

@@ -97,8 +97,11 @@ const res = []; const rec = (n, ok, d) => { res.push(ok); console.log((ok ? 'PAS
     const out = { btnTxt, d3a, errs: errs.filter(Boolean) };
     ['WO-800-1', 'WO-800-2', 'WO-800-3', 'WO-800-4', 'WO-800-5', 'WO-800-6'].forEach(x => out[x] = snap(x));
     showTab('d'); await w(120);
+    // (Tester, 10 Nov — week tabs, Garry 9 Nov: a job still to plan sits in the pool of its due week's tab; open that tab, then back to This week)
+    { const wk = delPoolWk(g('WO-800-1')), tb = ['0', '1', '2', '3'].find(x => delTabWk(x) === wk) || 'later'; const b = document.querySelector('[data-deltab="' + tb + '"]'); if (b) b.click(); await w(120); out.tab800 = tb; }
     const pool = [...document.querySelectorAll('#dpool .dchip')].map(c => c.textContent).join(' ');
     out.pool = { '800-1': pool.includes('WO-800-1') };
+    { const b = document.querySelector('[data-deltab="0"]'); if (b) b.click(); await w(120); }
     // the button after the step changes: WO-900-1 and WO-900-2 only
     const b2 = document.getElementById('btn-deltag');
     out.btn2 = b2 ? b2.textContent : '';
