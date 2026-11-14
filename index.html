@@ -5672,14 +5672,14 @@ function lsPrevCutMap(oldId){ // key → quantity already cut on the old list (n
   if(!oldId||!V2()||!LST.l.has(oldId))return null;
   if(!LST.full.has(oldId)){if(!LST.fetching.has(oldId)){LST.fetching.add(oldId);lsLines([oldId]).then(lsRedraw).catch(()=>{}).finally(()=>LST.fetching.delete(oldId));}return null;}
   const c=lsCache();c.prev=c.prev||new Map();if(c.prev.has(oldId))return c.prev.get(oldId);
-  const m=new Map();
+  const m=new Map(),mn=lsMatNow(LST.l.get(oldId).project_id||'','sheet'); // a board renamed since is the same board (old name = current name)
   lsLinesOf(oldId).forEach(x=>{if(x.kind!=='saw'||x.removed_rev!=null||lnSt(x)!=='cut')return;
-    const k=lsCutKey(x.part,x.length_mm,x.width_mm,x.material),q=String(x.qty==null?'':x.qty).trim()||'?',p=m.get(k);
+    const k=lsCutKey(x.part,x.length_mm,x.width_mm,mn(x.material)),q=String(x.qty==null?'':x.qty).trim()||'?',p=m.get(k);
     m.set(k,p==null?q:/^\d+(\.\d+)?$/.test(p)&&/^\d+(\.\d+)?$/.test(q)?String(+p+ +q):p+' + '+q);});
   c.prev.set(oldId,m);return m;
 }
 function lsPrevCutHTML(oldId,part,L,W,mat){
-  const m=lsPrevCutMap(oldId),n=m&&m.get(lsCutKey(part,L,W,mat));
+  const m=lsPrevCutMap(oldId),n=m&&m.get(lsCutKey(part,L,W,lsMatNow(LST.l.get(oldId).project_id||'','sheet')(mat)));
   return n?`<div class="pc-b" title="This part was already ticked cut on the list this one replaces — check before cutting it again">already cut on old list (${escA(n)})</div>`:'';
 }
 function lsPrevCutBadge(lineId){ // the saw view: a line of a list that replaced another
