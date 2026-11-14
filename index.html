@@ -5312,6 +5312,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
         const un=r.unsure.filter(x=>seqKind(x.o.title)===kind);
         if(un.length&&!confirm('These planner jobs might be the same house ('+fu+'):\n'+un.slice(0,6).map(x=>'• '+x.o.wo+' — '+[fuLbl(x.o),x.o.title].filter(Boolean).join(' · ')+' ('+x.why+')').join('\n')+'\n\nMake a new P-number anyway?\n\nOK = make it\nCancel = go back (pick the job instead)'))return;}
     }
+    if(st.tpl&&!lsTplPinOk())return err('Not saved — templates are made and changed by the Drawing office, Production Manager or Admin.'); // (final round) asked again at Save: the screen may have been switched since the window opened
     if(ex&&ex.tpl){const w=prompt('What changed in this template? (optional — shown in its History; it becomes Rev '+((+ex.rev||1)+1)+')','');if(w===null)return;d.why=w.trim()?w.trim():'Template edited';}
     // (round 3) our P-number was made while the database couldn't be asked: ask now, before this Save goes on
     if(!ex&&!st.newWO&&st.pUnchecked&&st.wo===st.pUnchecked&&!st.reChk){const own=DB.orders.find(x=>x.wo===st.wo);
