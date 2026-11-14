@@ -218,7 +218,7 @@ const LIT = () => ({ prev: document.getElementById('wkb-prev').className, next: 
     let oldHtml = '';
     try { oldHtml = execSync('git show ea990d4:index.html', { cwd: ROOT, maxBuffer: 64 * 1024 * 1024 }).toString(); } catch (e) { oldHtml = ''; }
     const roles = ['pm', 'dash', 'design', 'saw', 'stores', 'driver', 'floor', 'prod'];
-    const grab = async (html, settings) => {
+    const grab = async (html, settings, lw) => {
       const row = { id: 'main', nid: 9, settings, orders: [O('WO-R1'), O('WO-R2', { step: '6. CUT' }), O('WO-R3', { delVeh: 'VOLVO', delDay: 'Wed', delWk: '2026-11-09', step: '8. PALLETED' })] };
       const t = await H.open({ browser, now: NOW, row, viewport: { width: 1366, height: 900 } });
       if (html) {
@@ -230,16 +230,32 @@ const LIT = () => ({ prev: document.getElementById('wkb-prev').className, next: 
           return route.fulfill({ status: 404, body: '' }); });
         await t.page.reload(); await t.page.waitForFunction(() => typeof analyzeImport === 'function'); await t.page.waitForTimeout(300);
       }
-      const out = await t.page.evaluate(async roles => { const W = ms => new Promise(r => setTimeout(r, ms)); const o = {};
-        for (const r of roles) { ls.set('wpfPin_' + r, pins()[r]); ROLE = r; render(); await W(100); o[r] = document.getElementById('app').innerText.replace(/\d{1,2}:\d{2}(:\d{2})?/g, 'hh:mm').replace(/📦 Items sent/g, '').replace(/\s+/g, ' ').trim(); }
-        ROLE = 'office'; render(); return o; }, roles);
+      // FINAL round, 14 Nov 2026 (list window release re-point): `lw` = take OUT the three things the cutting-list window release
+      // adds to these screens ON PURPOSE with the lists switch ON, so the comparison with ea990d4 (which has no list window) is
+      // about the Deliveries carry-over only: (1) the PM's read-only "📋 cutting list …" status on each job row (.pm-ls, plan step 7),
+      // (2) the default list owner named to the saw / Production Manager — "Production Manager, Garry and Drawing office" instead of
+      // "Production Manager" (Garry 13 Nov), (3) the saw's red panel "Tell the Drawing office." instead of "Tell the Production Manager."
+      // (run 3, F15). out._raw keeps the text as it really is, so the test also checks those three ARE there.
+      const out = await t.page.evaluate(async ({ roles, lw }) => { const W = ms => new Promise(r => setTimeout(r, ms)); const o = { _raw: {} };
+        const txt = () => document.getElementById('app').innerText.replace(/\d{1,2}:\d{2}(:\d{2})?/g, 'hh:mm').replace(/📦 Items sent/g, '').replace(/\s+/g, ' ').trim();
+        for (const r of roles) { ls.set('wpfPin_' + r, pins()[r]); ROLE = r; render(); await W(100); o._raw[r] = txt();
+          if (lw) { document.querySelectorAll('#app .pm-ls').forEach(e => e.remove());
+            o[r] = txt().replace(/owner Production Manager, Garry and Drawing office/g, 'owner Production Manager').replace(/Tell the Drawing office\./g, 'Tell the Production Manager.'); }
+          else o[r] = o._raw[r]; }
+        ROLE = 'office'; render(); return o; }, { roles, lw: !!lw });
       await t.close(); return out;
     };
+    const LW = /pm-ls/.test(require('fs').readFileSync(path.join(ROOT, 'index.html'), 'utf8')) && !/pm-ls/.test(oldHtml); // this code has the list window, the baseline does not
     for (const listsOn of [false, true]) {
       const settings = listsOn ? { listStore: 'v2', listStoreAt: '2026-10-20T08:00:00Z' } : {};
       const tag = listsOn ? ' [lists ON]' : ' [lists OFF]';
       if (!oldHtml) { rec('B8' + tag + ' roles unchanged (could not read ea990d4:index.html)', false); continue; }
-      const now_ = await grab(null, settings), old = await grab(oldHtml, settings);
+      const now_ = await grab(null, settings, LW && listsOn), old = await grab(oldHtml, settings);
+      if (LW && listsOn) { // the three deliberate list-window differences are really on the screens (else the re-point above hides nothing and should go)
+        const raw = now_._raw;
+        rec('B8' + tag + ' list window release: the PM sees the read-only "📋 no cutting list yet" on each of his 3 job rows, the saw is told "owner Production Manager, Garry and Drawing office", the Production Manager\'s late-list rows name the same three',
+          (raw.pm.match(/📋 no cutting list yet/g) || []).length === 3 && /owner Production Manager, Garry and Drawing office/.test(raw.saw) && (raw.prod.match(/owner Production Manager, Garry and Drawing office/g) || []).length === 3, JSON.stringify([(raw.pm.match(/📋 no cutting list yet/g) || []).length, /owner Production Manager, Garry and Drawing office/.test(raw.saw), (raw.prod.match(/owner Production Manager, Garry and Drawing office/g) || []).length]));
+      }
       // Release "Deliveries weeks" (12 Nov 2026): the Cutting Lists page gained the Project filter on purpose (PR #2, tests/lists-filter),
       // so with the lists switch ON the drawing-office screen is no longer the ea990d4 text — left out there only when the filter exists.
       const lpf = listsOn && /function lpfSec\(/.test(require('fs').readFileSync(path.join(ROOT, 'index.html'), 'utf8'));
