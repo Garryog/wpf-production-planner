@@ -6055,7 +6055,7 @@ function lsParseGrid(aoa,opt){
   const isErr=v=>typeof v==='string'&&/^#(VALUE|REF|N\/A|NAME|DIV\/0|NUM|NULL)[!?]?/i.test(v.trim());
   const raw=(r,c)=>{const v=(aoa[r]||[])[c];return v==null||isErr(v)||(typeof v==='string'&&v.trim()==='')?null:v;};
   const fm=(r,c)=>{const f=(F[r]||[])[c];return f==null||String(f).trim()===''?null:String(f).trim().replace(/^=/,'');};
-  const num=v=>{if(v==null||v instanceof Date)return NaN;if(typeof v==='number')return v;const s=String(v).trim().replace(/\s*mm$/i,'').replace(/^(-?\d{1,3}(?:,\d{3})+)(\.\d+)?$/,(m,a,b)=>a.replace(/,/g,'')+(b||''));return /^-?\d+(\.\d+)?$/.test(s)?+s:NaN;}; // a size typed as text "1,200" = 1200 (like sizeKey)
+  const num=v=>{if(v==null||v instanceof Date)return NaN;if(typeof v==='number')return v;const s=String(v).trim().replace(/\s*mm$/i,''),k=/^(\d{1,3}(?:,\d{3})+)(\.\d+)?$/.exec(s);if(k){const n=+(k[1].replace(/,/g,'')+(k[2]||''));return n>0&&n<=6000?n:NaN;}return /^-?\d+(\.\d+)?$/.test(s)?+s:NaN;}; // a size typed as text "1,200" = 1200 (like sizeKey) — only when it is a believable size (over 0, no more than 6000 mm): "720,560" (length,width in one cell) and "-1,200" stay blank for the person to fill
   const col=s=>{let n=0;for(const ch of s.toUpperCase())n=n*26+ch.charCodeAt(0)-64;return n-1;};
   // a tiny formula reader: numbers, cell references on this sheet ($ allowed), + - * / and brackets; anything else = unknown
   const evalF=(src,depth)=>{
