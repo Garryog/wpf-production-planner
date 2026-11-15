@@ -3141,10 +3141,11 @@ async function lsSaveManual(d,by,ex){
     if(!ex.tpl&&lsTicked(id)&&(d.rows||[]).some(lsUnitsChanged))throw new Error(LS_LOCK_MSG);
     reason=lsAskReason(lsList(id));if(reason===null)throw new Error('not saved — a reason is needed for a new revision');}
   // (final-b N8) two screens on one list: a name / Type name THIS window never changed is saved as the database has it now, so the
-  // other screen's rename is kept. A Type name that only followed the name here (nobody typed in its box) gives way to one typed there.
+  // other screen's rename is kept. A Type name that only followed the name here (nobody typed in its box) gives way to one typed there
+  // (the other screen changed the Type name only, not the name).
   if(ex){const now=lsList(id),t=v=>String(v||'').trim();
     if(now){if(t(d.name)===t(ex.name))d.name=now.name;
-      if(d.tname!==undefined&&(t(d.tname)===t(ex.typeName)||(d.tnAuto&&t(now.typeName)!==t(ex.typeName))))d.tname=now.typeName;}}
+      if(d.tname!==undefined&&(t(d.tname)===t(ex.typeName)||(d.tnAuto&&t(now.typeName)!==t(ex.typeName)&&t(now.name)===t(ex.name))))d.tname=now.typeName;}} // (final-2 14a) the other screen renamed the template too: the pair THIS window shows is saved (name + the Type name that followed it), never one name from each screen
   // "Make new list from this" on two screens at once: before saving, ask the database whether another screen already
   // saved a replacement for the old list (or the WO already has another live list) — then stop and say which one
   if(!ex&&!d.tpl&&d.replaces&&d.replaces.id){
