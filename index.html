@@ -5169,6 +5169,11 @@ function openListEditor2(listId,presetWo,presetPid,opt){
             if(!confirm('This Excel file says '+d(fw,m0.floor,m0.unit)+', but this list is for '+d(st.wo,o&&fuF(o),o&&fuU(o))+'.\n\nPut its rows into this list anyway?\n\nOK = put the rows in (the list stays on '+st.wo+')\nCancel = nothing changes'))return;}}
         const add=sh.p.rows.filter(r=>!r.info).map(r=>{const x={...r};delete x.src;delete x.total;delete x.bu;delete x.qtyErr;
           if(x.k==='part'){x.qty=x.qty===''||x.qty==null?'':String(x.qty);x.L=x.L===''?'':String(x.L);x.W=x.W===''?'':String(x.W);}return x;});
+        // (final-a X5) the same file and sheet picked a second time by mistake: asked first, like "An old list…" — only while rows
+        // from it are still in the window (each carries _xl; Undo / deleting them takes the question away). Never saved.
+        const xk=String(f.name||'')+'|'+sh.name;
+        if(R().some(r=>r._xl===xk)&&!confirm('The rows of "'+sh.name+'" from '+String(f.name||'that file')+' are already in this list.\n\nAdd them a second time?'))return;
+        add.forEach(r=>{r._xl=xk;});
         snap();
         const typed=R().some(r=>r.k==='part'&&!lsEmptyRow(r));
         if(typed)R().push(...add);else R().splice(0,R().length,...add);
