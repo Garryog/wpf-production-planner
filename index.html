@@ -3140,6 +3140,11 @@ async function lsSaveManual(d,by,ex){
     //  screen is not theirs to be refused for, and the edit merge keeps it)
     if(!ex.tpl&&lsTicked(id)&&(d.rows||[]).some(lsUnitsChanged))throw new Error(LS_LOCK_MSG);
     reason=lsAskReason(lsList(id));if(reason===null)throw new Error('not saved — a reason is needed for a new revision');}
+  // (final-b N8) two screens on one list: a name / Type name THIS window never changed is saved as the database has it now, so the
+  // other screen's rename is kept. A Type name that only followed the name here (nobody typed in its box) gives way to one typed there.
+  if(ex){const now=lsList(id),t=v=>String(v||'').trim();
+    if(now){if(t(d.name)===t(ex.name))d.name=now.name;
+      if(d.tname!==undefined&&(t(d.tname)===t(ex.typeName)||(d.tnAuto&&t(now.typeName)!==t(ex.typeName))))d.tname=now.typeName;}}
   // "Make new list from this" on two screens at once: before saving, ask the database whether another screen already
   // saved a replacement for the old list (or the WO already has another live list) — then stop and say which one
   if(!ex&&!d.tpl&&d.replaces&&d.replaces.id){
@@ -5292,7 +5297,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       if(!title)return err('The new work order needs a title.');if(!due)return err('The new work order needs a due date — it drives the cutting deadline.');wo='__NEW__';}
     // (final round) what is saved is a COPY of the rows as they were checked here — a box changed while "Saving…" is on screen can't slip into the save unchecked
     const live0=JSON.stringify(R());
-    const d={...st,rows:rows.map(r=>({...r})),wo,project:(LST.p.get(st.pid)||{}).name||'',replaces:!ex&&!st.tpl&&st.from?st.from:null};
+    const d={...st,tnAuto:tnFollow,rows:rows.map(r=>({...r})),wo,project:(LST.p.get(st.pid)||{}).name||'',replaces:!ex&&!st.tpl&&st.from?st.from:null};
     if(!st.tpl&&!String(d.name||'').trim())d.name=wo==='__NEW__'?'':wo; // (10 Nov) list name left blank = the WO number (a new P-number: set when it is made)
     // a spec placeholder ("Worktops — None chosen / TBC", no quantity, no size) never blocks the save: it stays on the list, red
     const tbcHold=r=>!sized(r)&&String(r.qty==null?'':r.qty).trim()===''&&lsTbc([r]).length>0;
