@@ -2996,7 +2996,7 @@ async function lsReloadList(id){
 function lsSame(cur,pl,df){
   if(df.changed.length||df.added.length||df.removed.length||df.noteOnly.length)return false;
   const old=new Map(lsLinesOf(cur.id).map(x=>[x.id,x]));
-  if(!df.lines.every(ln=>{const o=old.get(ln.id);return o&&(+o.seq||0)===ln.seq&&(o.section||null)===(ln.section||null)&&(o.unit_qty||null)===(ln.unit_qty||null)&&!!o.material_other===!!ln.material_other;}))return false; // 2 per unit × 2 → 1 × 4: same total, still saved
+  if(!df.lines.every(ln=>{const o=old.get(ln.id);return o&&(+o.seq||0)===ln.seq&&(o.section||null)===(ln.section||null)&&(o.unit_qty||null)===(ln.unit_qty||null)&&(ln.kind!=='saw'||!!o.material_other===!!ln.material_other);}))return false; // 2 per unit × 2 → 1 × 4: same total, still saved. (final-b 2g) A Stores row's "spec not on the project list" mark alone is not a change: an old list saved untouched writes nothing
   const nz=v=>v==null||v===''?null:String(v);
   return['name','project_id','list_type','type_name','no_cut','no_fit','sdate','source','deliver_by','is_template'].every(k=>!(k in pl)||nz(pl[k])===nz(cur[k]));
 }
