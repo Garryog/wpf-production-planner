@@ -543,3 +543,46 @@ the same results as before. Not yet attacked by the Tester — final round.
   5 timing fails when three test groups ran at once all pass when run alone.
 - **Still to do before a pull request (next run):** final Tester round on the merged code (the plan's attack list + the Manager's
   four points from the entry above + B1–B5 and M5 re-attack), Coder fixes, Manager GO / NO-GO, GO-LIVE doc, screenshots.
+
+
+### 14 Nov 2026, 20:30–22:05 UTC (Garry's session — written up on 15 Nov from the commits; no entry was made at the time)
+- **Final Tester round on the merged code** (14 new files `tests/list-window/final-a-*` and `final-b-*`, two testers): 1 High,
+  7 Medium. 16 fix commits followed (a renamed material is ONE board on every screen and total; rows changed while "Saving…"
+  shows; ✕ during a save; template Save checks permission again at Save; on-hold jobs left out of "Find the Cienapps WO";
+  Excel "1,200" read as 1200; phone sizes; "Confirm all green" with a search on). 4 out-of-date checks re-pointed.
+
+### 15 Nov 2026, 23:30 UTC (scheduled run 8, started 19:43)
+- No other run was working (last push 14 Nov 22:03). `main` (Deliveries weeks, live since 14 Nov) was already merged in.
+- **Full suite first** (283 files, fake database): 7,243 pass / 101 fail. Older files were run on `main` too: none is worse here.
+- **Coder — leftovers of the final round, fixed:** Save on an old list with nothing changed writes nothing · a list or template
+  name this PC did not change no longer overwrites another PC's rename · the same Excel file picked twice is asked about first.
+  **Not done on purpose:** taking "📥 Import Excel" off the Cutting Lists page — see question 20.
+- **Tester round "final-2"** (5 new files `final2-*`, 217 checks) attacked the 19 fixes nobody had attacked: **no Critical, no
+  High.** 3 new Mediums, all fixed the same evening: an Excel cell "720,560" was read as a 720-metre board (now: a text size is
+  read only when it is 6000 mm or less, otherwise the box is left blank); a house whose only Cienapps job is ON HOLD was told
+  "no work order found — make a P-number" (now: told the WO number and that it is on hold; no P-number offered); two PCs renaming
+  one template left a name and Type name nobody typed together.
+- **Manager, final review: GO WITH CONDITIONS.** No blocker; items 1–7 built and tested; no database change. Conditions: Garry's
+  answers to questions 20–22, the go-live doc (written: `docs/GO-LIVE-list-window.md`), and one small gap he found — the Work
+  order drop-down did not show the job title. **Fixed:** each line is now WO · floor · unit · title · due date (title cut to 32
+  letters). The 38 test files that touch that drop-down were re-run: same results, 4 checks re-pointed. The whole suite was NOT
+  run again after that one-line change.
+- **Full suite on the final code (288 files): 7,454 pass / 106 fail**, every one listed in ACCEPTED-FAILURES ("15 Nov — final
+  round" holds the new ones). Not checked by a Tester after they were made: the three fixes of this evening and the title line
+  (the Manager read them; the suite ran after the three).
+- **Scope:** items 1–7 and 9 are in. Item 8: only the due badge in the window header; the delivery-card button and the Lists-home
+  badge are the next small release, as Garry chose on 13 Nov. P-number → WO merge: the release after.
+- **Pull request opened: `feature/list-window` → `main` (not merged — only Garry merges).** Screenshots: `docs/screens-list-window/`.
+  No further changes will be made on this branch by the scheduled task; it can be switched off.
+
+## Questions for Garry before he merges (recommended answer first; built on A)
+20. **"📥 Import Excel" on the Cutting Lists page.** You said "only in the window" (13 Nov). But the page button brings in a WHOLE
+    workbook (one list per sheet); the window brings in ONE sheet into the open list.
+    A (recommended, as built) — keep both for this release. B — take the page button away (a multi-house workbook then goes in one
+    sheet at a time). C — keep it, but tucked under a "More" menu on the page.
+21. **A house whose only Cienapps job is ON HOLD.** A (recommended, as built) — no P-number and no automatic fill; the person is
+    told the WO number and to get it taken off hold. B — allow a P-number after a confirm. C — let the list be made on the
+    on-hold job.
+22. **Buttons in the window** (old question 16, "don't know") — see the screenshots. A (recommended) — leave as it is.
+    B — move "?" and "Change job" under More.
+Also for Garry: accept or reject the rows marked pending in the "15 Nov 2026 — final round" section of ACCEPTED-FAILURES.
