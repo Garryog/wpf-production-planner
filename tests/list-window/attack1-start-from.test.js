@@ -57,6 +57,10 @@ function row() {
     rs = await rows(p);
     const said = await p.evaluate(() => document.body.innerText.match(/Imported[^\n]*/g));
     rec('Excel: the SAME file imported again → the person is told rows were ADDED (7 rows now; "added at the bottom")', rs.length === 7 && (said || []).some(x => /added at the bottom/.test(x)), JSON.stringify([rs.length, said]));
+    // (15 Nov) since ee2623f the same file picked twice is ASKED about first (this test answers OK) — check the question was put, then
+    // forget it, so the "nothing asked" checks on the old-list finder further down only see questions asked THERE
+    rec('Excel: the SAME file imported again → asked "already in this list … Add them a second time?" first (answered OK here)', (await p.evaluate(() => window.__asked.filter(m => /already in this list/.test(m) && /second\.xlsx/.test(m)).length)) === 1, JSON.stringify(await p.evaluate(() => window.__asked)));
+    await p.evaluate(() => { window.__asked = []; });
     // Ctrl+Z takes the last import away
     await p.evaluate(() => { const e = document.querySelector('.me-ed [data-mr="0|item"]'); e.focus(); e.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true })); }); await sleep(300);
     rs = await rows(p);
@@ -92,6 +96,7 @@ function row() {
     await p.evaluate(() => openListEditor(null, 'WO-27')); await sleep(800);
     await fillSaw(p, 0, 'Typed before', '1', '600', '400', 'MFC White');
     const s1 = snap(S, 'OLD1'); db0 = dbState(S);
+    await p.evaluate(() => { window.__asked = []; }); // only questions asked from here on count for the finder's "nothing asked" checks
     await openOld(p);
     ov = await topOv(p);
     rec('An old list…: the finder opens OVER the list window (2 windows), says "Use these rows"', ov.n === 2 && /Find an old list/.test(ov.txt) && /Use these rows/.test(ov.txt) && !/Copy to new list/.test(ov.txt.replace(/Use these rows puts[^\n]*/, '')), ov.txt.slice(0, 200));
