@@ -4766,6 +4766,8 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     if(o&&!String(o.customer||'').trim())return box('This WO has no customer in Cienapps — pick the project, or ＋ New project… at the bottom of the list.',true);
     return box(pick+'.',true);
   };
+  // (final-2 A2) nothing live found, but the house's Cienapps job is in the planner ON HOLD: said plainly — never "none found, make a P-number"
+  const jbHeld=(f,u,title)=>st.pid?keyFind(st.pid,f,u,keyJobs(true),title).same.filter(x=>isOnHold(x.o)):[];
   const jbFind=()=>{
     keep();const b=st.jb,typed=String(b.wo||'').trim();
     if(typed){ // typed by hand: it must be a job in the planner, and still live
@@ -4786,13 +4788,15 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     const r=keyFind(st.pid,b.floor,b.unit,kmap,b.title);
     if(r.st==='one'&&!b.not.includes(r.same[0].o.wo)){b.res=null;return jbChoose(r.same[0].o.wo,'auto');}
     if(r.st==='one')r.st='pick'; // "Not this one" was pressed for it: offer it, never fill it again by itself
+    if(r.st==='none'){const h=jbHeld(b.floor,b.unit,b.title);if(h.length){r.st='hold';r.held=h;}}
     b.res=r;b.pmsg=false;draw();
   };
   // L4a: a P-number only as the last resort — the lookup runs first (a job found → pick it), then the person confirms
   const jbMakeP=force=>{ // force: 'none' (the search found nothing) or 'pick' (none of the jobs found is it) — no second look
     keep();const b=st.jb,f=String(b.floor||'').trim(),u=String(b.unit||'').trim(),both=!!(keyTxt(f)&&keyTxt(u));
     if(!force&&st.pid&&both){const r=keyFind(st.pid,f,u,kmap,b.title);
-      if(r.st!=='none'){if(r.st==='one')r.st='pick';b.res=r;b.pmsg=true;draw();return;}}
+      if(r.st!=='none'){if(r.st==='one')r.st='pick';b.res=r;b.pmsg=true;draw();return;}
+      const h=jbHeld(f,u,b.title);if(h.length){r.st='hold';r.held=h;b.res=r;b.pmsg=false;draw();return;}}
     const where=both?'Floor '+f+' · Unit '+u+(st.pid?' on '+lsProjName(st.pid):''):'';
     if(!confirm((force==='pick'?'You picked none of the work orders found for '+where+'.\n\n':where?'No Cienapps work order was found for '+where+'.\n\n':'No Floor and Unit typed — the planner can\'t look for the Cienapps WO, and can\'t match this P-number to it later.\n\n')
       +'Make a new planner P-number instead?\n\nUse it only when Cienapps has no WO for this house yet. It shows purple, "not from Cienapps".\n\nOK = make a P-number\nCancel = go back'))return;
@@ -4812,6 +4816,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       :r.st==='noproj'?'<span class="me-jbw">Pick the project first — the work order is looked up inside the project.</span>'
       :r.st==='blank'?'<span class="me-jbw">Floor and Unit are both needed to look it up — no search was made.</span>'
       :r.st==='none'?'<span class="me-jbw">No Cienapps work order found'+where+'.</span> Check the floor and unit — or Cienapps may not have it yet. <button class="btn btn-s" id="me-jmkp" style="font-size:12px;padding:2px 9px;color:#5b21b6">Make a P-number instead…</button>'
+      :r.st==='hold'?'<span class="me-jbw">The Cienapps job'+where+' is in the planner but it is ON HOLD: '+r.held.map(x=>'<b>'+E(x.o.wo)+'</b>'+(x.o.title?' · '+E(x.o.title):'')).join(', ')+'.</span> It is not filled in while it is on hold, and no P-number is made for it — one unit never gets two jobs. Ask for it to be taken off hold in Cienapps; it can be used after the next import.'
       :r.st==='nowo'?'<span class="me-jbw">'+E(r.wo)+' is not in the planner</span> — check the number (a new Cienapps WO arrives with the next import).'
       :r.st==='gone'?'<span class="me-jbw">'+E(r.wo)+' is shipped or delivered</span> — a cutting list needs a live job.'
       :r.st==='typedno'?'<span class="me-jbw">'+E(r.wo)+' not used</span> — '+E(r.why)
@@ -5311,7 +5316,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     for(const r of rows.filter(r=>r.k==='part'&&r.buy)){if(!String(r.item||'').trim())return err('Every Bought in row needs a description'+at(r)+'.');if(!(+totalOf(r,b[rows.indexOf(r)])>0))return err('Every Bought in row needs a quantity ("'+String(r.item).trim()+'"'+at(r)+').');}
     const onlyBuy=!chk.length&&rows.some(r=>r.k==='part'&&(r.buy||tbcHold(r)));
     let e=manualListValidate({...d,name:d.name||(st.newWO?'(the new P-number)':''),rows:onlyBuy?[{k:'saw',item:'x',qty:1,L:1,W:1}]:chk,noCut:onlyBuy?false:d.noCut,noFit:onlyBuy?false:d.noFit,wo:st.tpl?'(template)':d.wo});
-    if(e==='Give the list a house / name.'&&!st.tpl&&!d.wo)e=jbOn()?(st.jb.res&&st.jb.res.st==='pick'?'No work order yet — pick one of the work orders offered above.':st.jb.res&&st.jb.res.st==='none'&&keyTxt(st.jb.floor)&&keyTxt(st.jb.unit)?'No Cienapps work order found for Floor '+String(st.jb.floor).trim()+' · Unit '+String(st.jb.unit).trim()+' — check the floor and unit, or press "Make a P-number instead…" above.':'No work order yet — type the Floor and the Unit, then press 🔎 Find the Cienapps WO.'):'Pick the work order (or create a new P-number).'; // (attack3 W7) name the real gap: the name is only blank because there is no WO
+    if(e==='Give the list a house / name.'&&!st.tpl&&!d.wo)e=jbOn()?(st.jb.res&&st.jb.res.st==='pick'?'No work order yet — pick one of the work orders offered above.':st.jb.res&&st.jb.res.st==='hold'?'No work order yet — the Cienapps job for this house ('+st.jb.res.held.map(x=>x.o.wo).join(', ')+') is ON HOLD. See the message above.':st.jb.res&&st.jb.res.st==='none'&&keyTxt(st.jb.floor)&&keyTxt(st.jb.unit)?'No Cienapps work order found for Floor '+String(st.jb.floor).trim()+' · Unit '+String(st.jb.unit).trim()+' — check the floor and unit, or press "Make a P-number instead…" above.':'No work order yet — type the Floor and the Unit, then press 🔎 Find the Cienapps WO.'):'Pick the work order (or create a new P-number).'; // (attack3 W7) name the real gap: the name is only blank because there is no WO
     if(e){err(e.replace(/saw row/g,'saw row (with a length or width)').replace(/fittings row/g,'Stores row (no length or width)'));
       const q=/needs a quantity/.test(e)?rows.find(r=>r.k==='part'&&!r.buy&&!tbcHold(r)&&!(+totalOf(r,b[rows.indexOf(r)])>0)):null,c=q&&ov.querySelector('[data-mr="'+R().indexOf(q)+'|qty"]');
       if(c&&!c.disabled)c.focus(); // the cursor goes to the row with no quantity (a long list: it is scrolled to)
@@ -5320,7 +5325,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       const pf=g('me-pfloor').value,pu=g('me-punit').value,kind=seqKind(g('me-ptitle').value);
       if(st.pid&&keyTxt(pf)&&keyTxt(pu)){const r=keyFind(st.pid,pf,pu,keyJobs(true),g('me-ptitle').value),fu='Floor '+String(pf).trim()+' · Unit '+String(pu).trim();
         const dup=r.same.find(x=>seqKind(x.o.title)===kind);
-        if(dup){const w0=dup.o.wo,isP=/^P-\d+$/.test(w0),m=isP?w0+' already exists for '+fu+' ('+kind+') — use it':w0+' from Cienapps is in the planner for '+fu+' ('+kind+') — use it';
+        if(dup){const w0=dup.o.wo,isP=/^P-\d+$/.test(w0),m=isP?w0+' already exists for '+fu+' ('+kind+') — use it':w0+' from Cienapps is in the planner for '+fu+' ('+kind+')'+(isOnHold(dup.o)?' — it is ON HOLD':'')+' — use it';
           if(confirm(m+'.\n\nNo second job is made for one house.\n\nOK = use '+w0+' for this list\nCancel = go back')){st.newWO=false;jbChoose(w0,'picked');}else err('Not saved — '+m+'.');return;}
         const un=r.unsure.filter(x=>seqKind(x.o.title)===kind);
         if(un.length&&!confirm('These planner jobs might be the same house ('+fu+'):\n'+un.slice(0,6).map(x=>'• '+x.o.wo+' — '+[fuLbl(x.o),x.o.title].filter(Boolean).join(' · ')+' ('+x.why+')').join('\n')+'\n\nMake a new P-number anyway?\n\nOK = make it\nCancel = go back (pick the job instead)'))return;}
