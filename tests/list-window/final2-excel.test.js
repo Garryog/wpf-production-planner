@@ -37,7 +37,7 @@ const A = { 'Kitchen': [COLS, ['Side', 2, 720, 560, 'MFC White'], ['Shelf', 4, 5
       ['quantity "1,200"', '1,200', '100', '50', { qty: '1200', L: '100', W: '50' }],
       ['quantity "1,200 off"', '1,200 off', '100', '50', { qty: '1200', L: '100', W: '50' }],
       [' spaces round " 1,200 "', '2', ' 1,200 ', ' 560 ', { qty: '2', L: '1200', W: '560' }],
-      ['"1,000,000" long (huge)', '1', '1,000,000', '560', { qty: '1', L: '1000000', W: '560' }],
+      ['"1,000,000" long (huge) → left blank for the person: over 6000 mm is not a believable board (rule of 15 Nov)', '1', '1,000,000', '560', { qty: '1', L: '', W: '560' }],
     ];
     const ODD = [ // what does the person get? never a silently WRONG size
       ['"1.200" long (European thousands)', '2', '1.200', '560'], ['"1 200" long (space thousands)', '2', '1 200', '560'], ['"1,5" long (decimal comma)', '2', '1,5', '560'],

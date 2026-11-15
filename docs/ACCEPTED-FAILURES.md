@@ -138,3 +138,28 @@ on the lists above (t17-exportbase gave 8 this run; s5s6-templates stops early w
 |---|---|---|---|
 | dates attack5-carryover B8 and B9 [lists ON] | they compare the PM / saw / Production Manager screens with a version from BEFORE the list window; the list window adds the PM's read-only list status and the saw's "no list yet" wording on purpose | Tester re-points them, final round | pending |
 | lists-filter attack1-filter "11 lists switch ON … character-for-character the same as origin/main" | same reason | Tester re-points it, final round | pending |
+
+
+## 15 Nov 2026 — final round on the list window release (all PENDING Garry unless marked)
+Full suite on the final code (288 files, fake database): **7,454 pass / 106 fail**. Two of the 106 are timing checks that fail only
+when several test files run at once and pass alone (editor e7-keyboard redraw time, lists-filter attack1-filter 13n). Every older
+file was compared with the live version (`main`) or with the lists above: nothing got worse. No Critical or High check fails.
+The checks below are the ones NOT already on the lists above.
+
+| Test | Why it fails (plain English) | Fixed in | Accepted? |
+|---|---|---|---|
+| list-window final-a-customer-simple S1b (Medium) | "📥 Import Excel" is still on the Cutting Lists page. Garry's answer of 13 Nov was "only in the window", but the page button brings in a WHOLE workbook (one list per sheet) and the window brings in ONE sheet — taking the button away would leave no way to import a multi-house workbook | Garry to decide (question 20 in docs/PLAN-list-window.md) | pending |
+| list-window final-a-customer-simple C3 (info) | a customer renamed outright in Cienapps gets a new project made from the new name (as decided: customer = project) | — | pending |
+| list-window final-a-merged-jobs P4b (info) | the import preview does not say a P-number job already exists for that house — part of the P-number → Cienapps WO merge | P-number release | pending |
+| list-window final-b-mat-2pcs W2 (info, Low) | Materials window: when a row's Save is refused because another PC changed it, the name just typed is not kept in the box | later | pending |
+| list-window final-b-save-slow D2 (info, Low) | after 10 s of "Saving…" the person is told nothing more (✕ does ask after 20 s) | later | pending |
+| list-window final-b-template-names N7, N9b (already on live) | a template can be renamed to a name another template has; "Save as template → Update" goes by Type name | "one name per template" (after this release) | pending |
+| list-window final2-two-pc-names 9a, 10a, 11, 12a (Medium, already on live) | two PCs: "no cutting" / "no fittings" / list Type ticked on one PC is put back by a Save from a window opened earlier on another | small fix after this release | pending |
+| list-window final2-two-pc-names 3b, 16 (Low) | both PCs rename the same list: last Save wins, nobody told · typing in the Type name box and typing it back stops it following the name | later | pending |
+| list-window final2-save-race B1 (Medium/Low, already on live by code reading), B2 (Low) | the list NAME retyped during the second "Saving…" is on screen is not saved · a box changed and put back during a save gives a false "NOT saved" warning (nothing lost) | small fix after this release | pending |
+| list-window final2-excel 3.4 (Low) | the same Excel file brought in again AFTER the list was saved and reopened is not asked about (it is asked while the window stays open) | Garry to say if wanted | pending |
+| list-window final2-rename B5 (Low) | wiping a renamed board's "Also called" box splits lists never re-saved into a second board on the totals | later (warn before clearing) | pending |
+| list-window final2-hold-roles-phone A11 (Low) | a job put ON HOLD after it was picked in the window still saves with a plain "Saved ✓" | Garry's answer to question 21 | pending |
+| list-window final2-hold-roles-phone D8b (Low) | Esc does not close the Materials window when it is opened on its own | later | pending |
+| dates attack6-release B3b | a check about the test file itself (how often it reads the old version), not the app — out of date since the checks were re-pointed on 14 Nov | Tester | pending |
+| dates attack6-release E1, E2b, E3 · stage2 attack-r3 A (2 checks) · stage1 t16 second check | fail the same way on the live version today (run on `main`, 15 Nov) — not caused by this release | — | pending |
