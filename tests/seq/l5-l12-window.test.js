@@ -241,8 +241,8 @@ const donep = p => p.evaluate(() => { const d = document.querySelector('.me-dov'
     rec('L11: Aderrig only — shipped WO-5, on-hold WO-24 and Lucan\'s WO-6 left out', !wv.some(v => ['WO-5', 'WO-24', 'WO-6', 'WO-20', 'WO-26'].includes(v)) && wv.includes('WO-1') && wv.includes('WO-3'), JSON.stringify(wv));
     rec('L12: sorted by due date, soonest first, no due date last (WO-1, WO-2 22 Oct · WO-4 20 Nov · WO-3 3 Dec · WO-25 none)', JSON.stringify(wv) === JSON.stringify(['WO-1', 'WO-2', 'WO-4', 'WO-3', 'WO-25']), JSON.stringify(wv));
     const o1 = os.find(o => o.v === 'WO-1'), o4 = os.find(o => o.v === 'WO-4'), o25 = os.find(o => o.v === 'WO-25');
-    rec('L12: line "WO-1 · Fl GF · Unit 12 · due 22 Oct · has a list"', o1 && o1.t === 'WO-1 · Fl GF · Unit 12 · due 22 Oct · has a list', o1 && o1.t);
-    rec('L12: a job with no list has no "has a list"; no due date says so', o4 && o4.t === 'WO-4 · Fl T09 · Unit 13 · due 20 Nov' && o25 && o25.t === 'WO-25 · Fl T09 · Unit 31 · no due date', JSON.stringify([o4, o25]));
+    rec('L12: line "WO-1 · Fl GF · Unit 12 · HOUSE WO-1 TYPE B · due 22 Oct · has a list" (title on the line since 15 Nov)', o1 && o1.t === 'WO-1 · Fl GF · Unit 12 · HOUSE WO-1 TYPE B · due 22 Oct · has a list', o1 && o1.t);
+    rec('L12: a job with no list has no "has a list"; no due date says so', o4 && o4.t === 'WO-4 · Fl T09 · Unit 13 · HOUSE TYPE C UTILITY · due 20 Nov' && o25 && o25.t === 'WO-25 · Fl T09 · Unit 31 · NO DUE · no due date', JSON.stringify([o4, o25]));
     await closeAll(p);
     // no project: one disabled line, never all the jobs
     await p.evaluate(() => openListEditor(null, '', '')); await sleep(400);

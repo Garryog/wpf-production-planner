@@ -33,8 +33,8 @@ const LONG = 'Job – Kitchen and utility fit-out, Type B 3-bed end of terrace w
     const s = document.getElementById('me-wo'), f = () => Object.fromEntries([...document.querySelectorAll('#me-woinfo [data-woi]')].map(e => [e.dataset.woi, e.textContent.trim()]));
     const r = { sel: s.options[s.selectedIndex].textContent, opts: [...s.options].map(o => o.textContent), info: f(), tt: document.querySelector('[data-woi="Title"]').title };
     s.value = 'WO-1'; s.onchange(); r.info2 = f(); s.value = 'WO-3'; s.onchange(); return r; });
-  rec('editor: the picked WO shows "WO-3 · Fl 2 · Unit 31 · due 28 Oct" — no title (Part 4 L12, Garry 10 Nov: due date on every line; was "WO-3 — Unit 31")', ed.sel === 'WO-3 · Fl 2 · Unit 31 · due 28 Oct', JSON.stringify(ed.sel));
-  rec('editor: no drop-down option carries the title or customer', ed.opts.every(o => !/Aderrig|HOUSE 22|Kitchen/.test(o)), JSON.stringify(ed.opts));
+  rec('editor: the picked WO shows "WO-3 · Fl 2 · Unit 31 · <title, cut to 32 letters> · due 28 Oct" (L12 due date on every line; title on the line since 15 Nov — Garry 12 Nov: WO · floor · unit · title · due date)', /^WO-3 · Fl 2 · Unit 31 · Job – Kitchen and utility fit-o… · due 28 Oct$/.test(ed.sel), JSON.stringify(ed.sel));
+  rec('editor: no drop-down option carries the customer (the title is on the line, never longer than 32 letters)', ed.opts.every(o => !/Aderrig/.test(o)) && ed.opts.some(o => /HOUSE 22 TYPE B/.test(o)) && ed.opts.every(o => o.split(' · ').every(x => x.length <= 32)), JSON.stringify(ed.opts));
   rec('editor: read-only Floor | Unit | Title | Customer filled from WO-3 (title shown as text, full title on hover)',
     ed.info.Floor === '2' && ed.info.Unit === '31' && ed.info.Title === LONG && ed.info.Customer === 'Aderrig Homes' && ed.tt === LONG, JSON.stringify(ed.info));
   rec('editor: picking WO-1 changes the boxes to 1 / 22 / HOUSE 22 TYPE B', ed.info2.Floor === '1' && ed.info2.Unit === '22' && ed.info2.Title === 'HOUSE 22 TYPE B', JSON.stringify(ed.info2));

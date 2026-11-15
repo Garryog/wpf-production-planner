@@ -4707,7 +4707,8 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     const DK=new Map(js.map(o=>[o,dk(o)]));
     js.sort((a,b)=>(DK.get(a)||'9999').localeCompare(DK.get(b)||'9999')||woCmp(a,b));
     const dueTxt=o=>{const k=DK.has(o)?DK.get(o):dk(o);return k?'due '+dShort(k):String(o.dueDate==null?'':o.dueDate).trim()?'due ?':'no due date';};
-    const line=o=>[o.wo,fuF(o)?'Fl '+fuF(o):'',fuU(o)?'Unit '+fuU(o):'',dueTxt(o)].filter(Boolean).join(' · ')+(hasL.has(o.wo)?' · has a list':'');
+    const ttl=o=>{const t=String(o.title==null?'':o.title).replace(/\s+/g,' ').trim();return t.length>32?t.slice(0,31)+'…':t;}; // the title is on the line itself (a phone has no hover): a kitchen WO and a wardrobe WO of one unit differ only by number otherwise
+    const line=o=>[o.wo,fuF(o)?'Fl '+fuF(o):'',fuU(o)?'Unit '+fuU(o):'',ttl(o),dueTxt(o)].filter(Boolean).join(' · ')+(hasL.has(o.wo)?' · has a list':'');
     const opt=(o,mark)=>`<option value="${escA(o.wo)}"${o.wo===st.wo?' selected':''} title="${escA([fuLbl(o),o.title,o.customer].filter(Boolean).join(' · '))}">${escA(line(o)+(mark?' '+mark:''))}</option>`;
     let cur='';if(st.wo&&!js.some(o=>o.wo===st.wo)){const o=DB.orders.find(x=>x.wo===st.wo);
       cur=o?opt(o,isShipped(o)?'(shipped)':o.delDone||o.delDelivAt?'(delivered)':isOnHold(o)?'(on hold)':st.pid&&kp(o)&&kp(o)!==st.pid?'(other project)':!kp(o)?'(customer not linked to a project)':''):`<option value="${escA(st.wo)}" selected>${escA(st.wo)} (not in the planner)</option>`;}
