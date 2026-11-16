@@ -92,6 +92,8 @@ button,input,select{font-family:inherit;cursor:pointer}
 .due-tag.grey{background:#f1f4f8;color:#3b4c63;border-color:#cdd5e0}
 button.due-tag{cursor:pointer;min-height:26px}button.due-tag:hover{outline:2px solid #1a56db;outline-offset:1px}
 .due-orig{font-size:10px;color:var(--t3)}
+/*(Garry 16 Nov: "scaling not correct on capacity board") the board's due-date column grew with the Deliveries release ("Due Thu 22 Oct · Wk 43" on one line + chips) and pushed Planned week and the bin off the right edge on a 1280 px screen: on the board the tag wraps and the column is capped*/
+.wo-table td .due-tags{max-width:78px}.wo-table td .due-tag,.wo-table td .dm-chip{white-space:normal;text-align:left;overflow:visible}
 .dq-w{position:relative;display:inline-block;max-width:100%}
 .dq-in{position:absolute;left:0;bottom:0;width:1px;height:1px;opacity:0;border:0;padding:0;margin:0;pointer-events:none}
 .dq-more{font-family:inherit;font-size:13px;font-weight:700;line-height:1;border:1px solid #cdd5e0;background:#fff;color:#3b4c63;border-radius:5px;padding:3px 7px;min-height:26px;cursor:pointer;vertical-align:middle}
