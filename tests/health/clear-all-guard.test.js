@@ -66,6 +66,18 @@ async function run(browser, { who, answers, pick }) {
     rec('name already set on this tab: no picker, PIN then DELETE, cleared, reason carries the name',
       !r.picker && r.n === 0 && /Mary Office \[office\]/.test((r.S.backups[0] || {}).reason || ''), JSON.stringify({ picker: r.picker, n: r.n, reason: (r.S.backups[0] || {}).reason }));
     await r.D.close();
+    // 8. Manager condition: an already empty board -> just a message; no name, no PIN, no 0-job backup
+    {
+      const S = makeServer({ ...base(), orders: [] }); const D = await device(browser, S, { name: 'A' }); const p = D.page;
+      await p.evaluate(() => { sessionStorage.removeItem('wpfWho'); window.__asked = []; window.prompt = m => { window.__asked.push(String(m)); return m.startsWith('Admin') ? '9000' : 'DELETE'; }; showTab('b'); });
+      await sleep(200);
+      await p.evaluate(() => document.getElementById('btn-clearall').click());
+      await sleep(600);
+      const o = await p.evaluate(() => ({ asked: window.__asked, picker: !!document.getElementById('pick-other'), toast: (document.getElementById('toast') || {}).textContent || '' }));
+      rec('empty board: "Nothing to clear — the board is already empty"; no name picker, no PIN, no backup',
+        !o.picker && o.asked.length === 0 && S.backups.length === 0 && /Nothing to clear — the board is already empty/.test(o.toast), JSON.stringify({ ...o, bak: S.backups.length }));
+      await D.close();
+    }
   } finally { await browser.close(); }
   console.log(res.filter(x => !x).length + ' failed of ' + res.length);
 })().catch(e => { console.error(e); process.exit(1); });
