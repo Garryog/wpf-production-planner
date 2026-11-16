@@ -4,6 +4,45 @@ Newest at the top. Each block must be run in Supabase BEFORE the matching code g
 
 ---
 
+## 2026-11-16 — Pin function search path (health check) — PENDING, NOT YET RUN — low priority, Garry decides
+
+**Why (plain English):** the Supabase security advisor warns "Function Search Path Mutable" on 14 of our database functions. It means
+each function looks tables up by name wherever the database is told to look at that moment; pinning it to our own `public` tables
+closes a small loophole and clears the warning. Nothing in the app changes.
+
+**What it changes:** only a setting on 14 existing functions. No data is touched, no table or column is added (so no GRANT lines).
+Safe to run twice (running it again just sets the same value). Run it in one go in **SQL Editor**:
+
+```sql
+alter function public.production_planner_bump() set search_path = public, pg_temp;
+alter function public.lists_touch() set search_path = public, pg_temp;
+alter function public.pm_key(text) set search_path = public, pg_temp;
+alter function public.pm_no_clash() set search_path = public, pg_temp;
+alter function public.lists_switch_on() set search_path = public, pg_temp;
+alter function public.apply_line_changes(jsonb, text) set search_path = public, pg_temp;
+alter function public.lists_one_per_wo(text[], text[]) set search_path = public, pg_temp;
+alter function public.lists_one_replacement(text, text) set search_path = public, pg_temp;
+alter function public.list_attach(text, text, boolean, text, text, boolean) set search_path = public, pg_temp;
+alter function public.list_set_done(text, text, boolean, text, text, text) set search_path = public, pg_temp;
+alter function public.save_list_revision(jsonb, jsonb, int, text, text) set search_path = public, pg_temp;
+alter function public.production_planner_keep_switch() set search_path = public, pg_temp;
+alter function public.snags_to_list(text[], date, text) set search_path = public, pg_temp;
+alter function public.snag_line_done() set search_path = public, pg_temp;
+```
+
+(`list_attach` uses its current 6-part version — the old 5-part one was dropped in the Stage 3 block. If a line says
+"function ... does not exist", stop and send a screenshot; nothing before it is harmed.)
+
+**Check after running:**
+1. **Advisors → Security** (refresh it): the "Function Search Path Mutable" warning is gone for these 14.
+2. On the planner: make one change on the Capacity Board and see it say Saved; tick one line on a cutting list (saw or stores) and see the tick stay after a refresh.
+
+**Also on the advisor, no SQL here:** 4 functions — `docket_cancel`, `docket_delivered`, `lists_writable`, `make_docket` — are
+SECURITY DEFINER and can be called with the public key. That is by design while the app has no sign-in (the app itself calls them).
+It will be dealt with by the sign-in plan (branch `plan/access-signin-2026-11-11`). Leave those warnings for now.
+
+---
+
 ## 2026-11-10 — Old-screen guard v2 — PENDING, NOT YET RUN — proposal for Garry: run on the dates-and-deliveries go-live day AFTER the new code is live
 
 **Garry decides yes or no.** Not needed for the 10 Nov release.
