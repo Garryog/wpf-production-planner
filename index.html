@@ -2203,15 +2203,16 @@ function renderBoard(app){
   dmBindChips(app); /*dates: due date → Change dates; moved N× → history; check-week chip*/
   const sn=document.getElementById('btn-snap');if(sn)sn.onclick=exportSnapshot;
   const ca=document.getElementById('btn-clearall');
-  if(ca)ca.onclick=async()=>{
+  if(ca)ca.onclick=()=>officeWho(async by=>{ /*health 16 Nov: name first (goes on the backup reason via whoTag), then the Admin PIN*/
+    if(!lsAdminOk())return;
     const typed=prompt('This deletes ALL '+DB.orders.length+' orders from the planner. A safety backup is saved to the database first.\n\nType DELETE to confirm:');
     if(typed!=='DELETE'){if(typed!==null)toast('Not deleted — you must type DELETE');return;}
     if(!await backupFirst('Clear all orders'))return;
     DB.orders=[];DB.grps={};grpSel.clear();
     if(V2())lists().forEach(l=>(l.wos||[]).forEach(w=>listTag(l,w,false)));else lists().forEach(l=>{l.wos=[];});
     Object.keys(orig).forEach(k=>delete orig[k]);Object.keys(origStep).forEach(k=>delete origStep[k]);
-    sched();render();toast('All orders cleared');
-  };
+    sched();render();toast('All orders cleared by '+by);
+  });
   document.querySelectorAll('[data-s]').forEach(th=>th.onclick=()=>{const s=th.dataset.s;if(sortCol===s)sortDir*=-1;else{sortCol=s;sortDir=1;}render();});
   // Every board edit is stamped with the person at this machine (asked once per tab)
   document.querySelectorAll('[data-wsel]').forEach(sel=>sel.onchange=function(){const o=DB.orders.find(x=>x.wo===this.dataset.wsel);const v=this.value;if(o)officeWho(by=>{const was=o.plannedWeek||'';o.plannedWeek=v;if(o.dueMv&&!o.dueMv.prog&&!o.dueMv.loaded)delete o.dueMv;/*dates: week checked by hand (programmed / loaded chips stay until tapped)*/logEdit(o,'Build week '+(was?wkLbl(was):'unscheduled')+' → '+(v?wkLbl(v):'unscheduled'),by);sched();render();},()=>render());});
