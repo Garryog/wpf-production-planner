@@ -163,3 +163,11 @@ The checks below are the ones NOT already on the lists above.
 | list-window final2-hold-roles-phone D8b (Low) | Esc does not close the Materials window when it is opened on its own | later | pending |
 | dates attack6-release B3b | a check about the test file itself (how often it reads the old version), not the app — out of date since the checks were re-pointed on 14 Nov | Tester | pending |
 | dates attack6-release E1, E2b, E3 · stage2 attack-r3 A (2 checks) · stage1 t16 second check | fail the same way on the live version today (run on `main`, 15 Nov) — not caused by this release | — | pending |
+
+## 16 Nov 2026 — checks out of date because Garry asked for "✓ Save & close" (not app faults)
+Garry, 16 Nov: "also need a save and close button". The window now has "Save list → Saw & Stores" (saves, shows the Saved ✓
+panel, as before) AND a big green "✓ Save & close" (saves and closes in one press). Older checks that count exactly ONE Save /
+ONE Close (the word "close" is in the new button), the button count (now one more), or expect `#me-save` to be the full-width
+green button on a phone now fail by design. The new behaviour is tested in `tests/list-window/g16-xl-old-saveclose.test.js`
+(10 checks, pass). Tester to rewrite: attack3-close-keys C1 (1), attack3-roles-archived-simple C2 / C3 (12), final-a-customer-simple
+S6 (1), attack1-layout / attack2-excel-phone / attack3-phone P1 / P10 / final-a-phone "big Save … full width" (8). | pending |

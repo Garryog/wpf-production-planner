@@ -586,3 +586,15 @@ the same results as before. Not yet attacked by the Tester — final round.
 22. **Buttons in the window** (old question 16, "don't know") — see the screenshots. A (recommended) — leave as it is.
     B — move "?" and "Change job" under More.
 Also for Garry: accept or reject the rows marked pending in the "15 Nov 2026 — final round" section of ACCEPTED-FAILURES.
+
+### 16 Nov 2026 (Garry live, screenshot of WO-2659-1 House 22 on the LIVE site)
+- **"These top lines need to be removed when importing a spreadsheet."** On this branch an Excel sheet already replaced the
+  blank standard layout when nothing was typed (his screenshot is the live version). Now the same for **an old list** (Start
+  from… → An old list): it replaces the blank layout too, like a template and an Excel sheet. Anything typed is kept and the
+  rows are added.
+- **"Also need a save and close button."** Built: big green **✓ Save & close** — one press saves and closes, and the message
+  says "Saved ✓ — list is with the Saw & Stores — <name>". The old Save stays (white) and shows the Saved ✓ panel. A warning
+  (list archived on another screen) still shows the panel. On a phone both are thumb-sized, Save & close full width.
+- Tests: new `list-window/g16-xl-old-saveclose` 10/10. 63 files touching the window run on the old and new code side by side:
+  the only differences are the checks listed on ACCEPTED-FAILURES (16 Nov) — counts of Save / Close buttons and the phone's
+  "big Save" being `#me-save`. Not yet re-checked by the Tester or Manager.
