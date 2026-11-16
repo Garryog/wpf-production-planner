@@ -537,7 +537,7 @@ body.del-dragging #del-wkbar .wkb-btn:not(:disabled):not(.nodrop),body.del-dragg
 .me-hs td{background:#eaf0f8}.me-hs td:nth-child(2){padding-left:18px}.me-hsel{width:auto!important;font-size:12px!important;min-height:28px!important}
 .me-bi{text-align:center}.me-bi input{width:20px!important;height:20px;min-height:0!important}.me-buy td{background:#eef8fb}.me-buy .me-st{background:#0b5566;color:#fff}
 .me-card.me-ch:not(.me-cu):not(.me-chs){background:#14335c;color:#fff}.me-card.me-ch:not(.me-cu):not(.me-chs) .me-chd,.me-card.me-ch:not(.me-cu):not(.me-chs) .me-cl>span{color:#fff}.me-card.me-chs{background:#eaf0f8;margin-left:8px}
-.me-card.me-buy{background:#eef8fb}.me-bic{margin-top:4px}.me-chd .me-hsel{min-height:36px!important;font-size:14px!important}
+.me-card.me-buy{background:#eef8fb}.me-bic{margin-top:4px}.me-chd .me-hsel{min-height:40px!important;font-size:16px!important}
 .wl-h1 td{background:#14335c!important;color:#fff!important;font-size:16px!important;font-weight:900;letter-spacing:.2px}
 .chk-bar{padding:4px 10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:13px;color:#14335c;background:#f4fbf6;border-bottom:1px solid var(--border)}.chk-line{font-size:13px}
 .wl-sub td{background:#eaf0f8!important;color:#14335c!important;font-size:13px!important;font-weight:800;padding-left:20px!important;border-top:1px solid var(--b2)}
@@ -3025,7 +3025,7 @@ function lsEditRows(id){ // the typed-list editor's rows, with edging and note k
   let units=null;
   return live.map(x=>{
     const base={lid:x.id,sig:lsLineSig(x),opened:at,ids};
-    if(x.kind==='hdr'){const u=String(x.qty==null?'':x.qty).trim();units=u?+u:null;const h={k:'hdr',item:x.part||'',note:x.note||'',...base};if(u){h.units=u;h.u0=u;}if(String(x.section||'').trim())h.sub=true;return h;}
+    if(x.kind==='hdr'){const u=String(x.qty==null?'':x.qty).trim();if(u||!String(x.section||'').trim()||!units)units=u?+u:null;const h={k:'hdr',item:x.part||'',note:x.note||'',...base};if(u){h.units=u;h.u0=u;}if(String(x.section||'').trim())h.sub=true;return h;} // (16 Nov) a sub-heading with no number keeps the × block it is in
     let q=lsQty(x.qty),fixed=false;
     if(units){const pu=lsPerUnit(x,units);q=lsQty(pu.qty);fixed=pu.fixed;} // one rule for every place: lsPerUnit
     return{k:x.kind,item:x.part||'',qty:q,...(fixed?{fixed:true}:{}),L:x.length_mm==null?'':+x.length_mm,W:x.width_mm==null?'':+x.width_mm,mat:x.material||'',edging:x.edging||'',edging2:x.edging2||'',note:x.note||'',sec:x.section||'',...base};
@@ -3074,7 +3074,7 @@ function lsEditMerge(id,rows,lines){
 function lsBlockTotals(lines){
   let u=null;
   lines.forEach(ln=>{if(!ln||ln._drop)return;
-    if(ln.kind==='hdr'){const q=String(ln.qty==null?'':ln.qty).trim();u=q?q:null;return;}
+    if(ln.kind==='hdr'){const q=String(ln.qty==null?'':ln.qty).trim();if(q||!String(ln.section||'').trim()||u==null)u=q?q:null;return;}/* a sub-heading in a × block stays in it (16 Nov) */
     const uq=String(ln.unit_qty==null?'':ln.unit_qty).trim();if(!uq)return;
     if(u==null){ln.unit_qty='';return;}
     if(uq.toLowerCase()===LS_FIXED)return; // a fixed total: Units never change it
@@ -3086,7 +3086,7 @@ function lsBlockTotals(lines){
 // can't cut half a part. Stores rows may be decimal (half a litre of glue). Refused at save, naming the row.
 function lsHalfTotal(lines){let u=null,n=0;
   for(const ln of lines){if(!ln||ln._drop)continue;n++;
-    if(ln.kind==='hdr'){const q=String(ln.qty==null?'':ln.qty).trim();u=q||null;continue;}
+    if(ln.kind==='hdr'){const q=String(ln.qty==null?'':ln.qty).trim();if(q||!String(ln.section||'').trim()||u==null)u=q||null;continue;}
     const uq=String(ln.unit_qty==null?'':ln.unit_qty).trim(),t=String(ln.qty==null?'':ln.qty).trim();
     if(ln.kind!=='saw'||!/^\d*\.?\d+$/.test(t)||Number.isInteger(+t))continue;
     const nm='Row '+n+' "'+(String(ln.part||'').trim()||'part')+'": ';
@@ -4851,7 +4851,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
   const isStores=r=>r.k==='part'&&!r.buy&&!(lsNum(r.L)>0||lsNum(r.W)>0)&&!lsEmptyRow(r);
   const tagTxt=r=>r.k!=='part'||lsEmptyRow(r)?'':r.buy?'Bought in':isStores(r)?'Stores':'';
   // ---- the unit block each row is in: U[i] = number of units (or null), H[i] = the index of its heading (or -1)
-  const blocks=()=>{const U=[],H=[];let u=null,h=-1;R().forEach((r,i)=>{if(r.k==='hdr'){h=i;u=r.units!==undefined&&r.units!==null?r.units:null;U.push(null);H.push(-1);return;}U.push(u);H.push(h);});return{U,H};};
+  const blocks=()=>{const U=[],H=[];let u=null,h=-1;R().forEach((r,i)=>{if(r.k==='hdr'){if(!(r.sub&&!(r.units!==undefined&&r.units!==null)&&u!=null)){h=i;u=r.units!==undefined&&r.units!==null?r.units:null;}U.push(null);H.push(-1);return;}U.push(u);H.push(h);});return{U,H};}; // (Garry 16 Nov) a sub-heading inside a × block stays in it
   const totalOf=(r,u)=>u==null||r.fixed?String(r.qty==null?'':r.qty).trim():lsMul(r.qty,u);
   // a FIXED row in a unit block: its quantity is the total (it doesn't divide by the units) — shown "fixed" in grey; typing a
   // new quantity makes it per unit again
@@ -4893,9 +4893,9 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     if(r.k==='hdr'){const unit=r.units!==undefined&&r.units!==null,sub=!unit&&!!r.sub;
       return `<tr data-row="${i}" class="me-h${unit?' me-u':''}${sub?' me-hs':''}"><td class="me-n">${i+1}<span class="me-ht">${unit?'Unit':sub?'Sub':'Heading'}</span></td>
         <td><input data-mr="${i}|item" value="${escA(r.item)}" placeholder="${unit?'Unit — e.g. 900 Single Rail + 2 shelves':sub?'Sub-heading — e.g. Fillers and Kickers':'Heading — e.g. House nr 103'}" class="me-b"></td>
-        ${unit?`<td class="me-q"><input data-mr="${i}|units" value="${escA(r.units)}" inputmode="numeric" class="me-b me-w52"${sawStarted&&r.lid?' disabled':''} title="Number of units"> <span class="me-ul">units</span></td>
+        ${unit?`<td class="me-q" style="white-space:nowrap"><span class="me-ul" style="font-weight:800;font-size:15px">×</span> <input data-mr="${i}|units" value="${escA(r.units)}" inputmode="numeric" class="me-b me-w52"${sawStarted&&r.lid?' disabled':''} title="Number of units"> ${sawStarted&&r.lid?'':`<select data-mhs="${i}" class="me-hsel" style="margin-left:6px" title="Stop multiplying: the rows keep their totals"><option value="mul" selected>× Multiply</option><option value="">Heading (no ×)</option><option value="sub">Sub-heading (no ×)</option></select>`}</td>
           <td colspan="5">${sawStarted&&r.lid?`<span class="me-lock">🔒 ${escA(LS_LOCK_MSG)}</span> <button class="btn btn-s" data-mecopy="1" style="font-size:12px;padding:3px 9px">Make new list from this</button>`:'<span class="me-hint">Qty below is for ONE unit — the total to cut is shown beside it</span>'}</td>`
-          :`<td colspan="6"><select data-mhs="${i}" class="me-hsel" title="A heading (the house) or a sub-heading under it (Fillers and Kickers, ISLAND, Utility, Doors FU)"><option value="">Heading</option><option value="sub"${sub?' selected':''}>Sub-heading</option></select></td>`}
+          :`<td colspan="6"><select data-mhs="${i}" class="me-hsel" title="A heading (the house), a sub-heading under it (Fillers and Kickers, ISLAND, Utility, Doors FU), or × Multiply: the rows under it × a number (e.g. Floor 2 × 4)"><option value="">Heading</option><option value="sub"${sub?' selected':''}>Sub-heading</option><option value="mul">× Multiply…</option></select></td>`}
         <td><input data-mr="${i}|note" value="${escA(r.note||'')}" placeholder="Note" ></td><td></td>
         <td>${mvB(i)}<button class="btn btn-s me-x" data-mrx="${i}" title="Delete row">✕</button></td></tr>`;}
     const u=b.U[i],tg=tagTxt(r);
@@ -4915,7 +4915,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
   const cardHTML=(r,i,b)=>{
     const lab=(t,h)=>`<label class="me-cl"><span>${t}</span>${h}</label>`,x=`${mvB(i)}<button class="btn btn-s me-x" data-mrx="${i}" title="Delete row">✕</button>`;
     if(r.k==='hdr'){const unit=r.units!==undefined&&r.units!==null,lock=sawStarted&&r.lid,sub=!unit&&!!r.sub;
-      return `<div class="me-card me-ch${unit?' me-cu':''}${sub?' me-chs':''}" data-row="${i}"><div class="me-chd"><b>${i+1} · ${unit?'Unit':sub?'Sub-heading':'Heading'}</b>${unit?'':`<select data-mhs="${i}" class="me-hsel"><option value="">Heading</option><option value="sub"${sub?' selected':''}>Sub-heading</option></select>`}${x}</div>
+      return `<div class="me-card me-ch${unit?' me-cu':''}${sub?' me-chs':''}" data-row="${i}"><div class="me-chd"><b>${i+1} · ${unit?'Unit':sub?'Sub-heading':'Heading'}</b>${sawStarted&&r.lid&&unit?'':`<select data-mhs="${i}" class="me-hsel"><option value=""${!unit&&!sub?' selected':''}>Heading</option><option value="sub"${sub?' selected':''}>Sub-heading</option><option value="mul"${unit?' selected':''}>× Multiply…</option></select>`}${x}</div>
         ${lab(unit?'Unit name':sub?'Sub-heading':'Heading',`<input data-mr="${i}|item" value="${escA(r.item)}" class="me-b">`)}
         ${unit?lab('Units',`<input data-mr="${i}|units" value="${escA(r.units)}" inputmode="numeric" class="me-b"${lock?' disabled':''}>`)+(lock?`<div class="me-lock">🔒 ${escA(LS_LOCK_MSG)}</div><button class="btn btn-s" data-mecopy="1" style="margin-top:4px">Make new list from this</button>`:'<div class="me-hint">Qty in the rows below is for ONE unit</div>'):''}
         ${lab('Note',`<input data-mr="${i}|note" value="${escA(r.note||'')}">`)}</div>`;}
@@ -5058,7 +5058,19 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     });
     ov.querySelectorAll('[data-mrx]').forEach(b=>b.onclick=()=>delRow(+b.dataset.mrx));
     ov.querySelectorAll('[data-mup]').forEach(b=>b.onclick=()=>moveRow(+b.dataset.mup,-1));ov.querySelectorAll('[data-mdn]').forEach(b=>b.onclick=()=>moveRow(+b.dataset.mdn,1));
-    ov.querySelectorAll('[data-mhs]').forEach(e=>e.onchange=()=>{const i=+e.dataset.mhs,r=R()[i];if(!r)return;keep();snap();if(e.value==='sub')r.sub=true;else delete r.sub;st.focus=i+'|item';draw();});
+    ov.querySelectorAll('[data-mhs]').forEach(e=>e.onchange=()=>{const i=+e.dataset.mhs,r=R()[i];if(!r)return;keep();
+      const wasU=r.units!==undefined&&r.units!==null;
+      /* (Garry 16 Nov: "the option for multiplying needs to be inside the cutting list") × Multiply on any heading: the rows under it
+         (and under its sub-headings) are × that number — the quantity typed is for ONE, the total is shown beside it and goes to the
+         saw. Changing the number later changes every total. Back to Heading / Sub-heading: the rows keep their TOTALS. */
+      if(e.value==='mul'){if(wasU){draw();return;}
+        const v=prompt('Multiply the rows under "'+(String(r.item||'').trim()||'this heading')+'" by how many?\n\n(e.g. 4 = four apartments on this floor. The quantities in the rows are then for ONE — the totals are worked out.)','2');
+        if(v===null){draw();return;}const n=String(v).trim();if(!/^\d+$/.test(n)||+n<1||+n>500){toast('Not changed — a whole number from 1 to 500');draw();return;}
+        snap();r.units=n;delete r.sub;st.unitsOn=true;st.focus=i+'|units';draw();toast('"'+(String(r.item||'').trim()||'Heading')+'" × '+n+' — every row under it is now × '+n);return;}
+      snap();
+      if(wasU){if(sawStarted&&r.lid){draw();return;}const u=r.units,B=blocks();R().forEach((x,j)=>{if(B.H[j]===i&&x.k==='part'){if(!x.fixed)x.qty=lsMul(x.qty,u);delete x.fixed;}});delete r.units;delete r.u0;
+        toast('No longer × '+u+' — the rows keep their totals');}
+      if(e.value==='sub')r.sub=true;else delete r.sub;st.focus=i+'|item';draw();});
     ov.querySelectorAll('[data-mbuy]').forEach(e=>e.onchange=()=>{const i=+e.dataset.mbuy,r=R()[i];if(!r)return;snap();if(e.checked)r.buy=true;else delete r.buy;
       const tr=e.closest('[data-row]');if(tr)tr.classList.toggle('me-buy',!!r.buy);updTag(i);});
     const g=id=>ov.querySelector('#'+id);
@@ -5246,7 +5258,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       try{if(!LST.full.has(tid))await lsReloadList(tid);}catch(e){body.innerHTML='<span style="color:var(--red)">Could not load the template — '+escA(e.message)+'</span>';return;}
       const t=lsList(tid),lines=lsLinesOf(tid).filter(x=>x.removed_rev==null&&x.status!=='na');
       const blocks0=[];let cur=null;
-      lines.forEach(x=>{if(x.kind==='hdr'){cur=String(x.qty==null?'':x.qty).trim()?{name:x.part||'',units:+x.qty||1,parts:[]}:null;if(cur)blocks0.push(cur);return;}if(cur)cur.parts.push(x);});
+      lines.forEach(x=>{if(x.kind==='hdr'){if(!String(x.qty==null?'':x.qty).trim()&&String(x.section||'').trim()&&cur)return;/* a sub-heading in a × block stays in it (16 Nov) */cur=String(x.qty==null?'':x.qty).trim()?{name:x.part||'',units:+x.qty||1,parts:[]}:null;if(cur)blocks0.push(cur);return;}if(cur)cur.parts.push(x);});
       if(!blocks0.length&&!st.unitsOn){ // a house-type template (Aspect / O'Malleys): its rows go in as they are — headings, sub-headings, bought-in; change anything for this house
         const add=lines.map(x=>x.kind==='hdr'?{k:'hdr',item:x.part||'',note:x.note||'',...(String(x.section||'').trim()?{sub:true}:{})}
           :{k:'part',item:x.part||'',qty:x.qty==null?'':String(x.qty),L:x.length_mm==null?'':String(+x.length_mm),W:x.width_mm==null?'':String(+x.width_mm),mat:x.material||'',edging:x.edging||'',edging2:x.edging2||'',note:x.note||'',...(x.kind==='buy'?{buy:true}:{})});
@@ -5257,7 +5269,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
            become sub-headings under it. The quantities are TOTALS once in: change them like any row. */
         const tnm=t.typeName||t.name;
         body.innerHTML=`<div style="font-weight:800;color:#14335c;font-size:16px;margin-bottom:6px">📐 ${escA(tnm)} · Rev ${+t.rev||1}</div>
-          <div style="font-size:12px;color:var(--t3);margin-bottom:8px">${add.filter(r=>r.k==='part').length} rows. Put it in once, or several times over (e.g. 4 apartments on Floor 2) — every quantity is multiplied.</div>
+          <div style="font-size:12px;color:var(--t3);margin-bottom:8px">${add.filter(r=>r.k==='part').length} rows. Put it in once, or several times over (e.g. 4 apartments on Floor 2). The list shows it as “Floor 2 × 4” — the totals are worked out, and the × can be changed in the list later.</div>
           <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end"><div><label style="font-size:13px;font-weight:700;display:block">How many?</label><input id="it-hn" value="1" inputmode="numeric" style="${LS_INP};width:80px;font-size:15px"></div>
           <div style="flex:1;min-width:180px"><label style="font-size:13px;font-weight:700;display:block">Name it <span style="font-weight:400;color:var(--t3)">(optional — e.g. Floor 2)</span></label><input id="it-hname" maxlength="80" placeholder="e.g. Floor 2" style="${LS_INP};width:100%;font-size:15px"></div></div>
           <div id="it-err" style="color:#b42318;font-weight:700;font-size:13px;min-height:18px"></div>
@@ -5266,17 +5278,18 @@ function openListEditor2(listId,presetWo,presetPid,opt){
         const go=()=>{
           const n=String(hn.value||'').trim(),nm=String(body.querySelector('#it-hname').value||'').replace(/\s+/g,' ').trim();
           if(!/^\d+$/.test(n)||+n<1||+n>500){body.querySelector('#it-err').textContent='How many? A whole number from 1 to 500.';hn.focus();return;}
-          const k=+n;let odd=0;
+          const k=+n,blk=k>1||!!nm;let odd=0;
+          /* (Garry 16 Nov) × N and/or a name → a × block IN the list: a heading "Floor 2" × 4 with the template under it (its headings
+             become sub-headings). The quantities stay as in the template (for ONE); the totals are worked out and change if the
+             number is changed later in the list. */
           const rows=add.map(r=>{const x=Object.assign({},r);
-            if(nm&&x.k==='hdr')x.sub=true; // the template's headings sit under the new name
-            if(k>1&&x.k==='part'){const q=String(x.qty==null?'':x.qty).trim();
-              if(/^\d+(\.\d+)?$/.test(q))x.qty=String(Math.round(+q*k*1000)/1000);
-              else if(q||x.item){odd++;x.note=(x.note?x.note+' · ':'')+'⚠ ×'+k+' — check qty';}}
+            if(blk&&x.k==='hdr'){x.sub=true;delete x.units;}
+            if(k>1&&x.k==='part'&&!x.buy){const q=String(x.qty==null?'':x.qty).trim();if(q&&!/^\d+(\.\d+)?$/.test(q)){odd++;x.note=(x.note?x.note+' · ':'')+'⚠ ×'+k+' — check qty';}}
             return x;});
-          if(nm)rows.unshift({k:'hdr',item:nm,note:k>1?tnm+' × '+k:tnm});
+          if(blk){rows.unshift({k:'hdr',item:nm||tnm,units:String(k),note:nm?tnm:''});st.unitsOn=true;}
           snap();const c=curRow(),at=c<0?R().length:endOfBlock(c),drop=blankAll()?R().length:0,at2=drop?0:at; // (Garry 13 Nov) nothing typed yet — the blank standard headings and rows are replaced by the template, not left above it
           R().splice(at2,drop,...rows);dl.remove();st.focus=at2+'|item';draw();
-          toast('Added '+(nm?'"'+nm+'" — ':'')+'template '+tnm+(k>1?' × '+k+' (every quantity × '+k+')':'')+(odd?' — '+odd+' row'+(odd!==1?'s':'')+' with a quantity that is not a number: check them (⚠ in the note)':'')+(drop>1?' — the blank rows were replaced':''));};
+          toast('Added '+(nm?'"'+nm+'" — ':'')+'template '+tnm+(k>1?' × '+k+' (the totals are worked out — change × '+k+' in the list any time)':'')+(odd?' — '+odd+' row'+(odd!==1?'s':'')+' with a quantity that is not a number: check them (⚠ in the note)':'')+(drop>1?' — the blank rows were replaced':''));};
         body.querySelector('#it-hok').onclick=go;
         [hn,body.querySelector('#it-hname')].forEach(e=>e.onkeydown=ev=>{if(ev.key==='Enter'){ev.preventDefault();go();}});
         return;}
@@ -5331,7 +5344,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     if(st.tpl&&!String(st.name||'').trim())return err('Give the template a name.');
     let rows=R().filter(r=>!lsEmptyRow(r)); // empty rows (nothing typed) are left out, as in Excel
     const
-      b=(()=>{const U=[];let u=null;rows.forEach(r=>{if(r.k==='hdr'){u=r.units!==undefined&&r.units!==null?r.units:null;U.push(null);}else U.push(u);});return U;})();
+      b=(()=>{const U=[];let u=null;rows.forEach(r=>{if(r.k==='hdr'){if(!(r.sub&&!(r.units!==undefined&&r.units!==null)&&u!=null))u=r.units!==undefined&&r.units!==null?r.units:null;U.push(null);}else U.push(u);});return U;})();
     const at=r=>' (row '+(R().indexOf(r)+1)+')';
     for(const r of rows){if(r.k!=='hdr')continue;
       if(!String(r.item||'').trim())return err('Type the heading or delete the row'+at(r)+'.');
@@ -6275,9 +6288,9 @@ function lsEdLines(rows){
   let sec='',top='',units=null;
   return (rows||[]).map(r=>{
     let ln;
-    if(r.k==='hdr'){sec=s(r.item);units=r.units!==undefined&&r.units!==null?s(r.units):null;
+    if(r.k==='hdr'){sec=s(r.item);if(!(r.sub&&!(r.units!==undefined&&r.units!==null)&&units!==null&&top))units=r.units!==undefined&&r.units!==null?s(r.units):null; // (16 Nov) a sub-heading inside a × block keeps the block's multiplier
       // a sub-heading ("Fillers and Kickers") is stored with section = the house heading above it ("House nr 103")
-      ln={kind:'hdr',section:r.sub&&top?top:'',part:s(r.item),note:s(r.note)};if(units!==null)ln.qty=units;if(!(r.sub&&top))top=s(r.item);}
+      ln={kind:'hdr',section:r.sub&&top?top:'',part:s(r.item),note:s(r.note)};if(r.units!==undefined&&r.units!==null)ln.qty=s(r.units);/* only the × heading itself carries the number, not a sub-heading in its block */if(!(r.sub&&top))top=s(r.item);}
     else{ // 'part': Saw if it has a length or width; old-shape rows (k 'saw' / 'fit') keep their kind
       const kind=r.buy||r.k==='buy'?'buy':r.k==='saw'||r.k==='fit'?r.k:n(r.L)>0||n(r.W)>0?'saw':'fit',inU=units!==null; // "Bought in" ticked: never the saw or stores
       ln={kind,section:sec||s(r.sec),part:s(r.item),qty:inU&&!r.fixed?lsMul(r.qty,units):s(r.qty),unit_qty:inU?(r.fixed?LS_FIXED:s(r.qty)):'',material:s(r.mat),edging:s(r.edging),edging2:s(r.edging2),note:s(r.note)};

@@ -619,3 +619,16 @@ Also for Garry: accept or reject the rows marked pending in the "15 Nov 2026 —
   Test `list-window/g16-template-times` 11/11; 5 template test files updated for the extra Insert press / new toast wording
   (incl. the Tester's attack4-blank-replace helper) — same results as before.
 - Tester round 4 findings (8 Medium, 8 Low) are still open for the Coder — next step.
+- **Garry, 16 Nov (live): "the option for multiplying needs to be inside the cutting list".** Changed: the multiply now lives IN
+  the list as a **× block**, not a one-off multiplication at insert.
+  - Any heading's type box has **Heading / Sub-heading / × Multiply…**. × Multiply asks how many (1–500); the rows under that
+    heading — and under its sub-headings — are then × that number: the quantity typed is for ONE, the total shows beside it
+    ("= 12") and is what the saw / stores / labels get. The × number can be changed any time in the list; every total follows.
+    Turning it back to Heading / Sub-heading keeps the TOTALS. Ctrl+Z works.
+  - A template brought in with How many? 4 / Name it "Floor 2" now becomes "Floor 2 × 4" in the list (template headings under
+    it as sub-headings, quantities for ONE).
+  - Underneath: a sub-heading inside a × block stays in the block (it used to end it) — in the window, the save check, the saved
+    lines (`lsEdLines`, `lsBlockTotals`, `lsHalfTotal`), reopening (`lsEditRows`) and a template with a × block. Only the ×
+    heading stores the number. Existing lists keep their totals (a reopened row divides back only when it divides exactly).
+  - Test `g16-template-times` rewritten, 17/17. 84 related files run old vs new: one phone check (heading-type box 36 px) fixed
+    to 40 px; no other difference.
