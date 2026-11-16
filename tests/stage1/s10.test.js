@@ -5,7 +5,7 @@ const res = []; const rec = (n, ok, d) => { res.push(ok); console.log((ok ? 'PAS
   const S = makeServer({ id: 'main', version: 1, orders: [H.order({ wo: 'WO-1-1', delv: true, delVeh: 'v1', delDay: 'Mon' }), H.order({ wo: 'WO-1-2' })], nid: 3, settings: {} });
   const A = await open(browser, S, {});
   const msgs = await A.page.evaluate(async () => {
-    const seen = []; window.confirm = m => { seen.push(m); return true; }; window.prompt = m => { seen.push(m); return 'DELETE'; };
+    const seen = []; window.confirm = m => { seen.push(m); return true; }; window.prompt = m => { if (/^Admin PIN/.test(m)) return '9000'; seen.push(m); return 'DELETE'; }; // health 16 Nov: Clear all asks the Admin PIN first
     showTab('d'); document.getElementById('btn-delreset').click(); await new Promise(r => setTimeout(r, 800));
     showTab('b'); const b = document.getElementById('btn-clearall'); if (b) { b.click(); await new Promise(r => setTimeout(r, 800)); }
     return seen;
@@ -17,7 +17,7 @@ const res = []; const rec = (n, ok, d) => { res.push(ok); console.log((ok ? 'PAS
   rec('clear all still works', S.row.orders.length === 0, S.row.orders.length + '');
   // backup failure -> asked, can cancel
   S.noBackupTable = true; S.row.orders = [H.order({ wo: 'WO-9' })]; S.row.version++;
-  const r = await A.page.evaluate(async () => { await loadDB(); const seen = []; window.confirm = m => { seen.push(m); return !/FAILED/.test(m); }; window.prompt = () => 'DELETE'; showTab('b'); document.getElementById('btn-clearall').click(); await new Promise(r => setTimeout(r, 800)); return { seen, n: DB.orders.length }; });
+  const r = await A.page.evaluate(async () => { await loadDB(); const seen = []; window.confirm = m => { seen.push(m); return !/FAILED/.test(m); }; window.prompt = m => /^Admin PIN/.test(m) ? '9000' : 'DELETE'; showTab('b'); document.getElementById('btn-clearall').click(); await new Promise(r => setTimeout(r, 800)); return { seen, n: DB.orders.length }; });
   rec('backup failure: user asked, cancel keeps data', r.n === 1 && r.seen.some(m => /FAILED/.test(m)), JSON.stringify(r).slice(0, 200));
   await browser.close();
   console.log(res.filter(x => !x).length + ' failed of ' + res.length);
