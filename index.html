@@ -4963,6 +4963,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
         ${pjDiff?`<div class="wo-info"><div class="wc"><label>Project</label><div class="wo-ro" id="me-pjro" title="${escA(pjN)}">${escA(pjN)}</div></div></div>`:''}
         <div><label>${st.tpl?'Template name':'List name (optional)'}</label><input id="me-name" value="${escA(st.name)}" placeholder="e.g. Kitchen — Type B" title="${st.tpl?'The template\'s name':'A name for this list — any words, searchable later. Left blank, the list is named after its work order'}" style="${inp};width:170px"></div>
         ${st.tpl?typeHTML:''}
+        ${lwDelHTML()}
         <span style="flex:1"></span>
         ${sim?'<button class="btn btn-s" id="me-jobtog" style="font-size:12px;white-space:nowrap" title="Pick a different work order or project for this list">Change job ▾</button>':''}
         <details class="me-more me-start" id="me-start"${st.startOpen?' open':''}><summary class="btn btn-s" style="font-size:13px;white-space:nowrap" title="Fill this list from a template, an Excel file or an old list — or just type the rows below">Start from… ▾</summary><div class="me-morep">
@@ -5093,6 +5094,16 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     on('me-instpl',()=>{keep();stOff();insTpl();});
     on('me-jobtog',()=>{keep();st.jobOpen=true;draw();const w=g('me-wo');if(w)w.focus();});
     on('me-findold',()=>{keep();stOff();lsFindDlg(st.pid||'',useOld);});
+    {const dd=g('me-deld'),dv=g('me-delv');if(dd)dd.onchange=()=>{st.delD=dd.value;};if(dv)dv.onchange=()=>{st.delV=dv.value;};}
+    on('me-delgo',()=>{keep();const o=lwDelO(),m=g('me-delmsg'),say=(t,bad)=>{if(m){m.textContent=t;m.style.color=bad?'#b42318':'#14335c';}};if(!o)return;
+      const d=(g('me-deld')||{}).value||'',v=(g('me-delv')||{}).value||'';
+      if(!d||!v){say('Pick the delivery day AND the van, then 🚚 Book.',true);return;}
+      const day=DEL_DAYS[(new Date(d+'T12:00:00').getDay()+6)%7];if(!day){say(fmt(d)+' is a Sunday — no deliveries on a Sunday.',true);return;}
+      if(isOnHold(o)){say(o.wo+' is on hold in Cienapps — it cannot go on a van until it is off hold.',true);return;}
+      if(!o.delv){o.delv=true;delvMark(o);logEdit(o,'Ticked for delivery from the cutting list window',whoNow());} // (Garry 16 Nov) booking a van puts the job on the Deliveries page
+      st.delD=null;st.delV=null;say('Booking…');
+      placeJobs([o],v,day,wkOf(d)); // the same booking as the Deliveries page: name asked, a move asks why, bank holidays asked
+      const want=v+'|'+day+'|'+wkOf(d),t0=Date.now(),tick=()=>{if(!document.body.contains(ov))return;if((o.delVeh+'|'+o.delDay+'|'+slotWk(o))===want){draw();toast(o.wo+' booked: '+slotLbl(v,day,wkOf(d))+' ✓');return;}if(Date.now()-t0<120000)setTimeout(tick,400);else draw();};setTimeout(tick,300);});
     {const sd=g('me-start');if(sd)sd.ontoggle=()=>{st.startOpen=sd.open;};}
     on('me-impxl',()=>{keep();const fx=g('me-xlfile');if(fx){fx.value='';fx.click();}stOff();});
     const xf=g('me-xlfile');if(xf)xf.onchange=()=>{const f=xf.files[0];if(f)impXl(f);};
@@ -5218,6 +5229,11 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     R().splice(at,drop,...add);if(add.some(r=>r.k==='hdr'&&r.units!=null))st.unitsOn=true;st.focus=at+'|item';draw();
     toast('Added '+add.length+' row'+(add.length!==1?'s':'')+' from "'+l.name+'"'+(again?' again (now in twice — Ctrl+Z takes them out)':'')+' — change anything for this job, then Save');
   };
+  const lwDelO=()=>!st.tpl&&!st.newWO&&st.wo?DB.orders.find(x=>x.wo===st.wo):null;
+  const lwDelHTML=()=>{const o=lwDelO();if(!o)return'';const bk=o.delDay?slotLbl(o.delVeh,o.delDay,slotWk(o)):'';
+    if(!(ROLE==='prod'||ROLE==='admin'))return bk?`<div><label>Delivery</label><div class="wo-ro" id="me-delro" title="Booked on the Deliveries page">🚚 ${escA(bk)}</div></div>`:''; // (Garry 16 Nov) Production Manager books; everyone else sees it
+    const di=o.delDay?addDayISO(slotWk(o),DEL_DAYS.indexOf(o.delDay)):'';
+    return `<div id="me-delbk"><label>Delivery (Production Manager)</label><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><input type="date" id="me-deld" value="${escA(st.delD!=null?st.delD:di)}" style="${LS_INP}" title="The delivery day"><select id="me-delv" style="${LS_INP}" title="The van"><option value="">— van —</option>${DEL_VEH.map(v=>`<option value="${escA(v.k)}"${(st.delV!=null?st.delV:o.delVeh)===v.k?' selected':''}>${escA(v.n)}</option>`).join('')}</select><button class="btn btn-s" id="me-delgo" style="font-size:12px;white-space:nowrap" title="Books this job on that van and day on the Deliveries page now — separate from saving the list">🚚 Book</button></div><div id="me-delmsg" style="font-size:12px;color:${bk?'#0d6e46':'var(--t3)'};margin-top:2px">${bk?'Booked: '+escA(bk):'Not booked yet'}</div></div>`;};
   const blankAll=()=>R().length>0&&R().every(r=>r.k==='hdr'?!String(r.note||'').trim():(lsEmptyRow(r)&&!String(r.mat||'').trim()&&!r.buy)); // no part row has anything typed, picked or ticked, and no heading has a note: only the blank layout is there
   const insTpl=()=>{
     if(!st.pid){ov.querySelector('#me-err').textContent='Pick the project first — templates belong to a project.';return;}
@@ -5532,9 +5548,10 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     const cnt=st.tpl?'':[(+l.saw?l.saw+' saw row'+(+l.saw!==1?'s':''):'no cutting'),(+l.fit?l.fit+' Stores row'+(+l.fit!==1?'s':''):'no Stores'),wo?escA(wo):''].filter(Boolean).join(' · ');
     ov.classList.add('me-dov');
     ov.innerHTML=`<div class="pod-in me-done"><div class="me-dok${wait||arc||tarc?' me-dw':''}" id="me-dok">${h}</div><div class="me-dl"><b>${escA(l.name||'')}</b>${cnt?'<br>'+cnt:''}${arc?'<br>If the saw needs it: Lists → Archived → ⧉ Copy.':''}${d.retiredMsg?'<br>'+escA(d.retiredMsg):''}</div>
-      <button class="btn btn-g" id="me-dclose">Close</button><button class="btn btn-s" id="me-dagain">Edit it again</button></div>`;
+      <button class="btn btn-g" id="me-dclose">Close</button><button class="btn btn-s" id="me-dview" title="The whole list as the saw and stores will see it — check it is all correct">👁 View the list</button><button class="btn btn-s" id="me-dagain">Edit it again</button></div>`;
     const c=ov.querySelector('#me-dclose');c.onclick=()=>ov.remove();c.focus();
     ov.querySelector('#me-dagain').onclick=()=>{ov.remove();openListEditor(l.id);};
+    ov.querySelector('#me-dview').onclick=()=>{ov.remove();lsViewDlg(l.id);}; // (Garry 16 Nov) check the saved list
   };
   const escH=e=>{if(!document.body.contains(ov)){document.removeEventListener('keydown',escH);return;}
     if(e.key==='Tab'&&!e.defaultPrevented){const os=[...document.querySelectorAll('.pod-ovl')],tp=os.pop();if(tp!==ov&&os.pop()===ov)tabWrap(tp,e);return;} // (attack3 F1) a little window open over the list (old-list finder, materials…): Tab stays in IT
@@ -6985,13 +7002,14 @@ function printLabels(lsArr,mode){
   if(!w){toast('Pop-up blocked — allow pop-ups for this site to print labels');return;}
   w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>WPF Location Labels</title><style>
   *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:Arial,sans-serif;padding:6mm}
-  .sheet{display:grid;grid-template-columns:1fr 1fr;gap:4mm}
-  .lb{border:1.6px dashed #555;border-radius:3mm;padding:4mm 5mm;height:62mm;overflow:hidden;page-break-inside:avoid;display:flex;flex-direction:column}
+  body{font-family:Arial,sans-serif;background:#ddd}
+  /* (Garry 16 Nov) the Zebra roll: 101.6 × 63.5 mm labels — ONE label per label, one under the other (was 2 across an A4 sheet) */
+  .sheet{display:flex;flex-direction:column;align-items:center;gap:4mm;padding:4mm 0}
+  .lb{background:#fff;width:101.6mm;height:63.5mm;padding:3mm 4mm;overflow:hidden;page-break-inside:avoid;break-inside:avoid;display:flex;flex-direction:column;border:1px solid #bbb}
   .lb-hd{background:#14335c;color:#fff;border-style:solid;border-color:#14335c}
   .lb-top{font-size:9px;letter-spacing:.6px;text-transform:uppercase;color:#888}
   .lb-hd .lb-top{color:#cbd5e6}
-  .lb-house{font-size:30px;font-weight:800;color:#14335c;line-height:1.05;margin:1mm 0}
+  .lb-house{font-size:28px;font-weight:800;color:#14335c;line-height:1.05;margin:0.5mm 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .lb-hd .lb-house{color:#fff}
   .lb-cust{font-size:13px;font-weight:700;color:#1450a8;margin-bottom:1mm}
   .lb-hd .lb-cust{color:#e8b931}
@@ -7006,7 +7024,7 @@ function printLabels(lsArr,mode){
   .fu-p{margin-left:4mm;font-size:12px;color:#14335c}.fu-p b{font-size:15px}
   .lb-hd .fu-p{color:#fff}
   .lb-hd .lb-wos{color:#cbd5e6}
-  @media print{@page{size:A4 portrait;margin:8mm} body{padding:0}}
+  @media print{@page{size:101.6mm 63.5mm;margin:0} body{background:#fff} .sheet{display:block;padding:0} .lb{border:0;page-break-after:always;break-after:page}.lb:last-child{page-break-after:auto;break-after:auto} .lb-hd{background:#fff;color:#000;border:1.2mm solid #000} .lb-hd .lb-house,.lb-hd .lb-cust,.lb-hd .fu-p{color:#000} .lb-hd .lb-top,.lb-hd .lb-sub,.lb-hd .lb-wos{color:#333}}
   </style></head><body><div class="sheet">${labels}</div><script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script></body></html>`);
   w.document.close();
 }

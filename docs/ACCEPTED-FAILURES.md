@@ -171,3 +171,4 @@ ONE Close (the word "close" is in the new button), the button count (now one mor
 green button on a phone now fail by design. The new behaviour is tested in `tests/list-window/g16-xl-old-saveclose.test.js`
 (10 checks, pass). Tester to rewrite: attack3-close-keys C1 (1), attack3-roles-archived-simple C2 / C3 (12), final-a-customer-simple
 S6 (1), attack1-layout / attack2-excel-phone / attack3-phone P1 / P10 / final-a-phone "big Save … full width" (8). | pending |
+| list-window attack3-roles-archived-simple "(info) C4 Production Manager … no typing box outside the rows except List name" (2) | Garry, 16 Nov: the Production Manager books the delivery date + van from the list window, so his window has a date box | Tester rewrite, final round | pending |

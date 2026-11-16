@@ -598,3 +598,15 @@ Also for Garry: accept or reject the rows marked pending in the "15 Nov 2026 —
 - Tests: new `list-window/g16-xl-old-saveclose` 10/10. 63 files touching the window run on the old and new code side by side:
   the only differences are the checks listed on ACCEPTED-FAILURES (16 Nov) — counts of Save / Close buttons and the phone's
   "big Save" being `#me-save`. Not yet re-checked by the Tester or Manager.
+- **Garry, 16 Nov (live), three more:**
+  1. **Labels "should be one row".** The Zebra roll is **101.6 × 63.5 mm** (Garry). Labels now print ONE per label, one under
+     the other (was two across an A4 sheet); each printed page is exactly 101.6 × 63.5 mm (checked by printing to PDF). The pack
+     label prints as a thick black frame instead of a solid dark block (a Zebra prints black only). Screen preview is one column.
+  2. **"View the list after you add it as a check."** The Saved ✓ panel has **👁 View the list** — the whole saved list as the
+     saw and stores see it, with 🖨 Print. (Garry chose this over Save & close opening it.)
+  3. **"Assign it to a delivery date and vehicle" — Production Manager only (Garry).** His list window has *Delivery (Production
+     Manager)*: date + van + 🚚 Book. It books straight away (separate from saving the list) using the Deliveries page's own
+     booking: the job is ticked for delivery if it wasn't, his name is asked, moving an existing booking asks why, bank holidays
+     ask, Sundays and on-hold jobs are refused. Every other screen sees "Delivery: 🚚 Volvo Tue 27 Oct" read-only when booked.
+  - Test `list-window/g16-labels-view-delivery` 19/19. 67 related files old vs new: only 2 "(info)" checks differ (the
+    Production Manager now has a date box) — on ACCEPTED-FAILURES. Tester and Manager have not reviewed today's changes yet.
