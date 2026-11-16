@@ -75,10 +75,10 @@ const set = (k, v) => `(()=>{const e=document.querySelector('.pod-ovl [data-mr="
   // ---- Insert from template: a house-type template goes in whole (headings, sub-headings, bought in)
   await pg.evaluate(() => { openListEditor(null, 'WO-2', 'P1'); document.getElementById('me-instpl').click(); });
   await F.sleep(100);
-  await pg.evaluate(() => document.querySelector('[data-itt="T1"]').click());
+  await pg.evaluate(() => document.querySelector('[data-itt="T1"]').click()); await new Promise(r => setTimeout(r, 600)); await pg.evaluate(() => { const hk = document.getElementById('it-hok'); if (hk) hk.click(); }); // (16 Nov) How many? / Name it → Insert
   await F.sleep(400);
   const ins = await pg.evaluate(() => { const ov = document.querySelector('.pod-ovl'); return { n: document.querySelectorAll('.pod-ovl').length, rows: [...ov.querySelectorAll('[data-row]')].map(r => r.className.replace(/\s+/g, ' ') + ':' + (r.querySelector('[data-mr$="|item"]') || {}).value), buy: (ov.querySelector('[data-mbuy="3"]') || {}).checked, t: document.getElementById('toast').textContent }; });
-  rec('Insert from template (house type): the whole template goes in, no "how many units" question', ins.n === 1 && ins.rows.length === 5 && /Added 5 rows from template Type A/.test(ins.t), J(ins));
+  rec('Insert from template (house type): the whole template goes in, no "how many units" question', ins.n === 1 && ins.rows.length === 5 && /Added template Type A/.test(ins.t) /* (16 Nov) the toast wording changed with How many? / Name it */, J(ins));
   rec('…headings stay headings / sub-headings and Bought in stays ticked', /me-h/.test(ins.rows[0]) && /me-hs/.test(ins.rows[1]) && ins.buy === true, J(ins.rows));
   await pg.evaluate(() => document.querySelectorAll('.pod-ovl').forEach(x => x.remove()));
   // ---- phone: Heading / Sub-heading box and the Bought in tick are on the cards

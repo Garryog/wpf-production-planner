@@ -6,7 +6,7 @@
 const L = require('./lw.js');
 const { X, sleep, rec, closeAll, asks, setv, rows } = L;
 const insert = async (p, tid) => { await p.evaluate(() => { const d = document.getElementById('me-start'); if (d) { d.open = true; d.dispatchEvent(new Event('toggle')); } document.getElementById('me-instpl').click(); }); await sleep(500);
-  await p.evaluate(tid => { const o = [...document.querySelectorAll('.pod-ovl')].pop(); o.querySelector('[data-itt="' + tid + '"]').click(); }, tid); await sleep(900); };
+  await p.evaluate(tid => { const o = [...document.querySelectorAll('.pod-ovl')].pop(); o.querySelector('[data-itt="' + tid + '"]').click(); }, tid); await sleep(900); await p.evaluate(() => { const hk = document.getElementById('it-hok'); if (hk) hk.click(); }); await sleep(300); }; // (16 Nov) How many? / Name it → Insert
 (async () => {
   const browser = await X.H.chromium.launch();
   try {

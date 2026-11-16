@@ -610,3 +610,12 @@ Also for Garry: accept or reject the rows marked pending in the "15 Nov 2026 —
      ask, Sundays and on-hold jobs are refused. Every other screen sees "Delivery: 🚚 Volvo Tue 27 Oct" read-only when booked.
   - Test `list-window/g16-labels-view-delivery` 19/19. 67 related files old vs new: only 2 "(info)" checks differ (the
     Production Manager now has a date box) — on ACCEPTED-FAILURES. Tester and Manager have not reviewed today's changes yet.
+- **Garry, 16 Nov (live): "an option to multiply a template by a quantity and name it, for example Floor 2".** Built: picking a
+  house-type template (Start from… → A template) now asks **How many?** (1) and **Name it** (optional, e.g. Floor 2) → Insert.
+  × N multiplies every number quantity (a quantity that is not a number, e.g. "as drawn", is left as typed and flagged
+  "⚠ ×N — check qty" in its note); with a name the rows go under a heading of that name (note "Type 2 × 4") and the template's
+  own headings become sub-headings under it. Once in, the quantities are ordinary totals. The unit-block template path ("How
+  many units?") also gets a Name box. Ctrl+Z takes the whole insert out. 1 + no name = exactly as before (one extra Insert press).
+  Test `list-window/g16-template-times` 11/11; 5 template test files updated for the extra Insert press / new toast wording
+  (incl. the Tester's attack4-blank-replace helper) — same results as before.
+- Tester round 4 findings (8 Medium, 8 Low) are still open for the Coder — next step.
