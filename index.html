@@ -1151,7 +1151,7 @@ async function loadDB(){
     if(!DB.loaded)DB.loadFailed=true;
   }
 }
-function whoTag(){return((whoNow()||'').trim()||'?')+' ['+(ROLE||'?')+']';}
+function whoTag(n){return((n||whoNow()||'').trim()||'?')+' ['+(ROLE||'?')+']';}
 // One save round: PATCH only if the database is still at our version; otherwise merge and go again.
 async function pushPlan(){
   for(let i=0;i<6;i++){
@@ -1315,11 +1315,11 @@ function bakErrText(r,t){return /planner_backups|42P01|PGRST205|PGRST202/.test(t
 // Every backup (database copy or download) leaves out the lists switch: pasting one back can never turn the new lists on
 // or off — only Migrate and Switch back move it (and the database's keep-switch rule keeps it when a save leaves it out)
 function bakSettings(){const s=fullSettings();delete s.listStore;delete s.listStoreAt;return s;}
-async function backupNow(reason){
+async function backupNow(reason,who){ /*who: optional name (health 16 Nov) — default = this tab's name, as before*/
   if(!DB.loaded||DB.loadFailed)throw new Error('the plan is not loaded on this screen');
   const n=DB.orders.length;
   const r=await fetch(SUPA_URL+'/planner_backups',{method:'POST',headers:{...SUPA_WHDR,'Prefer':'return=representation'},
-    body:JSON.stringify({reason:reason+' · '+whoTag(),orders_count:n,payload:{orders:DB.orders,nid:DB.nid,settings:bakSettings()}})});
+    body:JSON.stringify({reason:reason+' · '+whoTag(who),orders_count:n,payload:{orders:DB.orders,nid:DB.nid,settings:bakSettings()}})});
   if(!r.ok)throw new Error(bakErrText(r,await r.text().catch(()=>'')));
   const d=await r.json().catch(()=>null);
   const id=d&&d[0]&&d[0].id;if(!id)throw new Error('the database did not confirm the backup');
@@ -1360,8 +1360,8 @@ async function tryDailyBackup(){
   }
 }
 // Before any bulk delete: a verified copy in planner_backups. If that fails, the person decides.
-async function backupFirst(what){
-  try{await backupNow('before '+what);updBakLine();toast('Safety backup saved ✓');return true;}
+async function backupFirst(what,who){
+  try{await backupNow('before '+what,who);updBakLine();toast('Safety backup saved ✓');return true;}
   catch(e){BAK.err=e.message;updBakLine();return confirm('⚠ The safety backup before '+what+' FAILED:\n'+e.message+'\n\nGo ahead WITHOUT a backup?');}
 }
 function updBakLine(){
@@ -2207,7 +2207,7 @@ function renderBoard(app){
     if(!lsAdminOk())return;
     const typed=prompt('This deletes ALL '+DB.orders.length+' orders from the planner. A safety backup is saved to the database first.\n\nType DELETE to confirm:');
     if(typed!=='DELETE'){if(typed!==null)toast('Not deleted — you must type DELETE');return;}
-    if(!await backupFirst('Clear all orders'))return;
+    if(!await backupFirst('Clear all orders',by))return;
     DB.orders=[];DB.grps={};grpSel.clear();
     if(V2())lists().forEach(l=>(l.wos||[]).forEach(w=>listTag(l,w,false)));else lists().forEach(l=>{l.wos=[];});
     Object.keys(orig).forEach(k=>delete orig[k]);Object.keys(origStep).forEach(k=>delete origStep[k]);
