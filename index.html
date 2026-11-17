@@ -5084,10 +5084,10 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     // looked up when they leave the Title box, so a block named in the Title (BLOCK B) is known before anything is filled in
     {const auto=ev=>{const b=st.jb,from=ev&&ev.target?ev.target.id:'';if(!keyTxt(b.floor)||!keyTxt(b.unit)||String(b.wo||'').trim()||(keyHouseStr(b.floor,b.unit)||'')===b.last)return;
       setTimeout(()=>{if(!document.body.contains(ov)||st.wo)return;const a=document.activeElement,id=a&&ov.contains(a)&&a.id?a.id:'';if(id==='me-jt'||(from==='me-jf'&&id==='me-ju'))return;
-        const sb0=Date.now()-(st.savePress||0)<1500?ov.querySelector('#me-save'):null;st.savePress=0;jbFind();
+        const sb0=Date.now()-(st.savePress||0)<1500?ov.querySelector('#'+(st.savePressId||'me-save')):null;st.savePress=0;jbFind();
         // (attack3 W5, W6) Save pressed straight from the Floor / Unit / Title box: the look-up redrew the window under the press — the
         // press still counts, once. (attack3b S6) …but only when the mouse is let go on Save: dragged off and let go saves nothing
-        if(sb0&&!document.body.contains(sb0)){if(st.saveUp===true){st.saveUp=null;save();}else if(st.saveUp==null)st.savePend=Date.now();return;}
+        if(sb0&&!document.body.contains(sb0)){if(st.saveUp===true){st.saveUp=null;st.closeAfter=!!st.pressClose;save();}else if(st.saveUp==null)st.savePend=Date.now();return;}
         if(id&&!st.wo){const e=ov.querySelector('#'+id);if(e){e.focus();if(e.select)e.select();}}},0);};
       ['me-jf','me-ju','me-jt'].forEach(id=>{const e=g(id);if(e)e.onblur=auto;});} // (attack3b S4) the Floor box too: Unit typed first, then Floor, then Save
     ov.querySelectorAll('[data-jpick]').forEach(b=>b.onclick=()=>jbChoose(b.dataset.jpick,'picked'));
@@ -5155,12 +5155,12 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       const o=DB.orders.find(x=>x.wo===st.wo),p=o&&lsProjAuto(o.customer).p;if(!st.pid&&p){keep();st.pid=p.id;st.pauto=true;edges=lsProjEdges(p.id);draw();}
       else if(!st.pid&&o){st.pmsg=null;keep();draw();autoProj();}
       else if(jbOn()&&(!st.wo||!prev||(st.jm&&st.jm.wo!==st.wo))){if(st.jm&&st.jm.wo!==st.wo)st.jm=null;keep();draw();}}; // the job boxes come and go with the WO
-    g('me-save').onclick=()=>{st.closeAfter=false;save();};{const sc=g('me-saveclose');if(sc){sc.onclick=()=>{const sv=g('me-save');if(sc.disabled||(sv&&sv.disabled))return;st.closeAfter=true;save();};}}g('me-save').onmousedown=ev=>{st.closeAfter=false;st.savePress=Date.now();st.saveUp=null;st.savePend=0;
+    g('me-save').onclick=()=>{st.closeAfter=false;save();};{const sc=g('me-saveclose');if(sc){sc.onclick=()=>{const sv=g('me-save');if(sc.disabled||(sv&&sv.disabled)){const e=g('me-err');if(e&&!st.saving)e.textContent=st.addBusy?'Wait — the new material is still being added. Then press ✓ Save & close again.':'Wait a moment, then press ✓ Save & close again.';return;}st.closeAfter=true;save();}; /*attack4 E1: never a dead button*/}}{const pressS=(sid,cl)=>ev=>{st.pressClose=cl;st.savePress=Date.now();st.savePressId=sid;st.saveUp=null;st.savePend=0; // (attack4 G1) ✓ Save & close gets the same "press counts through the look-up redraw" as Save
       const bx=ev.currentTarget.getBoundingClientRect(),up=e2=>{document.removeEventListener('mouseup',up,true);if(!document.body.contains(ov))return;
         // let go on Save: on the (redrawn) button, or on the spot where it was pressed if the redraw moved the button
-        const t=e2.target,onS=!!(t&&t.closest&&t.closest('#me-save')&&ov.contains(t))||(e2.clientX>=bx.left&&e2.clientX<=bx.right&&e2.clientY>=bx.top&&e2.clientY<=bx.bottom);
-        if(st.savePend){const ok=onS&&Date.now()-st.savePend<10000;st.savePend=0;if(ok)save();}else st.saveUp=onS;};
-      document.addEventListener('mouseup',up,true);};
+        const t=e2.target,onS=!!(t&&t.closest&&t.closest('#'+sid)&&ov.contains(t))||(e2.clientX>=bx.left&&e2.clientX<=bx.right&&e2.clientY>=bx.top&&e2.clientY<=bx.bottom);
+        if(st.savePend){const ok=onS&&Date.now()-st.savePend<10000;st.savePend=0;if(ok){st.closeAfter=!!st.pressClose;save();}}else st.saveUp=onS;};
+      document.addEventListener('mouseup',up,true);};g('me-save').onmousedown=pressS('me-save',false);const sc2=g('me-saveclose');if(sc2)sc2.onmousedown=pressS('me-saveclose',true);}
     on('me-x0',()=>closeEd()); // step 11: ONE Close (top right); the Saved ✓ panel keeps its own
   };
   const addRow=(at)=>{keep();snap();const c=curRow();const i=at!=null?at:c<0?R().length:R()[c].k==='hdr'?c+1:c+1;R().splice(i,0,blank(i));st.focus=i+'|item';draw();};
@@ -5590,7 +5590,9 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     if([...document.querySelectorAll('.pod-ovl .me-ed')].some(e=>!ov.contains(e))){ov.remove();return;} // another list window is already open: the toast says it was saved
     const lv=lsList(l.id)||l,arc=!st.tpl&&!!(lv.archived||l.archived),tarc=!!st.tpl&&!!(lv.archived||l.archived),wait=!arc&&!st.tpl&&lsWaitCheck(lv),rev=+lv.rev||1,wo=d.wo&&!st.tpl&&d.wo!=='__NEW__'?d.wo:'';
     const h=arc?'Saved, but this list was archived on another screen — the saw will not see it':tarc?'Saved, but this template was archived on another screen — it cannot be picked':st.tpl?'Template saved ✓':wait?'Saved ✓ — waiting to be checked before the saw sees it':ex&&rev>(+ex.rev||1)?'Saved ✓ — Rev '+rev+' is with the Saw &amp; Stores':'Saved ✓ — list is with the Saw &amp; Stores';
-    if(st.closeAfter&&!arc&&!tarc){st.closeAfter=false;ov.remove();{const dv=document.createElement('div');dv.innerHTML=h;toast(dv.textContent+(l.name?' — '+String(l.name):''));}try{render();}catch(e){}return;} // ✓ Save & close: no finish panel — the window closes and says what happened (a warning still shows the panel)
+    const oldWarn=!!d.retiredMsg&&!/is archived \(off the saw\)/.test(d.retiredMsg); // (attack4 I1) the old list was NOT taken off the saw: the person must see that, so the panel stays
+    if(st.closeAfter&&(arc||tarc||oldWarn))st.closeAfter=false;
+    if(st.closeAfter&&!arc&&!tarc){st.closeAfter=false;ov.remove();{const dv=document.createElement('div');dv.innerHTML=h;toast(dv.textContent+(l.name?' — '+String(l.name):'')+(d.retiredMsg?' —'+String(d.retiredMsg):''));}try{render();}catch(e){}return;} // ✓ Save & close: no finish panel — the window closes and says what happened (a warning still shows the panel)
     const cnt=st.tpl?'':[(+l.saw?l.saw+' saw row'+(+l.saw!==1?'s':''):'no cutting'),(+l.fit?l.fit+' Stores row'+(+l.fit!==1?'s':''):'no Stores'),wo?escA(wo):''].filter(Boolean).join(' · ');
     ov.classList.add('me-dov');
     ov.innerHTML=`<div class="pod-in me-done"><div class="me-dok${wait||arc||tarc?' me-dw':''}" id="me-dok">${h}</div><div class="me-dl"><b>${escA(l.name||'')}</b>${cnt?'<br>'+cnt:''}${arc?'<br>If the saw needs it: Lists → Archived → ⧉ Copy.':''}${d.retiredMsg?'<br>'+escA(d.retiredMsg):''}</div>
