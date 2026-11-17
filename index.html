@@ -3923,12 +3923,21 @@ function lsHomeBind(){
     listArchive(l,whoNow());render();toast('List archived');});
 }
 // The office's read-only view of a list: every row (saw, stores, bought in), its check and any spec still TBC
-function lsViewDlg(id){const l=lsList(id);if(!l)return;const c=lsCheckInfo(l),t=lsTbc(lsView(l.id,true).rows);
+async function lsViewDlg(id){let l=lsList(id);if(!l)return;
+  // (Garry 17 Nov, attack6 V-A) an archived / finished list's rows are not loaded at start: load them FIRST, so View never shows an empty table
+  if(V2()&&!LST.full.has(id)){if(lsViewDlg.busy===id)return;lsViewDlg.busy=id;toast('Opening "'+String(l.name||'list')+'"…');
+    try{await lsReloadList(id);}catch(e){toast('Could not load "'+String(l.name||'the list')+'" — '+e.message+'. Try again.');return;}finally{lsViewDlg.busy=null;}
+    l=lsList(id);if(!l)return;}
+  const c=lsCheckInfo(l),t=lsTbc(lsView(l.id,true).rows);
   const ov=lsDlg(`<div style="font-weight:700;color:#14335c;margin-bottom:6px">${escA(l.project||'')} — ${escA(l.name)} · Rev ${+l.rev||1}</div>
     ${V2()&&!l.archived&&(c.need||c.ok)?`<div style="margin-bottom:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">${l.tpl&&!c.ok?'<span class="chk-wait">Not checked</span>':lsCheckChip(l)}${c.ok&&l.createdBy?'<span style="font-size:12px;color:var(--t2)">issued by '+escA(l.createdBy)+'</span>':''}${c.ok?`<button class="btn btn-s" data-vchk="0" style="font-size:11px;padding:2px 8px">Take check away</button>`:`<button class="btn btn-g" data-vchk="1" style="font-size:12px;padding:3px 10px">✓ Check</button>`}</div>`:''}
     ${t.length?'<div style="margin-bottom:6px">'+lsTbcChip(t,true)+'</div>':''}${listTableHTML(l,'all')}`);
   ov.querySelectorAll('[data-vchk]').forEach(b=>b.onclick=()=>{ov.remove();lsCheck(l.id,b.dataset.vchk==='1');});
   const x=ov.querySelector('#pod-x');if(x){const b=document.createElement('button');b.className='btn btn-s';b.id='lv-print';b.textContent='🖨 Print';b.style.marginRight='8px';b.onclick=()=>lsPrintList(l.id);x.parentNode.insertBefore(b,x);}
+  // (attack6) a double-click on View does not close it straight away (the 2nd click lands on the grey area); Esc closes it
+  {const t0=Date.now(),oc=ov.onclick;ov.onclick=e=>{if(e.target===ov&&Date.now()-t0<350)return;oc(e);};
+   const esc=e=>{if(!document.body.contains(ov)){document.removeEventListener('keydown',esc,true);return;}if(e.key!=='Escape')return;const top=[...document.querySelectorAll('.pod-ovl')].pop();if(top!==ov)return;e.preventDefault();e.stopPropagation();document.removeEventListener('keydown',esc,true);ov.remove();render();};
+   document.addEventListener('keydown',esc,true);}
 }
 /* Print one cutting list from its View window (Garry 13 Nov): the whole list (saw + stores rows) on A4, with its work orders,
    floor / unit / title and due date at the top, and a signature line. Opens the browser's print box in a new tab. */

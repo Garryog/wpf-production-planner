@@ -664,3 +664,12 @@ Also for Garry: accept or reject the rows marked pending in the "15 Nov 2026 —
 - **23 → A:** a sub-heading already inside a × block cannot be set to × Multiply; the window says "make it a Heading first". As built.
 - **24 → A:** booking a van from the list window for a job Cienapps says is SHIPPED asks "book it anyway?". As built.
 - Nothing to build. Still open: questions 20–22 (built on A).
+
+### 17 Nov 2026, afternoon — Garry: "check the cutting list view button is working in all scenarios"
+- **Tester round 6** (`attack6-view-save` 78 checks, `attack6-view-entry` 29): 👁 View the list worked after every kind of save
+  (new list, WO found from Floor/Unit, P-number, edit → Rev 2, Ctrl+S, × Multiply totals = saw sheet, stores-only, saw-only,
+  bought-in, 80 rows, odd names, template, archived-meanwhile, lost reply, every role, phone 360 px, Print and pop-up blocked).
+- Found and **fixed**: **[HIGH]** View of an ARCHIVED or FINISHED list (Lists home / Find old list) showed an EMPTY table the first
+  time — its rows are now loaded before the window opens · [LOW] Esc now closes View · [LOW] a double-click on View no longer
+  opens and shuts it at once.
+- After the fix: attack6 files 107/107; the 12 other test files that open View: same results as before (no new failure).
