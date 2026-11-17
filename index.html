@@ -7782,14 +7782,22 @@ function showReadiness(wos,ctx,always){
   if(!items.length)return;
   const attention=items.filter(i=>!i.s||i.s.lvl!=='green');
   if(!attention.length&&!always){toast('✓ Cutting & fittings all ready for '+(items.length===1?items[0].o.wo:items.length+' jobs'));return;}
+  // (Garry 17 Nov, L9: "add a cutting list in the delivery window") ＋ Add cutting list / 📋 Open list on each job — for the people who make
+  // lists (office, Production Manager, Drawing office); PMs, drivers and the floor see the status only
+  const canL=V2()&&!['pm','driver','dash','floor','saw','stores'].includes(ROLE||''),lbtn='padding:6px 12px;font-size:13px;white-space:nowrap';
+  const lsOf=w=>V2()?lists().filter(l=>(l.wos||[]).includes(w)):[];
+  const listBtns=o=>{if(!canL||o.manual)return'';const ls2=lsOf(o.wo);
+    if(!ls2.length)return `<button class="btn btn-g" data-rdadd="${escA(o.wo)}" style="${lbtn}" title="Opens the cutting list window for ${escA(o.wo)} — work order, floor, unit and title filled in">＋ Add cutting list</button>`;
+    return ls2.slice(0,3).map(l=>`<button class="btn btn-s" data-rdopen="${escA(l.id)}" style="${lbtn}" title="Open the list in the cutting list window">📋 Open ${escA(String(l.name||'list').slice(0,24))}</button>`).join('');};
   const chip=(ok,txtOk,txtNo)=>ok?`<span class="ls-ok" style="font-size:13px">${txtOk}</span>`:`<span class="ls-no" style="font-size:13px">${txtNo}</span>`;
   const rowH=i=>{
     const o=i.o,s=i.s;
     return `<div style="display:flex;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);flex-wrap:wrap">
       <b style="font-family:monospace;color:#14335c">${escA(o.wo)}</b>
       <span style="flex:1;min-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escA(o.title||'')}</span>
-      ${!s?`<span class="ls-no" style="font-size:13px">📋 NO LIST ISSUED — upload/attach one in 📋 Cutting Lists</span>`
+      ${!s?`<span class="ls-no" style="font-size:13px">📋 NO LIST YET${canL&&!o.manual?'':' — the Drawing office makes it in 📋 Cutting Lists'}</span>`
         :`<span class="rdy-pill rdy-${s.lvl}">${RDY_LBL[s.lvl]}</span>${sideChipHTML('saw',s.saw,s.sawAt,true)}${sideChipHTML('fit',s.fit,s.fitAt,true)}`}
+      ${listBtns(o)}
     </div>`;
   };
   const ov=document.createElement('div');ov.className='pod-ovl';
@@ -7800,6 +7808,8 @@ function showReadiness(wos,ctx,always){
     <div style="margin-top:12px;text-align:right"><button class="wl-btn" id="pod-x" style="padding:10px 22px;font-size:14px">OK — understood</button></div></div>`;
   document.body.appendChild(ov);
   ov.onclick=e=>{if(e.target===ov||e.target.id==='pod-x')ov.remove();};
+  ov.querySelectorAll('[data-rdadd]').forEach(b=>b.onclick=()=>{ov.remove();lsNewStd(b.dataset.rdadd);}); // the same window as Cutting Lists → ＋ New list, on this job
+  ov.querySelectorAll('[data-rdopen]').forEach(b=>b.onclick=()=>{ov.remove();openListEditor(b.dataset.rdopen);});
 }
 let drvUploading=false;
 function podKey(veh,day,wk){return veh+'|'+day+'|'+(wk||thisWk());} /*dates: the booking's own week*/
@@ -7935,7 +7945,7 @@ function dchip(o,showCust){
   const rd=(!st&&!o.manual)?woReady(o.wo):null; // one colour per job until it's loaded — detail behind the ⓘ button
   return `<div class="dchip${rd?' rdy-'+rd.lvl:''}${st==='deliv'?' done':''}${st==='disp'?' dispd':''}${st==='load'?' loadd':''}${o.manual?' manual':''}${delSel.has(o.wo)?' sel':''}" draggable="true" data-dw="${escA(o.wo)}" title="Click to select · drag onto a day${o.manual?' · added manually':''}">
     <div class="dchip-top"><b>${escA(o.wo)}</b>
-      <span class="dchip-btns">${rd?`<button class="dinfo" data-dinfo="${escA(o.wo)}" title="${escA(RDY_LBL[rd.lvl]+(rd.why.length?' — '+rd.why.join(' · '):''))} — tap for detail">ⓘ</button>`:''}<button class="dchk${st?' on':''}" data-dd="${escA(o.wo)}" title="Status: ${dStageLbl[st]||'planned'} — tap to update (opens a menu)">${st==='deliv'?'✓':st==='disp'?'D':st==='load'?'L':'·'}</button><button data-dx="${escA(o.wo)}" title="${o.delDay?'Return to pool':(o.manual?'Delete this manual job':'Remove from delivery plan')}">×</button></span>
+      <span class="dchip-btns">${V2()&&!o.manual&&!st&&!['pm','driver','dash','floor','saw','stores'].includes(ROLE||'')&&!lists().some(l=>(l.wos||[]).includes(o.wo))?`<button class="dinfo dlist-add" data-dladd="${escA(o.wo)}" title="＋ Add a cutting list for ${escA(o.wo)} (opens the cutting list window)" style="width:auto;padding:0 6px;font-weight:800">＋ List</button>`:''}${rd?`<button class="dinfo" data-dinfo="${escA(o.wo)}" title="${escA(RDY_LBL[rd.lvl]+(rd.why.length?' — '+rd.why.join(' · '):''))} — tap for detail">ⓘ</button>`:''}<button class="dchk${st?' on':''}" data-dd="${escA(o.wo)}" title="Status: ${dStageLbl[st]||'planned'} — tap to update (opens a menu)">${st==='deliv'?'✓':st==='disp'?'D':st==='load'?'L':'·'}</button><button data-dx="${escA(o.wo)}" title="${o.delDay?'Return to pool':(o.manual?'Delete this manual job':'Remove from delivery plan')}">×</button></span>
     </div>
     ${fuF(o)||fuU(o)?`<div class="dchip-fu">${fuHTML(o,'dfu')}</div>`:''}
     <div class="dchip-t" title="${escA(o.title)}">${escA(o.title)||'—'}</div>
@@ -8220,6 +8230,7 @@ function renderDeliveries(app){
     dropTo(c,parts[0],parts[1],parts[2]);
   });
   document.querySelectorAll('[data-dinfo]').forEach(b=>b.onclick=e=>{e.stopPropagation();showReadiness([b.dataset.dinfo],b.dataset.dinfo,true);});
+  document.querySelectorAll('[data-dladd]').forEach(b=>{b.onclick=e=>{e.stopPropagation();lsNewStd(b.dataset.dladd);};b.onmousedown=e=>e.stopPropagation();b.draggable=false;}); // (Garry 17 Nov, L9) ＋ List on a delivery card
   dmBindChips(app); /*dates: due date on a card → Change dates*/
   bindSiteOk(app); /*dates phase 2: site ready*/
   bindMissWhy();
