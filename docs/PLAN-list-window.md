@@ -681,3 +681,16 @@ Also for Garry: accept or reject the rows marked pending in the "15 Nov 2026 —
   (cherry-picked): a failed row fetch never marks a list loaded; a save taking away all / most rows asks first.
   Checked here: h17-save-guards 6/6, attack6-view-save 78/78, g16-xl-old-saveclose 10/10, attack5-multiply 28/31 (as before).
   Full suite not re-run after this change.
+
+### 17 Nov 2026, afternoon — two more from Garry (live)
+- **"Add a cutting list in the delivery window" (L9):** Deliveries page — a job card with no list has **＋ List**; the ⓘ check
+  window has **＋ Add cutting list** / **📋 Open <list>** per job. Opens the same list window (standard layout, WO filled in).
+  Office, Production Manager, Drawing office; PMs / drivers / floor see status only. Test `l9-delivery-add-list` 12/12; 19
+  delivery test files: no new failure.
+- **"Add a material/fitting to multiple templates together":** Lists → project row → **＋ Add to several templates**
+  (Drawing office / Production Manager / Admin, project with 2+ templates). Item, Qty, L × W (saw only), material, heading →
+  tick templates → one press. Each ticked template gets a new Rev with the reason; it goes at the end of that heading (heading
+  made at the end if missing); never inside a × block by accident; a template that already has that item + material is left
+  alone and named; the template is re-read first, so another PC's change is kept. Test `g17-add-to-templates` 16/16; 16
+  Lists-page test files pass.
+- Neither has been attacked by the Tester or read by the Manager yet. Full suite not re-run since this morning.

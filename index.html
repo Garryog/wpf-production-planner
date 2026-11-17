@@ -3885,7 +3885,7 @@ function lsHomeHTML(){
     <input type="file" id="lh-file" accept=".xlsx,.xls" style="display:none"><div id="lh-upmsg" style="font-size:12px;margin-bottom:6px"></div>
     ${keys.length?keys.map(k=>{const a=grp.get(k);return `<div class="lh-grp" style="margin-bottom:12px"><div style="background:#14335c;color:#fff;border-radius:6px 6px 0 0;padding:7px 10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <b>${escA(k?lsProjName(k):'No project')}</b><span style="font-size:12px;opacity:.85">${a.length} list${a.length!==1?'s':''}</span><span style="flex:1"></span>
-        ${k?`<button class="btn btn-s" data-lhtpl="${escA(k)}" style="font-size:11px;padding:3px 9px">Templates</button><button class="btn btn-s" data-lhmat="${escA(k)}" style="font-size:11px;padding:3px 9px">🧱 Project materials (add / edit)</button><button class="btn btn-s" data-lhnew="${escA(k)}" style="font-size:11px;padding:3px 9px">＋ New list</button><button class="btn btn-s" data-lhimp="${escA(k)}" style="font-size:11px;padding:3px 9px">Import Excel</button>`:''}</div>
+        ${k?`<button class="btn btn-s" data-lhtpl="${escA(k)}" style="font-size:11px;padding:3px 9px">Templates</button>${lsTplSaveOk()&&lsTemplatesFor(k).length>1?`<button class="btn btn-s" data-lhtpladd="${escA(k)}" style="font-size:11px;padding:3px 9px" title="Add one material or fitting to several of this project's templates in one go">＋ Add to several templates</button>`:''}<button class="btn btn-s" data-lhmat="${escA(k)}" style="font-size:11px;padding:3px 9px">🧱 Project materials (add / edit)</button><button class="btn btn-s" data-lhnew="${escA(k)}" style="font-size:11px;padding:3px 9px">＋ New list</button><button class="btn btn-s" data-lhimp="${escA(k)}" style="font-size:11px;padding:3px 9px">Import Excel</button>`:''}</div>
       <table class="lst-tbl" style="margin:0"><thead><tr><th>List · Project</th><th>Type</th><th>Work orders</th><th>Floor</th><th>Unit</th><th>Title</th><th>Rev</th><th>State</th><th>Saw</th><th>Stores</th><th></th></tr></thead><tbody>${a.map(row).join('')||'<tr><td colspan="11" style="color:var(--t3)">No lists match.</td></tr>'}</tbody></table></div>`;}).join('')
       :`<div style="font-size:13px;color:var(--t3);padding:10px">${LST.loaded?'No lists match.':'Loading the lists…'}</div>`}
   </div>`;
@@ -3910,6 +3910,7 @@ function lsHomeBind(){
   const nt=document.getElementById('lh-newtpl');if(nt)nt.onclick=()=>openListEditor(null,'',lhPid(),{tpl:true});
   const cp=document.getElementById('lh-copy');if(cp)cp.onclick=()=>lsCopyDlg(lhPid());
   document.querySelectorAll('[data-lhtpl]').forEach(b=>b.onclick=()=>{lpfSet(b.dataset.lhtpl);LH.kind='tpl';render();});
+  document.querySelectorAll('[data-lhtpladd]').forEach(b=>b.onclick=()=>lsTplAddDlg(b.dataset.lhtpladd));
   document.querySelectorAll('[data-lhmat]').forEach(b=>b.onclick=()=>lsMaterialsDlg(b.dataset.lhmat));
   document.querySelectorAll('[data-lhnew]').forEach(b=>b.onclick=()=>lsNewStd('',b.dataset.lhnew)); // the standard layout, like ＋ New list
   const fi=document.getElementById('lh-file');
@@ -5867,6 +5868,71 @@ async function lsCreateFromTpl(tid,wos,name,by,opt){
 }
 /* Templates in numerical order (Garry 13 Nov): "Type 2" before "Type 10", "House 9" before "House 12"; capitals don't matter. */
 function lsTplCmp(a,b){return String(a.typeName||a.name||'').localeCompare(String(b.typeName||b.name||''),undefined,{numeric:true,sensitivity:'base'})||String(a.name||'').localeCompare(String(b.name||''),undefined,{numeric:true,sensitivity:'base'});}
+/* (Garry 17 Nov) "a material / fittings can be added to multiple cutting list templates together": ONE row (item, qty, sizes,
+   material) put into the templates ticked, under a heading of your choice (made at the end if a template doesn't have it).
+   Each template gets a new Rev with the reason in its History; a template that already has that item + material is left alone.
+   Drawing office / Production Manager / Admin only (the same people who save templates). */
+function lsTplAddDlg(pid){
+  if(!lsTplSaveOk()){toast('Templates are changed by the Drawing office, Production Manager or Admin.');return;}
+  const tps=lsTemplatesFor(pid);if(!tps.length){toast('This project has no templates yet.');return;}
+  const mats=[...lsMats(pid,'sheet'),...lsMats(pid,'other')].map(m=>m.name);
+  const heads=[...new Set(tps.flatMap(t=>lsLinesOf(t.id).filter(x=>x.kind==='hdr'&&x.removed_rev==null).map(x=>String(x.part||'').trim())).filter(Boolean))].sort();
+  const I='padding:8px;border:1px solid var(--b2);border-radius:6px;font-size:14px;width:100%;box-sizing:border-box';
+  const dl=lsDlg(`<div style="font-weight:800;color:#14335c;font-size:16px;margin-bottom:2px">＋ Add to several templates — ${escA(lsProjName(pid))}</div>
+    <div style="font-size:12px;color:var(--t3);margin-bottom:10px">One row, added to every template you tick. Each template gets a new Rev (shown in its History). Lists already made from a template are not changed.</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-bottom:8px">
+      <div style="grid-column:1/-1"><label style="font-size:13px;font-weight:700">Item</label><input id="ta-item" maxlength="120" placeholder="e.g. Hinge, Worktop, Kicker" style="${I}"></div>
+      <div><label style="font-size:13px;font-weight:700">Qty</label><input id="ta-qty" inputmode="decimal" placeholder="Qty" style="${I}"></div>
+      <div><label style="font-size:13px;font-weight:700">L <span style="font-weight:400;color:var(--t3)">(saw only)</span></label><input id="ta-l" inputmode="numeric" placeholder="L" style="${I}"></div>
+      <div><label style="font-size:13px;font-weight:700">W <span style="font-weight:400;color:var(--t3)">(saw only)</span></label><input id="ta-w" inputmode="numeric" placeholder="W" style="${I}"></div>
+      <div style="grid-column:1/-1"><label style="font-size:13px;font-weight:700">Material / fitting</label><select id="ta-mat" style="${I}"><option value="">— pick —</option>${mats.map(m=>`<option>${escA(m)}</option>`).join('')}</select></div>
+      <div style="grid-column:1/-1"><label style="font-size:13px;font-weight:700">Put it under the heading <span style="font-weight:400;color:var(--t3)">(made at the end of a template that hasn't got it)</span></label><input id="ta-head" list="ta-heads" placeholder="e.g. Fittings — or leave blank for the end" style="${I}"><datalist id="ta-heads">${heads.map(h=>`<option value="${escA(h)}">`).join('')}</datalist></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin:4px 0"><b style="font-size:13px">Templates</b><span><button class="btn btn-s" id="ta-all" style="font-size:12px;padding:2px 8px">Tick all</button> <button class="btn btn-s" id="ta-none" style="font-size:12px;padding:2px 8px">None</button></span></div>
+    <div style="max-height:40vh;overflow:auto;border:1px solid var(--border);border-radius:6px;padding:4px 8px">${tps.map(t=>`<label class="hold-row" style="display:flex;gap:8px;align-items:center;padding:6px 0"><input type="checkbox" data-tat="${escA(t.id)}" style="width:20px;height:20px"><span><b>${escA(t.typeName||t.name)}</b> <span style="color:var(--t3);font-size:12px">Rev ${+t.rev||1}</span></span></label>`).join('')}</div>
+    <div id="ta-err" style="color:#b42318;font-weight:700;font-size:13px;min-height:18px;margin-top:6px"></div>
+    <div style="text-align:right"><button class="btn btn-g" id="ta-go" style="padding:10px 18px;font-size:14px">＋ Add to the ticked templates</button></div>`,560);
+  const g=id=>dl.querySelector('#'+id),err=t=>{g('ta-err').textContent=t;};
+  g('ta-all').onclick=()=>dl.querySelectorAll('[data-tat]').forEach(c=>c.checked=true);
+  g('ta-none').onclick=()=>dl.querySelectorAll('[data-tat]').forEach(c=>c.checked=false);
+  g('ta-go').onclick=async()=>{
+    const item=g('ta-item').value.replace(/\s+/g,' ').trim(),qty=g('ta-qty').value.trim(),L=g('ta-l').value.trim(),W=g('ta-w').value.trim(),mat=g('ta-mat').value,head=g('ta-head').value.replace(/\s+/g,' ').trim();
+    const ids=[...dl.querySelectorAll('[data-tat]:checked')].map(c=>c.dataset.tat);
+    if(!item){err('Type the item.');g('ta-item').focus();return;}
+    if(!/^\d+(\.\d+)?$/.test(qty)||!(+qty>0)){err('Qty — a number, e.g. 2.');g('ta-qty').focus();return;}
+    if((L||W)&&!(/^\d+$/.test(L)&&/^\d+$/.test(W)&&+L>0&&+W>0)){err('A saw part needs BOTH a length and a width in mm (or leave both blank for Stores).');return;}
+    if((L||W)&&+qty%1){err('The saw can\'t cut half a part — the Qty must be a whole number.');return;}
+    if(!ids.length){err('Tick at least one template.');return;}
+    if(!confirm('Add "'+item+'" ×'+qty+(L?' ('+L+' × '+W+')':'')+(mat?' — '+mat:'')+(head?' under "'+head+'"':'')+' to '+ids.length+' template'+(ids.length!==1?'s':'')+'?\n\nEach one gets a new Rev.'))return;
+    const go=g('ta-go');go.disabled=true;err('');go.textContent='Adding…';
+    const ok=[],same=[],bad=[],by=whoNow()||ROLE_LBL[ROLE]||'Office';
+    for(const tid of ids){const t0=lsList(tid);const nm=String((t0&&(t0.typeName||t0.name))||tid);
+      try{const r=await lsTplAddRow(tid,{item,qty,L,W,mat,head},by);(r==='same'?same:ok).push(nm);}catch(e){bad.push(nm+' ('+e.message+')');}}
+    dl.remove();try{render();}catch(e){}
+    const msg=[ok.length?'✓ Added to '+ok.length+': '+ok.join(', '):'',same.length?'Already there (left alone): '+same.join(', '):'',bad.length?'⚠ NOT added to: '+bad.join('; '):''].filter(Boolean).join('\n\n');
+    if(bad.length||same.length)alert(msg);else toast(msg);
+  };
+  g('ta-item').focus();
+}
+async function lsTplAddRow(tid,a,by){
+  await lsReloadList(tid); // the template as the database has it now — never an old copy
+  const raw=LST.l.get(tid);if(!raw||raw.archived||!raw.is_template)throw new Error('no longer a live template');
+  const pid=raw.project_id,rows=lsEditRows(tid),mk=a.L?'sheet':'other',m=a.mat?lsMatFind(pid,a.mat,mk):null,mat=m?m.name:a.mat;
+  const key=v=>String(v==null?'':v).trim().toLowerCase();
+  if(rows.some(r=>r.k!=='hdr'&&key(r.item)===key(a.item)&&key(r.mat)===key(mat)&&String(r.L||'')===String(a.L||'')&&String(r.W||'')===String(a.W||'')))return'same';
+  const row={k:'part',item:a.item,qty:a.qty,L:a.L||'',W:a.W||'',mat:mat||'',edging:'',edging2:'',note:''};
+  // where it goes: at the end of the heading's block (a heading with the same name, any case); else a new heading at the end
+  let at=-1;if(a.head){const h=rows.findIndex(r=>r.k==='hdr'&&key(r.item)===key(a.head));if(h>=0){at=h+1;while(at<rows.length&&rows[at].k!=='hdr')at++;}}
+  // never inside a × / unit block by accident (its rows are per ONE): the heading's own block is fine only when it has no ×
+  const uAt=i=>{let u=null;rows.slice(0,i).forEach(r=>{if(r.k==='hdr'){const hu=r.units!=null;if(!(r.sub&&!hu&&u!=null))u=hu?r.units:null;}});return u;};
+  if(at>=0&&uAt(at)!=null)at=-1;
+  if(at>=0)rows.splice(at,0,row);
+  else{if(a.head||uAt(rows.length)!=null)rows.push({k:'hdr',item:a.head||'Added items',note:''});rows.push(row);}
+  const lines=lsEdLines(rows);lines.forEach(ln=>{const mm=ln.kind!=='hdr'&&ln.material?lsMatFind(pid,ln.material,lsLineMk(ln.kind)):null;if(mm)ln.material=mm.name;});lsFlagMats(lines,pid);
+  lsBlockTotals(lines);
+  await lsSaveList({id:tid,project_id:pid,list_type:raw.list_type,type_name:raw.type_name},lines,by,'Added "'+a.item+'" ×'+a.qty+(mat?' — '+mat:'')+' (to several templates at once)',{expect:+raw.version||0});
+  return'ok';
+}
 function lsTemplatesFor(pid){return lsCache().all.filter(l=>l.tpl&&!l.archived&&l.pid===pid).sort(lsTplCmp);}
 // From a work order with no list: tap a template → preview with the WO ticked (+ other jobs of the project that need a list) → name → Create & attach
 function lsTplDlg(tid,wo){
