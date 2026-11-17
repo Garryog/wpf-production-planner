@@ -867,7 +867,7 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden&&pendT)writ
 // Server settings → a full settings object. Missing/empty keys keep what we had (same rules the old loader used).
 function settingsFrom(s,prev){
   const r={...prev};s=s||{};
-  ['weekCaps','delx','delNotes','grps','pins','pod','lists','listWBs','listDone','delArchive','staff','listHold','holdLog','listRow','listStore','listStoreAt','saveIds','pMerged'].forEach(k=>{if(s[k])r[k]=s[k];});
+  ['weekCaps','delx','delNotes','grps','pins','pod','lists','listWBs','listDone','delArchive','staff','listHold','holdLog','listRow','listStore','listStoreAt','saveIds','pMerged','drawSeen'].forEach(k=>{if(s[k])r[k]=s[k];});
   if(s.hourScale&&s.hourScale.length)r.hourScale=s.hourScale;
   ['wcap','vcap','listLead','listDue'].forEach(k=>{if(s[k]>0)r[k]=s[k];});
   ['delivLead','siteDays','earlyDays'].forEach(k=>{if(dsOk(s[k]))r[k]=s[k];}); /*dates: delivery-date numbers — whole 1–60 only, else the default*/
@@ -897,7 +897,7 @@ function applyPlan(p){
   if(p.nid)DB.nid=p.nid;
   const s=p.settings||{};
   DB.weekCaps=s.weekCaps||{};if(s.hourScale&&s.hourScale.length)HOUR_SCALE=s.hourScale;if(s.wcap>0)WCAP=s.wcap;if(s.vcap>0)VCAP=s.vcap;
-  ['delx','delNotes','grps','pins','pod','lists','listWBs','listDone','delArchive','staff','listHold','holdLog','listRow','listStore','listStoreAt','saveIds','pMerged'].forEach(k=>{if(s[k])DB[k]=s[k];}); // pMerged: copies of P-jobs dropped by "Keep one…" (round 3)
+  ['delx','delNotes','grps','pins','pod','lists','listWBs','listDone','delArchive','staff','listHold','holdLog','listRow','listStore','listStoreAt','saveIds','pMerged','drawSeen'].forEach(k=>{if(s[k])DB[k]=s[k];}); // pMerged: copies of P-jobs dropped by "Keep one…" (round 3)
   if(s.listLead>0)DB.listLead=s.listLead;
   if(s.listDue>0)DB.listDue=s.listDue;
   ['delivLead','siteDays','earlyDays'].forEach(k=>{if(dsOk(s[k]))DB[k]=s[k];else delete DB[k];}); /*dates: out of range / text → default*/
@@ -1362,7 +1362,7 @@ window.addEventListener('beforeunload',e=>{if(saveT||SAVING||DB.saveFailed||lqPe
 /*dates: release marker for the old-screen guard v2 (SUPABASE_CHANGES.md, PENDING). Written on every save by this code; older
   code drops settings keys it doesn't know, so its saves can be told apart (and refused once the guard is on). */
 const APP_REL=2;
-function fullSettings(){return{appRel:APP_REL,...(DB.pMerged&&DB.pMerged.length?{pMerged:DB.pMerged}:{}),weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP,delx:DB.delx||[],delNotes:DB.delNotes||{},grps:DB.grps||{},pins:DB.pins||{},pod:DB.pod||{},lists:DB.lists||[],listWBs:DB.listWBs||{},listDone:DB.listDone||{},listLead:DB.listLead||5,delArchive:DB.delArchive||{},staff:DB.staff||[],listHold:DB.listHold||{},holdLog:DB.holdLog||[],listRow:DB.listRow||{},saveIds:DB.saveIds||[],exportBase:{wk:orig,st:origStep},...(DB.listDue>0?{listDue:DB.listDue}:{}),...['delivLead','siteDays','earlyDays'].reduce((a,k)=>{if(dsOk(DB[k]))a[k]=DB[k];return a;},{}),...(typeof DB.listChk==='boolean'?{listChk:DB.listChk}:{}),...(typeof DB.photoLists==='boolean'?{photoLists:DB.photoLists}:{}),...(DB.delLegacyWk?{delLegacyWk:DB.delLegacyWk}:{}),...(DB.delLegacyAt?{delLegacyAt:DB.delLegacyAt}:{}),...(typeof DB.listDelOnly==='boolean'?{listDelOnly:DB.listDelOnly}:{}),...(DB.listStore?{listStore:DB.listStore,listStoreAt:DB.listStoreAt||''}:{})};}
+function fullSettings(){return{appRel:APP_REL,...(DB.pMerged&&DB.pMerged.length?{pMerged:DB.pMerged}:{}),weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP,delx:DB.delx||[],delNotes:DB.delNotes||{},...(DB.drawSeen&&Object.keys(DB.drawSeen).length?{drawSeen:DB.drawSeen}:{}),grps:DB.grps||{},pins:DB.pins||{},pod:DB.pod||{},lists:DB.lists||[],listWBs:DB.listWBs||{},listDone:DB.listDone||{},listLead:DB.listLead||5,delArchive:DB.delArchive||{},staff:DB.staff||[],listHold:DB.listHold||{},holdLog:DB.holdLog||[],listRow:DB.listRow||{},saveIds:DB.saveIds||[],exportBase:{wk:orig,st:origStep},...(DB.listDue>0?{listDue:DB.listDue}:{}),...['delivLead','siteDays','earlyDays'].reduce((a,k)=>{if(dsOk(DB[k]))a[k]=DB[k];return a;},{}),...(typeof DB.listChk==='boolean'?{listChk:DB.listChk}:{}),...(typeof DB.photoLists==='boolean'?{photoLists:DB.photoLists}:{}),...(DB.delLegacyWk?{delLegacyWk:DB.delLegacyWk}:{}),...(DB.delLegacyAt?{delLegacyAt:DB.delLegacyAt}:{}),...(typeof DB.listDelOnly==='boolean'?{listDelOnly:DB.listDelOnly}:{}),...(DB.listStore?{listStore:DB.listStore,listStoreAt:DB.listStoreAt||''}:{})};}
 /* Stage 3 switch: settings.listStore==='v2' → cutting lists live in their own tables (lists, list_lines…).
    Missing, blank or anything else (switch back writes 'v1') → today's lists in the planner record, untouched. */
 function V2(){return DB.listStore==='v2'||DB.listStore==='switching';} // 'switching' = a Switch back is rebuilding the old lists: screens still read the tables, the database takes no changes
@@ -9383,7 +9383,7 @@ const addsSum=(a,k)=>Object.keys(a||{}).reduce((s,x)=>s+(+(a[x]||{})[k]||0),0);
 function analyzeImport(input,source){
     if(Array.isArray(input))input=prepImport(input);
     const board=boardMap(),recs=input.recs||[],skip=input.skip||{};
-    const dups=[],newOrders=[],updates=[],fills=[],synced=[],autoTag=[],shipped=[],inTransit=[],dispGaps=[],flagged=[],stepDiffs=[],exCounts={},marks=[],unsched=[],pre={},oldDates=[],delivQ=[];
+    const drawQ=[],dups=[],newOrders=[],updates=[],fills=[],synced=[],autoTag=[],shipped=[],inTransit=[],dispGaps=[],flagged=[],stepDiffs=[],exCounts={},marks=[],unsched=[],pre={},oldDates=[],delivQ=[];
     let unchanged=0,excluded=0;
     const sh=s=>String(s||'—').replace(/^\d+\.\s*/,'');
     recs.forEach(r=>{
@@ -9405,7 +9405,8 @@ function analyzeImport(input,source){
       if(!ex){
         if(r.synth)return;
         const why=isWOD?'WO-D':isDrawC?'drawing':isShipC?(stepInvoiced(cs)?'invoiced':'shipped')+' (not on the board)':'';
-        if(why){excluded++;exCounts[why]=(exCounts[why]||0)+1;return;}
+        const isDraw=why==='WO-D'||why==='drawing'; // (Garry 17 Nov) at drawing stage: listed for a decision, brought in only if ticked
+        if(why&&!isDraw){excluded++;exCounts[why]=(exCounts[why]||0)+1;return;}
         const val=value===undefined?0:value;
         let hr=importHours(r.key,cs,val,r);
         if(r.adds&&r.has.hours)hr={...hr,hours:Math.round((r.hours+addsSum(r.adds,'hours'))*100)/100};
@@ -9413,12 +9414,13 @@ function analyzeImport(input,source){
           hours:hr.hours,hoursEstimated:hr.hoursEstimated,hoursSrc:hr.hoursSrc,dueDate:r.dueDate||'',origDueDate:r.dueDate||'',step:cs,
           salesRep:r.salesRep||'',orderNo:r.orderNo||'',value:val,plannedWeek:'',notes:'',colour:''};
         if(cs)o.cienStep=cs;
-        if(isHoldC){o.cienHold=true;unsched.push(r.key);}
-        else if(r.dueBad){unsched.push(r.key);flags.push('new job with an unreadable due date — left unscheduled (not put in this week)');}
-        if(stepForDelivery(cs)){o.delv=true;autoTag.push(o.wo);} // 7 ASSEMBLY COMPLETE / 8 PALLETED → on the delivery board (no van/day)
+        if(isHoldC){o.cienHold=true;if(!isDraw)unsched.push(r.key);}
+        else if(r.dueBad){if(!isDraw)unsched.push(r.key);flags.push('new job with an unreadable due date — left unscheduled (not put in this week)');}
+        if(stepForDelivery(cs)){o.delv=true;if(!isDraw)autoTag.push(o.wo);} // 7 ASSEMBLY COMPLETE / 8 PALLETED → on the delivery board (no van/day)
         if(r.has.sheets)o.sheetsCien=r.sheets;
         if(r.has.delivDate){o.delivDate=r.delivDate;o.origDelivDate=r.delivDate;if(o.dueDate&&o.dueDate>r.delivDate)flags.push('build date after the delivery date — check');} /*dates phase 2*/
         if(adds)o.adds=adds;
+        if(isDraw){excluded++;exCounts[why]=(exCounts[why]||0)+1;drawQ.push({o,why,unsched:!!(r.dueBad&&!isHoldC),flags:flags.slice(),seen:(DB.drawSeen||{})[r.key]||null});return;}
         newOrders.push(o);
         if(r.dupInfo)dups.push({wo:o.wo,...r.dupInfo});
         if(flags.length)flagged.push({wo:r.wo,title:o.title,why:flags.join(' · '),isNew:true});
@@ -9520,9 +9522,30 @@ function analyzeImport(input,source){
       importError('None of the '+(input.rows||recs.length)+' rows had a usable WO number, so nothing was imported.','Check that the WO number column is mapped to the column holding values like WO-2604-7.');
       return null;
     }
-    return{source:source||'file',input,pre,oldDates,delivQ,dups,skipped:input.skipped||[],marks,unsched,autoTag,newOrders,updates,fills,synced,shipped,inTransit,dispGaps,flagged,folds:input.folds||[],stepDiffs,exCounts,
+    drawQ.sort((a,b)=>(!!a.seen-!!b.seen)||String(a.o.dueDate||'9').localeCompare(String(b.o.dueDate||'9'))||String(a.o.wo).localeCompare(String(b.o.wo))); // new ones first, then earliest due
+    return{source:source||'file',input,pre,oldDates,delivQ,drawQ,dups,skipped:input.skipped||[],marks,unsched,autoTag,newOrders,updates,fills,synced,shipped,inTransit,dispGaps,flagged,folds:input.folds||[],stepDiffs,exCounts,
       removals:[],backfills:[],
       counts:{added,updated,skipped:unchanged,noWo:skip.noWo||0,totals:skip.totals||0,snag:skip.snag||0,excluded,shipped:shipped.length,folded:(input.folds||[]).length,rows:input.rows||recs.length}};
+}
+/* (Garry 17 Nov: "review every work order at drawing stage to decide whether or not to bring into planner") NEW work orders at
+   drawing stage (or WO-D) are listed in the import preview, each with a "bring in" tick (unticked = left out, as before).
+   Left out ones are listed again at the next import, marked "left out <date> by <name>" (settings.drawSeen); new ones first. */
+function drawHTML(dq){
+  if(!dq.length)return'';
+  const fd=d=>{if(!d)return'—';const x=new Date(String(d).slice(0,10)+'T12:00:00');return isNaN(x)?String(d):x.toLocaleDateString('en-IE',{day:'numeric',month:'short'});};
+  const nNew=dq.filter(d=>!d.seen).length;
+  return `<div id="imp-draw" style="background:#fff8e6;border:2px solid #e0a43a;border-radius:8px;padding:12px 15px;margin-bottom:12px">
+    <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center"><div style="font-size:14px;font-weight:800;color:#7a4a00">✏️ At drawing stage in Cienapps — ${dq.length} work order${dq.length!==1?'s':''}${nNew&&nNew<dq.length?' ('+nNew+' new)':''}. Tick the ones to bring into the planner</div>
+      <span style="white-space:nowrap"><button class="btn btn-s" id="drq-all" style="font-size:12px;padding:3px 9px">Tick all</button> <button class="btn btn-s" id="drq-none" style="font-size:12px;padding:3px 9px">None</button></span></div>
+    <div style="font-size:12px;color:#7a4a00;margin:2px 0 6px">Not ticked = left out of the planner (listed again at the next import, marked). New ones first, then earliest due.</div>
+    <div style="max-height:50vh;overflow:auto">${dq.map(d=>{const o=d.o,fu=[o.floor,o.unit].filter(Boolean).join(' · ');
+      return `<label style="display:flex;gap:8px;align-items:center;padding:6px 0;border-top:1px solid #f0d9a6;flex-wrap:wrap;cursor:pointer"><input type="checkbox" data-drq="${escA(o.wo)}" style="width:20px;height:20px;flex-shrink:0">
+        <b style="font-family:monospace;color:#14335c">${escA(o.wo)}</b>${d.why==='WO-D'?'<span style="font-size:11px;color:#7a4a00">(WO-D)</span>':''}
+        <span style="font-weight:700">${escA(o.customer||'')}</span>${fu?`<span style="color:var(--t2)">${escA(fu)}</span>`:''}
+        <span style="flex:1;min-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escA(o.title||'')}</span>
+        <span style="white-space:nowrap">due ${escA(fd(o.dueDate))}</span>${+o.value>0?`<span style="white-space:nowrap;color:var(--t2)">€${Math.round(+o.value).toLocaleString('en-IE')}</span>`:''}
+        ${d.seen?`<span style="font-size:11px;background:#eee;border-radius:4px;padding:1px 6px;white-space:nowrap" title="Left out at an earlier import">left out ${escA(fd(d.seen.at))}${d.seen.by?' by '+escA(d.seen.by):''}</span>`:'<span style="font-size:11px;background:#1a56db;color:#fff;border-radius:4px;padding:1px 6px">NEW</span>'}</label>`;}).join('')}</div>
+  </div>`;
 }
 function renderImportPreview(plan){
   const c=plan.counts,el=document.getElementById('iprev');if(!el)return;
@@ -9555,6 +9578,7 @@ function renderImportPreview(plan){
       ${nProc?`<div id="imp-proc" style="font-size:13px;color:#7a4a00;font-weight:700;margin-top:4px">📋 ${nProc} work order${nProc!==1?'s':''} newly processed with no cutting list — after Apply you'll be asked to issue ${nProc!==1?'them':'it'}</div>`:''}
       ${pUnder.map(([w,p])=>`<div class="imp-punder" style="font-size:13px;color:#14335c;margin-top:4px">📋 ${escA(w)} — list already made under ${escA(p)} (same house): no new list asked</div>`).join('')}
     </div>
+    ${drawHTML(plan.drawQ||[])}
     ${plan.changedNote?`<div id="imp-changed" style="background:#fdecea;border:2px solid #e57368;border-radius:8px;padding:12px 15px;margin-bottom:12px">
       <div style="font-size:13px;font-weight:800;color:#8a1c10;margin-bottom:4px">⚠ The plan changed while you were reviewing — ${plan.changedNote.added.length} difference${plan.changedNote.added.length!==1?'s':''}. Nothing was applied.</div>
       <div style="font-size:12px;color:#8a1c10;margin-bottom:4px">Another PC changed the planner since this preview was built. This is the import worked out again on the latest data — check it, then Apply.</div>
@@ -9611,6 +9635,7 @@ function renderImportPreview(plan){
   const setAll=v=>el.querySelectorAll('[data-dk]').forEach(r=>{if(r.value===v)r.checked=true;});
   const tk=document.getElementById('dk-take'),kp=document.getElementById('dk-keep');
   if(tk)tk.onclick=()=>setAll('take');if(kp)kp.onclick=()=>setAll('keep');
+  {const a=document.getElementById('drq-all'),n=document.getElementById('drq-none'),set=v=>el.querySelectorAll('[data-drq]').forEach(c=>c.checked=v);if(a)a.onclick=()=>set(true);if(n)n.onclick=()=>set(false);}
   document.getElementById('imp-cancel').onclick=()=>{IMPPLAN=null;el.innerHTML='<div style="margin-top:14px;font-size:13px;color:var(--t3)">Import cancelled — nothing was changed.</div>';};
   document.getElementById('imp-apply').onclick=async()=>{
     if(!IMPPLAN)return;
@@ -9619,6 +9644,7 @@ function renderImportPreview(plan){
     document.querySelectorAll('[data-rmv]').forEach(s=>{if(s.value)moves[s.dataset.rmv]=s.value;});
     document.querySelectorAll('[data-dk]').forEach(r=>{if(r.checked)dueDec[r.dataset.dk]=r.value;});
     document.querySelectorAll('[data-dlk]').forEach(r=>{if(r.checked)delivDec[r.dataset.dlk]=r.value;}); /*dates round 2*/
+    const drawPick=new Set([...document.querySelectorAll('[data-drq]:checked')].map(c=>c.dataset.drq)); // drawing stage: ticked = bring in
     const ns=IMPPLAN.shipped.length;
     if(ns>20&&!await backupFirst('import moving '+ns+' work orders to Shipped'))return;
     if(!IMPPLAN)return;
@@ -9638,12 +9664,22 @@ function renderImportPreview(plan){
       // choices made before another PC changed that job aren't carried over: the row starts at Keep (the other PC's date) and the job's week stays
       const chg=new Set(d.changed.map(x=>x.key));
       document.querySelectorAll('[data-dk]').forEach(r=>{const k=woKey(r.dataset.dk);if(chg.has(k))r.checked=r.value==='keep';else if(dueDec[r.dataset.dk])r.checked=dueDec[r.dataset.dk]===r.value;});
+      document.querySelectorAll('[data-drq]').forEach(c=>{c.checked=drawPick.has(c.dataset.drq);});
       document.querySelectorAll('[data-rmv]').forEach(s=>{if(chg.has(woKey(s.dataset.rmv)))return;if(moves[s.dataset.rmv]&&[...s.options].some(o=>o.value===moves[s.dataset.rmv]))s.value=moves[s.dataset.rmv];});
       toast('The plan changed while you were reviewing — check the preview again');
       return;
     }
     // Same or fewer changes: each dropped one was either already applied by another PC, or edited there (the planner's edit wins)
     fresh.moves=moves;fresh.dueDec=dueDec;fresh.delivDec=delivDec;
+    { // drawing stage: ticked → brought in like any new job (flagged); not ticked → remembered as left out (shown again, marked)
+      const bd=boardMap(),by=whoNow()||'Office',ds=DB.drawSeen=DB.drawSeen||{};
+      (fresh.drawQ||[]).forEach(d=>{const k=woKey(d.o.wo);
+        if(drawPick.has(d.o.wo)){delete ds[k];if(bd.has(k))return;fresh.newOrders.push(d.o);if(d.unsched)(fresh.unsched=fresh.unsched||[]).push(k);
+          fresh.flagged.push({wo:d.o.wo,title:d.o.title,why:'brought in at drawing stage (ticked in the import)'+(d.flags.length?' · '+d.flags.join(' · '):''),isNew:true});
+          fresh.counts.added++;fresh.counts.excluded=Math.max(0,(fresh.counts.excluded||0)-1);}
+        else if(!ds[k])ds[k]={at:todayLocal(),by};});
+      Object.keys(ds).forEach(k=>{if(bd.has(k))delete ds[k];}); // a job now in the planner needs no "left out" mark
+    }
     applyImport(fresh);IMPPLAN=null;
   };
 }
