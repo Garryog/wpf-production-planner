@@ -3022,12 +3022,13 @@ function lsEditRows(id){ // the typed-list editor's rows, with edging and note k
   // block (a heading whose qty is the number of units) a part's qty is the PER-UNIT quantity.
   const all=lsLinesOf(id),at=all.reduce((m,x)=>String(x.updated_at||'')>m?String(x.updated_at):m,String((LST.l.get(id)||{}).updated_at||''));
   const live=all.filter(x=>x.removed_rev==null),ids=live.map(x=>x.id).join(','); // which lines were on the list when it opened
-  let units=null;
+  let units=null,viaSub=false;
   return live.map(x=>{
     const base={lid:x.id,sig:lsLineSig(x),opened:at,ids};
-    if(x.kind==='hdr'){const u=String(x.qty==null?'':x.qty).trim();if(u||!String(x.section||'').trim()||!units)units=u?+u:null;const h={k:'hdr',item:x.part||'',note:x.note||'',...base};if(u){h.units=u;h.u0=u;}if(String(x.section||'').trim())h.sub=true;return h;} // (16 Nov) a sub-heading with no number keeps the × block it is in
+    if(x.kind==='hdr'){const u=String(x.qty==null?'':x.qty).trim();if(u||!String(x.section||'').trim()||!units){units=u?+u:null;viaSub=false;}else viaSub=true;const h={k:'hdr',item:x.part||'',note:x.note||'',...base};if(u){h.units=u;h.u0=u;}if(String(x.section||'').trim())h.sub=true;return h;} // (16 Nov) a sub-heading with no number keeps the × block it is in
     let q=lsQty(x.qty),fixed=false;
-    if(units){const pu=lsPerUnit(x,units);q=lsQty(pu.qty);fixed=pu.fixed;} // one rule for every place: lsPerUnit
+    if(units&&viaSub&&String(x.unit_qty==null?'':x.unit_qty).trim()==='')fixed=true; // (attack5 M10) saved before 16 Nov, when a sub-heading ended the unit block: its quantity is a TOTAL — kept as a fixed total, never × units
+    else if(units){const pu=lsPerUnit(x,units);q=lsQty(pu.qty);fixed=pu.fixed;} // one rule for every place: lsPerUnit
     return{k:x.kind,item:x.part||'',qty:q,...(fixed?{fixed:true}:{}),L:x.length_mm==null?'':+x.length_mm,W:x.width_mm==null?'':+x.width_mm,mat:x.material||'',edging:x.edging||'',edging2:x.edging2||'',note:x.note||'',sec:x.section||'',...base};
   });
 }
@@ -4873,6 +4874,9 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     if(odd)toast('⚠ '+odd+' row'+(odd!==1?'s':'')+' moved into a unit block don\'t divide by its units — kept as fixed totals (shown "fixed"): check them');
   };
   // where "+ Row / + Heading / + Unit block" go: after the row you were on (a heading or unit block: at the end of that block)
+  // (attack5 M13/M14) the × number in force at position at (what a row put there would be multiplied by), same rule as blocks()
+  const uAt=at=>{let u=null;R().slice(0,at).forEach(r=>{if(r.k==='hdr'){const hu=r.units!==undefined&&r.units!==null;if(!(r.sub&&!hu&&u!=null))u=hu?r.units:null;}});return u;};
+  const fenceX=(at,add,label)=>{if(uAt(at)!=null&&add.length&&!(add[0].k==='hdr'&&!add[0].sub))add.unshift({k:'hdr',item:label,note:''});return add;}; // a plain heading ends the × block: the rows keep their own quantities
   const curRow=()=>{const i=parseInt(String(st.cur).split('|')[0]);return isNaN(i)||i>=R().length?-1:i;};
   const endOfBlock=i=>{let j=i+1;while(j<R().length&&R()[j].k!=='hdr')j++;return j;};
   const matSel=(r,i,id)=>{
@@ -5064,13 +5068,17 @@ function openListEditor2(listId,presetWo,presetPid,opt){
          (and under its sub-headings) are × that number — the quantity typed is for ONE, the total is shown beside it and goes to the
          saw. Changing the number later changes every total. Back to Heading / Sub-heading: the rows keep their TOTALS. */
       if(e.value==='mul'){if(wasU){draw();return;}
+        if(r.sub){const B=blocks();let inX=false;for(let j=i-1;j>=0;j--){const y=R()[j];if(y.k==='hdr'&&!y.sub){inX=y.units!==undefined&&y.units!==null;break;}if(y.k==='hdr'&&y.units!=null){inX=true;break;}}
+          if(inX){toast('Not changed — "'+(String(r.item||'').trim()||'this sub-heading')+'" is inside a × block, so its rows are already multiplied. To multiply it on its own, make it a Heading first.');draw();return;}} // (attack5 M4) never a silent change of totals
         const v=prompt('Multiply the rows under "'+(String(r.item||'').trim()||'this heading')+'" by how many?\n\n(e.g. 4 = four apartments on this floor. The quantities in the rows are then for ONE — the totals are worked out.)','2');
         if(v===null){draw();return;}const n=String(v).trim();if(!/^\d+$/.test(n)||+n<1||+n>500){toast('Not changed — a whole number from 1 to 500');draw();return;}
         snap();r.units=n;delete r.sub;st.unitsOn=true;st.focus=i+'|units';draw();toast('"'+(String(r.item||'').trim()||'Heading')+'" × '+n+' — every row under it is now × '+n);return;}
       snap();
-      if(wasU){if(sawStarted&&r.lid){draw();return;}const u=r.units,B=blocks();R().forEach((x,j)=>{if(B.H[j]===i&&x.k==='part'){if(!x.fixed)x.qty=lsMul(x.qty,u);delete x.fixed;}});delete r.units;delete r.u0;
-        toast('No longer × '+u+' — the rows keep their totals');}
-      if(e.value==='sub')r.sub=true;else delete r.sub;st.focus=i+'|item';draw();});
+      if(wasU&&sawStarted&&r.lid){draw();return;}
+      const u=r.units; // (attack5 M1–M3) Heading ↔ Sub-heading, or no longer ×: every row keeps its TOTAL (the same rule as deleting or moving a row)
+      keepTotals(()=>{if(wasU){delete r.units;delete r.u0;}if(e.value==='sub')r.sub=true;else delete r.sub;});
+      if(wasU)toast('No longer × '+u+' — the rows keep their totals');
+      st.focus=i+'|item';draw();});
     ov.querySelectorAll('[data-mbuy]').forEach(e=>e.onchange=()=>{const i=+e.dataset.mbuy,r=R()[i];if(!r)return;snap();if(e.checked)r.buy=true;else delete r.buy;
       const tr=e.closest('[data-row]');if(tr)tr.classList.toggle('me-buy',!!r.buy);updTag(i);});
     const g=id=>ov.querySelector('#'+id);
@@ -5110,6 +5118,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     on('me-delgo',()=>{keep();const o=lwDelO(),m=g('me-delmsg'),say=(t,bad)=>{if(m){m.textContent=t;m.style.color=bad?'#b42318':'#14335c';}};if(!o)return;
       const d=(g('me-deld')||{}).value||'',v=(g('me-delv')||{}).value||'';
       if(!d||!v){say('Pick the delivery day AND the van, then 🚚 Book.',true);return;}
+      if(isNaN(new Date(d+'T12:00:00'))){say('That is not a date — pick the day from the calendar.',true);return;} // (attack5 F7)
       const day=DEL_DAYS[(new Date(d+'T12:00:00').getDay()+6)%7];if(!day){say(fmt(d)+' is a Sunday — no deliveries on a Sunday.',true);return;}
       if(isOnHold(o)){say(o.wo+' is on hold in Cienapps — it cannot go on a van until it is off hold.',true);return;}
       if(dStage(o)==='deliv'){say(o.wo+' is already DELIVERED'+(o.delDelivAt?' ('+fmt(o.delDelivAt)+')':'')+' — not booked again. If that is wrong, change it on the Deliveries page.',true);return;} // (attack4 D1)
@@ -5213,7 +5222,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
         add.forEach(r=>{r._xl=xk;});
         snap();
         const typed=!blankAll(); // (attack4 B1–B6) the same "nothing typed" test as a template or an old list: a heading note, a tick, a material, a renamed heading or a unit block all count as typed
-        if(typed)R().push(...add);else R().splice(0,R().length,...add);
+        if(typed){fenceX(R().length,add,sh.name||'From Excel');R().push(...add);}else R().splice(0,R().length,...add);
         if(add.some(r=>r.k==='hdr'&&r.units!=null))st.unitsOn=true;
         // (attack2 F13) the list name is not pre-filled with the sheet name (blank = the WO number)
         const m=sh.p.meta;if(!st.carcass&&m.carcass)st.carcass=m.carcass;if(!st.door&&m.door)st.door=m.door;
@@ -5242,9 +5251,8 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     const again=R().some(r=>r._old===l.id);
     if(again&&!confirm('The rows of "'+String(l.name||'that list')+'" are already in this list.\n\nAdd them a second time?'))return;
     add.forEach(r=>{r._old=l.id;});
-    const inUnits=!add.some(r=>r.k==='hdr'&&r.units!=null)&&(()=>{for(let j=R().length-1;j>=0;j--)if(R()[j].k==='hdr')return R()[j].units!=null;return false;})();
-    if(inUnits&&add[0].k!=='hdr')add.unshift({k:'hdr',item:'From "'+String(l.name||'old list')+'"',note:''}); // a plain heading ends the unit block: the quantities stay as they were on the old list (never × units)
-    snap();const drop=blankAll()?R().length:0,at=drop?0:R().length; // (Garry 16 Nov) nothing typed yet: the blank standard layout is replaced, like a template or an Excel sheet
+    snap();const drop=blankAll()?R().length:0,at=drop?0:R().length;
+    if(!drop)fenceX(at,add,'From "'+String(l.name||'old list')+'"'); // a plain heading ends a unit / × block: the quantities stay as they were on the old list (never × units) // (Garry 16 Nov) nothing typed yet: the blank standard layout is replaced, like a template or an Excel sheet
     R().splice(at,drop,...add);if(add.some(r=>r.k==='hdr'&&r.units!=null))st.unitsOn=true;st.focus=at+'|item';draw();
     toast('Added '+add.length+' row'+(add.length!==1?'s':'')+' from "'+l.name+'"'+(again?' again (now in twice — Ctrl+Z takes them out)':'')+' — change anything for this job, then Save');
   };
@@ -5266,7 +5274,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       const t=lsList(tid),lines=lsLinesOf(tid).filter(x=>x.removed_rev==null&&x.status!=='na');
       const blocks0=[];let cur=null;
       lines.forEach(x=>{if(x.kind==='hdr'){if(!String(x.qty==null?'':x.qty).trim()&&String(x.section||'').trim()&&cur)return;/* a sub-heading in a × block stays in it (16 Nov) */cur=String(x.qty==null?'':x.qty).trim()?{name:x.part||'',units:+x.qty||1,parts:[]}:null;if(cur)blocks0.push(cur);return;}if(cur)cur.parts.push(x);});
-      if(!blocks0.length&&!st.unitsOn){ // a house-type template (Aspect / O'Malleys): its rows go in as they are — headings, sub-headings, bought-in; change anything for this house
+      if(!blocks0.length){ // (attack5 M12) also when the list already has a × block: How many? / Name it, never the unit picker // a house-type template (Aspect / O'Malleys): its rows go in as they are — headings, sub-headings, bought-in; change anything for this house
         const add=lines.map(x=>x.kind==='hdr'?{k:'hdr',item:x.part||'',note:x.note||'',...(String(x.section||'').trim()?{sub:true}:{})}
           :{k:'part',item:x.part||'',qty:x.qty==null?'':String(x.qty),L:x.length_mm==null?'':String(+x.length_mm),W:x.width_mm==null?'':String(+x.width_mm),mat:x.material||'',edging:x.edging||'',edging2:x.edging2||'',note:x.note||'',...(x.kind==='buy'?{buy:true}:{})});
         if(!add.length){body.innerHTML='<span style="color:var(--t2)">That template has no rows.</span>';return;}
@@ -5294,7 +5302,8 @@ function openListEditor2(listId,presetWo,presetPid,opt){
             if(k>1&&x.k==='part'&&!x.buy){const q=String(x.qty==null?'':x.qty).trim();if(q&&!/^\d+(\.\d+)?$/.test(q)){odd++;x.note=(x.note?x.note+' · ':'')+'⚠ ×'+k+' — check qty';}}
             return x;});
           if(blk){rows.unshift({k:'hdr',item:nm||tnm,units:String(k),note:nm?tnm:''});st.unitsOn=true;}
-          snap();const c=curRow(),at=c<0?R().length:endOfBlock(c),drop=blankAll()?R().length:0,at2=drop?0:at; // (Garry 13 Nov) nothing typed yet — the blank standard headings and rows are replaced by the template, not left above it
+          snap();const c=curRow(),at=c<0?R().length:endOfBlock(c),drop=blankAll()?R().length:0,at2=drop?0:at;
+          if(!drop)fenceX(at2,rows,tnm); // (Garry 13 Nov) nothing typed yet — the blank standard headings and rows are replaced by the template, not left above it
           R().splice(at2,drop,...rows);dl.remove();st.focus=at2+'|item';draw();
           toast('Added '+(nm?'"'+nm+'" — ':'')+'template '+tnm+(k>1?' × '+k+' (the totals are worked out — change × '+k+' in the list any time)':'')+(odd?' — '+odd+' row'+(odd!==1?'s':'')+' with a quantity that is not a number: check them (⚠ in the note)':'')+(drop>1?' — the blank rows were replaced':''));};
         body.querySelector('#it-hok').onclick=go;
@@ -5613,7 +5622,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     closeEd();};
   document.addEventListener('keydown',escH);
   document.querySelectorAll('.pod-ovl.me-dov').forEach(x=>x.remove()); // a "Saved ✓" panel still open: that list is saved — it goes
-  st.hdr0=new Set(R().filter(r=>r.k==='hdr').map(r=>String(r.item||'').trim())); // (attack4 B5) the headings the window opened with: one renamed is typed
+  st.hdr0=new Set(ex||opt.rows?[]:R().filter(r=>r.k==='hdr').map(r=>String(r.item||'').trim())); // (attack5 F1) a saved list's headings are never "the blank layout" // (attack4 B5) the headings the window opened with: one renamed is typed
   document.body.appendChild(ov);draw();st.sig0=sig();autoProj();
   if(!ex&&!st.tpl&&st.wo&&window.innerWidth>=700&&R().length===1&&lsEmptyRow(R()[0]))setTimeout(()=>{const a=document.activeElement;if(document.body.contains(ov)&&!(a&&ov.contains(a)&&a!==ov))go(0,'item');},60); // opened from a job: the cursor is in the first Description box — just type
   return{st,draw};
@@ -10407,7 +10416,7 @@ function placeJobs(moved,veh,day,wk,fin){ /*list-window attack4: fin(true) once 
   if(!moved.length){no();return;}
   wk=day?(wk||delTabWk()||thisWk()):'';
   const changing=moved.filter(o=>(o.delVeh||'')!==veh||(o.delDay||'')!==day||(!!day&&slotWk(o)!==wk));
-  if(!changing.length){delSel.clear();render();if(fin)fin(true);return;}
+  if(!changing.length){if(!fin)delSel.clear();render();if(fin)fin(true);return;}
   const reMoves=changing.filter(o=>o.delDay);
   if(day){const dt=addDayISO(wk,DEL_DAYS.indexOf(day));if(!isDelivDay(dt)&&!confirm(day+' '+dShort(dt)+' is a bank holiday — book '+(changing.length===1?changing[0].wo:changing.length+' jobs')+' on it anyway?')){render();no();return;}} /*dates*/
   const apply=(by,why)=>{
@@ -10425,7 +10434,7 @@ function placeJobs(moved,veh,day,wk,fin){ /*list-window attack4: fin(true) once 
       if(day){o.delWk=wk;delete o.delRebook;delete o.delivMv;} /*dates: booked into a week; booked again clears "rebook"*/
       else delete o.delWk;
     });
-    delSel.clear();sched();render();
+    if(!fin)delSel.clear();sched();render(); /*attack5 F4: a booking from the list window leaves the Deliveries page ticks alone*/
     if(fin){fin(true);return;} /*list-window: the window says it itself*/
     if(day)showReadiness(changing.map(o=>o.wo),'scheduled to '+slotLbl(veh,day,wk));
     else toast(changing.length+' job'+(changing.length!==1?'s':'')+' returned to the pool');
