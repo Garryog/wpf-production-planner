@@ -694,3 +694,11 @@ Also for Garry: accept or reject the rows marked pending in the "15 Nov 2026 —
   alone and named; the template is re-read first, so another PC's change is kept. Test `g17-add-to-templates` 16/16; 16
   Lists-page test files pass.
 - Neither has been attacked by the Tester or read by the Manager yet. Full suite not re-run since this morning.
+
+## Garry's answers — 17 Nov 2026, evening (live)
+- 20 → A (keep both Import Excel buttons) · 21 → A (on-hold house: no P-number, told to get it off hold) · 22 → A (window buttons as they are).
+- Database guard against a save that empties a list → **A: yes** (SQL as a PENDING block + a tested "restore an old revision" script).
+- Driver per van per day, set by the Production Manager on Deliveries → **A: yes, with this release (#5)**.
+- Job B: two P-numbers for one house → A flag only (as built) · Cienapps customer matching an INACTIVE project → A reactivate and
+  use it · a date moved inside the 14-day window from Deliveries / the board → A counts as a Late change.
+- Not yet answered: KITCHEN ISLAND (9), Johnny's pool as built (10), upload as built (11), Mon 3 Jan 2028 (12).
