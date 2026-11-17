@@ -2991,7 +2991,8 @@ function lsFlagMats(lines,pid){ // sheet material not on the project's list → 
 }
 async function lsReloadList(id){
   lsPut('lists',await lsGet('lists?select=*&id=eq.'+encodeURIComponent(id)));
-  LST.full.add(id);lsPut('list_lines',await lsGet('list_lines?select=*&list_id=eq.'+encodeURIComponent(id)));
+  const rows=await lsGet('list_lines?select=*&list_id=eq.'+encodeURIComponent(id)); // (audit 17 Nov) fetched FIRST: a failed fetch never leaves the list marked "loaded" with no rows
+  LST.full.add(id);lsPut('list_lines',rows);
 }
 function lsSame(cur,pl,df){
   if(df.changed.length||df.added.length||df.removed.length||df.noteOnly.length)return false;
@@ -3008,6 +3009,12 @@ async function lsSaveList(pl,lines,by,reason,opt){
     if(LST.l.has(pl.id)&&!LST.full.has(pl.id))await lsReloadList(pl.id);
     const cur=LST.l.get(pl.id),df=diffLines(cur?lsLinesOf(pl.id):[],lines,{listId:pl.id,mat:lsMatCanon(pl.project_id||(cur&&cur.project_id))});
     if(cur&&lsSame(cur,pl,df))return{list:cur,diff:df,same:true}; // nothing changed: no save, no new revision for the saw
+    { // (audit 17 Nov, Garry) a save that takes away most of a list's rows is asked first — never a silent wipe (e.g. a list that opened looking empty)
+      const live=lsLinesOf(pl.id).filter(x=>x.removed_rev==null).length,gone=df.removed.length;
+      if(cur&&live>0&&gone>0&&!opt.shrinkOk&&(gone===live||(gone>=3&&gone*2>live))){
+        if(!confirm('⚠ This save TAKES AWAY '+gone+' of the '+live+' rows on "'+String(cur.name||pl.name||'this list')+'".\n\nIf the list opened looking empty or short, press Cancel, close it and open it again.\n\nOK = yes, take those rows away\nCancel = do not save'))throw new Error('Not saved — nothing was changed. Close the list and open it again.');
+        opt={...opt,shrinkOk:true};}
+    }
     try{
       const out=await lsRpc('save_list_revision',{p_list:{...pl,check_req:lsChkOn()},p_lines:df.lines,p_expect:opt.expect!=null?opt.expect:cur?cur.version:null,p_by:lqBy(by),p_reason:reason||null});
       LST.full.add(out.list.id);lsPut('lists',[out.list]);lsPut('list_lines',out.lines);
