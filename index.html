@@ -5623,7 +5623,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     closeEd();};
   document.addEventListener('keydown',escH);
   document.querySelectorAll('.pod-ovl.me-dov').forEach(x=>x.remove()); // a "Saved ✓" panel still open: that list is saved — it goes
-  st.hdr0=new Set(ex||opt.rows?[]:R().filter(r=>r.k==='hdr').map(r=>String(r.item||'').trim())); // (attack5 F1) a saved list's headings are never "the blank layout" // (attack4 B5) the headings the window opened with: one renamed is typed
+  st.hdr0=new Set(ex||st.from?[]:R().filter(r=>r.k==='hdr').map(r=>String(r.item||'').trim())); // (attack5 F1) a saved list's headings are never "the blank layout" // (attack4 B5) the headings the window opened with: one renamed is typed
   document.body.appendChild(ov);draw();st.sig0=sig();autoProj();
   if(!ex&&!st.tpl&&st.wo&&window.innerWidth>=700&&R().length===1&&lsEmptyRow(R()[0]))setTimeout(()=>{const a=document.activeElement;if(document.body.contains(ov)&&!(a&&ov.contains(a)&&a!==ov))go(0,'item');},60); // opened from a job: the cursor is in the first Description box — just type
   return{st,draw};
