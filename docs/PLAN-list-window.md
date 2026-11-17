@@ -673,3 +673,11 @@ Also for Garry: accept or reject the rows marked pending in the "15 Nov 2026 —
   time — its rows are now loaded before the window opens · [LOW] Esc now closes View · [LOW] a double-click on View no longer
   opens and shuts it at once.
 - After the fix: attack6 files 107/107; the 12 other test files that open View: same results as before (no new failure).
+
+### 17 Nov 2026, ~13:00–14:00 — Garry live: "all these are now empty" (Clancy, Elliotts Aderrig templates)
+- Live database checked (read only): nothing lost — every list and template has all its rows. Cause: on the LIVE version, ✎ Edit
+  and View did not load a template's / archived list's rows first (fixed on this branch on 12 Nov). Hotfix for live: **PR #6**.
+- Saving audit (Manager) → `docs/AUDIT-2026-11-17-list-saving.md`. Guards added on live via **PR #7** and on this branch
+  (cherry-picked): a failed row fetch never marks a list loaded; a save taking away all / most rows asks first.
+  Checked here: h17-save-guards 6/6, attack6-view-save 78/78, g16-xl-old-saveclose 10/10, attack5-multiply 28/31 (as before).
+  Full suite not re-run after this change.
