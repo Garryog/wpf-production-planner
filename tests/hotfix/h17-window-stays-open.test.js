@@ -28,14 +28,14 @@ const results = []; const rec = (n, ok, d) => { results.push(ok); console.log((o
     await p.mouse.click(4, 4); await sleep(300);
     rec('a click on the grey background does NOT close the list window', await isOpen());
     // 3. Cancel with rows typed → asked; No → stays
-    await p.evaluate(() => { window.__ok = false; window.__asked = []; document.querySelector('.me-ed #pod-x').click(); }); await sleep(200);
+    await p.evaluate(() => { window.__ok = false; window.__asked = []; (document.querySelector('.me-ed #pod-x') || document.getElementById('me-x0')).click(); }); await sleep(200);
     const a3 = await p.evaluate(() => window.__asked.slice());
     rec('Cancel with rows typed → asks "Close without saving?"; answer No → still open', /without saving/i.test(a3.join(' ')) && await isOpen(), JSON.stringify(a3));
-    await p.evaluate(() => { window.__ok = true; document.querySelector('.me-ed #pod-x').click(); }); await sleep(200);
+    await p.evaluate(() => { window.__ok = true; (document.querySelector('.me-ed #pod-x') || document.getElementById('me-x0')).click(); }); await sleep(200);
     rec('…answer Yes → closed', !(await isOpen()));
     // 4. Cancel on an untouched new window → closes without asking
     await p.evaluate(() => { window.__asked = []; document.querySelectorAll('.pod-ovl').forEach(x => x.remove()); openListEditor(null, '', 'P1', { tpl: true }); }); await sleep(600);
-    await p.evaluate(() => document.querySelector('.me-ed #pod-x').click()); await sleep(200);
+    await p.evaluate(() => (document.querySelector('.me-ed #pod-x') || document.getElementById('me-x0')).click()); await sleep(200);
     rec('Cancel on an untouched window closes straight away (no question)', !(await isOpen()) && !(await p.evaluate(() => window.__asked.length)));
     rec('no page errors', !(S.errors || []).length, JSON.stringify(S.errors));
   } catch (e) { rec('test ran to the end', false, e.stack); }
