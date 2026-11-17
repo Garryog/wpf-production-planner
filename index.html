@@ -4817,8 +4817,14 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     st.focus=m;draw();
     toast('Pasted '+n+' cell'+(n!==1?'s':'')+' from '+aoa.length+' row'+(aoa.length!==1?'s':'')+'. Ctrl+Z undoes it.');
   });
-  ov.onclick=e=>{if(e.target===ov||e.target.id==='pod-x')ov.remove();};
-  document.body.appendChild(ov);draw();
+  /* (hotfix 17 Nov, Garry: "I go back to … a previous line … it closed everything and I lose what I am working on") the grey
+     background NEVER closes the list window — a click that started in a cell (selecting text, or a press during a redraw) used to
+     land on it and close the window without asking. Cancel asks when something has been typed. */
+  const sigE=()=>{try{keep();}catch(e){}return JSON.stringify([R().filter(r=>r.k==='hdr'?String(r.item||'').trim()||String(r.note||'').trim():!lsEmptyRow(r)),st.name,st.wo,st.tname,st.pid]);};
+  ov.onclick=e=>{if(e.target.id!=='pod-x'||!e.target.closest('.me-ed'))return;
+    if(sigE()!==st.sig0&&!confirm('Close without saving?\n\nWhat you typed in this list is lost.\n\nOK = close without saving\nCancel = stay and Save'))return;
+    ov.remove();};
+  document.body.appendChild(ov);draw();st.sig0=sigE();
   return{st,draw};
 }
 /* ---------- Save as template / Update template / History (V2; Production Manager, Drawing office or Admin PIN) ----------
