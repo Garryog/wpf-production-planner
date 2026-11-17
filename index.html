@@ -5112,10 +5112,17 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       if(!d||!v){say('Pick the delivery day AND the van, then 🚚 Book.',true);return;}
       const day=DEL_DAYS[(new Date(d+'T12:00:00').getDay()+6)%7];if(!day){say(fmt(d)+' is a Sunday — no deliveries on a Sunday.',true);return;}
       if(isOnHold(o)){say(o.wo+' is on hold in Cienapps — it cannot go on a van until it is off hold.',true);return;}
-      if(!o.delv){o.delv=true;delvMark(o);logEdit(o,'Ticked for delivery from the cutting list window',whoNow());} // (Garry 16 Nov) booking a van puts the job on the Deliveries page
+      if(dStage(o)==='deliv'){say(o.wo+' is already DELIVERED'+(o.delDelivAt?' ('+fmt(o.delDelivAt)+')':'')+' — not booked again. If that is wrong, change it on the Deliveries page.',true);return;} // (attack4 D1)
+      if(d<todayLocal()){say(fmt(d)+' has already gone — pick today or a later day.',true);return;} // (attack4 D2) never booked into the past (it would show at once as a missed delivery)
+      if(isShipped(o)&&!confirm(o.wo+' is SHIPPED in Cienapps ('+fmt(o.shippedAt)+').\n\nBook it on a van anyway?')){say('Not booked — nothing changed.');return;} // (attack4 S1)
+      const wasD=!!o.delv,hadOv=Object.prototype.hasOwnProperty.call(o,'delvOverride'),ov0=o.delvOverride;
+      if(!wasD){o.delv=true;delvMark(o);} // booking a van puts the job on the Deliveries page (Garry 16 Nov) — taken back if the booking is cancelled
       st.delD=null;st.delV=null;say('Booking…');
-      placeJobs([o],v,day,wkOf(d)); // the same booking as the Deliveries page: name asked, a move asks why, bank holidays asked
-      const want=v+'|'+day+'|'+wkOf(d),t0=Date.now(),tick=()=>{if(!document.body.contains(ov))return;if((o.delVeh+'|'+o.delDay+'|'+slotWk(o))===want){draw();toast(o.wo+' booked: '+slotLbl(v,day,wkOf(d))+' ✓');return;}if(Date.now()-t0<120000)setTimeout(tick,400);else draw();};setTimeout(tick,300);});
+      placeJobs([o],v,day,wkOf(d),ok=>{ // the same booking as the Deliveries page: name asked, a move asks why, bank holidays asked
+        if(!ok){if(!wasD){o.delv=false;if(hadOv)o.delvOverride=ov0;else delete o.delvOverride;sched();} // (attack4 N1/B1) cancelled: nothing changed, not even the tick
+          if(document.body.contains(ov)){draw();const m2=g('me-delmsg');if(m2){m2.textContent=o.delDay?'Not changed — Booked: '+slotLbl(o.delVeh,o.delDay,slotWk(o))+' ('+o.wo+')':'Not booked — nothing changed.';m2.style.color='#b42318';}}return;}
+        if(!wasD)logEdit(o,'Ticked for delivery from the cutting list window',whoNow());
+        if(document.body.contains(ov)){draw();toast(o.wo+' booked: '+slotLbl(o.delVeh,o.delDay,slotWk(o))+' ✓');}});});
     {const sd=g('me-start');if(sd)sd.ontoggle=()=>{st.startOpen=sd.open;};}
     on('me-impxl',()=>{keep();const fx=g('me-xlfile');if(fx){fx.value='';fx.click();}stOff();});
     const xf=g('me-xlfile');if(xf)xf.onchange=()=>{const f=xf.files[0];if(f)impXl(f);};
@@ -5245,7 +5252,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
   const lwDelHTML=()=>{const o=lwDelO();if(!o)return'';const bk=o.delDay?slotLbl(o.delVeh,o.delDay,slotWk(o)):'';
     if(!(ROLE==='prod'||ROLE==='admin'))return bk?`<div><label>Delivery</label><div class="wo-ro" id="me-delro" title="Booked on the Deliveries page">🚚 ${escA(bk)}</div></div>`:''; // (Garry 16 Nov) Production Manager books; everyone else sees it
     const di=o.delDay?addDayISO(slotWk(o),DEL_DAYS.indexOf(o.delDay)):'';
-    return `<div id="me-delbk"><label>Delivery (Production Manager)</label><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><input type="date" id="me-deld" value="${escA(st.delD!=null?st.delD:di)}" style="${LS_INP}" title="The delivery day"><select id="me-delv" style="${LS_INP}" title="The van"><option value="">— van —</option>${DEL_VEH.map(v=>`<option value="${escA(v.k)}"${(st.delV!=null?st.delV:o.delVeh)===v.k?' selected':''}>${escA(v.n)}</option>`).join('')}</select><button class="btn btn-s" id="me-delgo" style="font-size:12px;white-space:nowrap" title="Books this job on that van and day on the Deliveries page now — separate from saving the list">🚚 Book</button></div><div id="me-delmsg" style="font-size:12px;color:${bk?'#0d6e46':'var(--t3)'};margin-top:2px">${bk?'Booked: '+escA(bk):'Not booked yet'}</div></div>`;};
+    return `<div id="me-delbk"><label>Delivery (Production Manager)</label><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><input type="date" id="me-deld" value="${escA(st.delD!=null?st.delD:di)}" style="${LS_INP}" title="The delivery day"><select id="me-delv" style="${LS_INP}" title="The van"><option value="">— van —</option>${DEL_VEH.map(v=>`<option value="${escA(v.k)}"${(st.delV!=null?st.delV:o.delVeh)===v.k?' selected':''}>${escA(v.n)}</option>`).join('')}</select><button class="btn btn-s" id="me-delgo" style="font-size:12px;white-space:nowrap" title="Books this job on that van and day on the Deliveries page now — separate from saving the list">🚚 Book</button></div><div id="me-delmsg" style="font-size:12px;color:${bk?'#0d6e46':'var(--t3)'};margin-top:2px">${bk?'Booked: '+escA(bk)+' ('+escA(o.wo)+')':'Not booked yet ('+escA(o.wo)+')'}</div></div>`;}; // (attack4 K1) says which work order
   const blankAll=()=>R().length>0&&R().every(r=>r.k==='hdr'?(!String(r.note||'').trim()&&r.units==null&&(st.hdr0||new Set()).has(String(r.item||'').trim())):(lsEmptyRow(r)&&!String(r.mat||'').trim()&&!r.buy)); // (attack4 B5/B6) a heading renamed, or a unit / × block, counts as typed; no part row has anything typed, picked or ticked, and no heading has a note: only the blank layout is there
   const insTpl=()=>{
     if(!st.pid){ov.querySelector('#me-err').textContent='Pick the project first — templates belong to a project.';return;}
@@ -10387,14 +10394,15 @@ function dateDlgOpen(wos,by){
 // wk (optional): adds the date — "Volvo Tue 17 Nov"
 function slotLbl(v,d,wk){if(!d)return'the pool';const i=DEL_DAYS.indexOf(d),dt=wk&&i>=0?dShort(addDayISO(wk,i)):'';return (vehLbl(v)||v)+' '+d+(dt?' '+dt:'');}
 /*dates: wk = the week being booked (the open tab's week). A move to another week is a move like any other — it asks why. */
-function placeJobs(moved,veh,day,wk){
+function placeJobs(moved,veh,day,wk,fin){ /*list-window attack4: fin(true) once booked, fin(false) when cancelled (name, reason, bank holiday) — the Deliveries page passes none*/
+  const no=()=>{if(fin)fin(false);};
   moved=moved.filter(delOnPage); /*v-deliv attack5: never books a job that has left the Deliveries page*/
-  if(!moved.length)return;
+  if(!moved.length){no();return;}
   wk=day?(wk||delTabWk()||thisWk()):'';
   const changing=moved.filter(o=>(o.delVeh||'')!==veh||(o.delDay||'')!==day||(!!day&&slotWk(o)!==wk));
-  if(!changing.length){delSel.clear();render();return;}
+  if(!changing.length){delSel.clear();render();if(fin)fin(true);return;}
   const reMoves=changing.filter(o=>o.delDay);
-  if(day){const dt=addDayISO(wk,DEL_DAYS.indexOf(day));if(!isDelivDay(dt)&&!confirm(day+' '+dShort(dt)+' is a bank holiday — book '+(changing.length===1?changing[0].wo:changing.length+' jobs')+' on it anyway?')){render();return;}} /*dates*/
+  if(day){const dt=addDayISO(wk,DEL_DAYS.indexOf(day));if(!isDelivDay(dt)&&!confirm(day+' '+dShort(dt)+' is a bank holiday — book '+(changing.length===1?changing[0].wo:changing.length+' jobs')+' on it anyway?')){render();no();return;}} /*dates*/
   const apply=(by,why)=>{
     const at=nowISO(),to=day?veh+'|'+day+'|'+wk:'';
     changing.map(o=>findDel(o.wo)).filter(Boolean).forEach(o=>{
@@ -10411,6 +10419,7 @@ function placeJobs(moved,veh,day,wk){
       else delete o.delWk;
     });
     delSel.clear();sched();render();
+    if(fin){fin(true);return;} /*list-window: the window says it itself*/
     if(day)showReadiness(changing.map(o=>o.wo),'scheduled to '+slotLbl(veh,day,wk));
     else toast(changing.length+' job'+(changing.length!==1?'s':'')+' returned to the pool');
   };
@@ -10418,8 +10427,8 @@ function placeJobs(moved,veh,day,wk){
     if(!reMoves.length){apply(by,'');return;}
     pickReason('Why is '+(reMoves.length===1?reMoves[0].wo:reMoves.length+' jobs')+' moving?',
       `Moving to <b>${escA(slotLbl(veh,day,wk))}</b>${reMoves.length===1?' from <b>'+escA(slotLblO(reMoves[0]))+'</b>':''}. Every move is recorded with your name (${escA(by)}) and shows on the management scorecard.`,
-      why=>apply(by,why),()=>render());
-  },()=>render());
+      why=>apply(by,why),()=>{render();no();});
+  },()=>{render();no();});
 }
 /* Missed deliveries (booked for a date already gone — any week still open — not delivered) need a reason */
 function missedJobs(){
