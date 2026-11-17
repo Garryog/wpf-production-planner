@@ -370,3 +370,11 @@ Garry sent the Aderrig cutting-list workbook ("a current high volume job … a n
 - Over the amount → **warn in red** (nothing blocked or moved). One apartment = one apartment number (kitchen + utility + robes = 1).
 - Counts in the work order's **delivery week**. **One figure + exceptions** for single weeks.
 - Lives in the PM sequence (Job B); no database change (planner settings).
+
+### Garry's answers — 17 Nov 2026, evening (live)
+- Two P-numbers for one house → **flag only** (as built). Cienapps customer matching an INACTIVE project → **reactivate it and use it**
+  (change to build). A date moved inside the 14-day window from Deliveries / the board → **counts as a Late change** (change to build).
+- "HOUSE TYPE B KITCHEN ISLAND" → **part of the kitchen** (as built).
+- Johnny's pool (B9) and the Cienapps upload (B10): Garry wants the points **one by one** — sent 17 Nov evening; awaiting answers.
+- Mon 3 Jan 2028 = the New Year bank holiday → **yes** (as built).
+- Garry will send one real Cienapps upload file + 5 real work orders for a dry run; and will run the 3 SQL blocks on go-live day, talked through.
