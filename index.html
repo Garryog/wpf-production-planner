@@ -4879,6 +4879,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
   const fenceX=(at,add,label)=>{if(uAt(at)!=null&&add.length&&!(add[0].k==='hdr'&&!add[0].sub))add.unshift({k:'hdr',item:label,note:''});return add;}; // a plain heading ends the × block: the rows keep their own quantities
   const curRow=()=>{const i=parseInt(String(st.cur).split('|')[0]);return isNaN(i)||i>=R().length?-1:i;};
   const endOfBlock=i=>{let j=i+1;while(j<R().length&&R()[j].k!=='hdr')j++;return j;};
+  const endOfXBlock=i=>{let j=endOfBlock(i);while(j<R().length&&R()[j].k==='hdr'&&R()[j].sub&&(R()[j].units===undefined||R()[j].units===null)&&uAt(j)!=null)j=endOfBlock(j);return j;}; // (Manager 17 Nov) a template goes in AFTER the whole × block — never between its sub-headings (that would change totals further down)
   const matSel=(r,i,id)=>{
     const sized=lsNum(r.L)>0||lsNum(r.W)>0;
     // a Stores row still carrying only the copied default colour is saved with NO colour — so it shows none (pick one to keep it)
@@ -5302,7 +5303,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
             if(k>1&&x.k==='part'&&!x.buy){const q=String(x.qty==null?'':x.qty).trim();if(q&&!/^\d+(\.\d+)?$/.test(q)){odd++;x.note=(x.note?x.note+' · ':'')+'⚠ ×'+k+' — check qty';}}
             return x;});
           if(blk){rows.unshift({k:'hdr',item:nm||tnm,units:String(k),note:nm?tnm:''});st.unitsOn=true;}
-          snap();const c=curRow(),at=c<0?R().length:endOfBlock(c),drop=blankAll()?R().length:0,at2=drop?0:at;
+          snap();const c=curRow(),at=c<0?R().length:endOfXBlock(c),drop=blankAll()?R().length:0,at2=drop?0:at;
           if(!drop)fenceX(at2,rows,tnm); // (Garry 13 Nov) nothing typed yet — the blank standard headings and rows are replaced by the template, not left above it
           R().splice(at2,drop,...rows);dl.remove();st.focus=at2+'|item';draw();
           toast('Added '+(nm?'"'+nm+'" — ':'')+'template '+tnm+(k>1?' × '+k+' (the totals are worked out — change × '+k+' in the list any time)':'')+(odd?' — '+odd+' row'+(odd!==1?'s':'')+' with a quantity that is not a number: check them (⚠ in the note)':'')+(drop>1?' — the blank rows were replaced':''));};
@@ -5321,7 +5322,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       body.querySelector('#it-ok').onclick=()=>{
         const n=String(body.querySelector('#it-n').value||'').trim();if(!/^\d+$/.test(n)||+n<1){body.querySelector('#it-err').textContent='How many units? A whole number, 1 or more.';return;}
         const o=opts[+(body.querySelector('[name="it-u"]:checked')||{}).value||0];
-        snap();const c=curRow(),at=c<0?R().length:endOfBlock(c);
+        snap();const c=curRow(),at=c<0?R().length:endOfXBlock(c);
         const unm=String((body.querySelector('#it-uname')||{}).value||'').replace(/\s+/g,' ').trim(); // (Garry 16 Nov) a name for the block, e.g. Floor 2
         const add=[{k:'hdr',item:unm||o.name,units:n,note:unm?o.name:''},...o.parts.map(({x,per,fixed})=>({k:'part',item:x.part||'',qty:per,...(fixed?{fixed:true}:{}),L:x.length_mm==null?'':String(+x.length_mm),W:x.width_mm==null?'':String(+x.width_mm),mat:x.material||'',edging:x.edging||'',edging2:x.edging2||'',note:x.note||''}))];
         const drop=blankAll()?R().length:0,at2=drop?0:at; // a brand-new list's empty row, or the blank standard layout, is replaced
