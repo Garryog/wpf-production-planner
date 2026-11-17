@@ -5205,7 +5205,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
         if(R().some(r=>r._xl===xk)&&!confirm('The rows of "'+sh.name+'" from '+String(f.name||'that file')+' are already in this list.\n\nAdd them a second time?'))return;
         add.forEach(r=>{r._xl=xk;});
         snap();
-        const typed=R().some(r=>r.k==='part'&&!lsEmptyRow(r));
+        const typed=!blankAll(); // (attack4 B1–B6) the same "nothing typed" test as a template or an old list: a heading note, a tick, a material, a renamed heading or a unit block all count as typed
         if(typed)R().push(...add);else R().splice(0,R().length,...add);
         if(add.some(r=>r.k==='hdr'&&r.units!=null))st.unitsOn=true;
         // (attack2 F13) the list name is not pre-filled with the sheet name (blank = the WO number)
@@ -5246,7 +5246,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     if(!(ROLE==='prod'||ROLE==='admin'))return bk?`<div><label>Delivery</label><div class="wo-ro" id="me-delro" title="Booked on the Deliveries page">🚚 ${escA(bk)}</div></div>`:''; // (Garry 16 Nov) Production Manager books; everyone else sees it
     const di=o.delDay?addDayISO(slotWk(o),DEL_DAYS.indexOf(o.delDay)):'';
     return `<div id="me-delbk"><label>Delivery (Production Manager)</label><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><input type="date" id="me-deld" value="${escA(st.delD!=null?st.delD:di)}" style="${LS_INP}" title="The delivery day"><select id="me-delv" style="${LS_INP}" title="The van"><option value="">— van —</option>${DEL_VEH.map(v=>`<option value="${escA(v.k)}"${(st.delV!=null?st.delV:o.delVeh)===v.k?' selected':''}>${escA(v.n)}</option>`).join('')}</select><button class="btn btn-s" id="me-delgo" style="font-size:12px;white-space:nowrap" title="Books this job on that van and day on the Deliveries page now — separate from saving the list">🚚 Book</button></div><div id="me-delmsg" style="font-size:12px;color:${bk?'#0d6e46':'var(--t3)'};margin-top:2px">${bk?'Booked: '+escA(bk):'Not booked yet'}</div></div>`;};
-  const blankAll=()=>R().length>0&&R().every(r=>r.k==='hdr'?!String(r.note||'').trim():(lsEmptyRow(r)&&!String(r.mat||'').trim()&&!r.buy)); // no part row has anything typed, picked or ticked, and no heading has a note: only the blank layout is there
+  const blankAll=()=>R().length>0&&R().every(r=>r.k==='hdr'?(!String(r.note||'').trim()&&r.units==null&&(st.hdr0||new Set()).has(String(r.item||'').trim())):(lsEmptyRow(r)&&!String(r.mat||'').trim()&&!r.buy)); // (attack4 B5/B6) a heading renamed, or a unit / × block, counts as typed; no part row has anything typed, picked or ticked, and no heading has a note: only the blank layout is there
   const insTpl=()=>{
     if(!st.pid){ov.querySelector('#me-err').textContent='Pick the project first — templates belong to a project.';return;}
     const tps=lsTemplatesFor(st.pid).filter(t=>!ex||t.id!==ex.id);
@@ -5604,6 +5604,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     closeEd();};
   document.addEventListener('keydown',escH);
   document.querySelectorAll('.pod-ovl.me-dov').forEach(x=>x.remove()); // a "Saved ✓" panel still open: that list is saved — it goes
+  st.hdr0=new Set(R().filter(r=>r.k==='hdr').map(r=>String(r.item||'').trim())); // (attack4 B5) the headings the window opened with: one renamed is typed
   document.body.appendChild(ov);draw();st.sig0=sig();autoProj();
   if(!ex&&!st.tpl&&st.wo&&window.innerWidth>=700&&R().length===1&&lsEmptyRow(R()[0]))setTimeout(()=>{const a=document.activeElement;if(document.body.contains(ov)&&!(a&&ov.contains(a)&&a!==ov))go(0,'item');},60); // opened from a job: the cursor is in the first Description box — just type
   return{st,draw};
