@@ -702,3 +702,8 @@ Also for Garry: accept or reject the rows marked pending in the "15 Nov 2026 —
 - Job B: two P-numbers for one house → A flag only (as built) · Cienapps customer matching an INACTIVE project → A reactivate and
   use it · a date moved inside the 14-day window from Deliveries / the board → A counts as a Late change.
 - Not yet answered: KITCHEN ISLAND (9), Johnny's pool as built (10), upload as built (11), Mon 3 Jan 2028 (12).
+- **Driver per van per day (answer 5A) — built:** Deliveries page → each van × day cell has a **👤 driver…** box (Production Manager
+  and office), drivers from Settings → Staff (Driver role). Same driver on two vans that day → asked. The driver's phone picks his
+  van for that day ("You're on the Volvo … (set by the office)"); another driver's van → red warning. The list window's delivery
+  line says "— driver Pat". Stored in settings.vanDrv (no database change), kept 60 days. Test `g17-van-driver` 10/10; 14 delivery /
+  driver test files: same results as before.

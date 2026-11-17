@@ -464,6 +464,7 @@ body.del-dragging #del-wkbar .wkb-btn:not(:disabled):not(.nodrop),body.del-dragg
 .rdy-green .rdy-tag{background:#0d6e46;color:#fff}.rdy-amber .rdy-tag{background:#8a5a00;color:#fff}.rdy-red .rdy-tag{background:#b42318;color:#fff}
 .dmoved{display:inline-block;margin:3px 0 0 4px;font-size:10px;font-weight:700;color:#4a5568}
 .dchip .dinfo{font-size:14px;color:#14335c}
+.ddrv-w{margin-bottom:3px}.ddrv{width:100%;font-size:11px;padding:2px 4px;border:1px dashed #9cbce8;border-radius:5px;background:#f7fbff;color:#5b6b80;max-width:100%}.ddrv.on{border:1px solid #1450a8;background:#eaf2ff;color:#14335c;font-weight:700}.ddrv-ro{font-size:11px;font-weight:700;color:#14335c}
 .rdy-dot{display:inline-block;width:12px;height:12px;border-radius:50%;vertical-align:middle;flex:0 0 12px}
 .rdy-dot.rdy-green{background:#0d6e46}.rdy-dot.rdy-amber{background:#c27803}.rdy-dot.rdy-red{background:#b42318}
 .rdy-pill{font-size:12px;font-weight:800;padding:3px 8px;border-radius:5px;color:#fff}
@@ -867,7 +868,7 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden&&pendT)writ
 // Server settings → a full settings object. Missing/empty keys keep what we had (same rules the old loader used).
 function settingsFrom(s,prev){
   const r={...prev};s=s||{};
-  ['weekCaps','delx','delNotes','grps','pins','pod','lists','listWBs','listDone','delArchive','staff','listHold','holdLog','listRow','listStore','listStoreAt','saveIds','pMerged','drawSeen'].forEach(k=>{if(s[k])r[k]=s[k];});
+  ['weekCaps','delx','delNotes','grps','pins','pod','lists','listWBs','listDone','delArchive','staff','listHold','holdLog','listRow','listStore','listStoreAt','saveIds','pMerged','drawSeen','vanDrv'].forEach(k=>{if(s[k])r[k]=s[k];});
   if(s.hourScale&&s.hourScale.length)r.hourScale=s.hourScale;
   ['wcap','vcap','listLead','listDue'].forEach(k=>{if(s[k]>0)r[k]=s[k];});
   ['delivLead','siteDays','earlyDays'].forEach(k=>{if(dsOk(s[k]))r[k]=s[k];}); /*dates: delivery-date numbers — whole 1–60 only, else the default*/
@@ -897,7 +898,7 @@ function applyPlan(p){
   if(p.nid)DB.nid=p.nid;
   const s=p.settings||{};
   DB.weekCaps=s.weekCaps||{};if(s.hourScale&&s.hourScale.length)HOUR_SCALE=s.hourScale;if(s.wcap>0)WCAP=s.wcap;if(s.vcap>0)VCAP=s.vcap;
-  ['delx','delNotes','grps','pins','pod','lists','listWBs','listDone','delArchive','staff','listHold','holdLog','listRow','listStore','listStoreAt','saveIds','pMerged','drawSeen'].forEach(k=>{if(s[k])DB[k]=s[k];}); // pMerged: copies of P-jobs dropped by "Keep one…" (round 3)
+  ['delx','delNotes','grps','pins','pod','lists','listWBs','listDone','delArchive','staff','listHold','holdLog','listRow','listStore','listStoreAt','saveIds','pMerged','drawSeen','vanDrv'].forEach(k=>{if(s[k])DB[k]=s[k];}); // pMerged: copies of P-jobs dropped by "Keep one…" (round 3)
   if(s.listLead>0)DB.listLead=s.listLead;
   if(s.listDue>0)DB.listDue=s.listDue;
   ['delivLead','siteDays','earlyDays'].forEach(k=>{if(dsOk(s[k]))DB[k]=s[k];else delete DB[k];}); /*dates: out of range / text → default*/
@@ -1362,7 +1363,7 @@ window.addEventListener('beforeunload',e=>{if(saveT||SAVING||DB.saveFailed||lqPe
 /*dates: release marker for the old-screen guard v2 (SUPABASE_CHANGES.md, PENDING). Written on every save by this code; older
   code drops settings keys it doesn't know, so its saves can be told apart (and refused once the guard is on). */
 const APP_REL=2;
-function fullSettings(){return{appRel:APP_REL,...(DB.pMerged&&DB.pMerged.length?{pMerged:DB.pMerged}:{}),weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP,delx:DB.delx||[],delNotes:DB.delNotes||{},...(DB.drawSeen&&Object.keys(DB.drawSeen).length?{drawSeen:DB.drawSeen}:{}),grps:DB.grps||{},pins:DB.pins||{},pod:DB.pod||{},lists:DB.lists||[],listWBs:DB.listWBs||{},listDone:DB.listDone||{},listLead:DB.listLead||5,delArchive:DB.delArchive||{},staff:DB.staff||[],listHold:DB.listHold||{},holdLog:DB.holdLog||[],listRow:DB.listRow||{},saveIds:DB.saveIds||[],exportBase:{wk:orig,st:origStep},...(DB.listDue>0?{listDue:DB.listDue}:{}),...['delivLead','siteDays','earlyDays'].reduce((a,k)=>{if(dsOk(DB[k]))a[k]=DB[k];return a;},{}),...(typeof DB.listChk==='boolean'?{listChk:DB.listChk}:{}),...(typeof DB.photoLists==='boolean'?{photoLists:DB.photoLists}:{}),...(DB.delLegacyWk?{delLegacyWk:DB.delLegacyWk}:{}),...(DB.delLegacyAt?{delLegacyAt:DB.delLegacyAt}:{}),...(typeof DB.listDelOnly==='boolean'?{listDelOnly:DB.listDelOnly}:{}),...(DB.listStore?{listStore:DB.listStore,listStoreAt:DB.listStoreAt||''}:{})};}
+function fullSettings(){return{appRel:APP_REL,...(DB.pMerged&&DB.pMerged.length?{pMerged:DB.pMerged}:{}),weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP,delx:DB.delx||[],delNotes:DB.delNotes||{},...(DB.drawSeen&&Object.keys(DB.drawSeen).length?{drawSeen:DB.drawSeen}:{}),...(DB.vanDrv&&Object.keys(DB.vanDrv).length?{vanDrv:DB.vanDrv}:{}),grps:DB.grps||{},pins:DB.pins||{},pod:DB.pod||{},lists:DB.lists||[],listWBs:DB.listWBs||{},listDone:DB.listDone||{},listLead:DB.listLead||5,delArchive:DB.delArchive||{},staff:DB.staff||[],listHold:DB.listHold||{},holdLog:DB.holdLog||[],listRow:DB.listRow||{},saveIds:DB.saveIds||[],exportBase:{wk:orig,st:origStep},...(DB.listDue>0?{listDue:DB.listDue}:{}),...['delivLead','siteDays','earlyDays'].reduce((a,k)=>{if(dsOk(DB[k]))a[k]=DB[k];return a;},{}),...(typeof DB.listChk==='boolean'?{listChk:DB.listChk}:{}),...(typeof DB.photoLists==='boolean'?{photoLists:DB.photoLists}:{}),...(DB.delLegacyWk?{delLegacyWk:DB.delLegacyWk}:{}),...(DB.delLegacyAt?{delLegacyAt:DB.delLegacyAt}:{}),...(typeof DB.listDelOnly==='boolean'?{listDelOnly:DB.listDelOnly}:{}),...(DB.listStore?{listStore:DB.listStore,listStoreAt:DB.listStoreAt||''}:{})};}
 /* Stage 3 switch: settings.listStore==='v2' → cutting lists live in their own tables (lists, list_lines…).
    Missing, blank or anything else (switch back writes 'v1') → today's lists in the planner record, untouched. */
 function V2(){return DB.listStore==='v2'||DB.listStore==='switching';} // 'switching' = a Switch back is rebuilding the old lists: screens still read the tables, the database takes no changes
@@ -5275,7 +5276,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     toast('Added '+add.length+' row'+(add.length!==1?'s':'')+' from "'+l.name+'"'+(again?' again (now in twice — Ctrl+Z takes them out)':'')+' — change anything for this job, then Save');
   };
   const lwDelO=()=>!st.tpl&&!st.newWO&&st.wo?DB.orders.find(x=>x.wo===st.wo):null;
-  const lwDelHTML=()=>{const o=lwDelO();if(!o)return'';const bk=o.delDay?slotLbl(o.delVeh,o.delDay,slotWk(o)):'';
+  const lwDelHTML=()=>{const o=lwDelO();if(!o)return'';const bk=o.delDay?slotLbl(o.delVeh,o.delDay,slotWk(o))+((d=>d?' — driver '+d:'')(vanDrv(o.delVeh,slotDate(o)))):'';
     if(!(ROLE==='prod'||ROLE==='admin'))return bk?`<div><label>Delivery</label><div class="wo-ro" id="me-delro" title="Booked on the Deliveries page">🚚 ${escA(bk)}</div></div>`:''; // (Garry 16 Nov) Production Manager books; everyone else sees it
     const di=o.delDay?addDayISO(slotWk(o),DEL_DAYS.indexOf(o.delDay)):'';
     return `<div id="me-delbk"><label>Delivery (Production Manager)</label><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><input type="date" id="me-deld" value="${escA(st.delD!=null?st.delD:di)}" style="${LS_INP}" title="The delivery day"><select id="me-delv" style="${LS_INP}" title="The van"><option value="">— van —</option>${DEL_VEH.map(v=>`<option value="${escA(v.k)}"${(st.delV!=null?st.delV:o.delVeh)===v.k?' selected':''}>${escA(v.n)}</option>`).join('')}</select><button class="btn btn-s" id="me-delgo" style="font-size:12px;white-space:nowrap" title="Books this job on that van and day on the Deliveries page now — separate from saving the list">🚚 Book</button></div><div id="me-delmsg" style="font-size:12px;color:${bk?'#0d6e46':'var(--t3)'};margin-top:2px">${bk?'Booked: '+escA(bk)+' ('+escA(o.wo)+')':'Not booked yet ('+escA(o.wo)+')'}</div></div>`;}; // (attack4 K1) says which work order
@@ -7879,8 +7880,14 @@ function showReadiness(wos,ctx,always){
 }
 let drvUploading=false;
 function podKey(veh,day,wk){return veh+'|'+day+'|'+(wk||thisWk());} /*dates: the booking's own week*/
+/* (Garry 17 Nov, answer 5A) the Production Manager / office give each van a DRIVER per day on the Deliveries page.
+   settings.vanDrv = { 'VOLVO|2026-11-19': 'Pat' } (van | real date). The driver's phone picks that van for him; everyone sees it. */
+function vanDrv(veh,date){return String(((DB.vanDrv||{})[veh+'|'+date])||'');}
+function vanDrvSet(veh,date,n){const m=DB.vanDrv=DB.vanDrv||{};n=String(n||'').trim();if(n)m[veh+'|'+date]=n;else delete m[veh+'|'+date];
+  const old=addDayISO(todayLocal(),-60);Object.keys(m).forEach(k=>{if(String(k.split('|')[1]||'')<old)delete m[k];});sched();}
+function vanOfDrv(name,date){const k=String(name||'').trim().toLowerCase();if(!k)return'';const v=DEL_VEH.find(x=>vanDrv(x.k,date).toLowerCase()===k);return v?v.k:'';}
 function renderDriver(app){
-  const name=ls.get('wpfDrvName'),veh=ls.get('wpfDrvVeh')||'';
+  const name=ls.get('wpfDrvName');let veh=ls.get('wpfDrvVeh')||'';
   /*dates: the day picked is a real date ('Tue|2026-11-16'); an old plain 'Tue' = this week; a day from a week already gone falls back to today*/
   let[day,dwk]=String(ls.get('wpfDrvDay')||'').split('|');
   if(!DEL_DAYS.includes(day)||(dwk&&dwk<thisWk())){const s0=floorSlots()[0];day=s0.d;dwk=s0.wk;}
@@ -7888,6 +7895,8 @@ function renderDriver(app){
   const dOpts=[thisWk(),wkPlus(thisWk(),1)].flatMap(w=>DEL_DAYS.map((d,i)=>({v:d+'|'+w,l:d+' '+dShort(addDayISO(w,i))+(w!==thisWk()?' (next week)':''),on:d===day&&w===dwk})));
   if(!dOpts.some(x=>x.on))dOpts.unshift({v:day+'|'+dwk,l:day+' '+dShort(addDayISO(dwk,DEL_DAYS.indexOf(day))),on:true});
   const dayL=day+' '+dShort(addDayISO(dwk,DEL_DAYS.indexOf(day)));
+  const dDate=addDayISO(dwk,DEL_DAYS.indexOf(day)),myVan=vanOfDrv(name,dDate),vanBy=veh?vanDrv(veh,dDate):'';
+  if(name&&!veh&&myVan){veh=myVan;ls.set('wpfDrvVeh',veh);} // given a van for that day: it is picked for him
   const jobs=veh?delAll().filter(o=>o.delVeh===veh&&slotIn(o,dwk,day)).sort(woCmp):[];
   const onVan=jobs.filter(o=>dStage(o)!=='').length;
   const delivd=jobs.filter(o=>dStage(o)==='deliv').length;
@@ -7905,6 +7914,8 @@ function renderDriver(app){
       <div><label>Vehicle</label><select id="drv-veh"><option value="">— pick van —</option>${DEL_VEH.map(v=>`<option value="${v.k}"${v.k===veh?' selected':''}>${v.n}</option>`).join('')}</select></div>
       <div><label>Day</label><select id="drv-day">${dOpts.map(x=>`<option value="${escA(x.v)}"${x.on?' selected':''}>${escA(x.l)}</option>`).join('')}</select></div>
     </div>
+    ${name&&myVan&&veh===myVan?`<div id="drv-asg" style="background:#e9f7ef;border:1px solid #0d6e46;color:#0d6e46;border-radius:8px;padding:8px 12px;font-weight:700;margin-bottom:8px">🚚 You're on the ${escA(vehLbl(myVan))} on ${escA(dayL)} (set by the office)</div>`
+      :name&&veh&&vanBy&&vanBy.toLowerCase()!==name.toLowerCase()?`<div id="drv-asg" style="background:#fdecea;border:1px solid #b42318;color:#b42318;border-radius:8px;padding:8px 12px;font-weight:700;margin-bottom:8px">⚠ The ${escA(vehLbl(veh))} on ${escA(dayL)} is ${escA(vanBy)}'s${myVan?' — you are on the '+escA(vehLbl(myVan)):''}. Check with the office.</div>`:''}
     ${!veh?`<div class="flr-none">Pick your van above to see your run</div>`:
       !jobs.length?`<div class="flr-none">No jobs planned for ${escA(vehLbl(veh))} on ${escA(dayL)}</div>`:`
       <div class="drv-stat"><span><b>${escA(vehLbl(veh))} — ${escA(dayL)}</b> · ${jobs.length} job${jobs.length!==1?'s':''}</span><span>${onVan}/${jobs.length} on van · ${delivd} delivered</span></div>
@@ -8120,7 +8131,7 @@ function renderDeliveries(app){
       <tbody>
         ${DEL_VEH.map((v,i)=>{const vc=tagged.filter(o=>o.delVeh===v.k&&slotIn(o,wk)).length;return `<tr${i===1?' style="border-top:3px double var(--border)"':''}>
           <td class="dveh">${v.n}<span class="dsub">${v.cat}${v.sub?' · '+v.sub:''} · ${vc} job${vc!==1?'s':''}</span></td>
-          ${DEL_DAYS.map(d=>{const cj=tagged.filter(o=>o.delVeh===v.k&&slotIn(o,wk,d)).sort(woCmp);const ppk0=podKey(v.k,d,wk);const ppk=(DB.pod&&DB.pod[ppk0]&&(DB.pod[ppk0].photos||[]).length)?ppk0:null;const allDlv=cj.length&&cj.every(o=>dStage(o)==='deliv');const hol=!isWorkDay(addDayISO(wk,DEL_DAYS.indexOf(d)))&&d!=='Sat';return `<td class="dcell${allDlv?' cell-done':''}${hol?' hol':''}" data-cell="${v.k}|${d}|${wk}">${allDlv?'<div style="font-size:10px;font-weight:800;color:#0d6e46;padding:2px 0">✓ COMPLETE DELIVERY</div>':''}${cj.map(o=>dchip(o,true)).join('')}${cj.length&&cj.some(o=>!o.delDispAt&&!o.delDelivAt&&!o.delDone)?`<button class="cell-disp" data-cdisp="${v.k}|${d}|${wk}" title="Mark this whole van load as dispatched (left the factory) — runs the part-load check first">🚚→ Dispatch van</button>`:''}${ppk?`<button class="cell-disp" style="background:#eef6ff;border-color:#9cbce8;color:#1450a8" data-pod="${escA(ppk)}" title="Proof-of-delivery photos taken by the driver on site">📷 ${DB.pod[ppk].photos.length} proof photo${DB.pod[ppk].photos.length!==1?'s':''}</button>`:''}${delSel.size?`<button class="cell-disp" style="background:#eaf2ff;border-color:#1a56db;color:#1a56db" data-place="${v.k}|${d}|${wk}">⤵ Place ${delSel.size} here</button>`:''}</td>`;}).join('')}
+          ${DEL_DAYS.map(d=>{const cj=tagged.filter(o=>o.delVeh===v.k&&slotIn(o,wk,d)).sort(woCmp);const ppk0=podKey(v.k,d,wk);const ppk=(DB.pod&&DB.pod[ppk0]&&(DB.pod[ppk0].photos||[]).length)?ppk0:null;const allDlv=cj.length&&cj.every(o=>dStage(o)==='deliv');const hol=!isWorkDay(addDayISO(wk,DEL_DAYS.indexOf(d)))&&d!=='Sat';const ddt=addDayISO(wk,DEL_DAYS.indexOf(d)),dn=vanDrv(v.k,ddt),drs=staffFor('driver').map(x=>x.n);return `<td class="dcell${allDlv?' cell-done':''}${hol?' hol':''}" data-cell="${v.k}|${d}|${wk}"><div class="ddrv-w">${ROLE==='prod'||ROLE==='office'||!ROLE?`<select class="ddrv${dn?' on':''}" data-ddrv="${escA(v.k+'|'+ddt)}" title="Driver for this van on this day"><option value="">👤 driver…</option>${[...new Set([...drs,...(dn?[dn]:[])])].map(n=>`<option${n===dn?' selected':''}>${escA(n)}</option>`).join('')}</select>`:dn?`<span class="ddrv-ro">👤 ${escA(dn)}</span>`:''}</div>${allDlv?'<div style="font-size:10px;font-weight:800;color:#0d6e46;padding:2px 0">✓ COMPLETE DELIVERY</div>':''}${cj.map(o=>dchip(o,true)).join('')}${cj.length&&cj.some(o=>!o.delDispAt&&!o.delDelivAt&&!o.delDone)?`<button class="cell-disp" data-cdisp="${v.k}|${d}|${wk}" title="Mark this whole van load as dispatched (left the factory) — runs the part-load check first">🚚→ Dispatch van</button>`:''}${ppk?`<button class="cell-disp" style="background:#eef6ff;border-color:#9cbce8;color:#1450a8" data-pod="${escA(ppk)}" title="Proof-of-delivery photos taken by the driver on site">📷 ${DB.pod[ppk].photos.length} proof photo${DB.pod[ppk].photos.length!==1?'s':''}</button>`:''}${delSel.size?`<button class="cell-disp" style="background:#eaf2ff;border-color:#1a56db;color:#1a56db" data-place="${v.k}|${d}|${wk}">⤵ Place ${delSel.size} here</button>`:''}</td>`;}).join('')}
         </tr>`;}).join('')}
         <tr><td class="dveh">Notes</td>${DEL_DAYS.map((d,i)=>{const dt=addDayISO(wk,i);return `<td style="border:1px solid var(--border);padding:4px;background:#fffef7"><input class="dnote" data-dnote="${dt}" value="${escA(delNoteGet(dt))}" placeholder="${d} ${dShort(dt)} note…"></td>`;}).join('')}</tr>
         <tr><td class="dtot" style="text-align:left">Value / day<br><span style="color:#0d6e46">Week: €${Math.round(wkTot).toLocaleString()}</span></td>
@@ -8307,6 +8318,10 @@ function renderDeliveries(app){
   });
   const pl=document.getElementById('dpool');
   if(pl)dropTo(pl,'','');
+  document.querySelectorAll('[data-ddrv]').forEach(sl=>{sl.onmousedown=e=>e.stopPropagation();sl.onclick=e=>e.stopPropagation();sl.onchange=()=>{const[vk,dt]=sl.dataset.ddrv.split('|');
+    const other=sl.value&&DEL_VEH.find(x=>x.k!==vk&&vanDrv(x.k,dt).toLowerCase()===sl.value.toLowerCase());
+    if(other&&!confirm(sl.value+' is already on the '+other.n+' that day.\n\nPut '+sl.value+' on the '+vehLbl(vk)+' as well?')){sl.value=vanDrv(vk,dt);return;}
+    vanDrvSet(vk,dt,sl.value);sl.classList.toggle('on',!!sl.value);toast(sl.value?'👤 '+sl.value+' — '+vehLbl(vk)+' '+dShort(dt):'Driver taken off '+vehLbl(vk)+' '+dShort(dt));};});
   document.querySelectorAll('.dnote').forEach(inp=>inp.oninput=function(){
     delNoteSet(this.dataset.dnote,this.value);sched(); /*dates: kept per date*/
   });
