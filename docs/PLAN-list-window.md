@@ -659,3 +659,8 @@ Also for Garry: accept or reject the rows marked pending in the "15 Nov 2026 —
     refused, with "make it a Heading first". B — multiply again (Hinge 8 × 3 × 2 = 48).
 24. **Booking a van from the list window for a job Cienapps says is SHIPPED.** A (recommended, as built) — asked "book it anyway?".
     B — refused.
+
+### Garry's answers — 17 Nov 2026 (live)
+- **23 → A:** a sub-heading already inside a × block cannot be set to × Multiply; the window says "make it a Heading first". As built.
+- **24 → A:** booking a van from the list window for a job Cienapps says is SHIPPED asks "book it anyway?". As built.
+- Nothing to build. Still open: questions 20–22 (built on A).
