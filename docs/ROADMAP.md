@@ -364,3 +364,9 @@ Garry sent the Aderrig cutting-list workbook ("a current high volume job … a n
   still moves, stays on its van and is flagged. **C** superseded: releases now go out as small pieces on top of live, in this order
   (Garry: "yes all important"): 1 Cutting Lists project filter (PR #2) · 2 Deliveries week tabs + due-date editing (Job A) ·
   3 Shipped steps 9/10/11 + Project filter on Shipped · 4 P-number → WO merge.
+
+### Agreed weekly capacity per project (Garry, 17 Nov 2026) — plan: docs/PLAN-project-week-capacity.md
+- Office / Production Manager set, per project, an agreed amount per week: **apartments** or **€ value**.
+- Over the amount → **warn in red** (nothing blocked or moved). One apartment = one apartment number (kitchen + utility + robes = 1).
+- Counts in the work order's **delivery week**. **One figure + exceptions** for single weeks.
+- Lives in the PM sequence (Job B); no database change (planner settings).
