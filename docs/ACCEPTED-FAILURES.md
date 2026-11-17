@@ -172,3 +172,13 @@ green button on a phone now fail by design. The new behaviour is tested in `test
 (10 checks, pass). Tester to rewrite: attack3-close-keys C1 (1), attack3-roles-archived-simple C2 / C3 (12), final-a-customer-simple
 S6 (1), attack1-layout / attack2-excel-phone / attack3-phone P1 / P10 / final-a-phone "big Save … full width" (8). | pending |
 | list-window attack3-roles-archived-simple "(info) C4 Production Manager … no typing box outside the rows except List name" (2) | Garry, 16 Nov: the Production Manager books the delivery date + van from the list window, so his window has a date box | Tester rewrite, final round | pending |
+
+## 17 Nov 2026 — left after Tester rounds 4 and 5 were fixed (all PENDING Garry; none Medium or above except M4, which is refused with a message on purpose)
+| Test / check | Why it fails | Fixed by | Status |
+|---|---|---|---|
+| list-window attack5-multiply M4 (Medium as written) | a sub-heading INSIDE a × block cannot be made × again: the window refuses and says "make it a Heading first" (no silent change of totals). The test wanted 3 × 2 = 6 times over or a warning; the refusal is the warning, in plain words | Garry: question 23 | pending |
+| list-window attack5-multiply M6b (Low) | 501 typed straight into the × cell is saved (the × Multiply question allows 1–500) | later | pending |
+| list-window attack5-multiply M11 (Low) | a template that itself holds a × block with a sub-heading comes in without that sub-heading | later | pending |
+| list-window attack4-delivery-book T1 (info) | two PCs booking one job at the same moment: the "first booked" record is the first PC's — same as two people on the Deliveries page | — | pending |
+| list-window attack4-labels-search-view V1 ×2 (Low) | Esc does not close the "View the list" window — the same for every View window on live | later | pending |
+| list-window attack4-saveclose B1 (info), phone pinned bar ×2 (info) | "✓ Save & close" is not greyed while saving (a press is ignored and says "wait"); on a 360 px phone the pinned Save bar is 171 px of 640 | later | pending |

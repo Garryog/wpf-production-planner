@@ -632,3 +632,30 @@ Also for Garry: accept or reject the rows marked pending in the "15 Nov 2026 —
     heading stores the number. Existing lists keep their totals (a reopened row divides back only when it divides exactly).
   - Test `g16-template-times` rewritten, 17/17. 84 related files run old vs new: one phone check (heading-type box 36 px) fixed
     to 40 px; no other difference.
+
+### 17 Nov 2026, 06:50–10:30 UTC (scheduled run 9)
+- No other run was working (last push 16 Nov 17:13). `main` (Deliveries weeks) was already in. Pull request #5 still open, not merged.
+- **Coder — Tester round 4 fixed (all Mediums):** an Excel sheet keeps what was typed (heading note, Bought in, material, renamed
+  heading, unit block) like a template / old list · Delivery booking from the window: Cancel at the name / reason / bank holiday
+  changes NOTHING and says "Not booked — nothing changed"; a delivered job is refused; a past date is refused; a shipped job asks
+  first; the line says which WO · ✓ Save & close pressed straight from the Floor / Unit / Title box saves in one press · an old list
+  left with the saw keeps the Saved panel so the warning is seen · a long item name no longer pushes the WO line off a Zebra label.
+- **Tester round 5** (new `attack5-multiply`, `attack5-fixes`) attacked × Multiply: **4 High** — changing Heading ↔ Sub-heading
+  around a × block changed totals silently (Hinge 24 → 8, or doubled); rows from an old list / Excel added after a × block were
+  multiplied by it. **All fixed:** every heading-type change keeps each row's total; rows added at the end get a plain heading so
+  they are never × by accident; a second template insert asks How many? / Name it; lists saved before 16 Nov keep rows under a
+  sub-heading as fixed totals (unchanged); a booking from the window keeps the Deliveries page ticks; a non-date is refused.
+- **Manager: GO WITH CONDITIONS.** One "should fix": a template inserted with the cursor in the MIDDLE of a × block went in
+  between its sub-headings and changed totals below. **Fixed** (it now goes after the whole block) + test `c17-template-mid-xblock` 5/5.
+  placeJobs (shared with the Deliveries page) checked: unchanged there. No database change.
+- **Tests (fake database), 298 files: about 7,660 pass / 129 fail.** Every file that failed was run on yesterday's code and today's
+  side by side: today fixes 19 checks and breaks none (3 that broke in between were fixed the same morning). Every failing check
+  is on ACCEPTED-FAILURES (new ones: "17 Nov 2026").
+- **Still open for Garry:** questions 20–22 (built on A), and 23–24 below. Item 8 (delivery-card button, Lists-home badge) and the
+  P-number → WO merge stay the next small releases, as Garry chose.
+
+## Questions added 17 Nov (recommended answer first; built on A)
+23. **A sub-heading inside a × block, e.g. "Stores items" under "Floor 2 × 3", set to × Multiply.** A (recommended, as built) —
+    refused, with "make it a Heading first". B — multiply again (Hinge 8 × 3 × 2 = 48).
+24. **Booking a van from the list window for a job Cienapps says is SHIPPED.** A (recommended, as built) — asked "book it anyway?".
+    B — refused.

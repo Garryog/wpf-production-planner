@@ -1,7 +1,9 @@
 # Go-live — the cutting list window (target Wed 18 Nov 2026)
 
 Pull request: `feature/list-window` → `main`. **Merging is going live. Only Garry merges.**
-Manager verdict, 15 Nov: **GO WITH CONDITIONS** — the conditions are Garry's three answers below and the "close every screen" step.
+Manager verdict, 15 Nov: **GO WITH CONDITIONS**; again **17 Nov, after Garry's 16 Nov additions: GO WITH CONDITIONS** — its one
+"should fix" (template inserted in the middle of a × block) is fixed and tested. Conditions left: Garry's answers (questions
+20–24 in `docs/PLAN-list-window.md`, all built on A) and the "close every screen" step.
 
 ## What changes for people
 - **Making a cutting list is one path:** open it from the job → fill the rows → one big **Save** → "Saved ✓ — list is with the Saw & Stores" → Close.
@@ -15,6 +17,10 @@ Manager verdict, 15 Nov: **GO WITH CONDITIONS** — the conditions are Garry's t
 - "＋ New material…" works first time. A renamed material shows as one board everywhere.
 - Templates can be made and changed by the **Drawing office, Admin and the Production Manager**.
 - The "can't keep a backup copy" bar says how to fix it; Settings shows "Storage on this device".
+
+Added 16 Nov at Garry's request: **✓ Save & close**; labels one per Zebra label (101.6 × 63.5 mm); **👁 View the list** on the
+Saved panel; the **Production Manager books the delivery date + van** from the window (the same booking as the Deliveries page);
+any heading can be **× Multiply** (e.g. "Floor 2 × 4" — quantities for ONE, totals worked out); a template can come in × N with a name.
 
 **Not in this release (as Garry chose 13 Nov):** "＋ Add cutting list" on the delivery card and the due badge on the Cutting
 Lists home page; the automatic P-number → Cienapps WO merge. Each is its own small release after this one.
@@ -40,11 +46,13 @@ Lists home page; the automatic P-number → Cienapps WO merge. Each is its own s
    templates, and that a job on hold in Cienapps gets no P-number until it is off hold.
 
 ## Rollback
-- On GitHub, open the merged pull request → **Revert** → merge the revert. The previous version is live again in a minute or two.
+- On GitHub, open the merged pull request → **Revert** → merge the revert (main goes back to `7147af2`). The previous version is live again in a minute or two.
 - Nothing to undo in Supabase. Lists saved in the new window can be read by the previous version (tested with an old screen
   left open). A full rollback on the live site has not been rehearsed.
+- A list with a × block saved in the new version reads correctly on the old version (totals are saved), but should not be
+  EDITED on the old version (it would treat a sub-heading as the end of the × block).
 - Never delete lists or materials to "tidy up" after a rollback.
 
 ## Tests (fake database only)
-288 test files, 15 Nov: **7,454 pass / 106 fail**, no Critical or High. Every failing check is listed with its reason in
-`docs/ACCEPTED-FAILURES.md` (the "15 Nov 2026 — final round" section holds the new ones, for Garry to accept or reject).
+298 test files, 17 Nov: **about 7,660 pass / 129 fail**, no Critical or High left (15 Nov: 7,454 / 106 on 288 files). Every failing check is listed with its reason in
+`docs/ACCEPTED-FAILURES.md` (the "15 Nov 2026 — final round" and "17 Nov 2026" sections hold the new ones, for Garry to accept or reject).
