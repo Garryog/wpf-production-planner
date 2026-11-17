@@ -182,3 +182,7 @@ S6 (1), attack1-layout / attack2-excel-phone / attack3-phone P1 / P10 / final-a-
 | list-window attack4-delivery-book T1 (info) | two PCs booking one job at the same moment: the "first booked" record is the first PC's — same as two people on the Deliveries page | — | pending |
 | list-window attack4-labels-search-view V1 ×2 (Low) | Esc does not close the "View the list" window — the same for every View window on live | later | pending |
 | list-window attack4-saveclose B1 (info), phone pinned bar ×2 (info) | "✓ Save & close" is not greyed while saving (a press is ignored and says "wait"); on a 360 px phone the pinned Save bar is 171 px of 640 | later | pending |
+## 17 Nov 2026 — Capacity Board rows less tall (Garry: "the rows are too high") — out of date by design, not app faults
+| Test / check | Why it fails | Fixed by | Status |
+|---|---|---|---|
+| lists-filter attack1-filter "11 lists switch ON / OFF … screens are character-for-character the same as origin/main" (2) | the check compares the Capacity Board's HTML with the live version byte for byte; the board's date cell was changed on purpose (dates side by side, chips on one line) | Tester: leave office:b out of that comparison | pending |
