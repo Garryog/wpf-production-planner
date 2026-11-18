@@ -707,3 +707,29 @@ Also for Garry: accept or reject the rows marked pending in the "15 Nov 2026 —
   van for that day ("You're on the Volvo … (set by the office)"); another driver's van → red warning. The list window's delivery
   line says "— driver Pat". Stored in settings.vanDrv (no database change), kept 60 days. Test `g17-van-driver` 10/10; 14 delivery /
   driver test files: same results as before.
+
+### 18 Nov 2026, 11:10–17:30 UTC (scheduled run 10, "restart")
+- No other run was working (last push 17 Nov 17:52). `main` already merged in. PR #5 still open, not merged.
+- **Coder — saving audit (17 Nov) items 1–3 done:** an EDIT save whose reply is lost now asks the database (saved / not saved /
+  "may have saved" → Save again checks first; never a double row or Rev) · Excel re-upload over a list edited in the app names the
+  typed rows (and renamed headings) it would take away; Cancel skips that sheet · **PENDING SQL (Garry's 17 Nov "yes")**: a guard in
+  `save_list_revision` refusing a save that takes away EVERY row unless the person pressed OK (`p_empty_ok`, default off — the old
+  live screen keeps working), a read-only check box to run first, a "restore a list to Rev N" box (never deletes) and an Undo box.
+  Tested on a throwaway Postgres: `tests/sql/run-list-guard.sh` 39/39. The 2 Nov Stage 3 block is now labelled ALREADY RUN — never re-run.
+- **Tester rounds 7 and 8** attacked L9 (＋ List on Deliveries), ＋ Add to several templates, driver per van per day, and the
+  lost-reply work. Found 1 High (two windows on one list could save a row twice) and ~15 Medium/Low (a removed driver coming back
+  from another PC, the driver's phone keeping yesterday's van, the template dialog closing on a drag, "(added 2/3)" headings…).
+  **All fixed** except: an old screen wipes the drivers (O1/O2/E6 — close every screen on go-live day) and the same driver on two
+  vans in the same second (T2, Low) — both on ACCEPTED-FAILURES (pending Garry).
+- **Manager: GO WITH CONDITIONS** — conditions done: SQL labels + read-only check + Undo; an OK to "TAKES AWAY…" no longer carries
+  over to a different set of rows on a retry (`c18-retry-reask` 8/8); ACCEPTED-FAILURES rows added.
+- **Full suite (fake database, 316 files) on 2de4b0f: 8,022 pass / 138 fail.** Failing files compared with this morning's code:
+  no check that passed before fails now. The last two commits (Manager's conditions, board cell) were checked on their own test
+  files (list-window + hotfix, 7 date files), not the whole suite again.
+- **Garry live, 18 Nov: "too much going on in these lines … the capacity board is just for managing dates … a record of how many
+  moves is enough".** He chose **due date only**. Capacity Board date cell is now: the due date (tap to move) + "🔁 moved N×" (tap
+  for history). Delivery date, (orig …), ⋯ and the check chips are gone from the board (still on the Deliveries cards). The PM board
+  reads the same due date, so a move shows there at once. Put on **PR #10** (`hotfix/board-row-height`, can go live on its own) and
+  merged into this branch.
+- Garry's screenshot of the "can't keep a backup copy" bar is the LIVE version; this branch (L10) already says how to fix it and
+  shows device storage in Settings.
