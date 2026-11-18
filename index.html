@@ -3015,9 +3015,13 @@ async function lsSaveList(pl,lines,by,reason,opt){
     if(cur&&lsSame(cur,pl,df))return{list:cur,diff:df,same:true}; // nothing changed: no save, no new revision for the saw
     { // (audit 17 Nov, Garry) a save that takes away most of a list's rows is asked first — never a silent wipe (e.g. a list that opened looking empty)
       const live=lsLinesOf(pl.id).filter(x=>x.removed_rev==null).length,gone=df.removed.length;
-      if(cur&&live>0&&gone>0&&!opt.shrinkOk&&(gone===live||(gone>=3&&gone*2>live))){
+      // (Manager 18 Nov) an OK counts only for the rows it was given for: on a retry after another PC's change, if the rows this
+      // save takes away are not the same set, the OK (and p_empty_ok) does not carry over — it is asked again
+      const goneSet=df.removed.slice().sort().join(','),ok=opt.shrinkSet!=null?opt.shrinkSet===goneSet:!!opt.shrinkOk;
+      if(!ok&&opt.emptyOk)opt={...opt,emptyOk:false};
+      if(cur&&live>0&&gone>0&&!ok&&(gone===live||(gone>=3&&gone*2>live))){
         if(!confirm('⚠ This save TAKES AWAY '+gone+' of the '+live+' rows on "'+String(cur.name||pl.name||'this list')+'".\n\nIf the list opened looking empty or short, press Cancel, close it and open it again.\n\nOK = yes, take those rows away\nCancel = do not save'))throw Object.assign(new Error('Not saved — nothing was changed. Close the list and open it again.'),{shrinkCancel:true});
-        opt={...opt,shrinkOk:true,emptyOk:gone===live};} // emptyOk: they were asked about taking away ALL the rows, and said OK
+        opt={...opt,shrinkOk:true,shrinkSet:goneSet,emptyOk:gone===live};} // emptyOk: they were asked about taking away ALL the rows, and said OK
     }
     const expect=opt.expect!=null?opt.expect:cur?cur.version:null;
     const args={p_list:{...pl,check_req:lsChkOn()},p_lines:df.lines,p_expect:expect,p_by:lqBy(by),p_reason:reason||null};
@@ -3309,7 +3313,7 @@ async function lsImportWB(wb,entries,fname,by,opt){
     if(old&&lsLocked(old))pl.lock=true;
     let so;
     if(old){const w=await lsTypedGoing(old,lines); // (audit 17 Nov, item 2) rows typed in the app since the last upload: named, and asked
-      if(w){if(!confirm(w.msg)){(out.kept=out.kept||[]).push(e.sheet);out.replaced--;continue;}so={shrinkOk:true,emptyOk:w.all};}}
+      if(w){if(!confirm(w.msg)){(out.kept=out.kept||[]).push(e.sheet);out.replaced--;continue;}so={shrinkOk:true,shrinkSet:w.set,emptyOk:w.all};}}
     let res;
     try{res=await lsSaveList(pl,lines,by,old?'Workbook re-uploaded'+(fname?' ('+fname+')':''):null,so);}
     catch(x){if(!x.shrinkCancel)throw x;(out.kept=out.kept||[]).push(e.sheet);out.replaced--;continue;} // (attack8 F6) Cancel on "This save TAKES AWAY …": only this sheet is skipped — the rest of the workbook goes on
@@ -3342,7 +3346,7 @@ async function lsTypedGoing(old,lines){
     +go.slice(0,20).map(x=>'  • '+(x.kind==='hdr'?'heading "'+String(x.part||'').trim()+'"'+(ch.has(x.id)?' — changed back to the workbook':' — goes (the workbook\'s own heading is put in its place)'):nm(x)+(ch.has(x.id)?' — changed back to the workbook':' — taken away'))).join('\n')+(go.length>20?'\n  … and '+(go.length-20)+' more':'')
     +(gone?'\n\nIn all it takes away '+gone+' of the '+live+' rows.':'')
     +'\n\nOK = upload anyway (those rows go)\nCancel = leave "'+String(raw.name||old.name||'this list')+'" as it is (this sheet is skipped)';
-  return{msg,all:gone>0&&gone===live&&!df.lines.length};
+  return{msg,all:gone>0&&gone===live&&!df.lines.length,set:df.removed.slice().sort().join(',')};
 }
 /* V2 Excel import: every sheet read by lsParseGrid (unit blocks, per-unit quantities, headings), the Blank / Index / Stock /
    Door Stock sheets left out (Garry, 3 Nov), and a preview before anything is saved. */
