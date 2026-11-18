@@ -37,11 +37,12 @@ const ord = (wo, unit, x) => H.order(Object.assign({ wo, customer: 'Kildare Home
     await closeAll(p);
     // other roles
     for (const role of ['pm', 'driver', 'prod']) {
-      await p.evaluate(rl => { ROLE = rl; tab = 'd'; if (rl === 'prod') prodTab = 'deliv'; render(); }, role); await sleep(500);
+      // (18 Nov) the role's PIN is entered first, so the screen is really drawn (without it the PIN picker shows and the check can't fail)
+      const drawn = await p.evaluate(rl => { localStorage.setItem('wpfPin_' + rl, pins()[rl]); ROLE = rl; tab = 'd'; if (rl === 'prod') prodTab = 'deliv'; render(); return roleOk(rl); }, role); await sleep(500);
       const n = await p.evaluate(() => document.querySelectorAll('[data-dladd]').length);
       await p.evaluate(() => showReadiness(['WO-D3'], 'test', true)); await sleep(200);
       const m = await p.evaluate(() => document.querySelectorAll('[data-rdadd]').length); await closeAll(p);
-      rec(role + ': ' + (role === 'prod' ? 'sees' : 'does NOT see') + ' the add-list buttons', role === 'prod' ? m > 0 : n === 0 && m === 0, JSON.stringify([n, m]));
+      rec(role + ': ' + (role === 'prod' ? 'sees' : 'does NOT see') + ' the add-list buttons (screen drawn with its PIN)', drawn && (role === 'prod' ? m > 0 : n === 0 && m === 0), JSON.stringify([drawn, n, m]));
     }
     // phone
     await p.setViewportSize({ width: 360, height: 640 }); await p.evaluate(() => { ROLE = 'office'; tab = 'd'; render(); }); await sleep(500);

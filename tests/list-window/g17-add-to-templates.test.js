@@ -57,8 +57,9 @@ const live = (S, id) => S.db.t.list_lines.filter(x => x.list_id === id && x.remo
     await p.evaluate(() => { const s = (id, x) => { document.getElementById(id).value = x; }; s('ta-item', 'Bin'); s('ta-qty', '1'); s('ta-mat', 'Blum hinge'); document.querySelectorAll('[data-tat]').forEach(c => c.checked = c.dataset.tat === 'T3'); document.getElementById('ta-go').click(); }); await sleep(3000);
     rec('a template changed on another PC since this screen loaded it: the add re-reads it first, so the Bin is added and their change kept', live(S, 'T3').some(x => x.part === 'Bin') && live(S, 'T3').some(x => x.part === 'Handle'));
     // roles
-    for (const role of ['pm', 'office']) { await p.evaluate(rl => { ROLE = rl; render(); }, role); await sleep(300);
-      rec(role + ': no "＋ Add to several templates" button', !(await p.evaluate(() => !!document.querySelector('[data-lhtpladd]')))); }
+    // (18 Nov) the role's PIN is entered first, so the screen is really drawn (without it the PIN picker shows and the check can't fail)
+    for (const role of ['pm', 'office']) { const drawn = await p.evaluate(rl => { localStorage.setItem('wpfPin_' + rl, pins()[rl]); ROLE = rl; render(); return roleOk(rl) && !!document.querySelector('#app') && document.getElementById('app').innerText.length > 0; }, role); await sleep(300);
+      rec(role + ': no "＋ Add to several templates" button (screen drawn with its PIN)', drawn && !(await p.evaluate(() => !!document.querySelector('[data-lhtpladd]'))), JSON.stringify({ drawn })); }
     rec('no page errors', !(S.errors || []).length, JSON.stringify(S.errors));
   } catch (e) { rec('test ran to the end', false, e.stack); }
   await browser.close();
