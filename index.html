@@ -3017,14 +3017,55 @@ async function lsSaveList(pl,lines,by,reason,opt){
       const live=lsLinesOf(pl.id).filter(x=>x.removed_rev==null).length,gone=df.removed.length;
       if(cur&&live>0&&gone>0&&!opt.shrinkOk&&(gone===live||(gone>=3&&gone*2>live))){
         if(!confirm('⚠ This save TAKES AWAY '+gone+' of the '+live+' rows on "'+String(cur.name||pl.name||'this list')+'".\n\nIf the list opened looking empty or short, press Cancel, close it and open it again.\n\nOK = yes, take those rows away\nCancel = do not save'))throw new Error('Not saved — nothing was changed. Close the list and open it again.');
-        opt={...opt,shrinkOk:true};}
+        opt={...opt,shrinkOk:true,emptyOk:gone===live};} // emptyOk: they were asked about taking away ALL the rows, and said OK
     }
+    const expect=opt.expect!=null?opt.expect:cur?cur.version:null;
+    const args={p_list:{...pl,check_req:lsChkOn()},p_lines:df.lines,p_expect:expect,p_by:lqBy(by),p_reason:reason||null};
+    if(opt.emptyOk&&cur&&!df.lines.length)args.p_empty_ok=true; // (18 Nov) the database's empty-save guard (SUPABASE_CHANGES.md) lets it through — only after that OK
     try{
-      const out=await lsRpc('save_list_revision',{p_list:{...pl,check_req:lsChkOn()},p_lines:df.lines,p_expect:opt.expect!=null?opt.expect:cur?cur.version:null,p_by:lqBy(by),p_reason:reason||null});
+      const out=await lsSaveRpc(args);
       LST.full.add(out.list.id);lsPut('lists',[out.list]);lsPut('list_lines',out.lines);
       return{list:out.list,diff:df,retired:out.retired||null};
-    }catch(e){if(!/stale/.test(e.message)||i>=2||opt.expect!=null)throw e;await lsReloadList(pl.id);} // changed on another PC meanwhile: compare again
+    }catch(e){
+      if(e.hint==='empty-refused'||/^empty save refused/.test(String(e.message||'')))throw new Error('the database refused it: '+String(e.message).replace(/^empty save refused:\s*/,'').replace(/take away all /,'take away ALL ')+'. Nothing was changed. If the list opened looking empty or short, close it and open it again.');
+      /* (audit 17 Nov, item 1) an EDIT whose reply was lost: it may have reached the database. Ask the database before saying
+         anything (as a new list does): saved → carry on as saved; not → "Not saved"; can't tell → say so, and the next Save checks first */
+      if(cur&&expect!=null&&lsLost(e)){if(opt.onLost)try{opt.onLost();}catch(x){}
+        const s=await lsEditLanded(pl.id,expect,df,pl);
+        if(s==='saved'||s==='later')return{list:LST.l.get(pl.id),diff:df,retired:null,lost:s};
+        const nm='"'+String(cur.name||pl.name||'the list')+'"',x=new Error(s==='not'?'the connection failed ('+e.message+') before the database took it — nothing was saved to '+nm+'. Press Save again.'
+          :s==='other'?'May have saved — the reply was lost ('+e.message+') and '+nm+' has been changed since (maybe on another screen), so this screen can\'t tell whether your changes are in it. Nothing more was saved. Close the list and open it again to check it — your rows stay here until you close this window.'
+          :'May have saved — the reply was lost ('+e.message+') and the database could not be checked. Press Save again when the connection is back: it checks first, so nothing is saved twice.');
+        x.lostState=s;x.sent={expect,df,pl};throw x;}
+      if(!/stale/.test(e.message)||i>=2||opt.expect!=null)throw e;await lsReloadList(pl.id);} // changed on another PC meanwhile: compare again
   }
+}
+// save_list_revision, and — before the 18 Nov SQL is run — the same save without p_empty_ok (the database doesn't know it yet:
+// it answers "function not found" and nothing ran, so sending it again is safe)
+async function lsSaveRpc(args){
+  try{return await lsRpc('save_list_revision',args);}
+  catch(e){if(!('p_empty_ok' in args)||!(e.code==='PGRST202'||e.status===404))throw e;
+    const a={...args};delete a.p_empty_ok;return await lsRpc('save_list_revision',a);}
+}
+/* (audit 17 Nov, item 1) Did an edit whose reply was lost reach the database? Reads the list fresh and compares with what was sent:
+   'not'    — nothing landed: the list is still at the version the editor sent (p_expect), or ONE change later that is not ours
+              (our save would have left it exactly as sent);
+   'saved'  — it holds exactly what was sent (rows, their content and order, the name) — or one change later with all of ours in it;
+   'later'  — it moved on more than once since, and every change this save made is in it (another screen saved after ours);
+   'other'  — it moved on more than once and only some (or none) of this save's changes are there: ours may have landed and
+              been changed over since — can't tell;   'unknown' — no answer. */
+async function lsEditLanded(id,expect,df,pl){
+  try{await lsReloadList(id);}catch(e){return'unknown';}
+  const cur=LST.l.get(id);if(!cur)return'unknown';
+  const v=+cur.version||0,e0=+expect||0;
+  if(v<=e0)return'not';
+  const live=new Map(lsLinesOf(id).filter(x=>x.removed_rev==null).map(x=>[x.id,x]));
+  const has=ln=>{const x=live.get(ln.id);return!!x&&lsLineSig(x)===lsLineSig(ln);};
+  if(df.lines.length===live.size&&df.lines.every(ln=>has(ln)&&(+live.get(ln.id).seq||0)===ln.seq)&&(pl.name==null||String(pl.name)===String(cur.name||'')))return'saved';
+  const ch=new Set([...df.changed,...df.added,...df.noteOnly]),mine=df.lines.filter(ln=>ch.has(ln.id)),gone=df.removed;
+  const n=mine.filter(has).length+gone.filter(i=>!live.has(i)).length,all=n===mine.length+gone.length&&n>0;
+  if(v===e0+1)return all?'saved':n===0?'not':'other';
+  return all?'later':'other';
 }
 function lsLineSig(x){const n=v=>v==null||v===''?'':+v,t=v=>v==null?'':String(v).trim();return JSON.stringify([x.kind,t(x.section),t(x.part),n(x.length_mm),n(x.width_mm),t(x.qty),t(x.material),t(x.edging),t(x.note),t(x.unit_qty),t(x.edging2)]);}
 function lsEditRows(id){ // the typed-list editor's rows, with edging and note kept apart; each remembers its line and when the editor opened
@@ -3141,12 +3182,23 @@ const lsLost=x=>!!x&&((!x.status&&LS_LOST_RE.test(String(x.message||'').trim()))
 // → 'saved' (the list is in the database), 'not' (it isn't), or 'unknown' (the database could not be asked)
 async function lsSavedYet(id){try{const r=await lsGet1('lists?select=id,archived&id=eq.'+encodeURIComponent(id));if(!r.length)return'not';await lsReloadList(id);return'saved';}catch(e){return'unknown';}}
 async function lsSaveManual(d,by,ex){
+  const key0=ex?lsEditKey(d):''; // what the window asked to save, before anything below adjusts it
   const pk=!ex&&!d.newId?JSON.stringify([d.wo,d.name,!!d.tpl,d.pid||'',d.project||'',d.rows]):'';
   const o=DB.orders.find(x=>x.wo===d.wo);
   const pid=d.pid&&LST.p.has(d.pid)?d.pid:await lsProject(String(d.project||'').trim()||(o&&o.customer)||'Unassigned',o&&o.customer);
   const id=ex?ex.id:d.newId?d.newId:(LS_PEND.get(pk)||LS_PEND.set(pk,uid('L')).get(pk));
   let reason='';
   if(ex){await lsReloadList(id);
+    // (audit 17 Nov, item 1) the last Save of this list here lost its reply and the database couldn't say whether it landed:
+    // ask again BEFORE comparing (a landed save would otherwise look like another screen's rows, and go in twice)
+    let lp=LS_LOSTED.get(id);if(lp&&lp.tok!==d.edTok){LS_LOSTED.delete(id);lp=null;} // only the window that made that save: a window opened since starts from what the database has
+    if(lp){const s=await lsEditLanded(id,lp.expect,lp.df,lp.pl);
+      if(s==='unknown'||s==='other'){const x=new Error(s==='other'?'May have saved — your last Save lost its reply and "'+String(ex.name||'the list')+'" has been changed since (maybe on another screen), so this screen can\'t tell whether your changes are in it. Nothing was saved. Close the list and open it again to check it.':'May have saved — the database still could not be checked. Nothing more was saved. Try again when the connection is back.');x.lostState=s;throw x;}
+      LS_LOSTED.delete(id);
+      if(s!=='not'){lsEditAfter(ex,id,lp.wo,by,lp.df); // it DID land: do now what that save would have done next
+        if(lp.key===key0){d.lostOk=s;return lsList(id);}
+        const x=new Error('Your last Save DID reach the database (only its reply was lost) — but what you changed after it is NOT saved. The list is opened again as the database has it: make those changes again and press Save.');x.reopen=true;throw x;}
+    }
     // the saw has started (a line is ticked): the number of units can't change on this list — a new list is made instead
     // (only a Units change made by THIS person — compared with the value when the editor opened; a change made on another
     //  screen is not theirs to be refused for, and the edit merge keeps it)
@@ -3193,26 +3245,35 @@ async function lsSaveManual(d,by,ex){
   if(!ex&&!d.tpl&&d.replaces&&d.replaces.id){pl.replaces=d.replaces.id;if(d.replaces.lines)pl.replaces_lines=d.replaces.lines;}
   if(!ex&&d.replaces&&d.replaces.id)reason='Made with "Make new list from this" from "'+String(d.replaces.name||'').trim()+'" — replaces list '+d.replaces.id; // lsReplOf reads the id back
   let res;const on='"'+String((d.replaces||{}).name||'the old list').trim()+'"';
-  const save=()=>lsSaveList(pl,lines,by,reason||(ex?(d.why||'List edited'):null)); // a template's "what changed" goes in its History
+  const save=()=>lsSaveList(pl,lines,by,reason||(ex?(d.why||'List edited'):null),{onLost:d.onLost}); // a template's "what changed" goes in its History
   try{try{res=await save();}
     catch(e){if(!pl.replaces||!/replaced list changed/.test(e.message))throw e; // nothing saved: ask, then save again (same id)
       if(confirm('The old list '+on+' was changed on another screen after you copied it.\n\nArchive it anyway (take it off the saw)?\n\nOK = archive it. Cancel = leave it with the saw — check it, then archive it from Lists.'))pl.replaces_force=true;else pl.replaces_keep=true;
       res=await save();}}
-  catch(e){const k=lsOneErr(e);if(k&&pl.replaces){const l=await lsOneList(k);throw new Error('"'+String(d.replaces.name||'the old list').trim()+'" has already been replaced by "'+l.name+'" on another PC — nothing saved (no second list for '+(d.wo||'this job')+'). Open "'+l.name+'" from Lists instead.');}
+  catch(e){if(ex&&e.lostState){if(e.lostState==='not')LS_LOSTED.delete(id);else LS_LOSTED.set(id,{...e.sent,wo:d.wo,key:key0,tok:d.edTok});} // can't tell yet: the next Save asks first
+    const k=lsOneErr(e);if(k&&pl.replaces){const l=await lsOneList(k);throw new Error('"'+String(d.replaces.name||'the old list').trim()+'" has already been replaced by "'+l.name+'" on another PC — nothing saved (no second list for '+(d.wo||'this job')+'). Open "'+l.name+'" from Lists instead.');}
     if(k)throw new Error(lsGotMsg(k.wo,await lsOneList(k)));throw e;}
   if(pk)LS_PEND.delete(pk);
+  if(ex)LS_LOSTED.delete(id);if(res.lost)d.lostOk=res.lost; // 'saved' / 'later': the reply was lost, the database has it
   if(pl.replaces){let r=res.retired; // what the database did with the old list in the same step
     if(r)lsReloadList(pl.replaces).then(()=>render()).catch(()=>{}); // this screen sees the old list archived (in the background — the editor closes at once)
     else{try{await lsReloadList(pl.replaces);const ol=lsList(pl.replaces);r=!ol?'missing':ol.archived?'archived':'live';}catch(e){r='unknown';}} // our own earlier save (its reply was lost)
     d.retiredMsg={archived:' The old list '+on+' is archived (off the saw).',already:' The old list '+on+' was already archived on another screen — left as it is.',
       missing:' The old list '+on+' is no longer there — nothing archived.',kept:' The old list '+on+' was changed on another screen meanwhile — left with the saw: check it and archive it from Lists.',
       live:' ⚠ The old list '+on+' is still with the saw — check it and archive it from Lists.',unknown:' ⚠ The old list '+on+' could not be checked — if it is still with the saw, archive it from Lists.'}[r]||'';}
-  if(ex&&!ex.tpl){const was=(ex.wos||[])[0];if(d.wo&&d.wo!==was){if(was)listTag(ex,was,false,by);listTag(ex,d.wo,true,by);}
-    // rows added to a side that was already signed off put that side back on the bench — and say so
-    ['saw','fit'].forEach(m=>{const n=res.diff.lines.filter(x=>x.kind===m&&res.diff.added.includes(x.id)).length;
-      if(n&&listDone(id)[m])listSetDone({id},m,false,by,n+' row'+(n!==1?'s':'')+' added after it was signed off');});}
+  lsEditAfter(ex,id,d.wo,by,res.diff);
   return lsList(id)||lsAdapt(res.list);
 }
+// after an edit is saved: a new WO moves the tag; rows added to a side that was already signed off put that side back on the bench — and say so
+function lsEditAfter(ex,id,wo,by,diff){
+  if(!ex||ex.tpl)return;
+  const was=(ex.wos||[])[0];if(wo&&wo!==was){if(was)listTag(ex,was,false,by);listTag(ex,wo,true,by);}
+  ['saw','fit'].forEach(m=>{const n=diff.lines.filter(x=>x.kind===m&&diff.added.includes(x.id)).length;
+    if(n&&listDone(id)[m])listSetDone({id},m,false,by,n+' row'+(n!==1?'s':'')+' added after it was signed off');});
+}
+// (audit 17 Nov, item 1) edits whose reply was lost and the database couldn't say whether they landed: list id → what was sent
+const LS_LOSTED=new Map();
+const lsEditKey=d=>JSON.stringify([d.rows,String(d.name||'').trim(),d.wo||'',!!d.noCut,!!d.noFit,d.tname===undefined?null:d.tname,d.ltype||'']);
 async function lsImportWB(wb,entries,fname,by,opt){
   opt=opt||{};
   const proj=opt.pid&&LST.p.has(opt.pid)?LST.p.get(opt.pid).name:wb.project||String(fname||'').replace(/\.(xlsx|xls)$/i,'');
@@ -3246,11 +3307,40 @@ async function lsImportWB(wb,entries,fname,by,opt){
     const pl={id:old?old.id:uid('L'),name:e.sheet,project_id:pid,sdate:e.sdate||null,source:'excel'};
     if(!old){pl.wos=[];pl.list_type='house';out.sugg+=cand.filter(w=>!live.some(x=>(x.wos||[]).includes(w))).length;}else out.replaced++;
     if(old&&lsLocked(old))pl.lock=true;
-    const res=await lsSaveList(pl,lines,by,old?'Workbook re-uploaded'+(fname?' ('+fname+')':''):null);
+    let so;
+    if(old){const w=await lsTypedGoing(old,lines); // (audit 17 Nov, item 2) rows typed in the app since the last upload: named, and asked
+      if(w){if(!confirm(w.msg)){(out.kept=out.kept||[]).push(e.sheet);out.replaced--;continue;}so={shrinkOk:true,emptyOk:w.all};}}
+    const res=await lsSaveList(pl,lines,by,old?'Workbook re-uploaded'+(fname?' ('+fname+')':''):null,so);
     if(res.same){out.same++;if(old)out.replaced--;}else if(old&&pl.lock)out.revised++;
     out.n++;
   }
   return out;
+}
+/* (audit 17 Nov, item 2) Re-uploading a workbook over a list that was changed IN THE APP since its last upload replaces those
+   changes. Returns null (nothing typed goes — upload as before) or {msg, all}: the question naming each typed row that goes
+   (taken away, or changed back to the workbook). "Typed in the app" = a row added or changed by an app save after the last
+   upload: the list's history has an app edit since, and the row's own time is later than the upload (a tick alone doesn't count).
+   A list that never came from Excel (a typed list the workbook supersedes) is left to the usual questions. */
+async function lsTypedGoing(old,lines){
+  if(!LST.full.has(old.id))await lsReloadList(old.id);
+  const raw=LST.l.get(old.id)||{},log=Array.isArray(raw.log)?raw.log:[],T=v=>{const t=Date.parse(v||'');return isNaN(t)?0:t;};
+  let up=0;log.forEach(e=>{if(/^Workbook re-uploaded/.test(String(e&&e.why||''))||(e&&e.what==='List created'&&raw.source==='excel'&&!up))up=Math.max(up,T(e.at));});
+  if(!up)return null;
+  const edits=log.filter(e=>e&&T(e.at)>up&&(e.what==='List edited'||/^Revision \d+$/.test(String(e.what||'')))&&!/^Workbook re-uploaded/.test(String(e.why||'')));
+  if(!edits.length)return null;
+  const cur=lsLinesOf(old.id),byId=new Map(cur.map(x=>[x.id,x])),df=diffLines(cur,lines,{listId:old.id,mat:lsMatCanon(raw.project_id)});
+  const near=(a,b)=>!!a&&Math.abs(T(a)-T(b))<2000; // the row's last change was a tick / release, not a typed change
+  const typed=x=>x&&x.kind!=='hdr'&&T(x.updated_at)>up&&!near(x.status_at,x.updated_at)&&!near(x.released_at,x.updated_at);
+  const ch=new Set(df.changed),go=[...df.removed,...df.changed].map(i=>byId.get(i)).filter(typed);
+  if(!go.length)return null;
+  const live=cur.filter(x=>x.removed_rev==null).length,gone=df.removed.length,last=edits[edits.length-1];
+  const sz=x=>[x.length_mm,x.width_mm].filter(v=>v!=null&&v!=='').join('×'),nm=x=>String(x.part||'(no name)').trim()+(sz(x)?' '+sz(x):'')+(x.qty!=null&&x.qty!==''?' ×'+x.qty:'')+(x.material?' — '+x.material:'');
+  const msg='⚠ "'+String(raw.name||old.name||'this list')+'" was changed in the app after its last Excel upload'+(last.by?' (by '+last.by+(T(last.at)?', '+new Date(T(last.at)).toLocaleDateString('en-IE'):'')+')':'')+'.\n\n'
+    +'This upload puts the workbook in its place, so '+(go.length===1?'this row typed in the app goes':'these '+go.length+' rows typed in the app go')+':\n'
+    +go.slice(0,20).map(x=>'  • '+nm(x)+(ch.has(x.id)?' — changed back to the workbook':' — taken away')).join('\n')+(go.length>20?'\n  … and '+(go.length-20)+' more':'')
+    +(gone?'\n\nIn all it takes away '+gone+' of the '+live+' rows.':'')
+    +'\n\nOK = upload anyway (those rows go)\nCancel = leave "'+String(raw.name||old.name||'this list')+'" as it is (this sheet is skipped)';
+  return{msg,all:gone>0&&gone===live&&!df.lines.length};
 }
 /* V2 Excel import: every sheet read by lsParseGrid (unit blocks, per-unit quantities, headings), the Blank / Index / Stock /
    Door Stock sheets left out (Garry, 3 Nov), and a preview before anything is saved. */
@@ -3338,7 +3428,7 @@ function lsUpload(f,pid){
       const s=await lsImportWB(wb,entries,f.name,whoNow(),{pid:pid2,map});
       if(msg)msg.textContent='';
       render();
-      toast(s.n+' lists imported from '+(bk.project||f.name)+(s.same?' — '+s.same+' unchanged':'')+(s.replaced?' — '+s.replaced+' replaced with this newer version'+(s.revised?' ('+s.revised+' new revision'+(s.revised!==1?'s':'')+' for the saw)':''):'')+(s.auto?' — '+s.auto+' work orders auto-tagged. Check the tags.':'')+(s.sugg?' — '+s.sugg+' work order'+(s.sugg!==1?'s':'')+' matched: confirm '+(s.sugg!==1?'them':'it')+' in "Cutting lists to issue" (not on the saw until confirmed)':'')+(s.flagged?' — '+s.flagged+' line'+(s.flagged!==1?'s':'')+' use a material not on the project list (flagged)':''));
+      toast(s.n+' lists imported from '+(bk.project||f.name)+(s.same?' — '+s.same+' unchanged':'')+(s.replaced?' — '+s.replaced+' replaced with this newer version'+(s.revised?' ('+s.revised+' new revision'+(s.revised!==1?'s':'')+' for the saw)':''):'')+(s.auto?' — '+s.auto+' work orders auto-tagged. Check the tags.':'')+(s.sugg?' — '+s.sugg+' work order'+(s.sugg!==1?'s':'')+' matched: confirm '+(s.sugg!==1?'them':'it')+' in "Cutting lists to issue" (not on the saw until confirmed)':'')+(s.flagged?' — '+s.flagged+' line'+(s.flagged!==1?'s':'')+' use a material not on the project list (flagged)':'')+(s.kept&&s.kept.length?' — left as it was (changed in the app, you pressed Cancel): '+s.kept.join(', '):''));
     }catch(e){bad('Could not save that file: '+e.message);}
   };
   rd.readAsArrayBuffer(f);
@@ -4708,7 +4798,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     wo:ex?((ex.wos||[])[0]||''):(presetWo||''),name:ex?ex.name:(opt.name||''),pid:ex?ex.pid:(presetPid||(o0&&lsProjAutoId(o0.customer))||''),
     ltype:ex?(ex.ltype||'house'):(opt.ltype||(opt.tpl?'kitchen':'house')),tname:ex?ex.typeName:(opt.tname||''),tpl:ex?ex.tpl:!!opt.tpl,noCut:ex?!!ex.noCut:false,noFit:ex?!!ex.noFit:false,newWO:false,pw:{title:'',cust:'',floor:'',unit:'',due:'',val:'',hrs:''},
     carcass:'',door:'',undo:[],cur:'',focus:'',snapKey:'',note:opt.note||'',from:!ex&&opt.from&&opt.from.id?opt.from:null,
-    newId:ex?'':opt.pendId||uid('L'),landed:!!opt.landed,unitsOn:!!opt.unitsOn,moreOpen:false,help:false,
+    newId:ex?'':opt.pendId||uid('L'),edTok:uid('E'),landed:!!opt.landed,unitsOn:!!opt.unitsOn,moreOpen:false,help:false,
     jb:{floor:'',unit:'',title:'',wo:'',res:null,not:[],last:''},jm:null,pauto:false,pmsg:null}; // jb = the Floor / Unit / Title boxes of a new list with no WO (L1); jm = the WO they found (L3) // a new list keeps ONE id for this editor: Save pressed again after a lost reply is the same list, never a second one
   if(!ex&&!presetPid&&st.pid)st.pauto=true; // the project came from the WO's customer (L5)
   let sawStarted=!!ex&&!ex.tpl&&lsTicked(ex.id); // set on a refused save too (a tick landed while the editor was open)
@@ -5456,8 +5546,10 @@ function openListEditor2(listId,presetWo,presetPid,opt){
         if(st.chkFail){st.pUnchecked=pwo;st.chkFail=false;} // (round 3) made without the database check: checked again on the next Save
       }
       const sb=g('me-save');if(sb)sb.disabled=true;err('Saving…');st.saving=Date.now();
+      d.onLost=()=>err('May have saved — the reply was lost. Checking the database…'); // (audit 17 Nov, item 1) an edit: asked before anything is said
       lsSaveManual(d,by,ex).then(async l=>{st.saving=0;sched();render();if(d.newId)lsPendDrop(d.newId);setTimeout(()=>pMineFix(),0);
         let t=(ex?'List updated':'List saved')+' — '+l.name+' → '+(l.saw?l.saw+' saw row'+(l.saw!==1?'s':''):'no cutting')+' · '+(l.fit?l.fit+' Stores':'no Stores')+(d.wo&&!st.tpl?' · tagged '+d.wo:'');
+        if(d.lostOk)t+=d.lostOk==='later'?' (the reply was lost — checked: your save is in the database; another screen has changed the list since)':' (the reply was lost — checked: the database has it)';
         if(d.retiredMsg)t+='.'+d.retiredMsg; // the database archived the old list in the same step as the save
         if(JSON.stringify(R())!==live0){ // a box was changed WHILE it was saving: that change is not in the saved list — never a plain "Saved ✓" over it
           toast('⚠ '+t+'. What you changed WHILE it was saving was NOT saved — the saved list is open again: make that change again and press Save',true);
@@ -5465,6 +5557,8 @@ function openListEditor2(listId,presetWo,presetPid,opt){
         toast(t);done(l,d);})
         .catch(x=>{st.saving=0;if(sb)sb.disabled=false;if(/already been replaced/.test(x.message))toast(x.message,true);
           if(x.message===LS_LOCK_MSG&&ex&&!ex.tpl&&!sawStarted){sawStarted=true;draw();} // lock the Units box now and offer "Make new list from this"
+          if(x.reopen&&ex){toast('⚠ '+x.message,true);const other=[...document.querySelectorAll('.pod-ovl .me-ed')].some(e=>!ov.contains(e));ov.remove();if(!other)openListEditor(ex.id);return;} // an earlier lost Save had landed
+          if(ex&&x.lostState&&x.lostState!=='not')return err(x.message); // "May have saved — …" (never a plain "Not saved" for a save that may be in)
           if(ex||st.tpl||!d.newId||!lsLost(x))return err('Not saved — '+x.message);
           // a new list and the reply was lost: it may have reached the database. Keep its id on this device, then ask.
           const was=st.landed,nm='"'+(String(d.name||'').trim()||'the list')+'"';

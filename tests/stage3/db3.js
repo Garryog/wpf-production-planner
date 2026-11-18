@@ -190,12 +190,20 @@ function listSetDone(d, id, mode, on, by, why, cid) {
 
 // ---- save_list_revision(p_list jsonb, p_lines jsonb, p_expect int, p_by, p_reason)
 const LINE_F = ['section', 'part', 'length_mm', 'width_mm', 'qty', 'unit_qty', 'material', 'edging', 'edging2', 'note'];
-function saveListRevision(d, pl, lines, expect, by, reason) {
+// (18 Nov) d.sql18 = 'after': the empty-save guard (SUPABASE_CHANGES.md 18 Nov) — a save leaving NO rows on a list that has rows
+// is refused unless p_empty_ok. Unset / 'before': no guard (as live before that SQL). srv3.js answers 'before' + p_empty_ok with 404.
+function saveListRevision(d, pl, lines, expect, by, reason, emptyOk) {
   let r = find(d, 'lists', pl.id), isnew = false, nrev;
   const chk = pl.check_req != null && String(pl.check_req) === 'true'; // (4 Nov) the "checked before the saw" switch, as the app sent it
   // validate everything first — the SQL runs in one transaction, so an error leaves nothing half-written
   if (!r && expect != null) throw new DbError('stale: list ' + pl.id + ' is missing');
   if (r && (expect == null || r.version !== +expect)) throw new DbError('stale: list ' + r.id + ' is at version ' + r.version + ', editor had ' + expect);
+  let wiped = 0;
+  if (r && d.sql18 === 'after' && !(lines || []).length) {
+    const n = d.t.list_lines.filter(x => x.list_id === r.id && x.removed_rev == null).length;
+    if (n > 0 && !emptyOk) throw new DbError('empty save refused: this save would take away all ' + n + ' rows of "' + r.name + '"', 'P0001', r.id, 'empty-refused');
+    wiped = n;
+  }
   for (const e of lines || []) {
     if (e.id == null || e.id === '') throw new DbError('null value in column "id" of relation "list_lines"', '23502');
     const ex = find(d, 'list_lines', e.id);
@@ -266,7 +274,7 @@ function saveListRevision(d, pl, lines, expect, by, reason) {
   ['project_id', 'type_name', 'sdate', 'deliver_by'].forEach(k => { if (k in pl) patch[k] = pl[k]; });
   ['no_cut', 'no_fit'].forEach(k => { if (pl[k] != null) patch[k] = !!pl[k]; });
   if (!isnew) Object.assign(patch, { check_req: chk, checked_by: null, checked_at: null }); // (4 Nov) an edit clears the check (switch ON: must be checked again)
-  if (!isnew) patch.log = logAdd(r, { at: now(), by, what: nrev > r.rev ? 'Revision ' + nrev : 'List edited', why: reason == null ? null : reason });
+  if (!isnew) patch.log = logAdd(r, { at: now(), by, what: nrev > r.rev ? 'Revision ' + nrev : 'List edited', why: wiped ? [reason, 'all ' + wiped + ' rows taken away (the person confirmed)'].filter(x => x != null).join(' · ') : reason == null ? null : reason });
   update(d, 'lists', r, patch);
   return { list: clone(r), lines: clone(d.t.list_lines.filter(x => x.list_id === r.id).sort((a, b) => a.seq - b.seq)), retired };
 }
@@ -307,7 +315,7 @@ const RPC0 = {
   apply_line_changes: (d, a) => applyLineChanges(d, a.p_changes, a.p_by),
   list_attach: (d, a) => listAttach(d, a.p_list, a.p_wo, a.p_on, a.p_by, a.p_cid, a.p_one),
   list_set_done: (d, a) => listSetDone(d, a.p_list, a.p_mode, a.p_on, a.p_by, a.p_why, a.p_cid),
-  save_list_revision: (d, a) => saveListRevision(d, a.p_list, a.p_lines, a.p_expect, a.p_by, a.p_reason),
+  save_list_revision: (d, a) => saveListRevision(d, a.p_list, a.p_lines, a.p_expect, a.p_by, a.p_reason, a.p_empty_ok === true),
   snags_to_list: (d, a) => snagsToList(d, a.p_ids, a.p_deliver_by, a.p_by),
 };
 const RPC = {}; Object.keys(RPC0).forEach(k => { RPC[k] = txn(RPC0[k]); });
