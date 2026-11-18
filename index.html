@@ -3016,7 +3016,7 @@ async function lsSaveList(pl,lines,by,reason,opt){
     { // (audit 17 Nov, Garry) a save that takes away most of a list's rows is asked first — never a silent wipe (e.g. a list that opened looking empty)
       const live=lsLinesOf(pl.id).filter(x=>x.removed_rev==null).length,gone=df.removed.length;
       if(cur&&live>0&&gone>0&&!opt.shrinkOk&&(gone===live||(gone>=3&&gone*2>live))){
-        if(!confirm('⚠ This save TAKES AWAY '+gone+' of the '+live+' rows on "'+String(cur.name||pl.name||'this list')+'".\n\nIf the list opened looking empty or short, press Cancel, close it and open it again.\n\nOK = yes, take those rows away\nCancel = do not save'))throw new Error('Not saved — nothing was changed. Close the list and open it again.');
+        if(!confirm('⚠ This save TAKES AWAY '+gone+' of the '+live+' rows on "'+String(cur.name||pl.name||'this list')+'".\n\nIf the list opened looking empty or short, press Cancel, close it and open it again.\n\nOK = yes, take those rows away\nCancel = do not save'))throw Object.assign(new Error('Not saved — nothing was changed. Close the list and open it again.'),{shrinkCancel:true});
         opt={...opt,shrinkOk:true,emptyOk:gone===live};} // emptyOk: they were asked about taking away ALL the rows, and said OK
     }
     const expect=opt.expect!=null?opt.expect:cur?cur.version:null;
@@ -3191,10 +3191,10 @@ async function lsSaveManual(d,by,ex){
   if(ex){await lsReloadList(id);
     // (audit 17 Nov, item 1) the last Save of this list here lost its reply and the database couldn't say whether it landed:
     // ask again BEFORE comparing (a landed save would otherwise look like another screen's rows, and go in twice)
-    let lp=LS_LOSTED.get(id);if(lp&&lp.tok!==d.edTok){LS_LOSTED.delete(id);lp=null;} // only the window that made that save: a window opened since starts from what the database has
+    const lk=id+'|'+(d.edTok||''),lp=LS_LOSTED.get(lk); // (attack8 C3) per list AND per window: only the window that made that save checks it — and only that window's saves clear it (a second window on the same list never does)
     if(lp){const s=await lsEditLanded(id,lp.expect,lp.df,lp.pl);
       if(s==='unknown'||s==='other'){const x=new Error(s==='other'?'May have saved — your last Save lost its reply and "'+String(ex.name||'the list')+'" has been changed since (maybe on another screen), so this screen can\'t tell whether your changes are in it. Nothing was saved. Close the list and open it again to check it.':'May have saved — the database still could not be checked. Nothing more was saved. Try again when the connection is back.');x.lostState=s;throw x;}
-      LS_LOSTED.delete(id);
+      LS_LOSTED.delete(lk);
       if(s!=='not'){lsEditAfter(ex,id,lp.wo,by,lp.df); // it DID land: do now what that save would have done next
         if(lp.key===key0){d.lostOk=s;return lsList(id);}
         const x=new Error('Your last Save DID reach the database (only its reply was lost) — but what you changed after it is NOT saved. The list is opened again as the database has it: make those changes again and press Save.');x.reopen=true;throw x;}
@@ -3250,11 +3250,11 @@ async function lsSaveManual(d,by,ex){
     catch(e){if(!pl.replaces||!/replaced list changed/.test(e.message))throw e; // nothing saved: ask, then save again (same id)
       if(confirm('The old list '+on+' was changed on another screen after you copied it.\n\nArchive it anyway (take it off the saw)?\n\nOK = archive it. Cancel = leave it with the saw — check it, then archive it from Lists.'))pl.replaces_force=true;else pl.replaces_keep=true;
       res=await save();}}
-  catch(e){if(ex&&e.lostState){if(e.lostState==='not')LS_LOSTED.delete(id);else LS_LOSTED.set(id,{...e.sent,wo:d.wo,key:key0,tok:d.edTok});} // can't tell yet: the next Save asks first
+  catch(e){if(ex&&e.lostState){const lk=id+'|'+(d.edTok||'');if(e.lostState==='not')LS_LOSTED.delete(lk);else LS_LOSTED.set(lk,{...e.sent,wo:d.wo,key:key0,tok:d.edTok});} // can't tell yet: the next Save asks first
     const k=lsOneErr(e);if(k&&pl.replaces){const l=await lsOneList(k);throw new Error('"'+String(d.replaces.name||'the old list').trim()+'" has already been replaced by "'+l.name+'" on another PC — nothing saved (no second list for '+(d.wo||'this job')+'). Open "'+l.name+'" from Lists instead.');}
     if(k)throw new Error(lsGotMsg(k.wo,await lsOneList(k)));throw e;}
   if(pk)LS_PEND.delete(pk);
-  if(ex)LS_LOSTED.delete(id);if(res.lost)d.lostOk=res.lost; // 'saved' / 'later': the reply was lost, the database has it
+  if(ex)LS_LOSTED.delete(id+'|'+(d.edTok||''));if(res.lost)d.lostOk=res.lost; // 'saved' / 'later': the reply was lost, the database has it
   if(pl.replaces){let r=res.retired; // what the database did with the old list in the same step
     if(r)lsReloadList(pl.replaces).then(()=>render()).catch(()=>{}); // this screen sees the old list archived (in the background — the editor closes at once)
     else{try{await lsReloadList(pl.replaces);const ol=lsList(pl.replaces);r=!ol?'missing':ol.archived?'archived':'live';}catch(e){r='unknown';}} // our own earlier save (its reply was lost)
@@ -3272,7 +3272,7 @@ function lsEditAfter(ex,id,wo,by,diff){
     if(n&&listDone(id)[m])listSetDone({id},m,false,by,n+' row'+(n!==1?'s':'')+' added after it was signed off');});
 }
 // (audit 17 Nov, item 1) edits whose reply was lost and the database couldn't say whether they landed: list id → what was sent
-const LS_LOSTED=new Map();
+const LS_LOSTED=new Map(); // key: list id | the editor window's token (d.edTok)
 const lsEditKey=d=>JSON.stringify([d.rows,String(d.name||'').trim(),d.wo||'',!!d.noCut,!!d.noFit,d.tname===undefined?null:d.tname,d.ltype||'']);
 async function lsImportWB(wb,entries,fname,by,opt){
   opt=opt||{};
@@ -3310,7 +3310,9 @@ async function lsImportWB(wb,entries,fname,by,opt){
     let so;
     if(old){const w=await lsTypedGoing(old,lines); // (audit 17 Nov, item 2) rows typed in the app since the last upload: named, and asked
       if(w){if(!confirm(w.msg)){(out.kept=out.kept||[]).push(e.sheet);out.replaced--;continue;}so={shrinkOk:true,emptyOk:w.all};}}
-    const res=await lsSaveList(pl,lines,by,old?'Workbook re-uploaded'+(fname?' ('+fname+')':''):null,so);
+    let res;
+    try{res=await lsSaveList(pl,lines,by,old?'Workbook re-uploaded'+(fname?' ('+fname+')':''):null,so);}
+    catch(x){if(!x.shrinkCancel)throw x;(out.kept=out.kept||[]).push(e.sheet);out.replaced--;continue;} // (attack8 F6) Cancel on "This save TAKES AWAY …": only this sheet is skipped — the rest of the workbook goes on
     if(res.same){out.same++;if(old)out.replaced--;}else if(old&&pl.lock)out.revised++;
     out.n++;
   }
@@ -3330,14 +3332,14 @@ async function lsTypedGoing(old,lines){
   if(!edits.length)return null;
   const cur=lsLinesOf(old.id),byId=new Map(cur.map(x=>[x.id,x])),df=diffLines(cur,lines,{listId:old.id,mat:lsMatCanon(raw.project_id)});
   const near=(a,b)=>!!a&&Math.abs(T(a)-T(b))<2000; // the row's last change was a tick / release, not a typed change
-  const typed=x=>x&&x.kind!=='hdr'&&T(x.updated_at)>up&&!near(x.status_at,x.updated_at)&&!near(x.released_at,x.updated_at);
+  const typed=x=>x&&T(x.updated_at)>up&&!near(x.status_at,x.updated_at)&&!near(x.released_at,x.updated_at); // (attack8 E3) a heading renamed in the app counts too
   const ch=new Set(df.changed),go=[...df.removed,...df.changed].map(i=>byId.get(i)).filter(typed);
   if(!go.length)return null;
   const live=cur.filter(x=>x.removed_rev==null).length,gone=df.removed.length,last=edits[edits.length-1];
   const sz=x=>[x.length_mm,x.width_mm].filter(v=>v!=null&&v!=='').join('×'),nm=x=>String(x.part||'(no name)').trim()+(sz(x)?' '+sz(x):'')+(x.qty!=null&&x.qty!==''?' ×'+x.qty:'')+(x.material?' — '+x.material:'');
   const msg='⚠ "'+String(raw.name||old.name||'this list')+'" was changed in the app after its last Excel upload'+(last.by?' (by '+last.by+(T(last.at)?', '+new Date(T(last.at)).toLocaleDateString('en-IE'):'')+')':'')+'.\n\n'
     +'This upload puts the workbook in its place, so '+(go.length===1?'this row typed in the app goes':'these '+go.length+' rows typed in the app go')+':\n'
-    +go.slice(0,20).map(x=>'  • '+nm(x)+(ch.has(x.id)?' — changed back to the workbook':' — taken away')).join('\n')+(go.length>20?'\n  … and '+(go.length-20)+' more':'')
+    +go.slice(0,20).map(x=>'  • '+(x.kind==='hdr'?'heading "'+String(x.part||'').trim()+'"'+(ch.has(x.id)?' — changed back to the workbook':' — goes (the workbook\'s own heading is put in its place)'):nm(x)+(ch.has(x.id)?' — changed back to the workbook':' — taken away'))).join('\n')+(go.length>20?'\n  … and '+(go.length-20)+' more':'')
     +(gone?'\n\nIn all it takes away '+gone+' of the '+live+' rows.':'')
     +'\n\nOK = upload anyway (those rows go)\nCancel = leave "'+String(raw.name||old.name||'this list')+'" as it is (this sheet is skipped)';
   return{msg,all:gone>0&&gone===live&&!df.lines.length};
@@ -3428,7 +3430,7 @@ function lsUpload(f,pid){
       const s=await lsImportWB(wb,entries,f.name,whoNow(),{pid:pid2,map});
       if(msg)msg.textContent='';
       render();
-      toast(s.n+' lists imported from '+(bk.project||f.name)+(s.same?' — '+s.same+' unchanged':'')+(s.replaced?' — '+s.replaced+' replaced with this newer version'+(s.revised?' ('+s.revised+' new revision'+(s.revised!==1?'s':'')+' for the saw)':''):'')+(s.auto?' — '+s.auto+' work orders auto-tagged. Check the tags.':'')+(s.sugg?' — '+s.sugg+' work order'+(s.sugg!==1?'s':'')+' matched: confirm '+(s.sugg!==1?'them':'it')+' in "Cutting lists to issue" (not on the saw until confirmed)':'')+(s.flagged?' — '+s.flagged+' line'+(s.flagged!==1?'s':'')+' use a material not on the project list (flagged)':'')+(s.kept&&s.kept.length?' — left as it was (changed in the app, you pressed Cancel): '+s.kept.join(', '):''));
+      toast(s.n+' lists imported from '+(bk.project||f.name)+(s.same?' — '+s.same+' unchanged':'')+(s.replaced?' — '+s.replaced+' replaced with this newer version'+(s.revised?' ('+s.revised+' new revision'+(s.revised!==1?'s':'')+' for the saw)':''):'')+(s.auto?' — '+s.auto+' work orders auto-tagged. Check the tags.':'')+(s.sugg?' — '+s.sugg+' work order'+(s.sugg!==1?'s':'')+' matched: confirm '+(s.sugg!==1?'them':'it')+' in "Cutting lists to issue" (not on the saw until confirmed)':'')+(s.flagged?' — '+s.flagged+' line'+(s.flagged!==1?'s':'')+' use a material not on the project list (flagged)':'')+(s.kept&&s.kept.length?' — left as it was (you pressed Cancel): '+s.kept.join(', '):''));
     }catch(e){bad('Could not save that file: '+e.message);}
   };
   rd.readAsArrayBuffer(f);
@@ -5804,12 +5806,21 @@ function lsSaveAsTpl(src,done){
           const e=new Error('');e.clash={t,add,gone,by:lg.by||'',why:lg.why||''};throw e;};
         // the save itself is conditional on the version this dialog showed (the database checks): two people pressing Update
         // at the same moment — the second is refused and gets the clash message below
-        const p=(ex&&st.mode==='upd'?clash():Promise.resolve()).then(()=>ex&&st.mode==='upd'
+        // (attack8 D2/D3) the last Update here lost its reply and the database couldn't say whether it landed: ask it first —
+        // if it did land, that is THIS person's own update (never "someone updated it on another screen"), and nothing is sent again
+        const upd=ex&&st.mode==='upd',pre=upd&&st.lost&&st.lost.id===ex.id?lsEditLanded(ex.id,st.lost.expect,st.lost.df,st.lost.pl):Promise.resolve(null);
+        const p=pre.then(s0=>{
+          if(s0==='saved'||s0==='later'){st.lost=null;return{list:LST.l.get(ex.id),lost:s0};}
+          if(s0==='other'||s0==='unknown')throw Object.assign(new Error(s0==='other'?'May have saved — your last Update lost its reply and the template has been changed since (maybe on another screen), so this screen can\'t tell whether your rows are in it. Nothing more was saved. Close this and open the template\'s History to check.':'May have saved — the database still could not be checked. Nothing more was saved. Press Update template again when the connection is back.'),{lostState:s0});
+          if(s0==='not')st.lost=null;
+          return(upd?clash():Promise.resolve()).then(()=>ex&&st.mode==='upd'
           ?lsSaveList({id:ex.id,list_type:st.type,type_name:name},ls2,whoNow(),why||'Template updated from "'+(src.name||'a list')+'"',{expect:st.seen.ver!=null?st.seen.ver:undefined})
             .catch(e=>{if(/stale/.test(e.message))return clash(true).then(()=>{throw e;});throw e;})
-          :lsSaveList({id:uid('L'),name,project_id:src.pid,is_template:true,list_type:st.type,type_name:name,source:'template',wos:[]},ls2,whoNow(),'Saved as a template from "'+(src.name||'a list')+'"'));
-        p.then(r=>{ov.remove();render();toast(r.same?'Template "'+name+'" already has exactly these rows — nothing changed':ex&&st.mode==='upd'?'Template "'+name+'" updated — now Rev '+(+r.list.rev||1)+' ✓':'Template "'+name+'" saved in '+lsProjName(src.pid)+' ✓');if(done)done(r.list);})
+          :lsSaveList({id:uid('L'),name,project_id:src.pid,is_template:true,list_type:st.type,type_name:name,source:'template',wos:[]},ls2,whoNow(),'Saved as a template from "'+(src.name||'a list')+'"'));});
+        p.then(r=>{ov.remove();render();toast((r.same?'Template "'+name+'" already has exactly these rows — nothing changed':ex&&st.mode==='upd'?'Template "'+name+'" updated — now Rev '+(+r.list.rev||1)+' ✓':'Template "'+name+'" saved in '+lsProjName(src.pid)+' ✓')+(r.lost?' (the reply was lost — checked: the database has it)':''));if(done)done(r.list);})
           .catch(e=>{b.disabled=false;
+            if(e.lostState&&upd&&e.sent)st.lost={id:ex.id,...e.sent}; // can't tell yet: the next press asks the database first
+            if(e.lostState){const m=String(e.message).replace(/Press Save again/g,'Press Update template again');return err(e.lostState==='not'?'Not saved — '+m:m);} // never "Not saved — May have saved"
             if(!e.clash)return err('Not saved — '+e.message);
             const k=e.clash,li=a=>a.slice(0,8).map(escA).join(', ')+(a.length>8?' …':'');
             q('at-err').innerHTML=`Not saved — <b>${escA(k.by||'Someone')}</b> updated this template on another screen while you had this open: it is now <b>Rev ${+k.t.rev||1}</b>${k.why?' ("'+escA(k.why)+'")':''}.
@@ -6036,10 +6047,14 @@ async function lsTplAddRow(tid,a,by){
   const uAt=i=>{let u=null;rows.slice(0,i).forEach(r=>{if(r.k==='hdr'){const hu=r.units!=null;if(!(r.sub&&!hu&&u!=null))u=hu?r.units:null;}});return u;};
   // a heading of that name (any case) that is NOT inside a × block; (attack7 U5/U9) one that is only inside a × block is never
   // copied as a second heading of the same name — the row goes at the end under "<name> (added)"
+  // (attack8 U6) a top heading's section runs on through its sub-headings: the row goes at the END of the whole section —
+  // unless that end is inside a × block (then at the end of the heading's own rows, if that is outside one)
+  const endOf=h=>{let j0=h+1;while(j0<rows.length&&rows[j0].k!=='hdr')j0++;let j=j0;if(!rows[h].sub)while(j<rows.length&&(rows[j].k!=='hdr'||rows[j].sub))j++;
+    return uAt(j)==null?j:uAt(j0)==null?j0:-1;};
+  const findHead=n=>{for(const h of rows.map((r,i)=>i).filter(i=>rows[i].k==='hdr'&&key(rows[i].item)===key(n))){const j=endOf(h);if(j>=0)return j;}return -1;};
   let at=-1,clash=false;
-  if(a.head){const hs=rows.map((r,i)=>i).filter(i=>rows[i].k==='hdr'&&key(rows[i].item)===key(a.head));
-    for(const h of hs){let j=h+1;while(j<rows.length&&rows[j].k!=='hdr')j++;if(uAt(j)==null){at=j;break;}}
-    if(at<0&&hs.length)clash=true;}
+  if(a.head){at=findHead(a.head);if(at<0&&rows.some(r=>r.k==='hdr'&&key(r.item)===key(a.head)))clash=true;
+    if(clash){const j=findHead(a.head+' (added)');if(j>=0){at=j;clash=false;}}} // (attack8 H2) a "<name> (added)" heading made by an earlier add is used again
   if(at>=0)rows.splice(at,0,row);
   else{let hn=a.head||'Added items';
     if(clash){const taken=new Set(rows.filter(r=>r.k==='hdr').map(r=>key(r.item)));hn=a.head+' (added)';for(let n=2;taken.has(key(hn));n++)hn=a.head+' (added '+n+')';}
@@ -8005,6 +8020,7 @@ function podKey(veh,day,wk){return veh+'|'+day+'|'+(wk||thisWk());} /*dates: the
 function vanDrv(veh,date){return String(((DB.vanDrv||{})[veh+'|'+date])||'');}
 function vanDrvSet(veh,date,n){const m=DB.vanDrv=DB.vanDrv||{};n=String(n||'').trim();if(n)m[veh+'|'+date]=n;else delete m[veh+'|'+date];
   const old=addDayISO(todayLocal(),-60);Object.keys(m).forEach(k=>{if(k!==veh+'|'+date&&String(k.split('|')[1]||'')<old)delete m[k];});sched();} // (attack7 G1) the cell just set is never tidied away at once
+function vansOfDrv(name,date){const k=String(name||'').trim().toLowerCase();return k?DEL_VEH.filter(x=>vanDrv(x.k,date).toLowerCase()===k).map(x=>x.k):[];}
 function vanOfDrv(name,date){const k=String(name||'').trim().toLowerCase();if(!k)return'';const v=DEL_VEH.find(x=>vanDrv(x.k,date).toLowerCase()===k);return v?v.k:'';}
 function renderDriver(app){
   const name=ls.get('wpfDrvName');let veh=ls.get('wpfDrvVeh')||'';
@@ -8015,12 +8031,21 @@ function renderDriver(app){
   const dOpts=[thisWk(),wkPlus(thisWk(),1)].flatMap(w=>DEL_DAYS.map((d,i)=>({v:d+'|'+w,l:d+' '+dShort(addDayISO(w,i))+(w!==thisWk()?' (next week)':''),on:d===day&&w===dwk})));
   if(!dOpts.some(x=>x.on))dOpts.unshift({v:day+'|'+dwk,l:day+' '+dShort(addDayISO(dwk,DEL_DAYS.indexOf(day))),on:true});
   const dayL=day+' '+dShort(addDayISO(dwk,DEL_DAYS.indexOf(day)));
-  const dDate=addDayISO(dwk,DEL_DAYS.indexOf(day)),myVan=vanOfDrv(name,dDate),vanBy=veh?vanDrv(veh,dDate):'';
-  // (attack7 P1/P2) the van the office gave him for that day is picked — each day / each new assignment, not only when no van is
-  // stored (yesterday's van must not stick). Once per assignment: if he then picks another van himself, that stands.
+  const dDate=addDayISO(dwk,DEL_DAYS.indexOf(day)),myVans=vansOfDrv(name,dDate);let myVan=myVans[0]||'';
+  // Which van is shown for that day: (attack8 D4) a van he picked himself FOR THAT DAY stands (kept per date, so looking at
+  // another day and back doesn't undo it); else (attack7 P1/P2) the van the office gave him that day — yesterday's van never
+  // sticks; else the last van he looked at.
+  let picks={};try{picks=JSON.parse(ls.get('wpfDrvPick')||'{}')||{};}catch(e){picks={};}
   let switched='';
-  if(name&&myVan&&veh!==myVan&&ls.get('wpfDrvAsg')!==dDate+'|'+myVan){switched=veh;veh=myVan;ls.set('wpfDrvVeh',veh);}
-  if(name&&myVan)ls.set('wpfDrvAsg',dDate+'|'+myVan);
+  const asgNow=myVans.join(','),pk0=picks[dDate];
+  if(pk0&&typeof pk0==='object'&&pk0.a!==asgNow){delete picks[dDate];ls.set('wpfDrvPick',JSON.stringify(picks));} // the office changed his van(s) for that day since he picked: the office's choice counts again
+  const myPick=picks[dDate];
+  if(name&&myPick&&DEL_VEH.some(v=>v.k===myPick.v))veh=myPick.v;
+  else if(name&&myVans.length&&!myVans.includes(veh)){switched=veh;veh=myVan;if(switched)ls.set('wpfDrvSw',JSON.stringify({d:dDate,from:switched,to:veh}));}
+  if(!switched){let sw=null;try{sw=JSON.parse(ls.get('wpfDrvSw')||'null');}catch(e){}if(sw&&sw.d===dDate&&sw.to===veh)switched=sw.from||'';} // the "switched from …" line stays while he is on that van that day (a refresh redraws the page)
+  if(veh!==(ls.get('wpfDrvVeh')||''))ls.set('wpfDrvVeh',veh);
+  if(myVans.includes(veh))myVan=veh; // (attack8 D5) on two vans that day: the one he is looking at is one of his — no warning
+  const vanBy=veh?vanDrv(veh,dDate):'';
   const jobs=veh?delAll().filter(o=>o.delVeh===veh&&slotIn(o,dwk,day)).sort(woCmp):[];
   const onVan=jobs.filter(o=>dStage(o)!=='').length;
   const delivd=jobs.filter(o=>dStage(o)==='deliv').length;
@@ -8073,7 +8098,9 @@ function renderDriver(app){
     if(sel&&sel.value&&sel.value!=='__other')return sel.value.trim();
     const el=document.getElementById('drv-name');return((el&&el.value)||ls.get('wpfDrvName')||'').trim();
   };
-  const vs=document.getElementById('drv-veh');if(vs)vs.onchange=()=>{ls.set('wpfDrvVeh',vs.value);render();};
+  const vs=document.getElementById('drv-veh');if(vs)vs.onchange=()=>{ls.set('wpfDrvVeh',vs.value);
+    const old=addDayISO(todayLocal(),-14);Object.keys(picks).forEach(k=>{if(k<old)delete picks[k];});if(vs.value)picks[dDate]={v:vs.value,a:myVans.join(',')};else delete picks[dDate];ls.set('wpfDrvPick',JSON.stringify(picks)); // his own pick for this day
+    render();};
   const ds=document.getElementById('drv-day');if(ds)ds.onchange=()=>{ls.set('wpfDrvDay',ds.value);render();};
   document.querySelectorAll('[data-dl]').forEach(b=>b.onclick=()=>{
     const o=findDel(b.dataset.dl);if(!o)return;
