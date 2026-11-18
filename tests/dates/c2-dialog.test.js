@@ -17,7 +17,7 @@ const w = ms => new Promise(r => setTimeout(r, ms));
   const p = t.page;
   await p.evaluate(() => showTab('b')); await w(200);
   // 1. single job from the board
-  await p.click('[data-duedlg="WO-1"]'); await w(150);
+  await p.evaluate(w=>dateDlg([w]),'WO-1'); /*18 Nov: board ⋯ removed — same dialog opened directly*/ await w(150);
   const open1 = await p.evaluate(() => { const d = document.getElementById('date-dlg'); return d ? { txt: d.innerText, ok: d.querySelector('#dm-ok').disabled } : null; });
   rec('tapping the due badge opens "Change dates" with the job', !!open1 && /Change dates — WO-1/.test(open1.txt) && open1.ok, open1 && open1.txt.slice(0, 120));
   await p.fill('#dm-date', '2026-11-27'); await w(50);
@@ -33,7 +33,7 @@ const w = ms => new Promise(r => setTimeout(r, ms));
   const a = await p.evaluate(() => { const o = DB.orders.find(x => x.wo === 'WO-1'); return { due: o.dueDate, wk: o.plannedWeek, hist: o.dueHist, by: o.dueHist && o.dueHist[0].by, dlg: !!document.getElementById('date-dlg'), chip: !!document.querySelector('[data-duehist="WO-1"]') }; });
   rec('Move date writes the job (Tester = person at this PC) and shows "moved 1×"', a.due === '2026-11-27' && a.wk === '2026-11-23' && a.by === 'Tester' && !a.dlg && a.chip, JSON.stringify(a));
   // 2. bank holiday → "Use 24 Dec"
-  await p.click('[data-duedlg="WO-3"]'); await w(100);
+  await p.evaluate(w=>dateDlg([w]),'WO-3'); /*18 Nov: board ⋯ removed — same dialog opened directly*/ await w(100);
   await p.fill('#dm-date', '2026-12-25'); await w(50);
   const bh = await p.evaluate(() => document.getElementById('dm-prev').innerText);
   rec('25 Dec warns "bank holiday"', /bank holiday/.test(bh), bh.replace(/\n/g, ' '));
@@ -74,7 +74,7 @@ const w = ms => new Promise(r => setTimeout(r, ms));
   await p.click('#pod-x'); await w(50);
   // 6. escaping
   await p.evaluate(() => showTab('b')); await w(150);
-  await p.click('[data-duedlg="WO-<b>7"]'); await w(100);
+  await p.evaluate(w=>dateDlg([w]),'WO-<b>7'); /*18 Nov: board ⋯ removed — same dialog opened directly*/ await w(100);
   const x = await p.evaluate(() => ({ xss: !!window.__xss, img: !!document.querySelector('#date-dlg img'), head: document.querySelector('#date-dlg').innerText.slice(0, 60) }));
   rec('WO / title are escaped in the dialog', !x.xss && !x.img && /WO-<b>7/.test(x.head), JSON.stringify(x));
   await p.click('#pod-x'); await w(50);

@@ -21,7 +21,7 @@ const w = ms => new Promise(r => setTimeout(r, ms));
   const t = await H.open({ browser, now: '2026-11-10T10:00:00Z', row });
   const p = t.page;
   await p.evaluate(() => showTab('b')); await w(200);
-  await p.click('[data-duedlg="WO-1"]'); await w(150);
+  await p.evaluate(w=>dateDlg([w]),'WO-1'); /*18 Nov: board ⋯ removed — same dialog opened directly*/ await w(150);
   const has = await p.evaluate(() => !!document.getElementById('dm-deliv') && document.getElementById('dm-deliv').value);
   rec('dialog has a Delivery date box with the job\'s date', has === '2026-11-25', String(has));
   await p.fill('#dm-deliv', '2026-12-04'); await w(80);

@@ -46,3 +46,8 @@ Fixed by Stage 2 and removed from this list: import.test.js (17 of 19), datasafe
 | ship merge-b-import A8 (Medium/Low) | a job added by hand (no Cienapps step on record), set to JOB SHIPPED by hand, then "Bring back", then imported as shipped: it stays on the board instead of going to the Shipped tab | small fix after this release | pending |
 | ship merge-e-edges E2 (Low/Medium) | after "Bring back" on a job Cienapps had at 10 INSTALLED, the step box lets it go back to 9 JOB SHIPPED and puts that on Export Changes | small fix after this release | pending |
 | ship merge-e-edges E1 (Low) | old data with a space after the step name shows as a "change" on Export Changes after ship + bring back | small fix after this release | pending |
+
+## 17 Nov 2026 — Capacity Board rows less tall (Garry: "the rows are too high") — out of date by design, not app faults
+| Test / check | Why it fails | Fixed by | Status |
+|---|---|---|---|
+| lists-filter attack1-filter "11 lists switch ON / OFF … screens are character-for-character the same as origin/main" (2) | the check compares the Capacity Board's HTML with the live version byte for byte; the board's date cell was changed on purpose (dates side by side, chips on one line) | Tester: leave office:b out of that comparison | pending |

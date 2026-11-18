@@ -88,7 +88,7 @@ const res = []; const rec = (n, ok, d) => { res.push(ok); console.log((ok ? 'PAS
   rec('-1 working day from Mon 30 Nov = Fri 27 Nov', r.l === '2026-11-27', r.l);
   rec('delivered job / same date are not moved', r.m === 'already delivered' && /already due/.test(r.n), r.m + ' | ' + r.n);
   rec('job deleted between preview and apply: skipped, nothing moved', r.o.moved === 0 && r.o.skipped.length === 1, JSON.stringify(r.o));
-  rec('board shows moved / check chips and tappable due dates', r.board.chips > 0 && r.board.mv > 0 && r.board.due > 5, JSON.stringify(r.board));
+  rec('board (18 Nov): "moved N×" shown; no check chips, no ⋯', r.board.chips > 0 && r.board.mv === 0 && r.board.due === 0, JSON.stringify(r.board));
   const last = t.server.patches[t.server.patches.length - 1];
   const sv = last && last.orders && last.orders.find(o => o.wo === 'WO-1');
   rec('saved to the database (orders only, no new top-level key)', !!sv && sv.dueHist.length === 2 && Object.keys(last).every(k => ['orders', 'settings', 'nid', 'version'].includes(k)), sv ? JSON.stringify(Object.keys(last)) : 'no patch');
