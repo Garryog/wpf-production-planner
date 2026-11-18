@@ -467,7 +467,7 @@ body.del-dragging #del-wkbar .wkb-btn:not(:disabled):not(.nodrop),body.del-dragg
 .rdy-green .rdy-tag{background:#0d6e46;color:#fff}.rdy-amber .rdy-tag{background:#8a5a00;color:#fff}.rdy-red .rdy-tag{background:#b42318;color:#fff}
 .dmoved{display:inline-block;margin:3px 0 0 4px;font-size:10px;font-weight:700;color:#4a5568}
 .dchip .dinfo{font-size:14px;color:#14335c}
-.ddrv-w{margin-bottom:3px}.ddrv{width:100%;font-size:11px;padding:2px 4px;border:1px dashed #9cbce8;border-radius:5px;background:#f7fbff;color:#5b6b80;max-width:100%}.ddrv.on{border:1px solid #1450a8;background:#eaf2ff;color:#14335c;font-weight:700}.ddrv-ro{font-size:11px;font-weight:700;color:#14335c}
+.ddrv-w{margin-bottom:3px}.ddrv{width:100%;font-size:11px;padding:2px 4px;border:1px dashed #9cbce8;border-radius:5px;background:#f7fbff;color:#5b6b80;max-width:100%}.ddrv.on{border:1px solid #1450a8;background:#eaf2ff;color:#14335c;font-weight:700}@media(max-width:700px){.ddrv{min-height:40px;font-size:14px}} /*(attack7 M2) finger-sized on a phone*/.ddrv-ro{font-size:11px;font-weight:700;color:#14335c}
 .rdy-dot{display:inline-block;width:12px;height:12px;border-radius:50%;vertical-align:middle;flex:0 0 12px}
 .rdy-dot.rdy-green{background:#0d6e46}.rdy-dot.rdy-amber{background:#c27803}.rdy-dot.rdy-red{background:#b42318}
 .rdy-pill{font-size:12px;font-weight:800;padding:3px 8px;border-radius:5px;color:#fff}
@@ -1366,7 +1366,7 @@ window.addEventListener('beforeunload',e=>{if(saveT||SAVING||DB.saveFailed||lqPe
 /*dates: release marker for the old-screen guard v2 (SUPABASE_CHANGES.md, PENDING). Written on every save by this code; older
   code drops settings keys it doesn't know, so its saves can be told apart (and refused once the guard is on). */
 const APP_REL=2;
-function fullSettings(){return{appRel:APP_REL,...(DB.pMerged&&DB.pMerged.length?{pMerged:DB.pMerged}:{}),weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP,delx:DB.delx||[],delNotes:DB.delNotes||{},...(DB.drawSeen&&Object.keys(DB.drawSeen).length?{drawSeen:DB.drawSeen}:{}),...(DB.vanDrv&&Object.keys(DB.vanDrv).length?{vanDrv:DB.vanDrv}:{}),grps:DB.grps||{},pins:DB.pins||{},pod:DB.pod||{},lists:DB.lists||[],listWBs:DB.listWBs||{},listDone:DB.listDone||{},listLead:DB.listLead||5,delArchive:DB.delArchive||{},staff:DB.staff||[],listHold:DB.listHold||{},holdLog:DB.holdLog||[],listRow:DB.listRow||{},saveIds:DB.saveIds||[],exportBase:{wk:orig,st:origStep},...(DB.listDue>0?{listDue:DB.listDue}:{}),...['delivLead','siteDays','earlyDays'].reduce((a,k)=>{if(dsOk(DB[k]))a[k]=DB[k];return a;},{}),...(typeof DB.listChk==='boolean'?{listChk:DB.listChk}:{}),...(typeof DB.photoLists==='boolean'?{photoLists:DB.photoLists}:{}),...(DB.delLegacyWk?{delLegacyWk:DB.delLegacyWk}:{}),...(DB.delLegacyAt?{delLegacyAt:DB.delLegacyAt}:{}),...(typeof DB.listDelOnly==='boolean'?{listDelOnly:DB.listDelOnly}:{}),...(DB.listStore?{listStore:DB.listStore,listStoreAt:DB.listStoreAt||''}:{})};}
+function fullSettings(){return{appRel:APP_REL,...(DB.pMerged&&DB.pMerged.length?{pMerged:DB.pMerged}:{}),weekCaps:DB.weekCaps||{},hourScale:HOUR_SCALE,wcap:WCAP,vcap:VCAP,delx:DB.delx||[],delNotes:DB.delNotes||{},...(DB.drawSeen&&Object.keys(DB.drawSeen).length?{drawSeen:DB.drawSeen}:{}),vanDrv:DB.vanDrv||{}, /*(attack7 R2–R5) always saved, even empty: "no drivers" must not read as "not known" — else another PC's stale copy brings a removed driver back*/grps:DB.grps||{},pins:DB.pins||{},pod:DB.pod||{},lists:DB.lists||[],listWBs:DB.listWBs||{},listDone:DB.listDone||{},listLead:DB.listLead||5,delArchive:DB.delArchive||{},staff:DB.staff||[],listHold:DB.listHold||{},holdLog:DB.holdLog||[],listRow:DB.listRow||{},saveIds:DB.saveIds||[],exportBase:{wk:orig,st:origStep},...(DB.listDue>0?{listDue:DB.listDue}:{}),...['delivLead','siteDays','earlyDays'].reduce((a,k)=>{if(dsOk(DB[k]))a[k]=DB[k];return a;},{}),...(typeof DB.listChk==='boolean'?{listChk:DB.listChk}:{}),...(typeof DB.photoLists==='boolean'?{photoLists:DB.photoLists}:{}),...(DB.delLegacyWk?{delLegacyWk:DB.delLegacyWk}:{}),...(DB.delLegacyAt?{delLegacyAt:DB.delLegacyAt}:{}),...(typeof DB.listDelOnly==='boolean'?{listDelOnly:DB.listDelOnly}:{}),...(DB.listStore?{listStore:DB.listStore,listStoreAt:DB.listStoreAt||''}:{})};}
 /* Stage 3 switch: settings.listStore==='v2' → cutting lists live in their own tables (lists, list_lines…).
    Missing, blank or anything else (switch back writes 'v1') → today's lists in the planner record, untouched. */
 function V2(){return DB.listStore==='v2'||DB.listStore==='switching';} // 'switching' = a Switch back is rebuilding the old lists: screens still read the tables, the database takes no changes
@@ -3081,7 +3081,7 @@ function lsEditRows(id){ // the typed-list editor's rows, with edging and note k
     let q=lsQty(x.qty),fixed=false;
     if(units&&viaSub&&String(x.unit_qty==null?'':x.unit_qty).trim()==='')fixed=true; // (attack5 M10) saved before 16 Nov, when a sub-heading ended the unit block: its quantity is a TOTAL — kept as a fixed total, never × units
     else if(units){const pu=lsPerUnit(x,units);q=lsQty(pu.qty);fixed=pu.fixed;} // one rule for every place: lsPerUnit
-    return{k:x.kind,item:x.part||'',qty:q,...(fixed?{fixed:true}:{}),L:x.length_mm==null?'':+x.length_mm,W:x.width_mm==null?'':+x.width_mm,mat:x.material||'',edging:x.edging||'',edging2:x.edging2||'',note:x.note||'',sec:x.section||'',...base};
+    return{k:x.kind,item:x.part||'',qty:q,...(fixed?{fixed:true}:{}),L:x.length_mm==null?'':+x.length_mm,W:x.width_mm==null?'':+x.width_mm,mat:x.material||'',edging:x.edging||'',edging2:x.edging2||'',note:x.note||'',sec:x.section||'',...(x.material_other?{matOther:true}:{}),...base};
   });
 }
 /* Another office saved this list after this editor opened it. Merge, never overwrite silently:
@@ -3736,7 +3736,10 @@ async function lsWrite(t,row,patch){ // insert (row) or version-checked update (
 const LS_KINDS={kitchen:'Kitchen',house:'House',room:'Room',other:'Other',snag:'Snag'};
 function lsProjects(all){return[...LST.p.values()].filter(p=>all||p.active!==false).sort((a,b)=>String(a.name).localeCompare(String(b.name)));}
 function lsMats(pid,kind,all){return[...LST.m.values()].filter(m=>m.project_id===pid&&(!kind||m.kind===kind)&&(all||m.active!==false)).sort((a,b)=>(a.sort||0)-(b.sort||0)||String(a.name).localeCompare(String(b.name)));}
-function lsDlg(html,w){const ov=document.createElement('div');ov.className='pod-ovl';ov.innerHTML=`<div class="pod-in" style="min-width:min(${w||760}px,96vw)">${html}<div style="margin-top:12px;text-align:right"><button class="btn btn-s" id="pod-x">Close</button></div></div>`;document.body.appendChild(ov);ov.onclick=e=>{if(e.target===ov||e.target.id==='pod-x'){ov.remove();render();}};return ov;}
+// o.keep: the grey background never closes it (a text selection let go on the grey must not lose what was typed — 17 Nov hotfix rule);
+// o.dirty(): something typed → Close asks first
+function lsDlg(html,w,o){o=o||{};const ov=document.createElement('div');ov.className='pod-ovl';ov.innerHTML=`<div class="pod-in" style="min-width:min(${w||760}px,96vw)">${html}<div style="margin-top:12px;text-align:right"><button class="btn btn-s" id="pod-x">Close</button></div></div>`;document.body.appendChild(ov);
+  ov.onclick=e=>{if(e.target.id==='pod-x'){if(o.dirty&&o.dirty()&&!confirm('Close without saving? What you typed here is lost.\n\nOK = close\nCancel = keep it open'))return;ov.remove();render();}else if(e.target===ov&&!o.keep){ov.remove();render();}};return ov;}
 const LS_INP='padding:6px 8px;border:1px solid var(--b2);border-radius:6px;font-size:13px';
 // (Garry, 9 Nov) an old list edited to make a new one: its rows are copied (no ticks, no work order) into a NEW list for the
 // project picked (default: the project on screen, else the old list's). Nothing is saved until Save; the old list is not changed.
@@ -4184,11 +4187,11 @@ function lsFuTds(l){ // Lists home: the tagged jobs' Floor and Unit in their own
    standard sub-headings Fillers and Kickers / Worktops / Stores items, two empty rows under each. The Colour drop-down is the
    project's own materials (+ Add new material…). Empty rows and headings with nothing under them never reach the saw. */
 const LS_STD_SUBS=['Fillers and Kickers','Worktops','Stores items'];
-function lsStdHouse(o){const u=fuU(o);return !u?'':/^\d+[a-z]?$/i.test(u)?'House '+u:u;}
+function lsStdHouse(o){const u=fuU(o);return !u?(o?String(o.title||'').trim()||String(o.wo||''):''):/^\d+[a-z]?$/i.test(u)?'House '+u:u;} // (attack7 B2) a job with no unit: its title (or WO) — never a blank heading the save refuses
 function lsStdRows(o){const e=()=>({k:'part',item:'',qty:'',L:'',W:'',mat:'',edging:'',edging2:'',note:''});
   return[{k:'hdr',item:lsStdHouse(o),note:''},...LS_STD_SUBS.flatMap(s=>[{k:'hdr',item:s,note:'',sub:true},e(),e()])];}
 function lsNewStd(wo,pid){const o=wo?DB.orders.find(x=>x.wo===wo):null;
-  openListEditor(null,wo||'',pid||(o&&lsProjAutoId(o.customer))||'',{std:true,rows:lsStdRows(o),note:'Standard layout — fill in the rows under each heading. Empty rows, and headings with nothing under them, are left off the saw.'});}
+  openListEditor(null,wo||'',pid||(o&&lsProjAutoId(o.customer))||'',{std:true,rows:lsStdRows(o),...(o&&!fuU(o)?{name:String(o.title||'').trim()||o.wo}:{}),note:'Standard layout — fill in the rows under each heading. Empty rows, and headings with nothing under them, are left off the saw.'});}
 function lsListName(o){return o?(fuU(o)||o.title||o.wo):'';}
 async function confirmList(wo,tid,by){
   const o=DB.orders.find(x=>x.wo===wo);if(!o)throw new Error(wo+' is no longer on the planner');
@@ -5989,11 +5992,13 @@ function lsTplAddDlg(pid){
     <div style="display:flex;justify-content:space-between;align-items:center;margin:4px 0"><b style="font-size:13px">Templates</b><span><button class="btn btn-s" id="ta-all" style="font-size:12px;padding:2px 8px">Tick all</button> <button class="btn btn-s" id="ta-none" style="font-size:12px;padding:2px 8px">None</button></span></div>
     <div style="max-height:40vh;overflow:auto;border:1px solid var(--border);border-radius:6px;padding:4px 8px">${tps.map(t=>`<label class="hold-row" style="display:flex;gap:8px;align-items:center;padding:6px 0"><input type="checkbox" data-tat="${escA(t.id)}" style="width:20px;height:20px"><span><b>${escA(t.typeName||t.name)}</b> <span style="color:var(--t3);font-size:12px">Rev ${+t.rev||1}</span></span></label>`).join('')}</div>
     <div id="ta-err" style="color:#b42318;font-weight:700;font-size:13px;min-height:18px;margin-top:6px"></div>
-    <div style="text-align:right"><button class="btn btn-g" id="ta-go" style="padding:10px 18px;font-size:14px">＋ Add to the ticked templates</button></div>`,560);
+    <div style="text-align:right"><button class="btn btn-g" id="ta-go" style="padding:10px 18px;font-size:14px">＋ Add to the ticked templates</button></div>`,560,
+    {keep:true,dirty:()=>['ta-item','ta-qty','ta-l','ta-w','ta-head','ta-mat'].some(k=>{const e=document.getElementById(k);return e&&String(e.value||'').trim()!=='';})}); // (attack7 G1) only Close shuts it
   const g=id=>dl.querySelector('#'+id),err=t=>{g('ta-err').textContent=t;};
   g('ta-all').onclick=()=>dl.querySelectorAll('[data-tat]').forEach(c=>c.checked=true);
   g('ta-none').onclick=()=>dl.querySelectorAll('[data-tat]').forEach(c=>c.checked=false);
   g('ta-go').onclick=async()=>{
+    if(!lsTplSaveOk()){err('Not added — templates are changed by the Drawing office, Production Manager or Admin (this screen was switched to '+(ROLE_LBL[ROLE]||ROLE)+').');return;} // (attack7 S1) checked again at the moment of Add
     const item=g('ta-item').value.replace(/\s+/g,' ').trim(),qty=g('ta-qty').value.trim(),L=g('ta-l').value.trim(),W=g('ta-w').value.trim(),mat=g('ta-mat').value,head=g('ta-head').value.replace(/\s+/g,' ').trim();
     const ids=[...dl.querySelectorAll('[data-tat]:checked')].map(c=>c.dataset.tat);
     if(!item){err('Type the item.');g('ta-item').focus();return;}
@@ -6003,9 +6008,16 @@ function lsTplAddDlg(pid){
     if(!ids.length){err('Tick at least one template.');return;}
     if(!confirm('Add "'+item+'" ×'+qty+(L?' ('+L+' × '+W+')':'')+(mat?' — '+mat:'')+(head?' under "'+head+'"':'')+' to '+ids.length+' template'+(ids.length!==1?'s':'')+'?\n\nEach one gets a new Rev.'))return;
     const go=g('ta-go');go.disabled=true;err('');go.textContent='Adding…';
+    // (attack7 H1) no answer at all: say so after 10 s; after 45 s give the button back (pressing again is safe — a template
+    // that already has the row is left alone)
+    const gen=(dl._gen=(dl._gen||0)+1),slow=setTimeout(()=>{if(dl._gen===gen)err('No answer from the database yet… it may still go through — wait, or check the connection.');},10000),
+      give=setTimeout(()=>{if(dl._gen!==gen)return;go.disabled=false;go.textContent='＋ Add to the ticked templates';err('No answer from the database for 45 s — it may have been added. Press Add again when the connection is back: a template that already has it is left alone.');},45000);
     const ok=[],same=[],bad=[],by=whoNow()||ROLE_LBL[ROLE]||'Office';
+    const plain=e=>{const m=String(e&&e.message||e);return/stale/.test(m)?'changed on another screen at the same moment — press Add again':/lists load failed|Failed to fetch|NetworkError|Load failed|HTTP 5\d\d|^5\d\d/i.test(m)?'the database did not answer — check the connection and press Add again':m;}; // (attack7 W4) plain words
     for(const tid of ids){const t0=lsList(tid);const nm=String((t0&&(t0.typeName||t0.name))||tid);
-      try{const r=await lsTplAddRow(tid,{item,qty,L,W,mat,head},by);(r==='same'?same:ok).push(nm);}catch(e){bad.push(nm+' ('+e.message+')');}}
+      try{let r;try{r=await lsTplAddRow(tid,{item,qty,L,W,mat,head},by);}catch(e){if(!/stale/.test(String(e.message)))throw e;r=await lsTplAddRow(tid,{item,qty,L,W,mat,head},by);} // saved on another screen meanwhile: read it again and add once more
+        (r==='same'?same:ok).push(nm);}catch(e){bad.push(nm+' ('+plain(e)+')');}}
+    clearTimeout(slow);clearTimeout(give);if(dl._gen!==gen)return; // Add was pressed again meanwhile: that press reports
     dl.remove();try{render();}catch(e){}
     const msg=[ok.length?'✓ Added to '+ok.length+': '+ok.join(', '):'',same.length?'Already there (left alone): '+same.join(', '):'',bad.length?'⚠ NOT added to: '+bad.join('; '):''].filter(Boolean).join('\n\n');
     if(bad.length||same.length)alert(msg);else toast(msg);
@@ -6020,14 +6032,24 @@ async function lsTplAddRow(tid,a,by){
   if(rows.some(r=>r.k!=='hdr'&&key(r.item)===key(a.item)&&key(r.mat)===key(mat)&&String(r.L||'')===String(a.L||'')&&String(r.W||'')===String(a.W||'')))return'same';
   const row={k:'part',item:a.item,qty:a.qty,L:a.L||'',W:a.W||'',mat:mat||'',edging:'',edging2:'',note:''};
   // where it goes: at the end of the heading's block (a heading with the same name, any case); else a new heading at the end
-  let at=-1;if(a.head){const h=rows.findIndex(r=>r.k==='hdr'&&key(r.item)===key(a.head));if(h>=0){at=h+1;while(at<rows.length&&rows[at].k!=='hdr')at++;}}
   // never inside a × / unit block by accident (its rows are per ONE): the heading's own block is fine only when it has no ×
   const uAt=i=>{let u=null;rows.slice(0,i).forEach(r=>{if(r.k==='hdr'){const hu=r.units!=null;if(!(r.sub&&!hu&&u!=null))u=hu?r.units:null;}});return u;};
-  if(at>=0&&uAt(at)!=null)at=-1;
+  // a heading of that name (any case) that is NOT inside a × block; (attack7 U5/U9) one that is only inside a × block is never
+  // copied as a second heading of the same name — the row goes at the end under "<name> (added)"
+  let at=-1,clash=false;
+  if(a.head){const hs=rows.map((r,i)=>i).filter(i=>rows[i].k==='hdr'&&key(rows[i].item)===key(a.head));
+    for(const h of hs){let j=h+1;while(j<rows.length&&rows[j].k!=='hdr')j++;if(uAt(j)==null){at=j;break;}}
+    if(at<0&&hs.length)clash=true;}
   if(at>=0)rows.splice(at,0,row);
-  else{if(a.head||uAt(rows.length)!=null)rows.push({k:'hdr',item:a.head||'Added items',note:''});rows.push(row);}
+  else{let hn=a.head||'Added items';
+    if(clash){const taken=new Set(rows.filter(r=>r.k==='hdr').map(r=>key(r.item)));hn=a.head+' (added)';for(let n=2;taken.has(key(hn));n++)hn=a.head+' (added '+n+')';}
+    if(a.head||uAt(rows.length)!=null)rows.push({k:'hdr',item:hn,note:''});rows.push(row);}
   const lines=lsEdLines(rows);lines.forEach(ln=>{const mm=ln.kind!=='hdr'&&ln.material?lsMatFind(pid,ln.material,lsLineMk(ln.kind)):null;if(mm)ln.material=mm.name;});lsFlagMats(lines,pid);
   lsBlockTotals(lines);
+  // (attack7 U1b/U1c) every line that was already there is saved exactly as the database has it — only the new row (and its
+  // heading) is new: no "not on the project" flag lost, no old total turned into a "fixed" one, nothing renamed
+  const was=new Map(lsLinesOf(tid).filter(x=>x.removed_rev==null).map(x=>[x.id,x]));
+  lines.forEach(ln=>{const x=ln.id&&was.get(ln.id);if(x)['kind','section','part','length_mm','width_mm','qty','unit_qty','material','edging','edging2','note'].forEach(k=>{ln[k]=x[k]==null?(k==='length_mm'||k==='width_mm'?'':null):x[k];}),ln.material_other=!!x.material_other;});
   await lsSaveList({id:tid,project_id:pid,list_type:raw.list_type,type_name:raw.type_name},lines,by,'Added "'+a.item+'" ×'+a.qty+(mat?' — '+mat:'')+' (to several templates at once)',{expect:+raw.version||0});
   return'ok';
 }
@@ -7950,7 +7972,8 @@ function showReadiness(wos,ctx,always){
   // lists (office, Production Manager, Drawing office); PMs, drivers and the floor see the status only
   const canL=V2()&&!['pm','driver','dash','floor','saw','stores'].includes(ROLE||''),lbtn='padding:6px 12px;font-size:13px;white-space:nowrap';
   const lsOf=w=>V2()?lists().filter(l=>(l.wos||[]).includes(w)):[];
-  const listBtns=o=>{if(!canL||o.manual)return'';const ls2=lsOf(o.wo);
+  const listBtns=o=>{if(!canL||o.manual||dStage(o))return''; // (attack7 C5) as on the card: not for a job already loaded / on the road / delivered
+const ls2=lsOf(o.wo);
     if(!ls2.length)return `<button class="btn btn-g" data-rdadd="${escA(o.wo)}" style="${lbtn}" title="Opens the cutting list window for ${escA(o.wo)} — work order, floor, unit and title filled in">＋ Add cutting list</button>`;
     return ls2.slice(0,3).map(l=>`<button class="btn btn-s" data-rdopen="${escA(l.id)}" style="${lbtn}" title="Open the list in the cutting list window">📋 Open ${escA(String(l.name||'list').slice(0,24))}</button>`).join('');};
   const chip=(ok,txtOk,txtNo)=>ok?`<span class="ls-ok" style="font-size:13px">${txtOk}</span>`:`<span class="ls-no" style="font-size:13px">${txtNo}</span>`;
@@ -7978,10 +8001,10 @@ function showReadiness(wos,ctx,always){
 let drvUploading=false;
 function podKey(veh,day,wk){return veh+'|'+day+'|'+(wk||thisWk());} /*dates: the booking's own week*/
 /* (Garry 17 Nov, answer 5A) the Production Manager / office give each van a DRIVER per day on the Deliveries page.
-   settings.vanDrv = { 'VOLVO|2026-11-19': 'Pat' } (van | real date). The driver's phone picks that van for him; everyone sees it. */
+   settings.vanDrv = { 'VOLVO|2026-11-19': 'Pat' } (van | real date). The driver's phone picks that van for him; the Deliveries page (office / Production Manager) and the list window show it. */
 function vanDrv(veh,date){return String(((DB.vanDrv||{})[veh+'|'+date])||'');}
 function vanDrvSet(veh,date,n){const m=DB.vanDrv=DB.vanDrv||{};n=String(n||'').trim();if(n)m[veh+'|'+date]=n;else delete m[veh+'|'+date];
-  const old=addDayISO(todayLocal(),-60);Object.keys(m).forEach(k=>{if(String(k.split('|')[1]||'')<old)delete m[k];});sched();}
+  const old=addDayISO(todayLocal(),-60);Object.keys(m).forEach(k=>{if(k!==veh+'|'+date&&String(k.split('|')[1]||'')<old)delete m[k];});sched();} // (attack7 G1) the cell just set is never tidied away at once
 function vanOfDrv(name,date){const k=String(name||'').trim().toLowerCase();if(!k)return'';const v=DEL_VEH.find(x=>vanDrv(x.k,date).toLowerCase()===k);return v?v.k:'';}
 function renderDriver(app){
   const name=ls.get('wpfDrvName');let veh=ls.get('wpfDrvVeh')||'';
@@ -7993,7 +8016,11 @@ function renderDriver(app){
   if(!dOpts.some(x=>x.on))dOpts.unshift({v:day+'|'+dwk,l:day+' '+dShort(addDayISO(dwk,DEL_DAYS.indexOf(day))),on:true});
   const dayL=day+' '+dShort(addDayISO(dwk,DEL_DAYS.indexOf(day)));
   const dDate=addDayISO(dwk,DEL_DAYS.indexOf(day)),myVan=vanOfDrv(name,dDate),vanBy=veh?vanDrv(veh,dDate):'';
-  if(name&&!veh&&myVan){veh=myVan;ls.set('wpfDrvVeh',veh);} // given a van for that day: it is picked for him
+  // (attack7 P1/P2) the van the office gave him for that day is picked — each day / each new assignment, not only when no van is
+  // stored (yesterday's van must not stick). Once per assignment: if he then picks another van himself, that stands.
+  let switched='';
+  if(name&&myVan&&veh!==myVan&&ls.get('wpfDrvAsg')!==dDate+'|'+myVan){switched=veh;veh=myVan;ls.set('wpfDrvVeh',veh);}
+  if(name&&myVan)ls.set('wpfDrvAsg',dDate+'|'+myVan);
   const jobs=veh?delAll().filter(o=>o.delVeh===veh&&slotIn(o,dwk,day)).sort(woCmp):[];
   const onVan=jobs.filter(o=>dStage(o)!=='').length;
   const delivd=jobs.filter(o=>dStage(o)==='deliv').length;
@@ -8011,8 +8038,9 @@ function renderDriver(app){
       <div><label>Vehicle</label><select id="drv-veh"><option value="">— pick van —</option>${DEL_VEH.map(v=>`<option value="${v.k}"${v.k===veh?' selected':''}>${v.n}</option>`).join('')}</select></div>
       <div><label>Day</label><select id="drv-day">${dOpts.map(x=>`<option value="${escA(x.v)}"${x.on?' selected':''}>${escA(x.l)}</option>`).join('')}</select></div>
     </div>
-    ${name&&myVan&&veh===myVan?`<div id="drv-asg" style="background:#e9f7ef;border:1px solid #0d6e46;color:#0d6e46;border-radius:8px;padding:8px 12px;font-weight:700;margin-bottom:8px">🚚 You're on the ${escA(vehLbl(myVan))} on ${escA(dayL)} (set by the office)</div>`
-      :name&&veh&&vanBy&&vanBy.toLowerCase()!==name.toLowerCase()?`<div id="drv-asg" style="background:#fdecea;border:1px solid #b42318;color:#b42318;border-radius:8px;padding:8px 12px;font-weight:700;margin-bottom:8px">⚠ The ${escA(vehLbl(veh))} on ${escA(dayL)} is ${escA(vanBy)}'s${myVan?' — you are on the '+escA(vehLbl(myVan)):''}. Check with the office.</div>`:''}
+    ${name&&myVan&&veh===myVan?`<div id="drv-asg" style="background:#e9f7ef;border:1px solid #0d6e46;color:#0d6e46;border-radius:8px;padding:8px 12px;font-weight:700;margin-bottom:8px">🚚 You're on the ${escA(vehLbl(myVan))} on ${escA(dayL)} (set by the office)${switched?' — switched from the '+escA(vehLbl(switched)):''}</div>`
+      :name&&veh&&vanBy&&vanBy.toLowerCase()!==name.toLowerCase()?`<div id="drv-asg" style="background:#fdecea;border:1px solid #b42318;color:#b42318;border-radius:8px;padding:8px 12px;font-weight:700;margin-bottom:8px">⚠ The ${escA(vehLbl(veh))} on ${escA(dayL)} is ${escA(vanBy)}'s${myVan?' — you are on the '+escA(vehLbl(myVan)):''}. Check with the office.</div>`
+      :name&&myVan&&veh!==myVan?`<div id="drv-asg" style="background:#fff4e5;border:1px solid #b54708;color:#b54708;border-radius:8px;padding:8px 12px;font-weight:700;margin-bottom:8px">⚠ The office put you on the ${escA(vehLbl(myVan))} on ${escA(dayL)} — you are looking at the ${escA(vehLbl(veh))}.</div>`:''}
     ${!veh?`<div class="flr-none">Pick your van above to see your run</div>`:
       !jobs.length?`<div class="flr-none">No jobs planned for ${escA(vehLbl(veh))} on ${escA(dayL)}</div>`:`
       <div class="drv-stat"><span><b>${escA(vehLbl(veh))} — ${escA(dayL)}</b> · ${jobs.length} job${jobs.length!==1?'s':''}</span><span>${onVan}/${jobs.length} on van · ${delivd} delivered</span></div>
