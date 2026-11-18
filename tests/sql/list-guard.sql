@@ -17,6 +17,8 @@ insert into production_planner(id, orders, nid, settings) values ('main', '[]', 
 -- ---------- the Stage 3 block exactly as in SUPABASE_CHANGES.md (what live runs today) ----------
 \set f :dir '/stage3.sql'
 \i :f
+-- the 2 Nov function exactly as live has it, to compare with what the Undo box puts back
+create table t_src as select prosrc, proargnames, proargtypes from pg_proc where proname = 'save_list_revision';
 
 -- a pass / fail helper: a failed check stops the run (ON_ERROR_STOP) with its name
 create function t_ok(n text, c boolean, d text default null) returns void language plpgsql as $$
@@ -30,6 +32,12 @@ select save_list_revision('{"id":"L0","name":"Before","project_id":"P1","wos":["
   '[{"id":"L0:1","seq":1,"kind":"saw","part":"Side","qty":"2","length_mm":720,"width_mm":560,"material":"MFC White"}]', null, 'Op', null);
 select save_list_revision('{"id":"L0"}', '[]', t_ver('L0'), 'Op', 'oops');
 select t_ok('0 before the guard: an empty save takes every row away (the hole being closed)', t_live('L0') = 0);
+
+-- ---------- the read-only check box (Garry's step 1) ----------
+\set f :dir '/check.sql'
+\i :f
+select t_ok('C1 read-only check before the guard: exactly one row "p_list jsonb, p_lines jsonb, p_expect integer, p_by text, p_reason text"',
+  (select count(*) = 1 and min(pg_get_function_identity_arguments(oid)) = 'p_list jsonb, p_lines jsonb, p_expect integer, p_by text, p_reason text' from pg_proc where proname = 'save_list_revision'));
 
 -- ---------- the new block, run TWICE (safe to run twice) ----------
 \set f :dir '/guard.sql'
@@ -180,5 +188,34 @@ select set_config('wpf.restore_list', 'L1', false), set_config('wpf.restore_rev'
 \i :f
 \set ON_ERROR_STOP 1
 select t_ok('5m a plain unlocked list: refused, unchanged', t_live('L1') = 0 and (select rev from lists where id = 'L1') = 1);
+
+select t_ok('C2 read-only check after the guard: exactly one row, now ending "p_empty_ok boolean"',
+  (select count(*) = 1 and min(pg_get_function_identity_arguments(oid)) = 'p_list jsonb, p_lines jsonb, p_expect integer, p_by text, p_reason text, p_empty_ok boolean' from pg_proc where proname = 'save_list_revision'));
+
+-- ---------- 6. the UNDO box, run TWICE: back to the 2 Nov function exactly ----------
+\set f :dir '/undo.sql'
+\i :f
+\i :f
+select t_ok('6a after Undo (run twice): exactly ONE save_list_revision, read-only check shows the 5-setting one',
+  (select count(*) = 1 and min(pg_get_function_identity_arguments(oid)) = 'p_list jsonb, p_lines jsonb, p_expect integer, p_by text, p_reason text' from pg_proc where proname = 'save_list_revision'));
+select t_ok('6b it is the 2 Nov function byte for byte (same body, names and types as the Stage 3 block made)',
+  (select p.prosrc = t.prosrc and p.proargnames = t.proargnames and p.proargtypes::text = t.proargtypes::text from pg_proc p, t_src t where p.proname = 'save_list_revision'));
+select t_ok('6c anon, authenticated and service_role may call it again',
+  has_function_privilege('anon', 'save_list_revision(jsonb,jsonb,int,text,text)', 'execute')
+  and has_function_privilege('authenticated', 'save_list_revision(jsonb,jsonb,int,text,text)', 'execute')
+  and has_function_privilege('service_role', 'save_list_revision(jsonb,jsonb,int,text,text)', 'execute'));
+select save_list_revision('{"id":"L5","name":"After undo","project_id":"P1","wos":[]}',
+  '[{"id":"L5:1","seq":1,"kind":"saw","part":"Side","qty":"2","length_mm":720,"width_mm":560,"material":"MFC White"}]', null, 'Op', null);
+select save_list_revision(p_list := '{"id":"L5"}', p_lines := '[]', p_expect := t_ver('L5'), p_by := 'Op', p_reason := 'old behaviour');
+select t_ok('6d after Undo the old behaviour is back: an empty save is not refused (5 settings by name, as the app sends)', t_live('L5') = 0);
+-- and the guard can be put on again after an Undo
+\set f :dir '/guard.sql'
+\i :f
+select save_list_revision('{"id":"L5"}', '[{"id":"L5:1","seq":1,"kind":"saw","part":"Side","qty":"2","length_mm":720,"width_mm":560,"material":"MFC White"}]', t_ver('L5'), 'Op', 'back');
+do $$ declare m text; begin
+  begin perform save_list_revision('{"id":"L5"}', '[]', t_ver('L5'), 'Op', null); raise exception 'FAIL 6e';
+  exception when others then get stacked diagnostics m = message_text; if m like 'FAIL%' then raise; end if; end;
+  perform t_ok('6e guard run again after the Undo: refuses again, one function', m like 'empty save refused:%' and (select count(*) = 1 from pg_proc where proname = 'save_list_revision'), m);
+end $$;
 
 \echo ALL LIST GUARD CHECKS PASSED
