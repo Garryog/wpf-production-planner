@@ -92,9 +92,10 @@ const changed = (S, id, before) => { const now = new Map(live(S, id).map(x => [x
     S.fail3 = true; await run({ 'ta-item': 'Down', 'ta-qty': '1', 'ta-mat': HB }, ['TB']); S.fail3 = false;
     const al3 = await lastAlert();
     rec('F1: database down → "NOT added to: TB" said; nothing changed', /NOT added[\s\S]*TB/.test(al3) && !live(S, 'TB').some(x => x.part === 'Down') && revOf('TB') === r0, al3);
+    await p.evaluate(() => { window.__alerts = []; window.__toasts = []; if (!window.__tw) { window.__tw = 1; const T0 = window.toast; window.toast = function (m) { window.__toasts.push(String(m)); return T0.apply(this, arguments); }; } });
     S.dropReply = 1; await run({ 'ta-item': 'Lost reply', 'ta-qty': '1', 'ta-mat': HB }, ['TB']); S.dropReply = 0;
-    const al4 = await lastAlert(), landed = live(S, 'TB').some(x => x.part === 'Lost reply');
-    rec('(info, LOW) F2: the save LANDED but its reply was lost → the person is told "NOT added to TB" although it is there', !(landed && /NOT added[\s\S]*TB/.test(al4)), JSON.stringify([landed, al4]));
+    const al4 = await lastAlert(), to4 = await p.evaluate(() => window.__toasts.slice()), landed = live(S, 'TB').some(x => x.part === 'Lost reply');
+    rec('F2: the save LANDED but its reply was lost → no "NOT added" alert; told "✓ Added to 1: TB subs"', landed && !al4 && to4.some(m => /✓ Added to 1: TB subs/.test(m)), JSON.stringify([landed, al4, to4]));
     await run({ 'ta-item': 'Lost reply', 'ta-qty': '1', 'ta-mat': HB }, ['TB']);
     rec('F3: …pressing again says "Already there" and does not add it twice', /Already there[\s\S]*TB/.test(await lastAlert()) && live(S, 'TB').filter(x => x.part === 'Lost reply').length === 1, await lastAlert());
     // no reply at all

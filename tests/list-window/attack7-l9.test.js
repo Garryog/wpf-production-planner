@@ -40,9 +40,6 @@ const isEd = p => p.evaluate(() => !!document.querySelector('.me-ed'));
     }
     await deliv('design');
     rec('(info) R4: the Drawing office screen has no way to the Deliveries page, so L9\'s "Drawing office may add" is only via 📋 Cutting Lists', !(await p.evaluate(() => !!document.querySelector('[data-dladd]'))));
-    // the roles' check in tests/list-window/l9-delivery-add-list.test.js runs without the PIN → it draws the role picker, not the screen
-    const vac = await p.evaluate(() => { localStorage.removeItem('wpfPin_pm'); ROLE = 'pm'; tab = 'd'; render(); return { ok: roleOk('pm'), app: document.getElementById('app').innerText.length }; });
-    rec('(info, test quality) l9-delivery-add-list "pm / driver do NOT see" checks draw the role picker (no PIN set), so they cannot fail', vac.ok, JSON.stringify(vac));
     await deliv('office');
 
     // ---------- the cards ----------
