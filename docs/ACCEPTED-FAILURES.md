@@ -30,6 +30,8 @@ Timing note: the 2,500-row timing tests can fail when many tests run at once; th
 | stage3 c4-queue A5 "no close-tab warning once everything is sent" (cutting-lists branches) | pre-existing (found failing before the 3 Nov cutting-list flow work; added by the Tester 3 Nov, attack round 1). After the saw's offline ticks have all been sent and confirmed, closing the tab still shows the browser's "Leave site? Changes may not be saved" warning. Nothing is lost — it is a false alarm that may teach people to ignore the warning | Coder to check what still counts as "unsent" after the queue empties | pending |
 | stage1 t17-exportbase-attack A2–A5, A'1–A'2 (old-code tab) **NOT acceptable as-is** | "Mark as applied" on one PC is undone if an old-version tab saves before another new-version PC refreshes: that PC puts back its older Export Changes baseline, so the already-applied changes reappear in the Export Changes list on every PC | old-tab guard (docs/PROPOSAL-old-tab-guard.md) would stop it; otherwise store the baseline where old tabs can't overwrite it, and reopen every device on go-live day | pending |
 | stage1 t17-exportbase-attack E1–E2, E'1–E'2 (old-code tab) **NOT acceptable as-is** | if an old-version tab saves and the next new-version screen to open is a fresh one (a reloaded page, a PC switched on in the morning), it doesn't know the old baseline, so it rebuilds it from today's plan: **the Export Changes list goes empty for everyone and those week changes are never sent to Cienapps** | old-tab guard (docs/PROPOSAL-old-tab-guard.md) would stop it; otherwise store the baseline where old tabs can't overwrite it, and reopen every device on go-live day | pending |
+| seq attack5-window [LOW] "L5 inactive: customer 'Zed Homes' is a Cienapps spelling of INACTIVE project 'Old Zed Site' → no silent second project" (added 10 Nov, Part 4) | an inactive project is not looked at for its Cienapps spellings, so a WO of that customer gets a new project. Left as it is on the coordinator's instruction | Garry to decide (reuse / reactivate the inactive project, or a new one) | **pending — Garry to decide** |
+| seq attack5-window [LOW] "L10 blocked: Settings → 💾 Storage on this device can be reached" (added 10 Nov, Part 4) | when the browser blocks storage, the sign-in ("Who's using this screen?") comes back on every screen, so Settings can't be reached to read the storage panel. The plain message still shows. Left as it is on the coordinator's instruction | Garry to decide | **pending — Garry to decide** |
 
 Fixed by Stage 2 and removed from this list: import.test.js (17 of 19), datasafety 3/5/6 (all 11 now pass), weeks 2 and 8 (and the year-end autoSchedule check), stage1 t5 "shipped job returns if edited elsewhere" (rewritten as acceptance check 27 — imports never remove a job, so it can't happen; stage1 t8 rewritten the same way).
 
@@ -40,6 +42,89 @@ Fixed by Stage 2 and removed from this list: import.test.js (17 of 19), datasafe
 - **stage1 t4 "2,500 jobs … under 10 s" occasionally fails (3 in 15 in a loop) — test timing, not lost data.** PC B's startup save is still in flight when the test calls saveDB(), which then only queues B's edit and returns; B's note lands a moment later (confirmed by waiting). Tester to wait for `!SAVING` before checking.
 
 
+## Cutting-list window release (branch feature/list-window) — added 12 Nov 2026, all PENDING Garry
+Full suite on this branch, 12 Nov: 197 files, 3,984 pass / 75 fail before the last test updates; after them 66 fail = 27 on the list
+above (the same checks as before this branch) + the 39 below, all from the Tester's new attack files in `tests/list-window/`.
+
+| Test | Why it fails (plain English) | Fixed in | Accepted? |
+|---|---|---|---|
+| list-window attack1-two-pcs A, B, C, E, F, H (15 checks) | the test answers "OK — save a second list" to the new question "WO already has a cutting list — save a second one anyway?", so two lists are saved. A person now SEES the question; before 12 Nov nothing was asked. Two PCs pressing Save in the same second are still not stopped (needs a database rule), the Cutting Lists page now flags it "⚠ 2 lists on WO-…" | Garry's answer to question 1 in docs/PLAN-list-window.md (ask / never allow / allow) | pending |
+| list-window attack1-two-pcs D2 | two PCs change the same quantity: the last Save wins and the second person is not told | later (revisions already record who changed what) | pending |
+| list-window attack1-jobs — 3 checks "P-1001 / WO-777" + 1 "not on this branch — L4b" | a P-number's house gets a second list when the Cienapps WO arrives; the automatic merge (L4b) is not in this release. The Cutting Lists page does say "A Cienapps WO now exists for the house of P-1001" | L4b small release (question 2) | pending |
+| list-window attack1-jobs "Aderig Homes" | a customer spelled one letter differently quietly makes a second project | question 4 | pending |
+| list-window attack1-jobs "(info, simplicity) filled in by itself" | several jobs share the unit number: the right one is offered first but the person must tap it | — (never wrong, one more tap) | pending |
+| list-window attack1-layout "(info) Capacity Board behind…" | not this window: the board scrolls sideways on a phone with a 64-letter customer | — | pending |
+| list-window attack1-due "(info) due date moved on another PC" | the open window shows the new due date only after the next action | — | pending |
+| list-window attack1-oldscreen O4 | an old list that has NO work order can't be saved after an edit until a work order is picked ("Pick the work order…") | Coder to check next run — may be the intended rule | pending |
+| list-window attack1-unloaded "(info) the SAME thing on the older code" | shows the Critical "opens empty, Save wipes the rows" fault on the OLD code (main) on purpose; fixed on this branch | fixed here | pending |
+
+**Update 12 Nov 2026, late run.** Fixed and taken off the table above: attack1-tpl-role (5), attack1-keyboard (4), attack1-layout
+"Use these rows" on a phone (2), attack1-start-from second press (1), two-pcs "H flagged" (1). Round-1 list-window fails now 26.
+Tester round 2 (`tests/list-window/attack2-*.test.js`, 6 files, 259 checks): 1 High, 2 Medium, 4 Low all fixed; the 11 below
+are "(info)" checks left failing on purpose until Garry decides. Full suite 203 files: **4,254 pass / 64 fail = 27 long-standing +
+26 round 1 + 11 round 2.**
+
+| Test | Why it fails (plain English) | Fixed in | Accepted? |
+|---|---|---|---|
+| list-window attack2-tpl-pin "(info) … Drawing office PIN stays remembered" (5 checks: office, pm, prod, saw, stores) | once the Drawing office PIN is typed on a PC it stays remembered, so the next person at that PC can Save as template without it | Garry's answer to question 6 in docs/PLAN-list-window.md | pending |
+| list-window attack2-tpl-pin "(info, ask Garry) ＋ New template" | "＋ New template" on the Cutting Lists page still accepts the Production Manager PIN (Save as template refuses it) | question 5 | pending |
+| list-window attack2-keys K5, K7, K8, K9 (info) | small keyboard points: Tab from an empty heading adds a row; Shift+Tab from Save lands on Close; Tab past Save reaches the page behind; ✕ after ＋ Row with nothing typed still asks | next run (simplicity polish) | pending |
+| list-window attack2-finder-pm-tag "(info) O: lists OFF" | with lists switched OFF, Settings shows the new "💾 Storage on this device" section — the only difference from today's screens | question 8 | pending |
+
+**Update 13 Nov 2026, 00:40 (run 3).** Now passing and off the table above: attack2-tpl-pin (6 checks — templates are Drawing
+office / Admin only on every route and a PIN typed there is not remembered) and attack2-keys K5, K7, K8, K9 (fixed).
+A second Tester round 2 added 5 more files (`attack2-basics / -excel-phone / -fixes / -match / -two-pcs`, 248 checks): 2 High,
+8 Medium, 6 Low — 14 fixed, 5 checks left failing (below). Full suite 209 files: **4,490 pass / 57 fail = 25 long-standing
+(t17-exportbase gives 8 or 10 from run to run) + 26 round 1 + 6 round 2.** No older file got worse; three stage3 files
+(s4-editor, s5s6-templates, attack2-screens) stop early with 0 fails exactly as on the baseline.
+
+| Test | Why it fails (plain English) | Fixed in | Accepted? |
+|---|---|---|---|
+| list-window attack2-two-pcs (2 checks) "old screen saved the plan → settings.pMerged" | an OLD planner screen left open that saves the plan wipes the safety copies kept of merged-away duplicate P-number jobs (F6) | go-live step: close every screen and phone first | pending |
+| list-window attack2-excel-phone (2 checks) "[already on main]" | an Excel sheet with Width before Length, or Qty first, is read in the wrong columns — the same on the live site today (F10) | later (read the column headings) | pending |
+| list-window attack2-fixes "[LOW] used, then taken out again with Ctrl+Z" | the test presses Ctrl+Z at phone width, where keyboard shortcuts are off on purpose, so the rows are still there and asking is right; with the ↶ Undo button the question goes away | Tester to correct the test | pending |
+| list-window attack2-finder-pm-tag "(info) O: lists OFF" | (still open, as above) Settings shows "💾 Storage on this device" with lists OFF | question 8 | pending |
+
+**Update 13 Nov 2026, 05:10 (run 4).** Tester rounds 3 and 3b added 10 files (`tests/list-window/attack3-*` and `attack3b-*`,
+709 checks): 3 High, 6 Medium, 12 Low — all fixed. 13 "(info)" checks are left failing on purpose (below). Full suite 219 files:
+**5,183 pass / 71 fail = 27 long-standing (t17-exportbase gave 10 this run) + 25 round 1 (attack1-jobs now 5, was 6) + 6 round 2
++ 13 round 3.** No older file got worse.
+
+| Test | Why it fails (plain English) | Fixed in | Accepted? |
+|---|---|---|---|
+| list-window attack3-roles-archived-simple "(info) C2" (6 checks: Production Manager, Office, Drawing office at 1280 and 360 px) | the Tester wanted at most 8 buttons outside the rows; there are 9 (Drawing office 10) | question 16 in docs/PLAN-list-window.md | pending |
+| list-window attack3-roles-archived-simple "(info) A7" | an Office screen unlocked with the Admin PIN shows no template buttons — templates are on the Drawing office screen only (Admin opens that screen with the Admin PIN) | question 12 (built on answer A) | pending |
+| list-window attack3-custproj "(info)" (3 checks: "OGrady & Sons", "Aderig Homes", "Co. Kildare Homes") | a customer spelled without its apostrophe or one letter out is not offered the existing project; "Co. Kildare Homes" links itself to "Kildare Homes" | question 4 | pending |
+| list-window attack3-excel "(info) E5" | an Excel file that says "WO-26114" when the planner calls the job "26114" is asked about ("different job?") instead of going straight in — one extra OK, never wrong | later | pending |
+| list-window attack3-phone "(info) P10" | on a Drawing office phone the pinned bar also holds "Save as template", so it is 117 px tall (110 wanted) | later (small) | pending |
+| list-window attack3-two-pcs-old "(info) O2" | an OLD screen left open can still make a second list for a house that has a P-number list, and the new screen's "⚠ 2 lists" tag only counts lists on the SAME work order | go-live step: close every screen and phone first; full fix with L4b | pending |
+
+
+## 13 Nov 2026, afternoon — checks that are OUT OF DATE because Garry changed the rule (not app faults)
+Garry answered the open questions live on 13 Nov (table in docs/PLAN-list-window.md). Two answers reverse a rule that older
+Tester files check for, so those checks now fail **because the planner does what Garry asked**. The rule as it stands is tested
+in the new file `tests/list-window/g13-prod-templates.test.js` (41 checks, all pass). The Tester rewrites the old checks in the
+final round (after Deliveries is merged in); until then they are listed here.
+
+| Test | Why it fails (plain English) | Fixed in | Accepted? |
+|---|---|---|---|
+| list-window attack2-tpl-pin — 44 checks | they expect the Production Manager screen / PIN to be REFUSED for templates; Garry, 13 Nov: the Production Manager may make and change templates | Tester rewrite, final round | pending |
+| list-window attack3-roles-archived-simple — 44 more checks ("A1" / "A2" Production Manager rows) | same | Tester rewrite, final round | pending |
+| list-window attack3b-phone-tplpin — 49 checks ("T4 … with the Production Manager PIN → refused", and the "template untouched" checks that follow them) | same | Tester rewrite, final round | pending |
+| list-window attack2-fixes — 18 checks ("Q3 everywhere", "prod:" rows) | same | Tester rewrite, final round | pending |
+| list-window attack2-fixes "[LOW, wording] saw screen … does not say Production Manager" | Garry, 13 Nov: the default list owner the saw is told stays "Production Manager" | Tester rewrite, final round | pending |
+
+**Signed off by Garry, 13 Nov 2026 (answer A to both):** two PCs saving a list for the same job in the same second (fixed
+with the database rule in the P-number release) and an old screen wiping the P-number safety copies / making a second list
+(go-live step: close every screen and phone) — the rows above for those are accepted for the list window release.
+
+
+## 14 Nov 2026 — the 156 out-of-date checks above are DONE (nothing for Garry to sign)
+The Tester rewrote them to Garry's 13 Nov rule (Production Manager screen / typed PIN open templates; a remembered PIN, PM, office,
+saw and stores are still refused; the saw is told "owner Production Manager, Garry and Drawing office"). All 156 pass; the five rows
+in the 13 Nov afternoon table no longer apply. Full suite on this code (232 files): **5,488 pass / 68 fail** — every one of the 68 is
+on the lists above (t17-exportbase gave 8 this run; s5s6-templates stops early with 0 fails as before). No new failing test.
+
 ## 14 Nov 2026 — found while merging main into the Deliveries weeks release (all three happen on today's LIVE version too)
 | Test | Why it fails (plain English) | Fixed in | Accepted? |
 |---|---|---|---|
@@ -47,7 +132,65 @@ Fixed by Stage 2 and removed from this list: import.test.js (17 of 19), datasafe
 | ship merge-e-edges E2 (Low/Medium) | after "Bring back" on a job Cienapps had at 10 INSTALLED, the step box lets it go back to 9 JOB SHIPPED and puts that on Export Changes | small fix after this release | pending |
 | ship merge-e-edges E1 (Low) | old data with a space after the step name shows as a "change" on Export Changes after ship + bring back | small fix after this release | pending |
 
+
+## 14 Nov 2026 — after merging the live version (Deliveries weeks) into the list window branch: 3 checks to RE-POINT (not app faults)
+| Test | Why it fails (plain English) | Fixed in | Accepted? |
+|---|---|---|---|
+| dates attack5-carryover B8 and B9 [lists ON] | they compare the PM / saw / Production Manager screens with a version from BEFORE the list window; the list window adds the PM's read-only list status and the saw's "no list yet" wording on purpose | Tester re-points them, final round | pending |
+| lists-filter attack1-filter "11 lists switch ON … character-for-character the same as origin/main" | same reason | Tester re-points it, final round | pending |
+
+
+## 15 Nov 2026 — final round on the list window release (all PENDING Garry unless marked)
+Full suite on the final code (288 files, fake database): **7,454 pass / 106 fail**. Two of the 106 are timing checks that fail only
+when several test files run at once and pass alone (editor e7-keyboard redraw time, lists-filter attack1-filter 13n). Every older
+file was compared with the live version (`main`) or with the lists above: nothing got worse. No Critical or High check fails.
+The checks below are the ones NOT already on the lists above.
+
+| Test | Why it fails (plain English) | Fixed in | Accepted? |
+|---|---|---|---|
+| list-window final-a-customer-simple S1b (Medium) | "📥 Import Excel" is still on the Cutting Lists page. Garry's answer of 13 Nov was "only in the window", but the page button brings in a WHOLE workbook (one list per sheet) and the window brings in ONE sheet — taking the button away would leave no way to import a multi-house workbook | Garry to decide (question 20 in docs/PLAN-list-window.md) | pending |
+| list-window final-a-customer-simple C3 (info) | a customer renamed outright in Cienapps gets a new project made from the new name (as decided: customer = project) | — | pending |
+| list-window final-a-merged-jobs P4b (info) | the import preview does not say a P-number job already exists for that house — part of the P-number → Cienapps WO merge | P-number release | pending |
+| list-window final-b-mat-2pcs W2 (info, Low) | Materials window: when a row's Save is refused because another PC changed it, the name just typed is not kept in the box | later | pending |
+| list-window final-b-save-slow D2 (info, Low) | after 10 s of "Saving…" the person is told nothing more (✕ does ask after 20 s) | later | pending |
+| list-window final-b-template-names N7, N9b (already on live) | a template can be renamed to a name another template has; "Save as template → Update" goes by Type name | "one name per template" (after this release) | pending |
+| list-window final2-two-pc-names 9a, 10a, 11, 12a (Medium, already on live) | two PCs: "no cutting" / "no fittings" / list Type ticked on one PC is put back by a Save from a window opened earlier on another | small fix after this release | pending |
+| list-window final2-two-pc-names 3b, 16 (Low) | both PCs rename the same list: last Save wins, nobody told · typing in the Type name box and typing it back stops it following the name | later | pending |
+| list-window final2-save-race B1 (Medium/Low, already on live by code reading), B2 (Low) | the list NAME retyped during the second "Saving…" is on screen is not saved · a box changed and put back during a save gives a false "NOT saved" warning (nothing lost) | small fix after this release | pending |
+| list-window final2-excel 3.4 (Low) | the same Excel file brought in again AFTER the list was saved and reopened is not asked about (it is asked while the window stays open) | Garry to say if wanted | pending |
+| list-window final2-rename B5 (Low) | wiping a renamed board's "Also called" box splits lists never re-saved into a second board on the totals | later (warn before clearing) | pending |
+| list-window final2-hold-roles-phone A11 (Low) | a job put ON HOLD after it was picked in the window still saves with a plain "Saved ✓" | Garry's answer to question 21 | pending |
+| list-window final2-hold-roles-phone D8b (Low) | Esc does not close the Materials window when it is opened on its own | later | pending |
+| dates attack6-release B3b | a check about the test file itself (how often it reads the old version), not the app — out of date since the checks were re-pointed on 14 Nov | Tester | pending |
+| dates attack6-release E1, E2b, E3 · stage2 attack-r3 A (2 checks) · stage1 t16 second check | fail the same way on the live version today (run on `main`, 15 Nov) — not caused by this release | — | pending |
+
+## 16 Nov 2026 — checks out of date because Garry asked for "✓ Save & close" (not app faults)
+Garry, 16 Nov: "also need a save and close button". The window now has "Save list → Saw & Stores" (saves, shows the Saved ✓
+panel, as before) AND a big green "✓ Save & close" (saves and closes in one press). Older checks that count exactly ONE Save /
+ONE Close (the word "close" is in the new button), the button count (now one more), or expect `#me-save` to be the full-width
+green button on a phone now fail by design. The new behaviour is tested in `tests/list-window/g16-xl-old-saveclose.test.js`
+(10 checks, pass). Tester to rewrite: attack3-close-keys C1 (1), attack3-roles-archived-simple C2 / C3 (12), final-a-customer-simple
+S6 (1), attack1-layout / attack2-excel-phone / attack3-phone P1 / P10 / final-a-phone "big Save … full width" (8). | pending |
+| list-window attack3-roles-archived-simple "(info) C4 Production Manager … no typing box outside the rows except List name" (2) | Garry, 16 Nov: the Production Manager books the delivery date + van from the list window, so his window has a date box | Tester rewrite, final round | pending |
+
+## 17 Nov 2026 — left after Tester rounds 4 and 5 were fixed (all PENDING Garry; none Medium or above except M4, which is refused with a message on purpose)
+| Test / check | Why it fails | Fixed by | Status |
+|---|---|---|---|
+| list-window attack5-multiply M4 (Medium as written) | a sub-heading INSIDE a × block cannot be made × again: the window refuses and says "make it a Heading first" (no silent change of totals). The test wanted 3 × 2 = 6 times over or a warning; the refusal is the warning, in plain words | Garry: question 23 — answered A, 17 Nov | **accepted (Garry, 17 Nov)** |
+| list-window attack5-multiply M6b (Low) | 501 typed straight into the × cell is saved (the × Multiply question allows 1–500) | later | pending |
+| list-window attack5-multiply M11 (Low) | a template that itself holds a × block with a sub-heading comes in without that sub-heading | later | pending |
+| list-window attack4-delivery-book T1 (info) | two PCs booking one job at the same moment: the "first booked" record is the first PC's — same as two people on the Deliveries page | — | pending |
+| list-window attack4-labels-search-view V1 ×2 (Low) | Esc does not close the "View the list" window — the same for every View window on live | later | pending |
+| list-window attack4-saveclose B1 (info), phone pinned bar ×2 (info) | "✓ Save & close" is not greyed while saving (a press is ignored and says "wait"); on a 360 px phone the pinned Save bar is 171 px of 640 | later | pending |
 ## 17 Nov 2026 — Capacity Board rows less tall (Garry: "the rows are too high") — out of date by design, not app faults
 | Test / check | Why it fails | Fixed by | Status |
 |---|---|---|---|
 | lists-filter attack1-filter "11 lists switch ON / OFF … screens are character-for-character the same as origin/main" (2) | the check compares the Capacity Board's HTML with the live version byte for byte; the board's date cell was changed on purpose (dates side by side, chips on one line) | Tester: leave office:b out of that comparison | pending |
+## 18 Nov 2026 — driver per van per day (settings.vanDrv) — pending, Garry to sign off
+| Test / check | Why it fails (plain English) | Fixed by | Accepted? |
+|---|---|---|---|
+| list-window attack7-vandrv O1 "the old screen's settings save keeps settings.vanDrv" (Medium) | a screen still running the version before drivers-per-van saves the whole settings block without the drivers, so every driver set on the Deliveries page is wiped from the database. **Close every screen and phone on go-live day** | go-live step: close every screen | pending |
+| list-window attack7-vandrv O2 "a PC opened after the old screen's save still shows Mick on the Artic" (Medium) | same cause as O1: once the old screen has saved, the drivers are gone for everyone and have to be set again. **Close every screen on go-live day** | go-live step: close every screen | pending |
+| list-window attack8-deliv E6 "the old screen's next saves put back ALL the drivers" (Medium) | same cause as O1/O2, seen from the other side: after an old screen's save only the drivers this PC set again come back. **Close every screen on go-live day** | go-live step: close every screen | pending |
+| list-window attack7-vandrv T2 "Pat put on the Volvo AND the Artic Fri from two PCs at once → somebody is told" (Low) | two PCs putting the same driver on two different vans in the same second both save without warning (each PC checked before the other had saved). The Deliveries page shows both vans, and the driver's phone shows both as his | — (rare; same-second double booking) | pending |
+| list-window attack7-vandrv W "the PM screen shows who drives a van" (info) | only office / Production Manager see the Deliveries page, so a PM doesn't see who drives; the code comment that said "everyone sees it" has been corrected | — (information only) | pending |

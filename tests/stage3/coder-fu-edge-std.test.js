@@ -92,7 +92,7 @@ let pass = 0, fail = 0; const rec = (n, ok, d) => { ok ? pass++ : fail++; consol
     const h = document.querySelector('[data-mr="0|item"]').value, n = document.getElementById('me-name').value;
     const sel = document.querySelector('[data-mr="2|mat"]'); const opts = [...sel.options].map(o => o.textContent.trim()).filter(Boolean);
     return { h, n, opts }; });
-  rec('picking WO-3 (unit 31): house heading "House 31", list name "31"', sw.h === 'House 31' && sw.n === '31', JSON.stringify(sw));
+  rec('picking WO-3 (unit 31): house heading "House 31", list name NOT pre-filled (Part 4, Garry 10 Nov — was "31")', sw.h === 'House 31' && sw.n === '', JSON.stringify(sw));
   rec('Colour drop-down: only Aderrig\'s materials + "＋ Add new material…" (not another project\'s)', sw.opts.includes('MFC White') && sw.opts.some(o => /Add new material/.test(o)) && !sw.opts.includes('Oak Other Site'), JSON.stringify(sw.opts));
   if (SHOTS) await p.screenshot({ path: SHOTS + '/std-editor-1400.png' });
   // save it: empty rows dropped; the saw never gets empty headings

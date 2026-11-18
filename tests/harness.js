@@ -52,7 +52,7 @@ async function open(opts = {}) {
   // opts.server: share one fake database between two pages ("two PCs").
   const server = opts.server || { row: JSON.parse(JSON.stringify(row)), patches: [], posts: [], deletes: [], other: [], failSaves: opts.failSaves || false, failLoad: opts.failLoad || false };
   const browser = opts.browser || await launch();
-  const ctx = await browser.newContext({ viewport: opts.viewport || { width: 1400, height: 900 }, timezoneId: opts.tz || 'Europe/Dublin', acceptDownloads: true });
+  const ctx = await browser.newContext({ viewport: opts.viewport || { width: 1400, height: 900 }, timezoneId: opts.tz || 'Europe/Dublin', acceptDownloads: true, ...(+process.env.H_DSF > 1 ? { deviceScaleFactor: +process.env.H_DSF } : {}) }); // H_DSF=2 → sharp screenshots (default 1, unchanged)
   if (opts.now) await ctx.addInitScript(`(()=>{const T=${+new Date(opts.now)};const R=Date;const off=T-R.now();class D extends R{constructor(...a){if(a.length===0){super(R.now()+off);}else super(...a);}static now(){return R.now()+off;}}D.UTC=R.UTC;D.parse=R.parse;window.Date=D;})();`);
   await ctx.addInitScript(() => {
     localStorage.setItem('wpfRole', 'office');

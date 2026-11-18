@@ -1,0 +1,393 @@
+// Part 4 (L5–L12, Garry's first live use of the list window, 10 Nov): the project fills itself from the WO's customer (L5),
+// "＋ New material" always works and asks once (L6), Qty placeholder (L7), ✕ Close / Close / Esc and "Saved ✓" (L8),
+// storage message + Settings panel (L10), WO drop-down = this project's jobs by due date (L11/L12), list name not pre-filled.
+// Fake Supabase only. Run: node tests/seq/l5-l12-window.test.js
+const X = require('./fixs.js');
+const { H, D, rec, sleep } = X;
+function row() {
+  const r = X.v2Row();
+  r.orders.push(
+    H.order({ wo: 'WO-20', customer: 'Brand New Homes', floor: '7', unit: '231', title: 'APT TYPE 1', dueDate: '2026-11-14', origDueDate: '2026-11-14' }),
+    H.order({ wo: 'WO-21', customer: 'Brand New Homes', floor: '7', unit: '232', title: 'APT TYPE 2', dueDate: '2026-11-12', origDueDate: '2026-11-12' }),
+    H.order({ wo: 'WO-22', customer: '', floor: '1', unit: '1', title: 'NO CUSTOMER', dueDate: '2026-11-30', origDueDate: '2026-11-30' }),
+    H.order({ wo: 'WO-23', customer: 'Twin Homes', floor: '1', unit: '2', title: 'TWO PROJECTS FIT', dueDate: '2026-11-30', origDueDate: '2026-11-30' }),
+    H.order({ wo: 'WO-24', customer: 'Aderrig Homes', floor: 'T09', unit: '30', title: 'ON HOLD <b>x</b>', dueDate: '2026-11-05', origDueDate: '2026-11-05', cienHold: true }),
+    H.order({ wo: 'WO-25', customer: 'Aderrig Homes', floor: 'T09', unit: '31', title: 'NO DUE', dueDate: '', origDueDate: '' }),
+    H.order({ wo: 'WO-27', customer: 'Mat Homes', floor: '3', unit: '1', title: 'MATERIAL FIRST', dueDate: '2026-11-30', origDueDate: '2026-11-30' }),
+    H.order({ wo: 'WO-28', customer: 'Park Homes', floor: '1', unit: '8', title: 'CONTAINS', dueDate: '2026-11-30', origDueDate: '2026-11-30' }),
+    H.order({ wo: 'WO-29', customer: 'Glen Homes', floor: '1', unit: '9', title: 'CONTAINS 2', dueDate: '2026-11-30', origDueDate: '2026-11-30' }),
+    H.order({ wo: 'WO-26', customer: 'Race Homes', floor: '2', unit: '9', title: 'TWO PCS', dueDate: '2026-11-30', origDueDate: '2026-11-30' }));
+  return r;
+}
+const closeAll = p => p.evaluate(() => document.querySelectorAll('.pod-ovl').forEach(x => x.remove()));
+const ed = p => p.evaluate(() => !!document.querySelector('.me-ed'));
+const asks = p => p.evaluate(() => { window.__asked = []; window.confirm = m => { window.__asked.push(m); return window.__confirm !== undefined ? window.__confirm : true; }; });
+const setv = (p, k, v) => p.evaluate(({ k, v }) => { const e = document.querySelector('.me-ed [data-mr="' + k + '"]'); e.value = v; e.dispatchEvent(new Event(e.tagName === 'SELECT' ? 'change' : 'input')); }, { k, v });
+const fillSaw = async (p, i, item, qty, L, W, mat) => { for (const [f, v] of [['item', item], ['qty', qty], ['L', L], ['W', W], ['mat', mat]]) await setv(p, i + '|' + f, v); };
+const donep = p => p.evaluate(() => { const d = document.querySelector('.me-dov'); if (!d) return null;
+  return { h: d.querySelector('#me-dok').textContent, l: d.querySelector('.me-dl').innerText, focus: (document.activeElement || {}).id, again: !!d.querySelector('#me-dagain'), editor: !!document.querySelector('.me-ed') }; });
+(async () => {
+  const browser = await H.chromium.launch();
+  try {
+    const S = X.makeServer(row());
+    D.insert(S.db, 'projects', { id: 'P3', name: 'Twin North', customer: 'Twin Homes', cien_names: [] });
+    D.insert(S.db, 'projects', { id: 'P4', name: 'Twin South', customer: 'Twin Homes', cien_names: [] });
+    D.insert(S.db, 'projects', { id: 'P7', name: 'Kilcock Park', customer: 'Kilcock Park Developments', cien_names: [] });
+    D.insert(S.db, 'projects', { id: 'P8', name: 'Glen Court', customer: 'Glen Court Developments', cien_names: [] });
+    ['Type A', 'Type B', 'Type C', 'Type D', 'Type E', 'Type F', 'Larch Type Q'].forEach((n, i) => X.F3.seedList(S, 'T' + (i + 1), { wos: [], name: n, list: { is_template: true, type_name: n, list_type: 'kitchen' } }));
+    const t = await X.dev(browser, S, 'office'), p = t.page;
+    let w;
+
+    // ---- L6: "＋ Add new material…" asks ONCE (a select fires input AND change)
+    await p.evaluate(() => openListEditor(null, 'WO-2')); await sleep(300);
+    const asked = await p.evaluate(async () => { window.__asked = []; const pr = window.prompt; window.prompt = m => { window.__asked.push(m); return /New material/.test(m) ? 'Walnut 18' : pr(m); };
+      const s = document.querySelector('.me-ed [data-mr="0|mat"]'); s.value = '__add'; s.dispatchEvent(new Event('input')); s.dispatchEvent(new Event('change'));
+      await new Promise(r => setTimeout(r, 900)); window.prompt = pr; return window.__asked.filter(m => /New material/.test(m)).length; });
+    rec('L6: ＋ Add new material… asks for the name once (input + change both fire)', asked === 1, asked);
+    await closeAll(p);
+
+    // ---- L8: a click on the grey area outside the window does nothing
+    await p.evaluate(() => openListEditor(null, 'WO-2')); await sleep(300);
+    await p.evaluate(() => { const o = document.querySelector('.me-ed').closest('.pod-ovl'); o.dispatchEvent(new MouseEvent('click', { bubbles: true })); }); await sleep(100);
+    rec('L8: click outside the window → the window stays open', await ed(p));
+    // ✕ Close at the top right, inside a sticky bar; the bottom button says Close (not Cancel)
+    w = await p.evaluate(() => { const x = document.getElementById('me-x0'), b = x && x.closest('.me-tb'), r = x && x.getBoundingClientRect(), o = document.querySelector('.me-ed').getBoundingClientRect();
+      return { x: !!x, txt: x && x.textContent, sticky: b && getComputedStyle(b).position, right: r && o.right - r.right < 40, bottom: !!document.querySelector('.me-ed #pod-x') }; });
+    rec('L8: "✕ Close" top right in a sticky bar; no second Close at the bottom (step 11: one Close)', w.x && /✕ Close/.test(w.txt) && w.sticky === 'sticky' && w.right && !w.bottom, JSON.stringify(w));
+    // nothing typed: ✕ closes without asking
+    await asks(p);
+    await p.evaluate(() => document.getElementById('me-x0').click()); await sleep(100);
+    rec('L8: ✕ Close with nothing typed → closes, no question', !(await ed(p)) && !(await p.evaluate(() => window.__asked.length)), JSON.stringify(await p.evaluate(() => window.__asked)));
+    // typed something: asked; Cancel → stays; OK → closes
+    await p.evaluate(() => openListEditor(null, 'WO-2')); await sleep(300);
+    await setv(p, '0|item', 'Side');
+    await p.evaluate(() => { window.__confirm = false; document.getElementById('me-x0').click(); }); await sleep(100);
+    rec('L8: ✕ Close after typing → "Close without saving?"; Cancel → stays open, row kept', await ed(p) && await p.evaluate(() => /Close without saving\?[\s\S]*What you typed in this list is lost/.test(window.__asked.pop() || '') && document.querySelector('[data-mr="0|item"]').value === 'Side'));
+    await p.evaluate(() => { window.__confirm = false; document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); }); await sleep(100);
+    rec('L8: Esc after typing → asked; Cancel → stays', await ed(p) && await p.evaluate(() => /Close without saving/.test(window.__asked.pop() || '')));
+    await p.evaluate(() => { window.__confirm = true; document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); }); await sleep(100);
+    rec('L8: Esc, OK → closed', !(await ed(p)));
+    await p.evaluate(() => openListEditor(null, 'WO-2')); await sleep(300);
+    await p.evaluate(() => { window.__asked = []; document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); }); await sleep(100);
+    rec('L8: Esc with nothing typed → closes, no question', !(await ed(p)) && await p.evaluate(() => !window.__asked.length));
+    // another window over the list (materials): Esc is not the list's
+    await p.evaluate(() => openListEditor(null, 'WO-2')); await sleep(300);
+    await setv(p, '0|item', 'Side');
+    await p.evaluate(() => { document.getElementById('me-mats').click(); }); await sleep(300);
+    await p.evaluate(() => { window.__asked = []; document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); }); await sleep(100);
+    rec('L8: Esc with the materials window on top → the list is not asked about or closed', await ed(p) && await p.evaluate(() => !window.__asked.length));
+    await closeAll(p);
+    await p.evaluate(() => { window.__confirm = undefined; });
+
+    // ---- L8: the finish panel — four messages
+    await p.evaluate(() => openListEditor(null, 'WO-2')); await sleep(300);
+    await fillSaw(p, 0, 'Side', '2', '720', '560', 'MFC White');
+    await p.evaluate(() => document.getElementById('me-save').click()); await sleep(900);
+    w = await donep(p);
+    rec('L8: saved → "Saved ✓ — list is with the Saw & Stores" + rows + WO, [Close] focused, [Edit it again]', w && /^Saved ✓ — list is with the Saw & Stores$/.test(w.h) && /1 saw row · no Stores · WO-2/.test(w.l) && w.focus === 'me-dclose' && w.again && !w.editor, JSON.stringify(w));
+    await p.evaluate(() => document.getElementById('me-dagain').click()); await sleep(500);
+    rec('L8: [Edit it again] opens the saved list in the editor', await p.evaluate(() => /Edit cutting list/.test((document.querySelector('.me-ed') || {}).innerText || '') && !document.querySelector('.me-dov')));
+    await p.evaluate(() => document.getElementById('me-x0').click()); await sleep(100);
+    rec('L8: …and ✕ closes it (nothing changed, no question)', !(await ed(p)));
+    // the saw already has the WO-2 list (WO-2 due tomorrow): saving makes Rev 2
+    await p.evaluate(() => openListEditor(lsCache().all.find(l => !l.tpl && !l.archived && (l.wos || []).includes('WO-2')).id)); await sleep(500);
+    await setv(p, '0|note', 'changed');
+    await p.evaluate(() => document.getElementById('me-save').click()); await sleep(1200);
+    w = await donep(p);
+    rec('L8: revision → "Saved ✓ — Rev 2 is with the Saw & Stores"', w && /^Saved ✓ — Rev 2 is with the Saw & Stores$/.test(w.h), JSON.stringify(w) + (w ? '' : await p.evaluate(() => (document.getElementById('me-err') || {}).textContent)));
+    await p.evaluate(() => document.getElementById('me-dclose').click()); await sleep(100);
+    rec('L8: [Close] closes the panel', await p.evaluate(() => !document.querySelector('.pod-ovl')));
+    // lists must be checked: waiting
+    await p.evaluate(() => { DB.listChk = true; openListEditor(null, 'WO-3'); }); await sleep(400);
+    await fillSaw(p, 0, 'Side', '1', '700', '500', 'MFC White');
+    await p.evaluate(() => document.getElementById('me-save').click()); await sleep(1000);
+    w = await donep(p);
+    rec('L8: checking on → "Saved ✓ — waiting to be checked before the saw sees it"', w && /^Saved ✓ — waiting to be checked before the saw sees it$/.test(w.h), JSON.stringify(w));
+    await p.evaluate(() => { DB.listChk = false; document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); }); await sleep(100);
+    rec('L8: Esc closes the finish panel', await p.evaluate(() => !document.querySelector('.pod-ovl')));
+    // a template
+    await p.evaluate(() => { (o => { window.prompt = (m, d) => /Enter the Drawing office, Production Manager or Admin PIN/.test(m) ? pins().design : o(m, d); })(window.prompt); /* a remembered PIN no longer opens templates (plan question 12): the PIN is typed when asked */ /* attack2 F5 (Garry Q3): templates are Drawing office / Admin only */ openListEditor(null, '', 'P1', { tpl: true }); }); await sleep(400);
+    await p.evaluate(() => { const n = document.getElementById('me-name'); n.value = 'Type Z'; n.dispatchEvent(new Event('input')); });
+    await fillSaw(p, 0, 'Side', '1', '700', '500', 'MFC White');
+    await p.evaluate(() => document.getElementById('me-save').click()); await sleep(1000);
+    w = await donep(p);
+    rec('L8: template → "Template saved ✓"', w && /^Template saved ✓$/.test(w.h), JSON.stringify(w));
+    // a finish panel left open goes when another list window opens
+    await p.evaluate(() => openListEditor(null, 'WO-25')); await sleep(300);
+    rec('L8: opening another list window removes a finish panel left open', await p.evaluate(() => !document.querySelector('.me-dov') && document.querySelectorAll('.pod-ovl').length === 1));
+    await closeAll(p);
+
+    // ---- L7: Qty shows "Qty" in the empty box like L and W; L6 wording
+    await p.evaluate(() => openListEditor(null, 'WO-2')); await sleep(300);
+    w = await p.evaluate(() => { const q = s => document.querySelector('.me-ed ' + s); return { qty: q('[data-mr="0|qty"]').placeholder, L: q('[data-mr="0|L"]').placeholder, mats: q('#me-mats').textContent, dis: q('#me-mats').disabled }; });
+    rec('L7: PC grid — the Qty box says "Qty" like "L" and "W"', w.qty === 'Qty' && w.L === 'L', JSON.stringify(w));
+    rec('L6: "🧱 Project materials (add / edit)" beside the project, not greyed', /Project materials \(add \/ edit\)/.test(w.mats) && !w.dis, JSON.stringify(w));
+    await closeAll(p);
+    await p.evaluate(() => openListEditor(null, '', '')); await sleep(300);
+    rec('L6: Project materials button not greyed with no project either', await p.evaluate(() => !document.getElementById('me-mats').disabled));
+    await closeAll(p);
+    await p.evaluate(() => { showTab('l'); }); await sleep(500);
+    rec('L6: Lists home — the same "Project materials (add / edit)" wording', await p.evaluate(() => [...document.querySelectorAll('[data-lhmat]')].every(b => /Project materials \(add \/ edit\)/.test(b.textContent)) && document.querySelectorAll('[data-lhmat]').length > 0));
+    // a project with no materials: "Set up project materials now" opens the materials window
+    await p.evaluate(() => openListEditor(null, '', 'P2')); await sleep(300);
+    rec('L6: no materials yet → "Set up project materials now" button', await p.evaluate(() => /This project has no materials yet/.test(document.querySelector('.me-ed').innerText) && !!document.getElementById('me-matsnow')));
+    const nOv = await p.evaluate(() => document.querySelectorAll('.pod-ovl').length);
+    await p.evaluate(() => document.getElementById('me-matsnow').click()); await sleep(300);
+    rec('L6: the button opens the project materials window over the list', await p.evaluate(n => document.querySelectorAll('.pod-ovl').length === n + 1 && /Lucan/.test(document.querySelector('.pod-ovl:last-of-type').innerText), nOv));
+    await closeAll(p);
+
+    // ---- L5: the project fills itself from the WO's customer
+    const projs = n => S.db.t.projects.filter(x => String(x.name).toLowerCase() === n.toLowerCase());
+    const pst = () => p.evaluate(() => ({ pid: (document.getElementById('me-pid') || {}).value, pm: (document.getElementById('me-pm') || {}).innerText || '', open: !!document.querySelector('.me-ed') }));
+    await asks(p);
+    await p.evaluate(() => openListEditor(null, 'WO-20')); await sleep(900);
+    w = await pst();
+    const bn = projs('Brand New Homes');
+    rec('L5: WO-20 (customer "Brand New Homes", no project) → project made at once, picked, grey "from the WO\'s customer"', bn.length === 1 && w.pid === bn[0].id && /Project: Brand New Homes — from the WO's customer/.test(w.pm) && JSON.stringify(bn[0].cien_names) === '["Brand New Homes"]' && bn[0].customer === 'Brand New Homes', JSON.stringify([w, bn]));
+    rec('L5: no PIN asked to make it', await p.evaluate(() => !window.__asked.length));
+    await p.evaluate(() => document.getElementById('me-x0').click()); await sleep(100);
+    rec('L5: the project set by the app is not "typed" — ✕ closes with no question', !(await ed(p)) && await p.evaluate(() => !window.__asked.length));
+    await p.evaluate(() => openListEditor(null, 'WO-21')); await sleep(900);
+    w = await pst();
+    rec('L5: WO-21 (same customer) → the same project, not a second one', projs('Brand New Homes').length === 1 && w.pid === bn[0].id, JSON.stringify(w));
+    await closeAll(p);
+    // two projects fit the customer → the person picks
+    const n0 = S.db.t.projects.length;
+    await p.evaluate(() => openListEditor(null, 'WO-23')); await sleep(900);
+    w = await pst();
+    rec('L5: customer fits two projects → "\'Twin Homes\' fits more than one project — pick one", nothing made', !w.pid && /'Twin Homes' fits more than one project — pick one/.test(w.pm) && S.db.t.projects.length === n0 && await p.evaluate(() => [...document.querySelectorAll('[data-mepp]')].map(b => b.dataset.mepp).sort().join() === 'P3,P4'), JSON.stringify(w));
+    await p.evaluate(() => document.querySelector('[data-mepp="P4"]').click()); await sleep(200);
+    w = await pst();
+    rec('L5: tapping "Twin South" picks it', w.pid === 'P4' && !/fits more than one/.test(w.pm), JSON.stringify(w));
+    await closeAll(p);
+    // a WO with no customer
+    await p.evaluate(() => openListEditor(null, 'WO-22')); await sleep(600);
+    w = await pst();
+    rec('L5: WO with no customer → "This WO has no customer in Cienapps — pick the project, or ＋ New project…"', !w.pid && /This WO has no customer in Cienapps — pick the project, or ＋ New project… at the bottom of the list/.test(w.pm) && S.db.t.projects.length === n0, JSON.stringify(w));
+    await closeAll(p);
+    // no WO: the picker, said plainly; Save says what to do
+    await p.evaluate(() => openListEditor(null, '', '')); await sleep(400);
+    w = await pst();
+    rec('L5: list with no WO → "Pick the project — or ＋ New project… at the bottom of the list"', !w.pid && /Pick the project — or ＋ New project… at the bottom of the list/.test(w.pm), JSON.stringify(w));
+    await fillSaw(p, 0, 'Side', '1', '700', '500', '');
+    await p.evaluate(() => { const n = document.getElementById('me-name'); n.value = 'x'; n.dispatchEvent(new Event('input')); document.getElementById('me-save').click(); }); await sleep(200);
+    rec('L5: Save with no project → "Pick the project — or ＋ New project… at the bottom of the list."', await p.evaluate(() => /Pick the project — or ＋ New project… at the bottom of the list\./.test(document.getElementById('me-err').textContent)));
+    // ＋ New project… in the window: no PIN, the name asked once
+    await p.evaluate(() => { localStorage.removeItem('wpfEditPin'); window.__pq = []; window.__pr0 = window.prompt; window.prompt = (m, d) => { window.__pq.push(m); return /New project name/.test(m) ? 'Fresh Site' : null; };
+      const s = document.getElementById('me-pid'); s.value = '__new'; s.dispatchEvent(new Event('change')); }); await sleep(600);
+    w = await pst();
+    const fs = projs('Fresh Site');
+    rec('L5: ＋ New project… in the window → no PIN, project made and picked', fs.length === 1 && w.pid === fs[0].id && await p.evaluate(() => window.__pq.length === 1 && !window.__pq.some(m => /PIN/.test(m))), JSON.stringify([w, await p.evaluate(() => window.__pq)]));
+    await p.evaluate(() => { window.prompt = window.__pr0; });
+    await closeAll(p);
+
+
+    // ---- (round 5) a "contains" / builder-only fit is ASKED, never linked by itself
+    await p.evaluate(() => openListEditor(null, 'WO-28')); await sleep(900);
+    w = await pst();
+    rec('round 5: customer "Park Homes" vs project "Kilcock Park" → asked "Is this project \'Kilcock Park\'? [Yes, use it] [No — make project \'Park Homes\']", not linked', !w.pid && /Is this project 'Kilcock Park'\?/.test(w.pm) && /No — make project 'Park Homes'/.test(w.pm) && !projs('Park Homes').length, JSON.stringify(w));
+    await p.evaluate(() => document.getElementById('me-pyes').click()); await sleep(900);
+    w = await pst();
+    rec('round 5: [Yes, use it] → Kilcock Park picked, "Park Homes" added to its Cienapps names (certain next time)', w.pid === 'P7' && (D.find(S.db, 'projects', 'P7').cien_names || []).includes('Park Homes'), JSON.stringify([w, D.find(S.db, 'projects', 'P7').cien_names]));
+    await closeAll(p);
+    await p.evaluate(() => openListEditor(null, 'WO-28')); await sleep(900);
+    rec('round 5: …the next "Park Homes" WO gets Kilcock Park by itself', (await pst()).pid === 'P7');
+    await closeAll(p);
+    await p.evaluate(() => openListEditor(null, 'WO-29')); await sleep(900);
+    rec('round 5: "Glen Homes" vs "Glen Court" → asked', /Is this project 'Glen Court'\?/.test((await pst()).pm));
+    await p.evaluate(() => document.getElementById('me-pno').click()); await sleep(900);
+    w = await pst();
+    const gh = projs('Glen Homes');
+    rec('round 5: [No — make project \'Glen Homes\'] → a new project "Glen Homes", picked', gh.length === 1 && w.pid === gh[0].id && !(D.find(S.db, 'projects', 'P8').cien_names || []).includes('Glen Homes'), JSON.stringify(w));
+    await closeAll(p);
+    // ---- L6: "＋ Add new material…" with no project yet → led through, asked once, saved on the project and picked
+    const addAsk = (k, name) => p.evaluate(({ k, name }) => { window.__mq = []; window.__pr1 = window.prompt; window.prompt = (m, d) => { window.__mq.push(m); return /New material/.test(m) ? name : null; };
+      const s = document.querySelector('.me-ed [data-mr="' + k + '"]'); s.value = '__add'; s.dispatchEvent(new Event('input')); s.dispatchEvent(new Event('change')); }, { k, name });
+    const mq = () => p.evaluate(() => { window.prompt = window.__pr1 || window.prompt; return window.__mq.filter(m => /New material/.test(m)).length; });
+    const mats = pid => S.db.t.project_materials.filter(m => m.project_id === pid).map(m => m.name);
+    // (a) WO known, project not set on this screen: L5 runs, then the name is asked
+    await p.evaluate(() => { window.__e = openListEditor(null, 'WO-27'); }); await sleep(900);
+    const mh = projs('Mat Homes')[0];
+    await p.evaluate(() => { window.__e.st.pid = ''; window.__e.st.pauto = false; window.__e.draw(); }); // as if the project had not been set up yet
+    await setv(p, '0|item', 'Side'); await setv(p, '0|L', '700');
+    await addAsk('0|mat', 'Oak 18'); await sleep(1200);
+    w = await p.evaluate(() => ({ pid: document.getElementById('me-pid').value, mat: document.querySelector('.me-ed [data-mr="0|mat"]').value }));
+    rec('L6: WO known, no project → project set from the customer, then the name asked ONCE, saved on the project, picked on the row', mh && w.pid === mh.id && (await mq()) === 1 && mats(mh.id).includes('Oak 18') && w.mat === 'Oak 18', JSON.stringify([w, mh && mats(mh.id)]));
+    await closeAll(p);
+    // (b) no WO, no project: "Pick the project — then the new material is added"; picking it carries on
+    await p.evaluate(() => openListEditor(null, '', '')); await sleep(400);
+    await setv(p, '0|item', 'Side'); await setv(p, '0|L', '700');
+    await addAsk('0|mat', 'Ash 18'); await sleep(300);
+    w = await p.evaluate(() => ({ pm: (document.getElementById('me-pm') || {}).innerText || '', focus: (document.activeElement || {}).id }));
+    rec('L6: no WO, no project → "Pick the project — then the new material is added", the project box focused, nothing asked yet', /Pick the project — then the new material is added/.test(w.pm) && w.focus === 'me-pid' && await p.evaluate(() => !window.__mq.length), JSON.stringify(w));
+    await p.evaluate(() => { const s = document.getElementById('me-pid'); s.value = 'P2'; s.dispatchEvent(new Event('change')); }); await sleep(900);
+    w = await p.evaluate(() => ({ mat: document.querySelector('.me-ed [data-mr="0|mat"]').value }));
+    rec('L6: …project picked → the name is asked (once), added to Lucan\'s materials, picked on the row', (await mq()) === 1 && mats('P2').includes('Ash 18') && w.mat === 'Ash 18', JSON.stringify([w, mats('P2')]));
+    await closeAll(p);
+    // (c) two projects fit: picking one of them carries on too
+    await p.evaluate(() => openListEditor(null, 'WO-23')); await sleep(800);
+    await setv(p, '0|item', 'Side'); await setv(p, '0|L', '700');
+    await addAsk('0|mat', 'Elm 18'); await sleep(300);
+    rec('L6: two projects fit → still "pick one", nothing asked yet', await p.evaluate(() => /fits more than one project/.test(document.getElementById('me-pm').innerText) && !window.__mq.length));
+    await p.evaluate(() => document.querySelector('[data-mepp="P3"]').click()); await sleep(900);
+    rec('L6: …"Twin North" tapped → name asked once, added, picked', (await mq()) === 1 && mats('P3').includes('Elm 18') && await p.evaluate(() => document.querySelector('.me-ed [data-mr="0|mat"]').value === 'Elm 18'), JSON.stringify(mats('P3')));
+    await closeAll(p);
+
+    // ---- L11 + L12: the Work order drop-down = this project's live jobs, soonest due first, "WO · Fl · Unit · due · has a list"
+    const opts = () => p.evaluate(() => [...document.querySelectorAll('.me-ed #me-wo option')].map(o => ({ v: o.value, t: o.textContent, d: o.disabled, s: o.selected })));
+    await p.evaluate(() => openListEditor(null, '', 'P1')); await sleep(400);
+    let os = await opts();
+    const wv = os.filter(o => o.v).map(o => o.v);
+    rec('L11: Aderrig only — shipped WO-5, on-hold WO-24 and Lucan\'s WO-6 left out', !wv.some(v => ['WO-5', 'WO-24', 'WO-6', 'WO-20', 'WO-26'].includes(v)) && wv.includes('WO-1') && wv.includes('WO-3'), JSON.stringify(wv));
+    rec('L12: sorted by due date, soonest first, no due date last (WO-1, WO-2 22 Oct · WO-4 20 Nov · WO-3 3 Dec · WO-25 none)', JSON.stringify(wv) === JSON.stringify(['WO-1', 'WO-2', 'WO-4', 'WO-3', 'WO-25']), JSON.stringify(wv));
+    const o1 = os.find(o => o.v === 'WO-1'), o4 = os.find(o => o.v === 'WO-4'), o25 = os.find(o => o.v === 'WO-25');
+    rec('L12: line "WO-1 · Fl GF · Unit 12 · HOUSE WO-1 TYPE B · due 22 Oct · has a list" (title on the line since 15 Nov)', o1 && o1.t === 'WO-1 · Fl GF · Unit 12 · HOUSE WO-1 TYPE B · due 22 Oct · has a list', o1 && o1.t);
+    rec('L12: a job with no list has no "has a list"; no due date says so', o4 && o4.t === 'WO-4 · Fl T09 · Unit 13 · HOUSE TYPE C UTILITY · due 20 Nov' && o25 && o25.t === 'WO-25 · Fl T09 · Unit 31 · NO DUE · no due date', JSON.stringify([o4, o25]));
+    await closeAll(p);
+    // no project: one disabled line, never all the jobs
+    await p.evaluate(() => openListEditor(null, '', '')); await sleep(400);
+    os = await opts();
+    rec('L11: no project → one disabled line "— pick the project first (or type the WO number below) —"', os.length === 1 && os[0].d && os[0].t === '— pick the project first (or type the WO number below) —', JSON.stringify(os));
+    // typed WO sets the project and the list
+    await p.evaluate(() => { const e = document.getElementById('me-jwo'); e.value = 'WO-20'; e.dispatchEvent(new Event('input')); document.getElementById('me-find').click(); }); await sleep(900);
+    os = await opts();
+    w = await pst();
+    rec('L11: typed WO-20 → its project (Brand New Homes) set; the drop-down = WO-21 (12 Nov), WO-20 (14 Nov)', w.pid === bn[0].id && JSON.stringify(os.filter(o => o.v).map(o => o.v)) === '["WO-21","WO-20"]' && os.find(o => o.v === 'WO-20').s, JSON.stringify([w, os]));
+    await closeAll(p);
+    // a shipped WO chosen: stays an option, marked, never wiped by a redraw
+    await p.evaluate(() => openListEditor(null, 'WO-5')); await sleep(500);
+    await p.evaluate(() => document.getElementById('me-addsaw').click()); await sleep(150);
+    os = await opts();
+    rec('L11: chosen shipped WO-5 stays the chosen option, marked "(shipped)", after a redraw', await p.evaluate(() => document.getElementById('me-wo').value === 'WO-5') && /\(shipped\)$/.test((os.find(o => o.v === 'WO-5') || {}).t || ''), JSON.stringify(os.find(o => o.v === 'WO-5')));
+    await closeAll(p);
+    // NEW list: changing the project clears a WO of another project, says why
+    await p.evaluate(() => openListEditor(null, 'WO-4')); await sleep(500);
+    await p.evaluate(() => { const s = document.getElementById('me-pid'); s.value = 'P2'; s.dispatchEvent(new Event('change')); }); await sleep(200);
+    w = await p.evaluate(() => ({ wo: document.getElementById('me-wo').value, err: document.getElementById('me-err').textContent, opts: [...document.querySelectorAll('#me-wo option')].map(o => o.value).filter(Boolean) }));
+    rec('L11: new list, project changed to Lucan → WO-4 (Aderrig) taken off, said why; drop-down = Lucan\'s WO-6', !w.wo && /WO-4 is a Aderrig job, not Lucan — it was taken off this list/.test(w.err) && JSON.stringify(w.opts) === '["WO-6"]', JSON.stringify(w));
+    await closeAll(p);
+    // EXISTING list: the WO is kept, marked "(other project)"
+    await p.evaluate(() => openListEditor('L1')); await sleep(500);
+    await p.evaluate(() => { const s = document.getElementById('me-pid'); s.value = 'P2'; s.dispatchEvent(new Event('change')); }); await sleep(200);
+    w = await p.evaluate(() => ({ wo: document.getElementById('me-wo').value, t: (document.querySelector('#me-wo option[value="WO-1"]') || {}).textContent }));
+    rec('L11: existing list, project changed → WO-1 kept, marked "(other project)"', w.wo === 'WO-1' && /\(other project\)$/.test(w.t || ''), JSON.stringify(w));
+    await closeAll(p);
+    // the WO's text is escaped (title in the tooltip)
+    await p.evaluate(() => openListEditor(null, 'WO-24')); await sleep(500);
+    rec('L11: an on-hold WO chosen is marked "(on hold)", its title escaped', await p.evaluate(() => { const o = document.querySelector('#me-wo option[value="WO-24"]'); return !!o && /\(on hold\)$/.test(o.textContent) && /<b>x<\/b>/.test(o.title) && !document.querySelector('#me-wo b'); }));
+    await closeAll(p);
+
+    // ---- names: not pre-filled; blank → the WO number; a typed name is found again
+    await p.evaluate(() => openListEditor(null, 'WO-4')); await sleep(500);
+    w = await p.evaluate(() => { const n = document.getElementById('me-name'); return { v: n.value, ph: n.placeholder, lab: n.previousElementSibling.textContent }; });
+    rec('names: a new list for WO-4 (Unit 13) → name box EMPTY, "List name (optional)", "e.g. Kitchen — Type B"', w.v === '' && w.lab === 'List name (optional)' && w.ph === 'e.g. Kitchen — Type B', JSON.stringify(w));
+    await fillSaw(p, 0, 'Side', '1', '700', '500', 'MFC White');
+    await p.evaluate(() => document.getElementById('me-save').click()); await sleep(1000);
+    rec('names: saved with the name blank → the list is named "WO-4"', S.db.t.lists.some(l => !l.archived && (l.wos || []).includes('WO-4') && l.name === 'WO-4'), JSON.stringify(S.db.t.lists.filter(l => (l.wos || []).includes('WO-4')).map(l => l.name)));
+    await closeAll(p);
+    await p.evaluate(() => openListEditor(null, 'WO-25')); await sleep(500);
+    await fillSaw(p, 0, 'Side', '1', '700', '500', 'MFC White');
+    await p.evaluate(() => { const n = document.getElementById('me-name'); n.value = 'Larch special kitchen'; n.dispatchEvent(new Event('input')); document.getElementById('me-save').click(); }); await sleep(1000);
+    await closeAll(p);
+    await p.evaluate(() => lsFindDlg('P1')); await sleep(300);
+    await p.evaluate(() => { const q = document.getElementById('fo-q'); q.value = 'larch special'; q.dispatchEvent(new Event('input')); }); await sleep(300);
+    rec('names: the typed name is found in 🔍 Find old list', await p.evaluate(() => /Larch special kitchen/.test(document.getElementById('fo-body').innerText)));
+    await closeAll(p);
+    await p.evaluate(() => { LH.q = 'larch special'; showTab('l'); }); await sleep(400);
+    rec('names: …and in the Lists search', await p.evaluate(() => /Larch special kitchen/.test(document.getElementById('content') ? document.getElementById('content').innerText : document.body.innerText)));
+    await p.evaluate(() => { LH.q = ''; });
+    // Insert from template: > 6 templates → a find box; the template's name is found
+    await p.evaluate(() => openListEditor(null, 'WO-3')); await sleep(500);
+    await p.evaluate(() => document.getElementById('me-instpl').click()); await sleep(300);
+    w = await p.evaluate(() => { const q = document.getElementById('it-q'); if (!q) return null; q.value = 'larch'; q.dispatchEvent(new Event('input'));
+      return [...document.querySelectorAll('[data-itq]')].filter(r => r.style.display !== 'none').map(r => r.querySelector('b').textContent); });
+    rec('names: Insert from template (8 templates) has a find box; "larch" → only "Larch Type Q"', JSON.stringify(w) === '["Larch Type Q"]', JSON.stringify(w));
+    await closeAll(p);
+    // templates still need a name
+    await p.evaluate(() => { (o => { window.prompt = (m, d) => /Enter the Drawing office, Production Manager or Admin PIN/.test(m) ? pins().design : o(m, d); })(window.prompt); /* a remembered PIN no longer opens templates (plan question 12): the PIN is typed when asked */ /* attack2 F5 (Garry Q3): templates are Drawing office / Admin only */ openListEditor(null, '', 'P1', { tpl: true }); }); await sleep(400);
+    await fillSaw(p, 0, 'Side', '1', '700', '500', 'MFC White');
+    await p.evaluate(() => document.getElementById('me-save').click()); await sleep(300);
+    rec('names: a template with no name → "Give the template a name."', await p.evaluate(() => document.getElementById('me-err').textContent === 'Give the template a name.' && !!document.querySelector('.me-ed')));
+    await closeAll(p);
+
+    rec('no page errors', !(S.errors || []).length, JSON.stringify(S.errors));
+    await t.close();
+    // two PCs open a list for WO-26 (customer "Race Homes", no project) at the same moment → one project
+    const [a1, a2] = await Promise.all([X.dev(browser, S, 'office'), X.dev(browser, S, 'office')]);
+    await Promise.all([a1.page.evaluate(() => openListEditor(null, 'WO-26')), a2.page.evaluate(() => openListEditor(null, 'WO-26'))]); await sleep(1500);
+    const rh = S.db.t.projects.filter(x => /^race homes$/i.test(x.name));
+    const pids = await Promise.all([a1, a2].map(a => a.page.evaluate(() => (document.getElementById('me-pid') || {}).value)));
+    rec('L5: two PCs at once → ONE project "Race Homes", both windows on it', rh.length === 1 && pids.every(x => x === rh[0].id), JSON.stringify([rh.map(x => x.id), pids]));
+    await a1.close(); await a2.close();
+
+    // ---- L10: "can't keep a backup copy" says why and how to fix it; Settings → 💾 Storage on this device; nothing removed
+    const big = 'x'.repeat(1024 * 1024); // 1 M characters = 2 MB as browsers count it
+    const st0 = await X.dev(browser, S, 'office'), sp = st0.page;
+    await sp.evaluate(b => { localStorage.setItem('wpf_quotes_backup', b); localStorage.setItem('wpf_doctor_backup', 'y'.repeat(1000)); localStorage.setItem('someOtherApp', 'z'); }, big);
+    const keys0 = await sp.evaluate(() => Object.keys(localStorage).sort());
+    await sp.evaluate(() => { const si = Storage.prototype.setItem; window.__si = si; Storage.prototype.setItem = function (k, v) { if (/^wpfPending/.test(k)) throw new DOMException('The quota has been exceeded.', 'QuotaExceededError'); return si.call(this, k, v); };
+      DB.orders.find(o => o.wo === 'WO-3').notes = 'changed here'; writePend(); });
+    await sleep(200);
+    w = await sp.evaluate(() => ({ fail: DB.pendFail, why: DB.pendWhy, txt: document.body.innerText }));
+    rec('L10: storage full → "This device\'s storage for the planner is full — old Quoting-tool copies use 2 MB … Fix: Settings → Storage on this device."', w.fail && w.why === 'full' && /This device's storage for the planner is full — old Quoting-tool copies use 2(\.\d+)? MB\. Your work still saves to the database while this page is open and online\. Fix: Settings → Storage on this device\./.test(w.txt), JSON.stringify({ why: w.why, t: (w.txt.match(/This device[^\n]*/) || [''])[0] }));
+    await sp.evaluate(() => showTab('s')); await sleep(500);
+    w = await sp.evaluate(() => { const p = document.getElementById('set-store'); if (!p) return null; const row = k => { const r = p.querySelector('[data-stg="' + k + '"]'); return r ? [...r.cells].map(c => c.textContent) : null; };
+      return { plan: row('plan'), quote: row('quote'), other: row('other'), dl: !!document.getElementById('btn-stg-dl'), txt: p.innerText, del: [...p.querySelectorAll('button')].filter(b => /delete|remove|clear/i.test(b.textContent)).length }; });
+    rec('L10: Settings "💾 Storage on this device": Planner / old Quoting tool (2 items, 2 MB) / Other, with sizes', w && w.quote && w.quote[1] === '2' && /^2(\.\d+)? MB$/.test(w.quote[2]) && w.plan && +w.plan[1] > 0 && w.other && w.other[1] === '1', JSON.stringify(w && { plan: w.plan, quote: w.quote, other: w.other }));
+    rec('L10: the full message shows there too, with fix steps; a Download button and NO delete button', w && /storage for the planner is full/.test(w.txt) && /Fix:/.test(w.txt) && /Nothing is deleted here/.test(w.txt) && w.dl && w.del === 0, JSON.stringify(w && { dl: w.dl, del: w.del }));
+    await sleep(500);
+    rec('L10: the browser\'s own estimate is shown', await sp.evaluate(() => /Browser storage for this address: .*(used|not known)/.test(document.getElementById('stg-est').textContent)), await sp.evaluate(() => document.getElementById('stg-est').textContent));
+    const [dl] = await Promise.all([sp.waitForEvent('download', { timeout: 5000 }).catch(() => null), sp.evaluate(() => document.getElementById('btn-stg-dl').click())]);
+    let dlOk = false; if (dl) { const fs = require('fs'); const pth = await dl.path(); const j = JSON.parse(fs.readFileSync(pth, 'utf8')); dlOk = Object.keys(j.items).sort().join() === 'wpf_doctor_backup,wpf_quotes_backup' && j.items.wpf_quotes_backup.length === big.length; }
+    rec('L10: Download = a copy of the two old Quoting-tool items (whole)', dlOk, dl ? dl.suggestedFilename() : 'no download');
+    const keys1 = await sp.evaluate(() => { Storage.prototype.setItem = window.__si; return Object.keys(localStorage).sort(); });
+    rec('L10: nothing removed from this device\'s storage', keys0.every(k => keys1.includes(k)) && await sp.evaluate(b => localStorage.getItem('wpf_quotes_backup') === b, big), JSON.stringify(keys0.filter(k => !keys1.includes(k))));
+    await sp.evaluate(() => { localStorage.removeItem('wpf_quotes_backup'); localStorage.removeItem('wpf_doctor_backup'); localStorage.removeItem('someOtherApp'); }); // the test's own items
+    await st0.close();
+    // blocked
+    const st1 = await X.dev(browser, S, 'office');
+    await st1.page.evaluate(() => { Storage.prototype.setItem = function () { throw new DOMException('Access is denied for this document.', 'SecurityError'); }; DB.orders.find(o => o.wo === 'WO-3').notes = 'again'; writePend(); }); await sleep(200);
+    rec('L10: storage blocked → "This browser is blocking storage (private window or a browser setting) — use a normal Chrome window."', await st1.page.evaluate(() => DB.pendWhy === 'blocked' && /This browser is blocking storage \(private window or a browser setting\) — use a normal Chrome window\./.test(document.body.innerText)));
+    await st1.close();
+    // lists switched off: the storage panel is there (the only Part 4 change with lists off), the list window is the old one
+    const S0 = X.makeServer(X.v1Row());
+    const o0 = await X.dev(browser, S0, 'office');
+    await o0.page.evaluate(() => showTab('s')); await sleep(300);
+    rec('switch OFF: Settings does NOT show "💾 Storage on this device" (Garry 13 Nov, question 15 answer B)', await o0.page.evaluate(() => !document.getElementById('set-store')));
+    await o0.page.evaluate(() => openListEditor(null, 'WO-2')); await sleep(200);
+    rec('switch OFF: the old list window — no ✕ Close bar, no project message, old name pre-fill and "Cancel"', await o0.page.evaluate(() => !document.getElementById('me-x0') && !document.getElementById('me-pm') && /Cancel/.test((document.getElementById('pod-x') || {}).textContent || '')));
+    rec('switch OFF: no page errors', !(S0.errors || []).length, JSON.stringify(S0.errors));
+    await o0.close();
+
+    // ---- (round 5) two P-numbers for one house: flagged on the saw and stores cards and in either P-job's list window
+    {
+      const r2 = X.v2Row(); const pj = wo => H.order({ wo, customer: 'Aderrig Homes', pid: 'P1', floor: 'T09', unit: '77', title: 'HOUSE TYPE K', step: 'Planner WO', dueDate: '2026-10-22', origDueDate: '2026-10-22', log: [{ at: '2026-10-21T08:00:00Z', by: 'Op', what: 'Work order created with a typed cutting list' }] });
+      r2.orders.push(pj('P-1001'), pj('P-1002'));
+      const S2 = X.makeServer(r2);
+      X.F3.seedList(S2, 'LP1', { wos: ['P-1001'], name: 'House 77 A' }); X.F3.seedList(S2, 'LP2', { wos: ['P-1002'], name: 'House 77 B' });
+      for (const role of ['saw', 'stores']) {
+        const sv = await X.dev(browser, S2, role); await sleep(400);
+        const n = await sv.page.evaluate(() => [...document.querySelectorAll('.wl-card .p-twin')].filter(e => /Two P-numbers for one house — P-1001 \/ P-1002/.test(e.textContent)).length);
+        rec('round 5: ' + role + ' — both P-job list cards carry "⚠ Two P-numbers for one house — P-1001 / P-1002"', n === 2, n);
+        await sv.close();
+      }
+      const ofc = await X.dev(browser, S2, 'office');
+      for (const id of ['LP1', 'LP2']) { await ofc.page.evaluate(id => openListEditor(id), id); await sleep(500);
+        rec('round 5: list window of ' + id + ' shows the two-P-numbers warning', await ofc.page.evaluate(() => /Two P-numbers for one house — P-1001 \/ P-1002/.test((document.querySelector('.me-ed .p-twin') || {}).textContent || '')));
+        await closeAll(ofc.page); }
+      await ofc.page.evaluate(() => openListEditor(null, 'WO-2')); await sleep(400);
+      rec('round 5: an ordinary WO has no such warning', await ofc.page.evaluate(() => !document.querySelector('.me-ed .p-twin')));
+      await ofc.close();
+    }
+    // phone 360 px: the Qty card box has the placeholder too
+    const ph = await X.dev(browser, S, 'office', { viewport: { width: 360, height: 740 } });
+    await ph.page.evaluate(() => openListEditor(null, 'WO-2')); await sleep(300);
+    rec('L7: phone card — the Qty box says "Qty"', await ph.page.evaluate(() => { const q = [...document.querySelectorAll('.me-ed .me-card [data-mr$="|qty"]')]; return q.length > 0 && q.every(e => e.placeholder === 'Qty'); }));
+    w = await ph.page.evaluate(() => { const x = document.getElementById('me-x0').getBoundingClientRect(), o = document.querySelector('.me-ed'); return { r: Math.round(x.right), h: Math.round(x.height), w: Math.round(x.width), sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth, ow: o.scrollWidth, oc: o.clientWidth }; });
+    rec('phone 360 px: ✕ Close on screen, ≥ 40 px tall, no sideways scroll', w.r <= 360 && w.h >= 40 && w.w >= 44 && w.sw <= w.cw + 1 && w.ow <= w.oc + 1, JSON.stringify(w));
+    await ph.page.evaluate(() => { document.querySelector('.me-ed .pod-in, .me-ed').scrollTop = 600; }); await sleep(100);
+    rec('phone 360 px: scrolled down, ✕ Close still at the top of the window (sticky)', await ph.page.evaluate(() => { const x = document.getElementById('me-x0').getBoundingClientRect(), o = document.querySelector('.me-ed').getBoundingClientRect(); return x.top >= o.top - 1 && x.top < o.top + 30; }));
+    await ph.close();
+  } finally { await browser.close(); }
+  X.finish();
+})().catch(e => { console.error(e); process.exit(1); });
