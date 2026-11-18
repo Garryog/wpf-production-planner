@@ -291,9 +291,9 @@ const LIT = () => ({ prev: document.getElementById('wkb-prev').className, next: 
       await __go('2'); out.cok = card('WO-OK');
       return out;
     });
-    rec('C1 moved job planned after its due date: board row shows "⚠ built after due" + "(orig 11 Nov Wk 46)" + the 🚚 delivery tag, nothing spills out of the cell', C.mv && C.mv.late && /orig 11 Nov Wk 46/.test(C.mv.orig) && C.mv.deliv.length === 1 && /Fri 20 Nov/.test(C.mv.deliv[0]) && !C.mv.spill, JSON.stringify(C.mv));
-    rec('C2 the chip explains itself (tooltip names the planned week and the due date)', C.mv && /Wk 48/.test(C.mv.lateTitle) && /18/.test(C.mv.lateTitle), C.mv && C.mv.lateTitle);
-    rec('C3 board row and delivery card: same tag text and colour for the moved job (grey, next week) — chip only on the board', C.mv && C.cmv && C.mv.cls === C.cmv.cls && C.mv.cls === 'grey' && C.mv.txt === C.cmv.txt && C.mv.deliv[0] === C.cmv.deliv[0], JSON.stringify([C.mv && C.mv.cls, C.cmv]));
+    rec('C1 (18 Nov: board shows the due date only) moved job: no "built after due", no "(orig …)", no 🚚 tag on the board row, nothing spills out', C.mv && !C.mv.late && !/orig/.test(C.mv.orig||'') && C.mv.deliv.length === 0 && !C.mv.spill, JSON.stringify(C.mv));
+    rec('C2 (18 Nov) no "built after due" chip on the board', C.mv && !C.mv.lateTitle, C.mv && C.mv.lateTitle);
+    rec('C3 board row and delivery card: same tag text and colour for the moved job (grey, next week) — chip only on the board', C.mv && C.cmv && C.mv.cls === C.cmv.cls && C.mv.cls === 'grey' && C.mv.txt === C.cmv.txt, JSON.stringify([C.mv && C.mv.cls, C.cmv]));
     rec('C4 due on the Friday of its own build week: no "built after due"; job planned before its due week: no chip', C.fri && !C.fri.late && C.ok && !C.ok.late && C.fri.cls === (C.cfri || {}).cls && C.ok.cls === (C.cok || {}).cls, JSON.stringify([C.fri, C.cfri, C.ok, C.cok]));
     rec('C: no page errors', !(t.server.errors || []).length, (t.server.errors || []).join(' | '));
     await t.close();
