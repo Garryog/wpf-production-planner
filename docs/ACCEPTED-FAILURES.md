@@ -186,3 +186,11 @@ S6 (1), attack1-layout / attack2-excel-phone / attack3-phone P1 / P10 / final-a-
 | Test / check | Why it fails | Fixed by | Status |
 |---|---|---|---|
 | lists-filter attack1-filter "11 lists switch ON / OFF … screens are character-for-character the same as origin/main" (2) | the check compares the Capacity Board's HTML with the live version byte for byte; the board's date cell was changed on purpose (dates side by side, chips on one line) | Tester: leave office:b out of that comparison | pending |
+## 18 Nov 2026 — driver per van per day (settings.vanDrv) — pending, Garry to sign off
+| Test / check | Why it fails (plain English) | Fixed by | Accepted? |
+|---|---|---|---|
+| list-window attack7-vandrv O1 "the old screen's settings save keeps settings.vanDrv" (Medium) | a screen still running the version before drivers-per-van saves the whole settings block without the drivers, so every driver set on the Deliveries page is wiped from the database. **Close every screen and phone on go-live day** | go-live step: close every screen | pending |
+| list-window attack7-vandrv O2 "a PC opened after the old screen's save still shows Mick on the Artic" (Medium) | same cause as O1: once the old screen has saved, the drivers are gone for everyone and have to be set again. **Close every screen on go-live day** | go-live step: close every screen | pending |
+| list-window attack8-deliv E6 "the old screen's next saves put back ALL the drivers" (Medium) | same cause as O1/O2, seen from the other side: after an old screen's save only the drivers this PC set again come back. **Close every screen on go-live day** | go-live step: close every screen | pending |
+| list-window attack7-vandrv T2 "Pat put on the Volvo AND the Artic Fri from two PCs at once → somebody is told" (Low) | two PCs putting the same driver on two different vans in the same second both save without warning (each PC checked before the other had saved). The Deliveries page shows both vans, and the driver's phone shows both as his | — (rare; same-second double booking) | pending |
+| list-window attack7-vandrv W "the PM screen shows who drives a van" (info) | only office / Production Manager see the Deliveries page, so a PM doesn't see who drives; the code comment that said "everyone sees it" has been corrected | — (information only) | pending |
