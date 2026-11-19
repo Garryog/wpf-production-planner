@@ -1127,16 +1127,26 @@ async function fetchMain(){
   (the Stage 1 trigger does it for every screen), so a change is never missed. Anything unusual (no version column,
   the quick check fails, unsaved or unsure work, a failed load or save) → the full load exactly as before.
   A full load still happens at least every 10 minutes as a safety net. */
-const SYNC={save:null,load:null,check:null,day:'',skips:0,fulls:0,lastFull:0};
+const SYNC={save:null,load:null,check:null,day:'',skips:0,fulls:0,lastFull:0,down:false,ua:null,uaV:null};
+/* down: the database was seen at a LOWER version than this screen holds (e.g. restored from a backup). Other screens can
+   then climb back to the same number with different content, so "same number" proves nothing: no skipping until a full
+   load has actually been put on this screen. ua/uaV: the record's "last changed" time for version uaV — the same number
+   with a different time also means a different record. */
 const SYNC_FULL_MS=600000;
 function syncDay(){const d=new Date().toDateString();if(SYNC.day!==d){SYNC.day=d;SYNC.skips=0;SYNC.fulls=0;}}
-async function fetchVer(){ // the record's version number only; null = could not tell
+async function fetchVer(){ // the record's version number and last-changed time only; null = could not tell
   const t0=Date.now();
-  const r=await fetch(SUPA_URL+'/production_planner?id=eq.main&select=version',{headers:SUPA_HDR});
+  const r=await fetch(SUPA_URL+'/production_planner?id=eq.main&select=version,updated_at',{headers:SUPA_HDR});
   const d=await r.json();
   if(!r.ok||!Array.isArray(d)||!d[0]||d[0].version==null)return null;
   SYNC.check={at:Date.now(),ms:Date.now()-t0};
-  return +d[0].version||null;
+  const v=+d[0].version||null;
+  if(v!==null&&VER!==null&&v<VER)SYNC.down=true; // went backwards: never trust "same number" until a full load is applied
+  return v===null?null:{v,ua:d[0].updated_at==null?null:String(d[0].updated_at)};
+}
+function syncApplied(row){ // a full load has just been put on this screen: the safety net and the "went backwards" mark restart
+  SYNC.lastFull=Date.now();syncDay();SYNC.fulls++;SYNC.down=false;
+  SYNC.ua=row&&row.updated_at!=null?String(row.updated_at):null;SYNC.uaV=VER;
 }
 // Nothing on this screen that a full load would have to merge or repair.
 // Settings → "Sync speed": what the last save / full load / quick check cost on this screen (plain English)
@@ -1155,9 +1165,15 @@ function syncSpeedHTML(){
 function syncCalm(){return VER!==null&&DB.loaded&&!DB.loadFailed&&!DB.remoteBroken&&!DB.saveFailed&&DB.lastLoadOk&&!SAVING&&!saveT&&!UNSURE.length&&!!BASE&&same(snap(),BASE);}
 async function refreshDB(){
   syncDay();
-  if(syncCalm()&&Date.now()-SYNC.lastFull<SYNC_FULL_MS){
-    let v=null;try{v=await fetchVer();}catch(e){v=null;}
-    if(v!==null&&v===VER&&syncCalm()){SYNC.skips++;return;} // unchanged — keep what we have
+  const gap=Date.now()-SYNC.lastFull; // negative = the clock was set back: treat the safety net as due
+  if(!SYNC.down&&syncCalm()&&gap>=0&&gap<SYNC_FULL_MS){
+    let q=null;try{q=await fetchVer();}catch(e){q=null;}
+    if(q&&q.v===VER&&!SYNC.down&&syncCalm()){
+      // Same number: also the same last-changed time? (Not known yet for a version this screen saved itself — the first
+      // check after its own save records it.)
+      if(SYNC.uaV!==VER){SYNC.ua=q.ua;SYNC.uaV=VER;SYNC.skips++;return;}
+      if(q.ua===SYNC.ua){SYNC.skips++;return;} // unchanged — keep what we have
+    }
   }
   return loadDB();
 }
@@ -1181,9 +1197,9 @@ async function loadDB(){
     const row=checkRow(await fetchMain());
     if(SAVING)return;
     DB.lastLoadOk=true;
-    SYNC.lastFull=Date.now();syncDay();SYNC.fulls++; /*R1: the 10-minute safety net counts from here*/
     // A slow refresh reply that left the database before this screen's own save landed is out of date — ignore it
-    if(row&&VER!==null&&row.version!==undefined&&(+row.version||1)<VER){setSS(DB.saveFailed?'e':'ok');return;}
+    // (R1: also marks "went backwards", so the quick check can't skip until a load is really applied — e.g. a restore)
+    if(row&&VER!==null&&row.version!==undefined&&(+row.version||1)<VER){SYNC.down=true;setSS(DB.saveFailed?'e':'ok');return;}
     DB.remoteBroken=false;
     // This screen has changes the database hasn't got yet (typing, a pending or failed save):
     // never throw them away — merge the database copy into them and send the result.
@@ -1195,6 +1211,7 @@ async function loadDB(){
       lqOwn(m.plan.settings,theirs.settings);
       applyPlan(m.plan);noteMerge(m.notes,m.ren,row.updated_by);
       BASE=clone(theirs);unsureKeep(row);VER=row.version===undefined?null:(+row.version||1);
+      syncApplied(row); /*R1*/
       if(ebDropped(row))delete BASE.settings.exportBase; // an old tab dropped the baseline: this save puts ours back
       DB.loadFailed=false;
       sched();setSS('s');
@@ -1204,6 +1221,7 @@ async function loadDB(){
       if(row.version===undefined){VER=null;legacyWarn('load');}else VER=+row.version||1;
       applyPlan(planOf(row,BASE?BASE.settings:fullSettings()));
       UNSURE=[];
+      syncApplied(row); /*R1: the safety net counts from a load that was really put on the screen*/
     }
     // One-off migration: plans saved before the baseline was stored get it built once from the jobs as they
     // stand (what every load used to do); the office saves it so all screens share one baseline.

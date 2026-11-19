@@ -17,12 +17,13 @@ function bigRow(v = 1) {
   for (let i = 0; i < 1500; i++) r.orders.push(H.order({ wo: 'WO-' + (1000 + i), title: 'Kitchen job ' + i, customer: 'Builder ' + (i % 40), notes: pad }));
   r.nid = 3000; return r;
 }
-// Like PostgREST: "select=version" answers only that column. Counts bytes of every planner GET.
+// Like PostgREST: "select=version" answers only that column (R1 fix round 1: the app asks "select=version,updated_at" — answered
+// with both columns). Counts bytes of every planner GET.
 async function routes(t, S) {
   S.bytes = S.bytes || 0;
-  await t.page.route(/production_planner\?id=eq\.main(&select=version)?$/, async route => {
+  await t.page.route(/production_planner\?id=eq\.main(&select=version(,updated_at)?)?$/, async route => {
     const req = route.request(); if (req.method() !== 'GET') return route.fallback();
-    const isVer = /select=version/.test(req.url());
+    const isVer = /select=version/.test(req.url()), wantUa = /updated_at/.test(req.url());
     S.log.push(isVer ? 'GET ?select=version' : 'GET /production_planner?id=eq.main');
     if (S.offline) return route.abort('internetdisconnected');
     if (isVer) {
@@ -30,7 +31,7 @@ async function routes(t, S) {
       if (S.verMode === 'fail') return route.fulfill({ status: 503, contentType: 'application/json', body: '{"message":"down"}' });
       if (S.verOverride !== undefined) { const b = JSON.stringify([{ version: S.verOverride }]); S.bytes += b.length; return route.fulfill({ status: 200, contentType: 'application/json', body: b }); }
       if (!S.versioned) return route.fulfill({ status: 400, contentType: 'application/json', body: '{"code":"42703","message":"column production_planner.version does not exist"}' });
-      const b = JSON.stringify(S.row ? [{ version: S.row.version }] : []); S.bytes += b.length;
+      const b = JSON.stringify(S.row ? [{ version: S.row.version, ...(wantUa ? { updated_at: S.row.updated_at == null ? null : S.row.updated_at } : {}) }] : []); S.bytes += b.length;
       return route.fulfill({ status: 200, contentType: 'application/json', body: b });
     }
     if (S.fullHold) await S.fullHold;

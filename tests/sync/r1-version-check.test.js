@@ -14,7 +14,7 @@ async function realVer(t, S, mode) {
     if (S.verMode === 'abort') return route.abort('internetdisconnected');
     if (S.verMode === 'empty') return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
     if (!S.versioned) return route.fulfill({ status: 400, contentType: 'application/json', body: '{"code":"42703","message":"column production_planner.version does not exist"}' });
-    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ version: S.row.version }]) });
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ version: S.row.version, updated_at: S.row.updated_at == null ? null : S.row.updated_at }]) });
   });
 }
 // Fire the real 2-minute refresh callback once (captured from startAutoRefresh), and wait for it to finish.
@@ -158,6 +158,32 @@ async function pc(browser, S) {
       const t2 = await (async () => { const S2 = makeServer(base()); const P = await pc(browser, S2); const x = await P.page.evaluate(() => { SYNC.save = null; SYNC.check = null; tab = 's'; render(); return document.getElementById('set-sync').innerText; }); await P.close(); return x; })();
       rec('7 a fresh screen says "none yet" instead of blanks', /Last save:\s*none yet on this screen/.test(t2) && /Last quick check:\s*none yet/.test(t2), (t2.match(/Last save:[^\n]*/) || [''])[0]);
       rec('7 no page errors', !(S.errors || []).length, (S.errors || []).join(' | ').slice(0, 200));
+      await A.close();
+    }
+    // 8. fix round 1: restore to a lower version, same number with a different last-changed time, clock set back
+    {
+      const S = makeServer(base()); const A = await pc(browser, S);
+      const vA = await A.page.evaluate(() => VER);
+      S.row = JSON.parse(JSON.stringify(base(1))); S.row.orders[1].notes = 'restored'; // database restored to a lower number
+      S.log.length = 0; await tick(A.page);
+      const d1 = await A.page.evaluate(() => ({ down: SYNC.down, lf: SYNC.lastFull }));
+      rec('8 lower version seen: marked "went backwards" (full load, row not applied)', d1.down === true && fullGets(S) === 1, JSON.stringify(d1) + ' ' + S.log.join(', '));
+      S.row.version = vA; S.row.updated_at = '2026-11-19T10:00:00Z'; S.row.orders[1].notes = 'climbed back';
+      S.log.length = 0; await tick(A.page);
+      const a = await A.page.evaluate(() => ({ n: DB.orders.find(o => o.wo === 'WO-2').notes, down: SYNC.down }));
+      rec('8 back at the same number with other content: no skip, A shows it and the mark clears', fullGets(S) === 1 && a.n === 'climbed back' && a.down === false, JSON.stringify(a) + ' ' + S.log.join(', '));
+      await A.page.evaluate(async () => { for (let i = 0; i < 60 && (saveT || SAVING); i++) await new Promise(r => setTimeout(r, 100)); if (saveT) await saveDB(); }); // the restored row had no Export baseline: the office writes it back first
+      S.log.length = 0; await tick(A.page);
+      rec('8 …then quiet refreshes are skipped again', fullGets(S) === 0 && verGets(S) === 1, S.log.join(', '));
+      // same number, different last-changed time (never seen the lower one) → full load
+      S.row.updated_at = '2026-11-19T11:00:00Z'; S.row.orders[1].notes = 'same number, new time';
+      S.log.length = 0; await tick(A.page);
+      const n2 = await A.page.evaluate(() => DB.orders.find(o => o.wo === 'WO-2').notes);
+      rec('8 same version, different updated_at: full load, change shown', fullGets(S) === 1 && n2 === 'same number, new time', n2 + ' ' + S.log.join(', '));
+      // clock set back: the gap is negative → the safety net is due now
+      await A.page.evaluate(() => { SYNC.lastFull = Date.now() + 3600000; });
+      S.log.length = 0; await tick(A.page);
+      rec('8 clock set back (last full load "in the future"): full load now', fullGets(S) === 1, S.log.join(', '));
       await A.close();
     }
   } catch (e) { rec('test ran without crashing', false, e && e.stack ? e.stack.slice(0, 300) : String(e)); }
