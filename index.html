@@ -8254,7 +8254,7 @@ function dchip(o){ /*d19-1: the customer band is on every card now (showCust gon
   return `<div class="dchip${rd?' rdy-'+rd.lvl:''}${st==='deliv'?' done':''}${st==='disp'?' dispd':''}${st==='load'?' loadd':''}${o.manual?' manual':''}${delSel.has(o.wo)?' sel':''}${!o.manual&&woListOk(o)?' lst-ok':''}" draggable="true" data-dw="${escA(o.wo)}" title="Click to select · drag onto a day${o.manual?' · added manually':''}${!o.manual&&woListOk(o)?' · green strip: cutting list sorted':''}">
     ${String(o.customer||'').trim()?`<div class="dchip-c" title="${escA(o.customer)}">${escA(o.customer)}</div>`:'<div class="dchip-c none">(no customer)</div>'}
     <div class="dchip-top"><span class="dtick" role="checkbox" aria-checked="${delSel.has(o.wo)?'true':'false'}" title="Tick to select">${delSel.has(o.wo)?'☑':'☐'}</span><b>${escA(o.wo)}${o.manual?'':stepBadge(o)}</b>
-      <span class="dchip-btns">${V2()&&!o.manual&&!st&&!['pm','driver','dash','floor','saw','stores'].includes(ROLE||'')&&!lists().some(l=>(l.wos||[]).includes(o.wo))?`<button class="dinfo dlist-add" data-dladd="${escA(o.wo)}" title="＋ Add a cutting list for ${escA(o.wo)} (opens the cutting list window)" style="width:auto;padding:0 6px;font-weight:800">＋ List</button>`:''}${rd?`<button class="dinfo" data-dinfo="${escA(o.wo)}" title="${escA(RDY_LBL[rd.lvl]+(rd.why.length?' — '+rd.why.join(' · '):''))} — tap for detail">ⓘ</button>`:''}<button class="dchk${st?' on':''}" data-dd="${escA(o.wo)}" title="Status: ${dStageLbl[st]||'planned'} — tap to update (opens a menu)">${st==='deliv'?'✓':st==='disp'?'D':st==='load'?'L':'·'}</button><button data-dx="${escA(o.wo)}" title="${o.delDay?'Return to pool':(o.manual?'Delete this manual job':'Remove from delivery plan')}">×</button></span>
+      <span class="dchip-btns">${V2()&&!o.manual&&!st&&!['pm','driver','dash','floor','saw','stores'].includes(ROLE||'')&&!lists().some(l=>(l.wos||[]).includes(o.wo))?`<button class="dinfo dlist-add" data-dladd="${escA(o.wo)}" title="＋ Add a cutting list for ${escA(o.wo)} (opens the cutting list window)" style="width:auto;padding:0 6px;font-weight:800">＋ List</button>`:''}${rd?`<button class="dinfo" data-dinfo="${escA(o.wo)}" title="${escA(RDY_LBL[rd.lvl]+(rd.why.length?' — '+rd.why.join(' · '):''))} — tap for detail">ⓘ</button>`:''}<button class="dchk${st?' on':''}" data-dd="${escA(o.wo)}" title="Status: ${dStageLbl[st]||'planned'} — tap to update (opens a menu)">${st==='deliv'?'✓':st==='disp'?'D':st==='load'?'L':'·'}</button><button data-dx="${escA(o.wo)}" title="${o.delDay?'Return to pool':'Take off board'}" aria-label="${o.delDay?'Return to pool':'Take off board'}">×</button></span>
     </div>
     ${fuF(o)||fuU(o)?`<div class="dchip-fu">${fuHTML(o,'dfu')}</div>`:''}
     <div class="dchip-t" title="${escA(o.title)}">${escA(o.title)||'—'}</div>
@@ -8527,10 +8527,8 @@ function renderDeliveries(app){
   });
   document.querySelectorAll('[data-dx]').forEach(b=>b.onclick=()=>{
     const o=findDel(b.dataset.dx);if(!o)return;
-    if(o.delDay){placeJobs([o],'','');return;}
-    else if(o.manual){DB.delx=(DB.delx||[]).filter(x=>x.wo!==o.wo);toast(o.wo+' deleted');}
-    else{o.delv=false;delvMark(o);o.delVeh='';o.delDay='';delete o.delWk;delete o.delRebook;o.delDone=false;delete o.delLoadedAt;delete o.delDispAt;delete o.delDelivAt;delete o.ldBy;delete o.delivBy;toast(o.wo+' removed from delivery plan');}
-    delSel.delete(o.wo);sched();render();
+    if(o.delDay){placeJobs([o],'','');return;} // a booked card back to the pool: the same who / why as before
+    delTakeOff(o); /*d19-4: two steps, typed WO (or DELETE), a name; a job added by hand is archived, never erased*/
   });
   // Every placement is stamped with who; every MOVE of a planned job also needs a reason (placeJobs)
   const dropTo=(el,veh,day,dwk)=>{
@@ -8597,6 +8595,58 @@ function renderDeliveries(app){
   if(rs)rs.onclick=()=>closeWeek(wk); /*dates: Close week replaces "Clear Week — Start Fresh"*/
 }
 
+/*d19-4 (Garry 19 Nov): × on a card still to plan = "Take off board", in two steps. (a) says exactly what will happen; (b) type the
+  WO number (or DELETE for a job added by hand) and pick a name. Loaded / dispatched / delivered are refused — clear the status first.
+  A Cienapps job loses its 🚚 tag (stays on the Capacity Board), logged. A job added by hand is ARCHIVED in 📚 Past weeks
+  ("Taken off the board"), never erased — ↩ Back to Deliveries there brings it back. */
+function delTakeOff(o){
+  if(!o||!delOnPage(o))return;
+  const st=dStage(o);
+  if(st){toast(o.wo+' is '+dStageLbl[st]+' — clear its status first (tap its status button → ↩ Clear status)',true);return;}
+  const man=!!o.manual,key=man?'DELETE':String(o.wo);
+  const ov=document.createElement('div');ov.className='pod-ovl';ov.id='tob-ov';
+  const head=`<div style="font-weight:800;color:#14335c;font-size:16px;margin-bottom:6px">Take ${escA(o.wo)} off the board?</div><div style="font-size:12px;color:var(--t2);margin-bottom:8px">${escA(o.customer||'')}${o.customer&&o.title?' · ':''}${escA(o.title||'')}</div>`;
+  ov.innerHTML=`<div class="pod-in" style="min-width:min(460px,92vw);max-width:560px" id="tob-in">${head}
+    <div style="font-size:13px;line-height:1.5;background:#f7f9fc;border:1px solid var(--border);border-radius:8px;padding:8px 12px">${man
+      ?`<b>What will happen:</b><br>• It was added by hand (＋ Add Job).<br>• It leaves the Deliveries page.<br>• It is <b>archived</b> in 📚 Past weeks (“Taken off the board”) — kept, never erased.<br>• Bring it back any time: 📚 Past weeks → ↩ Back to Deliveries.<br>• Your name and the time are recorded.`
+      :`<b>What will happen:</b><br>• It leaves the Deliveries page (its 🚚 tag is removed).<br>• It stays on the Capacity Board and in Cienapps — nothing else changes.<br>• Tag it again any time with 🚚 on the Capacity Board.<br>• Recorded in its history with your name.`}</div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:12px"><button class="btn btn-s" id="pod-x" style="min-height:44px">Cancel — change nothing</button><button class="btn btn-s" id="tob-next" style="min-height:44px;border-color:var(--red);color:var(--red);font-weight:700">Continue →</button></div></div>`;
+  document.body.appendChild(ov);
+  ov.onclick=e=>{if(e.target===ov||e.target.id==='pod-x')ov.remove();};
+  ov.querySelector('#tob-next').onclick=()=>{
+    const box=ov.querySelector('#tob-in');
+    box.innerHTML=`${head}<label for="tob-t" style="font-size:13px;font-weight:700;display:block;margin-bottom:4px">To confirm, type ${man?'<b>DELETE</b>':'the work order number <b style="font-family:monospace">'+escA(o.wo)+'</b>'}</label>
+      <input id="tob-t" autocomplete="off" style="width:100%;box-sizing:border-box;padding:10px;font-size:16px;border:1px solid var(--b2);border-radius:8px" placeholder="${escA(key)}">
+      <div id="tob-err" style="color:#b42318;font-weight:700;font-size:13px;min-height:18px;margin-top:4px"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:8px"><button class="btn btn-s" id="pod-x" style="min-height:44px">Cancel — change nothing</button><button class="btn btn-s" id="tob-go" style="min-height:44px;background:var(--red);border-color:var(--red);color:#fff;font-weight:700">Take off board</button></div>`;
+    const inp=box.querySelector('#tob-t');inp.focus();
+    const go=()=>{
+      const v=String(inp.value||'').trim();
+      if(man?v.toUpperCase()!=='DELETE':v.toUpperCase()!==key.trim().toUpperCase()){box.querySelector('#tob-err').textContent=man?'Type DELETE to take it off':'That is not '+o.wo+' — type the work order number exactly';inp.focus();return;}
+      ov.remove();
+      officeWho(by=>{
+        const x=findDel(o.wo); // the live copy (a sync may have replaced the object)
+        if(!x||!delOnPage(x)){toast(o.wo+' is not on the board any more — nothing changed');render();return;}
+        if(x.delDay||dStage(x)){toast(o.wo+' was booked or loaded on another screen meanwhile — nothing changed',true);render();return;}
+        const at=nowISO();
+        if(x.manual){
+          DB.delArchive=DB.delArchive||{};
+          const k=at.slice(0,10)+'.'+Date.now().toString(36)+'.off';
+          DB.delArchive[k]={at,w:'',by,off:true,why:'Taken off the board',notes:{},pod:{},jobs:[delArcRow(x)]};
+          DB.delx=(DB.delx||[]).filter(j=>j!==x&&j.wo!==x.wo);
+          toast(o.wo+' taken off the board — archived in 📚 Past weeks ('+by+')');
+        }else{
+          x.delv=false;delvMark(x);x.delVeh='';x.delDay='';delete x.delWk;delete x.delRebook;x.delDone=false;delete x.delLoadedAt;delete x.delDispAt;delete x.delDelivAt;delete x.ldBy;delete x.delivBy;
+          logEdit(x,'Taken off the Deliveries board (🚚 tag removed)',by);
+          toast(o.wo+' taken off the Deliveries board ('+by+')');
+        }
+        delSel.delete(o.wo);updDelBadge();sched();render();
+      },()=>{},true);
+    };
+    box.querySelector('#tob-go').onclick=go;
+    inp.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();go();}};
+  };
+}
 /*v-deliv D3: week moves from the pool. "→ Wk N" (the card's week + 1) and "Move to week…" on every card still to plan (not booked,
   not delivered / shipped); "Move ticked to week…" for the selection; drop on a week tab (PC). Every move goes through
   moveDates(…, {toWk}) — same rules, history, reason. One preview + one reason per move; the preview only shows first when
@@ -8691,7 +8741,7 @@ function wkPrevDlg(rows,man,wl,next){
    its bookings are archived first (📚 Past weeks "Wk N", with the week's dated notes and proof photos); delivered jobs
    leave the board as before; booked but NOT delivered go back to To plan flagged "not delivered Wk N — rebook".
    Other weeks' bookings, the pool and other weeks' notes / photos are never touched. */
-function delArcRow(o){return{wo:o.wo,t:o.title||'',c:o.customer||'',f:o.floor||'',u:o.unit||'',v:o.delVeh||'',d:o.delDay||'',dt:slotDate(o),val:Math.round(o.value||0),lAt:o.delLoadedAt||'',dAt:o.delDispAt||'',vAt:o.delDelivAt||'',lBy:o.ldBy||'',vBy:o.delivBy||'',mv:(o.delMoves||[]).map(m=>({at:m.at,by:m.by,why:m.why,from:m.from,to:m.to})),fd:o.delFirst||'',mw:o.missWhy||null};}
+function delArcRow(o){return{wo:o.wo,t:o.title||'',c:o.customer||'',f:o.floor||'',u:o.unit||'',v:o.delVeh||'',d:o.delDay||'',dt:slotDate(o),val:Math.round(o.value||0),lAt:o.delLoadedAt||'',dAt:o.delDispAt||'',vAt:o.delDelivAt||'',lBy:o.ldBy||'',vBy:o.delivBy||'',mv:(o.delMoves||[]).map(m=>({at:m.at,by:m.by,why:m.why,from:m.from,to:m.to})),fd:o.delFirst||'',mw:o.missWhy||null,...(o.manual?{m:1,x:clone(o)}:{})};} /*d19-4/5: a job added by hand keeps a full copy (x) so ↩ Back to Deliveries can restore it*/
 function closeWeekJobs(wk){
   // the week's bookings + delivered cards left in the pool (delivered in or before that week)
   // loaded / on the road but not confirmed delivered: physically on a van — they stay on it until the driver confirms (Tester round 1)
@@ -8715,7 +8765,7 @@ function closeWeek(wk){
       DB.delArchive=DB.delArchive||{};
       const key=new Date().toISOString().slice(0,10)+'.'+Date.now().toString(36);
       DB.delArchive[key]={at,w:wk,by,notes,pod:Object.fromEntries(podKs.map(k=>[k,DB.pod[k]])),jobs:js.map(delArcRow)};
-      const ks=Object.keys(DB.delArchive).sort();
+      const ks=Object.keys(DB.delArchive).filter(k=>!(DB.delArchive[k]||{}).off).sort(); /*d19-4: "taken off the board" entries don't count — only closed weeks*/
       while(ks.length>26)delete DB.delArchive[ks.shift()]; // keep half a year of history
     }
     podKs.forEach(k=>delete DB.pod[k]); // that week's proof photos move into the archive with it
@@ -8754,7 +8804,7 @@ function openDelArchive(detailKey){
     const a=ar[detailKey];
     const rows=[...a.jobs].sort((x,y)=>DEL_DAYS.indexOf(x.d)-DEL_DAYS.indexOf(y.d)||String(x.v).localeCompare(String(y.v))||woCmp({wo:x.wo},{wo:y.wo}));
     detail=`<div style="margin-top:14px;border-top:2px solid var(--border);padding-top:10px">
-      <div style="font-weight:700;color:#14335c;margin-bottom:6px">${a.w?'Wk '+wkNum(a.w)+' (Mon '+dShort(a.w)+') — closed '+new Date(a.at).toLocaleDateString('en-IE')+(a.by?' by '+escA(a.by):''):'Week archived '+new Date(a.at).toLocaleDateString('en-IE')} — ${a.jobs.length} jobs</div>
+      <div style="font-weight:700;color:#14335c;margin-bottom:6px">${a.off?'Taken off the board '+new Date(a.at).toLocaleDateString('en-IE')+' '+hhmm(a.at)+(a.by?' by '+escA(a.by):'')+' — added by hand, kept here':a.w?'Wk '+wkNum(a.w)+' (Mon '+dShort(a.w)+') — closed '+new Date(a.at).toLocaleDateString('en-IE')+(a.by?' by '+escA(a.by):''):'Week archived '+new Date(a.at).toLocaleDateString('en-IE')} — ${a.jobs.length} jobs</div>
       <table class="lst-tbl"><thead><tr><th>Day</th><th>Vehicle</th><th>WO #</th><th>Floor</th><th>Unit</th><th>Title</th><th>Customer</th><th>€</th><th>Loaded</th><th>Dispatched</th><th>Delivered</th></tr></thead><tbody>
       ${rows.map(j=>`<tr><td>${escA(j.d)||'—'}${j.dt?' '+escA(dShort(j.dt)):''}</td><td>${escA(vehLbl(j.v)||j.v)||'—'}</td><td style="font-family:monospace;font-weight:700">${escA(j.wo)}</td><td>${escA(fuF(j))}</td><td>${escA(fuU(j))}</td><td>${escA(j.t)}</td><td>${escA(j.c)}</td><td>${j.val?j.val.toLocaleString():''}</td>
         <td>${stamp(j.lAt)}${j.lBy?' · '+escA(j.lBy):''}</td><td>${stamp(j.dAt)}</td><td style="color:#0d6e46;font-weight:700">${stamp(j.vAt)}${j.vBy?' · '+escA(j.vBy):''}</td></tr>`).join('')}
@@ -8763,9 +8813,9 @@ function openDelArchive(detailKey){
   }
   ov.innerHTML=`<div class="pod-in" style="min-width:min(1050px,95vw)">
     <div style="font-weight:800;color:#14335c;font-size:17px;margin-bottom:4px">📚 Past delivery weeks</div>
-    <div style="font-size:12px;color:var(--t3);margin-bottom:10px">Every time a week is closed, it is stored here first — jobs, vans, days, who loaded, who delivered, when, and the day notes. Last 26 weeks kept.</div>
+    <div style="font-size:12px;color:var(--t3);margin-bottom:10px">Every time a week is closed, it is stored here first — jobs, vans, days, who loaded, who delivered, when, and the day notes. Last 26 weeks kept. Jobs added by hand that were taken off the board are kept here too (🗄).</div>
     ${keys.length?`<table class="lst-tbl"><thead><tr><th>Week</th><th>Jobs</th><th>Delivered</th><th>Value</th><th></th></tr></thead><tbody>
-      ${keys.map(k=>{const s=sum(k);return `<tr${k===detailKey?' style="background:#eaf2ff"':''}><td style="font-weight:700">${ar[k].w?'Wk '+wkNum(ar[k].w)+' · Mon '+escA(dShort(ar[k].w))+' <span style="font-weight:400;color:var(--t3)">closed '+new Date(ar[k].at).toLocaleDateString('en-IE',{day:'numeric',month:'short'})+'</span>':new Date(ar[k].at).toLocaleDateString('en-IE',{weekday:'short',day:'numeric',month:'short',year:'numeric'})+' '+hhmm(ar[k].at)}</td><td>${s.n}</td><td>${s.dlv}/${s.n}</td><td>€${Math.round(s.val).toLocaleString()}</td>
+      ${keys.map(k=>{const s=sum(k);return `<tr${k===detailKey?' style="background:#eaf2ff"':''}><td style="font-weight:700">${ar[k].off?'🗄 Taken off the board · '+escA(new Date(ar[k].at).toLocaleDateString('en-IE',{day:'numeric',month:'short',year:'numeric'}))+' '+hhmm(ar[k].at)+' <span style="font-weight:400;color:var(--t3)">'+escA((ar[k].jobs[0]||{}).wo||'')+(ar[k].by?' · by '+escA(ar[k].by):'')+'</span>':ar[k].w?'Wk '+wkNum(ar[k].w)+' · Mon '+escA(dShort(ar[k].w))+' <span style="font-weight:400;color:var(--t3)">closed '+new Date(ar[k].at).toLocaleDateString('en-IE',{day:'numeric',month:'short'})+'</span>':new Date(ar[k].at).toLocaleDateString('en-IE',{weekday:'short',day:'numeric',month:'short',year:'numeric'})+' '+hhmm(ar[k].at)}</td><td>${s.n}</td><td>${s.dlv}/${s.n}</td><td>€${Math.round(s.val).toLocaleString()}</td>
         <td style="white-space:nowrap"><button class="btn btn-s" data-arcv="${escA(k)}" style="padding:2px 8px;font-size:11px">${k===detailKey?'Viewing':'View'}</button> <button class="btn btn-s" data-arcx="${escA(k)}" style="padding:2px 8px;font-size:11px">⬇ Export</button></td></tr>`;}).join('')}
       </tbody></table>`:'<p style="font-size:13px;color:var(--t3)">No archived weeks yet — the first Close week will create one.</p>'}
     ${detail}
@@ -11370,7 +11420,7 @@ function todayDayIx(){return (i=>i<0?6:i)(DEL_DAYS.indexOf(wdName(new Date())));
 function scorecardHTML(n){
   const rows=[{lbl:'This week (so far)',p:weekPerf(liveWeekJobs(),todayDayIx()),live:true}];
   const ar=DB.delArchive||{};
-  Object.keys(ar).sort().reverse().slice(0,n||8).forEach(k=>{
+  Object.keys(ar).filter(k=>!(ar[k]||{}).off).sort().reverse().slice(0,n||8).forEach(k=>{ /*d19-4: "taken off the board" entries are not weeks*/
     const a=ar[k];const d=new Date(a.at);
     rows.push({lbl:(a.w?'Wk '+wkNum(a.w)+' · closed ':'Wk '+wkNum(new Date(d.getTime()-3*86400000))+' · cleared ')+d.toLocaleDateString('en-IE',{day:'numeric',month:'short'}),p:weekPerf(a.jobs.map(j=>({...j,mv:j.mv||[],mw:j.mw||null})),7)});
   });
