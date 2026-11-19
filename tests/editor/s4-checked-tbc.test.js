@@ -45,6 +45,8 @@ const J = JSON.stringify;
   rec('a wrong PIN: not checked', D.find(S.db, 'lists', c1).checked_at == null);
   await setPin(pin);
   await pg.evaluate(id => document.querySelector('[data-ltichk="' + id + '"]').click(), c1);
+  await new Promise(r => setTimeout(r, 600)); // (h19, Garry 19 Nov) ✓ Check opens the whole list first — "✓ Confirm checked" at its bottom checks it
+  await pg.evaluate(() => { const b = document.getElementById('lv-chkok'); if (b) b.click(); });
   await pg.evaluate(async () => { await lqSend(); await lsPoll(); });
   const l1b = D.find(S.db, 'lists', c1);
   rec('✓ Check with the PIN: checked by Ann, with the time and a history line', l1b.checked_by === 'Ann' && !!l1b.checked_at && l1b.log.some(e => e.what === 'Checked'), J([l1b.checked_by, l1b.checked_at]));
