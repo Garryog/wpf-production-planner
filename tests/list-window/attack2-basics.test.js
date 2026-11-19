@@ -124,7 +124,7 @@ function row() {
   // ---- lists switched OFF: every screen the same as main
   try {
     const mainHtml = A.gitShow('origin/main'), brHtml = fs.readFileSync(path.join(__dirname, '..', '..', 'index.html'), 'utf8');
-    const norm = s => s.replace(/\d{1,2}:\d{2}(:\d{2})?/g, 'hh:mm').replace(/\d+ ?(s|sec|seconds?|min|minutes?) ago/g, 'n ago').replace(/\s+/g, ' ').trim();
+    const norm = s => s.replace(/\d{1,2}:\d{2}(:\d{2})?/g, 'hh:mm').replace(/\d+ ?(s|sec|seconds?|min|minutes?) ago/g, 'n ago').replace(/\s+/g, ' ').replace(/⏱ Sync speed \(this screen\).*?at least every 10 minutes\)\. ?/, '').trim(); /*R1 (19 Nov): Settings → ⏱ Sync speed is a deliberate new panel — taken out on both sides before comparing*/
     const shot = async (html, role, tabs) => {
       const S = X.makeServer(X.v1Row());
       const t = await A.openOld(browser, S, html), p = t.page;

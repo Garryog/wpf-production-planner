@@ -132,7 +132,7 @@ const seed = (S, id, wos, f, lines) => X.F3.seedList(S, id, Object.assign({ wos,
       const html = A.gitShow('origin/main') || A.gitShow('main');
       if (!html) rec('O: origin/main could be read with git show', false);
       else {
-        const norm = s => s.replace(/\d{1,2}:\d{2}(:\d{2})?/g, 'HH:MM').replace(/\s+/g, ' ').trim();
+        const norm = s => s.replace(/\d{1,2}:\d{2}(:\d{2})?/g, 'HH:MM').replace(/\s+/g, ' ').replace(/⏱ Sync speed \(this screen\).*?at least every 10 minutes\)\. ?/, '').trim(); /*R1 (19 Nov): Settings → ⏱ Sync speed is a deliberate new panel — taken out on both sides before comparing*/
         const S1 = X.makeServer(X.v1Row()), S2 = X.makeServer(X.v1Row());
         const ctx = await browser.newContext({ viewport: { width: 1400, height: 900 }, timezoneId: 'Europe/Dublin' });
         await ctx.addInitScript(`(()=>{const T=${+new Date(X.NOW)};const R=Date;const off=T-R.now();class D extends R{constructor(...a){if(a.length===0){super(R.now()+off);}else super(...a);}static now(){return R.now()+off;}}D.UTC=R.UTC;D.parse=R.parse;window.Date=D;})();`);

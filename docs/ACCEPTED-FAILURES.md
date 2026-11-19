@@ -195,6 +195,14 @@ S6 (1), attack1-layout / attack2-excel-phone / attack3-phone P1 / P10 / final-a-
 | list-window attack7-vandrv T2 "Pat put on the Volvo AND the Artic Fri from two PCs at once → somebody is told" (Low) | two PCs putting the same driver on two different vans in the same second both save without warning (each PC checked before the other had saved). The Deliveries page shows both vans, and the driver's phone shows both as his | — (rare; same-second double booking) | pending |
 | list-window attack7-vandrv W "the PM screen shows who drives a van" (info) | only office / Production Manager see the Deliveries page, so a PM doesn't see who drives; the code comment that said "everyone sees it" has been corrected | — (information only) | pending |
 
+## 19 Nov 2026 — R1 sync quick win (branch feature/sync-quick-win): 3 checks RE-POINTED (not app faults, nothing for Garry to sign)
+The new Settings → "⏱ Sync speed" panel is on purpose, so the checks that say "Settings reads exactly like origin/main" now take
+that one panel out (both sides) before comparing: list-window attack2-basics "office / s screen text identical to main",
+list-window attack2-finder-pm-tag "(info) O: office tab s reads the same", lists-filter attack1-filter check 11 (lists ON and OFF).
+Everything else on those screens is still compared character for character. Once R1 is on main the take-out does nothing.
+Seen during the R1 full run, also failing on main (timing, not R1): list-window attack4-delivery-book "(info) T1 the first booked
+record matches the booking kept" (2 of 3 runs on main fail — which PC wins the race decides it); lists-filter 13n (passed on re-run).
+
 ## 19 Nov 2026 — template buttons back on the Office screen (Garry: "the edit button for the cutting lists templates is gone. i need that button") — pending, Garry to sign off
 The list window release (18 Nov) hid every template button from the Office, PM and Management screens. Garry asked for them back.
 They are SHOWN again on every screen that had them before 18 Nov; making or changing a template still needs the Drawing office /
@@ -206,3 +214,13 @@ These checks expect the buttons to be hidden, so they are out of date by design 
 | list-window attack1-tpl-role (9), attack2-fixes (5), attack2-tpl-pin (3), attack3-roles-archived-simple A1 / C5 (5 new), attack3b-phone-tplpin T2 / T3 (12), final-a-roles-fail (4), final-b-merge-seams 2 (1), g13-prod-templates (2), editor e9-templates (1) | they check that Office / PM / Management see NO ✎ Edit, Archive, 📐 Save as template, ＋ New template or ⧉ Copy from another project. Those buttons are back on purpose. The checks that follow a click (PM PIN typed → allowed; "Sneaked in" template saved with the Production Manager PIN) follow Garry's 13 Nov rule that the Production Manager may make templates | Tester to rewrite to the 19 Nov rule | pending |
 | list-window attack3-roles-archived-simple C2 (info) "no more than 8 buttons outside the rows" | 11 buttons instead of 10 on the Office screen — the extra one is 📐 Save as template | — (information only) | pending |
 | list-window attack3b-phone-tplpin PH3 "320 px: reason + Save bar take no more than half the screen" (Low) | on a 320 px phone the Office screen's Save bar now also holds 📐 Save as template, so it is taller. Save is still fully on the screen | could hide Save as template on phones if Garry wants | pending |
+
+## 19 Nov 2026 — green strip / step badge / Check view (feature/green-step-check) — pending Garry
+Full suite 322 files: 8,130 pass / 195 fail. Compared with the 19 Nov R1 run, the only new failing checks are written for the old screens:
+| Check(s) | Why it fails now | Fix |
+|---|---|---|
+| "screen text identical to main / before" (attack2-basics lists OFF, attack5-carryover B8, attack6-release B4, lists-filter 11, flow-attack1-switchoff) | the grey step badge / green strip change the screen text on purpose (Garry 19 Nov) | Tester re-points to the new screens |
+| stage3 coder-wo-cols (3), seq l4-keepone (2) | the step badge text now sits inside the WO cell / line | Tester re-points |
+| template-button checks (attack1-tpl-role, attack2-fixes, attack2-tpl-pin, attack3-roles-archived-simple, attack3b-phone-tplpin T2/T3, final-a-roles-fail, final-b-merge-seams, g13-prod-templates, editor e9-templates) | PR #12 (live 19 Nov) brought the template buttons back on Office / PM, as Garry asked | already listed under PR #12 |
+| attack3-phone P1, attack3b PH12/PH3 (Save bar not pinned at 481 / 1280 px) | PR #12 pins the Save bar at every width (short laptop screens) | Tester re-points |
+| attack5-carryover B5 (real drag at the edge of a 1366×900 window) | cards are a little taller with the step badge on its own line | Tester re-points |
