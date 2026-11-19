@@ -76,6 +76,11 @@ button,input,select{font-family:inherit;cursor:pointer}
 .wo-table tr.hl-row .wo-num{color:#b8860b;font-weight:700}
 .wo-table tr.c-blue td:first-child{border-left:4px solid var(--blue)}
 .wo-table tr.c-purple td:first-child{border-left:4px solid var(--purple)}
+/*h19: green strip = cutting list sorted (woListOk); inside any colour bar already there. Step badge beside a WO (stepBadge).*/
+tr.lst-ok>td:first-child{box-shadow:inset 4px 0 0 #2d9e54}
+.lst-ok:not(tr){box-shadow:inset 4px 0 0 #2d9e54}
+.dchip.lst-ok,.dcell .dchip.lst-ok,.dpool .dchip.lst-ok{box-shadow:inset 4px 0 0 #2d9e54}
+.stp-b{display:inline-block;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:10px;font-weight:600;line-height:1.4;color:#4a5568;background:#eef1f5;border:1px solid #d5dbe3;border-radius:4px;padding:0 5px;margin-left:5px;white-space:nowrap;vertical-align:middle;text-transform:none;letter-spacing:0;text-decoration:none}
 .wo-num{font-family:monospace;font-size:11px;color:var(--t2)}
 .wo-title{font-weight:500;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
 .wo-cust{color:var(--t2);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
@@ -238,6 +243,7 @@ button.due-tag{cursor:pointer;min-height:26px}button.due-tag:hover{outline:2px s
 @media(max-width:480px){.lti-act [data-ltistd]{min-height:40px}} /* attack2 F16: the phone's way to start a list from a job — big enough to tap */
 .lti-done{background:#e7f6ec;border:1px solid #9fd8b4;border-radius:8px;padding:6px 10px;margin-bottom:8px;font-size:12px;color:#0d6e46}
 .lti-nar{padding:3px 0;border-bottom:1px solid var(--border)}
+.lti-nar.lst-ok{padding-left:9px}
 .lpf{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center}.lpf-on{border:2px solid #1a56db;background:#f3f8ff}.lpf-l{font-size:14px;font-weight:800;color:#14335c}
 .lpf select,.lpf input{padding:8px 10px;border:1px solid var(--b2);border-radius:6px;font-size:14px;min-width:0;max-width:100%;flex:1 1 240px;background:#fff}.lpf input{flex:0 1 200px}
 .lpf-n{font-size:12px;color:var(--t2);overflow-wrap:anywhere;min-width:0}
@@ -1974,7 +1980,7 @@ function renderBoard(app){
   // spec TBC on any live list of the job (Garry, 4 Nov): a red chip on the row — it never blocks anything
   const tbcMap=V2()?(()=>{const m=new Map();lists().forEach(l=>{const t=lsTbc(lsView(l.id).rows);if(t.length)(l.wos||[]).forEach(w=>m.set(w,[...new Set([...(m.get(w)||[]),...t])]));});return m;})():null;
   const lnChip=o=>lsTbcChip(tbcMap&&tbcMap.get(o.wo))+(phHas(o)?`<span class="ph-chip" data-phwo="${escA(o.wo)}" title="A photo of the paper list is attached — tap to see it">📷 photo list</span>`:'')+(n=>n?`<span class="ls-nochip${n.late?' late':''}" title="No cutting list yet — ${n.late?'LATE, was due':'due by'} ${n.due?fmt(n.due):'—'}">📋 no list</span>`:'')(lnMap&&lnMap.get(o.wo));
-  const rowHTML=(o,member,sep)=>`<tr class="${o.colour?'c-'+o.colour:''}${o.hl?' hl-row':''}${sep?' grp-start':''}${member?' grp-member':''}" draggable="true" data-wo="${escA(o.wo)}">
+  const rowHTML=(o,member,sep)=>`<tr class="${o.colour?'c-'+o.colour:''}${woListOk(o)?' lst-ok':''}${o.hl?' hl-row':''}${sep?' grp-start':''}${member?' grp-member':''}" draggable="true" data-wo="${escA(o.wo)}">
           <td style="text-align:center">${member
             ?`<button class="grm-btn" data-grm="${escA(o.wo)}" title="Take this WO out of the group">×</button>`
             :`<input type="checkbox" class="gsel" data-gsel="${escA(o.wo)}"${grpSel.has(o.wo)?' checked':''} title="Select to group">`}</td>
@@ -2355,7 +2361,7 @@ function renderShipped(app){
   const card=o=>{
     const deliv=dStage(o)==='deliv',w=am.get(o.wo)||0;
     return `<div class="sh-card${o.completeAt?' sh-done':''}">
-      <div class="sh-top"><span class="wo-num">${escA(o.wo)}</span>${fuHTML(o)}${addBadge(o)}
+      <div class="sh-top"><span class="wo-num">${escA(o.wo)}</span>${stepBadge(o)}${fuHTML(o)}${addBadge(o)}
         <span class="sh-pill ${deliv?'ok':'no'}">${deliv?'✓ Delivered '+dt(o.delDelivAt):(o.delDispAt?'🚚 On the road':o.delv?'🚚 On Deliveries':'Not delivered')}</span>
         ${w?`<span class="sh-pill warn" title="Waiting (N/A) lines on its cutting/fittings lists — also shown on the Capacity Board">⚠ ${w} waiting</span>`:''}</div>
       <div class="sh-t">${escA(o.title||'')}</div>
@@ -2385,7 +2391,7 @@ function renderShipped(app){
       <div style="font-size:14px;font-weight:700;margin-bottom:4px">⏸ On hold in Cienapps <span id="sh-hcnt" style="font-weight:400;color:var(--t2)">(${held.length})</span></div>
       <div style="font-size:12px;color:var(--t2);margin-bottom:8px">Step 12 ON HOLD / DELETE. Off the Capacity Board, week totals and capacity — never deleted. The next import with any other step puts the job back on the board.</div>
       ${held.length?`<input class="search-input" id="sh-hq" placeholder="Search on-hold jobs…" value="${escA(shHoldQ)}" style="margin-bottom:8px">`:''}
-      ${hs.length?hs.slice(0,300).map(o=>`<div class="sh-card"><div class="sh-top"><span class="wo-num">${escA(o.wo)}</span>${fuHTML(o)}<span class="sh-pill no">⏸ On hold</span>${(am.get(o.wo)||0)?`<span class="sh-pill warn" title="Waiting (N/A) lines on its cutting/fittings lists">⚠ ${am.get(o.wo)} line${am.get(o.wo)!==1?'s':''} waiting</span>`:''}${!delHidden(o)&&o.delv?'<span class="sh-pill warn">🚚 Already loaded / on a van</span>':''}</div>
+      ${hs.length?hs.slice(0,300).map(o=>`<div class="sh-card"><div class="sh-top"><span class="wo-num">${escA(o.wo)}</span>${stepBadge(o)}${fuHTML(o)}<span class="sh-pill no">⏸ On hold</span>${(am.get(o.wo)||0)?`<span class="sh-pill warn" title="Waiting (N/A) lines on its cutting/fittings lists">⚠ ${am.get(o.wo)} line${am.get(o.wo)!==1?'s':''} waiting</span>`:''}${!delHidden(o)&&o.delv?'<span class="sh-pill warn">🚚 Already loaded / on a van</span>':''}</div>
         <div class="sh-t">${escA(o.title||'')}</div><div class="sh-m">${escA(o.customer||'')} · on hold since ${dt(o.holdAt)} · ${o.hours!=null?escA(String(o.hours))+'h · ':''}due ${fmt(o.dueDate)}</div>${o.holdDel?`<div class="sh-m">Taken off Deliveries when it went on hold (was ${escA(o.holdDel)}) — not put back automatically</div>`:''}</div>`).join(''):`<div class="empty">${held.length?'No on-hold jobs match.':'No jobs on hold.'}</div>`}
     </div>
   </div>`;
@@ -2467,14 +2473,24 @@ function fuLbl(o){const f=fuF(o),u=fuU(o);return[f?'Floor '+f:'',u?'Unit '+u:'']
 /* L4a (Job B part 3): a planner P-number is never a Cienapps WO. With the lists switched on, list surfaces show it purple,
    "P-1004 · not from Cienapps" (woChip); prints and dockets add "(not from Cienapps)" (woPTxt — display only, never stored). */
 function woIsP(w){return V2()&&/^P-\d+$/.test(String(w==null?'':w).trim());}
-function woChip(w,attr){const p=woIsP(w);return `<span class="lst-chip${p?' p-wo':''}"${attr||''}${p?' title="Made in the planner — not from Cienapps"':''}>${escA(w)}${p?' · not from Cienapps':''}</span>`;}
+function woChip(w,attr){const p=woIsP(w);return `<span class="lst-chip${p?' p-wo':''}"${attr||''}${p?' title="Made in the planner — not from Cienapps"':''}>${escA(w)}${p?' · not from Cienapps':''}</span>${stepBadge(w)}`;} // h19: + the job's step beside it
+/* h19 (Garry 19 Nov): ONE rule for "this job's cutting list is sorted" — a live list on it (not archived, not a template),
+   a photo of the paper list, or marked "No list needed". Shown as a 4 px GREEN strip on the left of the job (class lst-ok) on
+   the Capacity Board, the Lists page and the Deliveries cards. It sits INSIDE any colour bar already there (readiness on the
+   Deliveries cards), so that meaning is kept. The set follows lsCache, so a list saved on this screen shows at once. */
+function woListSet(){if(V2()){const c=lsCache();if(!c.woSet){const s=new Set();c.all.forEach(l=>{if(!l.archived&&!l.tpl)(l.wos||[]).forEach(w=>s.add(w));});c.woSet=s;}return c.woSet;}
+  const s=new Set();(DB.lists||[]).forEach(l=>(l.wos||[]).forEach(w=>s.add(w)));return s;}
+function woListOk(o){if(typeof o==='string')o=DB.orders.find(x=>x.wo===o);return !!o&&(woListSet().has(o.wo)||phHas(o)||lsNA(o));}
+/* h19: the job's current Cienapps step as a small grey badge beside its WO number, on every page (read-only) */
+function stepBadge(o,id){if(typeof o==='string')o=DB.orders.find(x=>x.wo===o);const s=o?stepShort(o.step):'';
+  return s?`<span class="stp-b"${id?' id="'+escA(id)+'"':''} title="Step in Cienapps: ${escA(String(o.step).trim())}">${escA(s)}</span>`:(id?`<span class="stp-b" id="${escA(id)}" hidden></span>`:'');}
 function woPTxt(s){return String(s==null?'':s).split(', ').map(w=>woIsP(w)?w+' (not from Cienapps)':w).join(', ');}
 /* The WO number and the title are separate fields (Garry, 4 Nov): woShort = a short drop-down label ("WO-3 — Unit 31");
    woColsHTML = WO | Floor | Unit | Title | Customer as separate cells (title cut short, full text on hover);
    woInfoHTML = read-only Floor | Unit | Title | Customer boxes beside a work-order picker. */
 function woShort(o){if(!o)return'';const u=fuU(o),f=fuF(o),t=String(o.title||'').trim();return o.wo+(u?' — Unit '+u:f?' — Floor '+f:t?' — '+(t.length>22?t.slice(0,21)+'…':t):'');}
 function woColsHTML(o){const f=fuF(o),u=fuU(o),t=o.title||'',cu=o.customer||'';
-  return `<span class="wo-cols"><b class="wc-wo">${escA(o.wo)}</b><span class="wc-f">${f?`<span class="fu-badge fu-fl" title="Floor">Floor ${escA(f)}</span>`:''}</span><span class="wc-u">${u?`<span class="fu-badge fu-un" title="Unit">Unit ${escA(u)}</span>`:''}</span><span class="wc-t" title="${escA(t)}">${escA(t)}</span><span class="wc-c" title="${escA(cu)}">${escA(cu||'(no customer)')}</span></span>`;}
+  return `<span class="wo-cols"><b class="wc-wo">${escA(o.wo)}</b>${stepBadge(o)}<span class="wc-f">${f?`<span class="fu-badge fu-fl" title="Floor">Floor ${escA(f)}</span>`:''}</span><span class="wc-u">${u?`<span class="fu-badge fu-un" title="Unit">Unit ${escA(u)}</span>`:''}</span><span class="wc-t" title="${escA(t)}">${escA(t)}</span><span class="wc-c" title="${escA(cu)}">${escA(cu||'(no customer)')}</span></span>`;}
 function woInfoHTML(o){const b=(k,l,v)=>`<div class="${k}"><label>${l}</label><div class="wo-ro" data-woi="${l}" title="${escA(v)}">${escA(v)||'&nbsp;'}</div></div>`;
   return b('wf','Floor',fuF(o))+b('wf','Unit',fuU(o))+b('wt','Title',(o&&o.title)||'')+b('wc','Customer',(o&&o.customer)||'');}
 
@@ -3971,7 +3987,7 @@ function lsHomeHTML(){
   const keys=[...grp.keys()].sort((a,b)=>(a?lsProjName(a):'~').localeCompare(b?lsProjName(b):'~'));
   const sel=(id,v,opts)=>`<select id="${id}" style="${LS_INP};max-width:100%;min-width:0">${opts.map(([k,t])=>`<option value="${escA(k)}"${k===v?' selected':''}>${escA(t)}</option>`).join('')}</select>`;
   const prog=(l,m)=>{const n=m==='saw'?l.saw:l.fit;if(!n)return(m==='saw'?l.noCut:l.noFit)?'n/a':'—';if(listDone(l.id)[m])return'✓';const t=Object.values(rowTicks(l.id)).filter(x=>x.m===m).length;return t+'/'+n;};
-  const row=l=>{const sup=lsSupersededBy(l);const[st,col]=sup?['Superseded (view only)','#8e99ab']:LS_STATE[lsState(l)];return `<tr data-lhrow="${escA(l.id)}"><td><b>${escA(l.name)}</b><div class="lh-pj">${lpfTag(l.pid?lsProjName(l.pid)||l.project:'')}</div>${sup?`<div class="lh-sup" style="font-size:11px;color:#5b6b82">replaced by "${escA(sup.name)}"</div>`:''}${l.tpl?' <span class="lst-chip" style="background:#efe7ff;color:#5b21b6">TEMPLATE'+(l.typeName?' · '+escA(l.typeName):'')+'</span>':''}</td>
+  const row=l=>{const sup=lsSupersededBy(l);const[st,col]=sup?['Superseded (view only)','#8e99ab']:LS_STATE[lsState(l)];return `<tr data-lhrow="${escA(l.id)}"${!l.archived&&!l.tpl&&(l.wos||[]).length&&(l.wos||[]).every(woListOk)?' class="lst-ok"':''}><td><b>${escA(l.name)}</b><div class="lh-pj">${lpfTag(l.pid?lsProjName(l.pid)||l.project:'')}</div>${sup?`<div class="lh-sup" style="font-size:11px;color:#5b6b82">replaced by "${escA(sup.name)}"</div>`:''}${l.tpl?' <span class="lst-chip" style="background:#efe7ff;color:#5b21b6">TEMPLATE'+(l.typeName?' · '+escA(l.typeName):'')+'</span>':''}</td>
     <td>${escA(LS_KINDS[l.ltype]||l.ltype||'')}${l.templateId?`<div style="font-size:11px;color:#5b21b6">${escA(lsTplInfo(l))}</div>`:''}</td><td>${(l.wos||[]).map(w=>woChip(w)+(!l.archived&&!l.tpl&&woN.get(woKey(w))>1?`<span class="lst-chip lh-two" style="background:#fdecea;color:#a31515" title="More than one live cutting list on this work order — check the saw is not cutting it twice">⚠ ${+woN.get(woKey(w))} lists on ${escA(w)}</span>`:'')).join('')||'<span style="color:var(--t3)">—</span>'}</td>${lsFuTds(l)}
     <td>${(+l.rev||1)>1?`<span class="lst-chip" style="background:#fff4d6;color:#7a5200">Rev ${+l.rev}</span>`:'Rev 1'}</td><td><span style="color:${col};font-weight:700">${st}</span>${!l.archived&&!sup?'<div>'+(lsChkOn()&&l.tpl&&l.checkReq&&!l.checkedAt?'<span class="chk-wait">Not checked</span>':lsCheckChip(l))+'</div>':''}${(t=>t.length?'<div>'+lsTbcChip(t)+'</div>':'')(l.archived?[]:lsTbc(lsView(l.id).rows))}</td><td>🪚 ${prog(l,'saw')}</td><td>🧰 ${prog(l,'fit')}</td>
     <td class="lh-act">${!l.archived&&!sup&&lsChkOn()&&l.checkReq&&!l.checkedAt?`<button class="btn btn-g" data-lhchk="${escA(l.id)}" style="padding:2px 8px;font-size:11px" title="Drawing office / Production Manager / Admin PIN — the saw sees the list once it is checked">✓ Check</button> `:''}${sup||l.tpl&&!lsTplBtnOk()?'':`<button class="btn btn-s" data-lhedit="${escA(l.id)}" style="padding:2px 8px;font-size:11px">✎ Edit</button> `}<button class="btn btn-s" data-lhview="${escA(l.id)}" style="padding:2px 8px;font-size:11px">View</button> <button class="btn btn-s" data-lhcopy="${escA(l.id)}" style="padding:2px 8px;font-size:11px" title="Start a NEW list from this one's rows — pick the work order and change anything. This list is not changed">⧉ Copy</button>${l.archived||!lsTplBtnOk()?'':` <button class="btn btn-s" data-lhastpl="${escA(l.id)}" style="padding:2px 8px;font-size:11px" title="Save this list as a template of the project (ticks are not copied)">📐 Save as template</button>`}${l.tpl?` <button class="btn btn-s" data-lhhist="${escA(l.id)}" style="padding:2px 8px;font-size:11px">🕘 History</button>`:''}${!l.tpl&&!l.archived&&lsState(l)==='draft'?` <button class="btn btn-s" data-lhsend="${escA(l.id)}" style="padding:2px 8px;font-size:11px">➜ Send to saw</button>`:''}${l.archived||l.tpl&&!lsTplBtnOk()?'':` <button class="btn btn-s" data-lharc="${escA(l.id)}" style="padding:2px 8px;font-size:11px;color:var(--red);border-color:var(--red)">Archive</button>`}</td></tr>`;};
@@ -4027,7 +4043,7 @@ function lsHomeBind(){
   document.querySelectorAll('[data-lhastpl]').forEach(b=>b.onclick=()=>lsSaveAsTpl({id:b.dataset.lhastpl}));
   document.querySelectorAll('[data-lhhist]').forEach(b=>b.onclick=()=>lsTplHistory(b.dataset.lhhist));
   document.querySelectorAll('[data-lhview]').forEach(b=>b.onclick=()=>lsViewDlg(b.dataset.lhview));
-  document.querySelectorAll('[data-lhchk]').forEach(b=>b.onclick=()=>lsCheck(b.dataset.lhchk,true));
+  document.querySelectorAll('[data-lhchk]').forEach(b=>b.onclick=()=>lsViewDlg(b.dataset.lhchk,{check:true})); // h19: ✓ Check opens the whole list first; only Confirm checks it
   document.querySelectorAll('[data-lhsend]').forEach(b=>b.onclick=()=>{const l=lsList(b.dataset.lhsend);if(!l)return;lqList({t:'done',list:l.id,mode:'send',on:true,by:whoNow()});render();toast('"'+l.name+'" sent to the saw — later changes make a new revision');});
   document.querySelectorAll('[data-lharc]').forEach(b=>b.onclick=()=>{const l=lsList(b.dataset.lharc);if(!l)return;
     if(l.tpl&&!lsTplPinOk())return; // templates: Drawing office or Admin only (Garry Q3)
@@ -4035,15 +4051,21 @@ function lsHomeBind(){
     listArchive(l,whoNow());render();toast('List archived');});
 }
 // The office's read-only view of a list: every row (saw, stores, bought in), its check and any spec still TBC
-async function lsViewDlg(id){let l=lsList(id);if(!l)return;
+async function lsViewDlg(id,opt){opt=opt||{};let l=lsList(id);if(!l)return;
   // (Garry 17 Nov, attack6 V-A) an archived / finished list's rows are not loaded at start: load them FIRST, so View never shows an empty table
   if(V2()&&!LST.full.has(id)){if(lsViewDlg.busy===id)return;lsViewDlg.busy=id;toast('Opening "'+String(l.name||'list')+'"…');
     try{await lsReloadList(id);}catch(e){toast('Could not load "'+String(l.name||'the list')+'" — '+e.message+'. Try again.');return;}finally{lsViewDlg.busy=null;}
     l=lsList(id);if(!l)return;}
-  const c=lsCheckInfo(l),t=lsTbc(lsView(l.id,true).rows);
+  const c=lsCheckInfo(l),t=lsTbc(lsView(l.id,true).rows),chk=!!opt.check&&!c.ok; // h19: opened from ✓ Check — read the whole list, then confirm at the bottom
   const ov=lsDlg(`<div style="font-weight:700;color:#14335c;margin-bottom:6px">${escA(l.project||'')} — ${escA(l.name)} · Rev ${+l.rev||1}</div>
-    ${V2()&&!l.archived&&(c.need||c.ok)?`<div style="margin-bottom:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">${l.tpl&&!c.ok?'<span class="chk-wait">Not checked</span>':lsCheckChip(l)}${c.ok&&l.createdBy?'<span style="font-size:12px;color:var(--t2)">issued by '+escA(l.createdBy)+'</span>':''}${c.ok?`<button class="btn btn-s" data-vchk="0" style="font-size:11px;padding:2px 8px">Take check away</button>`:`<button class="btn btn-g" data-vchk="1" style="font-size:12px;padding:3px 10px">✓ Check</button>`}</div>`:''}
-    ${t.length?'<div style="margin-bottom:6px">'+lsTbcChip(t,true)+'</div>':''}${listTableHTML(l,'all')}`);
+    ${(l.wos||[]).length?`<div class="lv-wos" style="margin-bottom:6px">${(l.wos||[]).map(w=>woChip(w)).join(' ')}</div>`:''}
+    ${chk?`<div class="lv-chkh" style="margin-bottom:6px;font-size:13px;color:#14335c;font-weight:700">Read the whole list, then press <b>✓ Confirm checked</b> at the bottom.</div>`:''}
+    ${!chk&&V2()&&!l.archived&&(c.need||c.ok)?`<div style="margin-bottom:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">${l.tpl&&!c.ok?'<span class="chk-wait">Not checked</span>':lsCheckChip(l)}${c.ok&&l.createdBy?'<span style="font-size:12px;color:var(--t2)">issued by '+escA(l.createdBy)+'</span>':''}${c.ok?`<button class="btn btn-s" data-vchk="0" style="font-size:11px;padding:2px 8px">Take check away</button>`:`<button class="btn btn-g" data-vchk="1" style="font-size:12px;padding:3px 10px">✓ Check</button>`}</div>`:''}
+    ${t.length?'<div style="margin-bottom:6px">'+lsTbcChip(t,true)+'</div>':''}${listTableHTML(l,'all')}
+    ${chk?`<div class="lv-chkbar" style="margin-top:14px;padding-top:12px;border-top:2px solid #14335c;display:flex;gap:10px;flex-wrap:wrap;align-items:center"><button class="btn btn-g" id="lv-chkok" style="font-size:17px;padding:12px 22px;font-weight:800;min-height:48px">✓ Confirm checked</button>${l.tpl&&!lsTplBtnOk()?'':`<button class="btn btn-s" id="lv-chked" style="font-size:16px;padding:11px 18px;font-weight:700;min-height:48px;color:#b42318;border-color:#b42318">✎ Not right — edit</button>`}<span style="font-size:12px;color:var(--t2)">Close changes nothing.</span></div>`:''}`);
+  if(chk){const ok=ov.querySelector('#lv-chkok'),ed=ov.querySelector('#lv-chked');
+    if(ok)ok.onclick=()=>{ov.remove();lsCheck(l.id,true,{viewed:true});};
+    if(ed)ed.onclick=()=>{ov.remove();openListEditor(l.id);};}
   ov.querySelectorAll('[data-vchk]').forEach(b=>b.onclick=()=>{ov.remove();lsCheck(l.id,b.dataset.vchk==='1');});
   const x=ov.querySelector('#pod-x');if(x){const b=document.createElement('button');b.className='btn btn-s';b.id='lv-print';b.textContent='🖨 Print';b.style.marginRight='8px';b.onclick=()=>lsPrintList(l.id);x.parentNode.insertBefore(b,x);}
   // (attack6) a double-click on View does not close it straight away (the 2nd click lands on the grey area); Esc closes it
@@ -4128,7 +4150,7 @@ function waitListHTML(){
   const rows=listsNeeded().map(o=>lsNeedInfo(o,today)).sort((a,b)=>(a.due||'9999').localeCompare(b.due||'9999')); // earliest "list due by" first
   if(!rows.length)return'';
   const red=rows.filter(r=>r.onDel),amb=rows.filter(r=>!r.onDel),late=amb.filter(r=>r.late).length;
-  const line=({o,cut,due,late,onDel})=>`<div class="wl-drow wait-row" data-waitwo="${escA(o.wo)}" style="${late?'background:#c0392b;color:#fff;':''}border-radius:5px;padding:5px 8px;flex-wrap:wrap"><b>${escA(o.wo)}</b><span class="dsh-c">${escA(o.customer||'')}</span><span class="dsh-t">${fuHTML(o)}</span><span class="dsh-x">${onDel?'<b>🚚 '+escA(slotLblO(o))+'</b> · ':''}${late?'⚠ OVERDUE · ':''}cut by ${cut?fmt(cut):'—'} · list due by ${due?fmt(due):'—'} · owner ${escA(lsOwnerFor(o))}</span></div>`;
+  const line=({o,cut,due,late,onDel})=>`<div class="wl-drow wait-row" data-waitwo="${escA(o.wo)}" style="${late?'background:#c0392b;color:#fff;':''}border-radius:5px;padding:5px 8px;flex-wrap:wrap"><b>${escA(o.wo)}</b>${stepBadge(o)}<span class="dsh-c">${escA(o.customer||'')}</span><span class="dsh-t">${fuHTML(o)}</span><span class="dsh-x">${onDel?'<b>🚚 '+escA(slotLblO(o))+'</b> · ':''}${late?'⚠ OVERDUE · ':''}cut by ${cut?fmt(cut):'—'} · list due by ${due?fmt(due):'—'} · owner ${escA(lsOwnerFor(o))}</span></div>`;
   return `<div id="wait-list">
     ${red.length?`<div class="exp-panel" id="wait-red" style="border:3px solid #c0392b;background:#fdf3f2;padding:10px 12px">
       <div style="font-size:17px;font-weight:900;color:#8a1c10;margin-bottom:6px">🚨 ON DELIVERY – NO CUTTING LIST — ${red.length} job${red.length!==1?'s':''}</div>
@@ -4165,10 +4187,10 @@ function lsPinOk(what){ // the Drawing office / Production Manager / Admin PIN (
   if(!ok(v.trim())){toast('Wrong PIN — not checked');return false;}
   ls.set('wpfEditPin',v.trim());return true;
 }
-function lsCheck(id,on){
+function lsCheck(id,on,opt){
   const l=lsList(id);if(!l||!lsChkOn())return;
   if(!lsPinOk(on?'Checking a list':'Taking a check away'))return;
-  if(on){const rows=lsView(id,true).rows,n=k=>rows.filter(r=>r.k===k).length,tbc=lsTbc(rows);
+  if(on&&!(opt&&opt.viewed)){ // h19: from the list view's "✓ Confirm checked" the list itself was the question — no second boxconst rows=lsView(id,true).rows,n=k=>rows.filter(r=>r.k===k).length,tbc=lsTbc(rows);
     if(!confirm('Check "'+l.name+'"'+(l.project?' ('+l.project+')':'')+' — Rev '+(+l.rev||1)+'?\n\n'+n('saw')+' saw · '+n('fit')+' stores · '+n('buy')+' bought in'+(tbc.length?'\n⚠ spec TBC: '+tbc.join(', ')+' (the saw is not stopped by this)':'')+'\n\nOnce checked the saw sees it.'))return;}
   else if(!confirm('Take the check away from "'+l.name+'"? The saw stops seeing it until it is checked again.'))return;
   officeWho(by=>{lqList({t:'done',list:id,mode:'check',on:!!on,by});
@@ -4247,7 +4269,7 @@ function ltiInner(){
       ${err&&!busy?`<div class="lti-msg" style="color:#b42318">✗ Not saved — ${escA(err)} <button class="btn btn-s" data-ltiretry="${escA(w)}" style="${btn};color:#b42318;border-color:#b42318">↻ Retry</button></div>`:''}
     </div>`;};
   const wrow=l=>{const t=lsTbc(lsView(l.id).rows),due=listDueKey(l);return `<div class="lti-row lti-wc" data-ltiwc="${escA(l.id)}" style="border-left:5px solid #e0a43a">
-      <div class="lti-top"><span class="chk-wait">Waiting for check</span><b class="lti-wo">${escA(l.name)}</b><span class="lti-t">${lpfTag(l.pid?lsProjName(l.pid)||l.project:'')}${(+l.rev||1)>1?' · Rev '+(+l.rev):''}</span><span class="lti-c">${(l.wos||[]).map(escA).join(' · ')||'no work order'}</span>${due?`<span class="lti-b" style="background:#eef1f5;color:#14335c">delivers ${fmt(due)}</span>`:''}${lsTbcChip(t)}</div>
+      <div class="lti-top"><span class="chk-wait">Waiting for check</span><b class="lti-wo">${escA(l.name)}</b><span class="lti-t">${lpfTag(l.pid?lsProjName(l.pid)||l.project:'')}${(+l.rev||1)>1?' · Rev '+(+l.rev):''}</span><span class="lti-c">${(l.wos||[]).map(w=>escA(w)+stepBadge(w)).join(' · ')||'no work order'}</span>${due?`<span class="lti-b" style="background:#eef1f5;color:#14335c">delivers ${fmt(due)}</span>`:''}${lsTbcChip(t)}</div>
       <div class="lti-act"><button class="btn btn-g" data-ltichk="${escA(l.id)}" style="${btn}">✓ Check</button><button class="btn btn-s" data-ltiview="${escA(l.id)}" style="${btn}">View</button><button class="btn btn-s" data-ltiedit="${escA(l.id)}" style="${btn}">✎ Edit</button><span class="lti-why">made by ${escA(l.createdBy||'?')} — the saw sees it once it is checked</span></div></div>`;};
   const nAll=rows.length+wc.length,under=V2()?(ps=>ps.length?[...new Set(listsNeeded().map(o=>pListUnder(o,ps)).filter(Boolean))]:[])(pListPs()):[]; // (attack2 F2) said, not asked
   return `<div class="exp-panel lti" id="lti" style="border:2px solid ${rows.some(r=>r.late||r.onDel)?'#c0392b':nAll?'#d4880f':'#9fd8b4'};background:${nAll?'#fffdf7':'#f4fbf6'}">
@@ -4266,9 +4288,9 @@ function ltiInner(){
     ${under.map(w=>`<div class="lti-nar" style="font-size:12px;color:#14335c;margin-top:4px">ℹ List already made under ${escA(w)} — the new Cienapps WO for that house needs no second list</div>`).join('')}
     ${!qm&&rows.length>show.length?`<button class="btn btn-s" id="lti-more" style="font-size:12px;margin-top:6px">Show all ${rows.length}</button>`:''}
     ${phs.length?`<div style="margin-top:8px;font-size:12px"><button class="btn btn-s" id="lti-ph" style="font-size:11px;padding:3px 9px">${LTI.showPh?'▲':'▼'} 📷 Photo lists (${phs.length})</button>
-      ${LTI.showPh?phs.map(o=>`<div class="lti-nar"><b>${escA(o.wo)}</b> ${jtag(o)} ${escA(o.title||'')} — ${phList(o).length} photo${phList(o).length!==1?'s':''} · ${escA(phList(o)[0].by||'')} ${fmt(phList(o)[0].at)} <button class="btn btn-s" data-phwo="${escA(o.wo)}" style="font-size:11px;padding:2px 8px">Open</button></div>`).join(''):''}</div>`:''}
+      ${LTI.showPh?phs.map(o=>`<div class="lti-nar lst-ok"><b>${escA(o.wo)}</b>${stepBadge(o)} ${jtag(o)} ${escA(o.title||'')} — ${phList(o).length} photo${phList(o).length!==1?'s':''} · ${escA(phList(o)[0].by||'')} ${fmt(phList(o)[0].at)} <button class="btn btn-s" data-phwo="${escA(o.wo)}" style="font-size:11px;padding:2px 8px">Open</button></div>`).join(''):''}</div>`:''}
     ${na.length?`<div style="margin-top:8px;font-size:12px"><button class="btn btn-s" id="lti-na" style="font-size:11px;padding:3px 9px">${LTI.showNA?'▲':'▼'} Cleared without a planner list (${na.length})</button>
-      ${LTI.showNA?na.map(o=>`<div class="lti-nar"><b>${escA(o.wo)}</b> ${jtag(o)} ${escA(o.title||'')} — no list needed · ${escA(o.listNA.by||'')} ${o.listNA.at?fmt(o.listNA.at):''} <button class="btn btn-s" data-ltiundo="${escA(o.wo)}" style="font-size:11px;padding:2px 8px">Undo</button></div>`).join(''):''}</div>`:''}
+      ${LTI.showNA?na.map(o=>`<div class="lti-nar lst-ok"><b>${escA(o.wo)}</b>${stepBadge(o)} ${jtag(o)} ${escA(o.title||'')} — no list needed · ${escA(o.listNA.by||'')} ${o.listNA.at?fmt(o.listNA.at):''} <button class="btn btn-s" data-ltiundo="${escA(o.wo)}" style="font-size:11px;padding:2px 8px">Undo</button></div>`).join(''):''}</div>`:''}
   </div>`;
 }
 // After an Apply, the import tab keeps the panel when it is redrawn (a refresh), until the page is reloaded
@@ -4310,7 +4332,7 @@ function ltiUse(w,lid){if(LTI.busy.has(w))return;
 function ltiBind(){
   const q=(sel,f)=>document.querySelectorAll(sel).forEach(f);
   q('[data-lticonf]',b=>b.onclick=()=>ltiConfirm([b.dataset.lticonf]));
-  q('[data-ltichk]',b=>b.onclick=()=>lsCheck(b.dataset.ltichk,true));
+  q('[data-ltichk]',b=>b.onclick=()=>lsViewDlg(b.dataset.ltichk,{check:true})); // h19: the same — view first, then Confirm
   q('[data-ltiedit]',b=>b.onclick=()=>openListEditor(b.dataset.ltiedit));
   q('[data-ltiview]',b=>b.onclick=()=>lsViewDlg(b.dataset.ltiview));
   q('[data-ltiretry]',b=>b.onclick=()=>{const w=b.dataset.ltiretry,r=LTI.res[w]||{};if(r.again)r.again();else ltiConfirm([w]);}); // ↻ Retry does the SAME thing again: an Excel list stays that Excel list, a link stays that link
@@ -5079,7 +5101,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     const typeHTML=`<div><label>Type</label><select id="me-type" style="${inp}">${['kitchen','house','room','other'].map(k=>`<option value="${k}"${st.ltype===k?' selected':''}>${LS_KINDS[k]}</option>`).join('')}</select>
           <input id="me-tname" value="${escA(st.tname||'')}" placeholder="e.g. Type B 3-bed" style="${inp};width:140px"></div>`;
     ov.innerHTML=`<div class="pod-in me-ed" style="min-width:min(1180px,97vw)">
-      <div class="me-tb"><div style="font-weight:800;color:#14335c;font-size:17px;flex:1;min-width:0">✍ ${ex?'Edit':'New'} ${st.tpl?'template':'cutting list'}${ex&&(+ex.rev||1)>1?' · Rev '+(+ex.rev):''}${hdWo?`<span class="me-hwo" id="me-hwo" title="The Cienapps work order this list is for">${escA(st.wo)}</span>`:''}</div>${hdWo?lwDueTag(DB.orders.find(x=>x.wo===st.wo)):''}<button class="btn btn-s me-x0" id="me-x0" title="Close this window (asks first if anything is not saved)">✕ Close</button></div>
+      <div class="me-tb"><div style="font-weight:800;color:#14335c;font-size:17px;flex:1;min-width:0">✍ ${ex?'Edit':'New'} ${st.tpl?'template':'cutting list'}${ex&&(+ex.rev||1)>1?' · Rev '+(+ex.rev):''}${hdWo?`<span class="me-hwo" id="me-hwo" title="The Cienapps work order this list is for">${escA(st.wo)}</span>${stepBadge(st.wo,'me-hstp')}`:''}</div>${hdWo?lwDueTag(DB.orders.find(x=>x.wo===st.wo)):''}<button class="btn btn-s me-x0" id="me-x0" title="Close this window (asks first if anything is not saved)">✕ Close</button></div>
       ${ex&&ex.templateId?`<div style="font-size:12px;color:#5b21b6;font-weight:700;margin-bottom:4px">📐 ${escA(lsTplInfo(ex))}</div>`:''}
       ${st.note?`<div style="font-size:12px;color:#1a56db;font-weight:700;margin-bottom:4px">${escA(st.note)}</div>`:''}
       ${!st.tpl&&st.wo&&!st.newWO?pTwinWarn([st.wo]):''}
@@ -5288,7 +5310,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       draw();if(cl){const er=g('me-err');if(er)er.textContent=cl;}projSet();};
     // the name boxes keep st up to date as you type: a redraw (picking a colour, adding a row) no longer puts back the old name
     const nm=g('me-name');if(nm)nm.oninput=()=>{tplNameTo(nm.value);};const tn0=g('me-tname');if(tn0)tn0.oninput=()=>{st.tname=tn0.value;tnFollow=false;};
-    const w=g('me-wo');if(w)w.onchange=()=>{const prev=st.wo;st.wo=w.value;{const hw=g('me-hwo'),hd=g('me-due'),oo=DB.orders.find(x=>x.wo===st.wo);if(hw&&st.wo){hw.textContent=st.wo;if(hd)hd.outerHTML=lwDueTag(oo)||'<span id="me-due"></span>';}else if(!!hw!==!!st.wo)setTimeout(()=>{keep();draw();},0);} /*the title bar always shows the WO the list is for*/if(st.pmsg&&st.pmsg.st!=='busy')st.pmsg=null;const wi=g('me-woinfo');if(wi)wi.innerHTML=woInfoHTML(DB.orders.find(x=>x.wo===st.wo));
+    const w=g('me-wo');if(w)w.onchange=()=>{const prev=st.wo;st.wo=w.value;{const hw=g('me-hwo'),hd=g('me-due'),oo=DB.orders.find(x=>x.wo===st.wo);if(hw&&st.wo){hw.textContent=st.wo;{const hs=g('me-hstp');if(hs)hs.outerHTML=stepBadge(st.wo,'me-hstp');}if(hd)hd.outerHTML=lwDueTag(oo)||'<span id="me-due"></span>';}else if(!!hw!==!!st.wo)setTimeout(()=>{keep();draw();},0);} /*the title bar always shows the WO the list is for*/if(st.pmsg&&st.pmsg.st!=='busy')st.pmsg=null;const wi=g('me-woinfo');if(wi)wi.innerHTML=woInfoHTML(DB.orders.find(x=>x.wo===st.wo));
       const h0=R()[0];if(opt.std&&h0&&h0.k==='hdr'&&!h0.sub&&(!String(h0.item||'').trim()||h0.item===lsStdHouse(DB.orders.find(x=>x.wo===prev)))){ // standard layout: the house heading follows the work order
         h0.item=lsStdHouse(DB.orders.find(x=>x.wo===st.wo));const hi=ov.querySelector('[data-mr="0|item"]');if(hi)hi.value=h0.item;}
       const o=DB.orders.find(x=>x.wo===st.wo),p=o&&lsProjAuto(o.customer).p;if(!st.pid&&p){keep();st.pid=p.id;st.pauto=true;edges=lsProjEdges(p.id);draw();}
@@ -6763,7 +6785,7 @@ function phCardsHTML(mode,js){
   const saw=mode==='saw';
   if(!js||!js.length)return'';
   return js.map(o=>`<div class="wl-card ph-card" data-phcard="${escA(o.wo)}">
-    <div class="wl-h"><div><span class="wn">📷 Photo list</span> <span class="wd">${escA(o.wo)}</span>${fuHTML(o,'lst-chip')}<div class="wl-wt">${escA(o.title||'')}${o.customer?' · '+escA(o.customer):''}</div></div>
+    <div class="wl-h"><div><span class="wn">📷 Photo list</span> <span class="wd">${escA(o.wo)}</span>${stepBadge(o)}${fuHTML(o,'lst-chip')}<div class="wl-wt">${escA(o.title||'')}${o.customer?' · '+escA(o.customer):''}</div></div>
       ${(od=>`<span class="wl-due"${od?' style="background:#c0392b;color:#fff"':''}>${od?'⚠ OVERDUE — ':''}${o.delv&&o.delDay?'DELIVERS '+escA(slotLblO(o)):o.dueDate?'DUE '+fmt(o.dueDate):''}</span>`)(listOverdue(phL(o)))}</div>
     ${movedBanner(o)}${lists().some(l=>(l.wos||[]).includes(o.wo))?'<div class="hold-note">⚠ This job also has a typed list — check with the office before cutting or picking it twice.</div>':''}
     <div class="ph-strip">${phThumbs(o)}</div>
@@ -6772,7 +6794,7 @@ function phCardsHTML(mode,js){
 }
 function phDoneRows(mode){
   return phJobs().filter(o=>phDone(o,mode)).sort((a,b)=>String(phDone(b,mode).at).localeCompare(String(phDone(a,mode).at))).map(o=>{const d=phDone(o,mode);
-    return `<div class="wl-drow"><b>📷 ${escA(o.wo)}</b><span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-c">${escA(o.customer||'')}</span><span class="wl-donelbl" style="font-size:13px">✓ ${fmt(d.at)} ${hhmm(d.at)}${d.by?' · '+escA(d.by):''}</span><button class="wl-undo" data-phundo="${escA(o.wo)}">Undo</button></div>`;}).join('');
+    return `<div class="wl-drow"><b>📷 ${escA(o.wo)}</b>${stepBadge(o)}<span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-c">${escA(o.customer||'')}</span><span class="wl-donelbl" style="font-size:13px">✓ ${fmt(d.at)} ${hhmm(d.at)}${d.by?' · '+escA(d.by):''}</span><button class="wl-undo" data-phundo="${escA(o.wo)}">Undo</button></div>`;}).join('');
 }
 function phBindWork(mode){
   const saw=mode==='saw';
@@ -7942,10 +7964,10 @@ function renderPM(app){
     if(!sched.length&&!delivWk.length&&!past.length&&!coming.length)return'';
         return `<div class="dsh-p" style="margin-bottom:14px">
       <div class="dsh-ph" style="background:#14335c;font-size:15px">👤 ${escA(c)} — ${sched.length} scheduled · ${delivWk.length} delivered this week · ${past.length?past.length+' past':'no earlier deliveries'} · ${coming.length} coming up</div>
-      ${sched.length?`<div class="pm-sec">🚚 SCHEDULED — on a van${sched.some(siteNotOk)&&siteCanOk()?` <button class="btn btn-s" data-sitecust="${escA(c)}" style="margin-left:8px;min-height:36px">✓ Site ready for all ${sched.filter(siteNotOk).length}</button>`:''}</div>`+sched.map(o=>row(`<b>${escA(o.wo)}</b>${fuHTML(o,'flr-fu','font-size:12px')}<span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-x">${escA(slotLblO(o))}${slotWk(o)!==thisWk()?' (Wk '+wkNum(slotWk(o))+')':''} · ${stageLbl(o)}</span>${siteChip(o)}${lsTxt(o)}`,V2()?' pm-lr':'')).join(''):''}
-      ${delivWk.length?`<div class="pm-sec" style="color:#0d6e46">✓ DELIVERED THIS WEEK</div>`+delivWk.map(o=>row(`<b>${escA(o.wo)}</b>${fuHTML(o,'flr-fu','font-size:12px')}<span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-x" style="color:#0d6e46">${o.delDelivAt?new Date(o.delDelivAt).toLocaleDateString('en-IE',{weekday:'short',day:'numeric',month:'short'})+' '+dStageTime(o):''}${o.delivBy?' · '+escA(o.delivBy):''}</span>`)).join(''):''}
-      ${past.length?`<div class="pm-sec" style="color:var(--t3)">📚 DELIVERED — PAST WEEKS</div>`+past.map(j=>row(`<b>${escA(j.wo)}</b>${fuHTML(j,'flr-fu','font-size:12px')}<span class="dsh-t">${escA(j.t||'')}</span><span class="dsh-x">${new Date(j._at).toLocaleDateString('en-IE',{day:'numeric',month:'short'})}${j.vBy?' · '+escA(j.vBy):''}</span>`)).join(''):''}
-      ${coming.length?`<div class="pm-sec" style="color:#8a6d00">📅 COMING UP — due, not yet on the delivery board</div>`+coming.map(o=>row(`<b>${escA(o.wo)}</b>${fuHTML(o,'flr-fu','font-size:12px')}<span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-x">due ${fmt(o.dueDate)}${o.plannedWeek?' · build '+wkLbl(o.plannedWeek):''}</span>${lsTxt(o)}`,V2()?' pm-lr':'')).join(''):''}
+      ${sched.length?`<div class="pm-sec">🚚 SCHEDULED — on a van${sched.some(siteNotOk)&&siteCanOk()?` <button class="btn btn-s" data-sitecust="${escA(c)}" style="margin-left:8px;min-height:36px">✓ Site ready for all ${sched.filter(siteNotOk).length}</button>`:''}</div>`+sched.map(o=>row(`<b>${escA(o.wo)}</b>${stepBadge(o)}${fuHTML(o,'flr-fu','font-size:12px')}<span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-x">${escA(slotLblO(o))}${slotWk(o)!==thisWk()?' (Wk '+wkNum(slotWk(o))+')':''} · ${stageLbl(o)}</span>${siteChip(o)}${lsTxt(o)}`,V2()?' pm-lr':'')).join(''):''}
+      ${delivWk.length?`<div class="pm-sec" style="color:#0d6e46">✓ DELIVERED THIS WEEK</div>`+delivWk.map(o=>row(`<b>${escA(o.wo)}</b>${stepBadge(o)}${fuHTML(o,'flr-fu','font-size:12px')}<span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-x" style="color:#0d6e46">${o.delDelivAt?new Date(o.delDelivAt).toLocaleDateString('en-IE',{weekday:'short',day:'numeric',month:'short'})+' '+dStageTime(o):''}${o.delivBy?' · '+escA(o.delivBy):''}</span>`)).join(''):''}
+      ${past.length?`<div class="pm-sec" style="color:var(--t3)">📚 DELIVERED — PAST WEEKS</div>`+past.map(j=>row(`<b>${escA(j.wo)}</b>${stepBadge(j.wo)}${fuHTML(j,'flr-fu','font-size:12px')}<span class="dsh-t">${escA(j.t||'')}</span><span class="dsh-x">${new Date(j._at).toLocaleDateString('en-IE',{day:'numeric',month:'short'})}${j.vBy?' · '+escA(j.vBy):''}</span>`)).join(''):''}
+      ${coming.length?`<div class="pm-sec" style="color:#8a6d00">📅 COMING UP — due, not yet on the delivery board</div>`+coming.map(o=>row(`<b>${escA(o.wo)}</b>${stepBadge(o)}${fuHTML(o,'flr-fu','font-size:12px')}<span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-x">due ${fmt(o.dueDate)}${o.plannedWeek?' · build '+wkLbl(o.plannedWeek):''}</span>${lsTxt(o)}`,V2()?' pm-lr':'')).join(''):''}
     </div>`;
   };
   app.innerHTML=`<div class="dsh">
@@ -8025,7 +8047,7 @@ const ls2=lsOf(o.wo);
   const rowH=i=>{
     const o=i.o,s=i.s;
     return `<div style="display:flex;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);flex-wrap:wrap">
-      <b style="font-family:monospace;color:#14335c">${escA(o.wo)}</b>
+      <b style="font-family:monospace;color:#14335c">${escA(o.wo)}</b>${o.manual?'':stepBadge(o)}
       <span style="flex:1;min-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escA(o.title||'')}</span>
       ${!s?`<span class="ls-no" style="font-size:13px">📋 NO LIST YET${canL&&!o.manual?'':' — the Drawing office makes it in 📋 Cutting Lists'}</span>`
         :`<span class="rdy-pill rdy-${s.lvl}">${RDY_LBL[s.lvl]}</span>${sideChipHTML('saw',s.saw,s.sawAt,true)}${sideChipHTML('fit',s.fit,s.fitAt,true)}`}
@@ -8100,7 +8122,7 @@ function renderDriver(app){
       !jobs.length?`<div class="flr-none">No jobs planned for ${escA(vehLbl(veh))} on ${escA(dayL)}</div>`:`
       <div class="drv-stat"><span><b>${escA(vehLbl(veh))} — ${escA(dayL)}</b> · ${jobs.length} job${jobs.length!==1?'s':''}</span><span>${onVan}/${jobs.length} on van · ${delivd} delivered</span></div>
       ${jobs.map(o=>{const st=dStage(o);return`<div class="drv-job${st==='deliv'?' done':st==='disp'?' disp':st?' on':''}">
-        <div class="drv-ji"><b>${escA(o.wo)}</b>${fuHTML(o,'drv-fu')}
+        <div class="drv-ji"><b>${escA(o.wo)}</b>${o.manual?'':stepBadge(o)}${fuHTML(o,'drv-fu')}
           <div class="drv-jt">${escA(o.title)||'—'}</div><div class="drv-jc">${escA(o.customer||'')}${st==='deliv'?' · ✓ delivered '+dStageTime(o)+(o.delivBy?' by '+escA(o.delivBy):''):st==='disp'?' · dispatched '+dStageTime(o):''}</div>${st==='deliv'?'':listStatHTML(o.wo)}</div>
         ${st==='deliv'?`<div style="font-size:28px;color:#0b7e44;flex-shrink:0">✓</div>`:`<div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">
           <button class="drv-tick${st?' on':''}" data-dl="${escA(o.wo)}">${st?'ON VAN ✓':'ON VAN'}</button>
@@ -8202,8 +8224,8 @@ async function addPodPhotos(files,pk){
 function dchip(o,showCust){
   const st=dStage(o);
   const rd=(!st&&!o.manual)?woReady(o.wo):null; // one colour per job until it's loaded — detail behind the ⓘ button
-  return `<div class="dchip${rd?' rdy-'+rd.lvl:''}${st==='deliv'?' done':''}${st==='disp'?' dispd':''}${st==='load'?' loadd':''}${o.manual?' manual':''}${delSel.has(o.wo)?' sel':''}" draggable="true" data-dw="${escA(o.wo)}" title="Click to select · drag onto a day${o.manual?' · added manually':''}">
-    <div class="dchip-top"><b>${escA(o.wo)}</b>
+  return `<div class="dchip${rd?' rdy-'+rd.lvl:''}${st==='deliv'?' done':''}${st==='disp'?' dispd':''}${st==='load'?' loadd':''}${o.manual?' manual':''}${delSel.has(o.wo)?' sel':''}${!o.manual&&woListOk(o)?' lst-ok':''}" draggable="true" data-dw="${escA(o.wo)}" title="Click to select · drag onto a day${o.manual?' · added manually':''}${!o.manual&&woListOk(o)?' · green strip: cutting list sorted':''}">
+    <div class="dchip-top"><b>${escA(o.wo)}${o.manual?'':stepBadge(o)}</b>
       <span class="dchip-btns">${V2()&&!o.manual&&!st&&!['pm','driver','dash','floor','saw','stores'].includes(ROLE||'')&&!lists().some(l=>(l.wos||[]).includes(o.wo))?`<button class="dinfo dlist-add" data-dladd="${escA(o.wo)}" title="＋ Add a cutting list for ${escA(o.wo)} (opens the cutting list window)" style="width:auto;padding:0 6px;font-weight:800">＋ List</button>`:''}${rd?`<button class="dinfo" data-dinfo="${escA(o.wo)}" title="${escA(RDY_LBL[rd.lvl]+(rd.why.length?' — '+rd.why.join(' · '):''))} — tap for detail">ⓘ</button>`:''}<button class="dchk${st?' on':''}" data-dd="${escA(o.wo)}" title="Status: ${dStageLbl[st]||'planned'} — tap to update (opens a menu)">${st==='deliv'?'✓':st==='disp'?'D':st==='load'?'L':'·'}</button><button data-dx="${escA(o.wo)}" title="${o.delDay?'Return to pool':(o.manual?'Delete this manual job':'Remove from delivery plan')}">×</button></span>
     </div>
     ${fuF(o)||fuU(o)?`<div class="dchip-fu">${fuHTML(o,'dfu')}</div>`:''}
@@ -8415,7 +8437,7 @@ function renderDeliveries(app){
     const ov=document.createElement('div');ov.className='pod-ovl';
     const dis='disabled style="opacity:.4;cursor:default"';
     ov.innerHTML=`<div class="pod-in" style="min-width:min(400px,92vw)">
-      <div style="font-weight:800;color:#14335c;margin-bottom:2px">${escA(o.wo)} — ${escA(o.title||'')}</div>
+      <div style="font-weight:800;color:#14335c;margin-bottom:2px">${escA(o.wo)}${o.manual?'':stepBadge(o)} — ${escA(o.title||'')}</div>
       <div style="font-size:12px;color:var(--t3);margin-bottom:10px">Current status: <b>${st?dStageLbl[st]:'planned'}</b>${dStageTime(o)?' '+dStageTime(o):''}</div>
       <button class="rbtn" data-st="load" ${st?dis:''} style="justify-content:center">📦 Mark LOADED</button>
       <button class="rbtn" data-st="disp" ${st==='disp'||st==='deliv'?dis:''} style="justify-content:center">🚚 Mark DISPATCHED — left the factory</button>
@@ -9737,7 +9759,7 @@ function drawHTML(dq){
     <div style="font-size:12px;color:#7a4a00;margin:2px 0 6px">Not ticked = left out of the planner (listed again at the next import, marked). New ones first, then earliest due.</div>
     <div style="max-height:50vh;overflow:auto">${dq.map(d=>{const o=d.o,fu=[o.floor,o.unit].filter(Boolean).join(' · ');
       return `<label style="display:flex;gap:8px;align-items:center;padding:6px 0;border-top:1px solid #f0d9a6;flex-wrap:wrap;cursor:pointer"><input type="checkbox" data-drq="${escA(o.wo)}" style="width:20px;height:20px;flex-shrink:0">
-        <b style="font-family:monospace;color:#14335c">${escA(o.wo)}</b>${d.why==='WO-D'?'<span style="font-size:11px;color:#7a4a00">(WO-D)</span>':''}
+        <b style="font-family:monospace;color:#14335c">${escA(o.wo)}</b>${stepBadge(o)}${d.why==='WO-D'?'<span style="font-size:11px;color:#7a4a00">(WO-D)</span>':''}
         <span style="font-weight:700">${escA(o.customer||'')}</span>${fu?`<span style="color:var(--t2)">${escA(fu)}</span>`:''}
         <span style="flex:1;min-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escA(o.title||'')}</span>
         <span style="white-space:nowrap">due ${escA(fd(o.dueDate))}</span>${+o.value>0?`<span style="white-space:nowrap;color:var(--t2)">€${Math.round(+o.value).toLocaleString('en-IE')}</span>`:''}
