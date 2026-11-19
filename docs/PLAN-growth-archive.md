@@ -93,5 +93,14 @@ an archive copy · 5,000 archive rows: search under 2 s on an Android phone in C
    while you are the only user · C only if it gets slow again.
 6. Old-screen guard switched on in live? **A** not sure — Coder checks read-only before R3.
 
-## Garry's answers
-(not yet)
+## Garry's answers — 19 Nov 2026 (live)
+1. Finished → **A**: installation complete (or Cienapps 11) + off Deliveries + nothing waiting + 30 days with no change.
+2. Who archives → **A**: office button with a preview.
+4. History → **A**: last 10 entries on the job, older ones to a history table, kept for ever.
+5. One record per job → **build it NOW while Garry is the only user** (not the recommended "with logins").
+   Order therefore: R1 quick wins → R2 history table → R3 archive → R4 one record per job, R4 rehearsed on a Supabase TEST
+   project with a copy of the real data, switch-over done early morning with every screen closed.
+   Garry asked: "can I launch the saw and stores while this work is going on?" → yes (see the session reply): saw and stores
+   ticks live in the list tables (one row per line), not in the big record; the work happens on branches; each switch-over is a
+   short morning step with every screen closed.
+Still open: 3 (archived WO in an import — built on A, preview asks "bring back?") and 6 (Coder checks the old-screen guard read-only).
