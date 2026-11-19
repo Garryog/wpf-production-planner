@@ -325,3 +325,13 @@ Garry's words: "the edit button for the cutting lists templates is gone. i need 
   Drawing office, Production Manager or Admin PIN at the click; a remembered PIN never opens templates (plan question 12).
 - Open question: should the Office screen opened with the Admin PIN count as Admin (no PIN question at each click)?
 
+
+### Green strip, step badge, Check opens the list (19 Nov 2026, Garry, live)
+- **Green strip:** a job's left edge is green when its cutting list is sorted — a live list (not archived, not a template), a photo of the
+  list, or "No list needed". Capacity Board rows, Lists page rows, Deliveries cards. A 4 px strip drawn *inside* any colour bar already there
+  (the Deliveries cards keep their red/amber/green readiness bar). One rule: `woListOk`. Built on feature/green-step-check.
+- **Step badge:** the job's Cienapps step (short name) as a small grey badge beside the WO number on every page (`stepBadge`). The board
+  keeps its step drop-down instead.
+- **✓ Check** on a new list opens the whole list read-only first; "✓ Confirm checked" at the bottom checks it (same PIN / who rules),
+  "Not right — edit" opens the list window, Close changes nothing.
+- Open question: a list still "Waiting for check" already counts as "has a list" (green). Say if it should stay un-green until checked.
