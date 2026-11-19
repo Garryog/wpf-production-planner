@@ -316,3 +316,12 @@ own small release, branch feature/board-shipped-steps. Plan: docs/PLAN-board-shi
 - Settings "Storage on this device": hidden while lists are OFF (shown if the device could not keep its backup copy).
 - Buttons in the list window (9): not decided — Garry to look at screenshots.
 - Deliveries weeks: Garry wants it live as soon as possible (was Mon 16 Nov).
+
+### Template buttons back (19 Nov 2026, Garry, live)
+Garry's words: "the edit button for the cutting lists templates is gone. i need that button." / "i need the last features i had for creating templates."
+- The Office screen (and PM / Management, as before 18 Nov) shows ✎ Edit and Archive on templates, 📐 Save as template (Lists rows and the
+  list window, which also gives "Update template" for the same name), ＋ New template and ⧉ Copy from another project again.
+- Who may make or change a template is unchanged: Drawing office / Production Manager screens straight away; any other screen asks for the
+  Drawing office, Production Manager or Admin PIN at the click; a remembered PIN never opens templates (plan question 12).
+- Open question: should the Office screen opened with the Admin PIN count as Admin (no PIN question at each click)?
+
