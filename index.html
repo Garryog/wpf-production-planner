@@ -1139,6 +1139,19 @@ async function fetchVer(){ // the record's version number only; null = could not
   return +d[0].version||null;
 }
 // Nothing on this screen that a full load would have to merge or repair.
+// Settings → "Sync speed": what the last save / full load / quick check cost on this screen (plain English)
+function syncSpeedHTML(){
+  syncDay();
+  const tm=t=>new Date(t).toTimeString().slice(0,5),sec=ms=>(Math.round((+ms||0)/100)/10).toFixed(1)+' s';
+  const one=(x,sz)=>x?(sz?fmtMB(x.b)+' in ':'')+sec(x.ms)+' (at '+tm(x.at)+')':'none yet on this screen';
+  return '<div class="exp-panel" id="set-sync"><div style="font-size:14px;font-weight:600;margin-bottom:6px">⏱ Sync speed (this screen)</div>'
+    +'<div style="font-size:13px;line-height:1.7">'
+    +'<div>Last save: <b data-sync="save">'+one(SYNC.save,1)+'</b></div>'
+    +'<div>Last full load: <b data-sync="load">'+one(SYNC.load,1)+'</b></div>'
+    +'<div>Last quick check: <b data-sync="check">'+one(SYNC.check,0)+'</b></div>'
+    +'<div>Today: <b data-sync="skips">'+(+SYNC.skips||0)+'</b> refresh'+(SYNC.skips===1?' was':'es were')+' skipped because nothing had changed · <b data-sync="fulls">'+(+SYNC.fulls||0)+'</b> full load'+(SYNC.fulls===1?'':'s')+'</div>'
+    +'</div><div style="font-size:11px;color:var(--t3);margin-top:3px">Every 2 minutes this screen first asks the database for a tiny "has anything changed?" number; the whole plan is only downloaded when it has (and at least every 10 minutes).</div></div>';
+}
 function syncCalm(){return VER!==null&&DB.loaded&&!DB.loadFailed&&!DB.remoteBroken&&!DB.saveFailed&&DB.lastLoadOk&&!SAVING&&!saveT&&!UNSURE.length&&!!BASE&&same(snap(),BASE);}
 async function refreshDB(){
   syncDay();
@@ -1807,7 +1820,7 @@ function renderSettings(app){
     +'<button class="btn btn-g" id="btn-backup">⬇ Download full backup (JSON)</button>'
     +'<div id="bak-last" style="font-size:13px;font-weight:700;margin-top:12px">Last good backup: checking…</div>'
     +'<div style="font-size:11px;color:var(--t3);margin-top:3px">Automatic: the first office screen each day saves a copy to the database (kept 30 days). Clear Week and other bulk deletes take one first.</div>'
-    +'</div>'+(V2()||DB.pendFail?devStoreHTML():'')+lsPanelHTML()+'</div>'; // (Garry 13 Nov, question 15 answer B) hidden while lists are OFF, except when this device could not keep its copy
+    +'</div>'+syncSpeedHTML()+(V2()||DB.pendFail?devStoreHTML():'')+lsPanelHTML()+'</div>'; // (Garry 13 Nov, question 15 answer B) hidden while lists are OFF, except when this device could not keep its copy
 
   // staff roster: edit in place, add, remove
   const uidS=()=>'S'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
