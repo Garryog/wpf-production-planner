@@ -4286,6 +4286,37 @@ function lsStdRows(o){const e=()=>({k:'part',item:'',qty:'',L:'',W:'',mat:'',edg
   return[{k:'hdr',item:lsStdHouse(o),note:''},...LS_STD_SUBS.flatMap(s=>[{k:'hdr',item:s,note:'',sub:true},e(),e()])];}
 function lsNewStd(wo,pid){const o=wo?DB.orders.find(x=>x.wo===wo):null;
   openListEditor(null,wo||'',pid||(o&&lsProjAutoId(o.customer))||'',{std:true,rows:lsStdRows(o),...(o&&!fuU(o)?{name:String(o.title||'').trim()||o.wo}:{}),note:'Standard layout — fill in the rows under each heading. Empty rows, and headings with nothing under them, are left off the saw.'});}
+/*d19-6 (Garry 19 Nov, L9): ＋ List on a Deliveries card / ＋ Add cutting list in the ⓘ window — when the job's project has templates,
+  "Start this list from:" comes first: each template, or the blank standard layout. A template opens the window with ONLY its
+  rows (the WO filled in, as ＋ List always did); nothing is saved until Save. No templates (or lists not loaded) = straight in. */
+function lsNewChoose(wo,pid){
+  const o=wo?DB.orders.find(x=>x.wo===wo):null;
+  const p=pid||(o&&lsProjAutoId(o.customer))||'';
+  const tps=V2()&&p?lsTemplatesFor(p):[];
+  if(!tps.length){lsNewStd(wo,pid);return;}
+  const dl=lsDlg('<div id="sfl-body"></div>',560),body=dl.querySelector('#sfl-body');
+  body.innerHTML=`<div style="font-weight:800;color:#14335c;font-size:16px;margin-bottom:2px">Start this list from:</div>
+    <div style="font-size:12px;color:var(--t3);margin-bottom:10px">${o?escA(o.wo)+' · '+escA(o.customer||'')+(lsListName(o)?' · '+escA(lsListName(o)):''):escA(lsProjName(p))} — pick the house type, or start blank. You can change anything before you save.</div>
+    ${tps.length>8?`<input id="sfl-q" placeholder="🔍 Type to find a template" autocomplete="off" style="${LS_INP};width:100%;box-sizing:border-box;margin-bottom:8px">`:''}
+    <div style="display:flex;flex-wrap:wrap;gap:8px">${tps.map(t=>`<button class="btn btn-g" data-sfl="${escA(t.id)}" data-sflq="${escA(String((t.typeName||'')+' '+(t.name||'')).toLowerCase())}" style="min-height:44px;font-size:14px" title="${escA((LS_KINDS[t.ltype]||t.ltype||'')+' · Rev '+(+t.rev||1))}">📐 ${escA(t.typeName||t.name)}</button>`).join('')}
+    <button class="btn btn-s" data-sfl="" style="min-height:44px;font-size:14px">Blank standard layout</button></div>
+    <div id="sfl-err" style="color:#b42318;font-weight:700;font-size:13px;min-height:18px;margin-top:6px"></div>`;
+  {const q=body.querySelector('#sfl-q');if(q){q.oninput=()=>{const ws=q.value.trim().toLowerCase().split(/\s+/).filter(Boolean);body.querySelectorAll('[data-sflq]').forEach(b=>{b.style.display=ws.every(w=>b.dataset.sflq.includes(w))?'':'none';});};q.focus();}}
+  body.querySelectorAll('[data-sfl]').forEach(b=>b.onclick=async()=>{
+    const tid=b.dataset.sfl;
+    if(!tid){dl.remove();lsNewStd(wo,pid);return;}
+    body.querySelectorAll('[data-sfl]').forEach(x=>x.disabled=true);
+    try{if(!LST.full.has(tid))await lsReloadList(tid);}catch(e){}
+    const t=lsList(tid);
+    if(!t||!LST.full.has(tid)){body.querySelector('#sfl-err').textContent='Could not load that template — try again, or start blank.';body.querySelectorAll('[data-sfl]').forEach(x=>x.disabled=false);return;}
+    const na=new Set(lsLinesOf(tid).filter(x=>x.status==='na').map(x=>x.id));
+    const rows=lsEditRows(tid).filter(r=>!na.has(r.lid)).map(r=>{const x={...r};delete x.done;delete x.hold;return x;});
+    if(!rows.length){body.querySelector('#sfl-err').textContent='That template has no rows — pick another, or start blank.';body.querySelectorAll('[data-sfl]').forEach(x=>x.disabled=false);return;}
+    dl.remove();
+    const tnm=t.typeName||t.name;
+    openListEditor(null,wo||'',p,{rows,unitsOn:rows.some(r=>r.k==='hdr'&&r.units!=null&&r.units!==''),...(o&&!fuU(o)?{name:String(o.title||'').trim()||o.wo}:{}),note:'Started from template '+tnm+' · Rev '+(+t.rev||1)+' — change anything for this house, then Save.'});
+  });
+}
 function lsListName(o){return o?(fuU(o)||o.title||o.wo):'';}
 async function confirmList(wo,tid,by){
   const o=DB.orders.find(x=>x.wo===wo);if(!o)throw new Error(wo+' is no longer on the planner');
@@ -5479,6 +5510,22 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     const di=o.delDay?addDayISO(slotWk(o),DEL_DAYS.indexOf(o.delDay)):'';
     return `<div id="me-delbk"><label>Delivery (Production Manager)</label><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><input type="date" id="me-deld" value="${escA(st.delD!=null?st.delD:di)}" style="${LS_INP}" title="The delivery day"><select id="me-delv" style="${LS_INP}" title="The van"><option value="">— van —</option>${DEL_VEH.map(v=>`<option value="${escA(v.k)}"${(st.delV!=null?st.delV:o.delVeh)===v.k?' selected':''}>${escA(v.n)}</option>`).join('')}</select><button class="btn btn-s" id="me-delgo" style="font-size:12px;white-space:nowrap" title="Books this job on that van and day on the Deliveries page now — separate from saving the list">🚚 Book</button></div><div id="me-delmsg" style="font-size:12px;color:${bk?'#0d6e46':'var(--t3)'};margin-top:2px">${bk?'Booked: '+escA(bk)+' ('+escA(o.wo)+')':'Not booked yet ('+escA(o.wo)+')'}</div></div>`;}; // (attack4 K1) says which work order
   const blankAll=()=>R().length>0&&R().every(r=>r.k==='hdr'?(!String(r.note||'').trim()&&r.units==null&&(st.hdr0||new Set()).has(String(r.item||'').trim())):(lsEmptyRow(r)&&!String(r.mat||'').trim()&&!r.buy)); // (attack4 B5/B6) a heading renamed, or a unit / × block, counts as typed; no part row has anything typed, picked or ticked, and no heading has a note: only the blank layout is there
+  /*d19-6 (Garry 19 Nov: blank lines were left when a template went in): whenever a template is put into a list, the untouched
+    empty rows (nothing typed — a colour alone or a copied colour does not count) and the standard sub-headings (Fillers and
+    Kickers / Worktops / Stores items) with nothing left under them are taken out. If only an untouched house heading is left
+    (the one the window opened with, or the one the WO gave it), it goes too — the template replaces the layout. Anything typed
+    stays. at = where the template was going; returns where it goes now and how many rows came out. Call snap() first. */
+  const tidyForTpl=at=>{
+    const rs=R(),n=rs.length,out=new Array(n).fill(false);
+    rs.forEach((r,i)=>{if(r.k==='part'&&lsEmptyRow(r)&&!r.buy)out[i]=true;});
+    rs.forEach((r,i)=>{if(!(r.k==='hdr'&&r.sub&&LS_STD_SUBS.includes(String(r.item||'').trim())&&!String(r.note||'').trim()&&r.units==null))return;
+      let j=i+1;while(j<n&&rs[j].k!=='hdr'){if(!out[j])return;j++;}out[i]=true;});
+    const left=rs.map((r,i)=>i).filter(i=>!out[i]);
+    if(left.length===1){const h=rs[left[0]],o=st.wo?DB.orders.find(x=>x.wo===st.wo):null,it=String(h.item||'').trim();
+      if(h.k==='hdr'&&!h.sub&&h.units==null&&!String(h.note||'').trim()&&(!it||(st.hdr0||new Set()).has(it)||(o&&it===lsStdHouse(o))))out[left[0]]=true;}
+    let k=0,a=at;for(let i=n-1;i>=0;i--)if(out[i]){rs.splice(i,1);k++;if(i<at)a--;}
+    return{at:Math.max(0,Math.min(a,rs.length)),n:k};
+  };
   const insTpl=()=>{
     if(!st.pid){ov.querySelector('#me-err').textContent='Pick the project first — templates belong to a project.';return;}
     const tps=lsTemplatesFor(st.pid).filter(t=>!ex||t.id!==ex.id);
@@ -5519,10 +5566,10 @@ function openListEditor2(listId,presetWo,presetPid,opt){
             if(k>1&&x.k==='part'&&!x.buy){const q=String(x.qty==null?'':x.qty).trim();if(q&&!/^\d+(\.\d+)?$/.test(q)){odd++;x.note=(x.note?x.note+' · ':'')+'⚠ ×'+k+' — check qty';}}
             return x;});
           if(blk){rows.unshift({k:'hdr',item:nm||tnm,units:String(k),note:nm?tnm:''});st.unitsOn=true;}
-          snap();const c=curRow(),at=c<0?R().length:endOfXBlock(c),drop=blankAll()?R().length:0,at2=drop?0:at;
-          if(!drop)fenceX(at2,rows,tnm); // (Garry 13 Nov) nothing typed yet — the blank standard headings and rows are replaced by the template, not left above it
-          R().splice(at2,drop,...rows);dl.remove();st.focus=at2+'|item';draw();
-          toast('Added '+(nm?'"'+nm+'" — ':'')+'template '+tnm+(k>1?' × '+k+' (the totals are worked out — change × '+k+' in the list any time)':'')+(odd?' — '+odd+' row'+(odd!==1?'s':'')+' with a quantity that is not a number: check them (⚠ in the note)':'')+(drop>1?' — the blank rows were replaced':''));};
+          snap();const c=curRow(),td=tidyForTpl(c<0?R().length:endOfXBlock(c)),at2=td.at,drop=td.n; // (Garry 13 Nov / d19-6 19 Nov) untouched blank rows and empty standard headings come out — no blank lines left
+          if(R().length)fenceX(at2,rows,tnm);
+          R().splice(at2,0,...rows);dl.remove();st.focus=at2+'|item';draw();
+          toast('Added '+(nm?'"'+nm+'" — ':'')+'template '+tnm+(k>1?' × '+k+' (the totals are worked out — change × '+k+' in the list any time)':'')+(odd?' — '+odd+' row'+(odd!==1?'s':'')+' with a quantity that is not a number: check them (⚠ in the note)':'')+(drop?' — the blank rows were taken out':''));};
         body.querySelector('#it-hok').onclick=go;
         [hn,body.querySelector('#it-hname')].forEach(e=>e.onkeydown=ev=>{if(ev.key==='Enter'){ev.preventDefault();go();}});
         return;}
@@ -5541,8 +5588,8 @@ function openListEditor2(listId,presetWo,presetPid,opt){
         snap();const c=curRow(),at=c<0?R().length:endOfXBlock(c);
         const unm=String((body.querySelector('#it-uname')||{}).value||'').replace(/\s+/g,' ').trim(); // (Garry 16 Nov) a name for the block, e.g. Floor 2
         const add=[{k:'hdr',item:unm||o.name,units:n,note:unm?o.name:''},...o.parts.map(({x,per,fixed})=>({k:'part',item:x.part||'',qty:per,...(fixed?{fixed:true}:{}),L:x.length_mm==null?'':String(+x.length_mm),W:x.width_mm==null?'':String(+x.width_mm),mat:x.material||'',edging:x.edging||'',edging2:x.edging2||'',note:x.note||''}))];
-        const drop=blankAll()?R().length:0,at2=drop?0:at; // a brand-new list's empty row, or the blank standard layout, is replaced
-        R().splice(at2,drop,...add);
+        const at2=tidyForTpl(at).at; // d19-6: untouched blank rows and empty standard headings come out (a brand-new list's empty row, the blank layout)
+        R().splice(at2,0,...add);
         dl.remove();st.focus=at2+'|units';st.focusAll=true;draw();
         toast('Added "'+o.name+'" × '+n+' unit'+(n!=='1'?'s':'')+' from template '+(t.typeName||t.name)+' — change Units any time before the saw starts');
       };
@@ -8127,7 +8174,7 @@ const ls2=lsOf(o.wo);
     <div style="margin-top:12px;text-align:right"><button class="wl-btn" id="pod-x" style="padding:10px 22px;font-size:14px">OK — understood</button></div></div>`;
   document.body.appendChild(ov);
   ov.onclick=e=>{if(e.target===ov||e.target.id==='pod-x')ov.remove();};
-  ov.querySelectorAll('[data-rdadd]').forEach(b=>b.onclick=()=>{ov.remove();lsNewStd(b.dataset.rdadd);}); // the same window as Cutting Lists → ＋ New list, on this job
+  ov.querySelectorAll('[data-rdadd]').forEach(b=>b.onclick=()=>{ov.remove();lsNewChoose(b.dataset.rdadd);}); /*d19-6: templates first*/ // the same window as Cutting Lists → ＋ New list, on this job
   ov.querySelectorAll('[data-rdopen]').forEach(b=>b.onclick=()=>{ov.remove();openListEditor(b.dataset.rdopen);});
 }
 let drvUploading=false;
@@ -8590,7 +8637,7 @@ function renderDeliveries(app){
     dropTo(c,parts[0],parts[1],parts[2]);
   });
   document.querySelectorAll('[data-dinfo]').forEach(b=>b.onclick=e=>{e.stopPropagation();showReadiness([b.dataset.dinfo],b.dataset.dinfo,true);});
-  document.querySelectorAll('[data-dladd]').forEach(b=>{b.onclick=e=>{e.stopPropagation();lsNewStd(b.dataset.dladd);};b.onmousedown=e=>e.stopPropagation();b.draggable=false;}); // (Garry 17 Nov, L9) ＋ List on a delivery card
+  document.querySelectorAll('[data-dladd]').forEach(b=>{b.onclick=e=>{e.stopPropagation();lsNewChoose(b.dataset.dladd);}; /*d19-6: templates first*/b.onmousedown=e=>e.stopPropagation();b.draggable=false;}); // (Garry 17 Nov, L9) ＋ List on a delivery card
   dmBindChips(app); /*dates: due date on a card → Change dates*/
   bindSiteOk(app); /*dates phase 2: site ready*/
   bindMissWhy();
