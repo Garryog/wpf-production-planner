@@ -293,7 +293,7 @@ const LIT = () => ({ prev: document.getElementById('wkb-prev').className, next: 
     });
     rec('C1 (18 Nov: board shows the due date only) moved job: no "built after due", no "(orig …)", no 🚚 tag on the board row, nothing spills out', C.mv && !C.mv.late && !/orig/.test(C.mv.orig||'') && C.mv.deliv.length === 0 && !C.mv.spill, JSON.stringify(C.mv));
     rec('C2 (18 Nov) no "built after due" chip on the board', C.mv && !C.mv.lateTitle, C.mv && C.mv.lateTitle);
-    rec('C3 board row and delivery card: same tag text and colour for the moved job (grey, next week) — chip only on the board', C.mv && C.cmv && C.mv.cls === C.cmv.cls && C.mv.cls === 'grey' && C.mv.txt === C.cmv.txt, JSON.stringify([C.mv && C.mv.cls, C.cmv]));
+    rec('C3 board row and delivery card: same tag text and colour for the moved job (grey, next week) — chip only on the board', C.mv && C.cmv && C.mv.cls === C.cmv.cls && C.mv.cls === 'grey' && C.mv.txt === 'Wk '+(C.cmv.txt.match(/Wk (\d+)/)||[])[1], /*19 Nov: board shows the week only*/ JSON.stringify([C.mv && C.mv.cls, C.cmv]));
     rec('C4 due on the Friday of its own build week: no "built after due"; job planned before its due week: no chip', C.fri && !C.fri.late && C.ok && !C.ok.late && C.fri.cls === (C.cfri || {}).cls && C.ok.cls === (C.cok || {}).cls, JSON.stringify([C.fri, C.cfri, C.ok, C.cok]));
     rec('C: no page errors', !(t.server.errors || []).length, (t.server.errors || []).join(' | '));
     await t.close();
