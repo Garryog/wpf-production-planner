@@ -195,6 +195,14 @@ S6 (1), attack1-layout / attack2-excel-phone / attack3-phone P1 / P10 / final-a-
 | list-window attack7-vandrv T2 "Pat put on the Volvo AND the Artic Fri from two PCs at once → somebody is told" (Low) | two PCs putting the same driver on two different vans in the same second both save without warning (each PC checked before the other had saved). The Deliveries page shows both vans, and the driver's phone shows both as his | — (rare; same-second double booking) | pending |
 | list-window attack7-vandrv W "the PM screen shows who drives a van" (info) | only office / Production Manager see the Deliveries page, so a PM doesn't see who drives; the code comment that said "everyone sees it" has been corrected | — (information only) | pending |
 
+## 19 Nov 2026 — R1 sync quick win (branch feature/sync-quick-win): 3 checks RE-POINTED (not app faults, nothing for Garry to sign)
+The new Settings → "⏱ Sync speed" panel is on purpose, so the checks that say "Settings reads exactly like origin/main" now take
+that one panel out (both sides) before comparing: list-window attack2-basics "office / s screen text identical to main",
+list-window attack2-finder-pm-tag "(info) O: office tab s reads the same", lists-filter attack1-filter check 11 (lists ON and OFF).
+Everything else on those screens is still compared character for character. Once R1 is on main the take-out does nothing.
+Seen during the R1 full run, also failing on main (timing, not R1): list-window attack4-delivery-book "(info) T1 the first booked
+record matches the booking kept" (2 of 3 runs on main fail — which PC wins the race decides it); lists-filter 13n (passed on re-run).
+
 ## 19 Nov 2026 — template buttons back on the Office screen (Garry: "the edit button for the cutting lists templates is gone. i need that button") — pending, Garry to sign off
 The list window release (18 Nov) hid every template button from the Office, PM and Management screens. Garry asked for them back.
 They are SHOWN again on every screen that had them before 18 Nov; making or changing a template still needs the Drawing office /
