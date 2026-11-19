@@ -2479,7 +2479,7 @@ function woChip(w,attr){const p=woIsP(w);return `<span class="lst-chip${p?' p-wo
    the Capacity Board, the Lists page and the Deliveries cards. It sits INSIDE any colour bar already there (readiness on the
    Deliveries cards), so that meaning is kept. The set follows lsCache, so a list saved on this screen shows at once. */
 function woListSet(){if(V2()){const c=lsCache();if(!c.woSet){const s=new Set();c.all.forEach(l=>{if(!l.archived&&!l.tpl)(l.wos||[]).forEach(w=>s.add(w));});c.woSet=s;}return c.woSet;}
-  const s=new Set();(DB.lists||[]).forEach(l=>(l.wos||[]).forEach(w=>s.add(w)));return s;}
+  const s=new Set();(DB.lists||[]).forEach(l=>{if(l&&!l.archived&&!l.tpl)(l.wos||[]).forEach(w=>s.add(w));});return s;} // lists OFF: the same rule (Manager)
 function woListOk(o){if(typeof o==='string')o=DB.orders.find(x=>x.wo===o);return !!o&&(woListSet().has(o.wo)||phHas(o)||lsNA(o));}
 /* h19: the job's current Cienapps step as a small grey badge beside its WO number, on every page (read-only) */
 function stepBadge(o,id){if(typeof o==='string')o=DB.orders.find(x=>x.wo===o);const s=o?stepShort(o.step):'';
@@ -4059,12 +4059,21 @@ async function lsViewDlg(id,opt){opt=opt||{};let l=lsList(id);if(!l)return;
   const c=lsCheckInfo(l),t=lsTbc(lsView(l.id,true).rows),chk=!!opt.check&&!c.ok; // h19: opened from ✓ Check — read the whole list, then confirm at the bottom
   const ov=lsDlg(`<div style="font-weight:700;color:#14335c;margin-bottom:6px">${escA(l.project||'')} — ${escA(l.name)} · Rev ${+l.rev||1}</div>
     ${(l.wos||[]).length?`<div class="lv-wos" style="margin-bottom:6px">${(l.wos||[]).map(w=>woChip(w)).join(' ')}</div>`:''}
+    ${chk&&opt.changed?`<div class="lv-changed" style="margin-bottom:8px;padding:8px 10px;border:2px solid #b42318;background:#fde8e8;color:#b42318;border-radius:6px;font-size:14px;font-weight:800">⚠ This list was changed on another screen while you were reading — here is the new version. Nothing was checked.</div>`:''}
     ${chk?`<div class="lv-chkh" style="margin-bottom:6px;font-size:13px;color:#14335c;font-weight:700">Read the whole list, then press <b>✓ Confirm checked</b> at the bottom.</div>`:''}
     ${!chk&&V2()&&!l.archived&&(c.need||c.ok)?`<div style="margin-bottom:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">${l.tpl&&!c.ok?'<span class="chk-wait">Not checked</span>':lsCheckChip(l)}${c.ok&&l.createdBy?'<span style="font-size:12px;color:var(--t2)">issued by '+escA(l.createdBy)+'</span>':''}${c.ok?`<button class="btn btn-s" data-vchk="0" style="font-size:11px;padding:2px 8px">Take check away</button>`:`<button class="btn btn-g" data-vchk="1" style="font-size:12px;padding:3px 10px">✓ Check</button>`}</div>`:''}
     ${t.length?'<div style="margin-bottom:6px">'+lsTbcChip(t,true)+'</div>':''}${listTableHTML(l,'all')}
     ${chk?`<div class="lv-chkbar" style="margin-top:14px;padding-top:12px;border-top:2px solid #14335c;display:flex;gap:10px;flex-wrap:wrap;align-items:center"><button class="btn btn-g" id="lv-chkok" style="font-size:17px;padding:12px 22px;font-weight:800;min-height:48px">✓ Confirm checked</button>${l.tpl&&!lsTplBtnOk()?'':`<button class="btn btn-s" id="lv-chked" style="font-size:16px;padding:11px 18px;font-weight:700;min-height:48px;color:#b42318;border-color:#b42318">✎ Not right — edit</button>`}<span style="font-size:12px;color:var(--t2)">Close changes nothing.</span></div>`:''}`);
   if(chk){const ok=ov.querySelector('#lv-chkok'),ed=ov.querySelector('#lv-chked');
-    if(ok)ok.onclick=()=>{ov.remove();lsCheck(l.id,true,{viewed:true});};
+    // (Manager, h19) what was READ is what gets checked: the list is fetched again at Confirm — a new revision or changed rows saved
+    // on another screen meanwhile → nothing is checked and the new version is shown to read
+    const sig=x=>(+(x&&x.rev)||1)+'|'+JSON.stringify(lsView(id,true).rows),seen=sig(l);
+    if(ok)ok.onclick=async()=>{if(ok.disabled)return;ok.disabled=true;ok.textContent='Checking for changes…';
+      try{if(V2())await lsReloadList(id);}catch(e){ok.disabled=false;ok.textContent='✓ Confirm checked';toast('Could not reach the database — not checked. Try again. ('+e.message+')');return;}
+      const now=lsList(id);ov.remove();
+      if(!now){toast('This list is no longer there — not checked');render();return;}
+      if(sig(now)!==seen){render();lsViewDlg(id,{check:true,changed:true});return;}
+      lsCheck(id,true,{viewed:true});};
     if(ed)ed.onclick=()=>{ov.remove();openListEditor(l.id);};}
   ov.querySelectorAll('[data-vchk]').forEach(b=>b.onclick=()=>{ov.remove();lsCheck(l.id,b.dataset.vchk==='1');});
   const x=ov.querySelector('#pod-x');if(x){const b=document.createElement('button');b.className='btn btn-s';b.id='lv-print';b.textContent='🖨 Print';b.style.marginRight='8px';b.onclick=()=>lsPrintList(l.id);x.parentNode.insertBefore(b,x);}

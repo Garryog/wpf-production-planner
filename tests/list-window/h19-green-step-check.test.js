@@ -117,6 +117,33 @@ const GREEN = 'rgb(45, 158, 84)';
     const c = dbChk(), pr = await p.evaluate(() => window.__prompted);
     rec('3 "✓ Confirm checked" → checked, by the person (Ann), with the PIN asked as today', !!c[0] && c[1] === 'Ann' && pr.some(m => /PIN/.test(m)), J([c, pr]));
     rec('3 …no OK/Cancel box on top (the list itself was the question)', (a => a.length === 0)(await p.evaluate(() => window.__asked)), J(await p.evaluate(() => window.__asked)));
+    // (Manager) TWO PCs: PC 2 saves a new revision while PC 1 is reading the list for its check → Confirm checks NOTHING,
+    // says so and shows the new version; Confirm on that one then checks it
+    X.F3.seedList(S, 'LE', { name: 'Two PC list', wos: ['WO-1'], list: { check_req: true } });
+    await p.evaluate(async () => { await lsReloadList('LE'); render(); }); await sleep(300);
+    const t2 = await X.dev(browser, S, 'design'), p2 = t2.page; await asks(p2);
+    await p.evaluate(() => document.querySelector('[data-lhchk="LE"]').click()); await sleep(600);
+    await p2.evaluate(() => { window.__confirm = true; openListEditor('LE'); }); await sleep(1000);
+    const i2 = (await rows(p2)).findIndex(x => !x.hdr && x.item === 'Top');
+    await setv(p2, i2 + '|qty', '5'); await sleep(150);
+    await p2.evaluate(() => document.getElementById('me-saveclose').click()); await sleep(2500);
+    await p2.evaluate(async () => { await lqSend(); }); await sleep(300);
+    const le = D.find(S.db, 'lists', 'LE'), topNow = S.db.t.list_lines.filter(x => x.list_id === 'LE' && x.part === 'Top' && x.removed_rev == null).map(x => x.qty);
+    rec('3 two PCs, set-up: PC 2 saved a change to the list (Top qty 5) while PC 1 reads it', topNow.includes('5') || topNow.includes(5), J([le.rev, topNow]));
+    await p.evaluate(() => { window.__asked = []; [...document.querySelectorAll('.pod-ovl')].pop().querySelector('#lv-chkok').click(); }); await sleep(1500);
+    await p.evaluate(async () => { await lqSend(); });
+    o = await ov();
+    const chg = await p.evaluate(() => { const x = [...document.querySelectorAll('.pod-ovl')].pop(); const tr = x && [...x.querySelectorAll('tr')].find(r => /Top/.test(r.innerText)); return { msg: !!(x && x.querySelector('.lv-changed')), top: tr ? tr.innerText : '' }; });
+    rec('3 two PCs: Confirm on PC 1 → NOT checked; "changed on another screen … here is the new version" and the view shows the new rows', D.find(S.db, 'lists', 'LE').checked_at == null && chg.msg && /changed on another screen while you were reading — here is the new version/.test(o.t) && /\b5\b/.test(chg.top) && o.ok, J([D.find(S.db, 'lists', 'LE').checked_at, chg, o && o.t.slice(0, 160)]));
+    await p.evaluate(() => [...document.querySelectorAll('.pod-ovl')].pop().querySelector('#lv-chkok').click()); await sleep(1500);
+    await p.evaluate(async () => { await lqSend(); });
+    rec('3 two PCs: Confirm on the new version (nothing changed since) → checked', !!D.find(S.db, 'lists', 'LE').checked_at, J(D.find(S.db, 'lists', 'LE').checked_at));
+    await closeAll(p); await t2.page.close().catch(() => {});
+    // (Manager) lists OFF (old store): archived lists and templates don't count either
+    const v1 = await p.evaluate(() => { const ls0 = DB.listStore, old = DB.lists; DB.listStore = '';
+      DB.lists = [{ id: 'a', wos: ['WO-4'], archived: true }, { id: 't', wos: ['WO-2'], tpl: true }, { id: 'b', wos: ['WO-1'] }];
+      const r = [woListOk('WO-4'), woListOk('WO-2'), woListOk('WO-1')]; DB.listStore = ls0; DB.lists = old; return r; });
+    rec('1 lists OFF: archived list → not green, template → not green, live list → green', J(v1) === J([false, false, true]), J(v1));
     // the panel "Cutting lists to issue" ✓ Check does the same
     X.F3.seedList(S, 'LD', { name: 'Needs check 2', wos: ['WO-3'], list: { check_req: true } });
     await p.evaluate(async () => { lsReset(); await lsLoad(); render(); }); await sleep(400);
