@@ -155,7 +155,7 @@ button.due-tag{cursor:pointer;min-height:26px}button.due-tag:hover{outline:2px s
 @media(max-width:700px){.sh-b .btn{flex:1;min-height:44px;font-size:14px}.sh-bar .search-input,.sh-bar .filter-sel{width:100%;min-width:0;min-height:40px;font-size:16px}.sh-chk{min-height:36px}}
 /* ---- Column filters ---- */
 .cf-row td{background:#f8f9fb;border-bottom:2px solid var(--border);padding:3px 4px}
-.cf-inp{width:100%;min-width:44px;border:1px solid var(--b2);border-radius:4px;padding:3px 6px;font-size:11px;background:#fff;color:var(--text)}
+.cf-inp{width:100%;min-width:30px;border:1px solid var(--b2);border-radius:4px;padding:3px 6px;font-size:11px;background:#fff;color:var(--text)}
 .cf-inp::placeholder{color:#c3cad6}
 .cf-inp:focus{border-color:#7ba7e0}
 .cf-inp.on{background:#fff8d6;border-color:#e0b830;font-weight:600}
@@ -530,6 +530,7 @@ body.del-dragging #del-wkbar .wkb-btn:not(:disabled):not(.nodrop),body.del-dragg
 .me-ed .me-grid,.me-ed .me-grid input,.me-ed .me-grid select{font-size:15px}.me-ed .me-grid input,.me-ed .me-grid select{min-height:34px}
 .lw-due{display:inline-block;font-size:13px;font-weight:700;border-radius:6px;padding:4px 10px;border:1px solid;white-space:nowrap}.lw-due.red{background:#fde8e8;color:#b42318;border-color:#e57368}.lw-due.amber{background:#fff4d6;color:#7a4a00;border-color:#e0a43a}.lw-due.grey{background:#f1f4f8;color:#3b4c63;border-color:#cdd5e0}
 .me-hwo{font-family:'DM Mono',monospace;background:#eef4ff;border:1px solid #c7d7f5;border-radius:6px;padding:1px 8px;margin-left:6px;white-space:nowrap}.me-start .me-morep{left:auto;right:0}@media(max-width:699px){.me-tb{flex-wrap:wrap}.me-tb>div:first-child{font-size:15px!important}.me-tb .lw-due{order:3;flex:1 0 100%;text-align:center}.me-hwo{display:inline-block;margin-left:0;white-space:normal;word-break:break-all}.me-start .me-morep{left:0;right:auto}}.me-ed .me-save-big{font-size:17px;padding:12px 30px;min-height:48px}
+/*h19 (Garry 19 Nov): the Save bar is pinned to the bottom of the list window at every width (a short laptop screen never hides it) — the red reason sits right above it*/.me-ed{scroll-padding:var(--meth,90px) 0 calc(var(--mefh,67px) + 12px)}.me-ed .me-foot{position:sticky;bottom:-18px;z-index:7;background:#fff;margin:8px -18px -18px;padding:8px 18px 10px;border-top:1px solid var(--border)}.me-ed #me-err:not(:empty){position:sticky;bottom:calc(var(--mefh,67px) - 18px);z-index:7;background:#fff;margin:0 -18px;padding:6px 18px;border-top:1px solid var(--border)}.me-ed .me-fmsg{flex:1 1 100%;order:-1;text-align:right;font-weight:700;font-size:14px;color:#8a5a00}.me-ed .me-fmsg:empty{display:none}
 .me-bar{display:flex;gap:8px;margin:10px 0 6px;flex-wrap:wrap;align-items:flex-start}
 /* step 11: on phones the big Save stays pinned at the bottom of the window, always in reach (it keeps its own place, so it never covers the last row) */
 @media(max-width:480px){.me-ed{scroll-padding:var(--meth,90px) 0 calc(var(--mefh,67px) + 12px)}.me-ed #me-more .me-morep{position:static;box-shadow:none;min-width:0;margin-top:6px}.me-ed .me-foot{position:sticky;bottom:-18px;z-index:7;background:#fff;margin:8px -18px -18px;padding:8px 18px 10px;border-top:1px solid var(--border)}.me-ed .me-foot .me-save-big{flex:1 1 100%}.me-ed .me-foot #me-save{min-height:44px;flex:1 1 auto}.me-ed .me-foot .me-save-big{min-height:48px;order:9}.me-ed #me-err:not(:empty){position:sticky;bottom:calc(var(--mefh,67px) - 18px);z-index:7;background:#fff;margin:0 -18px;padding:6px 18px;border-top:1px solid var(--border)}}.me-big{font-size:15px;padding:8px 16px;min-height:38px}
@@ -2050,7 +2051,7 @@ function renderBoard(app){
           <td><span class="wo-title" title="${escA(o.title)}">${escA(o.title)}</span></td>
           <td><span class="wo-cust" title="${escA(o.customer)}">${escA(o.customer)}</span></td>
           <td style="text-align:right"><input type="number" step="0.5" min="0" style="width:52px;text-align:right;border:1px solid ${o.hoursEstimated?'#f59e0b':'var(--b2)'};border-radius:4px;padding:2px 4px;font-size:12px;font-weight:600;background:${o.hoursEstimated?'#fffbeb':'#fff'}" title="${o.hoursEstimated?'Estimated from value — verify':'Actual hours from Cienapps'}" data-hi="${escA(o.wo)}" value="${+o.hours||0}"></td>
-          <td class="bd-dt"><div class="bd-dt1">${dueTag(o,{noDeliv:true})}${movedTag(o)}</div></td><!--Garry 18 Nov: the board is just for moving the due date — tap the date to move it; "moved N×" is the record (tap for the history). Delivery date, (orig …), ⋯ and the check chips are not shown here.-->
+          <td class="bd-dt"><div class="bd-dt1">${dueTag(o,{noDeliv:true,wk:true})}${movedTag(o)}</div></td><!--Garry 18 Nov: the board is just for moving the due date — tap the date to move it; "moved N×" is the record (tap for the history). Delivery date, (orig …), ⋯ and the check chips are not shown here.-->
           <td style="text-align:right;font-size:12px;color:var(--t2)">€${Math.round(o.value||0).toLocaleString()}</td>
           <td><select class="step-sel" data-stepsel="${escA(o.wo)}" style="font-size:11px;padding:3px 4px;border-radius:6px;border:1px solid var(--b2);background:#fff;color:var(--text);max-width:120px">
             ${getSteps().map(s=>`<option value="${escA(s)}"${String(o.step||'').trim()===s?' selected':''}>${escA(stepShort(s))}</option>`).join('')}
@@ -2176,8 +2177,8 @@ function renderBoard(app){
         <th style="width:22px"></th>
         <th style="width:34px;text-align:center" title="Delivery next week">🚚</th>
         <th data-s="wo" class="${sortCol==='wo'?sortDir>0?'asc':'desc':''}">WO #</th>
-        <th data-s="floor" class="${sortCol==='floor'?sortDir>0?'asc':'desc':''}">Floor</th>
-        <th data-s="unit" class="${sortCol==='unit'?sortDir>0?'asc':'desc':''}">Unit</th>
+        <th data-s="floor" class="${sortCol==='floor'?sortDir>0?'asc':'desc':''}" style="width:48px">Floor</th>
+        <th data-s="unit" class="${sortCol==='unit'?sortDir>0?'asc':'desc':''}" style="width:48px">Unit</th>
         <th data-s="title" class="${sortCol==='title'?sortDir>0?'asc':'desc':''}">Title</th>
         <th data-s="customer" class="${sortCol==='customer'?sortDir>0?'asc':'desc':''}">Customer</th>
         <th data-s="hours" class="${sortCol==='hours'?sortDir>0?'asc':'desc':''}" style="text-align:right">Hrs</th>
@@ -4038,7 +4039,7 @@ function lsHomeHTML(){
   const row=l=>{const sup=lsSupersededBy(l);const[st,col]=sup?['Superseded (view only)','#8e99ab']:LS_STATE[lsState(l)];return `<tr data-lhrow="${escA(l.id)}"><td><b>${escA(l.name)}</b><div class="lh-pj">${lpfTag(l.pid?lsProjName(l.pid)||l.project:'')}</div>${sup?`<div class="lh-sup" style="font-size:11px;color:#5b6b82">replaced by "${escA(sup.name)}"</div>`:''}${l.tpl?' <span class="lst-chip" style="background:#efe7ff;color:#5b21b6">TEMPLATE'+(l.typeName?' · '+escA(l.typeName):'')+'</span>':''}</td>
     <td>${escA(LS_KINDS[l.ltype]||l.ltype||'')}${l.templateId?`<div style="font-size:11px;color:#5b21b6">${escA(lsTplInfo(l))}</div>`:''}</td><td>${(l.wos||[]).map(w=>woChip(w)+(!l.archived&&!l.tpl&&woN.get(woKey(w))>1?`<span class="lst-chip lh-two" style="background:#fdecea;color:#a31515" title="More than one live cutting list on this work order — check the saw is not cutting it twice">⚠ ${+woN.get(woKey(w))} lists on ${escA(w)}</span>`:'')).join('')||'<span style="color:var(--t3)">—</span>'}</td>${lsFuTds(l)}
     <td>${(+l.rev||1)>1?`<span class="lst-chip" style="background:#fff4d6;color:#7a5200">Rev ${+l.rev}</span>`:'Rev 1'}</td><td><span style="color:${col};font-weight:700">${st}</span>${!l.archived&&!sup?'<div>'+(lsChkOn()&&l.tpl&&l.checkReq&&!l.checkedAt?'<span class="chk-wait">Not checked</span>':lsCheckChip(l))+'</div>':''}${(t=>t.length?'<div>'+lsTbcChip(t)+'</div>':'')(l.archived?[]:lsTbc(lsView(l.id).rows))}</td><td>🪚 ${prog(l,'saw')}</td><td>🧰 ${prog(l,'fit')}</td>
-    <td class="lh-act">${!l.archived&&!sup&&lsChkOn()&&l.checkReq&&!l.checkedAt?`<button class="btn btn-g" data-lhchk="${escA(l.id)}" style="padding:2px 8px;font-size:11px" title="Drawing office / Production Manager / Admin PIN — the saw sees the list once it is checked">✓ Check</button> `:''}${sup||l.tpl&&!lsTplSaveOk()?'':`<button class="btn btn-s" data-lhedit="${escA(l.id)}" style="padding:2px 8px;font-size:11px">✎ Edit</button> `}<button class="btn btn-s" data-lhview="${escA(l.id)}" style="padding:2px 8px;font-size:11px">View</button> <button class="btn btn-s" data-lhcopy="${escA(l.id)}" style="padding:2px 8px;font-size:11px" title="Start a NEW list from this one's rows — pick the work order and change anything. This list is not changed">⧉ Copy</button>${l.archived||!lsTplSaveOk()?'':` <button class="btn btn-s" data-lhastpl="${escA(l.id)}" style="padding:2px 8px;font-size:11px" title="Save this list as a template of the project (ticks are not copied)">📐 Save as template</button>`}${l.tpl?` <button class="btn btn-s" data-lhhist="${escA(l.id)}" style="padding:2px 8px;font-size:11px">🕘 History</button>`:''}${!l.tpl&&!l.archived&&lsState(l)==='draft'?` <button class="btn btn-s" data-lhsend="${escA(l.id)}" style="padding:2px 8px;font-size:11px">➜ Send to saw</button>`:''}${l.archived||l.tpl&&!lsTplSaveOk()?'':` <button class="btn btn-s" data-lharc="${escA(l.id)}" style="padding:2px 8px;font-size:11px;color:var(--red);border-color:var(--red)">Archive</button>`}</td></tr>`;};
+    <td class="lh-act">${!l.archived&&!sup&&lsChkOn()&&l.checkReq&&!l.checkedAt?`<button class="btn btn-g" data-lhchk="${escA(l.id)}" style="padding:2px 8px;font-size:11px" title="Drawing office / Production Manager / Admin PIN — the saw sees the list once it is checked">✓ Check</button> `:''}${sup||l.tpl&&!lsTplBtnOk()?'':`<button class="btn btn-s" data-lhedit="${escA(l.id)}" style="padding:2px 8px;font-size:11px">✎ Edit</button> `}<button class="btn btn-s" data-lhview="${escA(l.id)}" style="padding:2px 8px;font-size:11px">View</button> <button class="btn btn-s" data-lhcopy="${escA(l.id)}" style="padding:2px 8px;font-size:11px" title="Start a NEW list from this one's rows — pick the work order and change anything. This list is not changed">⧉ Copy</button>${l.archived||!lsTplBtnOk()?'':` <button class="btn btn-s" data-lhastpl="${escA(l.id)}" style="padding:2px 8px;font-size:11px" title="Save this list as a template of the project (ticks are not copied)">📐 Save as template</button>`}${l.tpl?` <button class="btn btn-s" data-lhhist="${escA(l.id)}" style="padding:2px 8px;font-size:11px">🕘 History</button>`:''}${!l.tpl&&!l.archived&&lsState(l)==='draft'?` <button class="btn btn-s" data-lhsend="${escA(l.id)}" style="padding:2px 8px;font-size:11px">➜ Send to saw</button>`:''}${l.archived||l.tpl&&!lsTplBtnOk()?'':` <button class="btn btn-s" data-lharc="${escA(l.id)}" style="padding:2px 8px;font-size:11px;color:var(--red);border-color:var(--red)">Archive</button>`}</td></tr>`;};
   return `<div class="exp-panel" id="lh">${pFlagsHTML()}
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
       <div style="font-size:15px;font-weight:700;color:#14335c">📋 Lists — ${ls0.length}</div>
@@ -4048,7 +4049,7 @@ function lsHomeHTML(){
       ${sel('lh-rev',LH.rev,[['','Any revision'],['revised','Revised (rev 2+)']])}
       ${sel('lh-state',LH.state,[['','Not archived'],['draft','Draft'],['live','Live (with the saw)'],['done','Done'],['archived','Archived'],['any','Any state (incl. archived)']])}
       ${LH.q||pf||LH.type||LH.kind!=='live'||LH.rev||LH.state?'<button class="btn btn-s" id="lh-x" style="font-size:12px">✕ Clear</button>':''}
-      <span style="flex:1"></span>${LH.kind==='tpl'&&lsTplSaveOk()?`<button class="btn btn-s" id="lh-copy"${pfk?'':' disabled title="Pick the project first"'}>⧉ Copy from another project</button><button class="btn btn-g" id="lh-newtpl"${pfk?'':' disabled title="Pick the project first"'}>＋ New template</button>`:''}<button class="btn btn-s" id="lh-projs">🏗 Projects</button><button class="btn btn-s dk-gate" id="lh-sent"${dkVis()?'':' hidden'} title="Everything sent to a project's site between two dates — print or Excel">📦 Items sent</button><button class="btn btn-s" id="lh-find" title="Search every list — any project, done or archived too — and copy one to start a new list">🔍 Find old list</button><button class="btn btn-s" id="lh-imp" title="Import a cutting-list workbook — one sheet per house, each sheet becomes a list. You see a preview first; nothing is saved until you press Save">📥 Import Excel</button><button class="btn btn-g" id="lh-new" title="Opens the standard layout: the house heading and the sub-headings Fillers and Kickers, Worktops, Stores items, ready to fill">＋ New list</button><details class="me-more lh-more" id="lh-more"><summary class="btn btn-s">More ▾</summary><div class="me-morep"><button class="btn btn-s" id="lh-blank" title="An empty list with no headings">Blank list</button><a class="btn btn-s" id="lh-xltpl" href="${LS_XL_TPL}" download="WPF-Cutting-List-Template.xlsx" title="The Excel template to fill in and import — send it to anyone who types cutting lists">⬇ Excel template</a></div></details>
+      <span style="flex:1"></span>${LH.kind==='tpl'&&lsTplBtnOk()?`<button class="btn btn-s" id="lh-copy"${pfk?'':' disabled title="Pick the project first"'}>⧉ Copy from another project</button><button class="btn btn-g" id="lh-newtpl"${pfk?'':' disabled title="Pick the project first"'}>＋ New template</button>`:''}<button class="btn btn-s" id="lh-projs">🏗 Projects</button><button class="btn btn-s dk-gate" id="lh-sent"${dkVis()?'':' hidden'} title="Everything sent to a project's site between two dates — print or Excel">📦 Items sent</button><button class="btn btn-s" id="lh-find" title="Search every list — any project, done or archived too — and copy one to start a new list">🔍 Find old list</button><button class="btn btn-s" id="lh-imp" title="Import a cutting-list workbook — one sheet per house, each sheet becomes a list. You see a preview first; nothing is saved until you press Save">📥 Import Excel</button><button class="btn btn-g" id="lh-new" title="Opens the standard layout: the house heading and the sub-headings Fillers and Kickers, Worktops, Stores items, ready to fill">＋ New list</button><details class="me-more lh-more" id="lh-more"><summary class="btn btn-s">More ▾</summary><div class="me-morep"><button class="btn btn-s" id="lh-blank" title="An empty list with no headings">Blank list</button><a class="btn btn-s" id="lh-xltpl" href="${LS_XL_TPL}" download="WPF-Cutting-List-Template.xlsx" title="The Excel template to fill in and import — send it to anyone who types cutting lists">⬇ Excel template</a></div></details>
     </div>
     <input type="file" id="lh-file" accept=".xlsx,.xls" style="display:none"><div id="lh-upmsg" style="font-size:12px;margin-bottom:6px"></div>
     ${keys.length?keys.map(k=>{const a=grp.get(k);return `<div class="lh-grp" style="margin-bottom:12px"><div style="background:#14335c;color:#fff;border-radius:6px 6px 0 0;padding:7px 10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -4810,6 +4811,13 @@ function lsMatCan(){return MAT_ED.includes(ROLE);}
    one big Save. The Project / Work order pickers sit behind "Change job", templates / Excel / old lists behind ONE "Start from…",
    Type and the rarely used switches under More, and "Save as template" shows only for the Drawing office or the Admin PIN. */
 function lsTplSaveOk(){return ROLE==='design'||ROLE==='admin'||ROLE==='prod';} // (Garry 13 Nov, question 12 answer B) the Production Manager too // (attack2 F11) the Admin view counts. (plan question 12, answer A) a PIN remembered on the PC from another action (✓ Check, a project edit) never opens templates — only this screen, or the PIN typed at that moment (lsTplPinOk)
+/*hotfix 19 Nov (Garry: "the edit button for the cutting lists templates is gone. i need that button" / "i need the last features i had
+   for creating templates"): the template BUTTONS (✎ Edit / Archive on a template, 📐 Save as template, ＋ New template, ⧉ Copy from
+   another project) are SHOWN again to every screen that had them before the list window (Office too), as well as the Drawing office,
+   Production Manager and Admin. Who may actually make or change a template is unchanged: each click still goes through lsTplPinOk —
+   no question on the Drawing office / Production Manager screen, the Drawing office / Production Manager / Admin PIN typed at that
+   moment everywhere else (a remembered PIN still never opens templates). Shop-floor screens never had them. */
+function lsTplBtnOk(){return lsTplSaveOk()||!['saw','stores','floor','driver'].includes(ROLE);}
 /* (Garry Q3, 12 Nov: "Drawing office and Admin only, everywhere") the ONE guard for making or changing a template: Save as template,
    ＋ New template, editing / archiving a template, ⧉ Copy from another project. (attack2 F12) a PIN typed here is good for this one
    action only — never remembered on the PC. */
@@ -5190,7 +5198,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       </div>
       <div class="me-keys"${st.help?'':' hidden'}>Rows with a length or width go to the <b>Saw</b>; rows without go to <b>Stores</b>; <b>Bought in</b> rows are never cut or picked. Materials come from the project's list — pick <b>＋ Add new material…</b> if one is missing. A new row starts with the material of the saw row above.<br>Works like Excel: <b>Tab</b> / <b>Shift+Tab</b> across · <b>Enter</b> down (a new row at the bottom) · arrow keys · <b>Ctrl+D</b> copies the cell above · <b>Insert</b> adds a row · <b>Ctrl+Delete</b> deletes the row · <b>Ctrl+Z</b> undo · <b>Ctrl+S</b> save · paste rows straight from Excel</div>
       <div id="me-err" style="color:#b42318;font-weight:700;font-size:13px;min-height:18px"></div>
-      <div class="me-foot" style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">${ex&&st.tpl?'<button class="btn btn-s" id="me-hist">🕘 History</button>':''}${st.tpl||!lsTplSaveOk()?'':'<button class="btn btn-s" id="me-astpl" title="Save these rows as a template of the project (unsaved changes included)">📐 Save as template</button>'}<span style="flex:1"></span><button class="btn btn-s" id="me-save" title="Saves and shows what was saved — the list stays open behind it">${ex?'Save changes':st.tpl?'Save template':'Save list → Saw & Stores'}</button><button class="btn btn-g me-save-big" id="me-saveclose" title="Saves and closes the window in one press (Garry 16 Nov)">✓ Save &amp; close</button></div>
+      <div class="me-foot" style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">${ex&&st.tpl?'<button class="btn btn-s" id="me-hist">🕘 History</button>':''}${st.tpl||!lsTplBtnOk()?'':'<button class="btn btn-s" id="me-astpl" title="Save these rows as a template of the project (unsaved changes included)">📐 Save as template</button>'}<span style="flex:1"></span><button class="btn btn-s" id="me-save" title="Saves and shows what was saved — the list stays open behind it">${ex?'Save changes':st.tpl?'Save template':'Save list → Saw & Stores'}</button><button class="btn btn-g me-save-big" id="me-saveclose" title="Saves and closes the window in one press (Garry 16 Nov)">✓ Save &amp; close</button><div id="me-fmsg" class="me-fmsg" role="status" aria-live="polite"></div></div>
     </div>`;
     bind();
     {const ft=ov.querySelector('.me-foot');const tb=ov.querySelector('.me-tb');if(ft&&ft.offsetHeight)ov.style.setProperty('--mefh',ft.offsetHeight+'px');if(tb&&tb.offsetHeight)ov.style.setProperty('--meth',tb.offsetHeight+'px');} // phones: the heights of the pinned Save bar and the title bar — the red reason sits right above Save (attack3 P8) and the box with the cursor is never under either (P3b)
@@ -5233,6 +5241,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
   };
   const bind=()=>{
     if(st.addBusy){const sb=ov.querySelector('#me-save');if(sb)sb.disabled=true;} // a redraw during the add keeps Save off
+    if(st.saving){svLook(true);if(!st.slowT&&Date.now()-st.saving>=4000)fMsg(SLOW_MSG);} // h19: a redraw while saving keeps both Save buttons greyed
     ov.querySelectorAll('[data-mr]').forEach(el=>{
       const[i0,f]=el.dataset.mr.split('|'),i=+i0;
       if(el.tagName==='SELECT'&&(f==='edging'||f==='edging2')){el.onchange=el.oninput=()=>{const r=R()[i];if(!r||!ov.contains(el)||el.value===String(r[f]||''))return; // input + change both fire: act once
@@ -5533,6 +5542,17 @@ function openListEditor2(listId,presetWo,presetPid,opt){
   // through the Type name's spelling); a template with no Type name at open never gets one; a Type name typed here is the person's own
   let tnFollow=!!st.tpl&&!!matKey(st.tname)&&matKey(st.tname)===matKey(st.name);
   const tplNameTo=v=>{if(tnFollow&&v!==st.name){st.tname=v;const b=ov.querySelector('#me-tname');if(b)b.value=v;}st.name=v;};
+  /*h19 (Garry 19 Nov: "save and close button not working"): while a save runs BOTH Save buttons are greyed and say so; a message by the
+    buttons (#me-fmsg, in the pinned Save bar) answers a second press, and after 4 s says the database is slow — never a button that seems dead*/
+  const fMsg=t=>{const m=ov.querySelector('#me-fmsg');if(m)m.textContent=t||'';};
+  const SLOW_MSG='Still saving — the database is slow, don\'t close';
+  const svLook=on=>['me-save','me-saveclose'].forEach(id=>{const b=ov.querySelector('#'+id);if(!b)return;
+    if(on){if(b.dataset.t0==null)b.dataset.t0=b.textContent;b.textContent='Saving… please wait';b.disabled=true;}
+    else{if(b.dataset.t0!=null){b.textContent=b.dataset.t0;delete b.dataset.t0;}b.disabled=id==='me-save'&&!!st.addBusy;}});
+  const svBusy=on=>{clearTimeout(st.slowT);st.slowT=0;svLook(on);fMsg('');
+    if(on)st.slowT=setTimeout(()=>{st.slowT=0;if(st.saving&&document.body.contains(ov)&&!ov.classList.contains('me-dov'))fMsg(SLOW_MSG);},4000);};
+  ov.addEventListener('pointerdown',e=>{const b=e.target&&e.target.closest&&e.target.closest('#me-save,#me-saveclose');if(!b||!b.disabled||!st.saving)return; // a greyed button still gets the press: say why nothing happens
+    fMsg(Date.now()-st.saving>=4000?SLOW_MSG:'Saving… please wait — '+(st.closeAfter?'the window closes by itself when it is saved.':'it shows what was saved in a moment.'));});
   const keep=()=>{const g=id=>ov.querySelector('#'+id);const tn=g('me-tname');if(tn)st.tname=tn.value;const n=g('me-name');if(n)tplNameTo(n.value);const w=g('me-wo');if(w)st.wo=w.value;
     const t=g('me-type');if(t)st.ltype=t.value;
     ['title','cust','floor','unit','due','val','hrs'].forEach(k=>{const e=g('me-p'+k);if(e)st.pw[k]=e.value;});
@@ -5541,6 +5561,12 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     keep();const g=id=>ov.querySelector('#'+id),err=t=>{const e=g('me-err'),m=t+(st.chkNote&&t&&!/^Checking/.test(t)?' '+st.chkNote:'');
       if(e&&document.body.contains(ov)&&!ov.classList.contains('me-dov'))e.textContent=m;else if(t&&!/^(Saving|Checking)/.test(t))toast(m,true);}; // the window is gone (closed meanwhile): the person is still told, on the page. chkNote: the house check couldn't be made (round 3)
     if(st.addBusy)return err('Wait a moment — the new material is still being added to the project.');
+    if(jbOn()&&!st.wo&&String(st.jb.wo||'').trim()&&!st.jbTry){ // h19: a WO typed in the "WO number" box, then Save — that WO is looked up (as 🔎 Find does), not "type the Floor and Unit"
+      const typed=String(st.jb.wo).trim();st.jbTry=true;try{jbFind();}finally{st.jbTry=false;}
+      if(!document.body.contains(ov))return; // "open that list instead" was chosen
+      if(!st.wo){const r=st.jb.res||{};st.closeAfter=false;
+        return err(r.st==='nowo'?typed+' not found in the planner — check the number.':r.st==='gone'?(r.wo||typed)+' is shipped or delivered — not saved. Check the number.':r.st==='haslist'?(r.wo||typed)+' already has a cutting list ("'+String(r.name||'')+'") — NOT saved. Open that list to change it.':'Not saved — '+typed+' was not used for this list. Check the number.');}
+      return save();}
     if(!st.pid&&st.pmsg&&st.pmsg.st==='ask')return err('Answer the question above first — is this project \''+String(st.pmsg.p.name)+'\'? Press Yes or No.');
     if(!st.pid)return err('Pick the project — or ＋ New project… at the bottom of the list.');
     if(st.tpl&&!String(st.name||'').trim())return err('Give the template a name.');
@@ -5593,9 +5619,9 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     if(ex&&ex.tpl){const w=prompt('What changed in this template? (optional — shown in its History; it becomes Rev '+((+ex.rev||1)+1)+')','');if(w===null)return;d.why=w.trim()?w.trim():'Template edited';}
     // (round 3) our P-number was made while the database couldn't be asked: ask now, before this Save goes on
     if(!ex&&!st.newWO&&st.pUnchecked&&st.wo===st.pUnchecked&&!st.reChk){const own=DB.orders.find(x=>x.wo===st.wo);
-      if(own){const sb=g('me-save');if(sb)sb.disabled=true;st.saving=Date.now();err('Checking the planner for this house…');
+      if(own){const sb=g('me-save');svBusy(true);st.saving=Date.now();err('Checking the planner for this house…');
         const again=()=>{st.reChk=true;try{save();}finally{st.reChk=false;}};
-        pFreshDup(st.pid,fuF(own),fuU(own),own.title,own.wo).then(async dup=>{st.saving=0;if(sb)sb.disabled=false;st.pUnchecked='';st.chkNote='';err('');
+        pFreshDup(st.pid,fuF(own),fuU(own),own.title,own.wo).then(async dup=>{st.saving=0;svBusy(false);st.pUnchecked='';st.chkNote='';err('');
           if(!dup)return again();
           if(!DB.orders.some(x=>x.wo===dup.wo))DB.orders.push(JSON.parse(JSON.stringify(dup)));
           const why=await pBare(own);
@@ -5603,7 +5629,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
           const by=lqBy('');DB.pMerged=(DB.pMerged||[]).concat([{at:nowISO(),by,wo:own.wo,into:dup.wo,why:'made offline; the house already had '+dup.wo,job:JSON.parse(JSON.stringify(own))}]).slice(-300);
           const i=DB.orders.indexOf(own);if(i>=0)DB.orders.splice(i,1);sched();
           st.wo='';st.jm=null;jbChoose(dup.wo,'picked');})
-        .catch(()=>{st.saving=0;if(sb)sb.disabled=false;st.chkNote='⚠ This house could not be checked against the database (offline?) — it is checked again on the next Save.';again();});
+        .catch(()=>{st.saving=0;svBusy(false);st.chkNote='⚠ This house could not be checked against the database (offline?) — it is checked again on the next Save.';again();});
         return;}}
     officeWho(by=>{
      const go0=()=>{
@@ -5619,9 +5645,9 @@ function openListEditor2(listId,presetWo,presetPid,opt){
         if(d.newId)pMineAdd(pwo,d.newId); // (round 2) this screen's list for this P-number — moved with it if a merge renumbers it
         if(st.chkFail){st.pUnchecked=pwo;st.chkFail=false;} // (round 3) made without the database check: checked again on the next Save
       }
-      const sb=g('me-save');if(sb)sb.disabled=true;err('Saving…');st.saving=Date.now();
+      const sb=g('me-save');svBusy(true);err('Saving…');st.saving=Date.now();
       d.onLost=()=>err('May have saved — the reply was lost. Checking the database…'); // (audit 17 Nov, item 1) an edit: asked before anything is said
-      lsSaveManual(d,by,ex).then(async l=>{st.saving=0;sched();render();if(d.newId)lsPendDrop(d.newId);setTimeout(()=>pMineFix(),0);
+      lsSaveManual(d,by,ex).then(async l=>{st.saving=0;svBusy(false);sched();render();if(d.newId)lsPendDrop(d.newId);setTimeout(()=>pMineFix(),0);
         let t=(ex?'List updated':'List saved')+' — '+l.name+' → '+(l.saw?l.saw+' saw row'+(l.saw!==1?'s':''):'no cutting')+' · '+(l.fit?l.fit+' Stores':'no Stores')+(d.wo&&!st.tpl?' · tagged '+d.wo:'');
         if(d.lostOk)t+=d.lostOk==='later'?' (the reply was lost — checked: your save is in the database; another screen has changed the list since)':' (the reply was lost — checked: the database has it)';
         if(d.retiredMsg)t+='.'+d.retiredMsg; // the database archived the old list in the same step as the save
@@ -5629,7 +5655,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
           toast('⚠ '+t+'. What you changed WHILE it was saving was NOT saved — the saved list is open again: make that change again and press Save',true);
           const other=[...document.querySelectorAll('.pod-ovl .me-ed')].some(e=>!ov.contains(e));ov.remove();if(!other)openListEditor(l.id);return;}
         toast(t);done(l,d);})
-        .catch(x=>{st.saving=0;if(sb)sb.disabled=false;if(/already been replaced/.test(x.message))toast(x.message,true);
+        .catch(x=>{st.saving=0;svBusy(false);if(/already been replaced/.test(x.message))toast(x.message,true);
           if(x.message===LS_LOCK_MSG&&ex&&!ex.tpl&&!sawStarted){sawStarted=true;draw();} // lock the Units box now and offer "Make new list from this"
           if(x.reopen&&ex){toast('⚠ '+x.message,true);const other=[...document.querySelectorAll('.pod-ovl .me-ed')].some(e=>!ov.contains(e));ov.remove();if(!other)openListEditor(ex.id);return;} // an earlier lost Save had landed
           if(ex&&x.lostState&&x.lostState!=='not')return err(x.message); // "May have saved — …" (never a plain "Not saved" for a save that may be in)
@@ -5638,8 +5664,8 @@ function openListEditor2(listId,presetWo,presetPid,opt){
           const was=st.landed,nm='"'+(String(d.name||'').trim()||'the list')+'"';
           const pend=st2=>lsPendSet({id:d.newId,wo:d.wo,name:String(d.name||'').trim(),pid:st.pid,ltype:st.ltype,tname:st.tname,rows:JSON.parse(JSON.stringify(R())),from:st.from,note:st.note,state:st2});
           pend('unknown');err('May have saved — the reply was lost ('+x.message+'). Checking the database…');
-          if(sb)sb.disabled=true;
-          lsSavedYet(d.newId).then(async s=>{if(sb)sb.disabled=false;pend(s);
+          svBusy(true);
+          lsSavedYet(d.newId).then(async s=>{svBusy(false);pend(s);
             if(s==='saved'){st.landed=true;
               let old='';if(d.replaces&&d.replaces.id){try{await lsReloadList(d.replaces.id);const o=LST.l.get(d.replaces.id),on=' "'+(d.replaces.name||'The old list')+'"';old=!o?'':o.archived?on+' is archived (off the saw).':on+' is still with the saw.';}catch(e){}}
               if(was)return err('May have saved — the reply was lost. '+nm+' is in the database, but it can\'t tell whether these latest changes reached it. Press Save again: it saves to the same list (never a second one).');
@@ -5652,8 +5678,8 @@ function openListEditor2(listId,presetWo,presetPid,opt){
      const go=()=>{
       const tgt=st.newWO?'':String(d.wo||'');
       if(st.tpl||!tgt||st.dupOk===tgt||(ex&&(ex.wos||[]).includes(tgt))||(d.replaces&&d.replaces.id))return go0(); // "Make new list from this" has its own rules for the list it replaces
-      const sb=g('me-save');if(sb)sb.disabled=true;st.saving=Date.now();err('Checking '+tgt+' for a list…');
-      lsLiveFor(tgt).then(found=>{st.saving=0;if(sb)sb.disabled=false;err('');
+      const sb=g('me-save');svBusy(true);st.saving=Date.now();err('Checking '+tgt+' for a list…');
+      lsLiveFor(tgt).then(found=>{st.saving=0;svBusy(false);err('');
         const other=found.filter(l=>l.id!==(ex?ex.id:d.newId)&&!(d.replaces&&d.replaces.id===l.id));
         const pu=other.length?'':pUnder();
         if(pu&&st.dupOk!==tgt+'|'+pu){ // (attack3 N7b) the same question as for a WO that already has a list
@@ -5665,21 +5691,21 @@ function openListEditor2(listId,presetWo,presetPid,opt){
         if(!confirm('⚠ '+tgt+' ALREADY HAS a cutting list: '+nm+'.\n\nOne work order should have ONE list — with two, the saw could cut the job twice.\n\nSave this as a SECOND list for '+tgt+' anyway?\n\nOK = yes, save a second list\nCancel = do not save (your rows stay on screen)'))
           return err(tgt+' already has the list '+nm+' — NOT saved. Your rows are still here. Open that list to change it, or use Change job to pick another work order.');
         st.dupOk=tgt;go0();
-      }).catch(()=>{st.saving=0;if(sb)sb.disabled=false;err('');go0();}); // offline: the save itself says so
+      }).catch(()=>{st.saving=0;svBusy(false);err('');go0();}); // offline: the save itself says so
      };
       if(st.newWO){ // (round 2) ask the database first: another screen may have made this house's job a moment ago
         const pf=g('me-pfloor').value,pu=g('me-punit').value,pt=g('me-ptitle').value;
-        if(st.pid&&keyTxt(pf)&&keyTxt(pu)){const sb=g('me-save');if(sb)sb.disabled=true;st.saving=Date.now();err('Checking the planner for this house…');
-          pFreshDup(st.pid,pf,pu,pt).then(dup=>{st.saving=0;if(sb)sb.disabled=false;err('');
+        if(st.pid&&keyTxt(pf)&&keyTxt(pu)){const sb=g('me-save');svBusy(true);st.saving=Date.now();err('Checking the planner for this house…');
+          pFreshDup(st.pid,pf,pu,pt).then(dup=>{st.saving=0;svBusy(false);err('');
             if(dup){const m=dup.wo+(/^P-\d+$/.test(dup.wo)?' (made on another screen)':' from Cienapps')+' is in the planner now for Floor '+pf.trim()+' · Unit '+pu.trim()+' — use it';
               if(!DB.orders.some(x=>x.wo===dup.wo))DB.orders.push(JSON.parse(JSON.stringify(dup))); // brought in now; the next refresh has it anyway
               if(confirm(m+'.\n\nNo second job is made for one house.\n\nOK = use '+dup.wo+' for this list\nCancel = go back')){st.newWO=false;jbChoose(dup.wo,'picked');}else err('Not saved — '+m+'.');return;}
             go();})
-          .catch(()=>{st.saving=0;if(sb)sb.disabled=false;st.chkFail=true;st.chkNote='⚠ This house could not be checked against the database (offline?) — only this screen\'s jobs were checked; it is checked again on the next Save.';err('');go();}); // offline: the local check above stands
+          .catch(()=>{st.saving=0;svBusy(false);st.chkFail=true;st.chkNote='⚠ This house could not be checked against the database (offline?) — only this screen\'s jobs were checked; it is checked again on the next Save.';err('');go();}); // offline: the local check above stands
           return;}
       }
       go();
-    });
+    },()=>{st.closeAfter=false;fMsg('Not saved — choose who you are first, then press Save again.');}); /*h19 (Garry 19 Nov): the "Who is making changes" box closed — said by the buttons, never a silent nothing*/
   };
   ov.addEventListener('focusin',e=>{const m=e.target&&e.target.dataset&&e.target.dataset.mr;if(m){st.cur=m;if(st.snapKey!==m)st.snapKey='';}});
   // ---- keyboard, like Excel (not on phones): Tab / Shift+Tab, Enter down (a new row at the bottom), arrows, Ctrl+D fill
@@ -10598,7 +10624,7 @@ function dueTag(o,opts){
   let h;
   if(!due)h=one('due','','no due date','grey','No due date');
   else{let c=dTagCls(due),ttl=c==='red'?'Overdue — was due '+fmt(due):c==='amber'?'Due this week':'Due date';
-    h=one('due',due,'Due '+dTagTxt(due),c,ttl);
+    h=one('due',due,opts.wk?'Wk '+wkNum(due):'Due '+dTagTxt(due),c,ttl+' — '+dTagTxt(due)); /*Garry 19 Nov: board shows the week number only; full date in the tooltip*/
     /*round 4: one colour rule everywhere; the board's "planned week ends after the due date" warning is its own small chip*/
     if(opts.late&&o.plannedWeek&&dmIsDate(String(o.plannedWeek))&&addDayISO(o.plannedWeek,4)>due)h+=`<span class="dm-chip red" style="margin:0" title="${escA('Planned build week '+wkLbl(o.plannedWeek)+' ends after the due date '+fmt(due))}">⚠ built after due</span>`;}
   const dv=!opts.noDeliv&&dmIsDate(String(o.delivDate||'').slice(0,10))?String(o.delivDate).slice(0,10):'';
