@@ -10787,6 +10787,13 @@ function placeJobs(moved,veh,day,wk,fin){ /*list-window attack4: fin(true) once 
   if(!changing.length){if(!fin)delSel.clear();render();if(fin)fin(true);return;}
   const reMoves=changing.filter(o=>o.delDay);
   if(day){const dt=addDayISO(wk,DEL_DAYS.indexOf(day));if(!isDelivDay(dt)&&!confirm(day+' '+dShort(dt)+' is a bank holiday — book '+(changing.length===1?changing[0].wo:changing.length+' jobs')+' on it anyway?')){render();no();return;}} /*dates*/
+  /*d19-2 (Garry 19 Nov): the van + day already has other jobs (not the ones being moved) — say which, and ask. Cancel = nothing changes.
+    One place for every way of booking: drag, ⤵ Place, the selection bar's 🚚 Book, the list window's 🚚 Book, In store → Book.*/
+  if(day){const mv=new Set(moved.map(o=>o.wo)),oth=delAll().filter(o=>!mv.has(o.wo)&&o.delVeh===veh&&slotIn(o,wk,day)).sort(woCmp);
+    if(oth.length){const cs=[...new Set(oth.map(o=>String(o.customer||'').trim()).filter(Boolean))];
+      const msg=slotLbl(veh,day,wk)+' already has '+jobsN(oth.length)+': '+oth.slice(0,8).map(o=>o.wo).join(', ')+(oth.length>8?' …':'')+(cs.length?' ('+cs.slice(0,4).join(', ')+(cs.length>4?' …':'')+')':'')
+        +'.\n\nAdd '+(changing.length===1?changing[0].wo:'these '+changing.length)+' as well?';
+      if(!confirm(msg)){render();no();return;}}}
   const apply=(by,why)=>{
     const at=nowISO(),to=day?veh+'|'+day+'|'+wk:'';
     changing.map(o=>findDel(o.wo)).filter(Boolean).forEach(o=>{
