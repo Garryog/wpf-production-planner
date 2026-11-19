@@ -14,7 +14,7 @@ const O = (wo, x) => H.order(Object.assign({ wo, dueDate: '2026-11-20', origDueD
     const R = await p.evaluate(async () => {
       const W = ms => new Promise(r => setTimeout(r, ms)); showTab('d'); await W(200);
       const card = wo => { const c = document.querySelector('.dchip[data-dw="' + wo + '"]'); if (!c) return null; const b = c.firstElementChild, cs = b && getComputedStyle(b);
-        return { first: b && b.className, txt: b && b.textContent, fs: cs && cs.fontSize, fw: cs && cs.fontWeight, bg: cs && cs.backgroundColor, step: !!c.querySelector('.stp-b'), inCard: b ? b.getBoundingClientRect().right <= c.getBoundingClientRect().right + 1 : false, html: b && b.innerHTML }; };
+        return { first: b && b.className, txt: b && (b.querySelector('.dchip-cn') || {}).textContent, tick: !!(b && b.querySelector('.dtick')), fs: cs && cs.fontSize, fw: cs && cs.fontWeight, bg: cs && cs.backgroundColor, step: !!c.querySelector('.stp-b'), inCard: b ? b.getBoundingClientRect().right <= c.getBoundingClientRect().right + 1 : false, html: b && (b.querySelector('.dchip-cn') || {}).innerHTML }; };
       const out = { p1: card('WO-P1'), b1: card('WO-B1'), m1: card('JOB-M1') };
       delTab = 'later'; render(); await W(100); out.l1 = card('WO-L1'); out.docW = document.documentElement.scrollWidth;
       return out;

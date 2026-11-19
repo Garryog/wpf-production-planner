@@ -12,7 +12,8 @@ const O = (wo, x) => H.order(Object.assign({ wo, dueDate: '2026-11-19', origDueD
     const t = await H.open({ browser, now: '2026-11-17T10:00:00Z', row, viewport: vw }); const p = t.page; const tag = ' (' + vw.width + ' px)';
     await p.evaluate(async () => { showTab('d'); await new Promise(r => setTimeout(r, 200)); });
     const t0 = await p.evaluate(() => [...document.querySelectorAll('.dchip')].map(c => { const k = c.querySelector('.dtick'); return k ? k.textContent : 'none'; }));
-    rec('every card has a visible ☐ tick' + tag, t0.length === 4 && t0.every(x => x === '☐'), JSON.stringify(t0));
+    rec('every card has a visible ☐ tick (in its customer band)' + tag, t0.length === 4 && t0.every(x => x === '☐'), JSON.stringify(t0));
+    rec('the tick sits in the customer band (the card is no taller for it)' + tag, await p.evaluate(() => [...document.querySelectorAll('.dchip')].every(c => !!c.querySelector('.dchip-c .dtick'))));
     // tap the tick of WO-1 and WO-2 (real clicks)
     await p.click('.dchip[data-dw="WO-1"] .dtick'); await p.click('.dchip[data-dw="WO-2"] .dtick'); await p.waitForTimeout(150);
     const B = await p.evaluate(() => { const b = document.getElementById('del-selbar'); const r = b && b.getBoundingClientRect();

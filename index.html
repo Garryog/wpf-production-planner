@@ -306,7 +306,8 @@ details.lti-other{margin-bottom:14px}details.lti-other>summary{cursor:pointer;fo
 .dchip .dchip-btns button:hover{background:#dde3ea;color:var(--text)}
 .dchip .dchk.on{color:#0b7e44;font-weight:700}
 .dchip-t{font-size:11px;color:var(--text);line-height:1.35;margin-top:3px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
-.dchip-c{font-size:13px;font-weight:700;line-height:1.3;color:#fff;background:#14335c;border-radius:4px;padding:3px 7px;margin:0 0 5px;overflow:hidden;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}/*d19-1: customer / project band at the top of every Deliveries card (pool, van cells, Later)*/
+.dchip-c{display:flex;align-items:flex-start;gap:6px;font-size:13px;font-weight:700;line-height:1.3;color:#fff;background:#14335c;border-radius:4px;padding:2px 7px 2px 5px;margin:0 0 4px;min-width:0}/*d19-1: customer / project band at the top of every Deliveries card (pool, van cells, Later); d19-3: the tick sits in it*/
+.dchip-cn{flex:1 1 auto;min-width:0;overflow:hidden;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .dchip-c.none{background:#e6eaf0;color:#4a5568;font-weight:600}
 .dchip.done{background:#eefbf3;border-color:#b3e0c4}
 .dchip.done .dchip-t,.dchip.done .dchip-top b{text-decoration:line-through;opacity:.6}
@@ -324,8 +325,9 @@ details.lti-other{margin-bottom:14px}details.lti-other>summary{cursor:pointer;fo
 .selbar{display:flex;align-items:center;gap:10px;background:#e8f1fd;border:1px solid #b0c8e8;border-radius:6px;padding:7px 12px;font-size:12px;color:#14418f;margin-bottom:10px}
 .selbar button{background:none;border:none;color:#1a56db;font-size:12px;cursor:pointer;text-decoration:underline;padding:0}
 /*d19-3: visible tick on each Deliveries card + book from the selection bar*/
-.dtick{flex:0 0 auto;font-size:19px;line-height:1;color:#7a8699;cursor:pointer;margin:-2px 0 0}
-.dchip.sel .dtick{color:#1a56db;font-weight:700}
+.dtick{flex:0 0 auto;font-size:17px;line-height:1;color:#fff;cursor:pointer;margin:0;padding:0 2px}
+.dchip-c.none .dtick{color:#4a5568}
+.dchip.sel .dtick{color:#ffd27a;font-weight:700}
 .selbar .selput{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}
 .selbar select{font-size:13px;padding:5px 6px;border:1px solid #b0c8e8;border-radius:6px;background:#fff;min-height:34px;max-width:100%}
 .selbar button.selbook{background:#0d6e46;color:#fff;border-radius:6px;text-decoration:none;font-weight:700;font-size:13px;padding:7px 12px;min-height:34px}
@@ -8337,8 +8339,8 @@ function dchip(o){ /*d19-1: the customer band is on every card now (showCust gon
   const st=dStage(o);
   const rd=(!st&&!o.manual)?woReady(o.wo):null; // one colour per job until it's loaded — detail behind the ⓘ button
   return `<div class="dchip${rd?' rdy-'+rd.lvl:''}${st==='deliv'?' done':''}${st==='disp'?' dispd':''}${st==='load'?' loadd':''}${o.manual?' manual':''}${delSel.has(o.wo)?' sel':''}${!o.manual&&woListOk(o)?' lst-ok':''}" draggable="true" data-dw="${escA(o.wo)}" title="Click to select · drag onto a day${o.manual?' · added manually':''}${!o.manual&&woListOk(o)?' · green strip: cutting list sorted':''}">
-    ${String(o.customer||'').trim()?`<div class="dchip-c" title="${escA(o.customer)}">${escA(o.customer)}</div>`:'<div class="dchip-c none">(no customer)</div>'}
-    <div class="dchip-top"><span class="dtick" role="checkbox" aria-checked="${delSel.has(o.wo)?'true':'false'}" title="Tick to select">${delSel.has(o.wo)?'☑':'☐'}</span><b>${escA(o.wo)}${o.manual?'':stepBadge(o)}</b>
+    <div class="dchip-c${String(o.customer||'').trim()?'':' none'}" title="${escA(o.customer||'')}"><span class="dtick" role="checkbox" aria-checked="${delSel.has(o.wo)?'true':'false'}" title="Tick to select">${delSel.has(o.wo)?'☑':'☐'}</span><span class="dchip-cn">${String(o.customer||'').trim()?escA(o.customer):'(no customer)'}</span></div>
+    <div class="dchip-top"><b>${escA(o.wo)}${o.manual?'':stepBadge(o)}</b>
       <span class="dchip-btns">${V2()&&!o.manual&&!st&&!['pm','driver','dash','floor','saw','stores'].includes(ROLE||'')&&!lists().some(l=>(l.wos||[]).includes(o.wo))?`<button class="dinfo dlist-add" data-dladd="${escA(o.wo)}" title="＋ Add a cutting list for ${escA(o.wo)} (opens the cutting list window)" style="width:auto;padding:0 6px;font-weight:800">＋ List</button>`:''}${rd?`<button class="dinfo" data-dinfo="${escA(o.wo)}" title="${escA(RDY_LBL[rd.lvl]+(rd.why.length?' — '+rd.why.join(' · '):''))} — tap for detail">ⓘ</button>`:''}<button class="dchk${st?' on':''}" data-dd="${escA(o.wo)}" title="Status: ${dStageLbl[st]||'planned'} — tap to update (opens a menu)">${st==='deliv'?'✓':st==='disp'?'D':st==='load'?'L':'·'}</button><button data-dx="${escA(o.wo)}" title="${o.delDay?'Return to pool':'Take off board'}" aria-label="${o.delDay?'Return to pool':'Take off board'}">×</button></span>
     </div>
     ${fuF(o)||fuU(o)?`<div class="dchip-fu">${fuHTML(o,'dfu')}</div>`:''}
@@ -8423,7 +8425,7 @@ function renderDeliveries(app){
         ${!later&&wk<=W0&&closeWeekJobs(wk).length?`<button class="btn btn-s" id="btn-delreset" style="border-color:var(--red);color:var(--red)" title="Archive Wk ${wkNum(wk)} to 📚 Past weeks — delivered jobs leave the board, anything not delivered goes back to To plan to rebook. Other weeks are not touched.">🔒 Close Wk ${wkNum(wk)}</button>`:''}
       </span>
     </div>
-    <p style="font-size:12px;color:var(--t3);margin-bottom:8px">Tag jobs on the Capacity Board with 🚚, or add one manually. Tick cards (☐) to select several, then drag (or tap ⤵ Place, or pick a van and day in the blue bar and tap 🚚 Book) onto a vehicle and day. Card colour = readiness: <b style="color:#0d6e46">green ready</b> · <b style="color:#8a5a00">amber part ready / waiting on material</b> · <b style="color:#b42318">red not ready or no list</b> — ⓘ shows why. Moving a planned job asks why, and records who — moving it to another week too (select it, open that week's tab, tap ⤵ Place). <b>Due date:</b> tap the date on a card to change it. <b>Another week:</b> tap → Wk / Move to week… on the card, tick several and use Move ticked to week…, or drag cards onto a week tab.</p>
+    <p style="font-size:12px;color:var(--t3);margin-bottom:8px">Tag jobs on the Capacity Board with 🚚, or add one manually. Tick cards (☐) to select several, then drag (or tap ⤵ Place, or 🚚 Book in the blue bar) onto a vehicle and day. Card colour = readiness: <b style="color:#0d6e46">green ready</b> · <b style="color:#8a5a00">amber part ready / waiting on material</b> · <b style="color:#b42318">red not ready or no list</b> — ⓘ shows why. Moving a planned job asks why, and records who — moving it to another week too (select it, open that week's tab, tap ⤵ Place). <b>Due date:</b> tap the date on a card to change it. <b>Another week:</b> tap → Wk / Move to week… on the card, tick several and use Move ticked to week…, or drag cards onto a week tab.</p>
     <div class="addjob-row" id="ajform">
       <input id="aj-wo" placeholder="WO / ref (optional)" style="width:140px">
       <input id="aj-title" placeholder="Description *" style="flex:1;min-width:180px">
@@ -8438,7 +8440,7 @@ function renderDeliveries(app){
     </div>
     <div class="del-pool" id="dpool">
       ${past?'<span style="font-size:12px;color:var(--t3)">A past week has no pool — jobs still to plan are on the This week tab. Drop a card here to take it off its van.</span>':''}
-      ${rebook.length?gHTML('__rebook','📅 Date moved / not delivered / brought back — rebook',rebook,'color:#b42318'):''}
+      ${rebook.length?gHTML('__rebook','📅 Date moved / not delivered — rebook',rebook,'color:#b42318'):''}
       ${pool.length?gkeys.map(k=>gHTML(k,gName(k),grps[k])).join(''):past?'':'<span style="font-size:12px;color:var(--t3)">Nothing waiting'+(delTab==='0'?'':' for this week')+'. Tag jobs on the Capacity Board with the 🚚 button, or use ＋ Add Job.</span>'}
     </div>
   </div>
