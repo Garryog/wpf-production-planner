@@ -53,7 +53,8 @@ async function openHtml(browser, S, html, role, vp, lsInit) {
   return t;
 }
 // the page, with the bits that legitimately differ run to run taken out
-const appHtml = p => p.evaluate(() => document.getElementById('app').innerHTML.replace(/\s+/g, ' '));
+// R1 (19 Nov): Settings → ⏱ Sync speed (#set-sync) is a deliberate new panel — taken out on both sides before comparing
+const appHtml = p => p.evaluate(() => { document.querySelectorAll('#app #set-sync').forEach(e => e.remove()); return document.getElementById('app').innerHTML.replace(/\s+/g, ' '); });
 // LW_NORM — the page with the cutting-list window's three deliberate lists-ON changes taken out (counted, so the test can say they were there):
 //  1. PM screen: the read-only "📋 cutting list …" status on each job row (class pm-lr on the row + a .pm-ls span) — plan step 7
 //  2. saw / Production Manager: the default list owner is "Production Manager, Garry and Drawing office" (was "Production Manager") — Garry 13 Nov
@@ -61,6 +62,7 @@ const appHtml = p => p.evaluate(() => document.getElementById('app').innerHTML.r
 const appHtmlLW = p => p.evaluate(() => { const app = document.getElementById('app'), n = { pm: 0, owner: 0, store: 0 };
   app.querySelectorAll('.pm-ls').forEach(e => { e.remove(); n.pm++; }); app.querySelectorAll('.pm-lr').forEach(e => e.classList.remove('pm-lr'));
   app.querySelectorAll('#set-store').forEach(e => { e.remove(); n.store++; });
+  app.querySelectorAll('#set-sync').forEach(e => e.remove()); // R1 (19 Nov): Sync speed panel, deliberate
   const h = app.innerHTML.replace(/\s+/g, ' ').replace(/owner Production Manager, Garry and Drawing office/g, () => { n.owner++; return 'owner Production Manager'; });
   return { h, n }; });
 

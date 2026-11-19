@@ -1115,10 +1115,68 @@ function noteMerge(N,ren,by){
 }
 function legacyWarn(why){if(!legacyWarn.done){legacyWarn.done=1;console.warn('Planner: database has no "version" column yet ('+why+') — saving the old way, without clash protection. Run the Stage 1 SQL in SUPABASE_CHANGES.md.');}}
 async function fetchMain(){
+  const t0=Date.now(); /*R1: timed for Settings → Sync speed*/
   const r=await fetch(SUPA_URL+'/production_planner?id=eq.main',{headers:SUPA_HDR});
-  const d=await r.json();
+  const tx=await r.text(),d=JSON.parse(tx);
   if(!r.ok||!Array.isArray(d))throw new Error('load failed: '+r.status+' '+JSON.stringify(d).slice(0,120));
+  SYNC.load={at:Date.now(),b:tx.length,ms:Date.now()-t0};
   return d[0]||null;
+}
+/*R1 (Garry 19 Nov, plan growth-archive option a): before the 2-minute refresh, ask the database only for the version
+  number of the planner record (a few bytes). Same number as this screen last loaded or saved, and nothing here waiting
+  to be merged → nothing has changed, so the full record (~600 KB) is not downloaded. Every save bumps the number
+  (the Stage 1 trigger does it for every screen), so a change is never missed. Anything unusual (no version column,
+  the quick check fails, unsaved or unsure work, a failed load or save) → the full load exactly as before.
+  A full load still happens at least every 10 minutes as a safety net. */
+const SYNC={save:null,load:null,check:null,day:'',skips:0,fulls:0,lastFull:0,down:false,ua:null,uaV:null};
+/* down: the database was seen at a LOWER version than this screen holds (e.g. restored from a backup). Other screens can
+   then climb back to the same number with different content, so "same number" proves nothing: no skipping until a full
+   load has actually been put on this screen. ua/uaV: the record's "last changed" time for version uaV — the same number
+   with a different time also means a different record. */
+const SYNC_FULL_MS=600000;
+function syncDay(){const d=new Date().toDateString();if(SYNC.day!==d){SYNC.day=d;SYNC.skips=0;SYNC.fulls=0;}}
+async function fetchVer(){ // the record's version number and last-changed time only; null = could not tell
+  const t0=Date.now();
+  const r=await fetch(SUPA_URL+'/production_planner?id=eq.main&select=version,updated_at',{headers:SUPA_HDR});
+  const d=await r.json();
+  if(!r.ok||!Array.isArray(d)||!d[0]||d[0].version==null)return null;
+  SYNC.check={at:Date.now(),ms:Date.now()-t0};
+  const v=+d[0].version||null;
+  if(v!==null&&VER!==null&&v<VER)SYNC.down=true; // went backwards: never trust "same number" until a full load is applied
+  return v===null?null:{v,ua:d[0].updated_at==null?null:String(d[0].updated_at)};
+}
+function syncApplied(row){ // a full load has just been put on this screen: the safety net and the "went backwards" mark restart
+  SYNC.lastFull=Date.now();syncDay();SYNC.fulls++;SYNC.down=false;
+  SYNC.ua=row&&row.updated_at!=null?String(row.updated_at):null;SYNC.uaV=VER;
+}
+// Nothing on this screen that a full load would have to merge or repair.
+// Settings → "Sync speed": what the last save / full load / quick check cost on this screen (plain English)
+function syncSpeedHTML(){
+  syncDay();
+  const tm=t=>new Date(t).toTimeString().slice(0,5),sec=ms=>(Math.round((+ms||0)/100)/10).toFixed(1)+' s';
+  const one=(x,sz)=>x?(sz?fmtMB(x.b)+' in ':'')+sec(x.ms)+' (at '+tm(x.at)+')':'none yet on this screen';
+  return '<div class="exp-panel" id="set-sync"><div style="font-size:14px;font-weight:600;margin-bottom:6px">⏱ Sync speed (this screen)</div>'
+    +'<div style="font-size:13px;line-height:1.7">'
+    +'<div>Last save: <b data-sync="save">'+one(SYNC.save,1)+'</b></div>'
+    +'<div>Last full load: <b data-sync="load">'+one(SYNC.load,1)+'</b></div>'
+    +'<div>Last quick check: <b data-sync="check">'+one(SYNC.check,0)+'</b></div>'
+    +'<div>Today: <b data-sync="skips">'+(+SYNC.skips||0)+'</b> refresh'+(SYNC.skips===1?' was':'es were')+' skipped because nothing had changed · <b data-sync="fulls">'+(+SYNC.fulls||0)+'</b> full load'+(SYNC.fulls===1?'':'s')+'</div>'
+    +'</div><div style="font-size:11px;color:var(--t3);margin-top:3px">Every 2 minutes this screen first asks the database for a tiny "has anything changed?" number; the whole plan is only downloaded when it has (and at least every 10 minutes).</div></div>';
+}
+function syncCalm(){return VER!==null&&DB.loaded&&!DB.loadFailed&&!DB.remoteBroken&&!DB.saveFailed&&DB.lastLoadOk&&!SAVING&&!saveT&&!UNSURE.length&&!!BASE&&same(snap(),BASE);}
+async function refreshDB(){
+  syncDay();
+  const gap=Date.now()-SYNC.lastFull; // negative = the clock was set back: treat the safety net as due
+  if(!SYNC.down&&syncCalm()&&gap>=0&&gap<SYNC_FULL_MS){
+    let q=null;try{q=await fetchVer();}catch(e){q=null;}
+    if(q&&q.v===VER&&!SYNC.down&&syncCalm()){
+      // Same number: also the same last-changed time? (Not known yet for a version this screen saved itself — the first
+      // check after its own save records it.)
+      if(SYNC.uaV!==VER){SYNC.ua=q.ua;SYNC.uaV=VER;SYNC.skips++;return;}
+      if(q.ua===SYNC.ua){SYNC.skips++;return;} // unchanged — keep what we have
+    }
+  }
+  return loadDB();
 }
 /* Refuse a missing, empty or damaged planner record (e.g. a wiped row or a permissions change that makes the
    database answer "nothing"). Treated as a failed load — the screen keeps what it has and never saves over it. */
@@ -1141,7 +1199,8 @@ async function loadDB(){
     if(SAVING)return;
     DB.lastLoadOk=true;
     // A slow refresh reply that left the database before this screen's own save landed is out of date — ignore it
-    if(row&&VER!==null&&row.version!==undefined&&(+row.version||1)<VER){setSS(DB.saveFailed?'e':'ok');return;}
+    // (R1: also marks "went backwards", so the quick check can't skip until a load is really applied — e.g. a restore)
+    if(row&&VER!==null&&row.version!==undefined&&(+row.version||1)<VER){SYNC.down=true;setSS(DB.saveFailed?'e':'ok');return;}
     DB.remoteBroken=false;
     // This screen has changes the database hasn't got yet (typing, a pending or failed save):
     // never throw them away — merge the database copy into them and send the result.
@@ -1153,6 +1212,7 @@ async function loadDB(){
       lqOwn(m.plan.settings,theirs.settings);
       applyPlan(m.plan);noteMerge(m.notes,m.ren,row.updated_by);
       BASE=clone(theirs);unsureKeep(row);VER=row.version===undefined?null:(+row.version||1);
+      syncApplied(row); /*R1*/
       if(ebDropped(row))delete BASE.settings.exportBase; // an old tab dropped the baseline: this save puts ours back
       DB.loadFailed=false;
       sched();setSS('s');
@@ -1162,6 +1222,7 @@ async function loadDB(){
       if(row.version===undefined){VER=null;legacyWarn('load');}else VER=+row.version||1;
       applyPlan(planOf(row,BASE?BASE.settings:fullSettings()));
       UNSURE=[];
+      syncApplied(row); /*R1: the safety net counts from a load that was really put on the screen*/
     }
     // One-off migration: plans saved before the baseline was stored get it built once from the jobs as they
     // stand (what every load used to do); the office saves it so all screens share one baseline.
@@ -1239,8 +1300,10 @@ async function pushPlan(){
       }
       const mine=snap();
       unsureAdd(mine); // counts as "may have landed" from the moment it's sent (the tab may close before the reply)
-      let resp;try{resp=await fetch(SUPA_URL+'/production_planner?id=eq.main',{method:'PATCH',headers:SUPA_WHDR,body:JSON.stringify(mine)});}catch(e){throw e;}
+      const bd=JSON.stringify(mine),t0=Date.now(); /*R1: timed for Sync speed*/
+      let resp;try{resp=await fetch(SUPA_URL+'/production_planner?id=eq.main',{method:'PATCH',headers:SUPA_WHDR,body:bd});}catch(e){throw e;}
       if(resp&&resp.ok===false){unsureDel(mine);throw new Error('HTTP '+resp.status);}
+      SYNC.save={at:Date.now(),b:bd.length,ms:Date.now()-t0};
       BASE=mine;UNSURE=[];return;
     }
     // Only saves if the database is still at the version we loaded. We ask for VER+1; the database trigger
@@ -1250,8 +1313,9 @@ async function pushPlan(){
     let resp;
     unsureAdd(mine,VER+1); // counts as "may have landed" from the moment it's sent — a tab closed mid-save keeps the record
     writePend(); // ...in the device copy too, with its tag, so a reopen can tell whether it landed
+    const bd=JSON.stringify({...mine,version:VER+1,updated_by:whoTag()}),t0=Date.now(); /*R1: timed for Sync speed*/
     try{resp=await fetch(SUPA_URL+'/production_planner?id=eq.main&version=eq.'+VER+'&select=version',{method:'PATCH',headers:{...SUPA_WHDR,'Prefer':'return=representation'},
-      body:JSON.stringify({...mine,version:VER+1,updated_by:whoTag()})});}
+      body:bd});}
     catch(e){ // no reply: it may have landed. Look at the database straight away, before other screens move it on.
       const c=await saveCheck(mine,VER+1,tok);
       if(c>0){VER=c;BASE=mine;UNSURE=[];return;} // it did land (the database holds exactly what we sent) — same as a normal reply
@@ -1275,6 +1339,7 @@ async function pushPlan(){
     // Saved. The row we wrote is VER+1 by definition (we matched version=VER and the trigger sets old+1). Never take a
     // higher number from the reply: if a later save had already landed, adopting its number would make this screen's
     // next save overwrite that save's changes without merging them.
+    if(Array.isArray(d)&&d.length)SYNC.save={at:Date.now(),b:bd.length,ms:Date.now()-t0}; /*R1*/
     if(Array.isArray(d)&&d.length){const nv=VER+1;if(+d[0].version!==nv)console.warn('Planner: save reply said version '+d[0].version+', expected '+nv+' — using '+nv);VER=nv;BASE=mine;UNSURE=[];return;}
     if(!Array.isArray(d))throw new Error('unexpected save reply');
     unsureDel(mine); // "nothing updated" — it didn't land
@@ -1602,7 +1667,7 @@ function startAutoRefresh(){
       if(typeof IMPPLAN!=='undefined'&&(IMPPLAN||PEND))return; // an import review in progress must never be wiped by a refresh
       const ae=document.activeElement;if(ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName))return; // someone is typing
       if(document.querySelector('.pod-ovl'))return; // a dialog is open (name, reason, list editor) — its answer must land on the live objects
-      loadDB().then(()=>{lsStart();if(ROLE)render();});
+      refreshDB().then(()=>{lsStart();if(ROLE)render();}); /*R1: full load only when the record changed*/
     },120000);
   }
 }
@@ -1774,7 +1839,7 @@ function renderSettings(app){
     +'<button class="btn btn-g" id="btn-backup">⬇ Download full backup (JSON)</button>'
     +'<div id="bak-last" style="font-size:13px;font-weight:700;margin-top:12px">Last good backup: checking…</div>'
     +'<div style="font-size:11px;color:var(--t3);margin-top:3px">Automatic: the first office screen each day saves a copy to the database (kept 30 days). Clear Week and other bulk deletes take one first.</div>'
-    +'</div>'+(V2()||DB.pendFail?devStoreHTML():'')+lsPanelHTML()+'</div>'; // (Garry 13 Nov, question 15 answer B) hidden while lists are OFF, except when this device could not keep its copy
+    +'</div>'+syncSpeedHTML()+(V2()||DB.pendFail?devStoreHTML():'')+lsPanelHTML()+'</div>'; // (Garry 13 Nov, question 15 answer B) hidden while lists are OFF, except when this device could not keep its copy
 
   // staff roster: edit in place, add, remove
   const uidS=()=>'S'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
