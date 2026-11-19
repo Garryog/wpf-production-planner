@@ -334,4 +334,6 @@ Garry's words: "the edit button for the cutting lists templates is gone. i need 
   keeps its step drop-down instead.
 - **✓ Check** on a new list opens the whole list read-only first; "✓ Confirm checked" at the bottom checks it (same PIN / who rules),
   "Not right — edit" opens the list window, Close changes nothing.
-- Open question: a list still "Waiting for check" already counts as "has a list" (green). Say if it should stay un-green until checked.
+- **Garry 19 Nov:** a list still "Waiting for check" counts as green straight away (as built) — no change.
+- **Garry 19 Nov:** the step badge shows on every page, lists switch ON or OFF, Deliveries cards included (one line taller) — as built.
+  So switch-OFF screens are no longer identical to live because of the badge/strip; tests comparing them with main ignore those two only.
