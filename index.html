@@ -80,7 +80,8 @@ button,input,select{font-family:inherit;cursor:pointer}
 tr.lst-ok>td:first-child{box-shadow:inset 4px 0 0 #2d9e54}
 .lst-ok:not(tr){box-shadow:inset 4px 0 0 #2d9e54}
 .dchip.lst-ok,.dcell .dchip.lst-ok,.dpool .dchip.lst-ok{box-shadow:inset 4px 0 0 #2d9e54}
-.stp-b{display:inline-block;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:10px;font-weight:600;line-height:1.4;color:#4a5568;background:#eef1f5;border:1px solid #d5dbe3;border-radius:4px;padding:0 5px;margin-left:5px;white-space:nowrap;vertical-align:middle;text-transform:none;letter-spacing:0;text-decoration:none}
+.stp-b{display:inline-block;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:10px;font-weight:600;line-height:1.4;color:#4a5568;background:#eef1f5;border:1px solid #d5dbe3;border-radius:4px;padding:0 5px;margin-left:5px;white-space:nowrap;vertical-align:middle;text-transform:none;letter-spacing:0;text-decoration:none;max-width:min(100%,240px);overflow:hidden;text-overflow:ellipsis;box-sizing:border-box}
+.dchip-top b .stp-b{display:block;width:max-content;max-width:100%;margin:2px 0 0}/*attack19: on a Deliveries card the step sits on its own line under the WO — never under the card buttons*/
 .wo-num{font-family:monospace;font-size:11px;color:var(--t2)}
 .wo-title{font-weight:500;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
 .wo-cust{color:var(--t2);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
@@ -4070,10 +4071,13 @@ async function lsViewDlg(id,opt){opt=opt||{};let l=lsList(id);if(!l)return;
     const sig=x=>(+(x&&x.rev)||1)+'|'+JSON.stringify(lsView(id,true).rows),seen=sig(l);
     if(ok)ok.onclick=async()=>{if(ok.disabled)return;ok.disabled=true;ok.textContent='Checking for changes…';
       try{if(V2())await lsReloadList(id);}catch(e){ok.disabled=false;ok.textContent='✓ Confirm checked';toast('Could not reach the database — not checked. Try again. ('+e.message+')');return;}
-      const now=lsList(id);ov.remove();
-      if(!now){toast('This list is no longer there — not checked');render();return;}
-      if(sig(now)!==seen){render();lsViewDlg(id,{check:true,changed:true});return;}
-      lsCheck(id,true,{viewed:true});};
+      if(!document.body.contains(ov))return; // (attack19 D) closed while it re-read: Close changes nothing
+      const now=lsList(id),shut=m=>{ov.remove();render();if(m)toast(m);};
+      if(!now)return shut('This list is no longer there — not checked');
+      if(now.archived)return shut('This list was archived on another screen — not checked'); // (attack19 A)
+      if(now.checkedAt)return shut('Already checked by '+(now.checkedBy||'someone')+' — nothing to do'); // (attack19 F) never re-stamped
+      if(sig(now)!==seen){ov.remove();render();lsViewDlg(id,{check:true,changed:true});return;}
+      lsCheck(id,true,{viewed:true,ov,ok});};
     if(ed)ed.onclick=()=>{ov.remove();openListEditor(l.id);};}
   ov.querySelectorAll('[data-vchk]').forEach(b=>b.onclick=()=>{ov.remove();lsCheck(l.id,b.dataset.vchk==='1');});
   const x=ov.querySelector('#pod-x');if(x){const b=document.createElement('button');b.className='btn btn-s';b.id='lv-print';b.textContent='🖨 Print';b.style.marginRight='8px';b.onclick=()=>lsPrintList(l.id);x.parentNode.insertBefore(b,x);}
@@ -4196,16 +4200,19 @@ function lsPinOk(what){ // the Drawing office / Production Manager / Admin PIN (
   if(!ok(v.trim())){toast('Wrong PIN — not checked');return false;}
   ls.set('wpfEditPin',v.trim());return true;
 }
-function lsCheck(id,on,opt){
+function lsCheck(id,on,opt){opt=opt||{};
   const l=lsList(id);if(!l||!lsChkOn())return;
-  if(!lsPinOk(on?'Checking a list':'Taking a check away'))return;
-  if(on&&opt&&opt.viewed){} // h19: from the list view's "✓ Confirm checked" the list itself was the question — no second box
+  // (attack19 G) from the check view: a wrong / cancelled PIN or "who" keeps the list open, Confirm pressable again
+  const back=()=>{if(opt.ok&&document.body.contains(opt.ok)){opt.ok.disabled=false;opt.ok.textContent='✓ Confirm checked';}};
+  if(!lsPinOk(on?'Checking a list':'Taking a check away')){back();return;}
+  if(on&&opt.viewed){} // h19: from the list view's "✓ Confirm checked" the list itself was the question — no second box
   else if(on){const rows=lsView(id,true).rows,n=k=>rows.filter(r=>r.k===k).length,tbc=lsTbc(rows);
     if(!confirm('Check "'+l.name+'"'+(l.project?' ('+l.project+')':'')+' — Rev '+(+l.rev||1)+'?\n\n'+n('saw')+' saw · '+n('fit')+' stores · '+n('buy')+' bought in'+(tbc.length?'\n⚠ spec TBC: '+tbc.join(', ')+' (the saw is not stopped by this)':'')+'\n\nOnce checked the saw sees it.'))return;}
   else if(!confirm('Take the check away from "'+l.name+'"? The saw stops seeing it until it is checked again.'))return;
-  officeWho(by=>{lqList({t:'done',list:id,mode:'check',on:!!on,by});
+  officeWho(by=>{if(opt.ov){if(!document.body.contains(opt.ov))return;opt.ov.remove();} // the view closed meanwhile → nothing
+    lqList({t:'done',list:id,mode:'check',on:!!on,by});
     if(typeof ltiAfter==='function'&&document.querySelector('.lti-host'))ltiAfter();else render();
-    toast(on?'"'+l.name+'" checked ✓ — the saw can see it now':'Check taken away from "'+l.name+'"');});
+    toast(on?'"'+l.name+'" checked ✓ — the saw can see it now':'Check taken away from "'+l.name+'"');},back);
 }
 /* ---------- Cutting-list flow (Garry, 3 Nov — docs/PLAN-cutting-lists-flow-nov.md), V2 only ----------
    "Cutting lists to issue": every WO that needs a list (listsNeeded) with a suggested template (suggestTpl).
