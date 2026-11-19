@@ -335,3 +335,16 @@ Garry's words: "the edit button for the cutting lists templates is gone. i need 
 - **✓ Check** on a new list opens the whole list read-only first; "✓ Confirm checked" at the bottom checks it (same PIN / who rules),
   "Not right — edit" opens the list window, Close changes nothing.
 - Open question: a list still "Waiting for check" already counts as "has a list" (green). Say if it should stay un-green until checked.
+
+### Deliveries fixes (19 Nov 2026, Garry) — plan docs/PLAN-deliveries-19nov.md, branch feature/deliveries-19nov
+- Customer / project band at the top of every Deliveries card (pool, van cells, Later); the tick sits in it.
+- Booking onto a van + day that already has ANY job asks first (names the jobs and customers). Cancel changes nothing.
+- Tick cards, then book from the blue bar: Put on [van] [day] → 🚚 Book N.
+- × = "Take off board": two steps, type the WO (DELETE for a job added by hand) + a name. Loaded / dispatched / delivered refused.
+  Jobs added by hand are archived in 📚 Past weeks, never erased.
+- Un-ship = BOTH: "↩ Back to Deliveries" on the 📦 Shipped card and on every job row in 📚 Past weeks (name + reason; the old
+  stamps go into the job's history; Cienapps 9 → shipBack so the next import does not ship it again). ↩ Clear status asks + a name.
+- ＋ List / ＋ Add cutting list: choose the template first ("Start this list from: Type A / Type B / Blank standard layout").
+  A template going into a list takes out untouched blank rows and empty standard sub-headings (a colour alone is not "typed").
+- Open question: should Cutting Lists → ＋ New list (and the "lists needed" rows) also ask "Start this list from:" first? Built for
+  the Deliveries ＋ List and the ⓘ window's ＋ Add cutting list only.
