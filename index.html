@@ -2439,12 +2439,13 @@ function shipBackApply(o,by){
 const BACK_WHY=['Not delivered after all','Damaged / returned — deliver again','Marked delivered by mistake','Customer asked for it again','Other'];
 function delStampTxt(o){const f=s=>s?new Date(s).toLocaleDateString('en-IE',{day:'numeric',month:'short'})+' '+hhmm(s):'';
   return [o.delLoadedAt?' · loaded '+f(o.delLoadedAt)+(o.ldBy?' by '+o.ldBy:''):'',o.delDispAt?' · dispatched '+f(o.delDispAt):'',(o.delDelivAt||o.delDone)?' · delivered '+(f(o.delDelivAt)||'(no time)')+(o.delivBy?' by '+o.delivBy:''):'',o.delVeh&&o.delDay?' · '+slotLblO(o):''].join('');}
+function delBack9(o){return !!o&&stepNo(o.cienStep||o.shippedStep||o.step)===9;} // shipped or not yet: Cienapps says 9 → shipBack, so the next import still saying 9 leaves it alone
 function delBackOk(o){return !!o&&DB.orders.includes(o)&&!isOnHold(o)&&!(delOnPage(o)&&dStage(o)!=='deliv');}
 function delBackAsk(o,arc){
   const man=!!arc&&!DB.orders.includes(o);
   if(!man&&!delBackOk(o)){toast(o&&delOnPage(o)?o.wo+' is already on Deliveries':o&&isOnHold(o)?o.wo+' is on hold in Cienapps — not brought back':'Not found',true);return;}
   officeWho(by=>pickReason('Why is '+o.wo+' coming back to Deliveries?',
-    'It goes into the To plan pool marked “↩ brought back — rebook”. The old delivered stamps are kept in its history. Recorded with your name ('+escA(by)+').'+(!man&&isShipped(o)&&stepNo(o.cienStep||o.shippedStep||o.step)===9?' It also comes back to the Capacity Board from 📦 Shipped (the next Cienapps import that still says 9 will not ship it again).':''),
+    'It goes into the To plan pool marked “↩ brought back — rebook”. The old delivered stamps are kept in its history. Recorded with your name ('+escA(by)+').'+(!man&&delBack9(o)?' It also comes back to the Capacity Board from 📦 Shipped (the next Cienapps import that still says 9 will not ship it again).':''),
     why=>{const at=nowISO();
       if(man){const a=(DB.delArchive||{})[arc.k],j=a&&a.jobs[arc.i];if(!j||j.back||(DB.delx||[]).some(x=>x.wo===j.wo)||DB.orders.some(x=>x.wo===j.wo)){toast(o.wo+' is already back — nothing changed');render();return;}
         const x=Object.assign({title:j.t||'',customer:j.c||'',floor:j.f||'',unit:j.u||'',value:+j.val||0},clone(j.x)||{},{wo:j.wo,manual:true,delVeh:'',delDay:'',delDone:false});
@@ -2454,7 +2455,7 @@ function delBackAsk(o,arc){
         j.back={at,by,why};DB.delx=DB.delx||[];DB.delx.push(x);
       }else{const x=DB.orders.find(z=>z.wo===o.wo);if(!delBackOk(x)){toast(o.wo+' changed on another screen — nothing changed');render();return;}
         logEdit(x,'Brought back to Deliveries'+(dStage(x)||x.delVeh?' — was'+delStampTxt(x):''),by,why);
-        if(isShipped(x)&&stepNo(x.cienStep||x.shippedStep||x.step)===9){shipBackApply(x,by);logEdit(x,'Brought back to the board from Shipped (back to Deliveries)',by);}
+        if(delBack9(x)){shipBackApply(x,by);logEdit(x,'Brought back to the board from Shipped (back to Deliveries)',by);}
         ['delLoadedAt','delDispAt','delDelivAt','ldBy','delivBy','delWk','missWhy'].forEach(k=>delete x[k]);
         x.delDone=false;x.delv=true;delvMark(x);x.delVeh='';x.delDay='';
         x.delRebook={at,by,why:'Brought back — '+why,was:'',back:1};
