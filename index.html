@@ -4190,7 +4190,8 @@ function lsPinOk(what){ // the Drawing office / Production Manager / Admin PIN (
 function lsCheck(id,on,opt){
   const l=lsList(id);if(!l||!lsChkOn())return;
   if(!lsPinOk(on?'Checking a list':'Taking a check away'))return;
-  if(on&&!(opt&&opt.viewed)){ // h19: from the list view's "✓ Confirm checked" the list itself was the question — no second boxconst rows=lsView(id,true).rows,n=k=>rows.filter(r=>r.k===k).length,tbc=lsTbc(rows);
+  if(on&&opt&&opt.viewed){} // h19: from the list view's "✓ Confirm checked" the list itself was the question — no second box
+  else if(on){const rows=lsView(id,true).rows,n=k=>rows.filter(r=>r.k===k).length,tbc=lsTbc(rows);
     if(!confirm('Check "'+l.name+'"'+(l.project?' ('+l.project+')':'')+' — Rev '+(+l.rev||1)+'?\n\n'+n('saw')+' saw · '+n('fit')+' stores · '+n('buy')+' bought in'+(tbc.length?'\n⚠ spec TBC: '+tbc.join(', ')+' (the saw is not stopped by this)':'')+'\n\nOnce checked the saw sees it.'))return;}
   else if(!confirm('Take the check away from "'+l.name+'"? The saw stops seeing it until it is checked again.'))return;
   officeWho(by=>{lqList({t:'done',list:id,mode:'check',on:!!on,by});

@@ -112,11 +112,11 @@ const GREEN = 'rgb(45, 158, 84)';
     rec('3 "Not right — edit" → the list window opens on that list; still not checked', ed.open && /Edit/.test(ed.t) && dbChk()[0] === null, J([ed, dbChk()]));
     await p.evaluate(() => { const x = document.getElementById('me-x0'); if (x) x.click(); }); await sleep(400); await closeAll(p);
     await p.evaluate(() => { render(); document.querySelector('[data-lhchk="LC"]').click(); }); await sleep(600);
-    await p.evaluate(() => [...document.querySelectorAll('.pod-ovl')].pop().querySelector('#lv-chkok').click()); await sleep(400);
+    await p.evaluate(() => { window.__asked = []; [...document.querySelectorAll('.pod-ovl')].pop().querySelector('#lv-chkok').click(); }); await sleep(400);
     await p.evaluate(async () => { await lqSend(); await lsPoll(); }); await sleep(300);
     const c = dbChk(), pr = await p.evaluate(() => window.__prompted);
     rec('3 "✓ Confirm checked" → checked, by the person (Ann), with the PIN asked as today', !!c[0] && c[1] === 'Ann' && pr.some(m => /PIN/.test(m)), J([c, pr]));
-    rec('3 …the old "Check …?" OK/Cancel box is not asked on top (the list itself was the question)', (await p.evaluate(() => window.__asked.filter(m => /^Check "/.test(m)).length)) === 0);
+    rec('3 …no OK/Cancel box on top (the list itself was the question)', (a => a.length === 0)(await p.evaluate(() => window.__asked)), J(await p.evaluate(() => window.__asked)));
     // the panel "Cutting lists to issue" ✓ Check does the same
     X.F3.seedList(S, 'LD', { name: 'Needs check 2', wos: ['WO-3'], list: { check_req: true } });
     await p.evaluate(async () => { lsReset(); await lsLoad(); render(); }); await sleep(400);
@@ -145,6 +145,11 @@ const GREEN = 'rgb(45, 158, 84)';
     rec('2 Drawing-stage review (import): step badge "DRAWING" beside the WO', /class="stp-b"[^>]*>DRAWING</.test(dr), dr.slice(0, 200));
     const wnoS = await p.evaluate(() => stepBadge({ wo: 'X', step: '' }) === '' && stepBadge('NOPE') === '');
     rec('2 a job with no step (or not on the planner) → no empty badge', wnoS);
+    // the small "✓ Check" inside a plain View still asks as before (unchanged)
+    await p.evaluate(() => { window.__asked = []; lsViewDlg('LD'); }); await sleep(600);
+    const v2 = await ov();
+    rec('3 a plain View (not from ✓ Check) is unchanged: its small ✓ Check button, no Confirm bar', v2 && v2.small && !v2.ok, J(v2 && { small: v2.small, ok: v2.ok }));
+    await closeAll(p);
     rec('no page errors', !errs.length, J(errs.slice(0, 3)));
   } catch (e) { rec('test ran without crashing', false, e.stack); }
   await browser.close(); finish();
