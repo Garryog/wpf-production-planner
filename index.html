@@ -306,7 +306,8 @@ details.lti-other{margin-bottom:14px}details.lti-other>summary{cursor:pointer;fo
 .dchip .dchip-btns button:hover{background:#dde3ea;color:var(--text)}
 .dchip .dchk.on{color:#0b7e44;font-weight:700}
 .dchip-t{font-size:11px;color:var(--text);line-height:1.35;margin-top:3px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
-.dchip-c{font-size:10px;color:var(--t3);margin-top:2px;overflow:hidden;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.dchip-c{font-size:13px;font-weight:700;line-height:1.3;color:#fff;background:#14335c;border-radius:4px;padding:3px 7px;margin:0 0 5px;overflow:hidden;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}/*d19-1: customer / project band at the top of every Deliveries card (pool, van cells, Later)*/
+.dchip-c.none{background:#e6eaf0;color:#4a5568;font-weight:600}
 .dchip.done{background:#eefbf3;border-color:#b3e0c4}
 .dchip.done .dchip-t,.dchip.done .dchip-top b{text-decoration:line-through;opacity:.6}
 .dchip.dispd{background:#e8f1fd;border-color:#9cbce8}
@@ -8238,10 +8239,11 @@ async function addPodPhotos(files,pk){
   drvUploading=false;render();
 }
 
-function dchip(o,showCust){
+function dchip(o){ /*d19-1: the customer band is on every card now (showCust gone)*/
   const st=dStage(o);
   const rd=(!st&&!o.manual)?woReady(o.wo):null; // one colour per job until it's loaded — detail behind the ⓘ button
   return `<div class="dchip${rd?' rdy-'+rd.lvl:''}${st==='deliv'?' done':''}${st==='disp'?' dispd':''}${st==='load'?' loadd':''}${o.manual?' manual':''}${delSel.has(o.wo)?' sel':''}${!o.manual&&woListOk(o)?' lst-ok':''}" draggable="true" data-dw="${escA(o.wo)}" title="Click to select · drag onto a day${o.manual?' · added manually':''}${!o.manual&&woListOk(o)?' · green strip: cutting list sorted':''}">
+    ${String(o.customer||'').trim()?`<div class="dchip-c" title="${escA(o.customer)}">${escA(o.customer)}</div>`:'<div class="dchip-c none">(no customer)</div>'}
     <div class="dchip-top"><b>${escA(o.wo)}${o.manual?'':stepBadge(o)}</b>
       <span class="dchip-btns">${V2()&&!o.manual&&!st&&!['pm','driver','dash','floor','saw','stores'].includes(ROLE||'')&&!lists().some(l=>(l.wos||[]).includes(o.wo))?`<button class="dinfo dlist-add" data-dladd="${escA(o.wo)}" title="＋ Add a cutting list for ${escA(o.wo)} (opens the cutting list window)" style="width:auto;padding:0 6px;font-weight:800">＋ List</button>`:''}${rd?`<button class="dinfo" data-dinfo="${escA(o.wo)}" title="${escA(RDY_LBL[rd.lvl]+(rd.why.length?' — '+rd.why.join(' · '):''))} — tap for detail">ⓘ</button>`:''}<button class="dchk${st?' on':''}" data-dd="${escA(o.wo)}" title="Status: ${dStageLbl[st]||'planned'} — tap to update (opens a menu)">${st==='deliv'?'✓':st==='disp'?'D':st==='load'?'L':'·'}</button><button data-dx="${escA(o.wo)}" title="${o.delDay?'Return to pool':(o.manual?'Delete this manual job':'Remove from delivery plan')}">×</button></span>
     </div>
@@ -8251,7 +8253,7 @@ function dchip(o,showCust){
     ${wkBtnsOk(o)?(nw=>`<div class="dchip-wkb"><button class="dwk-btn" data-wknext="${escA(o.wo)}" data-wk="${escA(nw)}" title="Move the due date${o.delivDate?' and the delivery date':''} one week on — asks why">→ Wk ${wkNum(nw)}</button><button class="dwk-btn" data-wkpick="${escA(o.wo)}" title="Pick any week — asks why">Move to week…</button></div>`)(wkPlus(delPoolWk(o),1)):''}${o.delRebook&&!o.delDay?`<div class="dm-moved" title="${escA('Taken off '+(o.delRebook.was||'').split('|').slice(0,2).join(' ')+' by '+(o.delRebook.by||'')+(o.delRebook.why?' — '+o.delRebook.why:''))}">${o.delRebook.nd?'🚚 not delivered Wk '+escA(o.delRebook.nd)+' — rebook':'📅 date moved — rebook'}</div>`:''}${o.dueMv&&o.dueMv.loaded&&dStage(o)&&dStage(o)!=='deliv'?`<div class="dm-moved" style="color:#b42318">📅 date moved after loading — check</div>`:''}
     ${st?`<div class="dstg s-${st}">${dStageLbl[st]}${dStageTime(o)?' '+dStageTime(o):''}${st==='deliv'&&o.delivBy?' — '+escA(o.delivBy):st==='load'&&o.ldBy?' — '+escA(o.ldBy):''}</div>`:''}
     ${isOnHold(o)?`<div class="rdy-tag" style="background:#fde8e8;color:#b42318" title="Step 12 in Cienapps — kept here because it's already loaded / on the road">⏸ ON HOLD in Cienapps</div>`:''}${rd?`<div class="rdy-tag">${RDY_LBL[rd.lvl]}</div>`:''}${(o.delMoves||[]).length?`<div class="dmoved" title="${escA(o.delMoves.map(m=>m.why+' — '+m.by).join(' | '))}">🚚 rebooked ×${o.delMoves.length}</div>`:''}
-    ${!o.manual&&(afterDelivOn(o)||delivMvOn(o))?`<div>${delivFlagChips(o)}</div>`:''}${siteChip(o)}${showCust?`<div class="dchip-c" title="${escA(o.customer)}">${escA(o.customer)}</div>`:''}
+    ${!o.manual&&(afterDelivOn(o)||delivMvOn(o))?`<div>${delivFlagChips(o)}</div>`:''}${siteChip(o)}
   </div>`;
 }
 
@@ -8292,7 +8294,7 @@ function renderDeliveries(app){
   const gName=k=>later?'Wk '+wkNum(k)+' — due from '+dShort(k):k;
   const gHTML=(k,lbl,list,sty)=>`<div class="dgrp">
         <div class="dgrp-h" data-grp="${escA(k)}"${sty?` style="${sty}"`:''}><span class="dgrp-n">${escA(lbl)}</span><span class="gcnt">${list.length} job${list.length!==1?'s':''} · click to select all</span></div>
-        <div class="dpool-chips">${list.map(o=>dchip(o,later||k==='__rebook')).join('')}</div>
+        <div class="dpool-chips">${list.map(o=>dchip(o)).join('')}</div>
         <div class="dgrp-f">${list.length} job${list.length!==1?'s':''} · €${Math.round(list.reduce((a,o)=>a+(+o.value||0),0)).toLocaleString()}</div>
       </div>`;
   const nOrd=delSelLive().filter(w=>DB.orders.some(o=>o.wo===w)).length;
