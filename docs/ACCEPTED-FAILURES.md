@@ -194,3 +194,15 @@ S6 (1), attack1-layout / attack2-excel-phone / attack3-phone P1 / P10 / final-a-
 | list-window attack8-deliv E6 "the old screen's next saves put back ALL the drivers" (Medium) | same cause as O1/O2, seen from the other side: after an old screen's save only the drivers this PC set again come back. **Close every screen on go-live day** | go-live step: close every screen | pending |
 | list-window attack7-vandrv T2 "Pat put on the Volvo AND the Artic Fri from two PCs at once → somebody is told" (Low) | two PCs putting the same driver on two different vans in the same second both save without warning (each PC checked before the other had saved). The Deliveries page shows both vans, and the driver's phone shows both as his | — (rare; same-second double booking) | pending |
 | list-window attack7-vandrv W "the PM screen shows who drives a van" (info) | only office / Production Manager see the Deliveries page, so a PM doesn't see who drives; the code comment that said "everyone sees it" has been corrected | — (information only) | pending |
+
+## 19 Nov 2026 — template buttons back on the Office screen (Garry: "the edit button for the cutting lists templates is gone. i need that button") — pending, Garry to sign off
+The list window release (18 Nov) hid every template button from the Office, PM and Management screens. Garry asked for them back.
+They are SHOWN again on every screen that had them before 18 Nov; making or changing a template still needs the Drawing office /
+Production Manager / Admin PIN typed at the click (a remembered PIN still never opens templates — new test `list-window/h19-templates`).
+These checks expect the buttons to be hidden, so they are out of date by design — not app faults:
+
+| Test / check | Why it fails | Fixed by | Status |
+|---|---|---|---|
+| list-window attack1-tpl-role (9), attack2-fixes (5), attack2-tpl-pin (3), attack3-roles-archived-simple A1 / C5 (5 new), attack3b-phone-tplpin T2 / T3 (12), final-a-roles-fail (4), final-b-merge-seams 2 (1), g13-prod-templates (2), editor e9-templates (1) | they check that Office / PM / Management see NO ✎ Edit, Archive, 📐 Save as template, ＋ New template or ⧉ Copy from another project. Those buttons are back on purpose. The checks that follow a click (PM PIN typed → allowed; "Sneaked in" template saved with the Production Manager PIN) follow Garry's 13 Nov rule that the Production Manager may make templates | Tester to rewrite to the 19 Nov rule | pending |
+| list-window attack3-roles-archived-simple C2 (info) "no more than 8 buttons outside the rows" | 11 buttons instead of 10 on the Office screen — the extra one is 📐 Save as template | — (information only) | pending |
+| list-window attack3b-phone-tplpin PH3 "320 px: reason + Save bar take no more than half the screen" (Low) | on a 320 px phone the Office screen's Save bar now also holds 📐 Save as template, so it is taller. Save is still fully on the screen | could hide Save as template on phones if Garry wants | pending |
