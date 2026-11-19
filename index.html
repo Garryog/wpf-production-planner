@@ -323,6 +323,14 @@ details.lti-other{margin-bottom:14px}details.lti-other>summary{cursor:pointer;fo
 .dchip.dragging{opacity:.4}
 .selbar{display:flex;align-items:center;gap:10px;background:#e8f1fd;border:1px solid #b0c8e8;border-radius:6px;padding:7px 12px;font-size:12px;color:#14418f;margin-bottom:10px}
 .selbar button{background:none;border:none;color:#1a56db;font-size:12px;cursor:pointer;text-decoration:underline;padding:0}
+/*d19-3: visible tick on each Deliveries card + book from the selection bar*/
+.dtick{flex:0 0 auto;font-size:19px;line-height:1;color:#7a8699;cursor:pointer;margin:-2px 0 0}
+.dchip.sel .dtick{color:#1a56db;font-weight:700}
+.selbar .selput{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}
+.selbar select{font-size:13px;padding:5px 6px;border:1px solid #b0c8e8;border-radius:6px;background:#fff;min-height:34px;max-width:100%}
+.selbar button.selbook{background:#0d6e46;color:#fff;border-radius:6px;text-decoration:none;font-weight:700;font-size:13px;padding:7px 12px;min-height:34px}
+.selbar button.selbook:disabled{background:#9fb3a8;cursor:default}
+@media(max-width:600px){.selbar{gap:8px}.selbar .selput{width:100%}.selbar select{flex:1 1 120px}}
 .del-grid{width:100%;min-width:1100px;border-collapse:collapse}
 .del-grid th{background:#f5f6f8;border:1px solid var(--border);padding:6px 8px;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--t2)}
 .del-grid th:first-child{width:106px;text-align:left}
@@ -2429,6 +2437,7 @@ const DEL_VEH=[
 const vehLbl=k=>{const v=DEL_VEH.find(x=>x.k===k);return v?v.n:'';};
 let delDragList=null,delFilter='';
 const delSel=new Set();
+let delBarVeh='',delBarDay=''; /*d19-3: the selection bar's van and day pickers (kept while the page redraws)*/
 
 /* On hold in Cienapps (12): off the Deliveries board and badge. A job already loaded / on the road / delivered stays —
    it is physically on a van and the driver must not lose it. */
@@ -8244,7 +8253,7 @@ function dchip(o){ /*d19-1: the customer band is on every card now (showCust gon
   const rd=(!st&&!o.manual)?woReady(o.wo):null; // one colour per job until it's loaded — detail behind the ⓘ button
   return `<div class="dchip${rd?' rdy-'+rd.lvl:''}${st==='deliv'?' done':''}${st==='disp'?' dispd':''}${st==='load'?' loadd':''}${o.manual?' manual':''}${delSel.has(o.wo)?' sel':''}${!o.manual&&woListOk(o)?' lst-ok':''}" draggable="true" data-dw="${escA(o.wo)}" title="Click to select · drag onto a day${o.manual?' · added manually':''}${!o.manual&&woListOk(o)?' · green strip: cutting list sorted':''}">
     ${String(o.customer||'').trim()?`<div class="dchip-c" title="${escA(o.customer)}">${escA(o.customer)}</div>`:'<div class="dchip-c none">(no customer)</div>'}
-    <div class="dchip-top"><b>${escA(o.wo)}${o.manual?'':stepBadge(o)}</b>
+    <div class="dchip-top"><span class="dtick" role="checkbox" aria-checked="${delSel.has(o.wo)?'true':'false'}" title="Tick to select">${delSel.has(o.wo)?'☑':'☐'}</span><b>${escA(o.wo)}${o.manual?'':stepBadge(o)}</b>
       <span class="dchip-btns">${V2()&&!o.manual&&!st&&!['pm','driver','dash','floor','saw','stores'].includes(ROLE||'')&&!lists().some(l=>(l.wos||[]).includes(o.wo))?`<button class="dinfo dlist-add" data-dladd="${escA(o.wo)}" title="＋ Add a cutting list for ${escA(o.wo)} (opens the cutting list window)" style="width:auto;padding:0 6px;font-weight:800">＋ List</button>`:''}${rd?`<button class="dinfo" data-dinfo="${escA(o.wo)}" title="${escA(RDY_LBL[rd.lvl]+(rd.why.length?' — '+rd.why.join(' · '):''))} — tap for detail">ⓘ</button>`:''}<button class="dchk${st?' on':''}" data-dd="${escA(o.wo)}" title="Status: ${dStageLbl[st]||'planned'} — tap to update (opens a menu)">${st==='deliv'?'✓':st==='disp'?'D':st==='load'?'L':'·'}</button><button data-dx="${escA(o.wo)}" title="${o.delDay?'Return to pool':(o.manual?'Delete this manual job':'Remove from delivery plan')}">×</button></span>
     </div>
     ${fuF(o)||fuU(o)?`<div class="dchip-fu">${fuHTML(o,'dfu')}</div>`:''}
@@ -8329,7 +8338,7 @@ function renderDeliveries(app){
         ${!later&&wk<=W0&&closeWeekJobs(wk).length?`<button class="btn btn-s" id="btn-delreset" style="border-color:var(--red);color:var(--red)" title="Archive Wk ${wkNum(wk)} to 📚 Past weeks — delivered jobs leave the board, anything not delivered goes back to To plan to rebook. Other weeks are not touched.">🔒 Close Wk ${wkNum(wk)}</button>`:''}
       </span>
     </div>
-    <p style="font-size:12px;color:var(--t3);margin-bottom:8px">Tag jobs on the Capacity Board with 🚚, or add one manually. Click cards to select several, then drag (or tap ⤵ Place) onto a vehicle and day. Card colour = readiness: <b style="color:#0d6e46">green ready</b> · <b style="color:#8a5a00">amber part ready / waiting on material</b> · <b style="color:#b42318">red not ready or no list</b> — ⓘ shows why. Moving a planned job asks why, and records who — moving it to another week too (select it, open that week's tab, tap ⤵ Place). <b>Due date:</b> tap the date on a card to change it. <b>Another week:</b> tap → Wk / Move to week… on the card, tick several and use Move ticked to week…, or drag cards onto a week tab.</p>
+    <p style="font-size:12px;color:var(--t3);margin-bottom:8px">Tag jobs on the Capacity Board with 🚚, or add one manually. Tick cards (☐) to select several, then drag (or tap ⤵ Place, or pick a van and day in the blue bar and tap 🚚 Book) onto a vehicle and day. Card colour = readiness: <b style="color:#0d6e46">green ready</b> · <b style="color:#8a5a00">amber part ready / waiting on material</b> · <b style="color:#b42318">red not ready or no list</b> — ⓘ shows why. Moving a planned job asks why, and records who — moving it to another week too (select it, open that week's tab, tap ⤵ Place). <b>Due date:</b> tap the date on a card to change it. <b>Another week:</b> tap → Wk / Move to week… on the card, tick several and use Move ticked to week…, or drag cards onto a week tab.</p>
     <div class="addjob-row" id="ajform">
       <input id="aj-wo" placeholder="WO / ref (optional)" style="width:140px">
       <input id="aj-title" placeholder="Description *" style="flex:1;min-width:180px">
@@ -8337,7 +8346,7 @@ function renderDeliveries(app){
       <input id="aj-val" type="number" min="0" placeholder="€ value" style="width:100px">
       <button class="btn btn-g" id="aj-add">Add to pool</button>
     </div>
-    ${delSel.size?`<div class="selbar" style="margin-top:10px;flex-wrap:wrap"><b>${delSel.size} selected</b> — ${later?'open a week tab and tap ⤵ Place':'drag any selected card onto a day to move them all'} <button id="selclr">clear selection</button>${dateCanMove()&&nMv?` <button id="selwk" style="font-weight:700" title="Move the ticked jobs to another week together, with one reason">📅 Move ticked to week… (${nMv})</button>`:''}${nOrd?` <button id="seldates" title="Change the due date of the selected jobs together, with one reason">📅 Move dates (${nOrd})</button>`:''}</div>`:''}
+    ${delSel.size?(sl=>`<div class="selbar" id="del-selbar" style="margin-top:10px;flex-wrap:wrap"><b id="selcnt">${sl.length} selected · €${Math.round(sl.reduce((a,o)=>a+(+o.value||0),0)).toLocaleString()}</b>${later?' — open a week tab to put them on a van':`<span class="selput" title="Or drag any ticked card onto a day">Put on: <select id="selveh" aria-label="Van"><option value="">van ▾</option>${DEL_VEH.map(v=>`<option value="${escA(v.k)}"${delBarVeh===v.k?' selected':''}>${escA(v.n)}</option>`).join('')}</select><select id="selday" aria-label="Day"><option value="">day ▾</option>${DEL_DAYS.map((d,i)=>{const dt=addDayISO(wk,i);return `<option value="${d}"${delBarDay===d?' selected':''}>${d} ${escA(dShort(dt))}${isDelivDay(dt)?'':' (bank holiday)'}</option>`;}).join('')}</select><button id="selbook" class="selbook"${sl.length?'':' disabled'} title="Book the ticked jobs on that van and day (Wk ${wkNum(wk)})">🚚 Book ${sl.length}</button></span>`}${dateCanMove()&&nMv?` <button id="selwk" style="font-weight:700" title="Move the ticked jobs to another week together, with one reason">📅 Move ticked to week… (${nMv})</button>`:''}${nOrd?` <button id="seldates" title="Change the due date of the selected jobs together, with one reason">📅 Move dates (${nOrd})</button>`:''} <button id="selclr">clear</button></div>`)(delSelLive().map(findDel).filter(Boolean)):''}
     <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin:10px 0 5px">
       <span style="font-size:11px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.4px">To plan — ${later?'due after Wk '+wkNum(W3):delTab==='0'?'due this week, overdue or no date':'due Wk '+wkNum(wk)} — ${pool.length} job${pool.length!==1?'s':''}</span>
       <input class="dsrch" id="dsrch" placeholder="🔍 Filter jobs — WO, customer, floor, unit, title…" value="${escA(delFilter)}">
@@ -8445,6 +8454,14 @@ function renderDeliveries(app){
     render();
   });
   const sc=document.getElementById('selclr');if(sc)sc.onclick=()=>{delSel.clear();render();};
+  /*d19-3: book the ticked jobs from the bar — the same placeJobs as drag / ⤵ Place (name, why, slot warning, bank holiday)*/
+  const sv=document.getElementById('selveh');if(sv)sv.onchange=()=>{delBarVeh=sv.value;};
+  const sdy=document.getElementById('selday');if(sdy)sdy.onchange=()=>{delBarDay=sdy.value;};
+  const sbk=document.getElementById('selbook');if(sbk)sbk.onclick=()=>{
+    const v=(document.getElementById('selveh')||{}).value||'',d=(document.getElementById('selday')||{}).value||'';delBarVeh=v;delBarDay=d;
+    if(!v||!d){toast('Pick a van and a day first');return;}
+    const js=delSelLive().map(findDel).filter(Boolean);if(!js.length){toast('Nothing ticked');return;}
+    placeJobs(js,v,d,wk);};
   const sdt=document.getElementById('seldates');if(sdt)sdt.onclick=()=>dateDlg(delSelLive()); /*dates: group move from ticked cards*/
   const swk=document.getElementById('selwk');if(swk)swk.onclick=()=>wkPickDlg(delSelLive()); /*v-deliv D3; attack5 — the ones that can't move go along only to be listed "not moved" with why*/
   document.querySelectorAll('[data-wknext]').forEach(b=>b.onclick=e=>{e.stopPropagation();wkMoveDo([b.dataset.wknext],b.dataset.wk);});
