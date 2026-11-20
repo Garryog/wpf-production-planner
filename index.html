@@ -4502,6 +4502,11 @@ function ltiImpKeep(){const el=document.getElementById('iprev');if(!V2()||!LTI.a
 function listsToIssueHTML(){return V2()?`<div class="lti-host">${ltiInner()}</div>`:'';}
 // Redraw: inside the import result only the panel is redrawn (a full render would clear the "Import applied" summary)
 function ltiAfter(){if(document.querySelector('#iprev .lti-host')){document.querySelectorAll('.lti-host').forEach(h=>{h.innerHTML=ltiInner();});ltiBind();updDelBadge();}else render();}
+// hand guard (20 Nov): a single ✓ Confirm where the title and the template are the same type but a different hand asks first
+function ltiHandOk(w){const o=DB.orders.find(x=>x.wo===w),r=ltiRows().find(x=>x.o.wo===w),t=r&&r.tid?lsList(r.tid):null;if(!o||!t)return true;
+  const fk=typeKey(o.title,false),gk=typeKey(tplName(t),true);
+  if(!fk.code||!gk.code||fk.code!==gk.code||fk.hand===gk.hand)return true;
+  return confirm('Template is '+tkLbl(gk)+', title says '+tkLbl(fk)+' — use it anyway?');}
 function ltiConfirm(wos){
   wos=wos.filter(w=>!LTI.busy.has(w));if(!wos.length)return;
   officeWho(async by=>{
@@ -4535,7 +4540,7 @@ function ltiUse(w,lid){if(LTI.busy.has(w))return;
 }
 function ltiBind(){
   const q=(sel,f)=>document.querySelectorAll(sel).forEach(f);
-  q('[data-lticonf]',b=>b.onclick=()=>ltiConfirm([b.dataset.lticonf]));
+  q('[data-lticonf]',b=>b.onclick=()=>{const w=b.dataset.lticonf;if(!ltiHandOk(w))return;ltiConfirm([w]);});
   q('[data-ltichk]',b=>b.onclick=()=>lsViewDlg(b.dataset.ltichk,{check:true})); // h19: the same — view first, then Confirm
   q('[data-ltiedit]',b=>b.onclick=()=>openListEditor(b.dataset.ltiedit));
   q('[data-ltiview]',b=>b.onclick=()=>lsViewDlg(b.dataset.ltiview));
@@ -4793,6 +4798,41 @@ function sgQtyWhy(title,cust,p){
   const tp=sgPhN(n);if(tp){const hp=sgPhN(sgPh(sgNorm(cust)))||sgPhN(sgPh(sgNorm(p&&p.name)));if(tp!==hp)return'title says phase '+tp+(hp?', the heading is phase '+hp:'');}
   return'';
 }
+/*hand guard (Garry 20 Nov): typeKey(text,isTemplate) → {code, hand:''|'H'|'LH'|'RH', why}. Pure.
+  Title: the code is the word after TYPE; the hand is the hand word(s) straight after it — H / HAND / HANDED = H (the mirror of
+  the standard), LH / L/H / LEFT HAND(ED) = LH, RH likewise. Spacing never matters ("1A H" = "1AH" = "1A-H"); a hand is never
+  stripped. A hand word anywhere else (HANDED before TYPE, LH at the end…) = why 'hand unclear'. A bare "H" elsewhere ("BLOCK H",
+  "HOUSE", "4H BLOCK") is never a hand. A template name reads the same way, TYPE optional ("1A H", "T2" = TYPE 2). */
+const TK_HAND={H:'H',HAND:'H',HANDED:'H',LH:'LH',RH:'RH'};
+const TK_DROP=new Set(['TYPE','HOUSE','HSE','STD','STANDARD','KITCHEN','KITCHENS','KIT','UTILITY','UTIL','WARDROBE','WARDROBES','ROBE','ROBES','BATHROOM','BATH','VANITY','ENSUITE','BED','BEDS','BEDROOM','BEDROOMS','AND','THE','OF']);
+const TK_CODE=/^(\d{1,2}[A-Z]?|[A-Z]{1,2}\d{0,2}[A-Z]?)$/;
+function typeKey(text,isTpl){
+  let s=' '+String(text==null?'':text).toUpperCase()+' ';
+  s=s.replace(/\bL\s*\/\s*H\b/g,' LH ').replace(/\bR\s*\/\s*H\b/g,' RH ').replace(/\b([A-Z]{1,2}) ?- ?(\d{1,2})\b/g,'$1$2');
+  const w=s.replace(/[^A-Z0-9]+/g,' ').trim().split(' ').filter(Boolean),used=new Set();
+  // a hand word at i (one or two words: LEFT HAND / RIGHT HANDED) → [hand, words used]
+  const handAt=i=>{const x=w[i]||'',y=w[i+1]||'';if(TK_HAND[x])return[TK_HAND[x],1];
+    if((x==='LEFT'||x==='RIGHT')&&(y==='HAND'||y==='HANDED'))return[x==='LEFT'?'LH':'RH',2];return null;};
+  // "1AH" = "1A H", "2LH" = "2 LH": a hand glued to a code that has a number in it
+  const split=t=>{for(const suf of['HANDED','HAND','LH','RH','H'])if(t.length>suf.length&&t.endsWith(suf)){const k=t.slice(0,-suf.length);if(TK_CODE.test(k)&&/\d/.test(k))return[k,TK_HAND[suf]];}return[t,''];};
+  let ci=-1,code='',why='';
+  const ti=w.map((x,i)=>x==='TYPE'?i:-1).filter(i=>i>=0);
+  if(ti.length){ci=ti[0]+1;if(ti.filter(i=>TK_CODE.test(split(w[i+1]||'')[0])&&!TK_DROP.has(w[i+1])).length>1)why='two types';}
+  else if(isTpl){const t0=/^T(\d{1,2}[A-Z]?)$/.exec(w[0]||'');
+    if(t0){w[0]=t0[1];ci=0;}
+    else{let i=0;while(i<w.length&&(TK_DROP.has(w[i])||/^\d(BED|B)?$/.test(w[i])&&(/BED/.test(w[i])||/^BED/.test(w[i+1]||''))))i++;
+      if(i<w.length&&TK_CODE.test(split(w[i])[0])&&!TK_HAND[w[i]])ci=i;}}
+  if(ti.length&&ti[0]>=0)used.add(ti[0]);
+  let hand='',hs=[];
+  if(ci>=0&&w[ci]&&!TK_DROP.has(w[ci])&&TK_CODE.test(split(w[ci])[0])){
+    const[k,h]=split(w[ci]);code=k;used.add(ci);if(h)hs.push(h);
+    let j=ci+1,a;while((a=handAt(j))){hs.push(a[0]);for(let q=0;q<a[1];q++)used.add(j+q);j+=a[1];}
+  }else if(!why)why=ti.length?'no type after TYPE':isTpl?'name doesn\'t read as a type':'no TYPE in the title';
+  if(new Set(hs).size>1)why='hand unclear';hand=hs[0]||'';
+  for(let i=0;i<w.length;i++){if(used.has(i))continue;const a=handAt(i);if(a&&w[i]!=='H'){why='hand unclear';break;}} // a bare H elsewhere is never a hand
+  return{code,hand,why};
+}
+function tkLbl(k){return k.code?k.code+(k.hand?' '+k.hand:''):'?';}
 function suggestTpl(o,templates,projects){
   const none=(why,pid)=>({level:'none',pid:pid||'',tid:'',alts:[],why});
   o=o||{};const p=projForCust(o.customer,projects);
@@ -4800,6 +4840,9 @@ function suggestTpl(o,templates,projects){
   const ts=(templates||[]).filter(t=>t&&t.pid===p.id&&!t.archived);
   if(!ts.length)return none('This project has no templates yet',p.id);
   const f=sgFeat(o.title),qx=sgQtyWhy(o.title,o.customer,p);
+  const fk=typeKey(o.title,false),tks=new Map(ts.map(t=>[t.id,typeKey(tplName(t),true)]));
+  // hand guard: a plain title where the project has an LH / RH template of that type — a person decides (Garry: never matched automatically)
+  const handUnknown=!!fk.code&&!fk.hand&&ts.some(t=>{const k=tks.get(t.id);return k.code===fk.code&&(k.hand==='LH'||k.hand==='RH');});
   const sc=ts.map(t=>{
     const g=sgFeat(tplName(t));
     if(t.ltype==='kitchen'&&!g.kinds.size)g.kinds.add('kitchen');
@@ -4815,10 +4858,17 @@ function suggestTpl(o,templates,projects){
     // goes with a kitchen ("Kitchen + Utility" is one kitchen list).
     const oRoom=[...f.kinds].some(k=>!g.kinds.has(k)&&!(k==='utility'&&g.kinds.has('kitchen')));
     const aw=sgAllow(o.title,o.customer,p,g);
-    const strong=!f.multi&&!aw&&!oRoom&&(!f.kinds.size||kHit)&&/* the title names a room → the template must name the same room */((cHit&&(kHit||!g.kinds.size||!f.kinds.size))||(ph&&(!f.code||cHit)));
+    let strong=!f.multi&&!aw&&!oRoom&&(!f.kinds.size||kHit)&&/* the title names a room → the template must name the same room */((cHit&&(kHit||!g.kinds.size||!f.kinds.size))||(ph&&(!f.code||cHit)));
     const why=[cHit?'type '+f.code.toUpperCase():'',kHit?[...g.kinds].filter(k=>f.kinds.has(k)).join(' + '):'',bHit?f.beds+' bed':'',ph&&!cHit?'name':''].filter(Boolean);
     if(aw)why.push((qx||aw)+' — check it');
     else if(oRoom)why.push('title names another room too — check it');
+    // hand guard (20 Nov): green only when the type AND hand of the title and the template are exactly the same
+    const gk=tks.get(t.id);let hw='';
+    if(fk.why==='hand unclear')hw='hand unclear in the title — check it';
+    else if(gk.why==='hand unclear')hw='hand unclear in the template name — check it';
+    else if(handUnknown)hw='hand not known — confirm singly';
+    else if(fk.code!==gk.code||fk.hand!==gk.hand)hw='title says '+tkLbl(fk)+', template is '+tkLbl(gk)+' — check the hand';
+    if(hw){strong=false;if(!aw&&!oRoom)why.push(hw);}
     return{t,score,strong,why,cHit};
   }).filter(x=>x&&x.score>0).sort((a,b)=>b.score-a.score||String(tplName(a.t)).localeCompare(String(tplName(b.t))));
   if(!sc.length)return none(f.code?'No "Type '+f.code.toUpperCase()+'" template for this project':'No template matches the title',p.id);

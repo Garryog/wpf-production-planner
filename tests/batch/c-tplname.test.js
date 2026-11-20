@@ -23,8 +23,8 @@ const edit = async (p, id) => { await closeAll(p); await p.evaluate(id => { wind
     rec('found by its name "4C"; the old type name "4B" no longer finds it', h.byC === 'T3' && h.byB === null, JSON.stringify(h));
     rec('tplName(null) is empty, a live list keeps its own name', h.nul === '' && h.list === 'House 1', JSON.stringify(h));
     // Lists page: templates show 4C, never 4B
-    const pg = await p.evaluate(() => { showTab('lists'); LH.kind = 'tpl'; render(); const e = document.getElementById('lists') || document.body; return e.innerText; });
-    rec('Lists page shows "4C" and never "4B"', /4C/.test(pg) && !/\b4B\b/.test(pg), pg.slice(0, 400));
+    const pg = await p.evaluate(() => { showTab('l'); LH.kind = 'tpl'; render(); return document.body.innerText; });
+    rec('Lists page shows "4C" and never "4B"', /TEMPLATE/.test(pg) && /4C/.test(pg) && !/\b4B\b/.test(pg), pg.replace(/\s+/g, ' ').slice(0, 300));
     // editor: no Type name box on a template; name saved as type_name
     await edit(p, 'T3');
     rec('template editor: no Type name box', (await box(p, 'me-tname')) === null && (await box(p, 'me-name')) === '4C');
