@@ -1,4 +1,95 @@
-# Plan — Issue lists by house type, copy materials, one template name
+# Plan — Saw batch table, hand guard, copy materials, one template name
+
+Branch `feature/bulk-issue-lists` (cut from `main`, 20 Nov 2026). **Scope changed by Garry's answers on 20 Nov — the
+section "FINAL SCOPE" below is what gets built.** The first plan (office-side "issue by house type") is kept further
+down for the record only; that screen is DROPPED.
+
+## Garry's answers — 20 Nov 2026 (live)
+- Titles: type and hand are always written "TYPE x" + hand.
+- Hands (his words): "Standard units do not have H, hand or handed the H hand and handed are mirrors of standard
+  templates. You can also have left and right templates." → plain = standard; H = HAND = HANDED = the mirror; LH and RH
+  are their own hands.
+- Plain "TYPE 1A" where 1A LH / 1A RH exist: leave for a person, never matched automatically.
+- **Bulk (his words): "What I mean about bulking templates together is only in the saw view. I want saw to be able to
+  tick number of list together in a separate table and built cut the lists then go back to the individual list and label
+  the item that were cut per list."** Office-side bulk issue: dropped.
+- What the saw's existing "⚡ Combined cutting list" lacks: grouped by board / sheets; a way back to each list; and the
+  saw is not using it / cannot find it.
+- Which lists: any he ticks, even across projects.
+- **Keep it simple at the start (his words): "Batch table is help saw work quicker by know what's involved when a number
+  of lists are grouped. Saw man need to go back to individual list to tick all items as cut as he batches the items in
+  their individual lists." "For start saw man goes back into single cutting list and marks everything as cut. Printing
+  label is option on initial roll out." A list that is short: "has the missing parts listed in the missing items tab in
+  saw view"** (= today's N/A → ⏸ WAITING).
+  → The batch table is a HELPER to read from. No ticking in it, no new "labelled" tick, no change to how a house is
+  finished. Ticks, N/A and CUT COMPLETE stay on each house's own list exactly as today.
+- One name per template: "we have just one name per templates. That looks like a mistake" (Emmet Road "4C" / hidden type
+  name "4B"). → the template NAME is the one name; the hidden type name is no longer shown or used.
+
+## FINAL SCOPE (what gets built) — no database change, no SQL
+### A. Saw page: "⚡ BATCH" tab (saw only; the Stores combined window is unchanged)
+Wireframe in words:
+- Tabs: 🪚 TO DO · **⚡ BATCH — 6 houses** · ⏸ WAITING · ✓ DONE. The tick box on each list card reads "＋ Add to batch";
+  with 1+ ticked the bar says "6 houses ticked → **⚡ Open batch**" (labels for selected and ✕ Clear stay).
+- Top line: "6 houses · 2 projects · 41 of 63 pieces cut" and ✕ Empty batch. Small: "This table is to cut from. Tick the
+  lines on each house's own list — tap a house to go to it."
+- One block per BOARD (material): heading **"18mm MFC White — 9 sheets for this batch · 4 still to cut"** (same rule as
+  the sheets panel: m² ÷ 5.75 + 10%, rounded up). Rows: item · L × W · edging/note · TOTAL · one chip per house
+  "House 14 ×2" (project shown first when the batch spans projects). A house's share that is already ticked cut on its own
+  list shows ✓ and is struck through; a fully cut row moves to the bottom of its board. Read-only: no tick boxes here.
+  Tapping a house chip goes to that house's own list.
+- Bottom: "Houses in this batch" — one line per house: name · project · WO · Floor · Unit · "cut 8 of 12" · ⏸ n waiting ·
+  **[Open list]** (goes to that house's card in TO DO, scrolled into view) · [🏷 Labels] (optional, prints that house).
+  A house that is CUT COMPLETE drops out of the batch by itself.
+- The batch is part of the page (not a pop-up), so it refreshes with the other device's ticks and new revisions.
+- Remembered on this saw device only (browser storage key `wpfSawBatch`), until its houses are finished; finished /
+  archived / replaced lists drop out with a one-line note. Storage blocked → held in memory, note "not remembered".
+- Waiting (N/A) lines are not in the table; "check quantity" lines ("2x2", blank) are shown red and never added in.
+- 360 px: each row a card; chips wrap; no sideways scroll. Works with lists switched on and off.
+Code: `combineLists` (keep ticked lines with a cut flag, per-house line ids, board key) · `sheetNeed` gets opt-in
+`anyDate` / `todoOnly` (sheets panel figures unchanged) · new `sawBatchHTML` / `sawBatchBind` drawn from
+`renderWorkList` · `wpfSawBatch` memory. NOT changed: `setRowTick`, card ticks, auto-finish on the last tick, CUT
+COMPLETE, N/A / Waiting / Release, labels, DONE tab and Undo, Deliveries readiness.
+
+### B. Hand guard in "✓ Confirm all green" (`suggestTpl`)
+Small pure `typeKey(text,isTemplate)` → `{code, hand: ''|'H'|'LH'|'RH', why}`. Title: code after TYPE + hand words
+straight after it (H/HAND/HANDED → H; LH, L/H, LEFT HAND(ED) → LH; RH likewise); spacing never matters ("1A H" = "1AH" =
+"1A-H"); the hand is never stripped; a hand word anywhere else → "hand unclear". Template name: same, TYPE optional,
+"T2" = TYPE 2. A template is never GREEN unless code + hand equal the title's exactly; plain title where the project has
+LH/RH templates of that code → amber "hand not known — confirm singly". Single ✓ Confirm with a different hand asks
+"Template is 1A, title says 1A H — use it anyway?".
+
+### C. One name per template (M5)
+`tplName(t)` = the template's name, used everywhere `typeName||name` is read today; the "Type name" box is hidden when
+editing a TEMPLATE; saving a template writes `type_name` = name. No stored data is rewritten in bulk. For Garry: check
+Emmet Road "4C" — its hidden type name was "4B"; it will now show "4C" everywhere.
+
+### D. Copy a project's materials from another project
+As the "Copy materials" wireframe and `matCopyDlg` notes below.
+
+### Acceptance checks (Tester)
+1. Tick 4 houses from 2 projects → ⚡ Open batch: grouped by board, sheets per board right by hand, every chip names its
+   house (+ project). 2. Tick a line on a house's own card → the batch shows that share ✓ at once (other device ≤ 15 s);
+   nothing can be ticked in the batch itself. 3. Close and reopen the browser: same batch. 4. A house marked CUT
+   COMPLETE leaves the batch; last-line auto-finish works as before. 5. N/A a line on a house → not in the batch, shows
+   in ⏸ WAITING as today; after Release it is back. 6. "2x2" line red, never in a total. 7. New Rev mid-batch: changed
+   lines back to uncut; replaced list drops out with the note. 8. Open list jumps to the right card (two houses with the
+   same name; a house not on today's TO DO filter). 9. 360 px; lists OFF; Stores page unchanged; sheets panel figures
+   unchanged. 10. Hand guard: checks 4–6 of the old plan + single-confirm question. 11. Template "4C"/"4B" → "4C"
+   everywhere, no Type name box, `type_name` saved = name. 12. Copy materials: check 11 of the old plan.
+   13. Full suite: nothing that passed before fails.
+
+### Build steps (Coder)
+1 `tplName` (C) · 2 `typeKey` + guard (B) · 3 `matCopyDlg` (D) · 4 `combineLists` + `sheetNeed` options · 5 batch
+memory · 6 BATCH tab + bar/tick-box wording + Open list · 7 full suite → Tester → Manager.
+
+### Not in this release
+Ticking inside the batch table; a separate "labelled" tick; piece counting ("7 of 12"); office bulk issue by house
+type; "Make handed copy" of a template; a batch shared between devices.
+
+---
+# FIRST PLAN (20 Nov, before Garry's answers) — for the record; the bulk-issue screen in it is NOT being built
+
 
 Branch `feature/bulk-issue-lists` (cut from `main`, 20 Nov 2026). Garry agreed the three jobs on 13 Nov
 (see `docs/PLAN-list-window.md`, "AFTER this release") and said "start" on 20 Nov. Nothing is built yet —
@@ -158,3 +249,5 @@ search in the Material drop-down; fixing the multi-WO "Create & attach" quantiti
 ## Progress log
 ### 20 Nov 2026
 - Garry: "Yes start 4". Branch cut from `main` (522e610). Architect plan written. No code yet — waiting on the questions.
+- Garry answered two rounds of questions (above). Office bulk issue dropped; the saw gets a read-only ⚡ BATCH tab; one
+  template name; hand guard; copy materials. No database change. Architect re-planned; build started.
