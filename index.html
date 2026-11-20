@@ -2473,10 +2473,11 @@ function renderShipped(app){
   const held=DB.orders.filter(o=>isOnHold(o)&&!isShipped(o));
   const hs=shHoldQ?held.filter(o=>[o.wo,o.title,o.customer,o.floor,o.unit].some(v=>String(v||'').toLowerCase().includes(shHoldQ.toLowerCase()))):held;
   const card=o=>{
-    const deliv=dStage(o)==='deliv',w=am.get(o.wo)||0;
+    const shwP=o=>{const s=o.delShipWas;return !o.delDelivAt&&!o.delv&&s&&typeof s==='object'?(s.v&&s.v!=='x'?'✓ Delivered '+dt(s.v):s.v?'✓ Delivered':'✓ Delivered by shipping'):'';};
+    const deliv=dStage(o)==='deliv'||!!shwP(o),w=am.get(o.wo)||0;
     return `<div class="sh-card${o.completeAt?' sh-done':''}">
       <div class="sh-top"><span class="wo-num">${escA(o.wo)}</span>${stepBadge(o)}${fuHTML(o)}${addBadge(o)}
-        <span class="sh-pill ${deliv?'ok':'no'}">${deliv?(!o.delDelivAt&&o.delShipWas&&typeof o.delShipWas==='object'?(o.delShipWas.v?'✓ Delivered '+dt(o.delShipWas.v):'✓ Delivered by shipping'):'✓ Delivered '+dt(o.delDelivAt)):(o.delDispAt?'🚚 On the road':o.delv?'🚚 Off Deliveries (shipped)':'Not delivered')}</span>
+        <span class="sh-pill ${deliv?'ok':'no'}">${shwP(o)?shwP(o):deliv?'✓ Delivered '+dt(o.delDelivAt):(o.delDispAt?'🚚 On the road':o.delv?'🚚 Off Deliveries (shipped)':'Not delivered')}</span>
         ${w?`<span class="sh-pill warn" title="Waiting (N/A) lines on its cutting/fittings lists — also shown on the Capacity Board">⚠ ${w} waiting</span>`:''}</div>
       <div class="sh-t">${escA(o.title||'')}</div>
       <div class="sh-m">${escA(o.customer||'')} · shipped ${dt(o.shippedAt)} · Cienapps: ${escA(String(o.cienStep||o.shippedStep||o.step||'—').replace(/^\d+\.\s*/,''))}</div>
@@ -2537,6 +2538,10 @@ function shipBackApply(o,by){
   /*S1: a step set by hand to 9/10/11 goes back to the step it had before (only while it is still the hand-set one)*/
   const h=o.stepHand;if(h&&String(o.step||'').trim()===h.to){o.step=h.from||'';if(h.inst)delete o.installedAt;logEdit(o,'Step '+h.to+' → '+(h.from||'—')+' (the step set by hand undone)',by);}
   delete o.stepHand;
+  /*d20 (Tester G2): a week closed while it was shipped — its old booking goes into the history and the close-off is cleared, so a
+    re-tagged job starts fresh (never "already delivered" from delivered-by-shipping)*/
+  const w=o.delShipWas;if(w&&typeof w==='object'){logEdit(o,'Brought back — its Deliveries booking from when it was shipped is history now (was '+String(w.txt||'—')+(w.v?'':' — delivered by shipping, Wk closed')+')',by);
+    if(!w.v)delete o.delDone;delete o.delShipWas;}
 }
 /*d19-5 (Garry 19 Nov): ↩ Back to Deliveries — from the 📦 Shipped tab card, or a job row in 📚 Past weeks. Asks a name and a reason.
   The old delivered (loaded / dispatched) stamps go into the job's history; the stamps are cleared; it is tagged again and sits in
@@ -2604,7 +2609,7 @@ function delShipWasTxt(o){if(!o)return'';
   if(o.delv&&(o.delVeh||o.delDay||dStage(o))){const s=delStampTxt(o),sl=o.delVeh&&o.delDay?' · '+slotLblO(o):'',st=sl&&s.endsWith(sl)?s.slice(0,-sl.length):s;
     return (o.delDay?'on '+slotLblO(o):o.delVeh?'on '+(vehLbl(o.delVeh)||o.delVeh)+' (no day)':'in the To plan pool')+st;}
   const w=o.delShipWas;return w&&typeof w==='object'?String(w.txt||''):'';}
-function delShipBooked(){return DB.orders.filter(o=>o.delv&&delShipOff(o)&&!delHidden(o));} // shipped jobs still holding a Deliveries tag (kept, not shown)
+function delShipBooked(){return DB.orders.filter(o=>o.delv&&delShipOff(o));} // shipped jobs still holding a Deliveries tag (kept, not shown)
 /* Planner overrides an import respects until the Cienapps step moves beyond the step they were made at:
    delvOverride — untagged from delivery by hand (stops the 7/8 auto-tag); completeOverride — "Undo complete" (stops 11 re-completing). */
 function delvMark(o){if(o.delv)delete o.delvOverride;else o.delvOverride=o.step||o.cienStep||'(none)';}
@@ -8336,6 +8341,9 @@ function renderDriver(app){
   if(myVans.includes(veh))myVan=veh; // (attack8 D5) on two vans that day: the one he is looking at is one of his — no warning
   const vanBy=veh?vanDrv(veh,dDate):'';
   const jobs=veh?delAll().filter(o=>o.delVeh===veh&&slotIn(o,dwk,day)).sort(woCmp):[];
+  /*d20 (Tester B2): a drop that left the run because it shipped (Garry 20 Nov rule) is named, never just gone — only ones not delivered*/
+  const shOff=veh?delShipBooked().filter(o=>o.delVeh===veh&&slotIn(o,dwk,day)&&dStage(o)!=='deliv').sort(woCmp):[];
+  const shOffH=shOff.length?`<div id="drv-shoff" style="background:#eef3fb;border:1px solid #14335c;color:#14335c;border-radius:8px;padding:8px 12px;margin-bottom:8px;font-size:13px">${shOff.map(o=>`📦 <b>${escA(o.wo)}</b> shipped in Cienapps — removed from your run${dStage(o)?' (it was '+(dStage(o)==='disp'?'dispatched':'loaded')+' — tell the office if it is still on your van)':''}`).join('<br>')}</div>`:'';
   const onVan=jobs.filter(o=>dStage(o)!=='').length;
   const delivd=jobs.filter(o=>dStage(o)==='deliv').length;
   const allDeliv=jobs.length>0&&delivd===jobs.length;
@@ -8355,7 +8363,7 @@ function renderDriver(app){
     ${name&&myVan&&veh===myVan?`<div id="drv-asg" style="background:#e9f7ef;border:1px solid #0d6e46;color:#0d6e46;border-radius:8px;padding:8px 12px;font-weight:700;margin-bottom:8px">🚚 You're on the ${escA(vehLbl(myVan))} on ${escA(dayL)} (set by the office)${switched?' — switched from the '+escA(vehLbl(switched)):''}</div>`
       :name&&veh&&vanBy&&vanBy.toLowerCase()!==name.toLowerCase()?`<div id="drv-asg" style="background:#fdecea;border:1px solid #b42318;color:#b42318;border-radius:8px;padding:8px 12px;font-weight:700;margin-bottom:8px">⚠ The ${escA(vehLbl(veh))} on ${escA(dayL)} is ${escA(vanBy)}'s${myVan?' — you are on the '+escA(vehLbl(myVan)):''}. Check with the office.</div>`
       :name&&myVan&&veh!==myVan?`<div id="drv-asg" style="background:#fff4e5;border:1px solid #b54708;color:#b54708;border-radius:8px;padding:8px 12px;font-weight:700;margin-bottom:8px">⚠ The office put you on the ${escA(vehLbl(myVan))} on ${escA(dayL)} — you are looking at the ${escA(vehLbl(veh))}.</div>`:''}
-    ${!veh?`<div class="flr-none">Pick your van above to see your run</div>`:
+    ${shOffH}${!veh?`<div class="flr-none">Pick your van above to see your run</div>`:
       !jobs.length?`<div class="flr-none">No jobs planned for ${escA(vehLbl(veh))} on ${escA(dayL)}</div>`:`
       <div class="drv-stat"><span><b>${escA(vehLbl(veh))} — ${escA(dayL)}</b> · ${jobs.length} job${jobs.length!==1?'s':''}</span><span>${onVan}/${jobs.length} on van · ${delivd} delivered</span></div>
       ${jobs.map(o=>{const st=dStage(o);return`<div class="drv-job${st==='deliv'?' done':st==='disp'?' disp':st?' on':''}">
@@ -9013,9 +9021,9 @@ function closeWeek(wk){
       delSel.delete(o.wo);
     });
     if(gone.size)DB.delx=(DB.delx||[]).filter(x=>!gone.has(x));
-    shj.forEach(o=>{const txt=delShipWasTxt(o);o.delShipWas={txt,wk,k:key,at,v:o.delDelivAt||''};
+    shj.forEach(o=>{const txt=delShipWasTxt(o);o.delShipWas={txt,wk,k:key,at,v:o.delDelivAt||(o.delDone?'x':'')};
       ['delLoadedAt','delDispAt','delDelivAt','ldBy','delivBy','delMoves','delFirst','missWhy','delPlacedBy','delPlacedAt','delWk','delRebook'].forEach(k=>delete o[k]);
-      delete o.delv;o.delVeh='';o.delDay='';o.delDone=true;
+      delete o.delv;o.delVeh='';o.delDay='';if(o.delShipWas.v)o.delDone=true;else delete o.delDone; /*Tester G2: delivered-by-shipping is never a delivered stamp*/
       logEdit(o,'Wk '+N+' closed — shipped, archived in 📚 Past weeks (was '+txt+')',by);delSel.delete(o.wo);});
     updDelBadge();sched();render();
     toast('Wk '+N+' closed — '+nd+' delivered'+(shj.length?' + '+shj.length+' shipped':'')+' to 📚 Past weeks'+(nu?', '+nu+' back to To plan (rebook)':''));
@@ -9066,9 +9074,9 @@ function openDelArchive(detailKey){
   ov.querySelectorAll('[data-arcx]').forEach(b=>b.onclick=()=>{
     const a=ar[b.dataset.arcx];if(!a)return;
     const stamp2=t=>t?new Date(t).toLocaleString('en-IE'):'';
-    const rows=[['Day','Vehicle','WO #','Floor','Unit','Title','Customer','Value','Loaded at','Loaded by','Dispatched at','Delivered at','Delivered by'],
+    const rows=[['Day','Vehicle','WO #','Floor','Unit','Title','Customer','Value','Loaded at','Loaded by','Dispatched at','Delivered at','Delivered by','Shipped'],
       ...[...a.jobs].sort((x,y)=>DEL_DAYS.indexOf(x.d)-DEL_DAYS.indexOf(y.d)||String(x.v).localeCompare(String(y.v)))
-        .map(j=>[j.dt?j.d+' '+j.dt:j.d,vehLbl(j.v)||j.v,j.wo,j.f,j.u,j.t,j.c,j.val,stamp2(j.lAt),j.lBy,stamp2(j.dAt),stamp2(j.vAt),j.vBy]),
+        .map(j=>[j.dt?j.d+' '+j.dt:j.d,vehLbl(j.v)||j.v,j.wo,j.f,j.u,j.t,j.c,j.val,stamp2(j.lAt),j.lBy,stamp2(j.dAt),stamp2(j.vAt),j.vBy,j.sh?'📦 shipped '+stamp2(j.sh):'']),
       [],['NOTES'],...Object.keys(a.notes||{}).filter(d=>(a.notes[d]||'').trim()).map(d=>[d,a.notes[d]])];
     const wb=XLSX.utils.book_new();const ws=XLSX.utils.aoa_to_sheet(rows);
     ws['!cols']=[{wch:6},{wch:13},{wch:16},{wch:7},{wch:7},{wch:34},{wch:24},{wch:9},{wch:18},{wch:12},{wch:18},{wch:18},{wch:12}];
@@ -10303,6 +10311,7 @@ function planDiff(a,b,moves){
 function holdUntag(ex){
   if(!ex.delv&&!ex.delVeh&&!ex.delDay)return;
   if(!delHidden(ex))return;
+  if(isShipped(ex))return; /*d20 (Tester F2): a shipped job is already off Deliveries — its booking is kept (Shipped card, its week's archive)*/
   const was=[ex.delVeh?vehLbl(ex.delVeh)||ex.delVeh:'',ex.delDay||''].filter(Boolean).join(' · ')||'tagged, no van/day';
   ex.holdDel=was;ex.delv=false;ex.delVeh='';ex.delDay='';delete ex.delWk;delete ex.delRebook;
   logEdit(ex,'On hold in Cienapps — taken off Deliveries (was '+was+')','(import)');

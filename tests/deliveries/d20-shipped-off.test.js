@@ -18,7 +18,8 @@ const BOOKED = { delVeh: 'IVECO', delDay: 'Fri', delWk: W0, delLoadedAt: '2026-1
 const shipCard = (p, wo) => p.evaluate(async wo => { showTab('h'); await new Promise(r => setTimeout(r, 100));
   const c = [...document.querySelectorAll('.sh-card')].find(x => (x.querySelector('.wo-num') || {}).textContent === wo); return c ? c.innerText.replace(/\s+/g, ' ') : ''; }, wo);
 const driver = (p, veh, day, wk) => p.evaluate(({ veh, day, wk }) => { ls.set('wpfDrvName', 'Joe'); ls.set('wpfDrvVeh', veh); ls.set('wpfDrvDay', day + '|' + wk);
-  const d = document.createElement('div'); renderDriver(d); return d.innerText; }, { veh, day, wk });
+  const d = document.createElement('div'); renderDriver(d); const n = d.querySelector('#drv-shoff');
+  return [...d.querySelectorAll('.drv-job')].map(x => x.innerText).join(' | ') + (n ? ' || NOTICE: ' + n.innerText : ''); }, { veh, day, wk }); // run list, then the "shipped — removed from your run" notice
 const sheets = (p, wk) => p.evaluate(wk => { window.__opened = []; printRunSheets(wk); return (window.__opened || []).join(''); }, wk);
 
 (async () => {
@@ -38,7 +39,9 @@ const sheets = (p, wk) => p.evaluate(wk => { window.__opened = []; printRunSheet
       rec('1. import 9 → shipped, OFF Deliveries everywhere (no grid cell, no pool, delOnPage false)', j1.sh && j1.onDel === 0 && countIn(sw1, 'WO-2701-1').g === 0 && countIn(sw1, 'WO-2701-1').pl === 0 && !(await p.evaluate(() => delOnPage(DB.orders.find(o => o.wo === 'WO-2701-1')))), JSON.stringify({ j1: { sh: j1.sh, onDel: j1.onDel }, where: countIn(sw1, 'WO-2701-1') }));
       rec('1. …nothing erased: tag, van, day, week and loaded stamp kept on the job', j1.delv && j1.veh === 'IVECO' && j1.day === 'Fri' && j1.wk === W0 && await p.evaluate(() => DB.orders.find(o => o.wo === 'WO-2701-1').delLoadedAt === '2026-11-12T07:30:00Z'), JSON.stringify(j1));
       rec('1. …logged "Off 🚚 Deliveries — shipped (was loaded … · Iveco Fri 13 Nov)"', j1.logs.some(l => /^Off 🚚 Deliveries — shipped \(was loaded 12 Nov .* by Joe · Iveco Fri 13 Nov\)/.test(l)), JSON.stringify(j1.logs.slice(-3)));
-      rec('1. …driver Joe on Iveco Fri no longer sees it; WO-2702-1 still there', await driver(p, 'IVECO', 'Fri', W0).then(t => !/WO-2701-1/.test(t) && /WO-2702-1/.test(t)));
+      const dr1 = await driver(p, 'IVECO', 'Fri', W0), run1 = dr1.split(' || NOTICE: ');
+      rec('1. …driver Joe on Iveco Fri: off his run (WO-2702-1 still on it)', !/WO-2701-1/.test(run1[0]) && /WO-2702-1/.test(run1[0]), dr1);
+      rec('1. …and told "WO-2701-1 shipped in Cienapps — removed from your run (it was loaded …)" (Tester B2)', /WO-2701-1 shipped in Cienapps — removed from your run \(it was loaded/.test(run1[1] || ''), dr1);
       const rs = await sheets(p, W0);
       rec('1. …run sheets for the week leave it out (WO-2702-1 still on)', !/WO-2701-1/.test(rs) && /WO-2702-1/.test(rs), rs.length + ' chars');
       const c1 = await shipCard(p, 'WO-2701-1');
@@ -50,7 +53,7 @@ const sheets = (p, wk) => p.evaluate(wk => { window.__opened = []; printRunSheet
       rec('2. board step drop-down to 9 asks first and says it comes off Deliveries', r2.asked && /comes off 🚚 Deliveries/.test(r2.asked[0] || ''), JSON.stringify(r2));
       const j2 = await job(p, 'WO-2702-1'), sw2 = await delSweep(p);
       rec('2. …shipped, off Deliveries, booking kept, logged with the name', j2.sh && j2.onDel === 0 && countIn(sw2, 'WO-2702-1').g + countIn(sw2, 'WO-2702-1').pl === 0 && j2.delv && j2.veh === 'IVECO' && j2.day === 'Fri' && j2.logs.some(l => /^Off 🚚 Deliveries — shipped \(was Iveco Fri 13 Nov\)/.test(l)), JSON.stringify({ j2, w: countIn(sw2, 'WO-2702-1') }));
-      rec('2. …driver page and badge drop it too', await driver(p, 'IVECO', 'Fri', W0).then(t => !/WO-2702-1/.test(t)) && sw2.badge === '1', sw2.badge);
+      rec('2. …driver page and badge drop it too', await driver(p, 'IVECO', 'Fri', W0).then(t => !/WO-2702-1/.test(t.split(' || NOTICE: ')[0])) && sw2.badge === '1', sw2.badge);
       // 3. back below 9 (Bring back to board undoes the hand-set 9 → 8)
       rec('3. ↩ Bring back to board clicked', (await bringBack(p, 'WO-2702-1')) === 'ok');
       const j3 = await job(p, 'WO-2702-1'), sw3 = await delSweep(p);
@@ -92,7 +95,7 @@ const sheets = (p, wk) => p.evaluate(wk => { window.__opened = []; printRunSheet
           o: { delv: !!o.delv, veh: o.delVeh, done: !!o.delDone, was: o.delShipWas, sh: !!o.shippedAt, log: (o.log || []).slice(-1)[0] } }; });
       rec('5. …the closed week holds both jobs: WO-2712-1 delivered, WO-2711-1 "shipped" with its van, day and loaded stamp', ar.n === 1 && ar.jobs.includes('WO-2712-1::v:IVECOTue:') && ar.jobs.includes('WO-2711-1:sh::IVECOTue:l'), JSON.stringify(ar.jobs));
       rec('5. …old archived week untouched (rows identical, same counts)', ar.old === JSON.stringify(oldJobs) && await p.evaluate(o => JSON.stringify(weekPerf(DB.delArchive['2026-11-07.old'].jobs.map(j => ({ ...j, mv: j.mv || [], mw: j.mw || null })), 7)) === o, sc0.old), ar.old.slice(0, 200));
-      rec('5. …WO-2711-1 still shipped; booking moved into delShipWas (shown on its card), logged', ar.o.sh && !ar.o.delv && ar.o.done && ar.o.was && /on Iveco Tue 10 Nov · loaded 10 Nov/.test(ar.o.was.txt) && /Wk 46 closed — shipped/.test((ar.o.log || {}).what || ''), JSON.stringify(ar.o));
+      rec('5. …WO-2711-1 still shipped; booking moved into delShipWas (shown on its card), not marked delivered (Tester G2), logged', ar.o.sh && !ar.o.delv && !ar.o.done && ar.o.was && /on Iveco Tue 10 Nov · loaded 10 Nov/.test(ar.o.was.txt) && /Wk 46 closed — shipped/.test((ar.o.log || {}).what || ''), JSON.stringify(ar.o));
       const c5 = await shipCard(p, 'WO-2711-1');
       rec('5. …Shipped card still says where it was, and "Delivered by shipping" (not a blank delivered date)', /✓ Delivered by shipping/.test(c5) && /Was on Deliveries: on Iveco Tue 10 Nov · loaded 10 Nov/.test(c5), c5);
       await p.evaluate(() => { const k = Object.keys(DB.delArchive).find(k => k !== '2026-11-07.old'); openDelArchive(k); }); await p.waitForTimeout(100);
