@@ -3,6 +3,7 @@
 // Two PCs (A opened the window first, B changes and saves, then A saves). Ordinary lists AND templates.
 // Does the fix ever DROP a rename the person really typed? typed-then-typed-back, case-only, spaces-only, name cleared,
 // both PCs renamed, Type name auto-follow on both PCs at once, "Change job".
+// Checks 14-18 updated 20 Nov 2026 for Garry's new rule (one name per template, no Type name box on a template).
 // Fake Supabase only. Run: node tests/list-window/final2-two-pc-names.test.js
 // (The same file runs against a copy of live to see which of these are already on live — see the report.)
 const L = require('./lw.js');
@@ -125,33 +126,36 @@ const SAWONLY = [['saw', 'Side', '2', 720, 560, 'MFC White', '', ''], ['saw', 'H
     await touch(pa, 'Hinge', 17); await tsave(pa, 2400);
     rec('[MEDIUM] 13 template: B renamed to "Type 2 RH" (both names); A only changed a row → both names stay "Type 2 RH", A\'s row saved', lst(S, 'T1').name === 'Type 2 RH' && lst(S, 'T1').type_name === 'Type 2 RH' && linesOf(S, 'T1').find(x => x.part === 'Hinge').qty === '17', JSON.stringify([lst(S, 'T1').name, lst(S, 'T1').type_name, await told(pa)]));
     await done();
-    // 14. BOTH rename the template (nobody types in the Type name box: it follows on both PCs)
+    // (14-18 updated 20 Nov 2026 for Garry's "one name per template": there is no Type name box on a template any more and every
+    //  template save writes type_name = name — the checks that typed in that box now check the one-name rule on two PCs)
+    // 14. BOTH rename the template
     await both('T2'); await retype(pb, 'me-name', 'Type 3 RH'); await tsave(pb);
     await pa.evaluate(() => { window.__asked = []; }); await retype(pa, 'me-name', 'Type 3 LH');
     const shownTn = await box(pa, 'me-tname'); await tsave(pa, 2400);
     const t14 = await told(pa);
-    rec('14 set-up: on A the Type name box followed to "Type 3 LH" before Save', shownTn === 'Type 3 LH', shownTn);
+    rec('14 set-up: on A there is no Type name box on a template', shownTn === null, shownTn);
     rec('[MEDIUM] 14a both PCs renamed one template: it does NOT end with a name and a Type name that nobody typed together (name "Type 3 LH" with Type name "Type 3 RH") — or A is told', lst(S, 'T2').name === lst(S, 'T2').type_name || /Type 3 RH|another screen/i.test(t14.split('##')[0] + t14.split('##')[2]), JSON.stringify({ name: lst(S, 'T2').name, type: lst(S, 'T2').type_name, AsawBeforeSave: shownTn, told: t14.slice(0, 200) }));
     await done();
-    // 15. A TYPES the Type name; B typed another → A's typed one is saved
-    await both('T3'); await retype(pb, 'me-tname', 'B special'); await tsave(pb);
-    await retype(pa, 'me-tname', 'A special'); await tsave(pa, 2400);
-    rec('15 A typed a Type name ("A special"), B had typed "B special": A\'s typed Type name is saved, the name stays "Type 4"', lst(S, 'T3').type_name === 'A special' && lst(S, 'T3').name === 'Type 4', JSON.stringify([lst(S, 'T3').name, lst(S, 'T3').type_name]));
+    // 15. B only changed a row; A renamed → A's name is the one name
+    await both('T3'); await touch(pb, 'Hinge', 15); await tsave(pb);
+    await retype(pa, 'me-name', 'Type 4 A'); await tsave(pa, 2400);
+    rec('15 B changed a row, A renamed "Type 4" → "Type 4 A": the one name is saved on both, B\'s row kept', lst(S, 'T3').type_name === 'Type 4 A' && lst(S, 'T3').name === 'Type 4 A' && linesOf(S, 'T3').find(x => x.part === 'Hinge').qty === '15', JSON.stringify([lst(S, 'T3').name, lst(S, 'T3').type_name]));
     await done();
-    // 16. A types in the Type name box and types it BACK, then renames the template
-    await fresh(pa); await edit(pa, 'T4'); await retype(pa, 'me-tname', 'oops'); await retype(pa, 'me-tname', 'Type 5'); await retype(pa, 'me-name', 'Type 5 LH');
-    const tn16 = await box(pa, 'me-tname'); await tsave(pa, 2200);
-    rec('(info) [LOW] 16 Type name typed and typed BACK to the same as the name, then the template renamed "Type 5 LH": does the Type name still follow?', lst(S, 'T4').type_name === 'Type 5 LH', JSON.stringify({ boxBeforeSave: tn16, name: lst(S, 'T4').name, type: lst(S, 'T4').type_name }));
+    // 16. A renames the template → the type name is the name
+    await fresh(pa); await edit(pa, 'T4'); await retype(pa, 'me-name', 'Type 5 LH');
+    await tsave(pa, 2200);
+    rec('16 template renamed "Type 5 LH": the type name is the name', lst(S, 'T4').type_name === 'Type 5 LH' && lst(S, 'T4').name === 'Type 5 LH', JSON.stringify({ name: lst(S, 'T4').name, type: lst(S, 'T4').type_name }));
     await done();
-    // 17. A CLEARS the Type name on purpose; B did nothing → saved empty (not put back)
-    await fresh(pa); await edit(pa, 'T5'); await retype(pa, 'me-tname', ''); await touch(pa, 'Hinge', 18); await tsave(pa, 2200);
-    rec('17 A cleared the Type name on purpose: saved empty (the fix does not put the old one back)', !lst(S, 'T5').type_name, JSON.stringify([lst(S, 'T5').name, lst(S, 'T5').type_name, await told(pa)]));
+    // 17. a template whose stored type name differs ("4C"/"4B" case): A only changes a row → the name wins
+    D.update(S.db, 'lists', lst(S, 'T5'), { type_name: 'Something else' });
+    await fresh(pa); await edit(pa, 'T5'); await touch(pa, 'Hinge', 18); await tsave(pa, 2200);
+    rec('17 template "Type 6" (stored type name "Something else"), a row changed: saved type name = "Type 6"', lst(S, 'T5').type_name === 'Type 6' && lst(S, 'T5').name === 'Type 6', JSON.stringify([lst(S, 'T5').name, lst(S, 'T5').type_name, await told(pa)]));
     await done();
-    // 18. A renames the template; B meanwhile CLEARED the Type name on purpose
-    await both('T6'); await retype(pb, 'me-tname', ''); await tsave(pb);
-    rec('18 set-up: B cleared the Type name', !lst(S, 'T6').type_name, JSON.stringify(lst(S, 'T6').type_name));
-    await retype(pa, 'me-name', 'Type 7 LH'); await tsave(pa, 2400);
-    rec('(info) [LOW] 18a A then renamed the template (Type name followed on A\'s screen): B\'s deliberate EMPTY Type name is kept, name is "Type 7 LH"', lst(S, 'T6').name === 'Type 7 LH' && !lst(S, 'T6').type_name, JSON.stringify([lst(S, 'T6').name, lst(S, 'T6').type_name]));
+    // 18. B renames the template; A (opened before) only changes a row → B's name kept as the one name
+    await both('T6'); await retype(pb, 'me-name', 'Type 7 RH'); await tsave(pb);
+    rec('18 set-up: B renamed to "Type 7 RH"', lst(S, 'T6').name === 'Type 7 RH' && lst(S, 'T6').type_name === 'Type 7 RH', JSON.stringify([lst(S, 'T6').name, lst(S, 'T6').type_name]));
+    await touch(pa, 'Hinge', 19); await tsave(pa, 2400);
+    rec('18a A only changed a row: B\'s name "Type 7 RH" kept on both names', lst(S, 'T6').name === 'Type 7 RH' && lst(S, 'T6').type_name === 'Type 7 RH', JSON.stringify([lst(S, 'T6').name, lst(S, 'T6').type_name]));
     await done();
     rec('no page errors', !(S.errors || []).length, JSON.stringify(S.errors));
   } catch (e) { rec('test ran to the end', false, e.stack); }

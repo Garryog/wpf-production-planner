@@ -17,11 +17,12 @@ const lines = (S, id) => S.db.t.list_lines.filter(x => x.list_id === id && x.rem
   // ---- S6: from "Cutting lists needed": Attach → template → Create & attach (name filled in)
   await off.page.evaluate(() => document.querySelector('[data-natt="WO-1"]').click());
   const btn = await off.page.evaluate(() => { const b = document.querySelector('[data-tplatt^="T1|WO-1"]'); return b ? b.textContent : ''; });
-  rec('Attach on WO-1 offers the project\'s templates as buttons (project found from the customer)', /Type B 3-bed · Rev 1/.test(btn), btn);
+  // (updated 20 Nov 2026, Garry: one name per template) templates are shown by their NAME — the hidden type name "Type B 3-bed" is not used
+  rec('Attach on WO-1 offers the project\'s templates as buttons (project found from the customer)', /Kitchen B · Rev 1/.test(btn), btn);
   await off.page.evaluate(() => document.querySelector('[data-tplatt^="T1|WO-1"]').click());
   await F.sleep(400);
   const dlg = await off.page.evaluate(() => { const o = document.querySelector('.pod-ovl'); return o ? { name: o.querySelector('#tp-name').value, wos: [...o.querySelectorAll('[data-tpwo]')].map(c => c.dataset.tpwo + (c.checked ? '+' : '')).join(','), rows: o.querySelectorAll('.wl-tbl tbody tr').length } : null; });
-  rec('preview: WO-1 ticked, WO-2 (same project, no list) offered, name filled in with the template type (Part 4, Garry 10 Nov — was the unit "1"), template lines shown', dlg && dlg.wos === 'WO-1+,WO-2' && dlg.name === 'Type B 3-bed' && dlg.rows === 4, JSON.stringify(dlg));
+  rec('preview: WO-1 ticked, WO-2 (same project, no list) offered, name filled in with the template type (Part 4, Garry 10 Nov — was the unit "1"), template lines shown', dlg && dlg.wos === 'WO-1+,WO-2' && dlg.name === 'Kitchen B' && dlg.rows === 4, JSON.stringify(dlg));
   await off.page.evaluate(() => document.getElementById('tp-go').click());
   await F.sleep(600);
   const live = S.db.t.lists.find(l => l.template_id === 'T1');
@@ -51,10 +52,10 @@ const lines = (S, id) => S.db.t.list_lines.filter(x => x.list_id === id && x.rem
   // ---- S5: new template, copy from another project
   await off.page.evaluate(() => { LH.proj = 'P1'; LH.kind = 'tpl'; render(); document.getElementById('lh-newtpl').click(); const o = document.querySelector('.pod-ovl');
     const s = (k, v) => { const e = o.querySelector('[data-mr="' + k + '"]'); e.value = v; (e.oninput || e.onchange)(); };
-    s('0|item', 'Plinth'); s('0|qty', '2'); s('0|L', '2400'); s('0|W', '150'); s('0|mat', 'MFC White'); o.querySelector('#me-name').value = 'Plinth kit'; o.querySelector('#me-tname').value = 'Plinths'; o.querySelector('#me-save').click(); });
+    s('0|item', 'Plinth'); s('0|qty', '2'); s('0|L', '2400'); s('0|W', '150'); s('0|mat', 'MFC White'); o.querySelector('#me-name').value = 'Plinth kit'; o.querySelector('#me-save').click(); }); // (20 Nov) no Type name box on a template
   await F.sleep(600);
   const nt = S.db.t.lists.find(l => l.name === 'Plinth kit');
-  rec('+ New template: saved as a template in the project, no work order', nt && nt.is_template && nt.project_id === 'P1' && !nt.wos.length && nt.type_name === 'Plinths');
+  rec('+ New template: saved as a template in the project, no work order, its one name saved as the type name', nt && nt.is_template && nt.project_id === 'P1' && !nt.wos.length && nt.type_name === 'Plinth kit');
   await off.page.evaluate(() => { render(); document.getElementById('lh-copy').click(); document.querySelector('[data-cpp="P2"]').click(); });
   await F.sleep(200);
   await off.page.evaluate(() => document.querySelector('[data-cpl="T2"]').click());

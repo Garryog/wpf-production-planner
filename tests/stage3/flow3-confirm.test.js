@@ -41,14 +41,15 @@ const made = (S, wo) => S.db.t.lists.filter(l => (l.wos || []).includes(wo) && !
     await t.page.evaluate(() => document.querySelector('[data-lticonf="WO-1"]').click());
     await F.sleep(700);
     const l1 = D.find(S.db, 'lists', 'WO:WO-1'), ll1 = S.db.t.list_lines.filter(x => x.list_id === 'WO:WO-1');
-    rec('✓ Confirm WO-1: list WO:WO-1 made from Type B kitchen rev 1, attached to WO-1, named after the template type (Part 4, Garry 10 Nov — was the house "14"), lines copied', l1 && l1.wos.join() === 'WO-1' && l1.template_id === 'T1' && l1.source === 'template' && l1.name === 'Type B 3-bed' && ll1.length === 4 && l1.created_by === 'Ann', JSON.stringify(l1 && { w: l1.wos, n: l1.name, by: l1.created_by }));
+    // (updated 20 Nov 2026, Garry: one name per template) named after the template's NAME — its hidden type name is no longer used
+    rec('✓ Confirm WO-1: list WO:WO-1 made from Type B kitchen rev 1, attached to WO-1, named after the template (Part 4, Garry 10 Nov — was the house "14"; 20 Nov: the template\'s name), lines copied', l1 && l1.wos.join() === 'WO-1' && l1.template_id === 'T1' && l1.source === 'template' && l1.name === 'Type B kitchen' && ll1.length === 4 && l1.created_by === 'Ann', JSON.stringify(l1 && { w: l1.wos, n: l1.name, by: l1.created_by }));
     p = await panel(t.page);
-    rec('WO-1 leaves the panel; the result line says so', p && !p.rows.some(r => r.startsWith('WO-1:')) && /✓ WO-1 — "Type B 3-bed" from Type B 3-bed/.test(p.t), p && p.t.slice(0, 300));
+    rec('WO-1 leaves the panel; the result line says so', p && !p.rows.some(r => r.startsWith('WO-1:')) && /✓ WO-1 — "Type B kitchen" from Type B kitchen/.test(p.t), p && p.t.slice(0, 300));
     // change the template on the amber row
     await t.page.evaluate(() => document.querySelector('[data-ltichg="WO-3"]').click());
     await t.page.evaluate(() => { const s = document.querySelector('[data-ltisel="WO-3"]'); s.value = 'T2'; s.onchange(); });
     p = await panel(t.page);
-    rec('change template (3 taps): WO-3 now "Chosen: Type B robes"', p && p.rows.includes('WO-3:pick') && /Chosen: Type B robes/.test(p.t), JSON.stringify(p && p.rows));
+    rec('change template (3 taps): WO-3 now "Chosen: Type B wardrobes" (20 Nov: the template\'s name)', p && p.rows.includes('WO-3:pick') && /Chosen: Type B wardrobes/.test(p.t), JSON.stringify(p && p.rows));
     await t.page.evaluate(() => document.querySelector('[data-lticonf="WO-3"]').click()); await F.sleep(700);
     rec('WO-3 confirmed with the chosen template (wardrobes)', (D.find(S.db, 'lists', 'WO:WO-3') || {}).template_id === 'T2');
     // Confirm all green, one row failing → per-row result + Retry

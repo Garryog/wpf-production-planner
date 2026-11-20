@@ -38,7 +38,8 @@ r = s('HOUSE 4 TYPE B-1 KITCHEN');
 rec('"TYPE B-1 KITCHEN" with a Type B1 template on the project is not GREEN for the plain Type B kitchen', notGreen(r) || r.tid === 'T9', J(r));
 r = s('HOUSE 4 HT-B KITCHEN');
 rec('"HT-B KITCHEN" (house type written HT-B): no crash, not green for a different type', !r || r.tid !== 'T4' || notGreen(r), J(r));
-r = s('HSE 2 TYPE B 2BED KITCHEN');
+// (updated 20 Nov 2026, Garry: one name per template) the hidden type name is no longer read — the bed count must be in the template's NAME
+r = s('HSE 2 TYPE B 2BED KITCHEN', CH, T.map(t => t.id === 'T2' ? { ...t, name: 'Type B 3-bed kitchen' } : t));
 rec('"2BED" read as 2 bed → the 3-bed Type B kitchen is not suggested green', notGreen(r) || r.tid !== 'T2', J(r));
 r = s('HSE 2 TYPE B KIT + ROBES');
 rec('"TYPE B KIT + ROBES" (kitchen AND wardrobes on one WO) is not green — one template can\'t cover both', notGreen(r), J(r));
