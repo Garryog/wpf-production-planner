@@ -2487,7 +2487,7 @@ function renderShipped(app){
       <div class="sh-b">
         ${o.completeAt?`<button class="btn btn-s" data-shu="${escA(o.wo)}">Undo complete</button>`:`<button class="btn btn-g" data-shc="${escA(o.wo)}">✓ Installation complete</button>`}
         <button class="btn btn-s" data-shb="${escA(o.wo)}">↩ Bring back to board</button>
-        ${delBackOk(o)?`<button class="btn btn-s" data-shd="${escA(o.wo)}" title="Put it back in the Deliveries pool to book again — asks who and why">↩ Back to Deliveries</button>`:''}
+        ${delBackOk(o)||delOnVanShipped(o)?`<button class="btn btn-s" data-shd="${escA(o.wo)}" title="Put it back in the Deliveries pool to book again — asks who and why">↩ Back to Deliveries</button>`:''}
       </div>
     </div>`;
   };
@@ -2551,12 +2551,12 @@ const BACK_WHY=['Not delivered after all','Damaged / returned — deliver again'
 function delStampTxt(o){const f=s=>s?new Date(s).toLocaleDateString('en-IE',{day:'numeric',month:'short'})+' '+hhmm(s):'';
   return [o.delLoadedAt?' · loaded '+f(o.delLoadedAt)+(o.ldBy?' by '+o.ldBy:''):'',o.delDispAt?' · dispatched '+f(o.delDispAt):'',(o.delDelivAt||o.delDone)?' · delivered '+(f(o.delDelivAt)||'(no time)')+(o.delivBy?' by '+o.delivBy:''):'',o.delVeh&&o.delDay?' · '+slotLblO(o):''].join('');}
 function delBack9(o){return !!o&&stepNo(o.cienStep||o.shippedStep||o.step)===9;} // shipped or not yet: Cienapps says 9 → shipBack, so the next import still saying 9 leaves it alone
-function delBackOk(o){if(!o||!DB.orders.includes(o)||isOnHold(o)||(delOnPage(o)&&dStage(o)!=='deliv'))return false;
+function delBackOk(o){if(!o||!DB.orders.includes(o)||isOnHold(o)||(delOnPage(o)&&dStage(o)!=='deliv')||delOnVanShipped(o))return false; /*d20: on the driver's run now*/
   const n=stepNo(o.cienStep||o.step);if(n===10||n===11)return false; /*(Garry 20 Nov) never for 10 installed / 11 completed + invoiced*/
   return delBack9(o)||dStage(o)==='deliv';} // delivered (on the board or since), or Cienapps 9
 function delBackAsk(o,arc){
   const man=!!arc&&!DB.orders.includes(o);
-  if(!man&&!delBackOk(o)){toast(o&&delOnPage(o)?o.wo+' is already on Deliveries':o&&isOnHold(o)?o.wo+' is on hold in Cienapps — not brought back':'Not found',true);return;}
+  if(!man&&!delBackOk(o)){toast(o&&delOnVanShipped(o)?o.wo+' is on the '+(vehLbl(o.delVeh)||o.delVeh)+'\'s run now — wait until the driver taps delivered, or clear its status first':o&&delOnPage(o)?o.wo+' is already on Deliveries':o&&isOnHold(o)?o.wo+' is on hold in Cienapps — not brought back':'Not found',true);return;}
   officeWho(by=>pickReason('Why is '+o.wo+' coming back to Deliveries?',
     'It goes into the To plan pool marked “↩ brought back — rebook”. The old delivered stamps are kept in its history. Recorded with your name ('+escA(by)+').'+(!man&&delBack9(o)?' It also comes back to the Capacity Board from 📦 Shipped (the next Cienapps import that still says 9 will not ship it again).':''),
     why=>{const at=nowISO();
@@ -8351,7 +8351,8 @@ function renderDriver(app){
   const shOffH=shOff.length?`<div id="drv-shoff" style="background:#eef3fb;border:1px solid #14335c;color:#14335c;border-radius:8px;padding:8px 12px;margin-bottom:8px;font-size:13px">${shOff.map(o=>`📦 <b>${escA(o.wo)}</b> shipped in Cienapps — removed from your run`).join('<br>')}</div>`:'';
   const onVan=jobs.filter(o=>dStage(o)!=='').length;
   const delivd=jobs.filter(o=>dStage(o)==='deliv').length;
-  const allDeliv=jobs.length>0&&delivd===jobs.length;
+  const shDel=veh?delShipBooked().filter(o=>o.delVeh===veh&&slotIn(o,dwk,day)&&dStage(o)==='deliv'):[]; /*d20 (Tester 3c): shipped drops he delivered have left the list — the run still reads "All delivered"*/
+  const allDeliv=(jobs.length>0||shDel.length>0)&&delivd===jobs.length;
   const pk=podKey(veh,day,dwk);const pod=(DB.pod||{})[pk];
   app.innerHTML=`<div class="drv">
     ${DB.saveFailed?`<div style="background:#c0392b;color:#fff;border-radius:10px;padding:12px 14px;font-size:14px;font-weight:800;margin-bottom:10px">⚠ NOT SAVED YET — no signal. Keep this page open; it retries automatically and will sync when you're back in coverage.</div>`:''}
@@ -8369,8 +8370,8 @@ function renderDriver(app){
       :name&&veh&&vanBy&&vanBy.toLowerCase()!==name.toLowerCase()?`<div id="drv-asg" style="background:#fdecea;border:1px solid #b42318;color:#b42318;border-radius:8px;padding:8px 12px;font-weight:700;margin-bottom:8px">⚠ The ${escA(vehLbl(veh))} on ${escA(dayL)} is ${escA(vanBy)}'s${myVan?' — you are on the '+escA(vehLbl(myVan)):''}. Check with the office.</div>`
       :name&&myVan&&veh!==myVan?`<div id="drv-asg" style="background:#fff4e5;border:1px solid #b54708;color:#b54708;border-radius:8px;padding:8px 12px;font-weight:700;margin-bottom:8px">⚠ The office put you on the ${escA(vehLbl(myVan))} on ${escA(dayL)} — you are looking at the ${escA(vehLbl(veh))}.</div>`:''}
     ${shOffH}${!veh?`<div class="flr-none">Pick your van above to see your run</div>`:
-      !jobs.length?`<div class="flr-none">No jobs planned for ${escA(vehLbl(veh))} on ${escA(dayL)}</div>`:`
-      <div class="drv-stat"><span><b>${escA(vehLbl(veh))} — ${escA(dayL)}</b> · ${jobs.length} job${jobs.length!==1?'s':''}</span><span>${onVan}/${jobs.length} on van · ${delivd} delivered</span></div>
+      !jobs.length&&!shDel.length?`<div class="flr-none">No jobs planned for ${escA(vehLbl(veh))} on ${escA(dayL)}</div>`:`
+      <div class="drv-stat"><span><b>${escA(vehLbl(veh))} — ${escA(dayL)}</b> · ${jobs.length} job${jobs.length!==1?'s':''}${shDel.length?' + '+shDel.length+' shipped, delivered':''}</span><span>${onVan}/${jobs.length} on van · ${delivd} delivered</span></div>
       ${jobs.map(o=>{const st=dStage(o);return`<div class="drv-job${st==='deliv'?' done':st==='disp'?' disp':st?' on':''}">
         <div class="drv-ji"><b>${escA(o.wo)}</b>${o.manual?'':stepBadge(o)}${fuHTML(o,'drv-fu')}${delOnVanShipped(o)?'<span class="drv-shp" style="font-size:11px;font-weight:700;color:#14335c;margin-left:6px">📦 shipped in Cienapps — still tap DELIVERED</span>':''}
           <div class="drv-jt">${escA(o.title)||'—'}</div><div class="drv-jc">${escA(o.customer||'')}${st==='deliv'?' · ✓ delivered '+dStageTime(o)+(o.delivBy?' by '+escA(o.delivBy):''):st==='disp'?' · dispatched '+dStageTime(o):''}</div>${st==='deliv'?'':listStatHTML(o.wo)}</div>
@@ -8986,8 +8987,8 @@ function closeWeekJobs(wk){
 /*d20: shipped jobs are off the board but their booking is kept — closing their week archives them too (the week's record stays
   whole), marked "📦 shipped" (sh = when). Shipped = left the factory, so a booked one counts as delivered-by-shipping; on the job the
   booking moves into delShipWas (still shown on its Shipped card) and it is closed off like a delivered job.*/
-function closeWeekShipped(wk){return delShipBooked().filter(o=>o.delDay?slotWk(o)===wk:(dStage(o)==='deliv'&&(!o.delDelivAt||wkOf(isoOf(new Date(o.delDelivAt)))<=wk)));}
-function closeWeekOnVan(wk){return delAll().filter(o=>o.delDay&&slotWk(o)===wk&&(dStage(o)==='load'||dStage(o)==='disp'));}
+function closeWeekShipped(wk){return delShipBooked().filter(o=>!delOnVanShipped(o)&&(o.delDay?slotWk(o)===wk:(dStage(o)==='deliv'&&(!o.delDelivAt||wkOf(isoOf(new Date(o.delDelivAt)))<=wk))));} // (Tester attack20-ship-3) a shipped job still loaded / on the road stays on his van, like closeWeekOnVan
+function closeWeekOnVan(wk){return delDrvAll().filter(o=>o.delDay&&slotWk(o)===wk&&(dStage(o)==='load'||dStage(o)==='disp'));}
 function closeWeek(wk){
   wk=wk||thisWk();
   if(wk>thisWk()){toast('Only this week or a week already gone can be closed');return;}
