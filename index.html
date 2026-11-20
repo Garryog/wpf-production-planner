@@ -4020,6 +4020,58 @@ async function lsMatUse(pid,m){
   const u=ls.filter(l=>hit.has(l.id));return{lists:u.filter(l=>!l.tpl).length,tpls:u.filter(l=>l.tpl).length};
 }
 function lsMatClash(pid,name,id){const k=matKey(name);return k?lsMats(pid,'',true).find(m=>m.id!==id&&[m.name,...(m.aliases||[])].some(a=>matKey(a)===k)):null;}
+/*copy materials (Garry 20 Nov, part D): bring another project's ACTIVE materials into this one. Only ones this project hasn't got
+  (by name or other spelling — a retired one here counts as "already here") can be ticked; nothing here is ever changed, retired or
+  removed. Each copy has a fixed id M:<this project>:<source id>, so a retry, or two PCs at once, gives "already here" — never a twin.*/
+function matCopyDlg(pid,done){
+  if(!lsMatEditOk())return;
+  const st={from:'',busy:false,load:false,err:'',msg:'',tick:new Set(),seen:new Set()};
+  const ov=lsDlg('<div id="mc-body"></div>',640);
+  const cid=src=>'M:'+pid+':'+src.id;
+  const here=src=>LST.m.get(cid(src))||[src.name,...(src.aliases||[])].map(n=>lsMatClash(pid,n,'')).find(Boolean)||null; // the material on THIS project that already answers to it
+  const srcMats=()=>st.from?lsMats(st.from,'',false):[];
+  const pick=async id=>{st.from=id;st.load=true;st.err='';st.msg='';st.tick=new Set();st.seen=new Set();draw();
+    try{await Promise.all([lsMatFresh(pid),lsMatFresh(id)]);}catch(e){st.err='Could not read the materials — '+e.message+'. Try again.';}
+    st.load=false;if(st.from!==id)return;
+    srcMats().forEach(m=>{st.seen.add(m.id);if(!here(m))st.tick.add(m.id);});draw();}; // every new one is ticked to start with
+  const draw=()=>{const b=ov.querySelector('#mc-body');if(!b)return;
+    const P=lsProjects().filter(x=>x.id!==pid).map(x=>({p:x,n:lsMats(x.id,'',false).length})).filter(x=>x.n);
+    const ms=srcMats(),nw=ms.filter(m=>!here(m)),n=[...st.tick].filter(id=>nw.some(m=>m.id===id)).length;
+    const row=m=>{const h=here(m),al=(m.aliases||[]).filter(Boolean);
+      return `<label class="hold-row" style="display:flex;gap:8px;align-items:flex-start;padding:6px 0;overflow-wrap:anywhere${h?';opacity:.55':''}"><input type="checkbox" data-mcp="${escA(m.id)}" style="width:20px;height:20px;flex:none"${h?' disabled':st.tick.has(m.id)?' checked':''}${st.busy?' disabled':''}>
+        <span style="min-width:0"><b>${escA(m.name)}</b>${al.length?` <span style="color:var(--t3);font-size:12px">· also called: ${escA(al.join(', '))}</span>`:''}${h?` <span class="mc-here" style="font-size:12px;color:#5b6b82;font-weight:700">· already here${h.active===false?' (retired here)':h.id===cid(m)?'':h.name&&matKey(h.name)!==matKey(m.name)?' as "'+escA(h.name)+'"':''}</span>`:''}</span></label>`;};
+    const grp=(k,t)=>{const g=ms.filter(m=>m.kind===k);return g.length?`<div style="font-weight:800;color:#14335c;margin-top:8px">${t} (${g.length})</div>${g.map(row).join('')}`:'';};
+    b.innerHTML=`<div style="font-weight:800;color:#14335c;font-size:17px;margin-bottom:6px">⧉ Copy materials into ${escA(lsProjName(pid))}</div>
+      <div style="font-size:13px;font-weight:700;margin-bottom:4px">Copy from:</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">${P.map(x=>`<button class="btn ${x.p.id===st.from?'btn-g':'btn-s'}" data-mcf="${escA(x.p.id)}" style="min-height:40px;overflow-wrap:anywhere;text-align:left"${st.busy?' disabled':''}>${escA(x.p.name)} (${x.n})</button>`).join('')||'<span style="color:var(--t3)">No other project has materials yet.</span>'}</div>
+      ${st.from?st.load?'<div style="color:var(--t3)">Checking both projects…</div>':st.err?'':`
+        <div style="font-size:12px;color:var(--t3);margin:4px 0">Nothing on this project is changed or removed — only new materials are added.</div>
+        ${ms.length?`<div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-s" id="mc-all" style="font-size:12px"${st.busy||!nw.length?' disabled':''}>Tick all new</button><button class="btn btn-s" id="mc-none" style="font-size:12px"${st.busy?' disabled':''}>None</button></div>
+        ${grp('sheet','Sheets (saw)')}${grp('other','Fittings / other')}`:'<div style="color:var(--t3)">That project has no materials in use.</div>'}
+        <div style="text-align:right;margin-top:10px"><button class="btn btn-g" id="mc-ok" style="font-size:14px;padding:9px 18px;min-height:44px"${st.busy||!n?' disabled':''}>${st.busy?'Copying…':'Copy '+n+' material'+(n!==1?'s':'')}</button></div>`:''}
+      <div id="mc-msg" style="font-size:13px;font-weight:700;margin-top:6px;color:${st.err?'#b42318':'#0d6e46'}">${escA(st.err||st.msg)}</div>`;
+    b.querySelectorAll('[data-mcf]').forEach(x=>x.onclick=()=>pick(x.dataset.mcf));
+    b.querySelectorAll('[data-mcp]').forEach(x=>x.onchange=()=>{if(x.checked)st.tick.add(x.dataset.mcp);else st.tick.delete(x.dataset.mcp);draw();});
+    const q=id=>b.querySelector('#'+id);
+    if(q('mc-all'))q('mc-all').onclick=()=>{nw.forEach(m=>st.tick.add(m.id));draw();};
+    if(q('mc-none'))q('mc-none').onclick=()=>{st.tick.clear();draw();};
+    if(q('mc-ok'))q('mc-ok').onclick=async()=>{if(st.busy||!lsMatEditOk())return;
+      st.busy=true;st.err='';st.msg='';draw();
+      let add=0,al=0,lost=false,why='';
+      try{await lsMatFresh(pid);}catch(e){lost=true;why=e.message;}
+      if(!lost)for(const m of srcMats().filter(m=>st.tick.has(m.id))){
+        if(here(m)){al++;st.tick.delete(m.id);continue;} // added meanwhile (another screen, or a lost reply)
+        try{await lsWrite('project_materials',{id:cid(m),project_id:pid,name:String(m.name).trim(),kind:m.kind,aliases:(m.aliases||[]).filter(Boolean),sort:lsMats(pid,'',true).length});add++;st.tick.delete(m.id);}
+        catch(e){if(/already used/.test(e.message)){try{await lsMatFresh(pid);}catch(e2){}al++;st.tick.delete(m.id);continue;} // 409 / 23505: it is here (same id, or that name / spelling) — re-read, never a second one
+          lost=true;why=e.message;break;}}
+      st.busy=false;
+      const sum='✓ '+add+' added'+(al?' · '+al+' already here':'');
+      if(lost){st.err=(add||al?sum+'. ':'')+'Stopped — '+why+'. The rest may have been added — press Copy again, nothing is added twice.';}
+      else{st.msg=sum;toast(sum);}
+      draw();if(done)done();};
+  };
+  draw();
+}
 function lsMaterialsDlg(pid,after){
   const ov=lsDlg('<div id="mt-body"></div>',820);
   {const b=ov.querySelector('#pod-x');if(b)b.id='mt-x2';} // (final round, phone) a second ✕ Close sits at the top and stays in view — it is the window's #pod-x (Esc presses it); this one at the bottom does the same
@@ -4044,11 +4096,13 @@ function lsMaterialsDlg(pid,after){
       <td><input data-mta="${escA(m.id)}" value="${escA(t.al)}" placeholder="other spellings, comma-separated" style="${LS_INP};width:100%"></td>
       <td><input type="checkbox" data-mtv="${escA(m.id)}"${t.act?' checked':''}></td><td><button class="btn btn-g" data-mts="${escA(m.id)}" style="font-size:12px;padding:4px 10px">Save</button></td></tr>`;};
     ov.querySelector('#mt-body').innerHTML=`<div class="mt-head"><div style="font-weight:800;color:#14335c;font-size:17px;flex:1;min-width:0">🧱 Materials — ${escA(p.name)}</div><button class="btn btn-s" id="pod-x">✕ Close</button></div>
+      ${lsMatCan()?'<div style="margin-bottom:8px"><button class="btn btn-s" id="mt-copy" style="font-size:13px;min-height:40px">⧉ Copy from another project…</button></div>':''}
       <div style="font-size:12px;color:var(--t3);margin-bottom:10px">Sheet materials are the only boards the office can pick on this project's lists. Other spellings from Excel files are remembered as aliases. Untick Active to retire a material — it is never deleted.</div>
       <table class="lst-tbl"><thead><tr><th>Name</th><th>Kind</th><th>Also called</th><th>Active</th><th></th></tr></thead><tbody>${ms.map(row).join('')||'<tr><td colspan="5" style="color:var(--t3)">No materials yet.</td></tr>'}
       <tr><td><input id="mt-new-n" value="${escA(nw.n)}" placeholder="e.g. 18mm MFC White" style="${LS_INP};width:100%"></td><td><select id="mt-new-k" style="${LS_INP}"><option value="sheet">Sheet (saw)</option><option value="other"${nw.k==='other'?' selected':''}>Fitting / other</option></select></td><td></td><td></td>
         <td><button class="btn btn-g" id="mt-add" style="font-size:12px;padding:4px 10px">＋ Add</button></td></tr></tbody></table><div id="mt-msg" style="font-size:12px;color:#b42318;font-weight:700;margin-top:6px"></div>`;
     const msg=t=>{const e=ov.querySelector('#mt-msg');if(e)e.textContent=t;};
+    {const cb=ov.querySelector('#mt-copy');if(cb)cb.onclick=()=>matCopyDlg(pid,()=>{if(document.body.contains(ov))draw();});}
     const fresh=async()=>{try{await lsMatFresh(pid);return true;}catch(e){msg('Could not check the materials list — '+e.message);return false;}}; // check against the database, not this screen's copy
     ov.querySelectorAll('[data-mts]').forEach(b=>b.onclick=async()=>{const id=b.dataset.mts;if(!LST.m.get(id)||!lsMatEditOk())return;
       const name=ov.querySelector('[data-mtn="'+id+'"]').value.trim();if(!name)return msg('A material needs a name.');
