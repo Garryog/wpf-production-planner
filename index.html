@@ -4914,6 +4914,8 @@ function typeKey(text,isTpl){
   return{code,hand,why};
 }
 function tkLbl(k){return k.code?k.code+(k.hand?' '+k.hand:''):'?';}
+// (20 Nov, one name per template) every template here is matched by its NAME only; kept inside this block so the pure tests can load it
+function sgTplName(t){return t?String(t.name||t.typeName||''):'';}
 function suggestTpl(o,templates,projects){
   const none=(why,pid)=>({level:'none',pid:pid||'',tid:'',alts:[],why});
   o=o||{};const p=projForCust(o.customer,projects);
@@ -4921,18 +4923,18 @@ function suggestTpl(o,templates,projects){
   const ts=(templates||[]).filter(t=>t&&t.pid===p.id&&!t.archived);
   if(!ts.length)return none('This project has no templates yet',p.id);
   const f=sgFeat(o.title),qx=sgQtyWhy(o.title,o.customer,p);
-  const fk=typeKey(o.title,false),tks=new Map(ts.map(t=>[t.id,typeKey(tplName(t),true)]));
+  const fk=typeKey(o.title,false),tks=new Map(ts.map(t=>[t.id,typeKey(sgTplName(t),true)]));
   // hand guard: a plain title where the project has an LH / RH template of that type — a person decides (Garry: never matched automatically)
   const handUnknown=!!fk.code&&!fk.hand&&ts.some(t=>{const k=tks.get(t.id);return k.code===fk.code&&(k.hand==='LH'||k.hand==='RH');});
   const sc=ts.map(t=>{
-    const g=sgFeat(tplName(t));
+    const g=sgFeat(sgTplName(t));
     if(t.ltype==='kitchen'&&!g.kinds.size)g.kinds.add('kitchen');
     if(g.code&&f.code&&g.code!==f.code)return null;   // a different type
     if(g.beds&&f.beds&&g.beds!==f.beds)return null;   // a different number of bedrooms
     const kHit=[...g.kinds].some(k=>f.kinds.has(k));
     if(g.kinds.size&&f.kinds.size&&!kHit)return null; // a different room
     const cHit=!!(g.code&&g.code===f.code),bHit=!!(g.beds&&g.beds===f.beds);
-    const ph=[tplName(t)].map(sgNorm).some(x=>x.length>=4&&(' '+f.n+' ').includes(' '+x+' '));
+    const ph=[sgTplName(t)].map(sgNorm).some(x=>x.length>=4&&(' '+f.n+' ').includes(' '+x+' '));
     const more=[...g.words].filter(w=>f.words.has(w)).length,miss=[...g.words].filter(w=>!f.words.has(w)).length;
     const score=(cHit?4:0)+(kHit?2:0)+(bHit?1:0)+(ph?3:0)+more-miss*0.5;
     // the title names a room this template doesn't cover ("KITCHEN & WARDROBES" for a kitchen template) → amber. A utility
@@ -4951,11 +4953,11 @@ function suggestTpl(o,templates,projects){
     else if(fk.hand!==gk.hand||(fk.code&&gk.code&&fk.code!==gk.code))hw='title says '+tkLbl(fk)+', template is '+tkLbl(gk)+' — check the hand'; // the hand must always be the same; the type too when both name one (a type missing on one side is left to the matcher above, as before)
     if(hw){strong=false;if(!aw&&!oRoom)why.push(hw);}
     return{t,score,strong,why,cHit};
-  }).filter(x=>x&&x.score>0).sort((a,b)=>b.score-a.score||String(tplName(a.t)).localeCompare(String(tplName(b.t))));
+  }).filter(x=>x&&x.score>0).sort((a,b)=>b.score-a.score||String(sgTplName(a.t)).localeCompare(String(sgTplName(b.t))));
   if(!sc.length)return none(f.code?'No "Type '+f.code.toUpperCase()+'" template for this project':'No template matches the title',p.id);
   if(sc.length>1)sc.forEach(x=>{if(!x.cHit)x.strong=false;}); // a name in the title (no type) is green only when no other template could fit
   const b=sc[0],st=sc.filter(x=>x.strong),alts=sc.map(x=>x.t.id);
-  ts.slice().sort((a,c)=>String(tplName(a)).localeCompare(String(tplName(c)))).forEach(t=>{if(!alts.includes(t.id))alts.push(t.id);});
+  ts.slice().sort((a,c)=>String(sgTplName(a)).localeCompare(String(sgTplName(c)))).forEach(t=>{if(!alts.includes(t.id))alts.push(t.id);});
   const strong=b.strong&&(st.length===1||st[0].score-st[1].score>=2);
   return{level:strong?'strong':'weak',pid:p.id,tid:b.t.id,alts,why:(strong?'Matches ':'Best guess — ')+(b.why.join(', ')||'room')+(!strong&&st.length>1?' (more than one template fits)':'')};
 }
