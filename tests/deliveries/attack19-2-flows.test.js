@@ -33,20 +33,21 @@ const W = '2026-11-16';
     rec('INFO Shipped cards offering ↩ Back to Deliveries', true, JSON.stringify(btns));
     for (const wo of ['WO-2609-1', 'WO-2610-1', 'WO-2611-1']) {
       const has = await p.evaluate(wo => { const b = document.querySelector('[data-shd="' + wo + '"]'); if (b) b.click(); return !!b; }, wo);
+      if (wo !== 'WO-2609-1') { rec(wo + ': NO ↩ Back to Deliveries on Shipped (Garry 20 Nov: never for steps 10 / 11)', !has); continue; }
       if (!has) { rec(wo + ': has ↩ Back to Deliveries on Shipped', false); continue; }
       await p.waitForTimeout(80); await name('Mary'); await p.click('.pod-ovl [data-why="Damaged / returned — deliver again"]'); await p.waitForTimeout(150);
       await p.evaluate(async () => { showTab('h'); await new Promise(r => setTimeout(r, 100)); });
     }
     const after = await p.evaluate(() => ['WO-2609-1', 'WO-2610-1', 'WO-2611-1'].map(w => { const o = DB.orders.find(x => x.wo === w); return { w, onDel: delOnPage(o), shipped: !!o.shippedAt, inst: !!o.installedAt, comp: !!o.completeAt, sb: o.shipBack ? o.shipBack.cs : '' }; }));
-    after.forEach(a => rec(`${a.w} brought back: on Deliveries`, a.onDel, JSON.stringify(a)));
-    after.filter(a => a.w !== 'WO-2609-1').forEach(a => rec(`${a.w} brought back: the job is not BOTH on the 📦 Shipped tab (installed/complete) AND in the Deliveries pool to rebook — or the dialog says so`, !(a.shipped && a.onDel), JSON.stringify(a)));
+    rec('WO-2609-1 brought back: on Deliveries', after[0].onDel, JSON.stringify(after[0]));
+    after.slice(1).forEach(a => rec(`${a.w} (step 10/11) untouched: still shipped, not on Deliveries`, a.shipped && !a.onDel, JSON.stringify(a)));
     const HDR = ['WO #', 'Title', 'Customer', 'Due Date', 'Step', 'Sub-Total'];
     const imp = async rows => { await H.importAoa(p, [HDR, ...rows]); return p.evaluate(async () => { const pl = IMPPLAN ? { sh: (IMPPLAN.shipped || []).map(s => s.wo), it: (IMPPLAN.inTransit || []).map(s => s.wo), n: DB.orders.length } : null; applyImport(IMPPLAN); await new Promise(r => setTimeout(r, 250)); return pl; }); };
     const nBefore = await p.evaluate(() => DB.orders.length);
     const i1 = await imp([['WO-2609-1', 'House', 'ASPECT', 46345, S9, 1000], ['WO-2610-1', 'House', 'ASPECT', 46345, S10, 1000], ['WO-2611-1', 'House', 'ASPECT', 46345, S11, 1000]]);
     const s1 = await p.evaluate(() => ['WO-2609-1', 'WO-2610-1', 'WO-2611-1'].map(w => { const os = DB.orders.filter(x => x.wo === w); const o = os[0]; return { w, n: os.length, onDel: delOnPage(o), shipped: !!o.shippedAt, comp: !!o.completeAt }; }));
     rec('import with the SAME steps: nothing re-shipped, no duplicate jobs', i1 && i1.n && !i1.sh.length && s1.every(x => x.n === 1) && (await p.evaluate(() => DB.orders.length)) === nBefore, JSON.stringify({ i1, s1 }));
-    rec('import with the SAME steps: all three still on Deliveries', s1.every(x => x.onDel), JSON.stringify(s1));
+    rec('import with the SAME steps: WO-2609-1 still on Deliveries; 10 / 11 still only on Shipped', s1[0].onDel && s1.slice(1).every(x => x.shipped && !x.onDel), JSON.stringify(s1));
     const i2 = await imp([['WO-2609-1', 'House', 'ASPECT', 46345, S10, 1000]]);
     const s2 = await p.evaluate(() => { const o = DB.orders.find(x => x.wo === 'WO-2609-1'); return { onDel: delOnPage(o), shipped: !!o.shippedAt, inst: !!o.installedAt }; });
     rec('INFO WO-2609-1 brought back, then Cienapps moves to 10: shipped again while still in the Deliveries pool (flagged in transit?)', true, JSON.stringify({ i2, s2 }));

@@ -23,7 +23,7 @@ const where = (p, wo) => p.evaluate(wo => ({ delx: (DB.delx || []).filter(x => x
     if (!oldHtml(OLD)) { rec('origin/main available', false); return done(); }
     // a + b
     for (const oldDoes of ['unrelated', 'books-it']) {
-      const S = makeServer({ id: 'main', version: 1, nid: 9, orders: [O('WO-2601-1')], settings: { delx: [MAN('JOB-M1')] } });
+      const S = makeServer({ id: 'main', version: 1, nid: 9, orders: [O('WO-2601-1')], settings: { delx: [MAN('JOB-M1', { jid: 'Jtest1', addedAt: '2026-11-10T09:00:00Z' })] } });
       const A = await openRef(browser, S, ''), B = await openRef(browser, S, OLD);
       await takeOffNew(A.page, 'JOB-M1'); await save(A.page);
       if (oldDoes === 'unrelated') await B.page.evaluate(() => { DB.orders[0].notes = 'old screen note'; sched(); });
@@ -50,14 +50,14 @@ const where = (p, wo) => p.evaluate(wo => ({ delx: (DB.delx || []).filter(x => x
     {
       const ar = {};
       for (let i = 0; i < 26; i++) { const d = new Date(Date.UTC(2026, 4, 11) + i * 7 * 864e5).toISOString().slice(0, 10); ar[d + '.k' + i] = { at: d + 'T16:00:00Z', w: d, by: 'Pat', notes: {}, pod: {}, jobs: [{ wo: 'WO-26' + String(i).padStart(2, '0') + '-1', t: 'x', c: 'c', v: 'VOLVO', d: 'Tue', vAt: d + 'T12:00:00Z' }] }; }
-      ar['2026-05-01.zz.off'] = { at: '2026-05-01T10:00:00Z', w: '', by: 'Ann', off: true, why: 'Taken off the board', notes: {}, pod: {}, jobs: [{ wo: 'JOB-OFF', t: 'Taken off hand job', c: 'Cairn', m: 1, x: MAN('JOB-OFF') }] };
+      ar['~off.2026-05-01.zz'] = { at: '2026-05-01T10:00:00Z', w: '', by: 'Ann', off: true, why: 'Taken off the board', notes: {}, pod: {}, jobs: [{ wo: 'JOB-OFF', t: 'Taken off hand job', c: 'Cairn', m: 1, x: MAN('JOB-OFF') }] };
       for (const who of ['new', 'old']) {
         const S = makeServer({ id: 'main', version: 1, nid: 9, orders: [O('WO-2699-1', { delVeh: 'VOLVO', delDay: 'Tue', delWk: W0, delDelivAt: '2026-11-10T12:00:00Z', delDone: true })], settings: { delArchive: JSON.parse(JSON.stringify(ar)) } });
         const B = await openRef(browser, S, who === 'old' ? OLD : '');
         await B.page.evaluate(async W0 => { window.confirm = () => true; closeWeek(W0); await new Promise(r => setTimeout(r, 150)); }, W0); await NAME(B.page, 'Bob'); await B.page.waitForTimeout(900);
         await save(B.page);
         const ks = Object.keys(S.row.settings.delArchive || {});
-        rec(`d (${who} screen closes a week with 26 weeks + 1 "taken off" entry): the archived hand job JOB-OFF is NOT erased`, ks.includes('2026-05-01.zz.off'), JSON.stringify({ n: ks.length, first: ks.sort()[0] }));
+        rec(`d (${who} screen closes a week with 26 weeks + 1 "taken off" entry): the archived hand job JOB-OFF is NOT erased`, ks.includes('~off.2026-05-01.zz'), JSON.stringify({ n: ks.length, first: ks.sort()[0] }));
         await B.close();
       }
     }

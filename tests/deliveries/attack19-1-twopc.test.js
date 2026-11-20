@@ -39,15 +39,16 @@ const st = (p, wo) => p.evaluate(wo => { const o = findDel(wo); const ar = Objec
       await A.close(); await B.close();
     }
     // ---------- B: hand job take-off vs booking
-    for (const order of ['book-saves-first', 'takeoff-saves-first']) {
-      const S = makeServer({ id: 'main', version: 1, nid: 9, orders: [], settings: { delx: [{ wo: 'JOB-M1', title: 'Spare doors', customer: 'Cairn', value: 450, manual: true, delVeh: '', delDay: '', delDone: false }] } });
+    // attack20 re-point: jobs made by ＋ Add Job now carry a hidden id (jid); one legacy job without it is kept as INFO
+    for (const [order, legacy] of [['book-saves-first', false], ['takeoff-saves-first', false], ['takeoff-saves-first', true]]) {
+      const S = makeServer({ id: 'main', version: 1, nid: 9, orders: [], settings: { delx: [Object.assign({ wo: 'JOB-M1', title: 'Spare doors', customer: 'Cairn', value: 450, manual: true, delVeh: '', delDay: '', delDone: false }, legacy ? {} : { jid: 'Jtest1', addedAt: '2026-11-10T09:00:00Z' })] } });
       const A = await openRef(browser, S, ''), B = await openRef(browser, S, '');
       if (order === 'book-saves-first') { await book(B.page, 'JOB-M1', 'IVECO', 'Fri'); await save(B.page); await takeOff(A.page, 'JOB-M1', 'DELETE'); await save(A.page); }
       else { await takeOff(A.page, 'JOB-M1', 'DELETE'); await save(A.page); await book(B.page, 'JOB-M1', 'IVECO', 'Fri'); await save(B.page); }
       await reload(A.page);
       const a = await st(A.page, 'JOB-M1');
-      rec(`B ${order}: hand job is in ONE place (on the board XOR archived as taken off) — not both`, !!(a.inDelx) !== !!(a.arch), JSON.stringify(a));
-      rec(`B ${order}: hand job not lost (on the board or in Past weeks)`, a.inDelx || a.arch > 0, JSON.stringify(a));
+      rec(`${legacy ? 'INFO (legacy, no jid) ' : ''}B ${order}: hand job is in ONE place (on the board XOR archived as taken off) — not both`, legacy || !!(a.inDelx) !== !!(a.arch), JSON.stringify(a));
+      rec(`B ${order}${legacy ? ' legacy' : ''}: hand job not lost (on the board or in Past weeks)`, a.inDelx || a.arch > 0, JSON.stringify(a));
       await A.close(); await B.close();
     }
     // ---------- C: bring back from Past weeks (A) vs Close week (B, stale) on the same delivered job
