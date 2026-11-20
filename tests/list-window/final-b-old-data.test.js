@@ -80,8 +80,9 @@ const content = x => [x.id, x.kind, x.part, x.qty == null ? null : String(x.qty)
     const r4 = await rows(p), tn4 = await p.evaluate(() => (document.getElementById('me-tname') || {}).value);
     await setv(p, r4.findIndex(r => r.item === 'Hinge') + '|qty', '6'); await sleep(200); await save(p, 2200);
     const t1 = D.find(S.db, 'lists', 'T1');
-    rec('4a old template opens (Type name box empty) and saves a changed row', tn4 === '' && (linesOf(S, 'T1').find(x => x.part === 'Hinge') || {}).qty === '6', JSON.stringify([tn4, await err(p)]));
-    rec('4b its name is still "Type 2", still a template, and no Type name was made up', t1.name === 'Type 2' && t1.is_template === true && !t1.type_name, JSON.stringify([t1.name, t1.is_template, t1.type_name]));
+    // (updated 20 Nov 2026, Garry: one name per template) a template has no Type name box; a template save writes type_name = name
+    rec('4a old template opens (no Type name box on a template) and saves a changed row', tn4 == null && (linesOf(S, 'T1').find(x => x.part === 'Hinge') || {}).qty === '6', JSON.stringify([tn4, await err(p)]));
+    rec('4b its name is still "Type 2", still a template, and its one name is saved as the type name too', t1.name === 'Type 2' && t1.is_template === true && t1.type_name === 'Type 2', JSON.stringify([t1.name, t1.is_template, t1.type_name]));
     await closeAll(p);
 
     // ---- 5. the saw still sees the old list right ----
