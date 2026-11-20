@@ -4943,12 +4943,12 @@ function suggestTpl(o,templates,projects){
     const why=[cHit?'type '+f.code.toUpperCase():'',kHit?[...g.kinds].filter(k=>f.kinds.has(k)).join(' + '):'',bHit?f.beds+' bed':'',ph&&!cHit?'name':''].filter(Boolean);
     if(aw)why.push((qx||aw)+' — check it');
     else if(oRoom)why.push('title names another room too — check it');
-    // hand guard (20 Nov): green only when the type AND hand of the title and the template are exactly the same
+    // hand guard (20 Nov): green only when the hand of the title and the template are exactly the same (and the type, when both have one)
     const gk=tks.get(t.id);let hw='';
     if(fk.why==='hand unclear')hw='hand unclear in the title — check it';
     else if(gk.why==='hand unclear')hw='hand unclear in the template name — check it';
     else if(handUnknown)hw='hand not known — confirm singly';
-    else if(fk.code!==gk.code||fk.hand!==gk.hand)hw='title says '+tkLbl(fk)+', template is '+tkLbl(gk)+' — check the hand';
+    else if(fk.hand!==gk.hand||(fk.code&&gk.code&&fk.code!==gk.code))hw='title says '+tkLbl(fk)+', template is '+tkLbl(gk)+' — check the hand'; // the hand must always be the same; the type too when both name one (a type missing on one side is left to the matcher above, as before)
     if(hw){strong=false;if(!aw&&!oRoom)why.push(hw);}
     return{t,score,strong,why,cHit};
   }).filter(x=>x&&x.score>0).sort((a,b)=>b.score-a.score||String(tplName(a.t)).localeCompare(String(tplName(b.t))));

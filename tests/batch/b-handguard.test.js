@@ -65,6 +65,10 @@ s = S('HANDED HOUSE 14 TYPE 2 KITCHEN', [T('c', 'Type 2 Handed'), T('d', 'Type 2
 rec('"HANDED" before TYPE → never green', s.level !== 'strong', JSON.stringify(s));
 s = S('HOUSE 14 TYPE 2 KITCHEN', [T('c', 'Type 2', { typeName: 'Type 2 LH' })]);
 rec('the old hidden type name is not used (plain "Type 2" name, type name "2 LH") → green', s.level === 'strong', JSON.stringify(s));
+s = S('HOUSE 14 ISLAND KITCHEN', [T('k', 'Island kitchen')]);
+rec('a title with no TYPE whose template name is in it stays green as before (no hand either side)', s.level === 'strong', JSON.stringify(s));
+s = S('HOUSE 14 ISLAND KITCHEN', [T('k', 'Island kitchen LH')]);
+rec('… but never against a handed template', s.level !== 'strong', JSON.stringify(s));
 // mixed hands never share a template: every combination
 const hands = ['', ' H', ' LH', ' RH'];
 let bad = [];
