@@ -7530,6 +7530,29 @@ let wlShowDone=false;     // saw/stores: viewing the date-stamped DONE screen
 let wlShowUpcoming=false; // saw/stores: peeking at later days' work
 let wlShowHold=false;     // saw/stores: the waiting-on-material book
 let wlCust='';            // saw/stores: one-tap customer filter over the day's work
+/*saw batch memory (Garry 20 Nov): the houses ticked "＋ Add to batch" on THIS saw device. Browser storage wpfSawBatch only — never
+  the planner record, never shared with another device. Storage blocked → kept in memory for this page (the batch says "not
+  remembered"). A house that is cut complete, archived, replaced or no longer on the saw queue drops out by itself, with a note.*/
+let wlShowBatch=false;    // saw: the ⚡ BATCH tab
+const SB={ids:[],mem:false,read:false,notes:[]};
+function sbLoad(){if(SB.read)return;SB.read=true;
+  try{const v=JSON.parse(localStorage.getItem('wpfSawBatch')||'null');if(v&&Array.isArray(v.ids))SB.ids=[...new Set(v.ids.filter(x=>typeof x==='string'&&x))].slice(0,300);}
+  catch(e){SB.mem=true;}} // blocked, or not ours to read: start empty
+function sbSave(){try{if(SB.ids.length)localStorage.setItem('wpfSawBatch',JSON.stringify({ids:SB.ids,at:new Date().toISOString()}));else localStorage.removeItem('wpfSawBatch');SB.mem=false;}catch(e){SB.mem=true;}}
+function sbHas(id){sbLoad();return SB.ids.includes(id);}
+function sbToggle(id){sbLoad();const i=SB.ids.indexOf(id);if(i>=0)SB.ids.splice(i,1);else SB.ids.push(id);sbSave();}
+function sbClear(){sbLoad();SB.ids=[];sbSave();}
+function sbNote(t){SB.notes=[t,...SB.notes.filter(x=>x!==t)].slice(0,6);}
+// open: the saw's open lists (TO DO, today and later days). Returns the batch's lists in the order they were added. Only once the
+// lists have loaded does a house that is not open drop out (a page still loading never empties the batch).
+function sbLists(open){sbLoad();
+  const by=new Map(open.map(l=>[l.id,l])),ready=!!DB.loaded&&(!V2()||LST.loaded);
+  if(ready){const gone=SB.ids.filter(id=>!by.has(id));
+    if(gone.length){gone.forEach(id=>{const l=V2()?lsList(id):(DB.lists||[]).find(x=>x.id===id),nm='"'+String((l&&l.name)||id)+'"';
+        const s=l&&l.archived?lsSupersededBy(l):null;
+        sbNote(nm+' left the batch — '+(!l?'no longer on the planner':s?'replaced by "'+s.name+'" (add the new list if it is needed)':l.archived?'list archived':listDone(id).saw?'cut complete':'no longer on the saw queue'));});
+      SB.ids=SB.ids.filter(id=>by.has(id));sbSave();}}
+  return SB.ids.map(id=>by.get(id)).filter(Boolean);}
 // A name is REQUIRED on every tick-off — blank records make the audit trail worthless.
 // Remembered per device, so it's one-time friction at each bench.
 function opName(what){
