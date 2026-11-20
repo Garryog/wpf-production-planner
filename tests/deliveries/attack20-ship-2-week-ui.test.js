@@ -29,7 +29,8 @@ const shipCard = (p, wo) => p.evaluate(async wo => { showTab('h'); await new Pro
       await importRows(A.page, [row('WO-3101-1', S9), row('WO-3102-1', S8)]);
       await close(A.page, W0); await close(A.page, W0); await save(A.page);
       const a = await arcFor(A.page, W0);
-      rec('E1 same PC closes Wk 46 twice: one archive, shipped job in it once', a.length === 1 && a[0].split(',').filter(x => x.startsWith('WO-3101-1')).length === 1, JSON.stringify(a));
+      // (Coder 20 Nov, re-pointed — attack20-ship-3 fix: a LOADED shipped job stays on the driver's van through Close week, like any on-van job)
+      rec('E1 same PC closes Wk 46 twice: one archive; the loaded shipped WO-3101-1 is in it at most once (now: stays on his van)', a.length === 1 && a[0].split(',').filter(x => x.startsWith('WO-3101-1')).length <= 1, JSON.stringify(a));
       await A.close();
     }
     {
@@ -39,7 +40,7 @@ const shipCard = (p, wo) => p.evaluate(async wo => { showTab('h'); await new Pro
       await Promise.all([close(A.page, W0), close(B.page, W0)]); await save(A.page); await save(B.page); await reload(A.page);
       const a = await arcFor(A.page, W0);
       const all = a.join(',').split(',');
-      rec('E2 FINDING-CHECK (race older than d20) two PCs close Wk 46 at the same moment: the shipped job is archived once (no double archive)', all.filter(x => x.startsWith('WO-3111-1')).length === 1, JSON.stringify(a));
+      rec('E2 FINDING-CHECK (race older than d20) two PCs close Wk 46 at the same moment: the shipped job is archived at most once (loaded → stays on his van; Coder re-point)', all.filter(x => x.startsWith('WO-3111-1')).length <= 1, JSON.stringify(a));
       rec('E2 INFO (compare): the delivered job WO-3112-1 archived ' + all.filter(x => x.startsWith('WO-3112-1')).length + ' time(s) — same race existed before d20', true, JSON.stringify(a));
       const sc = await A.page.evaluate(() => scorecardHTML(8));
       rec('E2 INFO scorecard rows for Wk 46', true, (sc.match(/Wk 46[^<]*/g) || []).join(' | '));
@@ -57,7 +58,8 @@ const shipCard = (p, wo) => p.evaluate(async wo => { showTab('h'); await new Pro
       rec('F1 listed once on the Shipped tab (not twice: shipped list + on-hold list)', c.n <= 1, JSON.stringify(c));
       await close(p, W0);
       const a = await arcFor(p, W0);
-      rec('F2 FINDING-CHECK closing Wk 46: the shipped + on-hold booked jobs are archived as shipped (the week\'s record is whole)', a.join(',').includes('WO-3201-1:sh') && a.join(',').includes('WO-3202-1:sh'), JSON.stringify(a));
+      // (Coder 20 Nov, re-pointed) WO-3202-1 is LOADED: it stays on the driver's van through Close week (attack20-ship-3), not archived
+      rec('F2 FINDING-CHECK closing Wk 46: the shipped + on-hold not-loaded job is archived as shipped; the loaded one stays on the van', a.join(',').includes('WO-3201-1:sh') && !a.join(',').includes('WO-3202-1') && await p.evaluate(() => delOnVanShipped(DB.orders.find(o => o.wo === 'WO-3202-1'))), JSON.stringify(a));
       // hold lifted (Cienapps back to 9): does the stale Wk 46 booking come back anywhere / get archived again?
       await importRows(p, [row('WO-3201-1', S9), row('WO-3202-1', S9)]);
       await close(p, W0);
