@@ -243,3 +243,14 @@ No new failing check against the base run except checks that compare with "origi
 |---|---|---|
 | sync attack1-roles-bytes "vs main", attack1-twopc "B really runs origin/main code" | main now HAS the quick check (R1 live 19 Nov), so "main" is no longer the old code | Tester pins these to the pre-R1 commit |
 | attack2-basics / attack2-finder-pm-tag "Deliveries tab reads the same as origin/main" | the Deliveries page changed on purpose (customer band, ticks, bar) | Tester re-points |
+
+## 20 Nov 2026 — Shipped = off Deliveries (feature/shipped-off-deliveries) — pending Garry
+Garry's rule (20 Nov): "If in any window a WO is updated to shipped it moves off the Deliveries page and onto the Shipped page."
+
+| Test / check | Why it fails (plain English) | Fix | Accepted? |
+|---|---|---|---|
+| deliveries attack20-ship-1 D1 / D2 (old screen closes the week after a ship) | a screen still running the OLD version does not know the shipped rule: it archives a shipped job as "never left" / sends it back to rebook, and the new Shipped card has no "was on" line for it | go-live: close every old screen (PCs, PM phone, driver phones) | pending |
+| deliveries attack20-ship-2 E2 (two PCs close the same week at the same moment → two archives) | an old race in Close week, the same on main; not caused by the shipped rule | later: Close week checks the archive again after the fresh load | pending |
+| deliveries attack20-ship-1 B1 "the driver's run drops WO-3001-1 / WO-3003-1" | out of date by design: the check reads the whole driver page, which now names the shipped drop in "WO-x shipped in Cienapps — removed from your run" (asked for by B2). The run list itself drops it | Tester re-points B1 to the run list (`.drv-job`) | pending |
+| stage2 attack2-basics "office / h identical to main", dates attack6-release E2 | the 📦 Shipped tab text changed on purpose (van booking line, "Off Deliveries (shipped)", header) | Tester re-points | pending |
+| dates c8-hold-site (crashes, 0 checks) | same crash on main — not from this change | separate look | pending |
