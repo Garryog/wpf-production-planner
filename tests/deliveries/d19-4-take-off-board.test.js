@@ -64,6 +64,20 @@ const O = (wo, x) => H.order(Object.assign({ wo, dueDate: '2026-11-19', origDueD
   await dx('WO-B1'); await p.waitForTimeout(150);
   const bk = await ovl();
   rec('booked card × → still "back to the pool" with the reason picker (not Take off board)', /Why is WO-B1 moving\?/.test(bk) && !/Take WO-B1 off/.test(bk), bk.slice(0, 200));
+  // Manager 20 Nov: the "taken off" record is only cleared for the SAME job (its hidden id), never by a reused reference
+  const T = await p.evaluate(() => {
+    const mk = (k, wo, jid) => { DB.delArchive[k] = { at: '2026-11-10T10:00:00Z', w: '', by: 'Ann', off: true, why: 'Taken off the board', notes: {}, pod: {}, jobs: [{ wo, t: 'old', c: 'x', m: 1, x: Object.assign({ wo, title: 'old', manual: true }, jid ? { jid } : {}) }] }; };
+    DB.delArchive = DB.delArchive || {};
+    mk('~off.t1', 'Remedial', 'J-old'); mk('~off.t2', 'Remedial2', ''); mk('~off.t3', 'Same', 'J-same');
+    DB.delx = (DB.delx || []).concat([{ wo: 'Remedial', title: 'new job, same ref', manual: true, jid: 'J-new' }, { wo: 'Remedial2', title: 'new, no id', manual: true }, { wo: 'Same', title: 'same job', manual: true, jid: 'J-same' }]);
+    const n = delOffTidy();
+    return { n, t1: !!DB.delArchive['~off.t1'], t2: !!DB.delArchive['~off.t2'], t3: !!DB.delArchive['~off.t3'] };
+  });
+  rec('a reused reference ("Remedial", another job) never clears the old "taken off" record', T.t1, JSON.stringify(T));
+  rec('a job with no id (added before this release) never clears a record either', T.t2, JSON.stringify(T));
+  rec('the SAME job (same hidden id) live on the board → its stale "taken off" record is cleared', !T.t3 && T.n === 1, JSON.stringify(T));
+  const jid = await p.evaluate(() => { document.getElementById('aj-title').value = 'Remedial work'; document.getElementById('aj-wo').value = 'Remedial-9'; document.getElementById('aj-add').click(); const x = DB.delx.find(z => z.wo === 'Remedial-9'); return x && x.jid; });
+  rec('＋ Add Job gives the job its hidden id', /^J/.test(jid || ''), jid);
   rec('no page errors', !(t.server.errors || []).length, (t.server.errors || []).join(' | '));
   await t.close(); await browser.close();
   console.log(res.every(Boolean) ? 'ALL PASS' : 'SOME FAILED');

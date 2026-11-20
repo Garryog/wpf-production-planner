@@ -5,6 +5,8 @@ From the Architect, approved by Garry on 19 Nov 2026. Branch `feature/deliveries
 
 ## Garry's answers (19 Nov)
 - **Un-ship:** BOTH cases — a job brought back from the Shipped tab AND a job brought back from 📚 Past weeks.
+- **(20 Nov) Steps 10 / 11:** ↩ Back to Deliveries is never offered for step 10 (installed) or 11 (completed / invoiced) — only for a
+  delivered job or a Cienapps step-9 job.
 - **Slot warning:** warn when the van + day already has ANY job on it.
 - **＋ List:** choose the template FIRST.
 - **Delete:** two steps, typed WO, never erased.

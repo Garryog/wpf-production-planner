@@ -942,7 +942,10 @@ function applyPlan(p){
 function delOffTidy(){
   const ar=DB.delArchive||{};let n=0;
   Object.keys(ar).forEach(k=>{const a=ar[k];if(!a||!a.off)return;const j=(a.jobs||[])[0];if(!j||j.back)return;
-    const x=(DB.delx||[]).find(z=>z.wo===j.wo);if(!x)return;
+    /*Manager 20 Nov: only the SAME job — matched by the hidden id it got when it was added (jid), never by its reference alone
+      (typed references get reused, e.g. "Remedial"). A job added before this release has no id: its record is never cleared.*/
+    const id=j.x&&j.x.jid;if(!id)return;
+    const x=(DB.delx||[]).find(z=>z.wo===j.wo&&z.jid===id);if(!x)return;
     logEdit(x,'Taken off the board by '+(a.by||'someone')+' on another screen ('+String(a.at||'').slice(0,10)+') while it was being booked here — kept on Deliveries, check','(auto-merge)');
     delete ar[k];n++;});
   return n;
@@ -8759,7 +8762,7 @@ function renderDeliveries(app){
     if(!wo){wo=uniqId('JOB-');while(delAll().some(o=>o.wo===wo))wo=uniqId('JOB-');}
     if(findDel(wo)||DB.orders.find(o=>o.wo===wo)){toast(wo+' already exists — use a different ref');return;}
     DB.delx=DB.delx||[];
-    DB.delx.push({wo,title,customer:document.getElementById('aj-cust').value.trim(),value:parseFloat(document.getElementById('aj-val').value)||0,manual:true,delVeh:'',delDay:'',delDone:false});
+    DB.delx.push({wo,title,customer:document.getElementById('aj-cust').value.trim(),value:parseFloat(document.getElementById('aj-val').value)||0,manual:true,delVeh:'',delDay:'',delDone:false,jid:uid('J'),addedAt:nowISO()}); /*jid: which job this is, whatever its reference*/
     sched();render();toast(wo+' added to the pool');
   };
   const ex=document.getElementById('btn-delexp');if(ex)ex.onclick=()=>exportDeliveries(wk); /*dates: this tab's week*/

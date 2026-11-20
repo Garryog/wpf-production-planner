@@ -344,6 +344,10 @@ Garry's words: "the edit button for the cutting lists templates is gone. i need 
   Jobs added by hand are archived in 📚 Past weeks, never erased.
 - Un-ship = BOTH: "↩ Back to Deliveries" on the 📦 Shipped card and on every job row in 📚 Past weeks (name + reason; the old
   stamps go into the job's history; Cienapps 9 → shipBack so the next import does not ship it again). ↩ Clear status asks + a name.
+- (20 Nov, Garry) ↩ Back to Deliveries is **never** offered for step 10 (installed) or 11 (completed / invoiced) — only for a delivered
+  job (on the board or since) or a Cienapps step-9 job.
+- (20 Nov) A "taken off the board" record is only cleared when the SAME hand job (its hidden id) is back on the board — never by its
+  reference alone (references like "Remedial" get reused). Go-live: close every old screen (old × erases hand jobs).
 - ＋ List / ＋ Add cutting list: choose the template first ("Start this list from: Type A / Type B / Blank standard layout").
   A template going into a list takes out untouched blank rows and empty standard sub-headings (a colour alone is not "typed").
 - Open question: should Cutting Lists → ＋ New list (and the "lists needed" rows) also ask "Start this list from:" first? Built for
