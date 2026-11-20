@@ -2476,7 +2476,7 @@ function renderShipped(app){
     const deliv=dStage(o)==='deliv',w=am.get(o.wo)||0;
     return `<div class="sh-card${o.completeAt?' sh-done':''}">
       <div class="sh-top"><span class="wo-num">${escA(o.wo)}</span>${stepBadge(o)}${fuHTML(o)}${addBadge(o)}
-        <span class="sh-pill ${deliv?'ok':'no'}">${deliv?'✓ Delivered '+dt(o.delDelivAt):(o.delDispAt?'🚚 On the road':o.delv?'🚚 Off Deliveries (shipped)':'Not delivered')}</span>
+        <span class="sh-pill ${deliv?'ok':'no'}">${deliv?(!o.delDelivAt&&o.delShipWas&&typeof o.delShipWas==='object'?(o.delShipWas.v?'✓ Delivered '+dt(o.delShipWas.v):'✓ Delivered by shipping'):'✓ Delivered '+dt(o.delDelivAt)):(o.delDispAt?'🚚 On the road':o.delv?'🚚 Off Deliveries (shipped)':'Not delivered')}</span>
         ${w?`<span class="sh-pill warn" title="Waiting (N/A) lines on its cutting/fittings lists — also shown on the Capacity Board">⚠ ${w} waiting</span>`:''}</div>
       <div class="sh-t">${escA(o.title||'')}</div>
       <div class="sh-m">${escA(o.customer||'')} · shipped ${dt(o.shippedAt)} · Cienapps: ${escA(String(o.cienStep||o.shippedStep||o.step||'—').replace(/^\d+\.\s*/,''))}</div>
@@ -9013,7 +9013,7 @@ function closeWeek(wk){
       delSel.delete(o.wo);
     });
     if(gone.size)DB.delx=(DB.delx||[]).filter(x=>!gone.has(x));
-    shj.forEach(o=>{const txt=delShipWasTxt(o);o.delShipWas={txt,wk,k:key,at};
+    shj.forEach(o=>{const txt=delShipWasTxt(o);o.delShipWas={txt,wk,k:key,at,v:o.delDelivAt||''};
       ['delLoadedAt','delDispAt','delDelivAt','ldBy','delivBy','delMoves','delFirst','missWhy','delPlacedBy','delPlacedAt','delWk','delRebook'].forEach(k=>delete o[k]);
       delete o.delv;o.delVeh='';o.delDay='';o.delDone=true;
       logEdit(o,'Wk '+N+' closed — shipped, archived in 📚 Past weeks (was '+txt+')',by);delSel.delete(o.wo);});
