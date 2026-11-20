@@ -41,14 +41,15 @@ const NOW = '2026-10-19T10:00:00Z';
   rec('AC20 Week Summary shows 100h capacity (90%)', e20 && e20[4] === 100 && e20[5] === '90%', JSON.stringify(e20));
   await t.close();
 
-  // AC21 shipped → Shipped tab, still there after re-import, searchable, Bring back works; off the week totals; Deliveries keeps it
+  // AC21 shipped → Shipped tab, still there after re-import, searchable, Bring back works; off the week totals; off Deliveries too
+  // (re-pointed 20 Nov 2026 to Garry's d20 rule: a shipped job leaves 🚚 Deliveries; its van/day are kept on the job)
   {
     const orders = [H.order({ wo: 'WO-5-1', title: 'Kitchen 12', plannedWeek: '2026-10-19', hours: 30, delv: true, delVeh: 'IVECO', delDay: 'Tue' }), H.order({ wo: 'WO-5-2', title: 'Kitchen 14', plannedWeek: '2026-10-19', hours: 10 })];
     t = await H.open({ browser, now: NOW, row: { id: 'main', orders, nid: 3, settings: {} } });
     const file = [HDR, ['WO-5-1', 'Kitchen 12', 'Cust', 46331, '9. JOB SHIPPED', 4000], ['WO-5-2', 'Kitchen 14', 'Cust', 46331, '3. In production', 4000]];
     let r = await H.importAoa(t.page, file);
     const a = await t.page.evaluate(() => { applyImport(IMPPLAN); showTab('b'); const board = [...document.querySelectorAll('tr[data-wo]')].map(x => x.dataset.wo); showTab('d'); const del = document.getElementById('app').innerText.includes('WO-5-1'); showTab('h'); const sh = document.getElementById('app').innerText; return { board, hrs: wkHrs('2026-10-19'), cnt: wkCnt('2026-10-19'), del, sh: sh.includes('WO-5-1') && !sh.includes('WO-5-2'), n: DB.orders.length }; });
-    rec('AC21 shipped job leaves the board and week totals, appears on Shipped, stays on Deliveries', a.board.join() === 'WO-5-2' && a.hrs === 10 && a.cnt === 1 && a.sh && a.del && a.n === 2 && /Moving to the Shipped tab/.test(r.iprev), JSON.stringify(a));
+    rec('AC21 shipped job leaves the board and week totals, appears on Shipped, leaves Deliveries (d20)', a.board.join() === 'WO-5-2' && a.hrs === 10 && a.cnt === 1 && a.sh && !a.del && a.n === 2 && /Moving to the Shipped tab/.test(r.iprev), JSON.stringify(a));
     r = await H.importAoa(t.page, file);
     const b = await t.page.evaluate(() => { applyImport(IMPPLAN); return { n: DB.orders.length, sh: DB.orders.filter(isShipped).map(o => o.wo).join() }; });
     rec('AC21 still on Shipped after re-import (nothing removed, no duplicate)', b.n === 2 && b.sh === 'WO-5-1' && r.plan.shipped.length === 0, JSON.stringify(b));
