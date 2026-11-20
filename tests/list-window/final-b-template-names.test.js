@@ -2,6 +2,9 @@
 // rename ONLY when it was the same as the old name. Real key presses (one letter at a time), renaming twice, renaming back,
 // blank names, names that differ only by case / spaces, a template with NO type name, two templates ending up with one
 // name, two PCs editing one template, and "Save as template" picking the wrong one of two same-looking templates.
+// UPDATED 20 Nov 2026 for Garry's new answer ("we have just one name per templates"): the template NAME is the one name — no
+// Type name box on a template, every template save writes type_name = name. Checks that asserted the old 14 Nov rule (a Type
+// name that follows / stays) now check the new rule; the rest (blank names, renaming back, two PCs, Save as template) are as before.
 // Fake Supabase only. Run: node tests/list-window/final-b-template-names.test.js
 const L = require('./lw.js');
 const { X, D, sleep, rec, closeAll, asks, setv, rows, save, err, linesOf } = L;
@@ -27,32 +30,31 @@ const touchRow = async p => { const r = await rows(p), i = r.findIndex(x => x.it
 
     // ---- N1. names different ON PURPOSE; the new name, typed letter by letter, passes through the Type name ----
     await edit(p, 'T2');
-    rec('N1 set-up: name "Type A kitchen", Type name "Type A"', (await box(p, 'me-name')) === 'Type A kitchen' && (await box(p, 'me-tname')) === 'Type A');
+    rec('N1 set-up: name "Type A kitchen" (hidden type name "Type A"), no Type name box', (await box(p, 'me-name')) === 'Type A kitchen' && (await box(p, 'me-tname')) === null);
     await retype(p, 'me-name', 'Type A (old layout)');
-    rec('[MEDIUM] N1 Type name typed differently on purpose ("Type A") is still "Type A" after the name is retyped as "Type A (old layout)"', (await box(p, 'me-tname')) === 'Type A', await box(p, 'me-tname'));
     await save(p, 1800);
-    rec('[MEDIUM] N1 saved: name "Type A (old layout)", type name still "Type A"', tpl(S, 'T2').name === 'Type A (old layout)' && tpl(S, 'T2').type_name === 'Type A', JSON.stringify([tpl(S, 'T2').name, tpl(S, 'T2').type_name, await err(p)]));
+    rec('[MEDIUM] N1 saved: name "Type A (old layout)" is the one name (type name the same)', tpl(S, 'T2').name === 'Type A (old layout)' && tpl(S, 'T2').type_name === 'Type A (old layout)', JSON.stringify([tpl(S, 'T2').name, tpl(S, 'T2').type_name, await err(p)]));
     // the live case: "4C" with type "4B", renamed to "4B handed" by typing
     await edit(p, 'T3'); await retype(p, 'me-name', '4B handed');
-    rec('[MEDIUM] N1b live case "4C" / "4B": name retyped as "4B handed" → the Type name "4B" does not start following half-way', (await box(p, 'me-tname')) === '4B', await box(p, 'me-tname'));
+    rec('[MEDIUM] N1b live case "4C" / "4B": no Type name box; the name box has what was typed', (await box(p, 'me-tname')) === null && (await box(p, 'me-name')) === '4B handed', await box(p, 'me-name'));
     await closeAll(p);
     // backspacing: "Type A kitchen" → backspace down to "Type A" → on to "Type AB"
     await edit(p, 'T9');
     await p.click('#me-name'); await p.keyboard.press('End'); await p.keyboard.press('Backspace'); await p.keyboard.press('Backspace'); await sleep(80); // "Type 1A H" → "Type 1A" (= its Type name now)
     await p.keyboard.type(' RH', { delay: 15 }); await sleep(120);
-    rec('[MEDIUM] N1c handed template "Type 1A H" (type "Type 1A"): name edited to "Type 1A RH" by backspacing → Type name stays "Type 1A"', (await box(p, 'me-tname')) === 'Type 1A', JSON.stringify([await box(p, 'me-name'), await box(p, 'me-tname')]));
+    rec('[MEDIUM] N1c handed template "Type 1A H": name edited to "Type 1A RH" by backspacing → the name box says "Type 1A RH", no Type name box', (await box(p, 'me-name')) === 'Type 1A RH' && (await box(p, 'me-tname')) === null, JSON.stringify([await box(p, 'me-name'), await box(p, 'me-tname')]));
     await closeAll(p);
 
     // ---- N2. renamed twice in one sitting, then saved ----
     await edit(p, 'T1'); await retype(p, 'me-name', 'Type 2B'); await retype(p, 'me-name', 'Type 2C LH');
-    rec('N2 renamed twice: Type name follows to the last name', (await box(p, 'me-tname')) === 'Type 2C LH', await box(p, 'me-tname'));
+    rec('N2 renamed twice: the name box has the last name', (await box(p, 'me-name')) === 'Type 2C LH', await box(p, 'me-name'));
     await save(p, 1800);
     rec('N2 saved: both "Type 2C LH"', tpl(S, 'T1').name === 'Type 2C LH' && tpl(S, 'T1').type_name === 'Type 2C LH', JSON.stringify([tpl(S, 'T1').name, tpl(S, 'T1').type_name]));
 
     // ---- N3. renamed and renamed BACK: nothing to save ----
     await edit(p, 'T5'); const s3 = saves(S), v3 = tpl(S, 'T5').version;
     await retype(p, 'me-name', 'Something else'); await retype(p, 'me-name', 'Type 6');
-    rec('N3 renamed back: Type name is back to "Type 6"', (await box(p, 'me-tname')) === 'Type 6', await box(p, 'me-tname'));
+    rec('N3 renamed back: the name is back to "Type 6"', (await box(p, 'me-name')) === 'Type 6', await box(p, 'me-name'));
     await p.evaluate(() => { window.__confirm = false; window.__asked = []; document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); }); await sleep(300);
     rec('N3 renamed back: Esc closes without "Close without saving?"', !(await L.ed(p)) && (await p.evaluate(() => window.__asked.join('|'))) === '', await p.evaluate(() => window.__asked.join('|')));
     await p.evaluate(() => { window.__confirm = true; });
@@ -72,19 +74,17 @@ const touchRow = async p => { const r = await rows(p), i = r.findIndex(x => x.it
 
     // ---- N5. old template with NO type name: nothing invented ----
     await edit(p, 'T6');
-    rec('N5 set-up: template "Type 9" has an empty Type name box', (await box(p, 'me-tname')) === '', await box(p, 'me-tname'));
-    await retype(p, 'me-name', 'Type 9 new');
-    rec('N5 select-all + type: the empty Type name stays empty (it was not the same as the name)', (await box(p, 'me-tname')) === '', await box(p, 'me-tname'));
+    rec('N5 set-up: template "Type 9" (no type name) — no Type name box', (await box(p, 'me-tname')) === null, await box(p, 'me-tname'));
     await closeAll(p);
     await edit(p, 'T6'); await wipeType(p, 'me-name', 'Type 9 new');
-    rec('(info) [LOW] N5 backspace to empty + type: the empty Type name stays empty (else a Type name is made up for a template that had none)', (await box(p, 'me-tname')) === '', await box(p, 'me-tname'));
     await touchRow(p); await save(p, 1800);
-    rec('(info) N5 saved type_name for that template', true, JSON.stringify([tpl(S, 'T6').name, tpl(S, 'T6').type_name]));
+    rec('N5 saved: the one name "Type 9 new" (type_name = name)', tpl(S, 'T6').name === 'Type 9 new' && tpl(S, 'T6').type_name === 'Type 9 new', JSON.stringify([tpl(S, 'T6').name, tpl(S, 'T6').type_name]));
     await closeAll(p);
 
     // ---- N6. only case / spaces differ ----
     await edit(p, 'T7'); await retype(p, 'me-name', 'Type 8 LH');
-    rec('N6 Type name "TYPE  8" counts as the same as "Type 8" → follows to "Type 8 LH"', (await box(p, 'me-tname')) === 'Type 8 LH', await box(p, 'me-tname'));
+    await save(p, 1800);
+    rec('N6 template with type name "TYPE  8" renamed "Type 8 LH" → both names "Type 8 LH"', tpl(S, 'T7').name === 'Type 8 LH' && tpl(S, 'T7').type_name === 'Type 8 LH', JSON.stringify([tpl(S, 'T7').name, tpl(S, 'T7').type_name]));
     await closeAll(p);
     await edit(p, 'T8'); await retype(p, 'me-name', 'TYPE 3'); await save(p, 1800);
     rec('N6 a capitals-only rename ("Type 3" → "TYPE 3") is saved on BOTH names', tpl(S, 'T8').name === 'TYPE 3' && tpl(S, 'T8').type_name === 'TYPE 3', JSON.stringify([tpl(S, 'T8').name, tpl(S, 'T8').type_name, await err(p)]));
@@ -103,13 +103,13 @@ const touchRow = async p => { const r = await rows(p), i = r.findIndex(x => x.it
     X.F3.seedList(S2, 'T2', { wos: [], name: 'Type 5', list: { is_template: true, type_name: 'Type 5', list_type: 'house' } });
     const a = await X.dev(browser, S2, 'design'), pa = a.page, b = await X.dev(browser, S2, 'prod'), pb = b.page; await asks(pa); await asks(pb);
     for (const q of [pa, pb]) await q.evaluate(async () => { lsReset(); await lsLoad(); document.querySelectorAll('.pod-ovl').forEach(x => x.remove()); });
-    // (a) B types a Type name on purpose and saves; A (opened before) only changes the NAME
+    // (a) (20 Nov: no Type name box) B renames the template and saves; A (opened before) renames it too → ONE name is saved, never a mix
     await edit(pa, 'T1'); await edit(pb, 'T1');
-    await retype(pb, 'me-tname', 'Special 3-bed'); await save(pb, 1800);
-    rec('N8a set-up: B saved Type name "Special 3-bed"', tpl(S2, 'T1').type_name === 'Special 3-bed', JSON.stringify([tpl(S2, 'T1').type_name, await err(pb)]));
+    await retype(pb, 'me-name', 'Special 3-bed'); await save(pb, 1800);
+    rec('N8a set-up: B saved the name "Special 3-bed" (both names)', tpl(S2, 'T1').name === 'Special 3-bed' && tpl(S2, 'T1').type_name === 'Special 3-bed', JSON.stringify([tpl(S2, 'T1').name, tpl(S2, 'T1').type_name, await err(pb)]));
     await pa.evaluate(() => { window.__asked = []; }); await retype(pa, 'me-name', 'Type 2B'); await save(pa, 2200);
-    const a8 = await pa.evaluate(() => window.__asked.join(' | ')), e8 = await err(pa);
-    rec('[MEDIUM] N8a A never touched the Type name box: A\'s rename does not silently wipe B\'s "Special 3-bed" (kept, or A is told / asked)', tpl(S2, 'T1').type_name === 'Special 3-bed' || /Special|another screen|changed/i.test(a8 + e8), JSON.stringify({ name: tpl(S2, 'T1').name, type: tpl(S2, 'T1').type_name, asked: a8.slice(0, 150), err: e8 }));
+    const e8 = await err(pa);
+    rec('[MEDIUM] N8a two screens renamed one template: name and type name are the same one name afterwards', tpl(S2, 'T1').name === tpl(S2, 'T1').type_name, JSON.stringify({ name: tpl(S2, 'T1').name, type: tpl(S2, 'T1').type_name, err: e8 }));
     await closeAll(pa); await closeAll(pb);
     // (b) B renames the template (both names follow) and saves; A (opened before) only changes a ROW
     for (const q of [pa, pb]) await q.evaluate(async () => { lsReset(); await lsLoad(); });
