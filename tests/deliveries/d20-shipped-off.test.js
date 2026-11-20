@@ -1,6 +1,8 @@
 // d20 (Garry 20 Nov 2026): "If a WO is marked as shipped on a WO or in a new Cienapps merge it moves to the Shipped page. If in any
 // window a WO is updated to shipped it moves off the Deliveries page and onto the Shipped page."
-//  1. Cienapps import to 9 → off Deliveries (pool, van cells, badge, driver's run, run sheets), on 📦 Shipped; booking + stamps kept + logged.
+//  1. Cienapps import to 9 → off Deliveries for the office (pool, van cells, badge), on 📦 Shipped; booking + stamps kept + logged.
+//     (Garry 20 Nov) a LOADED / on-the-road job stays on the driver's run + run sheet until he taps delivered; a not-loaded one leaves
+//     them at once and the driver sees "WO-x shipped in Cienapps — removed from your run".
 //  2. Step set to 9 by hand on the Capacity Board → same.
 //  3. Back below 9 (↩ Bring back to board undoes the hand step) → back on Deliveries exactly as it was.
 //  4. A job brought back with ↩ Back to Deliveries stays on Deliveries while Cienapps still says 9; moves on (10) → off again.
@@ -40,12 +42,11 @@ const sheets = (p, wk) => p.evaluate(wk => { window.__opened = []; printRunSheet
       rec('1. …nothing erased: tag, van, day, week and loaded stamp kept on the job', j1.delv && j1.veh === 'IVECO' && j1.day === 'Fri' && j1.wk === W0 && await p.evaluate(() => DB.orders.find(o => o.wo === 'WO-2701-1').delLoadedAt === '2026-11-12T07:30:00Z'), JSON.stringify(j1));
       rec('1. …logged "Off 🚚 Deliveries — shipped (was loaded … · Iveco Fri 13 Nov)"', j1.logs.some(l => /^Off 🚚 Deliveries — shipped \(was loaded 12 Nov .* by Joe · Iveco Fri 13 Nov\)/.test(l)), JSON.stringify(j1.logs.slice(-3)));
       const dr1 = await driver(p, 'IVECO', 'Fri', W0), run1 = dr1.split(' || NOTICE: ');
-      rec('1. …driver Joe on Iveco Fri: off his run (WO-2702-1 still on it)', !/WO-2701-1/.test(run1[0]) && /WO-2702-1/.test(run1[0]), dr1);
-      rec('1. …and told "WO-2701-1 shipped in Cienapps — removed from your run (it was loaded …)" (Tester B2)', /WO-2701-1 shipped in Cienapps — removed from your run \(it was loaded/.test(run1[1] || ''), dr1);
+      rec('1. …(Garry 20 Nov) LOADED WO-2701-1 STAYS on driver Joe\'s run, marked "📦 shipped in Cienapps — still tap DELIVERED"', /WO-2701-1[^|]*shipped in Cienapps — still tap DELIVERED/.test(run1[0]) && /WO-2702-1/.test(run1[0]) && !run1[1], dr1);
       const rs = await sheets(p, W0);
-      rec('1. …run sheets for the week leave it out (WO-2702-1 still on)', !/WO-2701-1/.test(rs) && /WO-2702-1/.test(rs), rs.length + ' chars');
+      rec('1. …run sheet keeps the loaded WO-2701-1, marked (shipped)', /WO-2701-1 <b>\(shipped\)<\/b>/.test(rs) && /WO-2702-1/.test(rs), rs.length + ' chars');
       const c1 = await shipCard(p, 'WO-2701-1');
-      rec('1. …on 📦 Shipped, card says "Was on Deliveries: on Iveco Fri 13 Nov · loaded …"', /Off Deliveries \(shipped\)/.test(c1) && /Was on Deliveries: on Iveco Fri 13 Nov · loaded 12 Nov/.test(c1), c1);
+      rec('1. …on 📦 Shipped, card says "🚚 Loaded — still on the driver\'s run…" and "Was on Deliveries: on Iveco Fri 13 Nov · loaded …"', /🚚 Loaded — still on the driver's run until he taps delivered/.test(c1) && /Was on Deliveries: on Iveco Fri 13 Nov · loaded 12 Nov/.test(c1), c1);
       rec('1. …offers ↩ Back to Deliveries (step 9)', await p.evaluate(() => !!document.querySelector('[data-shd="WO-2701-1"]')));
       rec('1. …badge counts 2 (WO-2702-1, WO-2703-1)', sw1.badge === '2', sw1.badge);
       // 2. step 9 by hand on the Capacity Board
@@ -53,7 +54,11 @@ const sheets = (p, wk) => p.evaluate(wk => { window.__opened = []; printRunSheet
       rec('2. board step drop-down to 9 asks first and says it comes off Deliveries', r2.asked && /comes off 🚚 Deliveries/.test(r2.asked[0] || ''), JSON.stringify(r2));
       const j2 = await job(p, 'WO-2702-1'), sw2 = await delSweep(p);
       rec('2. …shipped, off Deliveries, booking kept, logged with the name', j2.sh && j2.onDel === 0 && countIn(sw2, 'WO-2702-1').g + countIn(sw2, 'WO-2702-1').pl === 0 && j2.delv && j2.veh === 'IVECO' && j2.day === 'Fri' && j2.logs.some(l => /^Off 🚚 Deliveries — shipped \(was Iveco Fri 13 Nov\)/.test(l)), JSON.stringify({ j2, w: countIn(sw2, 'WO-2702-1') }));
-      rec('2. …driver page and badge drop it too', await driver(p, 'IVECO', 'Fri', W0).then(t => !/WO-2702-1/.test(t.split(' || NOTICE: ')[0])) && sw2.badge === '1', sw2.badge);
+      const dr2 = await driver(p, 'IVECO', 'Fri', W0), run2 = dr2.split(' || NOTICE: ');
+      rec('2. …not loaded: off the driver\'s run, badge drops it', !/WO-2702-1/.test(run2[0]) && sw2.badge === '1', dr2);
+      rec('2. …driver told "WO-2702-1 shipped in Cienapps — removed from your run"', /WO-2702-1 shipped in Cienapps — removed from your run/.test(run2[1] || ''), dr2);
+      const rs2 = await sheets(p, W0);
+      rec('2. …run sheet drops the not-loaded WO-2702-1 (loaded WO-2701-1 still on)', !/WO-2702-1/.test(rs2) && /WO-2701-1/.test(rs2), rs2.length + ' chars');
       // 3. back below 9 (Bring back to board undoes the hand-set 9 → 8)
       rec('3. ↩ Bring back to board clicked', (await bringBack(p, 'WO-2702-1')) === 'ok');
       const j3 = await job(p, 'WO-2702-1'), sw3 = await delSweep(p);
@@ -103,6 +108,27 @@ const sheets = (p, wk) => p.evaluate(wk => { window.__opened = []; printRunSheet
       rec('5. …📚 Past weeks: "1/2 + 📦 1 shipped" and the row says "📦 shipped"', /1\/2 \+ 📦 1 shipped/.test(pw) && /📦 shipped 10 Nov/.test(pw), pw.slice(0, 600));
       rec('5. …a second close of the same week archives nothing new for it', await p.evaluate(W0 => closeWeekShipped(W0).length === 0 && closeWeekJobs(W0).length === 0, W0));
       rec('no page errors (5)', !(S.errors || []).length, (S.errors || []).join(' | ').slice(0, 400));
+      await A.close();
+    }
+    // ---------- 7 (Garry 20 Nov): the driver taps DELIVERED on a loaded job that shipped → stamped, leaves his run, card ✓ Delivered by him
+    {
+      const S = makeServer({ id: 'main', version: 1, nid: 9, settings: {}, orders: [O('WO-2731-1', { delVeh: 'IVECO', delDay: 'Thu', delWk: W0, delLoadedAt: '2026-11-12T07:00:00Z', ldBy: 'Joe', step: S9, cienStep: S9, shippedAt: '2026-11-12T09:00:00Z', shippedStep: S9 }),
+        O('WO-2732-1', { delVeh: 'IVECO', delDay: 'Thu', delWk: W0 })] });
+      const A = await openRef(browser, S, ''); const p = A.page;
+      const sw = await delSweep(p);
+      rec('7. office: the loaded + shipped WO-2731-1 is off the Deliveries board', countIn(sw, 'WO-2731-1').g + countIn(sw, 'WO-2731-1').pl === 0, JSON.stringify(sw.grid));
+      const t0 = await p.evaluate(async () => { ls.set('wpfDrvName', 'Joe'); ls.set('wpfDrvVeh', 'IVECO'); ls.set('wpfDrvDay', 'Thu|' + thisWk()); localStorage.setItem('wpfPin_driver', '9000'); setRole('driver'); await new Promise(r => setTimeout(r, 200));
+        return [...document.querySelectorAll('.drv-job')].map(x => x.innerText.replace(/\s+/g, ' ')).join(' | '); });
+      rec('7. driver: it is on his run with a DELIVERED button', /WO-2731-1/.test(t0) && await p.evaluate(() => !!document.querySelector('[data-ddv="WO-2731-1"]')), t0);
+      const un = await p.evaluate(async () => { document.querySelector('[data-dl="WO-2731-1"]').click(); await new Promise(r => setTimeout(r, 100)); return !!DB.orders.find(o => o.wo === 'WO-2731-1').delLoadedAt; });
+      rec('7. …tapping ON VAN ✓ again does not take it off the van (it would vanish) — told to tap DELIVERED', un);
+      const t1 = await p.evaluate(async () => { window.confirm = () => true; document.querySelector('[data-ddv="WO-2731-1"]').click(); await new Promise(r => setTimeout(r, 200));
+        const o = DB.orders.find(x => x.wo === 'WO-2731-1'); return { by: o.delivBy, at: !!o.delDelivAt, run: [...document.querySelectorAll('.drv-job')].map(x => x.innerText.replace(/\s+/g, ' ')).join(' | '), photo: !!document.getElementById('drv-photo') }; });
+      rec('7. …DELIVERED tap: stamped by Joe, leaves his run, photo button still there', t1.by === 'Joe' && t1.at && !/WO-2731-1/.test(t1.run) && /WO-2732-1/.test(t1.run) && t1.photo, JSON.stringify(t1));
+      await p.evaluate(() => setRole('office'));
+      const c7 = await shipCard(p, 'WO-2731-1');
+      rec('7. …Shipped card says "✓ Delivered 12 Nov by Joe"', /✓ Delivered 12 Nov by Joe/.test(c7), c7);
+      rec('no page errors (7)', !(S.errors || []).length, (S.errors || []).join(' | ').slice(0, 300));
       await A.close();
     }
     // ---------- 6: two PCs — A imports 9 while B books the job (both save orders)

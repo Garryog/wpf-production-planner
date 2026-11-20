@@ -2477,7 +2477,7 @@ function renderShipped(app){
     const deliv=dStage(o)==='deliv'||!!shwP(o),w=am.get(o.wo)||0;
     return `<div class="sh-card${o.completeAt?' sh-done':''}">
       <div class="sh-top"><span class="wo-num">${escA(o.wo)}</span>${stepBadge(o)}${fuHTML(o)}${addBadge(o)}
-        <span class="sh-pill ${deliv?'ok':'no'}">${shwP(o)?shwP(o):deliv?'✓ Delivered '+dt(o.delDelivAt):(o.delDispAt?'🚚 On the road':o.delv?'🚚 Off Deliveries (shipped)':'Not delivered')}</span>
+        <span class="sh-pill ${deliv?'ok':'no'}">${shwP(o)?shwP(o):deliv?'✓ Delivered '+dt(o.delDelivAt)+(o.delivBy?' by '+escA(o.delivBy):''):(delOnVanShipped(o)?(o.delDispAt?'🚚 On the road':'🚚 Loaded')+' — still on the driver\'s run until he taps delivered':o.delDispAt?'🚚 On the road':o.delv?'🚚 Off Deliveries (shipped)':'Not delivered')}</span>
         ${w?`<span class="sh-pill warn" title="Waiting (N/A) lines on its cutting/fittings lists — also shown on the Capacity Board">⚠ ${w} waiting</span>`:''}</div>
       <div class="sh-t">${escA(o.title||'')}</div>
       <div class="sh-m">${escA(o.customer||'')} · shipped ${dt(o.shippedAt)} · Cienapps: ${escA(String(o.cienStep||o.shippedStep||o.step||'—').replace(/^\d+\.\s*/,''))}</div>
@@ -2609,7 +2609,12 @@ function delShipWasTxt(o){if(!o)return'';
   if(o.delv&&(o.delVeh||o.delDay||dStage(o))){const s=delStampTxt(o),sl=o.delVeh&&o.delDay?' · '+slotLblO(o):'',st=sl&&s.endsWith(sl)?s.slice(0,-sl.length):s;
     return (o.delDay?'on '+slotLblO(o):o.delVeh?'on '+(vehLbl(o.delVeh)||o.delVeh)+' (no day)':'in the To plan pool')+st;}
   const w=o.delShipWas;return w&&typeof w==='object'?String(w.txt||''):'';}
-function delShipBooked(){return DB.orders.filter(o=>o.delv&&delShipOff(o));} // shipped jobs still holding a Deliveries tag (kept, not shown)
+function delShipBooked(){return DB.orders.filter(o=>o.delv&&delShipOff(o));}
+/*d20 (Garry 20 Nov, live): a job already LOADED or on the road when it ships stays on the DRIVER's run (driver page + run sheet) until
+  he taps delivered — he can still tap delivered and take the photo. For the office it is on 📦 Shipped and off the Deliveries board.
+  Not loaded yet → it leaves everywhere at once. Once delivered it leaves his run (the Shipped card says ✓ Delivered with his stamp).*/
+function delOnVanShipped(o){return !!o&&delShipOff(o)&&!!o.delv&&!!(o.delLoadedAt||o.delDispAt)&&dStage(o)!=='deliv';}
+function delDrvAll(){return [...delAll(),...DB.orders.filter(delOnVanShipped)];} // the driver's run + run sheets // shipped jobs still holding a Deliveries tag (kept, not shown)
 /* Planner overrides an import respects until the Cienapps step moves beyond the step they were made at:
    delvOverride — untagged from delivery by hand (stops the 7/8 auto-tag); completeOverride — "Undo complete" (stops 11 re-completing). */
 function delvMark(o){if(o.delv)delete o.delvOverride;else o.delvOverride=o.step||o.cienStep||'(none)';}
@@ -8340,10 +8345,10 @@ function renderDriver(app){
   if(veh!==(ls.get('wpfDrvVeh')||''))ls.set('wpfDrvVeh',veh);
   if(myVans.includes(veh))myVan=veh; // (attack8 D5) on two vans that day: the one he is looking at is one of his — no warning
   const vanBy=veh?vanDrv(veh,dDate):'';
-  const jobs=veh?delAll().filter(o=>o.delVeh===veh&&slotIn(o,dwk,day)).sort(woCmp):[];
+  const jobs=veh?delDrvAll().filter(o=>o.delVeh===veh&&slotIn(o,dwk,day)&&!(delShipOff(o)&&!delOnVanShipped(o))).sort(woCmp):[]; /*d20: + loaded / on-the-road jobs that shipped*/
   /*d20 (Tester B2): a drop that left the run because it shipped (Garry 20 Nov rule) is named, never just gone — only ones not delivered*/
-  const shOff=veh?delShipBooked().filter(o=>o.delVeh===veh&&slotIn(o,dwk,day)&&dStage(o)!=='deliv').sort(woCmp):[];
-  const shOffH=shOff.length?`<div id="drv-shoff" style="background:#eef3fb;border:1px solid #14335c;color:#14335c;border-radius:8px;padding:8px 12px;margin-bottom:8px;font-size:13px">${shOff.map(o=>`📦 <b>${escA(o.wo)}</b> shipped in Cienapps — removed from your run${dStage(o)?' (it was '+(dStage(o)==='disp'?'dispatched':'loaded')+' — tell the office if it is still on your van)':''}`).join('<br>')}</div>`:'';
+  const shOff=veh?delShipBooked().filter(o=>o.delVeh===veh&&slotIn(o,dwk,day)&&dStage(o)===''&&!delOnVanShipped(o)).sort(woCmp):[]; // not loaded yet: gone from his run, named here
+  const shOffH=shOff.length?`<div id="drv-shoff" style="background:#eef3fb;border:1px solid #14335c;color:#14335c;border-radius:8px;padding:8px 12px;margin-bottom:8px;font-size:13px">${shOff.map(o=>`📦 <b>${escA(o.wo)}</b> shipped in Cienapps — removed from your run`).join('<br>')}</div>`:'';
   const onVan=jobs.filter(o=>dStage(o)!=='').length;
   const delivd=jobs.filter(o=>dStage(o)==='deliv').length;
   const allDeliv=jobs.length>0&&delivd===jobs.length;
@@ -8367,7 +8372,7 @@ function renderDriver(app){
       !jobs.length?`<div class="flr-none">No jobs planned for ${escA(vehLbl(veh))} on ${escA(dayL)}</div>`:`
       <div class="drv-stat"><span><b>${escA(vehLbl(veh))} — ${escA(dayL)}</b> · ${jobs.length} job${jobs.length!==1?'s':''}</span><span>${onVan}/${jobs.length} on van · ${delivd} delivered</span></div>
       ${jobs.map(o=>{const st=dStage(o);return`<div class="drv-job${st==='deliv'?' done':st==='disp'?' disp':st?' on':''}">
-        <div class="drv-ji"><b>${escA(o.wo)}</b>${o.manual?'':stepBadge(o)}${fuHTML(o,'drv-fu')}
+        <div class="drv-ji"><b>${escA(o.wo)}</b>${o.manual?'':stepBadge(o)}${fuHTML(o,'drv-fu')}${delOnVanShipped(o)?'<span class="drv-shp" style="font-size:11px;font-weight:700;color:#14335c;margin-left:6px">📦 shipped in Cienapps — still tap DELIVERED</span>':''}
           <div class="drv-jt">${escA(o.title)||'—'}</div><div class="drv-jc">${escA(o.customer||'')}${st==='deliv'?' · ✓ delivered '+dStageTime(o)+(o.delivBy?' by '+escA(o.delivBy):''):st==='disp'?' · dispatched '+dStageTime(o):''}</div>${st==='deliv'?'':listStatHTML(o.wo)}</div>
         ${st==='deliv'?`<div style="font-size:28px;color:#0b7e44;flex-shrink:0">✓</div>`:`<div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">
           <button class="drv-tick${st?' on':''}" data-dl="${escA(o.wo)}">${st?'ON VAN ✓':'ON VAN'}</button>
@@ -8404,6 +8409,7 @@ function renderDriver(app){
     const nmv=drvName();
     const st=dStage(o);
     if(st===''){o.delLoadedAt=new Date().toISOString();if(nmv){o.ldBy=nmv;ls.set('wpfDrvName',nmv);}toast(o.wo+' on the van ✓');}
+    else if(st==='load'&&delShipOff(o)){toast(o.wo+' is shipped in Cienapps — it stays on your van list until you tap DELIVERED. Tell the office if it is not on the van.',true);return;} /*d20: unticking would make it vanish*/
     else if(st==='load'){delete o.delLoadedAt;delete o.ldBy;toast(o.wo+' taken back off the van');}
     else return; // dispatched/delivered can't be un-ticked from the van
     sched();render();
@@ -9090,7 +9096,7 @@ function openDelArchive(detailKey){
    Print at load-out, the loader ticks each job onto the van and signs — the paper trail for dispatch. */
 function printRunSheets(wk){ /*dates: the open tab's week (default this week)*/
   wk=typeof wk==='string'&&wk?wk:(delTabWk()||thisWk());
-  const all=delAll();
+  const all=delDrvAll(); /*d20: + loaded / on-the-road jobs that shipped (still physically on the van)*/
   const planned=all.filter(o=>o.delVeh&&slotIn(o,wk));
   if(!planned.length){toast('No jobs placed on a vehicle and day in Wk '+wkNum(wk)+' yet');return;}
   const now=new Date();
@@ -9110,7 +9116,7 @@ function printRunSheets(wk){ /*dates: the open tab's week (default this week)*/
         <div class="meta">${jobs.length} job${jobs.length!==1?'s':''} · €${Math.round(jobs.reduce((a,o)=>a+(+o.value||0),0)).toLocaleString()}<br>Printed ${esc(printed)}</div></div>
         ${note?`<div class="note">NOTE: ${esc(note)}</div>`:''}
         <table><thead><tr><th class="tick">ON VAN</th><th>WO #</th><th>FLOOR</th><th>UNIT</th><th>DESCRIPTION</th><th>CUSTOMER / SITE</th><th class="tick">CHECKED</th></tr></thead><tbody>
-        ${jobs.map(o=>`<tr><td class="tick">☐</td><td class="mono">${esc(o.wo)}</td><td class="mono">${esc(o.floor||'')}</td><td class="mono">${esc(o.unit||'')}</td><td>${esc(o.title||'')}</td><td class="cu">${esc(o.customer||'')}</td><td class="tick">☐</td></tr>`).join('')}
+        ${jobs.map(o=>`<tr><td class="tick">☐</td><td class="mono">${esc(o.wo)}${delOnVanShipped(o)?' <b>(shipped)</b>':''}</td><td class="mono">${esc(o.floor||'')}</td><td class="mono">${esc(o.unit||'')}</td><td>${esc(o.title||'')}</td><td class="cu">${esc(o.customer||'')}</td><td class="tick">☐</td></tr>`).join('')}
         </tbody></table>
         <div class="sig">
           <div><span>Loaded by:</span><i></i></div>

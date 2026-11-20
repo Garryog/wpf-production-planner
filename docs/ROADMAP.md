@@ -350,13 +350,17 @@ Garry's words: "the edit button for the cutting lists templates is gone. i need 
   reference alone (references like "Remedial" get reused). Go-live: close every old screen (old × erases hand jobs).
 - (20 Nov, Garry) **Shipped = off Deliveries:** "If a WO is marked as shipped on a WO or in a new Cienapps merge it moves to the
   Shipped page. If in any window a WO is updated to shipped it moves off the Deliveries page and onto the Shipped page." Built on
-  feature/shipped-off-deliveries: a shipped job leaves the pool, van cells, Later, the driver's run (he sees "WO-x shipped in Cienapps —
-  removed from your run"), run sheets and the badge. Nothing erased — van, day and stamps stay on the job and show on its 📦 Shipped card.
-  ↩ Back to Deliveries keeps a job on Deliveries until Cienapps moves on; ↩ Bring back to board (step back below 9) puts it back as it was.
-- (20 Nov, Coder decision — Garry to confirm) **"Delivered by shipping":** a booked job that ships but is never marked delivered by the
-  driver counts as delivered on the scorecard (on time unless it was moved), shown separately ("incl. 📦 N shipped"). Closing its week
-  archives it marked "📦 shipped" (Past weeks + Excel "Shipped" column); it is NOT stamped delivered on the job. Weeks already closed
-  keep their counts.
+  feature/shipped-off-deliveries: a shipped job leaves the pool, van cells, Later and the badge. Nothing erased — van, day and stamps
+  stay on the job and show on its 📦 Shipped card. ↩ Back to Deliveries keeps a job on Deliveries until Cienapps moves on; ↩ Bring
+  back to board (step back below 9) puts it back as it was.
+- (20 Nov, Garry, decided) **A job already LOADED or on the road when it ships stays on the driver's run** (driver page + run sheet,
+  marked "📦 shipped in Cienapps — still tap DELIVERED") until he taps delivered; he can still tap delivered and take the photo. For
+  the office it is on 📦 Shipped and off the Deliveries board. A job not loaded yet leaves everywhere at once, and the driver sees
+  "WO-x shipped in Cienapps — removed from your run". Once he taps delivered it leaves his run; the Shipped card says ✓ Delivered
+  <date> by <driver>.
+- (20 Nov, Garry, confirmed) **"Delivered by shipping":** a booked job that ships but is never marked delivered by the driver counts
+  as delivered on the scorecard (on time unless it was moved), shown separately ("incl. 📦 N shipped"). Closing its week archives it
+  marked "📦 shipped" (Past weeks + Excel "Shipped" column); it is NOT stamped delivered on the job. Weeks already closed keep their counts.
 - ＋ List / ＋ Add cutting list: choose the template first ("Start this list from: Type A / Type B / Blank standard layout").
   A template going into a list takes out untouched blank rows and empty standard sub-headings (a colour alone is not "typed").
 - Open question: should Cutting Lists → ＋ New list (and the "lists needed" rows) also ask "Start this list from:" first? Built for

@@ -43,7 +43,7 @@ const { rec, done } = recorder('merge-d-roles');
         localStorage.setItem('wpfDrvName', 'Dan'); localStorage.setItem('wpfDrvVeh', 'IVECO'); localStorage.setItem('wpfDrvDay', 'Thu|' + thisWk());
         for (const r of ['prod', 'pm', 'driver', 'floor', 'dash', 'saw', 'stores', 'design']) {
           try { localStorage.setItem('wpfPin_' + r, '9000'); setRole(r); await new Promise(z => setTimeout(z, 200));
-            const T = txt(); out[r] = { n: T.length, wos: R.filter(wo => T.includes(wo)), esc: /<b>x<\/b>/.test(document.getElementById('app').innerHTML.replace(/&lt;b&gt;x&lt;\/b&gt;/g, '')) , ...sws() };
+            const T = txt(); out[r] = { n: T.length, wos: R.filter(wo => T.includes(wo)), run: R.filter(wo => [...document.querySelectorAll('.drv-job')].some(x => x.innerText.includes(wo))), esc: /<b>x<\/b>/.test(document.getElementById('app').innerHTML.replace(/&lt;b&gt;x&lt;\/b&gt;/g, '')) , ...sws() };
             if (r === 'prod') { for (const pt of ['deliv']) { prodTab = pt; render(); await new Promise(z => setTimeout(z, 200)); const T2 = txt(); out['prod-' + pt] = { n: T2.length, wos: R.filter(wo => T2.includes(wo)), ...sws() }; } prodTab = 'today'; }
           } catch (e) { out[r] = 'ERR ' + e.message; }
         }
@@ -51,7 +51,9 @@ const { rec, done } = recorder('merge-d-roles');
         return { out, errs };
       }, R);
       for (const [r, v] of Object.entries(roles.out)) rec(`${tag}: ${r} screen renders (no error), no raw HTML from the title`, typeof v === 'object' && v.n > 0 && !v.esc, JSON.stringify(v));
-      rec(`${tag}: driver no longer sees today's hand-shipped job (${R[0]}) — shipped = off Deliveries (d20)`, roles.out.driver && !roles.out.driver.wos.includes(R[0]) && roles.out.driver.n > 0, JSON.stringify(roles.out.driver));
+      // (Coder 20 Nov, re-pointed) the driver page now NAMES a not-loaded shipped drop in "shipped in Cienapps — removed from your run",
+      // so the check reads his run list (.drv-job cards), not the whole page
+      rec(`${tag}: driver's run no longer lists today's hand-shipped, not-loaded job (${R[0]}) — shipped = off Deliveries (d20)`, roles.out.driver && !roles.out.driver.run.includes(R[0]) && roles.out.driver.n > 0, JSON.stringify(roles.out.driver));
       rec(`${tag}: Production Manager's 🚚 Deliveries leaves out the four hand-shipped jobs (d20), still shows the step-7 job ${R[4]}`, roles.out['prod-deliv'] && R.slice(0, 4).every(wo => !roles.out['prod-deliv'].wos.includes(wo)) && roles.out['prod-deliv'].wos.includes(R[4]), JSON.stringify(roles.out['prod-deliv']));
       // floor (TV screen) and the Production Manager's Deliveries "Give reason" row are wider than 360 px on the Deliveries branch
       // before the merge too (floor also on main) — recorded as known, not merge-caused

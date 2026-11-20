@@ -12,6 +12,8 @@ const row = (wo, step) => [wo, 'House ' + wo, 'CAIRN', XD('2026-11-13'), step, 1
 const OLD = 'origin/main';
 const drvSetup = (p, veh, day, wk) => p.evaluate(async ({ veh, day, wk }) => { localStorage.setItem('wpfDrvName', 'Joe'); localStorage.setItem('wpfDrvVeh', veh); localStorage.setItem('wpfDrvDay', day + '|' + wk);
   localStorage.setItem('wpfPin_driver', '9000'); setRole('driver'); await new Promise(r => setTimeout(r, 200)); return document.getElementById('app').innerText; }, { veh, day, wk });
+// (Coder 20 Nov, re-pointed to Garry's 20 Nov driver rule) his run list only — the .drv-job cards
+const drvRun = p => p.evaluate(() => [...document.querySelectorAll('.drv-job')].map(x => x.innerText.replace(/\s+/g, ' ')).join(' | '));
 const shipCard = (p, wo) => p.evaluate(async wo => { setRole('office'); showTab('h'); await new Promise(r => setTimeout(r, 120));
   const c = document.getElementById('sh-done'); if (c && !c.checked) { c.checked = true; c.onchange(); await new Promise(r => setTimeout(r, 60)); }
   const k = [...document.querySelectorAll('.sh-card')].find(x => (x.querySelector('.wo-num') || {}).textContent === wo); return k ? k.innerText.replace(/\s+/g, ' ') : ''; }, wo);
@@ -43,13 +45,16 @@ const shipCard = (p, wo) => p.evaluate(async wo => { setRole('office'); showTab(
       rec('A3 Shipped card says "✓ Delivered" with the date (not "Off Deliveries")', /✓ Delivered 1?\d? ?Nov|✓ Delivered \d/.test(c) && !/Off Deliveries \(shipped\)/.test(c), c.slice(0, 300));
       // B. driver refreshes: WO-3003-1 is loaded on his van but Cienapps shipped it
       await reload(D.page); const t1 = await drvSetup(D.page, 'IVECO', 'Thu', W0);
-      rec('B1 (d20 rule) after a refresh the driver\'s run drops the shipped jobs WO-3001-1 / WO-3003-1, keeps WO-3002-1', !t1.includes('WO-3003-1') && !t1.includes('WO-3001-1') && t1.includes('WO-3002-1'), t1.slice(0, 400));
-      rec('B2 FINDING-CHECK: the driver is told a loaded drop left his run because it was shipped (WO-3003-1 is physically on his van)', /shipped/i.test(t1) && /WO-3003-1/.test(t1), t1.slice(0, 400));
+      // (Coder 20 Nov, re-pointed — Garry 20 Nov: a LOADED / on-the-road job that ships stays on the driver's run until he taps delivered)
+      const r1 = await drvRun(D.page);
+      rec('B1 (Garry 20 Nov) after a refresh: WO-3001-1 (delivered) has left his run; WO-3003-1 (LOADED, shipped) STAYS on it; WO-3002-1 kept', !r1.includes('WO-3001-1') && r1.includes('WO-3003-1') && r1.includes('WO-3002-1'), r1.slice(0, 400));
+      rec('B2 …WO-3003-1 is marked "📦 shipped in Cienapps — still tap DELIVERED" and has its DELIVERED button', /WO-3003-1[^|]*shipped in Cienapps — still tap DELIVERED/.test(r1) && await D.page.evaluate(() => !!document.querySelector('[data-ddv="WO-3003-1"]')), r1.slice(0, 400));
       // ALL DELIVERED now: WO-3003-1 (on his van, shipped) never gets a delivered stamp
       await D.page.evaluate(async () => { window.confirm = () => true; const b = document.getElementById('drv-alldeliv'); if (b) b.click(); await new Promise(r => setTimeout(r, 300)); try { clearTimeout(saveT); await saveDB(); } catch (e) {} });
       await reload(A.page);
       const j3 = await A.page.evaluate(() => { const o = DB.orders.find(x => x.wo === 'WO-3003-1'); return { at: o.delDelivAt || '', sh: !!o.shippedAt, l: o.delLoadedAt || '' }; });
-      rec('B3 INFO: after ALL DELIVERED the shipped WO-3003-1 (loaded on that van) has no delivered stamp — Shipped card shows "Off Deliveries (shipped)"', true, JSON.stringify(j3));
+      const j3d = await A.page.evaluate(() => DB.orders.find(x => x.wo === 'WO-3003-1').delivBy || ''), c3 = await shipCard(A.page, 'WO-3003-1'), r3 = await drvRun(D.page);
+      rec('B3 (Garry 20 Nov) ALL DELIVERED stamps the shipped WO-3003-1 with his name; Shipped card "✓ Delivered … by Joe"; it leaves his run as a delivered drop', !!j3.at && j3.sh && j3d === 'Joe' && /✓ Delivered [^·]* by Joe/.test(c3) && !r3.includes('WO-3003-1'), JSON.stringify({ j3, j3d, c3: c3.slice(0, 200), r3: r3.slice(0, 200) }));
       rec('A/B no page errors', !(S.errors || []).length, (S.errors || []).join(' | ').slice(0, 300));
       await A.close(); await D.close();
     }
