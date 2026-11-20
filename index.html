@@ -597,6 +597,33 @@ body.del-dragging #del-wkbar .wkb-btn:not(:disabled):not(.nodrop),body.del-dragg
 .wl-due{font-size:11px;padding:2px 8px}
 .wl-h .lst-chip{font-size:10px;padding:1px 5px}
 .wl-chk{width:30px;height:30px;font-size:15px;border-radius:6px}
+/* saw ⚡ BATCH (20 Nov): a read-only table to cut from — one block per board; every row a card on a phone, chips wrap */
+.wl-chk.wl-badd{width:auto;padding:0 10px;font-size:13px;color:#fff;white-space:nowrap}.wl-chk.wl-badd.on{color:#14335c}
+.wl-flash{outline:4px solid #e8b931;outline-offset:2px}
+.sb-top{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:space-between;background:#14335c;color:#fff;border-radius:8px;padding:8px 12px;margin-bottom:6px}
+.sb-top b{font-size:16px;overflow-wrap:anywhere}
+.sb-hint{font-size:12px;color:var(--t3);margin:0 0 10px}
+.sb-mem,.sb-nl{font-size:12px;font-weight:700;color:#7a4a00;background:#fff4d6;border:1px solid #e0a43a;border-radius:6px;padding:5px 8px;margin-bottom:6px;overflow-wrap:anywhere}
+.sb-nl{color:#14335c;background:#eaf2ff;border-color:#9cbce8;display:flex;gap:8px;align-items:center;justify-content:space-between}
+.sb-nl button{flex:none;border:1px solid #9cbce8;background:#fff;border-radius:5px;padding:2px 8px;cursor:pointer;min-height:28px}
+.sb-board{background:#fff;border:1px solid var(--border);border-radius:8px;margin-bottom:12px;overflow:hidden}
+.sb-bh{background:#eaf0f8;color:#14335c;font-weight:800;font-size:15px;padding:7px 12px;overflow-wrap:anywhere}
+.sb-bh span{font-weight:700;font-size:13px}
+.sb-row{display:grid;grid-template-columns:minmax(0,2fr) 96px minmax(0,3fr);gap:4px 12px;padding:7px 12px;border-top:1px solid #eef1f5;align-items:center}
+.sb-it{overflow-wrap:anywhere;font-size:14px}.sb-dm{font-family:monospace;font-weight:700;white-space:nowrap}.sb-nt{color:var(--t3);font-size:12px}
+.sb-tot{font-family:monospace;font-weight:800;font-size:17px;color:#14335c}.sb-tot small{font-size:10px;color:var(--t3);font-family:Arial,sans-serif;margin-right:4px}
+.sb-bad{font-size:12px;color:#c0392b;font-weight:700;font-family:Arial,sans-serif}
+.sb-chs{display:flex;flex-wrap:wrap;gap:4px;min-width:0}
+.sb-chip{background:#eaf0f8;border:1px solid #c4cdd9;border-radius:6px;padding:4px 8px;font-size:13px;font-weight:700;color:#14335c;cursor:pointer;min-height:32px;max-width:100%;overflow-wrap:anywhere;text-align:left}
+.sb-chip b{color:#0d6e46}.sb-chip.sb-cut{text-decoration:line-through;opacity:.65;background:#e7f6ec;border-color:#9fd8b4}.sb-chip.sb-chk{border-color:#c0392b;color:#c0392b}
+.sb-done .sb-it,.sb-done .sb-tot{text-decoration:line-through;opacity:.55}
+.sb-hs{background:#fff;border:1px solid var(--border);border-radius:8px;padding:6px 12px;margin-bottom:12px}
+.sb-hh{font-weight:800;color:#14335c;font-size:15px;margin-bottom:4px}
+.sb-hl{display:flex;gap:6px 10px;flex-wrap:wrap;align-items:center;justify-content:space-between;padding:6px 0;border-top:1px solid #eef1f5}
+.sb-hn{min-width:0;overflow-wrap:anywhere}.sb-ha{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.sb-w{font-size:12px;font-weight:800;color:#7a4a00}.sb-cnt{font-size:13px;font-weight:700;color:#14335c}
+.sb-ha .btn{min-height:40px}
+@media(max-width:600px){.sb-row{grid-template-columns:minmax(0,1fr) auto}.sb-chs{grid-column:1/-1}}
 .wl-tbl{font-size:13px}
 .wl-tbl th{padding:3px 8px;font-size:10px}
 .wl-tbl td{padding:3px 8px}
@@ -7722,6 +7749,55 @@ function printLabels(lsArr,mode){
   </style></head><body><div class="sheet">${labels}</div><script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script></body></html>`);
   w.document.close();
 }
+/*saw ⚡ BATCH (Garry 20 Nov): a READ-ONLY helper — what is involved when several houses are cut together. One block per board with
+  the sheets for the batch (same maths as the sheets panel); each row's TOTAL and every house's share ("House 14 ×2"). A share already
+  ticked cut on its OWN list shows ✓ (struck through); a fully cut row goes to the bottom of its board. Nothing is ticked here: the saw
+  ticks each house's own list (tap a house to go to it). Waiting (N/A) lines are not in it; "check quantity" lines are red and never
+  added in.*/
+function sbNotesHTML(){return SB.notes.map((t,i)=>`<div class="sb-nl"><span>ℹ ${escA(t)}</span><button data-sbnx="${i}" title="Hide this note">✕</button></div>`).join('');}
+function sawBatchHTML(bl){
+  const pl=n=>n!==1?'s':'';
+  if(!bl.length)return `<div class="flr-none">The batch is empty — on 🪚 TO DO, tap <b>＋ Add to batch</b> on each house you are cutting together.</div>`;
+  const hl=houseLabels(bl),rows=combineLists(bl,'saw',{withCut:true});
+  const sn=o=>new Map(sheetNeed(bl,'','',Object.assign({anyDate:true,relOnly:'saw'},o)).mats.map(g=>[matKey(g.mat),g]));
+  const sT=sn({}),sD=sn({todoOnly:true});
+  let pcs=0,pcut=0;rows.forEach(g=>g.shares.forEach(s=>{if(typeof s.q==='number'){pcs+=s.q;if(s.cut)pcut+=s.q;}}));
+  const nP=new Set(bl.map(l=>l.pid||matKey(l.project))).size;
+  const boards=new Map();rows.forEach(g=>{(boards.get(g.board)||boards.set(g.board,[]).get(g.board)).push(g);});
+  const bname=k=>(sT.get(k)||{}).mat||String((boards.get(k)[0]||{}).mat||'').trim()||'(no material)';
+  const chips=g=>{const per=new Map();g.shares.forEach(s=>{const x=per.get(s.lid)||per.set(s.lid,{lid:s.lid,h:s.h,n:0,nc:0,bad:[],all:0,cut:0}).get(s.lid);
+      x.all++;if(s.cut)x.cut++;if(typeof s.q==='number'){x.n+=s.q;if(s.cut)x.nc+=s.q;}else x.bad.push(s.q);});
+    return [...per.values()].map(x=>{const all=x.cut===x.all,q=[x.n?String(x.n):'',...x.bad].filter(Boolean).join(' + ');
+      return `<button class="sb-chip${all?' sb-cut':''}${x.bad.length?' sb-chk':''}" data-sbgo="${escA(x.lid)}" title="${all?'Ticked cut on its own list':'Go to this house\'s list to tick it'}">${all?'✓ ':''}${escA(x.h)} <b>×${escA(q)}</b>${x.bad.length?' ⚠ check quantity':''}${!all&&x.cut?' · '+(x.nc||x.cut)+' cut':''}</button>`;}).join('');};
+  const row=g=>{const done=g.shares.every(s=>s.cut);
+    return `<div class="sb-row${done?' sb-done':''}"><div class="sb-it"><b>${escA(g.item)||'—'}</b>${g.L||g.W?` <span class="sb-dm">${escA(g.L)} × ${escA(g.W)}</span>`:''}${g.note?` <span class="sb-nt">· ${escA(g.note)}</span>`:''}</div>
+      <div class="sb-tot"><small>TOTAL</small>${g.qty}${g.bad?`<div class="sb-bad">+ ${g.bad} not added — check quantity</div>`:''}</div><div class="sb-chs">${chips(g)}</div></div>`;};
+  const board=k=>{const gs=boards.get(k),T=sT.get(k),D=sD.get(k);
+    const ord=gs.filter(g=>!g.shares.every(s=>s.cut)).concat(gs.filter(g=>g.shares.every(s=>s.cut))); // a fully cut row goes to the bottom of its board
+    return `<div class="sb-board"><div class="sb-bh">${escA(bname(k))} <span>— ${T?T.sheets+' sheet'+pl(T.sheets)+' for this batch · '+(D&&D.sheets?D.sheets+' still to cut':'all cut'):'no sheets counted (no sizes)'}${T&&T.check?' <b style="color:#c0392b">⚠ check units</b>':''}</span></div>${ord.map(row).join('')}</div>`;};
+  const house=l=>{const o=(l.wos||[]).map(w=>DB.orders.find(x=>x.wo===w)).find(Boolean),tr=tickableRows(l,'saw'),nt=tr.filter(r=>rowTicked(l.id,rowKey(r))).length,nh=listHoldRows(l,'saw','hold').length;
+    return `<div class="sb-hl"><div class="sb-hn"><b>${escA(hl.get(l.id))}</b>${nP>1?'':' <span class="dsh-t">'+escA(l.project||'')+'</span>'} ${(l.wos||[]).map(w=>woChip(w)).join('')} ${o?fuHTML(o,'lst-chip'):''}</div>
+      <div class="sb-ha"><span class="sb-cnt">cut ${nt} of ${tr.length}</span>${nh?`<span class="sb-w">⏸ ${nh} waiting</span>`:''}<button class="btn btn-g" data-sbgo="${escA(l.id)}">Open list</button><button class="btn btn-s" data-sblbl="${escA(l.id)}" title="Optional — print this house's labels">🏷 Labels</button></div></div>`;};
+  return `<div class="sb-top"><b>${bl.length} house${pl(bl.length)} · ${nP} project${pl(nP)} · ${pcut} of ${pcs} piece${pl(pcs)} cut</b><button class="btn btn-s" id="sb-empty" style="min-height:40px">✕ Empty batch</button></div>
+    <div class="sb-hint">This table is to cut from. Tick the lines on each house's own list — tap a house to go to it.</div>
+    ${SB.mem?'<div class="sb-mem">⚠ Not remembered on this device (its storage is blocked) — the batch lasts until this page is closed.</div>':''}
+    ${[...boards.keys()].sort((a,b)=>bname(a).localeCompare(bname(b))).map(board).join('')||'<div class="flr-none">Nothing to cut in these houses.</div>'}
+    <div class="sb-hs"><div class="sb-hh">Houses in this batch</div>${bl.map(house).join('')}</div>`;
+}
+// "Open list": that house's card on 🪚 TO DO, scrolled into view (the Customer filter / later days are opened if it is behind them)
+function sbGo(id){wlShowBatch=false;wlShowDone=false;wlShowHold=false;
+  const l=lists().find(x=>x.id===id);
+  if(l){if(wlCust&&(listCust(l)||'(no customer)')!==wlCust)wlCust='';if(!dueToday(l,todayLocal()))wlShowUpcoming=true;}
+  render();
+  const card=[...document.querySelectorAll('[data-wlcard]')].find(e=>e.dataset.wlcard===id);
+  if(card){card.scrollIntoView({block:'start'});window.scrollBy(0,-80);card.classList.add('wl-flash');setTimeout(()=>card.classList.remove('wl-flash'),2500);}
+  else toast('That house is not on the saw queue any more');}
+function sawBatchBind(bl){
+  document.querySelectorAll('[data-sbgo]').forEach(b=>b.onclick=()=>sbGo(b.dataset.sbgo));
+  document.querySelectorAll('[data-sblbl]').forEach(b=>b.onclick=()=>{const l=bl.find(x=>x.id===b.dataset.sblbl);if(l)printLabels([l],'saw');});
+  document.querySelectorAll('[data-sbnx]').forEach(b=>b.onclick=()=>{SB.notes.splice(+b.dataset.sbnx,1);render();});
+  const e=document.getElementById('sb-empty');if(e)e.onclick=()=>{sbClear();wlShowBatch=false;render();toast('Batch emptied — nothing on the lists was changed');};
+}
 function renderWorkList(app,mode){
   const cfg=mode==='saw'?{icon:'🪚',title:'SAW — Cutting Queue',done:'✓ CUT COMPLETE',cnt:l=>l.saw||0}
                         :{icon:'🧰',title:'STORES — Fittings Queue',done:'✓ FITTINGS PICKED',cnt:l=>l.fit||0};
@@ -7730,6 +7806,7 @@ function renderWorkList(app,mode){
   const srtDue=(a,b)=>(listDueKey(a)||'9999').localeCompare(listDueKey(b)||'9999');
   const relRows=l=>listHoldRows(l,mode,'rel').length;
   const open=rel.filter(l=>!listDone(l.id)[mode]||relOpen(l,mode)).sort(srtDue);
+  const showB=mode==='saw'&&wlShowBatch,bl=mode==='saw'?sbLists(open):[]; // saw ⚡ BATCH: this device's batch
   const closed=rel.filter(l=>listDone(l.id)[mode]&&!relOpen(l,mode)).sort((a,b)=>String(listDone(b.id)[mode].at).localeCompare(String(listDone(a.id)[mode].at)));
   // The bench sees TODAY's work plus anything not cleared from past days — nothing else.
   const dueNow=open.filter(l=>dueToday(l,todayISO));                              // cut/pick by today, incl. overdue + cut-by on the non-working days ahead
@@ -7737,9 +7814,9 @@ function renderWorkList(app,mode){
   const undated=open.filter(l=>!listDeadline(l));                                  // no delivery date yet (office to tag)
   const holdModes=mode==='saw'?['saw']:['fit','saw']; // stores books material in, so it can release saw holds too
   const nHold=allHolds(holdModes,'hold').length;
-  const visAll=(wlShowDone||wlShowHold)?[]:(wlShowUpcoming?[...dueNow,...upcoming,...undated]:dueNow);
+  const visAll=(wlShowDone||wlShowHold||showB)?[]:(wlShowUpcoming?[...dueNow,...upcoming,...undated]:dueNow);
   // photo-list jobs follow the same rule: due now on the TO DO, later days behind "Work ahead", the Customer filter applies
-  const phO=phOpen(mode,todayISO),phAll=(wlShowDone||wlShowHold)?[]:(wlShowUpcoming?[...phO.now,...phO.later]:phO.now);
+  const phO=phOpen(mode,todayISO),phAll=(wlShowDone||wlShowHold||showB)?[]:(wlShowUpcoming?[...phO.now,...phO.later]:phO.now);
   const phCu=o=>o.customer||'(no customer)',nCu=c=>visAll.filter(l=>(listCust(l)||'(no customer)')===c).length+phAll.filter(o=>phCu(o)===c).length;
   const custs=[...new Set(visAll.map(listCust).map(c=>c||'(no customer)').concat(phAll.map(phCu)))].sort();
   if(wlCust&&!custs.includes(wlCust))wlCust='';
@@ -7749,8 +7826,8 @@ function renderWorkList(app,mode){
   [...wlSel].forEach(id=>{if(!visible.some(l=>l.id===id))wlSel.delete(id);}); // selections only valid while visible in the queue
   const selLists=visible.filter(l=>wlSel.has(l.id));
   const woChips=l=>(l.wos||[]).map(w=>{const o=DB.orders.find(x=>x.wo===w);return `<div class="wl-wo">${woChip(w)}${o&&fuLbl(o)?fuHTML(o,'lst-chip'):''}${o&&o.title?`<div class="wl-wt">${escA(o.title)}</div>`:''}</div>`;}).join('');
-  const card=(l,isDone)=>{const dn=listDone(l.id)[mode];const due=listDueKey(l);const relOnly=!isDone&&!!dn&&relOpen(l,mode);const nh=listHoldRows(l,mode,'hold').length;return `<div class="wl-card${isDone?' cdone':''}">
-    <div class="wl-h"><div style="display:flex;gap:10px;align-items:flex-start">${!isDone?`<button class="wl-chk${wlSel.has(l.id)?' on':''}" data-wlsel="${escA(l.id)}" title="Select for batch cutting across houses">${wlSel.has(l.id)?'✓':''}</button>`:''}<div><span class="wn">${escA(l.name)}</span> <span class="wd">${escA(l.project||'')}${(c=>c&&c!==l.project?' · '+escA(c):'')(listCust(l))}</span><div>${woChips(l)}</div></div></div>
+  const card=(l,isDone)=>{const dn=listDone(l.id)[mode];const due=listDueKey(l);const relOnly=!isDone&&!!dn&&relOpen(l,mode);const nh=listHoldRows(l,mode,'hold').length;const inB=mode==='saw'&&sbHas(l.id);return `<div class="wl-card${isDone?' cdone':''}"${mode==='saw'?` data-wlcard="${escA(l.id)}"`:''}>
+    <div class="wl-h"><div style="display:flex;gap:10px;align-items:flex-start">${isDone?'':mode==='saw'?`<button class="wl-chk wl-badd${inB?' on':''}" data-wlsel="${escA(l.id)}" title="${inB?'In the batch — tap to take it out':'Add this house to the ⚡ BATCH table'}">${inB?'✓ In batch':'＋ Add to batch'}</button>`:`<button class="wl-chk${wlSel.has(l.id)?' on':''}" data-wlsel="${escA(l.id)}" title="Select for batch cutting across houses">${wlSel.has(l.id)?'✓':''}</button>`}<div><span class="wn">${escA(l.name)}</span> <span class="wd">${escA(l.project||'')}${(c=>c&&c!==l.project?' · '+escA(c):'')(listCust(l))}</span><div>${woChips(l)}</div></div></div>
     ${due?(od=>`<span class="wl-due"${od?' style="background:#c0392b;color:#fff"':''}>${od?'⚠ OVERDUE — ':''}${mode==='saw'?'CUT':'PICK'} BY ${fmt(listDeadline(l))} · DELIVERS ${fmt(due)}</span>`)(!isDone&&listOverdue(l)):'<span class="wd">no delivery date yet</span>'}</div>
     ${pTwinWarn(l.wos)}${movedBanners(l.wos)}${relOnly?`<div class="rel-note">▶ MATERIAL HAS ARRIVED — ${relRows(l)} row${relRows(l)!==1?'s':''} released from the waiting list. The rest of this house was done ${new Date(dn.at).toLocaleDateString('en-IE')}${dn.by?' by '+escA(dn.by):''}.</div>`:''}
     ${lsRevBannerBoth(l)}${lsRevBanner(l,mode)}${V2()?(t=>t.length||lsIssuedHTML(l)?`<div class="chk-bar">${lsIssuedHTML(l)}${lsTbcChip(t,true)}</div>`:'')(lsTbc(lsView(l.id).rows)):''}
@@ -7777,16 +7854,21 @@ function renderWorkList(app,mode){
   };
   app.innerHTML=`<div class="wl"><h1>${cfg.icon} ${cfg.title}<span>today + anything not cleared · updates automatically</span></h1>
     ${mode==='fit'?dkBarHTML():''}<div class="wl-tabs">
-      <button id="wl-tab-todo" class="${!wlShowDone?'on':''}">${mode==='saw'?'🪚':'🧰'} TO DO — ${nNow} today${nOd?` <span style="color:#ffb3a7">(${nOd} overdue)</span>`:''}</button>
+      <button id="wl-tab-todo" class="${!wlShowDone&&!showB?'on':''}">${mode==='saw'?'🪚':'🧰'} TO DO — ${nNow} today${nOd?` <span style="color:#ffb3a7">(${nOd} overdue)</span>`:''}</button>
+      ${mode==='saw'&&(bl.length||showB)?`<button id="wl-tab-batch" class="${showB?'on':''}">⚡ BATCH — ${bl.length} house${bl.length!==1?'s':''}</button>`:''}
       <button id="wl-tab-hold" class="${wlShowHold?'on':''}">⏸ WAITING — ${nHold}</button>
       <button id="wl-tab-done" class="${wlShowDone?'on':''}">✓ DONE — ${closed.length}</button>
       <span class="wl-print"><button id="wl-pr1" title="Paper fallback — today's work and anything overdue, with tick boxes and initials">🖨 Print today</button><button id="wl-pr3" title="Paper fallback for a longer outage — the next 3 days">🖨 Next 3 days</button></span>
     </div>
-    ${wlShowHold?`<div class="wl-hint">Rows parked because ${mode==='saw'?'the material':'stock'} isn't in. When it arrives, tap <b>ARRIVED — RELEASE</b> and the rows go straight back on the ${mode==='saw'?'saw':'stores'} queue as due work.</div>`+holdBookHTML(holdModes):wlShowDone?doneScreen():`
+    ${mode==='saw'?sbNotesHTML():''}
+    ${wlShowHold?`<div class="wl-hint">Rows parked because ${mode==='saw'?'the material':'stock'} isn't in. When it arrives, tap <b>ARRIVED — RELEASE</b> and the rows go straight back on the ${mode==='saw'?'saw':'stores'} queue as due work.</div>`+holdBookHTML(holdModes):wlShowDone?doneScreen():showB?sawBatchHTML(bl):`
     ${mode==='saw'?sawNewListHTML(open)+waitListHTML()+sheetNeedHTML():''}
     ${custs.length>1?`<div class="wl-cust"><span>Customer:</span><button class="${!wlCust?'on':''}" data-wlc="">All · ${visAll.length+phAll.length}</button>${custs.map(c=>`<button class="${wlCust===c?'on':''}" data-wlc="${escA(c)}">${escA(c)} · ${nCu(c)}</button>`).join('')}</div>`:''}
-    ${visible.length>1?`<div style="font-size:12px;color:var(--t3);margin:-4px 0 10px">Cutting several houses together? Tick the box on each list for a combined table with per-house quantities and location labels.</div>`:''}
-    ${selLists.length?`<div class="wl-selbar"><b>${selLists.length} house${selLists.length!==1?'s':''} selected</b>
+    ${visible.length>1?`<div style="font-size:12px;color:var(--t3);margin:-4px 0 10px">${mode==='saw'?'Cutting several houses together? Tap <b>＋ Add to batch</b> on each list, then <b>⚡ Open batch</b> — one table grouped by board, with every house\'s share.':'Cutting several houses together? Tick the box on each list for a combined table with per-house quantities and location labels.'}</div>`:''}
+    ${mode==='saw'?(bl.length?`<div class="wl-selbar"><b>${bl.length} house${bl.length!==1?'s':''} ticked →</b>
+      <button class="btn2" id="wl-bopen">⚡ Open batch</button>
+      <button class="btn3" id="wl-lblsel">🏷 Labels for selected</button>
+      <button class="btn3" id="wl-clrsel">✕ Clear</button></div>`:''):selLists.length?`<div class="wl-selbar"><b>${selLists.length} house${selLists.length!==1?'s':''} selected</b>
       <button class="btn2" id="wl-comb" ${selLists.length<2?'disabled title="Select at least 2 lists to combine"':''}>⚡ Combined ${mode==='saw'?'cutting':'fittings'} table</button>
       <button class="btn3" id="wl-lblsel">🏷 Labels for selected</button>
       <button class="btn3" id="wl-clrsel">✕ Clear</button></div>`:''}
@@ -7798,9 +7880,12 @@ function renderWorkList(app,mode){
   document.querySelectorAll('[data-sawseen]').forEach(b=>b.onclick=()=>{sawSeenSet(b.dataset.sawseen);render();});
   document.querySelectorAll('[data-sawseenall]').forEach(b=>b.onclick=e=>{e.preventDefault();e.stopPropagation();sawSeenSet(b.dataset.sawseenall.split(','));render();});
   const snl=document.getElementById('snl-many');if(snl)snl.ontoggle=()=>{sawNlOpen=snl.open;const u=snl.querySelector('summary u');if(u)u.textContent=snl.open?'hide':'show';};
-  const tb1=document.getElementById('wl-tab-todo');if(tb1)tb1.onclick=()=>{wlShowDone=false;wlShowHold=false;render();};
-  const tb2=document.getElementById('wl-tab-done');if(tb2)tb2.onclick=()=>{wlShowDone=true;wlShowHold=false;render();};
-  const tb3=document.getElementById('wl-tab-hold');if(tb3)tb3.onclick=()=>{wlShowHold=true;wlShowDone=false;render();};
+  const tb1=document.getElementById('wl-tab-todo');if(tb1)tb1.onclick=()=>{wlShowDone=false;wlShowHold=false;wlShowBatch=false;render();};
+  const tb2=document.getElementById('wl-tab-done');if(tb2)tb2.onclick=()=>{wlShowDone=true;wlShowHold=false;wlShowBatch=false;render();};
+  const tb3=document.getElementById('wl-tab-hold');if(tb3)tb3.onclick=()=>{wlShowHold=true;wlShowDone=false;wlShowBatch=false;render();};
+  const tb4=document.getElementById('wl-tab-batch');if(tb4)tb4.onclick=()=>{wlShowBatch=true;wlShowDone=false;wlShowHold=false;render();};
+  const bo=document.getElementById('wl-bopen');if(bo)bo.onclick=()=>{wlShowBatch=true;wlShowDone=false;wlShowHold=false;render();window.scrollTo(0,0);};
+  if(mode==='saw')sawBatchBind(bl);
   const pr1=document.getElementById('wl-pr1');if(pr1)pr1.onclick=()=>printWorkList(mode,1);
   const pr3=document.getElementById('wl-pr3');if(pr3)pr3.onclick=()=>printWorkList(mode,3);
   if(mode==='fit')dkBarBind();
@@ -7840,11 +7925,11 @@ function renderWorkList(app,mode){
   });
   const upc=document.getElementById('wl-upc');if(upc)upc.onclick=()=>{wlShowUpcoming=!wlShowUpcoming;render();};
   document.querySelectorAll('[data-wlsel]').forEach(b=>b.onclick=()=>{
-    const id=b.dataset.wlsel;wlSel.has(id)?wlSel.delete(id):wlSel.add(id);render();
+    const id=b.dataset.wlsel;if(mode==='saw'){sbToggle(id);render();return;}wlSel.has(id)?wlSel.delete(id):wlSel.add(id);render();
   });
   const cb=document.getElementById('wl-comb');if(cb)cb.onclick=()=>{if(selLists.length>=2)openCombined(selLists,mode);};
-  const lb=document.getElementById('wl-lblsel');if(lb)lb.onclick=()=>printLabels(selLists,mode);
-  const cs=document.getElementById('wl-clrsel');if(cs)cs.onclick=()=>{wlSel.clear();render();};
+  const lb=document.getElementById('wl-lblsel');if(lb)lb.onclick=()=>printLabels(mode==='saw'?bl:selLists,mode);
+  const cs=document.getElementById('wl-clrsel');if(cs)cs.onclick=()=>{if(mode==='saw')sbClear();else wlSel.clear();render();};
   document.querySelectorAll('[data-wllbl]').forEach(b=>b.onclick=()=>{
     const l=lists().find(x=>x.id===b.dataset.wllbl);if(l)printLabels([l],mode);
   });
