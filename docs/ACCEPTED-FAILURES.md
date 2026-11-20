@@ -236,3 +236,10 @@ Production Manager's phone, the driver phones) when the new file goes live.
 | deliveries attack19-3 c "× on the OLD screen erases a hand job" (Medium) | the old version's × deletes a job added by hand with no archive and no question. The new version never erases (it archives in 📚 Past weeks). Code can't change the old file | go-live: close every old screen | pending |
 | deliveries attack19-3 d "(old screen) the archived hand job JOB-OFF is NOT erased" | the test's record uses the first key format (`…zz.off`). The new code stores these as `~off.…`, which the old screen's 26-week trim never reaches (checked: passes with a `~off.` key). The test fixture needs re-pointing. Side effect while old screens are open: they keep 26 weeks minus the number of "taken off" records, and show those records as odd rows in their own Past weeks / scorecard | fixture re-point (Tester); go-live: close every old screen | pending |
 | deliveries attack19-2 "WO-2610-1 / WO-2611-1: has ↩ Back to Deliveries on Shipped", "… brought back: on Deliveries", "import with the SAME steps: all three still on Deliveries" | out of date: Garry decided 20 Nov that ↩ Back to Deliveries is never offered for step 10 (installed) or 11 (completed / invoiced) | re-point (Tester) | not an app fault |
+
+## 20 Nov 2026 — Deliveries (feature/deliveries-19nov), full suite 339 files: 8,465 pass / 198 fail — pending Garry
+No new failing check against the base run except checks that compare with "origin/main", which has moved on:
+| Check(s) | Why | Fix |
+|---|---|---|
+| sync attack1-roles-bytes "vs main", attack1-twopc "B really runs origin/main code" | main now HAS the quick check (R1 live 19 Nov), so "main" is no longer the old code | Tester pins these to the pre-R1 commit |
+| attack2-basics / attack2-finder-pm-tag "Deliveries tab reads the same as origin/main" | the Deliveries page changed on purpose (customer band, ticks, bar) | Tester re-points |
