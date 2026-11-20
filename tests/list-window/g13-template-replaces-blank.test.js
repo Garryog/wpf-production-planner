@@ -1,7 +1,8 @@
 // Garry, 13 Nov 2026: "when i imported a template into a work order it left the blank standard headings and rows in and put the
 // template at the bottom … they need to be overridden when the template comes in."
 // Rule: if nothing has been typed, picked or ticked in the window, a template REPLACES the blank standard layout. If anything
-// has been typed, the template is ADDED and what was typed stays. Fake Supabase only.
+// has been typed, the template is ADDED and what was typed stays. (d19-6, 19 Nov) untouched blank rows / empty standard sub-headings
+// always come out when a template goes in; a colour alone does not count as typed. Fake Supabase only.
 // Run: node tests/list-window/g13-template-replaces-blank.test.js
 const L = require('./lw.js');
 const { X, sleep, rec, closeAll, asks, setv, rows } = L;
@@ -33,7 +34,9 @@ const insert = async (p, tid) => { await p.evaluate(() => { const d = document.g
     const n2 = (await rows(p)).length;
     await insert(p, 'T1');
     const r2 = await rows(p);
-    rec('one row typed + template → the typed row is kept and the template is added (nothing replaced)', r2.length === n2 + tl && r2.some(r => r.item === 'My own part'), JSON.stringify([r2.length, n2, tl]));
+    // (d19-6, Garry 19 Nov — supersedes "nothing replaced") the typed row stays and the template is added; the untouched blank rows
+    // and empty standard sub-headings around it come out, so no blank lines are left
+    rec('one row typed + template → the typed row is kept, the template is added, no blank rows left (d19-6)', r2.length === 3 + tl && r2.some(r => r.item === 'My own part') && !r2.some(r => !r.hdr && !r.item), JSON.stringify([r2.length, n2, tl]));
     await closeAll(p);
     // 3. only a material picked → counts as typed
     await p.evaluate(() => lsNewStd('WO-3')); await sleep(900);
@@ -42,7 +45,8 @@ const insert = async (p, tid) => { await p.evaluate(() => { const d = document.g
     const n3 = (await rows(p)).length;
     await insert(p, 'T1');
     const r3 = await rows(p);
-    rec('only a material picked + template → nothing replaced', picked && r3.length === n3 + tl, JSON.stringify([picked, r3.length, n3, tl]));
+    // (d19-6, Garry 19 Nov — supersedes "counts as typed") a colour alone on an empty row is still a blank line: the layout is replaced
+    rec('only a material picked + template → the blank layout is replaced by the template (d19-6)', picked && r3.length === tl && n3 > tl, JSON.stringify([picked, r3.length, n3, tl]));
     rec('no page errors', !(S.errors || []).length, JSON.stringify(S.errors));
   } catch (e) { rec('test ran to the end', false, e.stack); }
   await browser.close();
