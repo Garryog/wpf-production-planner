@@ -946,13 +946,23 @@ function delOffTidy(){
       (typed references get reused, e.g. "Remedial"). A job added before this release has no id: its record is never cleared.*/
     const id=j.x&&j.x.jid;if(!id)return;
     const x=(DB.delx||[]).find(z=>z.wo===j.wo&&z.jid===id);if(!x)return;
-    logEdit(x,'Taken off the board by '+(a.by||'someone')+' on another screen ('+String(a.at||'').slice(0,10)+') while it was being booked here — kept on Deliveries, check','(auto-merge)');
-    delete ar[k];n++;});
+    /*attack20-1 D (20 Nov): only a REAL booking (van + day) made on another screen keeps it on the board. Anything else a
+      stale screen did to it (value, Move to week…) is dropped — it was taken off on purpose — and noted on the archived record.*/
+    if(x.delVeh&&x.delDay){
+      logEdit(x,'Taken off the board by '+(a.by||'someone')+' on another screen ('+String(a.at||'').slice(0,10)+') while it was being booked here — kept on Deliveries, check','(auto-merge)');
+      delete ar[k];n++;return;}
+    DB.delx=(DB.delx||[]).filter(z=>z!==x);
+    (a.log=a.log||[]).push({at:nowISO(),by:'(auto-merge)',what:'An out-of-date screen changed it after it was taken off the board — the change was not kept, it stays off'});
+    n++;});
   return n;
 }
 /* 3-way merge: base = what both screens started from, mine = this screen, theirs = the database now.
    Changes made on only one side are kept. Both sides changed the same thing differently ("clash"):
    a tick / done flag wins over an un-tick, otherwise the later edit wins and the job's history notes it. */
+function shCut(s,n){s=String(s);if(s.length<=n)return s;const c=s.slice(0,n),i=c.lastIndexOf(' ');return (i>n*0.6?c.slice(0,i):c).replace(/[\s,·—-]+$/,'')+'…';}
+/*attack20: the same "Brought back…" history line written by two screens (two PCs brought the same job back) is kept once — same
+  text, name and reason within 30 minutes. Other history lines are never touched.*/
+function logTidy(l){const out=[];l.forEach(e=>{if(e&&/^Brought back/.test(String(e.what||''))&&out.some(x=>x&&x.what===e.what&&x.by===e.by&&(x.why||'')===(e.why||'')&&Math.abs(new Date(x.at)-new Date(e.at))<1800000))return;out.push(e);});return out;}
 const MERGE_ATOMIC={hourScale:1}; // edited as a whole, never mixed
 function mKey(x,seen){
   if(!x||typeof x!=='object'||Array.isArray(x))return null;
@@ -997,6 +1007,7 @@ function m3(b,m,t,path,N,o,u){
       if(du)DUE_K.forEach(k=>{if(du[k]!==undefined)r[k]=du[k];});
       [...new Set([...Object.keys(m),...Object.keys(t)])].forEach(k=>{if(hu&&HRS_K.includes(k))return;if(dl&&DEL_K.includes(k))return;if(du&&DUE_K.includes(k))return;const v=m3(bb[k],m[k],t[k],path.concat(k),N,o,u.map(x=>isObj(x)?x[k]:NOU));if(v!==undefined)r[k]=v;});
       if(path[0]==='orders'&&path.length===2&&Array.isArray(r.dueHist))r.dueHist=dueHistTidy(r.dueHist); /*dates: oldest → newest*/
+      if(((path[0]==='orders'&&path.length===2)||(path[0]==='settings'&&path[1]==='delx'&&path.length===3))&&Array.isArray(r.log))r.log=logTidy(r.log);
       return r;
     }
   }
@@ -1068,6 +1079,11 @@ function mDel(b,m,t,path,N,o,u){
   /*d19 attack19-1 A/C: the 🚚 tag goes with the booking. A job left on a van / day, or flagged "rebook" / "brought back", is never
     untagged (it would hold the slot yet be on no page): one screen took it off the board while the other booked it or brought it
     back → it stays tagged, and its history says "taken off on another screen — kept booked, check".*/
+  /*attack20-1 C: it went on hold on one screen while the other booked it → on hold wins: the booking is cleared (the hold rule:
+    coming back restores none of it). Loaded / on the road / delivered is never touched.*/
+  if(r.holdDel&&(m.cienHold||t.cienHold)&&!ts(r)&&(r.delv||r.delVeh||r.delDay||r.delRebook)){
+    const was=desc(r);r.delv=false;r.delVeh='';r.delDay='';delete r.delWk;delete r.delRebook;
+    N.push({path:path.concat('delivery'),kept:'went on hold on another screen — booking cleared',lost:was});}
   if(!r.delv&&(r.delVeh||r.delDay||r.delRebook)){r.delv=true;
     N.push({path:path.concat('delivery'),kept:desc(r)+' (kept on Deliveries)',lost:'taken off the board on another screen — kept booked, check'});}
   return r;
@@ -1102,7 +1118,7 @@ function mergePlan(base,mine,theirs,o){
   const orders=m3(base.orders||[],mine.orders||[],theirs.orders||[],['orders'],N,o,un.map(x=>x.orders||[]))||[];
   const settings=m3(base.settings||{},mine.settings||{},theirs.settings||{},['settings'],N,o,un.map(x=>x.settings||{}))||{};
   const plan={orders,nid:Math.max(+mine.nid||1,+theirs.nid||1),settings};
-  const sh=v=>v===undefined||v===null||v===''?'(blank)':String(typeof v==='object'?JSON.stringify(v):v).slice(0,40);
+  const sh=v=>v===undefined||v===null||v===''?'(blank)':shCut(String(typeof v==='object'?JSON.stringify(v):v),90); // attack20: cut at a whole word
   N.forEach(n=>{
     if(n.path[0]!=='orders'||n.path.length<3)return;
     const wo=String(n.path[1]).replace(/^wo:/,'').replace(/#\d+$/,''),od=orders.find(x=>x.wo===wo);
@@ -1143,7 +1159,7 @@ function noteMerge(N,ren,by){
   if(!N||!N.length)return;
   const g=N.filter(n=>n.gone).map(n=>String(n.path[1]).replace(/^wo:/,''));
   // Say plainly what changed: "<field> on <WO> was also changed by <who> — kept <value>"
-  const sh=v=>v===undefined||v===null||v===''?'(blank)':String(typeof v==='object'?JSON.stringify(v):v).slice(0,30);
+  const sh=v=>v===undefined||v===null||v===''?'(blank)':shCut(String(typeof v==='object'?JSON.stringify(v):v),60);
   const who=(by||'').trim()||'another screen';
   const cl=N.filter(n=>!n.gone).map(n=>n.path[0]==='orders'
     ?n.path.slice(2).join('.')+' on '+String(n.path[1]).replace(/^wo:/,'').replace(/#\d+$/,'')+' was also changed by '+who+' — kept '+sh(n.kept)
