@@ -1,3 +1,4 @@
+// (Re-pointed 20 Nov 2026 to Garry's d20 rule: a job shipped by hand is OFF 🚚 Deliveries — the driver's run and the PM's Deliveries tab too.)
 // Merge attack D (Tester, 13 Nov 2026): every role screen with jobs shipped by hand while on a van (this week / next / past)
 // and in the pool — Production Manager (its tabs incl. 🚚 Deliveries), PMs, driver, floor, management, saw, stores, drawing
 // office — at PC width and phone 360 px. The board step box at 360 px: 7 (store time + tick), 9 (asks, off the board), Cancel.
@@ -50,8 +51,8 @@ const { rec, done } = recorder('merge-d-roles');
         return { out, errs };
       }, R);
       for (const [r, v] of Object.entries(roles.out)) rec(`${tag}: ${r} screen renders (no error), no raw HTML from the title`, typeof v === 'object' && v.n > 0 && !v.esc, JSON.stringify(v));
-      rec(`${tag}: driver sees today's hand-shipped job (${R[0]}) — it still has to be delivered`, roles.out.driver && roles.out.driver.wos.includes(R[0]), JSON.stringify(roles.out.driver));
-      rec(`${tag}: Production Manager's 🚚 Deliveries shows the hand-shipped van jobs`, roles.out['prod-deliv'] && roles.out['prod-deliv'].wos.includes(R[0]), JSON.stringify(roles.out['prod-deliv']));
+      rec(`${tag}: driver no longer sees today's hand-shipped job (${R[0]}) — shipped = off Deliveries (d20)`, roles.out.driver && !roles.out.driver.wos.includes(R[0]) && roles.out.driver.n > 0, JSON.stringify(roles.out.driver));
+      rec(`${tag}: Production Manager's 🚚 Deliveries leaves out the four hand-shipped jobs (d20), still shows the step-7 job ${R[4]}`, roles.out['prod-deliv'] && R.slice(0, 4).every(wo => !roles.out['prod-deliv'].wos.includes(wo)) && roles.out['prod-deliv'].wos.includes(R[4]), JSON.stringify(roles.out['prod-deliv']));
       // floor (TV screen) and the Production Manager's Deliveries "Give reason" row are wider than 360 px on the Deliveries branch
       // before the merge too (floor also on main) — recorded as known, not merge-caused
       if (vp.width < 400) for (const [r, v] of Object.entries(roles.out)) if (r !== 'floor' && r !== 'prod-deliv') rec(`${tag}: ${r} — no sideways page scroll`, typeof v === 'object' && v.sw <= v.cw + 1, JSON.stringify(v));

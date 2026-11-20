@@ -75,11 +75,11 @@ const HDR = ['WO #', 'Title', 'Customer', 'Due Date', 'Step', 'Sub-Total'];
     j = await job('WO-6'); asked = await p.evaluate(() => window.__asked);
     // (rule changed by Garry 11 Nov): 11 by hand does NOT tick "Installation complete" — that stays its own button
     rec('11. COMPLETED AND INVOICED by hand: shipped + installed, NOT "Installation complete" (Garry 11 Nov: kept separate)', j.step === '11. COMPLETED AND INVOICED' && j.sh && j.inst && !j.done && !/Installation complete/.test(asked[0] || ''), JSON.stringify({ j, asked }));
-    // ---- a job on Deliveries (delv) set to 9 by hand stays on Deliveries until the driver confirms
+    // ---- a job on Deliveries (delv) set to 9 by hand comes OFF Deliveries (re-pointed to Garry's d20 rule, 20 Nov 2026); its tag is kept
     await pick('WO-9', '9. JOB SHIPPED', true); await sleep(300);
     j = await job('WO-9'); asked = await p.evaluate(() => window.__asked);
     const onDel = await p.evaluate(() => { const o = DB.orders.find(x => x.wo === 'WO-9'); return typeof delAll === 'function' ? delAll().includes(o) : null; });
-    rec('a job ticked for delivery set to 9 by hand: shipped, still on Deliveries (confirm says so)', j.sh && j.delv && onDel !== false && /stays on 🚚 Deliveries/.test(asked[0] || ''), JSON.stringify({ j, onDel, asked }));
+    rec('a job ticked for delivery set to 9 by hand: shipped, off Deliveries, tag kept (confirm says it comes off, d20)', j.sh && j.delv && onDel === false && /comes off 🚚 Deliveries/.test(asked[0] || ''), JSON.stringify({ j, onDel, asked }));
     // ---- Bring back to board: the old step comes back
     await p.evaluate(() => { showTab('h'); window.__shDone = true; }); await sleep(200);
     await p.evaluate(() => { const c = document.getElementById('sh-done'); if (c && !c.checked) { c.checked = true; c.onchange(); } }); await sleep(200);

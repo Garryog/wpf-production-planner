@@ -1,3 +1,5 @@
+// (Re-pointed 20 Nov 2026 to Garry's d20 rule: on a NEW screen a shipped job is off 🚚 Deliveries. "Both screens agree" now compares the
+// saved data only — whether it is shown on Deliveries is each version's own rule (old screens still show it; close them at go-live).)
 // Merge attack C (Tester, 13 Nov 2026): two PCs on one fake database. One books / moves the job on a van (Deliveries weeks)
 // while the other sets it to JOB SHIPPED by hand on the Capacity Board (S1). New screen = this working tree (the merge);
 // old screen = origin/main (live today: has S1, no Deliveries weeks). Also an import preview open on one PC while the other
@@ -35,12 +37,14 @@ const OLD = 'origin/main';
         const sa = await state(A.page), sb = await state(B.page);
         const exWk = combo[0] === 'new' ? W1 : '';
         rec(`${lbl}: J1 is BOTH shipped (hand) and on IVECO Thu — neither PC's work lost`, sa.J1.sh && sa.J1.step === '9. JOB SHIPPED' && sa.J1.veh === 'IVECO' && sa.J1.day === 'Thu' && sa.J1.wk === exWk, JSON.stringify({ sa: sa.J1, r: (r || []).map(x => typeof x === 'string' ? x : 'ok') }));
-        rec(`${lbl}: both screens agree after a reload`, JSON.stringify(sa) === JSON.stringify(sb), JSON.stringify({ sa, sb }));
+        const dataOf = s => JSON.stringify({ J1: Object.assign({}, s.J1, { onDel: undefined }), J2: s.J2 });
+        rec(`${lbl}: both screens agree on the saved job after a reload (data; Deliveries view is per version)`, dataOf(sa) === dataOf(sb), JSON.stringify({ sa, sb }));
+        for (const [side, st] of [[combo[0], sa], [combo[1], sb]]) if (side === 'new') rec(`${lbl}: the NEW screen shows the shipped J1 off Deliveries (d20)`, st.J1.onDel === 0, JSON.stringify(st.J1));
         rec(`${lbl}: J2 shipped, booking Tue Wk 47 kept`, sa.J2.sh && sa.J2.day === 'Tue' && sa.J2.wk === W1, JSON.stringify(sa.J2));
         if (combo[0] === 'new' && combo[1] === 'new' && order === 'book-first') {
           // on the new screen that shipped: J1 still on Deliveries once, in the Wk 47 grid
           const g = await B.page.evaluate(async J1 => { showTab('d'); await new Promise(r => setTimeout(r, 80)); const b = document.querySelector('[data-deltab="1"]'); b && b.click(); await new Promise(r => setTimeout(r, 80)); return [...document.querySelectorAll('.del-grid [data-cell] .dchip')].filter(c => c.dataset.dw === J1).map(c => c.closest('[data-cell]').dataset.cell); }, J1);
-          rec(`${lbl}: shipping screen's Deliveries shows J1 once on IVECO Thu Wk 47`, g.length === 1 && g[0] === 'IVECO|Thu|' + W1, JSON.stringify(g));
+          rec(`${lbl}: shipping screen's Deliveries no longer shows J1 (shipped, d20) — booking IVECO Thu Wk 47 kept on the job`, g.length === 0 && sb.J1.veh === 'IVECO' && sb.J1.day === 'Thu' && sb.J1.wk === W1, JSON.stringify(g));
         }
         rec(`${lbl}: no page errors`, !(S.errors || []).length, (S.errors || []).join(' | ').slice(0, 300));
         await A.close(); await B.close();

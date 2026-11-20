@@ -1,6 +1,7 @@
 // Merge attack A (Tester, 13 Nov 2026): a job on a van in a past / this / future week, or in the To-plan pool, set to
 // JOB SHIPPED / INSTALLED / COMPLETED by hand on the Capacity Board (S1, from main), then "↩ Bring back to board".
 // The same job shipped by a Cienapps import (the Deliveries release's rule) is the yardstick: the hand-set one must sit on
+// (Re-pointed 20 Nov 2026 to Garry's d20 rule: a shipped job — hand or import — is OFF 🚚 Deliveries; its van/day/week are kept on the job.)
 // Deliveries exactly like it. Also the step box 7 / 8 path (storeStamp + delvAuto, the merged line), Cancel, dueMv, delivery
 // date, Close week, Shipped tab and Export Changes. Fake Supabase only.  Run: node tests/ship/merge-a-van.test.js
 const M = require('./merge-lib');
@@ -42,28 +43,28 @@ const REF = process.env.MERGE_REF || ''; // '' = this working tree (the merge)
     // ---------- 1. ship by hand vs ship by import
     const ans = {};
     for (const wo of ['WO-4601-1', 'WO-4603-1', 'WO-4605-1', 'WO-4607-1', 'WO-4609-1']) ans[wo] = await pick(p, wo, '9. JOB SHIPPED');
-    rec('ship question mentions "stays on 🚚 Deliveries until the driver confirms" for each booked / pooled job', Object.values(ans).every(a => a.asked && /stays on 🚚 Deliveries/.test(a.asked[0] || '')), JSON.stringify(Object.fromEntries(Object.entries(ans).map(([k, v]) => [k, (v.asked || [v])[0] && String((v.asked || [v])[0]).slice(0, 60)]))));
+    rec('ship question says it "comes off 🚚 Deliveries" (d20) for each booked / pooled job', Object.values(ans).every(a => a.asked && /comes off 🚚 Deliveries/.test(a.asked[0] || '')), JSON.stringify(Object.fromEntries(Object.entries(ans).map(([k, v]) => [k, (v.asked || [v])[0] && String((v.asked || [v])[0]).slice(0, 60)]))));
     const twins = await p.evaluate(() => ['WO-4602-1', 'WO-4604-1', 'WO-4606-1', 'WO-4608-1', 'WO-4610-1'].map(wo => { const o = DB.orders.find(x => x.wo === wo); return [wo, o.title, o.customer, o.dueDate, o.value]; }));
     await importRows(p, twins.map(([wo, ti, cu, dd, v]) => [wo, ti, cu, XD(dd), '9. JOB SHIPPED', v]));
     const J = {}; for (const wo of ['WO-4601-1', 'WO-4602-1', 'WO-4603-1', 'WO-4604-1', 'WO-4605-1', 'WO-4606-1', 'WO-4607-1', 'WO-4608-1', 'WO-4609-1', 'WO-4610-1']) J[wo] = await job(p, wo);
     for (const [a, b] of [['WO-4601-1', 'WO-4602-1'], ['WO-4603-1', 'WO-4604-1'], ['WO-4605-1', 'WO-4606-1'], ['WO-4607-1', 'WO-4608-1'], ['WO-4609-1', 'WO-4610-1']]) {
       const pickK = x => ({ sh: x.sh, onBoard: x.onBoard, inPlan: x.inPlan, onDel: x.onDel, veh: x.veh, day: x.day, wk: x.wk, slotWk: x.slotWk, missed: x.missed, inStore: x.inStore, delv: x.delv });
       rec(`${a} (hand) sits exactly like ${b} (Cienapps import): shipped, off the board / week totals, same van / day / week, same missed`, JSON.stringify(pickK(J[a])) === JSON.stringify(pickK(J[b])) && J[a].sh && !J[a].onBoard && !J[a].inPlan, JSON.stringify({ [a]: pickK(J[a]), [b]: pickK(J[b]) }));
-      rec(`${a}: kept its van booking (no ghost, no lost booking) — on Deliveries once`, J[a].onDel === 1 && J[a].veh === (a === 'WO-4609-1' ? '' : J[a].veh) && (a === 'WO-4609-1' ? !J[a].day : !!J[a].day), JSON.stringify(J[a]));
+      rec(`${a}: kept its van booking on the job (no lost booking) — but OFF Deliveries (d20)`, J[a].onDel === 0 && J[a].delv && J[a].veh === (a === 'WO-4609-1' ? '' : J[a].veh) && (a === 'WO-4609-1' ? !J[a].day : !!J[a].day), JSON.stringify(J[a]));
     }
     const sw1 = await delSweep(p);
     for (const wo of ['WO-4601-1', 'WO-4603-1', 'WO-4605-1', 'WO-4607-1', 'WO-4609-1']) {
       const c0 = countIn(sw0, wo), c1 = countIn(sw1, wo);
-      rec(`${wo}: Deliveries DOM shows it exactly where it was before shipping, once (${c0.where.join(',')})`, JSON.stringify(c0) === JSON.stringify(c1) && c1.g + c1.pl === 1, JSON.stringify({ before: c0.where, after: c1.where }));
+      rec(`${wo}: Deliveries DOM no longer shows it anywhere after shipping (d20; was ${c0.where.join(',')})`, c0.g + c0.pl === 1 && c1.g + c1.pl === 0, JSON.stringify({ before: c0.where, after: c1.where }));
     }
-    rec('Deliveries tab counts unchanged by shipping (a shipped job still on its van counts as before)', JSON.stringify(sw0.tabs) === JSON.stringify(sw1.tabs), JSON.stringify({ before: sw0.tabs, after: sw1.tabs }));
+    rec('Deliveries tab counts drop by the shipped jobs (d20): Wk46 5→1, Wk47 6→4, Wk48 2→0, past Wk45 tab gone', JSON.stringify(sw0.tabs) === JSON.stringify({ 0: '(5)', 1: '(6)', 2: '(2)', 3: '(0)', '-1': '(2)', later: '(0)' }) && JSON.stringify(sw1.tabs) === JSON.stringify({ 0: '(1)', 1: '(4)', 2: '(0)', 3: '(0)', later: '(0)' }), JSON.stringify({ before: sw0.tabs, after: sw1.tabs }));
     const day1 = await p.evaluate(({ W0, W1, W2, WP }) => ({ W2Tue: dayVal('Tue', W2), W0Fri: dayVal('Fri', W0), W0Mon: dayVal('Mon', W0), WPWed: dayVal('Wed', WP), W1Sat: dayVal('Sat', W1) }), { W0, W1, W2, WP });
-    rec('van/day loads (€) unchanged by shipping', JSON.stringify(day0) === JSON.stringify(day1), JSON.stringify({ day0, day1 }));
+    rec('van/day loads (€): shipped jobs leave the load (d20) — Tue W2, Fri W0, Mon W0, Wed WP now 0; Sat W1 unchanged', day1.W2Tue === 0 && day1.W0Fri === 0 && day1.W0Mon === 0 && day1.WPWed === 0 && day1.W1Sat === day0.W1Sat && day0.W2Tue > 0, JSON.stringify({ day0, day1 }));
     const hrs1 = await p.evaluate(({ W0, W1, W2, WP }) => ({ W0: wkHrs(W0), W1: wkHrs(W1), W2: wkHrs(W2), WP: wkHrs(WP) }), { W0, W1, W2, WP });
     rec('board week hours: W0 −(3+3+2+2)=−10, W1 −(7+7+6+6)=−26, WP −8 (hand + import alike)', hrs0.W0 - hrs1.W0 === 10 && hrs0.W1 - hrs1.W1 === 26 && hrs0.WP - hrs1.WP === 8, JSON.stringify({ hrs0, hrs1 }));
     const miss1 = await p.evaluate(() => missedJobs().map(o => o.wo).sort());
-    rec('missed list unchanged by shipping (WO-4605-1/WO-4606-1/WO-4607-1/WO-4608-1 still "missed" — driver never confirmed; same for hand and import)', JSON.stringify(miss0) === JSON.stringify(miss1), JSON.stringify({ miss0, miss1 }));
-    rec('INFO: a shipped job (hand or import) still asks for a "missed delivery" reason', true, JSON.stringify(miss1));
+    rec('missed list: WO-4605-1/WO-4606-1/WO-4607-1/WO-4608-1 were "missed"; shipped (hand or import) they are off Deliveries, so no longer missed (d20)', JSON.stringify(miss0) === JSON.stringify(['WO-4605-1', 'WO-4606-1', 'WO-4607-1', 'WO-4608-1']) && miss1.length === 0, JSON.stringify({ miss0, miss1 }));
+    rec('INFO: a shipped job (hand or import) no longer asks for a "missed delivery" reason (d20)', true, JSON.stringify(miss1));
 
     // ---------- 1b. bring back
     for (const wo of ['WO-4601-1', 'WO-4603-1', 'WO-4605-1', 'WO-4607-1', 'WO-4609-1']) rec('bring back ' + wo + ' clicked', (await bringBack(p, wo)) === 'ok');
@@ -76,15 +77,15 @@ const REF = process.env.MERGE_REF || ''; // '' = this working tree (the merge)
     for (const wo of ['WO-4601-1', 'WO-4603-1', 'WO-4605-1', 'WO-4607-1', 'WO-4609-1']) { const c0 = countIn(sw0, wo), c2 = countIn(sw2, wo); rec(`${wo}: after bring-back, Deliveries shows it once, same place`, JSON.stringify(c0) === JSON.stringify(c2), JSON.stringify(c2.where)); }
     const hrs2 = await p.evaluate(({ W0, W1, W2, WP }) => ({ W0: wkHrs(W0), W1: wkHrs(W1), W2: wkHrs(W2), WP: wkHrs(WP) }), { W0, W1, W2, WP });
     rec('board hours after bring-back = before minus only the import-shipped twins (no double count)', hrs0.W0 - hrs2.W0 === 5 && hrs0.W1 - hrs2.W1 === 13 && hrs0.WP - hrs2.WP === 4, JSON.stringify({ hrs0, hrs2 }));
-    rec('Deliveries badge unchanged through ship + bring back', sw0.badge === sw2.badge, sw0.badge + ' → ' + sw2.badge);
+    rec('Deliveries badge after ship + bring back = before minus the 5 import-shipped twins (d20)', +sw0.badge - 5 === +sw2.badge, sw0.badge + ' → ' + sw2.badge);
     const boardRows = await p.evaluate(() => { showTab('b'); return [...document.querySelectorAll('[data-stepsel]')].map(s => s.dataset.stepsel); });
     rec('board lists each brought-back job once', ['WO-4601-1', 'WO-4603-1', 'WO-4605-1', 'WO-4607-1', 'WO-4609-1'].every(wo => boardRows.filter(x => x === wo).length === 1), JSON.stringify(boardRows));
 
     // ---------- INSTALLED / COMPLETED by hand on a booked job
     const ai = await pick(p, 'WO-4611-1', '10. INSTALLED TO BE INVOICE'), ac = await pick(p, 'WO-4612-1', '11. COMPLETED AND INVOICED');
     const jI = await job(p, 'WO-4611-1'), jC = await job(p, 'WO-4612-1');
-    rec('INSTALLED by hand on a van job: shipped + installed, still on its van (Sat Wk 47) once', jI.sh && jI.inst && jI.day === 'Sat' && jI.wk === W1 && jI.onDel === 1 && !jI.onBoard, JSON.stringify(jI));
-    rec('COMPLETED by hand on a van job: shipped + installed, still on its van once', jC.sh && jC.inst && jC.day === 'Sat' && jC.onDel === 1, JSON.stringify(jC));
+    rec('INSTALLED by hand on a van job: shipped + installed, booking (Sat Wk 47) kept on the job, off Deliveries (d20)', jI.sh && jI.inst && jI.day === 'Sat' && jI.wk === W1 && jI.onDel === 0 && !jI.onBoard, JSON.stringify(jI));
+    rec('COMPLETED by hand on a van job: shipped + installed, booking kept, off Deliveries (d20)', jC.sh && jC.inst && jC.day === 'Sat' && jC.onDel === 0, JSON.stringify(jC));
     await bringBack(p, 'WO-4611-1'); await bringBack(p, 'WO-4612-1');
     const I1b = await job(p, 'WO-4611-1'), C1b = await job(p, 'WO-4612-1');
     rec('INSTALLED/COMPLETED brought back: step 8, installed mark removed, van kept', I1b.step === '8. PALLETED' && !I1b.inst && !I1b.sh && I1b.day === 'Sat' && C1b.step === '8. PALLETED' && !C1b.inst && C1b.day === 'Sat', JSON.stringify({ I1b, C1b }));
@@ -114,7 +115,7 @@ const REF = process.env.MERGE_REF || ''; // '' = this working tree (the merge)
     rec('then 8: store time NOT re-stamped (set once)', s8.storeAt === s7.storeAt && s8.delv, s7.storeAt + ' / ' + s8.storeAt);
     await pick(p, 'WO-4614-1', '9. JOB SHIPPED');
     const s9 = await job(p, 'WO-4614-1');
-    rec('then 9 by hand: shipped, storeAt kept, still in the To-plan pool (ticked), not "in store"', s9.sh && s9.storeAt === s7.storeAt && s9.delv && s9.onDel === 1 && s9.inStore === false, JSON.stringify(s9));
+    rec('then 9 by hand: shipped, storeAt kept, still ticked but off the To-plan pool (d20), not "in store"', s9.sh && s9.storeAt === s7.storeAt && s9.delv && s9.onDel === 0 && s9.inStore === false, JSON.stringify(s9));
     await bringBack(p, 'WO-4614-1');
     const sb = await job(p, 'WO-4614-1');
     rec('bring back: step 8, storeAt kept, delv kept, no delvOverride, in store again', sb.step === '8. PALLETED' && sb.storeAt === s7.storeAt && sb.delv && !sb.ovr && sb.inStore === true && !sb.sh, JSON.stringify(sb));
@@ -159,7 +160,7 @@ const REF = process.env.MERGE_REF || ''; // '' = this working tree (the merge)
       closeWeek(WP); await new Promise(r => setTimeout(r, 1500)); const g = w => DB.orders.find(o => o.wo === w);
       const k = Object.keys(DB.delArchive || {}).sort().pop(); return { ask: window.__closeAsk, arch: k ? DB.delArchive[k].jobs.map(j => j.wo) : [], P1: { day: g('WO-4607-1').delDay, rb: g('WO-4607-1').delRebook && g('WO-4607-1').delRebook.why, sh: !!g('WO-4607-1').shippedAt }, P2: { day: g('WO-4608-1').delDay, rb: g('WO-4608-1').delRebook && g('WO-4608-1').delRebook.why, sh: !!g('WO-4608-1').shippedAt, delv: !!g('WO-4608-1').delv } }; }, WP);
     rec('Close past week: archive has WO-4607-1 and WO-4608-1 once each', cl.arch.filter(x => x === 'WO-4607-1').length === 1 && cl.arch.filter(x => x === 'WO-4608-1').length === 1, JSON.stringify(cl));
-    rec('INFO Close past week: a SHIPPED (import) job not confirmed delivered goes back to To plan "rebook" (same for hand-shipped)', true, JSON.stringify(cl.P2));
+    rec('Close past week: the SHIPPED (import) job WO-4608-1 is archived as shipped (d20) — not sent back to To plan, no rebook, booking moved to delShipWas', !cl.P2.day && !cl.P2.rb && cl.P2.sh && !cl.P2.delv, JSON.stringify(cl.P2));
     const tabsAfter = await delSweep(p);
     rec('after close: no past tab left for Wk 45', !Object.keys(tabsAfter.tabs).includes('-1'), JSON.stringify(Object.keys(tabsAfter.tabs)));
     // save to the fake database and read back
