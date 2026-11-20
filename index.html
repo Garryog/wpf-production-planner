@@ -327,6 +327,7 @@ details.lti-other{margin-bottom:14px}details.lti-other>summary{cursor:pointer;fo
 /*d19-3: visible tick on each Deliveries card + book from the selection bar*/
 .dtick{flex:0 0 auto;font-size:17px;line-height:1;color:#fff;cursor:pointer;margin:0;padding:0 2px}
 .dchip-c.none .dtick{color:#4a5568}
+@media(max-width:900px){.dtick{display:inline-flex;align-items:center;justify-content:center;min-width:32px;min-height:32px;box-sizing:border-box;margin:-7px -4px -7px -6px;font-size:19px}} /*attack19: a 32 px tap target on phones (the band stays the same height)*/
 .dchip.sel .dtick{color:#ffd27a;font-weight:700}
 .selbar .selput{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}
 .selbar select{font-size:13px;padding:5px 6px;border:1px solid #b0c8e8;border-radius:6px;background:#fff;min-height:34px;max-width:100%}
@@ -933,6 +934,18 @@ function applyPlan(p){
   if(typeof s.delLegacyAt==='string'&&s.delLegacyAt)DB.delLegacyAt=s.delLegacyAt; /*dates*/
   // dates: a job booked on an old screen while flagged "rebook" is on a van now — the flag is older than the booking
   DB.orders.forEach(o=>{if(o&&o.delDay&&o.delRebook&&delBookAt(o)>String(o.delRebook.at||''))delete o.delRebook;});
+  if(delOffTidy()&&DB.loaded)sched(); // during the first load the next save carries it
+}
+/*attack19-1 B / attack19-3 b: a job added by hand taken off the board on one screen while another booked it — the merge keeps it on
+  the board (in delx). Its "taken off" archive entry is then a stale copy: it comes out, and the job's history says what happened.
+  An entry whose job was brought back on purpose (row marked back) is real history and stays. Same result on every screen.*/
+function delOffTidy(){
+  const ar=DB.delArchive||{};let n=0;
+  Object.keys(ar).forEach(k=>{const a=ar[k];if(!a||!a.off)return;const j=(a.jobs||[])[0];if(!j||j.back)return;
+    const x=(DB.delx||[]).find(z=>z.wo===j.wo);if(!x)return;
+    logEdit(x,'Taken off the board by '+(a.by||'someone')+' on another screen ('+String(a.at||'').slice(0,10)+') while it was being booked here — kept on Deliveries, check','(auto-merge)');
+    delete ar[k];n++;});
+  return n;
 }
 /* 3-way merge: base = what both screens started from, mine = this screen, theirs = the database now.
    Changes made on only one side are kept. Both sides changed the same thing differently ("clash"):
@@ -1049,6 +1062,11 @@ function mDel(b,m,t,path,N,o,u){
     const v=same(M[k],B[k])?T[k]:same(T[k],B[k])?M[k]:(M[k]!=null&&M[k]!==''&&M[k]!==false?M[k]:T[k]);
     if(v!==undefined)r[k]=v;
   });
+  /*d19 attack19-1 A/C: the 🚚 tag goes with the booking. A job left on a van / day, or flagged "rebook" / "brought back", is never
+    untagged (it would hold the slot yet be on no page): one screen took it off the board while the other booked it or brought it
+    back → it stays tagged, and its history says "taken off on another screen — kept booked, check".*/
+  if(!r.delv&&(r.delVeh||r.delDay||r.delRebook)){r.delv=true;
+    N.push({path:path.concat('delivery'),kept:desc(r)+' (kept on Deliveries)',lost:'taken off the board on another screen — kept booked, check'});}
   return r;
 }
 const BOOK_K=['delVeh','delDay','delWk','delRebook'];
@@ -2505,7 +2523,9 @@ const BACK_WHY=['Not delivered after all','Damaged / returned — deliver again'
 function delStampTxt(o){const f=s=>s?new Date(s).toLocaleDateString('en-IE',{day:'numeric',month:'short'})+' '+hhmm(s):'';
   return [o.delLoadedAt?' · loaded '+f(o.delLoadedAt)+(o.ldBy?' by '+o.ldBy:''):'',o.delDispAt?' · dispatched '+f(o.delDispAt):'',(o.delDelivAt||o.delDone)?' · delivered '+(f(o.delDelivAt)||'(no time)')+(o.delivBy?' by '+o.delivBy:''):'',o.delVeh&&o.delDay?' · '+slotLblO(o):''].join('');}
 function delBack9(o){return !!o&&stepNo(o.cienStep||o.shippedStep||o.step)===9;} // shipped or not yet: Cienapps says 9 → shipBack, so the next import still saying 9 leaves it alone
-function delBackOk(o){return !!o&&DB.orders.includes(o)&&!isOnHold(o)&&!(delOnPage(o)&&dStage(o)!=='deliv');}
+function delBackOk(o){if(!o||!DB.orders.includes(o)||isOnHold(o)||(delOnPage(o)&&dStage(o)!=='deliv'))return false;
+  const n=stepNo(o.cienStep||o.step);if(n===10||n===11)return false; /*(Garry 20 Nov) never for 10 installed / 11 completed + invoiced*/
+  return delBack9(o)||dStage(o)==='deliv';} // delivered (on the board or since), or Cienapps 9
 function delBackAsk(o,arc){
   const man=!!arc&&!DB.orders.includes(o);
   if(!man&&!delBackOk(o)){toast(o&&delOnPage(o)?o.wo+' is already on Deliveries':o&&isOnHold(o)?o.wo+' is on hold in Cienapps — not brought back':'Not found',true);return;}
@@ -8613,8 +8633,13 @@ function renderDeliveries(app){
   const sbk=document.getElementById('selbook');if(sbk)sbk.onclick=()=>{
     const v=(document.getElementById('selveh')||{}).value||'',d=(document.getElementById('selday')||{}).value||'';delBarVeh=v;delBarDay=d;
     if(!v||!d){toast('Pick a van and a day first');return;}
-    const js=delSelLive().map(findDel).filter(Boolean);if(!js.length){toast('Nothing ticked');return;}
-    placeJobs(js,v,d,wk);};
+    const all=delSelLive().map(findDel).filter(Boolean);if(!all.length){toast('Nothing ticked');return;}
+    /*attack19-2: the bar never books a job that is loaded / on the road / delivered, or on hold — it says which it left*/
+    const why=o=>dStage(o)?dStageLbl[dStage(o)].toLowerCase():isOnHold(o)?'on hold':'';
+    const sk=all.filter(why),js=all.filter(o=>!why(o));
+    const skTxt=sk.length?'Not booked: '+sk.slice(0,6).map(o=>o.wo+' ('+why(o)+')').join(', ')+(sk.length>6?' …':''):'';
+    if(!js.length){toast(skTxt+' — nothing to book',true);return;}
+    placeJobs(js,v,d,wk);if(skTxt)setTimeout(()=>toast(skTxt+' — left where they are',true),50);};
   const sdt=document.getElementById('seldates');if(sdt)sdt.onclick=()=>dateDlg(delSelLive()); /*dates: group move from ticked cards*/
   const swk=document.getElementById('selwk');if(swk)swk.onclick=()=>wkPickDlg(delSelLive()); /*v-deliv D3; attack5 — the ones that can't move go along only to be listed "not moved" with why*/
   document.querySelectorAll('[data-wknext]').forEach(b=>b.onclick=e=>{e.stopPropagation();wkMoveDo([b.dataset.wknext],b.dataset.wk);});
@@ -8791,7 +8816,7 @@ function delTakeOff(o){
         const at=nowISO();
         if(x.manual){
           DB.delArchive=DB.delArchive||{};
-          const k=at.slice(0,10)+'.'+Date.now().toString(36)+'.off';
+          const k='~off.'+at.slice(0,10)+'.'+Date.now().toString(36); /*attack19-3 d: "~" sorts after every week key, so an old screen's 26-week trim (oldest key first) never reaches it*/
           DB.delArchive[k]={at,w:'',by,off:true,why:'Taken off the board',notes:{},pod:{},jobs:[delArcRow(x)]};
           DB.delx=(DB.delx||[]).filter(j=>j!==x&&j.wo!==x.wo);
           toast(o.wo+' taken off the board — archived in 📚 Past weeks ('+by+')');
@@ -8955,7 +8980,7 @@ function closeWeek(wk){
    This is the answer to "clearing each week will lose information": it can't, it's archived. */
 function openDelArchive(detailKey){
   const ar=DB.delArchive||{};
-  const keys=Object.keys(ar).sort().reverse();
+  const keys=Object.keys(ar).sort((a,b)=>String(ar[b].at||'').localeCompare(String(ar[a].at||''))||b.localeCompare(a)); // newest first (a "~off" entry sits by its date)
   const ov=document.createElement('div');ov.className='pod-ovl';
   const sum=k=>{const a=ar[k];return{n:a.jobs.length,val:a.jobs.reduce((s,j)=>s+(+j.val||0),0),dlv:a.jobs.filter(j=>j.vAt).length};};
   const stamp=t=>t?new Date(t).toLocaleDateString('en-IE',{day:'numeric',month:'short'})+' '+hhmm(t):'';

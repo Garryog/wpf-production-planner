@@ -13,6 +13,7 @@ const O = (wo, x) => H.order(Object.assign({ wo, dueDate: '2026-11-19', origDueD
     await p.evaluate(async () => { showTab('d'); await new Promise(r => setTimeout(r, 200)); });
     const t0 = await p.evaluate(() => [...document.querySelectorAll('.dchip')].map(c => { const k = c.querySelector('.dtick'); return k ? k.textContent : 'none'; }));
     rec('every card has a visible ☐ tick (in its customer band)' + tag, t0.length === 4 && t0.every(x => x === '☐'), JSON.stringify(t0));
+    if (vw.width === 360) { const tp = await p.evaluate(() => { const r = document.querySelector('.dchip .dtick').getBoundingClientRect(); return [Math.round(r.width), Math.round(r.height)]; }); rec('phone: the tick is a 32 px tap target' + tag, tp[0] >= 32 && tp[1] >= 32, JSON.stringify(tp)); }
     rec('the tick sits in the customer band (the card is no taller for it)' + tag, await p.evaluate(() => [...document.querySelectorAll('.dchip')].every(c => !!c.querySelector('.dchip-c .dtick'))));
     // tap the tick of WO-1 and WO-2 (real clicks)
     await p.click('.dchip[data-dw="WO-1"] .dtick'); await p.click('.dchip[data-dw="WO-2"] .dtick'); await p.waitForTimeout(150);
