@@ -3413,6 +3413,7 @@ async function lsSaveManual(d,by,ex){
       reason=(reason?reason+' · ':'')+'Template parts left out: '+miss.join(', ')+' — '+w.trim();
     }
   }
+  if(d.tpl||(ex&&ex.tpl))d.tname=String(d.name||'').trim(); // (20 Nov, one name per template) a template saves type_name = its name, after any rename merge above
   const pl={id,name:String(d.name).trim(),project_id:pid,no_cut:!!d.noCut,no_fit:!!d.noFit};
   if(ex&&!ex.tpl&&!ex.locked&&lsLocked(lsList(id)))pl.lock=true; // cut-by today / next working day: this save is a revision
   if(d.ltype)pl.list_type=d.ltype;if(d.tname!==undefined)pl.type_name=String(d.tname||'').trim()||null;
@@ -3928,7 +3929,7 @@ async function lsCopyToNew(id,pid){
   const rows=lsEditRows(id).filter(r=>!lsEmptyRow(r));
   if(!rows.length){toast('"'+l.name+'" has no rows to copy');return;}
   const to=pid&&LST.p.has(pid)?pid:l.pid,other=to!==l.pid;
-  openListEditor2(null,'',to,{rows,name:String(l.name||'')+' (copy)',ltype:l.tpl?'house':(l.ltype||'house'),tname:l.typeName||'',unitsOn:rows.some(r=>r.k==='hdr'&&r.units!=null),
+  openListEditor2(null,'',to,{rows,name:String(l.name||'')+' (copy)',ltype:l.tpl?'house':(l.ltype||'house'),tname:l.tpl?tplName(l):(l.typeName||''),unitsOn:rows.some(r=>r.k==='hdr'&&r.units!=null),
     note:'Copied from "'+l.name+'"'+(other?' ('+lsProjName(l.pid)+')':'')+' — pick the work order and change anything. Nothing is saved until you press Save; "'+l.name+'" is not changed.'+(other?' Materials not on this project are flagged ⚠.':'')});
 }
 // 🔍 Find old list: every list (not templates), any project, any state — newest first; View or Copy to start a new list
@@ -3937,7 +3938,7 @@ function lsFindDlg(pid,onUse){ // onUse(rows,list): called from the list window'
   if(onUse)ov.onclick=e=>{if(e.target===ov||e.target.id==='pod-x')ov.remove();}; // over the list window: closing it leaves that window as it was
   const draw=()=>{
     const k=q.trim().toLowerCase(),ws=k.split(/\s+/).filter(Boolean);
-    const hit=l=>{const t=[l.name,lsProjName(l.pid),l.typeName,(l.wos||[]).join(' '),...(l.wos||[]).map(w=>{const o=DB.orders.find(x=>x.wo===w);return o?[o.title,o.customer,fuLbl(o)].join(' '):'';})].join(' ').toLowerCase();return ws.every(w=>t.includes(w));};
+    const hit=l=>{const t=[l.name,lsProjName(l.pid),l.tpl?'':l.typeName,(l.wos||[]).join(' '),...(l.wos||[]).map(w=>{const o=DB.orders.find(x=>x.wo===w);return o?[o.title,o.customer,fuLbl(o)].join(' '):'';})].join(' ').toLowerCase();return ws.every(w=>t.includes(w));};
     const ls=lsCache().all.filter(l=>!l.tpl&&(all||!pid||l.pid===pid)&&hit(l)).sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||''))||String(b.id).localeCompare(String(a.id)));
     const body=ov.querySelector('#fo-body'),had=body.querySelector('#fo-q');
     body.innerHTML=`<div style="font-weight:800;color:#14335c;font-size:17px;margin-bottom:2px">🔍 Find an old list</div>
@@ -3945,7 +3946,7 @@ function lsFindDlg(pid,onUse){ // onUse(rows,list): called from the list window'
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px"><input id="fo-q" value="${escA(q)}" placeholder="e.g. House 18, Type B, Aderrig, WO-2557" style="${LS_INP};flex:1;min-width:200px">
         ${pid?`<label style="font-size:12px;white-space:nowrap"><input type="checkbox" id="fo-all"${all?' checked':''}> All projects</label>`:''}</div>
       <div style="max-height:56vh;overflow:auto"><table class="lst-tbl"><thead><tr>${onUse?'<th></th>':''}<th>List</th><th>Project</th><th>Work orders</th><th>Type</th><th>State</th><th>Made</th>${onUse?'':'<th></th>'}</tr></thead><tbody>
-      ${ls.slice(0,80).map(l=>`<tr>${onUse?`<td style="white-space:nowrap"><button class="btn btn-g" data-foc="${escA(l.id)}" style="padding:8px 12px;font-size:13px;min-height:40px">Use these rows</button> <button class="btn btn-s" data-fov="${escA(l.id)}" style="padding:8px 10px;font-size:13px;min-height:40px">View</button></td>`:''}<td><b>${escA(l.name)}</b></td><td>${escA(lsProjName(l.pid))}</td><td>${(l.wos||[]).map(w=>woChip(w)).join('')||'—'}</td><td>${escA(l.typeName||LS_KINDS[l.ltype]||'')}</td>
+      ${ls.slice(0,80).map(l=>`<tr>${onUse?`<td style="white-space:nowrap"><button class="btn btn-g" data-foc="${escA(l.id)}" style="padding:8px 12px;font-size:13px;min-height:40px">Use these rows</button> <button class="btn btn-s" data-fov="${escA(l.id)}" style="padding:8px 10px;font-size:13px;min-height:40px">View</button></td>`:''}<td><b>${escA(l.name)}</b></td><td>${escA(lsProjName(l.pid))}</td><td>${(l.wos||[]).map(w=>woChip(w)).join('')||'—'}</td><td>${escA((l.tpl?'':l.typeName)||LS_KINDS[l.ltype]||'')}</td>
         <td>${escA((LS_STATE[lsState(l)]||[''])[0])}</td><td style="white-space:nowrap">${l.created_at?fmt(String(l.created_at).slice(0,10)):'—'}</td>
         ${onUse?'':`<td style="white-space:nowrap"><button class="btn btn-s" data-fov="${escA(l.id)}" style="padding:2px 8px;font-size:11px">View</button> <button class="btn btn-g" data-foc="${escA(l.id)}" style="padding:2px 8px;font-size:11px">⧉ Copy to new list</button></td>`}</tr>`).join('')
         ||`<tr><td colspan="7" style="color:var(--t3)">${k?'No list matches "'+escA(q)+'"'+(pid&&!all?' on this project — tick All projects to search everywhere':''):'No lists yet.'}</td></tr>`}
@@ -4130,7 +4131,7 @@ function lsHomeLists(allProj){
     if(LH.type&&l.ltype!==LH.type)return false;
     if(LH.rev==='revised'&&!((+l.rev||1)>1))return false;
     const st=lsState(l);if(LH.state==='any'){}else if(LH.state?st!==LH.state:st==='archived')return false; // archived only when asked for ('any' = everything, 9 Nov)
-    if(q){const hay=[l.name,l.project,LS_KINDS[l.ltype]||l.ltype,l.typeName,listCust(l),...(l.wos||[]).map(w=>{const o=DB.orders.find(x=>x.wo===w);return w+' '+(o?[o.floor,o.unit,o.title,o.customer].join(' '):'');})].join(' ').toLowerCase();if(!hay.includes(q))return false;}
+    if(q){const hay=[l.name,l.project,LS_KINDS[l.ltype]||l.ltype,l.tpl?'':l.typeName,listCust(l),...(l.wos||[]).map(w=>{const o=DB.orders.find(x=>x.wo===w);return w+' '+(o?[o.floor,o.unit,o.title,o.customer].join(' '):'');})].join(' ').toLowerCase();if(!hay.includes(q))return false;}
     return true;
   }).map((l,i)=>[l,i]).sort((x,y)=>x[0].tpl&&y[0].tpl?(lsTplCmp(x[0],y[0])||x[1]-y[1]):x[1]-y[1]).map(x=>x[0]); // templates in numerical order; live lists keep their order
 }
@@ -4143,7 +4144,7 @@ function lsHomeHTML(){
   const keys=[...grp.keys()].sort((a,b)=>(a?lsProjName(a):'~').localeCompare(b?lsProjName(b):'~'));
   const sel=(id,v,opts)=>`<select id="${id}" style="${LS_INP};max-width:100%;min-width:0">${opts.map(([k,t])=>`<option value="${escA(k)}"${k===v?' selected':''}>${escA(t)}</option>`).join('')}</select>`;
   const prog=(l,m)=>{const n=m==='saw'?l.saw:l.fit;if(!n)return(m==='saw'?l.noCut:l.noFit)?'n/a':'—';if(listDone(l.id)[m])return'✓';const t=Object.values(rowTicks(l.id)).filter(x=>x.m===m).length;return t+'/'+n;};
-  const row=l=>{const sup=lsSupersededBy(l);const[st,col]=sup?['Superseded (view only)','#8e99ab']:LS_STATE[lsState(l)];return `<tr data-lhrow="${escA(l.id)}"${!l.archived&&!l.tpl&&(l.wos||[]).length&&(l.wos||[]).every(woListOk)?' class="lst-ok"':''}><td><b>${escA(l.name)}</b><div class="lh-pj">${lpfTag(l.pid?lsProjName(l.pid)||l.project:'')}</div>${sup?`<div class="lh-sup" style="font-size:11px;color:#5b6b82">replaced by "${escA(sup.name)}"</div>`:''}${l.tpl?' <span class="lst-chip" style="background:#efe7ff;color:#5b21b6">TEMPLATE'+(l.typeName?' · '+escA(l.typeName):'')+'</span>':''}</td>
+  const row=l=>{const sup=lsSupersededBy(l);const[st,col]=sup?['Superseded (view only)','#8e99ab']:LS_STATE[lsState(l)];return `<tr data-lhrow="${escA(l.id)}"${!l.archived&&!l.tpl&&(l.wos||[]).length&&(l.wos||[]).every(woListOk)?' class="lst-ok"':''}><td><b>${escA(l.name)}</b><div class="lh-pj">${lpfTag(l.pid?lsProjName(l.pid)||l.project:'')}</div>${sup?`<div class="lh-sup" style="font-size:11px;color:#5b6b82">replaced by "${escA(sup.name)}"</div>`:''}${l.tpl?' <span class="lst-chip" style="background:#efe7ff;color:#5b21b6">TEMPLATE</span>':''}</td>
     <td>${escA(LS_KINDS[l.ltype]||l.ltype||'')}${l.templateId?`<div style="font-size:11px;color:#5b21b6">${escA(lsTplInfo(l))}</div>`:''}</td><td>${(l.wos||[]).map(w=>woChip(w)+(!l.archived&&!l.tpl&&woN.get(woKey(w))>1?`<span class="lst-chip lh-two" style="background:#fdecea;color:#a31515" title="More than one live cutting list on this work order — check the saw is not cutting it twice">⚠ ${+woN.get(woKey(w))} lists on ${escA(w)}</span>`:'')).join('')||'<span style="color:var(--t3)">—</span>'}</td>${lsFuTds(l)}
     <td>${(+l.rev||1)>1?`<span class="lst-chip" style="background:#fff4d6;color:#7a5200">Rev ${+l.rev}</span>`:'Rev 1'}</td><td><span style="color:${col};font-weight:700">${st}</span>${!l.archived&&!sup?'<div>'+(lsChkOn()&&l.tpl&&l.checkReq&&!l.checkedAt?'<span class="chk-wait">Not checked</span>':lsCheckChip(l))+'</div>':''}${(t=>t.length?'<div>'+lsTbcChip(t)+'</div>':'')(l.archived?[]:lsTbc(lsView(l.id).rows))}</td><td>🪚 ${prog(l,'saw')}</td><td>🧰 ${prog(l,'fit')}</td>
     <td class="lh-act">${!l.archived&&!sup&&lsChkOn()&&l.checkReq&&!l.checkedAt?`<button class="btn btn-g" data-lhchk="${escA(l.id)}" style="padding:2px 8px;font-size:11px" title="Drawing office / Production Manager / Admin PIN — the saw sees the list once it is checked">✓ Check</button> `:''}${sup||l.tpl&&!lsTplBtnOk()?'':`<button class="btn btn-s" data-lhedit="${escA(l.id)}" style="padding:2px 8px;font-size:11px">✎ Edit</button> `}<button class="btn btn-s" data-lhview="${escA(l.id)}" style="padding:2px 8px;font-size:11px">View</button> <button class="btn btn-s" data-lhcopy="${escA(l.id)}" style="padding:2px 8px;font-size:11px" title="Start a NEW list from this one's rows — pick the work order and change anything. This list is not changed">⧉ Copy</button>${l.archived||!lsTplBtnOk()?'':` <button class="btn btn-s" data-lhastpl="${escA(l.id)}" style="padding:2px 8px;font-size:11px" title="Save this list as a template of the project (ticks are not copied)">📐 Save as template</button>`}${l.tpl?` <button class="btn btn-s" data-lhhist="${escA(l.id)}" style="padding:2px 8px;font-size:11px">🕘 History</button>`:''}${!l.tpl&&!l.archived&&lsState(l)==='draft'?` <button class="btn btn-s" data-lhsend="${escA(l.id)}" style="padding:2px 8px;font-size:11px">➜ Send to saw</button>`:''}${l.archived||l.tpl&&!lsTplBtnOk()?'':` <button class="btn btn-s" data-lharc="${escA(l.id)}" style="padding:2px 8px;font-size:11px;color:var(--red);border-color:var(--red)">Archive</button>`}</td></tr>`;};
@@ -4405,7 +4406,7 @@ function lsNewChoose(wo,pid){
   body.innerHTML=`<div style="font-weight:800;color:#14335c;font-size:16px;margin-bottom:2px">Start this list from:</div>
     <div style="font-size:12px;color:var(--t3);margin-bottom:10px">${o?escA(o.wo)+' · '+escA(o.customer||'')+(lsListName(o)?' · '+escA(lsListName(o)):''):escA(lsProjName(p))} — pick the house type, or start blank. You can change anything before you save.</div>
     ${tps.length>8?`<input id="sfl-q" placeholder="🔍 Type to find a template" autocomplete="off" style="${LS_INP};width:100%;box-sizing:border-box;margin-bottom:8px">`:''}
-    <div style="display:flex;flex-wrap:wrap;gap:8px">${tps.map(t=>`<button class="btn btn-g" data-sfl="${escA(t.id)}" data-sflq="${escA(String((t.typeName||'')+' '+(t.name||'')).toLowerCase())}" style="min-height:44px;font-size:14px" title="${escA((LS_KINDS[t.ltype]||t.ltype||'')+' · Rev '+(+t.rev||1))}">📐 ${escA(t.typeName||t.name)}</button>`).join('')}
+    <div style="display:flex;flex-wrap:wrap;gap:8px">${tps.map(t=>`<button class="btn btn-g" data-sfl="${escA(t.id)}" data-sflq="${escA(String(tplName(t)).toLowerCase())}" style="min-height:44px;font-size:14px" title="${escA((LS_KINDS[t.ltype]||t.ltype||'')+' · Rev '+(+t.rev||1))}">📐 ${escA(tplName(t))}</button>`).join('')}
     <button class="btn btn-s" data-sfl="" style="min-height:44px;font-size:14px">Blank standard layout</button></div>
     <div id="sfl-err" style="color:#b42318;font-weight:700;font-size:13px;min-height:18px;margin-top:6px"></div>`;
   {const q=body.querySelector('#sfl-q');if(q){q.oninput=()=>{const ws=q.value.trim().toLowerCase().split(/\s+/).filter(Boolean);body.querySelectorAll('[data-sflq]').forEach(b=>{b.style.display=ws.every(w=>b.dataset.sflq.includes(w))?'':'none';});};q.focus();}}
@@ -4420,14 +4421,14 @@ function lsNewChoose(wo,pid){
     const rows=lsEditRows(tid).filter(r=>!na.has(r.lid)).map(r=>{const x={...r};delete x.done;delete x.hold;return x;});
     if(!rows.length){body.querySelector('#sfl-err').textContent='That template has no rows — pick another, or start blank.';body.querySelectorAll('[data-sfl]').forEach(x=>x.disabled=false);return;}
     dl.remove();
-    const tnm=t.typeName||t.name;
+    const tnm=tplName(t);
     openListEditor(null,wo||'',p,{rows,unitsOn:rows.some(r=>r.k==='hdr'&&r.units!=null&&r.units!==''),...(o&&!fuU(o)?{name:String(o.title||'').trim()||o.wo}:{}),note:'Started from template '+tnm+' · Rev '+(+t.rev||1)+' — change anything for this house, then Save.'});
   });
 }
 function lsListName(o){return o?(fuU(o)||o.title||o.wo):'';}
 async function confirmList(wo,tid,by){
   const o=DB.orders.find(x=>x.wo===wo);if(!o)throw new Error(wo+' is no longer on the planner');
-  const t=lsList(tid);return lsCreateFromTpl(tid,[wo],String(t&&(t.typeName||t.name)||'').trim()||wo,by,{fixedFor:wo}); // (10 Nov) named after the template's type, not the unit
+  const t=lsList(tid);return lsCreateFromTpl(tid,[wo],String(t&&(tplName(t))||'').trim()||wo,by,{fixedFor:wo}); // (10 Nov) named after the template's type, not the unit
 }
 // Excel uploads are never tagged automatically (plan step 6): an untagged Excel list whose sheet name points at a WO
 // (house number, suggestWOs) is offered on that WO's row here, for a person to confirm.
@@ -4446,7 +4447,7 @@ function ltiRows(){
     .sort((a,b)=>(b.onDel-a.onDel)||(b.late-a.late)||(a.due||'9999').localeCompare(b.due||'9999')||woCmp(a.o,b.o));
 }
 const LTI_COL={strong:['#0d6e46','#e7f6ec','#9fd8b4','✓ Suggested'],weak:['#7a4a00','#fff4d6','#e0a43a','? Best guess'],none:['#5b6b82','#eef1f5','#c9d1dc','No suggestion'],pick:['#1a56db','#eaf2ff','#9cbce8','Chosen']};
-function ltiTplName(id){const t=lsList(id);return t?(t.typeName||t.name)+' · Rev '+(+t.rev||1):'';}
+function ltiTplName(id){const t=lsList(id);return t?(tplName(t))+' · Rev '+(+t.rev||1):'';}
 function ltiInner(){
   const rows=ltiRows(),green=rows.filter(r=>r.lvl==='strong'&&r.tid&&!LTI.busy.has(r.o.wo)),wc=lpfLists(lsWaitCheckLists()).sort((a,b)=>(listDueKey(a)||'9999').localeCompare(listDueKey(b)||'9999'));
   const na=lpfJobs(DB.orders.filter(o=>lsNA(o)&&!woFinished(o))),phs=lpfJobs(phJobs()),show=LTI.all?rows:rows.slice(0,40);
@@ -4800,14 +4801,14 @@ function suggestTpl(o,templates,projects){
   if(!ts.length)return none('This project has no templates yet',p.id);
   const f=sgFeat(o.title),qx=sgQtyWhy(o.title,o.customer,p);
   const sc=ts.map(t=>{
-    const g=sgFeat([t.name,t.typeName].filter(Boolean).join(' '));
+    const g=sgFeat(tplName(t));
     if(t.ltype==='kitchen'&&!g.kinds.size)g.kinds.add('kitchen');
     if(g.code&&f.code&&g.code!==f.code)return null;   // a different type
     if(g.beds&&f.beds&&g.beds!==f.beds)return null;   // a different number of bedrooms
     const kHit=[...g.kinds].some(k=>f.kinds.has(k));
     if(g.kinds.size&&f.kinds.size&&!kHit)return null; // a different room
     const cHit=!!(g.code&&g.code===f.code),bHit=!!(g.beds&&g.beds===f.beds);
-    const ph=[t.name,t.typeName].map(sgNorm).some(x=>x.length>=4&&(' '+f.n+' ').includes(' '+x+' '));
+    const ph=[tplName(t)].map(sgNorm).some(x=>x.length>=4&&(' '+f.n+' ').includes(' '+x+' '));
     const more=[...g.words].filter(w=>f.words.has(w)).length,miss=[...g.words].filter(w=>!f.words.has(w)).length;
     const score=(cHit?4:0)+(kHit?2:0)+(bHit?1:0)+(ph?3:0)+more-miss*0.5;
     // the title names a room this template doesn't cover ("KITCHEN & WARDROBES" for a kitchen template) → amber. A utility
@@ -4819,11 +4820,11 @@ function suggestTpl(o,templates,projects){
     if(aw)why.push((qx||aw)+' — check it');
     else if(oRoom)why.push('title names another room too — check it');
     return{t,score,strong,why,cHit};
-  }).filter(x=>x&&x.score>0).sort((a,b)=>b.score-a.score||String(a.t.typeName||a.t.name).localeCompare(String(b.t.typeName||b.t.name)));
+  }).filter(x=>x&&x.score>0).sort((a,b)=>b.score-a.score||String(tplName(a.t)).localeCompare(String(tplName(b.t))));
   if(!sc.length)return none(f.code?'No "Type '+f.code.toUpperCase()+'" template for this project':'No template matches the title',p.id);
   if(sc.length>1)sc.forEach(x=>{if(!x.cHit)x.strong=false;}); // a name in the title (no type) is green only when no other template could fit
   const b=sc[0],st=sc.filter(x=>x.strong),alts=sc.map(x=>x.t.id);
-  ts.slice().sort((a,c)=>String(a.typeName||a.name).localeCompare(String(c.typeName||c.name))).forEach(t=>{if(!alts.includes(t.id))alts.push(t.id);});
+  ts.slice().sort((a,c)=>String(tplName(a)).localeCompare(String(tplName(c)))).forEach(t=>{if(!alts.includes(t.id))alts.push(t.id);});
   const strong=b.strong&&(st.length===1||st[0].score-st[1].score>=2);
   return{level:strong?'strong':'weak',pid:p.id,tid:b.t.id,alts,why:(strong?'Matches ':'Best guess — ')+(b.why.join(', ')||'room')+(!strong&&st.length>1?' (more than one template fits)':'')};
 }
@@ -5038,7 +5039,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
   const fresh=r=>{const x=toRow(r);['lid','sig','opened','ids','src','keep','info','total','u0','qtyErr','bu'].forEach(k=>delete x[k]);return x;};
   const st={rows:ex?lsEditRows(ex.id).map(toRow):opt.rows?opt.rows.map(fresh):[{k:'part',item:'',qty:'',L:'',W:'',mat:'',edging:'',edging2:'',note:''}],
     wo:ex?((ex.wos||[])[0]||''):(presetWo||''),name:ex?ex.name:(opt.name||''),pid:ex?ex.pid:(presetPid||(o0&&lsProjAutoId(o0.customer))||''),
-    ltype:ex?(ex.ltype||'house'):(opt.ltype||(opt.tpl?'kitchen':'house')),tname:ex?ex.typeName:(opt.tname||''),tpl:ex?ex.tpl:!!opt.tpl,noCut:ex?!!ex.noCut:false,noFit:ex?!!ex.noFit:false,newWO:false,pw:{title:'',cust:'',floor:'',unit:'',due:'',val:'',hrs:''},
+    ltype:ex?(ex.ltype||'house'):(opt.ltype||(opt.tpl?'kitchen':'house')),tname:ex?(ex.tpl?tplName(ex):ex.typeName):(opt.tpl?(opt.name||''):(opt.tname||'')),tpl:ex?ex.tpl:!!opt.tpl,noCut:ex?!!ex.noCut:false,noFit:ex?!!ex.noFit:false,newWO:false,pw:{title:'',cust:'',floor:'',unit:'',due:'',val:'',hrs:''},
     carcass:'',door:'',undo:[],cur:'',focus:'',snapKey:'',note:opt.note||'',from:!ex&&opt.from&&opt.from.id?opt.from:null,
     newId:ex?'':opt.pendId||uid('L'),edTok:uid('E'),landed:!!opt.landed,unitsOn:!!opt.unitsOn,moreOpen:false,help:false,
     jb:{floor:'',unit:'',title:'',wo:'',res:null,not:[],last:''},jm:null,pauto:false,pmsg:null}; // jb = the Floor / Unit / Title boxes of a new list with no WO (L1); jm = the WO they found (L3) // a new list keeps ONE id for this editor: Save pressed again after a lost reply is the same list, never a second one
@@ -5302,7 +5303,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     const sim=hdWo&&!!st.pid&&!st.jobOpen&&st.matAfter==null&&!(st.pmsg&&['busy','many','ask','off','err'].includes(st.pmsg.st)); // the job is settled: the pickers are folded away
     const pjN=lsProjName(st.pid)||'',o1=hdWo?DB.orders.find(x=>x.wo===st.wo):null,pjDiff=sim&&pjN.trim().toLowerCase()!==String((o1&&o1.customer)||'').trim().toLowerCase();
     const typeHTML=`<div><label>Type</label><select id="me-type" style="${inp}">${['kitchen','house','room','other'].map(k=>`<option value="${k}"${st.ltype===k?' selected':''}>${LS_KINDS[k]}</option>`).join('')}</select>
-          <input id="me-tname" value="${escA(st.tname||'')}" placeholder="e.g. Type B 3-bed" style="${inp};width:140px"></div>`;
+          ${st.tpl?'':`<input id="me-tname" value="${escA(st.tname||'')}" placeholder="e.g. Type B 3-bed" style="${inp};width:140px">`}</div>`; // (M5, 20 Nov) a template has one name: no Type name box
     ov.innerHTML=`<div class="pod-in me-ed" style="min-width:min(1180px,97vw)">
       <div class="me-tb"><div style="font-weight:800;color:#14335c;font-size:17px;flex:1;min-width:0">✍ ${ex?'Edit':'New'} ${st.tpl?'template':'cutting list'}${ex&&(+ex.rev||1)>1?' · Rev '+(+ex.rev):''}${hdWo?`<span class="me-hwo" id="me-hwo" title="The Cienapps work order this list is for">${escA(st.wo)}</span>${stepBadge(st.wo,'me-hstp')}`:''}</div>${hdWo?lwDueTag(DB.orders.find(x=>x.wo===st.wo)):''}<button class="btn btn-s me-x0" id="me-x0" title="Close this window (asks first if anything is not saved)">✕ Close</button></div>
       ${ex&&ex.templateId?`<div style="font-size:12px;color:#5b21b6;font-weight:700;margin-bottom:4px">📐 ${escA(lsTplInfo(ex))}</div>`:''}
@@ -5653,7 +5654,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
            the rows go in exactly as before. N > 1: every quantity is multiplied by N (a quantity that is not a plain number is left as
            typed and flagged ⚠ in its note); with a name, the rows go under a heading of that name and the template's own headings
            become sub-headings under it. The quantities are TOTALS once in: change them like any row. */
-        const tnm=t.typeName||t.name;
+        const tnm=tplName(t);
         body.innerHTML=`<div style="font-weight:800;color:#14335c;font-size:16px;margin-bottom:6px">📐 ${escA(tnm)} · Rev ${+t.rev||1}</div>
           <div style="font-size:12px;color:var(--t3);margin-bottom:8px">${add.filter(r=>r.k==='part').length} rows. Put it in once, or several times over (e.g. 4 apartments on Floor 2). The list shows it as “Floor 2 × 4” — the totals are worked out, and the × can be changed in the list later.</div>
           <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end"><div><label style="font-size:13px;font-weight:700;display:block">How many?</label><input id="it-hn" value="1" inputmode="numeric" style="${LS_INP};width:80px;font-size:15px"></div>
@@ -5681,8 +5682,8 @@ function openListEditor2(listId,presetWo,presetPid,opt){
         [hn,body.querySelector('#it-hname')].forEach(e=>e.onkeydown=ev=>{if(ev.key==='Enter'){ev.preventDefault();go();}});
         return;}
       const opts=[...blocks0.map((b,k)=>({k,label:b.name+' ('+b.parts.length+' part'+(b.parts.length!==1?'s':'')+')',name:b.name,parts:b.parts.map(x=>{const pu=lsPerUnit(x,b.units);return{x,per:String(pu.qty),fixed:pu.fixed};})})), // the same rule as a reload (lsPerUnit)
-        {k:'all',label:'The whole template as one unit ('+lines.filter(x=>x.kind!=='hdr').length+' parts — quantities as one unit)',name:t.typeName||t.name,parts:lines.filter(x=>x.kind!=='hdr').map(x=>({x,per:String(x.qty==null?'':x.qty)}))}];
-      body.innerHTML=`<div style="font-weight:800;color:#14335c;font-size:16px;margin-bottom:6px">📐 ${escA(t.typeName||t.name)} · Rev ${+t.rev||1}</div>
+        {k:'all',label:'The whole template as one unit ('+lines.filter(x=>x.kind!=='hdr').length+' parts — quantities as one unit)',name:tplName(t),parts:lines.filter(x=>x.kind!=='hdr').map(x=>({x,per:String(x.qty==null?'':x.qty)}))}];
+      body.innerHTML=`<div style="font-weight:800;color:#14335c;font-size:16px;margin-bottom:6px">📐 ${escA(tplName(t))} · Rev ${+t.rev||1}</div>
         <div style="font-size:12px;color:var(--t3);margin-bottom:8px">Pick the unit, then how many. The parts are added with the quantity for ONE unit; the total is worked out from the number of units.</div>
         ${opts.map((o,k)=>`<label class="hold-row"><input type="radio" name="it-u" value="${k}"${k===0?' checked':''}><span>${escA(o.label)}</span></label>`).join('')}
         <div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><label style="font-size:13px;font-weight:700">How many units?</label><input id="it-n" value="1" inputmode="numeric" style="${LS_INP};width:70px"><label style="font-size:13px;font-weight:700;margin-left:6px">Name it</label><input id="it-uname" maxlength="80" placeholder="optional — e.g. Floor 2" style="${LS_INP};width:190px"></div>
@@ -5698,12 +5699,12 @@ function openListEditor2(listId,presetWo,presetPid,opt){
         const at2=tidyForTpl(at).at; // d19-6: untouched blank rows and empty standard headings come out (a brand-new list's empty row, the blank layout)
         R().splice(at2,0,...add);
         dl.remove();st.focus=at2+'|units';st.focusAll=true;draw();
-        toast('Added "'+o.name+'" × '+n+' unit'+(n!=='1'?'s':'')+' from template '+(t.typeName||t.name)+' — change Units any time before the saw starts');
+        toast('Added "'+o.name+'" × '+n+' unit'+(n!=='1'?'s':'')+' from template '+(tplName(t))+' — change Units any time before the saw starts');
       };
     };
     body.innerHTML=`<div style="font-weight:800;color:#14335c;font-size:16px;margin-bottom:6px">📐 Insert ${st.unitsOn?'unit ':''}from template — ${escA(lsProjName(st.pid))}</div>
       ${tps.length>6?`<input id="it-q" placeholder="🔍 Type to find a template (name or type)" autocomplete="off" style="${LS_INP};width:100%;box-sizing:border-box;margin-bottom:8px">`:''}
-      ${tps.map(t=>`<div class="wl-drow" data-itq="${escA([t.name,t.typeName,LS_KINDS[t.ltype]||t.ltype].filter(Boolean).join(' ').toLowerCase())}"><b>${escA(t.typeName||t.name)}</b>${lsCheckInfo(t).ok?' <span class="chk-ok">✓ checked</span>':''}<span class="dsh-t">${escA(LS_KINDS[t.ltype]||t.ltype||'')} · Rev ${+t.rev||1}</span><button class="btn btn-g" data-itt="${escA(t.id)}" style="font-size:12px">Use</button></div>`).join('')}`;
+      ${tps.map(t=>`<div class="wl-drow" data-itq="${escA([tplName(t),LS_KINDS[t.ltype]||t.ltype].filter(Boolean).join(' ').toLowerCase())}"><b>${escA(tplName(t))}</b>${lsCheckInfo(t).ok?' <span class="chk-ok">✓ checked</span>':''}<span class="dsh-t">${escA(LS_KINDS[t.ltype]||t.ltype||'')} · Rev ${+t.rev||1}</span><button class="btn btn-g" data-itt="${escA(t.id)}" style="font-size:12px">Use</button></div>`).join('')}`;
     body.querySelectorAll('[data-itt]').forEach(b=>b.onclick=()=>pick(b.dataset.itt));
     {const q=body.querySelector('#it-q');if(q){q.oninput=()=>{const ws=q.value.trim().toLowerCase().split(/\s+/).filter(Boolean);body.querySelectorAll('[data-itq]').forEach(r=>{r.style.display=ws.every(w=>r.dataset.itq.includes(w))?'':'none';});};q.focus();}}
   };
@@ -5716,7 +5717,8 @@ function openListEditor2(listId,presetWo,presetPid,opt){
   // (M5, Garry 14 Nov: A) a template's Type name that was the same as its name follows a new name; one typed differently on purpose stays
   // (final round) judged on the two names AS THEY WERE WHEN THE WINDOW OPENED — not after each key (a name retyped letter by letter passes
   // through the Type name's spelling); a template with no Type name at open never gets one; a Type name typed here is the person's own
-  let tnFollow=!!st.tpl&&!!matKey(st.tname)&&matKey(st.tname)===matKey(st.name);
+  // (20 Nov, one name per template) a TEMPLATE's Type name is always its name (the box is hidden); a live list never follows
+  let tnFollow=!!st.tpl;
   const tplNameTo=v=>{if(tnFollow&&v!==st.name){st.tname=v;const b=ov.querySelector('#me-tname');if(b)b.value=v;}st.name=v;};
   /*h19 (Garry 19 Nov: "save and close button not working"): while a save runs BOTH Save buttons are greyed and say so; a message by the
     buttons (#me-fmsg, in the pinned Save bar) answers a second press, and after 4 s says the database is slow — never a button that seems dead*/
@@ -6028,13 +6030,13 @@ function lsTplCopy(lines){ // lines → clean template lines: no ids, no ticks, 
   return (lines||[]).filter(x=>x.removed_rev==null&&x.status!=='na').map(x=>({kind:x.kind,section:x.section||'',part:x.part||'',length_mm:x.length_mm,width_mm:x.width_mm,qty:x.qty==null?'':String(x.qty),
     unit_qty:x.unit_qty==null?'':String(x.unit_qty),material:x.material||'',material_other:!!x.material_other,edging:x.edging||'',edging2:x.edging2||'',note:x.note||''}));
 }
-function lsTplByName(pid,name){const k=matKey(name);return k?lsTemplatesFor(pid).find(t=>matKey(t.typeName||t.name)===k||matKey(t.name)===k):null;}
+function lsTplByName(pid,name){const k=matKey(name);return k?lsTemplatesFor(pid).find(t=>matKey(tplName(t))===k):null;}
 function lsSaveAsTpl(src,done){
   // src: {pid, name, ltype, tname, lines} or {id} (a saved list)
   if(!lsTplPinOk())return; // (Garry, Q3 12 Nov) Drawing office / Admin only, everywhere — the Production Manager PIN no longer opens it
   const go=async()=>{
     if(src.id){if(!LST.full.has(src.id))await lsReloadList(src.id);const l=lsList(src.id);if(!l)throw new Error('that list is no longer there');
-      src={pid:l.pid,name:l.name,ltype:l.ltype,tname:l.typeName,lines:lsLinesOf(l.id),fromId:l.id};}
+      src={pid:l.pid,name:l.name,ltype:l.ltype,tname:l.tpl?tplName(l):l.typeName,lines:lsLinesOf(l.id),fromId:l.id};}
     if(!src.pid)throw new Error('pick the project first — a template belongs to a project');
     const lines=lsTplCopy(src.lines);
     if(!lines.some(x=>x.kind!=='hdr'))throw new Error('there are no parts to save');
@@ -6049,7 +6051,7 @@ function lsSaveAsTpl(src,done){
         <div class="me-top"><div><label>Type</label><select id="at-type" style="${LS_INP}">${['kitchen','house','room','other'].map(k=>`<option value="${k}"${st.type===k?' selected':''}>${LS_KINDS[k]}</option>`).join('')}</select></div>
           <div style="flex:1"><label>Template name (type)</label><input id="at-name" value="${escA(st.name)}" placeholder="e.g. Type B 3-bed / 900 Single Rail" style="${LS_INP};width:100%"></div></div>
         ${st.chg&&ex&&st.chg.id===ex.id?`<div id="at-chg" style="margin-top:10px;background:#fff8e6;border:1px solid #e0a43a;border-radius:8px;padding:8px 10px;font-size:13px">↻ Reloaded — <b>Rev ${+st.chg.rev||1}</b> was saved by <b>${escA(st.chg.by||'someone')}</b> on another screen${st.chg.why?' ("'+escA(st.chg.why)+'")':''}.${st.chg.add.length?'<br>They added: '+st.chg.li(st.chg.add):''}${st.chg.gone.length?'<br>They removed: '+st.chg.li(st.chg.gone):''}${!st.chg.add.length&&!st.chg.gone.length?'<br>(open its History to see what changed)':''}<br>Update template now replaces Rev ${+st.chg.rev||1} with your rows.</div>`:''}
-        ${ex?`<div style="margin-top:10px;background:#f6f2ff;border:1px solid #d9ccff;border-radius:8px;padding:8px 10px;font-size:13px">A template called <b>${escA(ex.typeName||ex.name)}</b> already exists (Rev ${+ex.rev||1}).
+        ${ex?`<div style="margin-top:10px;background:#f6f2ff;border:1px solid #d9ccff;border-radius:8px;padding:8px 10px;font-size:13px">A template called <b>${escA(tplName(ex))}</b> already exists (Rev ${+ex.rev||1}).
           <label class="hold-row"><input type="radio" name="at-mode" value="upd"${st.mode==='upd'?' checked':''}><span><b>Update template</b> — it becomes Rev ${(+ex.rev||1)+1}. Lists already made from it don't change.</span></label>
           <label class="hold-row"><input type="radio" name="at-mode" value="new"${st.mode==='new'?' checked':''}><span><b>New template</b> — a separate template with this name</span></label>
           ${st.mode==='upd'?`<div style="margin-top:6px"><label style="font-size:12px;color:var(--t2)">What changed? (optional — shown in its History)</label><input id="at-why" value="${escA(st.why)}" placeholder="e.g. shelves now 864 wide" style="${LS_INP};width:100%"></div>`:''}</div>`:''}
@@ -6085,7 +6087,7 @@ function lsSaveAsTpl(src,done){
           if(s0==='other'||s0==='unknown')throw Object.assign(new Error(s0==='other'?'May have saved — your last Update lost its reply and the template has been changed since (maybe on another screen), so this screen can\'t tell whether your rows are in it. Nothing more was saved. Close this and open the template\'s History to check.':'May have saved — the database still could not be checked. Nothing more was saved. Press Update template again when the connection is back.'),{lostState:s0});
           if(s0==='not')st.lost=null;
           return(upd?clash():Promise.resolve()).then(()=>ex&&st.mode==='upd'
-          ?lsSaveList({id:ex.id,list_type:st.type,type_name:name},ls2,whoNow(),why||'Template updated from "'+(src.name||'a list')+'"',{expect:st.seen.ver!=null?st.seen.ver:undefined})
+          ?lsSaveList({id:ex.id,list_type:st.type,type_name:ex.name||name},ls2,whoNow(),why||'Template updated from "'+(src.name||'a list')+'"',{expect:st.seen.ver!=null?st.seen.ver:undefined})
             .catch(e=>{if(/stale/.test(e.message))return clash(true).then(()=>{throw e;});throw e;})
           :lsSaveList({id:uid('L'),name,project_id:src.pid,is_template:true,list_type:st.type,type_name:name,source:'template',wos:[]},ls2,whoNow(),'Saved as a template from "'+(src.name||'a list')+'"'));});
         p.then(r=>{ov.remove();render();toast((r.same?'Template "'+name+'" already has exactly these rows — nothing changed':ex&&st.mode==='upd'?'Template "'+name+'" updated — now Rev '+(+r.list.rev||1)+' ✓':'Template "'+name+'" saved in '+lsProjName(src.pid)+' ✓')+(r.lost?' (the reply was lost — checked: the database has it)':''));if(done)done(r.list);})
@@ -6123,7 +6125,7 @@ function lsTplHistory(id){
     const log=(LST.l.get(id)||{}).log||[],made=r=>log.find(e=>r===1?e.what==='List created':e.what==='Revision '+r);
     const cur=+l.rev||1,rows=[{rev:cur,lines:lsLinesOf(id),cur:true},...revs.filter(r=>+r.rev<cur).map(r=>({rev:+r.rev,lines:Array.isArray(r.lines)?r.lines:[]}))];
     const who=r=>{const e=made(r.rev);return e?(e.by?escA(e.by)+' · ':'')+escA(e.at?new Date(e.at).toLocaleString('en-IE',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}):'')+(e.why?' — '+escA(e.why):''):'';};
-    body(`<div style="font-weight:800;color:#14335c;font-size:17px;margin-bottom:4px">🕘 History — ${escA(l.typeName||l.name)}</div>
+    body(`<div style="font-weight:800;color:#14335c;font-size:17px;margin-bottom:4px">🕘 History — ${escA(tplName(l))}</div>
       <div style="font-size:12px;color:var(--t3);margin-bottom:8px">${escA(l.project)} · every change to this ${l.tpl?'template':'list'} is a new revision. Lists already made from a template keep the revision they were made from.</div>
       <table class="lst-tbl"><thead><tr><th>Revision</th><th>Saved by · when — what changed</th><th>Parts</th><th></th></tr></thead><tbody>${rows.map((r,k)=>`<tr><td><b>Rev ${r.rev}</b>${r.cur?' <span class="lst-chip" style="background:#e7f6ec;color:#0d6e46">current</span>':''}</td><td>${who(r)}</td><td>${r.lines.filter(x=>x.kind!=='hdr'&&x.removed_rev==null).length}</td><td><button class="btn btn-s" data-threv="${k}" style="font-size:11px;padding:2px 8px">View</button></td></tr>`).join('')}</tbody></table>
       <div id="th-view" style="margin-top:10px;max-height:46vh;overflow:auto"></div>`);
@@ -6236,7 +6238,7 @@ async function lsCreateFromTpl(tid,wos,name,by,opt){
     if(oth.length)return already(oth[0]);
   }
   // one_per_wo: the database refuses it if another PC gave one of these WOs a live list a moment ago (lsOneErr)
-  const pl={id,name,project_id:t.project_id,list_type:t.list_type==='snag'?'house':t.list_type,type_name:t.type_name||null,template_id:tid,template_rev:+t.rev||1,wos,source:'template',one_per_wo:true};
+  const pl={id,name,project_id:t.project_id,list_type:t.list_type==='snag'?'house':t.list_type,type_name:t.name||t.type_name||null,template_id:tid,template_rev:+t.rev||1,wos,source:'template',one_per_wo:true};
   const why='Made from template "'+t.name+'" rev '+(+t.rev||1),lines=await lsCopyLines(tid);
   if(!opt.fixedFor){try{const res=await lsSaveList(pl,lines,by,why);return res.list;}
     catch(e){const k=lsOneErr(e);if(k)throw new Error(lsGotMsg(k.wo,await lsOneList(k)));throw e;}}
@@ -6250,7 +6252,10 @@ async function lsCreateFromTpl(tid,wos,name,by,opt){
   }
 }
 /* Templates in numerical order (Garry 13 Nov): "Type 2" before "Type 10", "House 9" before "House 12"; capitals don't matter. */
-function lsTplCmp(a,b){return String(a.typeName||a.name||'').localeCompare(String(b.typeName||b.name||''),undefined,{numeric:true,sensitivity:'base'})||String(a.name||'').localeCompare(String(b.name||''),undefined,{numeric:true,sensitivity:'base'});}
+/*one template name (Garry 20 Nov, M5): a TEMPLATE shows and is matched by its NAME only — its old hidden Type name is no longer
+  shown or used. A live list keeps today's order (its type, else its name).*/
+function tplName(t){return t?String((t.tpl?(t.name||t.typeName):(t.typeName||t.name))||''):'';}
+function lsTplCmp(a,b){return String(tplName(a)||'').localeCompare(String(tplName(b)||''),undefined,{numeric:true,sensitivity:'base'})||String(a.name||'').localeCompare(String(b.name||''),undefined,{numeric:true,sensitivity:'base'});}
 /* (Garry 17 Nov) "a material / fittings can be added to multiple cutting list templates together": ONE row (item, qty, sizes,
    material) put into the templates ticked, under a heading of your choice (made at the end if a template doesn't have it).
    Each template gets a new Rev with the reason in its History; a template that already has that item + material is left alone.
@@ -6272,7 +6277,7 @@ function lsTplAddDlg(pid){
       <div style="grid-column:1/-1"><label style="font-size:13px;font-weight:700">Put it under the heading <span style="font-weight:400;color:var(--t3)">(made at the end of a template that hasn't got it)</span></label><input id="ta-head" list="ta-heads" placeholder="e.g. Fittings — or leave blank for the end" style="${I}"><datalist id="ta-heads">${heads.map(h=>`<option value="${escA(h)}">`).join('')}</datalist></div>
     </div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin:4px 0"><b style="font-size:13px">Templates</b><span><button class="btn btn-s" id="ta-all" style="font-size:12px;padding:2px 8px">Tick all</button> <button class="btn btn-s" id="ta-none" style="font-size:12px;padding:2px 8px">None</button></span></div>
-    <div style="max-height:40vh;overflow:auto;border:1px solid var(--border);border-radius:6px;padding:4px 8px">${tps.map(t=>`<label class="hold-row" style="display:flex;gap:8px;align-items:center;padding:6px 0"><input type="checkbox" data-tat="${escA(t.id)}" style="width:20px;height:20px"><span><b>${escA(t.typeName||t.name)}</b> <span style="color:var(--t3);font-size:12px">Rev ${+t.rev||1}</span></span></label>`).join('')}</div>
+    <div style="max-height:40vh;overflow:auto;border:1px solid var(--border);border-radius:6px;padding:4px 8px">${tps.map(t=>`<label class="hold-row" style="display:flex;gap:8px;align-items:center;padding:6px 0"><input type="checkbox" data-tat="${escA(t.id)}" style="width:20px;height:20px"><span><b>${escA(tplName(t))}</b> <span style="color:var(--t3);font-size:12px">Rev ${+t.rev||1}</span></span></label>`).join('')}</div>
     <div id="ta-err" style="color:#b42318;font-weight:700;font-size:13px;min-height:18px;margin-top:6px"></div>
     <div style="text-align:right"><button class="btn btn-g" id="ta-go" style="padding:10px 18px;font-size:14px">＋ Add to the ticked templates</button></div>`,560,
     {keep:true,dirty:()=>['ta-item','ta-qty','ta-l','ta-w','ta-head','ta-mat'].some(k=>{const e=document.getElementById(k);return e&&String(e.value||'').trim()!=='';})}); // (attack7 G1) only Close shuts it
@@ -6296,7 +6301,7 @@ function lsTplAddDlg(pid){
       give=setTimeout(()=>{if(dl._gen!==gen)return;go.disabled=false;go.textContent='＋ Add to the ticked templates';err('No answer from the database for 45 s — it may have been added. Press Add again when the connection is back: a template that already has it is left alone.');},45000);
     const ok=[],same=[],bad=[],by=whoNow()||ROLE_LBL[ROLE]||'Office';
     const plain=e=>{const m=String(e&&e.message||e);return/stale/.test(m)?'changed on another screen at the same moment — press Add again':/lists load failed|Failed to fetch|NetworkError|Load failed|HTTP 5\d\d|^5\d\d/i.test(m)?'the database did not answer — check the connection and press Add again':m;}; // (attack7 W4) plain words
-    for(const tid of ids){const t0=lsList(tid);const nm=String((t0&&(t0.typeName||t0.name))||tid);
+    for(const tid of ids){const t0=lsList(tid);const nm=String((t0&&(tplName(t0)))||tid);
       try{let r;try{r=await lsTplAddRow(tid,{item,qty,L,W,mat,head},by);}catch(e){if(!/stale/.test(String(e.message)))throw e;r=await lsTplAddRow(tid,{item,qty,L,W,mat,head},by);} // saved on another screen meanwhile: read it again and add once more
         (r==='same'?same:ok).push(nm);}catch(e){bad.push(nm+' ('+plain(e)+')');}}
     clearTimeout(slow);clearTimeout(give);if(dl._gen!==gen)return; // Add was pressed again meanwhile: that press reports
@@ -6336,7 +6341,7 @@ async function lsTplAddRow(tid,a,by){
   // heading) is new: no "not on the project" flag lost, no old total turned into a "fixed" one, nothing renamed
   const was=new Map(lsLinesOf(tid).filter(x=>x.removed_rev==null).map(x=>[x.id,x]));
   lines.forEach(ln=>{const x=ln.id&&was.get(ln.id);if(x)['kind','section','part','length_mm','width_mm','qty','unit_qty','material','edging','edging2','note'].forEach(k=>{ln[k]=x[k]==null?(k==='length_mm'||k==='width_mm'?'':null):x[k];}),ln.material_other=!!x.material_other;});
-  await lsSaveList({id:tid,project_id:pid,list_type:raw.list_type,type_name:raw.type_name},lines,by,'Added "'+a.item+'" ×'+a.qty+(mat?' — '+mat:'')+' (to several templates at once)',{expect:+raw.version||0});
+  await lsSaveList({id:tid,project_id:pid,list_type:raw.list_type,type_name:raw.name||raw.type_name},lines,by,'Added "'+a.item+'" ×'+a.qty+(mat?' — '+mat:'')+' (to several templates at once)',{expect:+raw.version||0});
   return'ok';
 }
 function lsTemplatesFor(pid){return lsCache().all.filter(l=>l.tpl&&!l.archived&&l.pid===pid).sort(lsTplCmp);}
@@ -6345,9 +6350,9 @@ function lsTplDlg(tid,wo){
   const t=lsList(tid);if(!t)return;
   const o=DB.orders.find(x=>x.wo===wo);
   const more=listsNeeded().filter(x=>x.wo!==wo&&(lsProjForCust(x.customer)||{}).id===t.pid);
-  const ov=lsDlg(`<div style="font-weight:800;color:#14335c;font-size:17px;margin-bottom:2px">📐 ${escA(t.typeName||t.name)} · Rev ${+t.rev||1} → ${escA(wo)}</div>
+  const ov=lsDlg(`<div style="font-weight:800;color:#14335c;font-size:17px;margin-bottom:2px">📐 ${escA(tplName(t))} · Rev ${+t.rev||1} → ${escA(wo)}</div>
     <div style="font-size:12px;color:var(--t3);margin-bottom:8px">${escA(t.project)} — a live copy of the template is made and attached. Later template changes never change it.</div>
-    <div style="margin-bottom:8px"><label style="font-size:12px;color:var(--t2)">List name</label><br><input id="tp-name" value="${escA(t.typeName||t.name||'')}" placeholder="e.g. Kitchen — Type B" style="${LS_INP};width:240px"></div>
+    <div style="margin-bottom:8px"><label style="font-size:12px;color:var(--t2)">List name</label><br><input id="tp-name" value="${escA(tplName(t)||'')}" placeholder="e.g. Kitchen — Type B" style="${LS_INP};width:240px"></div>
     <div style="font-size:12px;font-weight:700;color:#14335c;margin-bottom:4px">Work orders</div>
     <label class="hold-row" style="display:flex;gap:8px;align-items:baseline"><input type="checkbox" data-tpwo="${escA(wo)}" checked>${o?woColsHTML(o):`<b>${escA(wo)}</b>`}</label>
     ${more.map(x=>`<label class="hold-row" style="display:flex;gap:8px;align-items:baseline"><input type="checkbox" data-tpwo="${escA(x.wo)}">${woColsHTML(x)}</label>`).join('')}
@@ -6358,7 +6363,7 @@ function lsTplDlg(tid,wo){
     const wos=[...ov.querySelectorAll('[data-tpwo]:checked')].map(c=>c.dataset.tpwo),name=ov.querySelector('#tp-name').value.trim(),err=t2=>{ov.querySelector('#tp-err').textContent=t2;};
     if(!wos.length)return err('Tick at least one work order.');if(!name)return err('Give the list a name.');
     officeWho(by=>{const b=ov.querySelector('#tp-go');b.disabled=true;err('Saving…');
-      (async()=>{for(const w of wos){const h=await lsLiveFor(w);if(h.length)throw new Error(lsHasListMsg(w,h[0]));}return lsCreateFromTpl(tid,wos,name,by);})().then(l=>{ov.remove();lstAttachOpen=null;render();toast('"'+l.name+'" made from '+(t.typeName||t.name)+' and attached to '+wos.join(', ')+' ✓');})
+      (async()=>{for(const w of wos){const h=await lsLiveFor(w);if(h.length)throw new Error(lsHasListMsg(w,h[0]));}return lsCreateFromTpl(tid,wos,name,by);})().then(l=>{ov.remove();lstAttachOpen=null;render();toast('"'+l.name+'" made from '+(tplName(t))+' and attached to '+wos.join(', ')+' ✓');})
         .catch(e=>{b.disabled=false;err('Not saved — '+e.message);});});
   };
 }
@@ -6373,7 +6378,7 @@ function lsCopyDlg(pid){
     const src=from?lsCache().all.filter(l=>l.pid===from&&!l.archived).sort((a,b)=>(b.tpl?1:0)-(a.tpl?1:0)||String(a.name).localeCompare(String(b.name))):[];
     ov.querySelector('#cp-body').innerHTML=`<div style="font-weight:800;color:#14335c;font-size:17px;margin-bottom:8px">⧉ Copy into ${escA(lsProjName(pid))} as a template</div>
       <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">${others.map(p=>`<button class="btn ${p.id===from?'btn-g':'btn-s'}" data-cpp="${escA(p.id)}">${escA(p.name)}</button>`).join('')||'<span style="color:var(--t3)">No other project has lists yet.</span>'}</div>
-      ${from?src.map(l=>`<div class="wl-drow"><b>${escA(l.typeName||l.name)}</b><span class="dsh-t">${l.tpl?'Template':'Live list'} · Rev ${+l.rev||1} · ${l.saw} saw / ${l.fit} fittings</span><button class="btn btn-g" data-cpl="${escA(l.id)}" style="font-size:12px">Copy</button></div>`).join('')||'<div style="color:var(--t3)">Nothing to copy in this project.</div>':''}
+      ${from?src.map(l=>`<div class="wl-drow"><b>${escA(tplName(l))}</b><span class="dsh-t">${l.tpl?'Template':'Live list'} · Rev ${+l.rev||1} · ${l.saw} saw / ${l.fit} fittings</span><button class="btn btn-g" data-cpl="${escA(l.id)}" style="font-size:12px">Copy</button></div>`).join('')||'<div style="color:var(--t3)">Nothing to copy in this project.</div>':''}
       <div id="cp-err" style="color:#b42318;font-weight:700;font-size:13px;min-height:18px"></div>`;
     ov.querySelectorAll('[data-cpp]').forEach(b=>b.onclick=()=>{from=b.dataset.cpp;draw();});
     ov.querySelectorAll('[data-cpl]').forEach(b=>b.onclick=async()=>{
@@ -6385,7 +6390,7 @@ function lsCopyDlg(pid){
         if(!map)return;
         const lines=await lsCopyLines(s.id,map);lsFlagMats(lines,pid);
         const r=s.ltype==='snag'?'other':s.ltype||'house';
-        const res=await lsSaveList({id:uid('L'),name:s.typeName||s.name,project_id:pid,is_template:true,list_type:r,type_name:s.typeName||s.name,source:'template',wos:[]},lines,whoNow(),'Copied from '+s.project+' — '+s.name+' rev '+(+s.rev||1));
+        const res=await lsSaveList({id:uid('L'),name:tplName(s),project_id:pid,is_template:true,list_type:r,type_name:tplName(s),source:'template',wos:[]},lines,whoNow(),'Copied from '+s.project+' — '+s.name+' rev '+(+s.rev||1));
         ov.remove();lpfSet(pid);LH.kind='tpl';render();toast('Copied — "'+res.list.name+'" is now a template in '+lsProjName(pid));
       }catch(e){err('Not copied — '+e.message);}
     });
@@ -7109,7 +7114,7 @@ function renderLists(app){
         <td style="white-space:nowrap"><button class="btn btn-s" data-natt="${escA(o.wo)}" style="padding:2px 8px;font-size:11px">${lstAttachOpen===o.wo?'✕ close':'➕ Attach list'}</button></td></tr>
       ${lstAttachOpen===o.wo?`<tr><td colspan="8" style="background:#fff;border:1px solid var(--b2);padding:10px">
         <div style="font-size:12px;font-weight:700;color:#14335c;margin-bottom:6px">Attach a cutting list to ${escA(o.wo)}${o.unit?' (unit '+escA(o.unit)+')':''}:</div>
-        ${V2()?((p=>p?lsTemplatesFor(p.id).map(t=>`<button class="btn btn-s" data-tplatt="${escA(t.id)}|${escA(o.wo)}" style="margin:2px 6px 6px 0;font-size:12px;border-color:#5b21b6;color:#5b21b6">📐 ${escA(t.typeName||t.name)} · Rev ${+t.rev||1}</button>`).join(''):'')(lsProjForCust(o.customer))):''}<button class="btn btn-g" data-mtype="${escA(o.wo)}" style="margin:2px 6px 6px 0;font-size:12px">✍ Type a list for ${escA(o.wo)}</button><br>
+        ${V2()?((p=>p?lsTemplatesFor(p.id).map(t=>`<button class="btn btn-s" data-tplatt="${escA(t.id)}|${escA(o.wo)}" style="margin:2px 6px 6px 0;font-size:12px;border-color:#5b21b6;color:#5b21b6">📐 ${escA(tplName(t))} · Rev ${+t.rev||1}</button>`).join(''):'')(lsProjForCust(o.customer))):''}<button class="btn btn-g" data-mtype="${escA(o.wo)}" style="margin:2px 6px 6px 0;font-size:12px">✍ Type a list for ${escA(o.wo)}</button><br>
         ${cands.length?cands.slice(0,8).map(l=>`<button class="btn btn-s" data-attdo="${escA(l.id)}|${escA(o.wo)}" style="margin:2px;font-size:11px">+ ${escA(l.project||'')} — ${escA(l.name)}</button>`).join(''):`<span style="font-size:12px;color:var(--t3)">No library list matches unit ${escA(o.unit||'?')} — pick one below or upload the workbook.</span>`}
         <div style="margin-top:6px;display:flex;gap:6px;align-items:center;flex-wrap:wrap"><span style="font-size:11px;color:var(--t3)">Any list:</span>
           <select id="att-sel" style="padding:4px 8px;border:1px solid var(--b2);border-radius:5px;font-size:12px;max-width:340px">${all.map(l=>`<option value="${escA(l.id)}">${escA(l.project||'')} — ${escA(l.name)}</option>`).join('')}</select>
