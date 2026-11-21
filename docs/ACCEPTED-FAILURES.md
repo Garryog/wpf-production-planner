@@ -243,3 +243,13 @@ No new failing check against the base run except checks that compare with "origi
 |---|---|---|
 | sync attack1-roles-bytes "vs main", attack1-twopc "B really runs origin/main code" | main now HAS the quick check (R1 live 19 Nov), so "main" is no longer the old code | Tester pins these to the pre-R1 commit |
 | attack2-basics / attack2-finder-pm-tag "Deliveries tab reads the same as origin/main" | the Deliveries page changed on purpose (customer band, ticks, bar) | Tester re-points |
+
+## 21 Nov 2026 — Saw batch / hand guard / one template name / copy materials (feature/bulk-issue-lists) — PENDING Garry
+Last full run (355 files, commit 6e15a7e): 8,890 pass / 190 fail; live main 339 files: 8,464 / 196. No file worse than main.
+
+| Test | Why it fails (plain English) | Fix | Accepted? |
+|---|---|---|---|
+| batch attack3-fuzz "the suggestion is the exact-hand template — 110 cases" (Low, same on live) | a hand glued to a ONE-character type ("TYPE 1H", "TYPE BH") gets no template suggested — the person picks it by hand. Nothing wrong is issued. "TYPE 1AH", "TYPE 1 H" are fine | teach the older matcher (`sgFeat`) to split "1H" | pending |
+| batch attack3-loaded A (2 checks) (Low) | if an admin presses Migrate lists / Switch back while the lists are still loading on that same PC, the lists count as "loaded" while empty and a remembered saw batch on that PC is dropped. The underlying loading slip is on live too; no saw start-up path hits it (tested) | a "which load is this" check in `lsLoad` | pending |
+| lists-filter f1-project-filter, stage1 s11-pend, deliveries attack20-1-merge (timing) | each failed once in a full run with two test streams on 2 CPUs and passes when run alone, same as main | none needed | pending |
+| list-window final-b-template-names, m5-template-name-follows, final2-two-pc-names, stage3 flow*-suggest, s4-editor, s5s6-templates, attack1-layout, final-b-old-data (re-pointed, not failing) | these checked the old two-name behaviour; rewritten for Garry's 20 Nov "one name per template". The two-PC rename check no longer checks WHOSE rename wins (last save wins, as on live) | — | nothing to sign; listed for the record |

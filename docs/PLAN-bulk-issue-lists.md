@@ -251,3 +251,39 @@ search in the Material drop-down; fixing the multi-WO "Create & attach" quantiti
 - Garry: "Yes start 4". Branch cut from `main` (522e610). Architect plan written. No code yet — waiting on the questions.
 - Garry answered two rounds of questions (above). Office bulk issue dropped; the saw gets a read-only ⚡ BATCH tab; one
   template name; hand guard; copy materials. No database change. Architect re-planned; build started.
+
+### 20–21 Nov 2026 — build, test, review (Garry live at the start)
+- **Coder** built parts A–D (saw ⚡ BATCH tab, hand guard, one template name, copy materials). No Supabase change, no SQL,
+  nothing new in the saved planner record (the batch is kept in the saw device's own browser storage).
+- **Tester, 3 rounds** (`tests/batch/attack*.test.js`). Proved the hole on the LIVE version: "✓ Confirm all green" issued the
+  "Type 2 H" list to a plain "TYPE 2" unit. Closed on this branch. Found 1 High (a 3-bed template going green on a 2-bed
+  house — new on the branch), 4 Medium and ~15 Low; all fixed except the three checks now on ACCEPTED-FAILURES.
+  A 290,000-combination comparison with the live matcher found no wrong hand / bed count / room going green, and nothing
+  green that is not green today.
+- **Manager: GO WITH CONDITIONS.** Conditions done: batch houses shown by Floor + Unit (lists are named after their
+  template, so "Type B kitchen" ×6 could not be told apart); a handed unit's best guess is the same-hand template; the
+  flaky batch test traced to the test itself and made steady; ACCEPTED-FAILURES entry written. Left for Garry: the
+  decisions below.
+- **Tests.** Last FULL run (all 355 files) on 6e15a7e: 8,890 pass / 190 fail; live `main`: 339 files, 8,464 / 196. No file
+  worse than main except `deliveries/attack20-1-merge`, which failed once under load and passes alone. After that only a
+  label/wrapping change (733e425); for it the batch, saw/stores, stage3, list-window and lists-filter folders were re-run
+  (204 files, none worse) — the whole suite was NOT run again on the final commit.
+- **Not tested by anyone:** a real phone or the saw PC, real Cienapps titles and live template names, the live 10-second
+  refresh, printed labels.
+- Screenshots (fake database): `docs/screens-saw-batch/`. Go-live steps: `docs/GO-LIVE-saw-batch.md`.
+
+## Changed without being in the plan — for Garry to know
+- The saw's old "Combined cutting table" pop-up is replaced by the BATCH tab, so its "MARK ALL CUT COMPLETE" button is
+  gone from the Saw page (Stores keeps its own). Each house is finished on its own list, as Garry described.
+- Every handed unit (H / HAND / HANDED / LH / RH) is now AMBER, never green — it suggests the same-hand template and is
+  confirmed one tap at a time. On the live version "HANDED" against a "… Handed" template was green.
+- A template with a word after the type that the planner cannot place ("Type B island", "galley", "L-shape", "corner",
+  "special", "large") is amber where it is green today, unless the title has that word too.
+- A template whose old hidden type name differs from its name (Emmet Road "4C"/"4B") stays amber until it is next saved.
+
+## Decisions for Garry (recommended first)
+1. MARK ALL CUT COMPLETE on the Saw page: **A leave it off** · B add it inside the BATCH tab.
+2. Handed units always amber (one tap each): **A keep (safest)** · B exact-hand match may go green and be confirmed in bulk.
+3. "Type B island / galley / corner…" templates amber: **A accept, rename where it matters** · B add those words as safe.
+4. Old type names that differ: **A accept, they fix themselves when saved** · B open and save each on go-live day
+   (read-only SQL to list them is in the go-live doc).

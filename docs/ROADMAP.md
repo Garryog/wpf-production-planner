@@ -352,3 +352,13 @@ Garry's words: "the edit button for the cutting lists templates is gone. i need 
   A template going into a list takes out untouched blank rows and empty standard sub-headings (a colour alone is not "typed").
 - Open question: should Cutting Lists → ＋ New list (and the "lists needed" rows) also ask "Start this list from:" first? Built for
   the Deliveries ＋ List and the ⓘ window's ＋ Add cutting list only.
+
+## Decisions 20 Nov 2026 — saw batch, handing, template names (Garry, live) — plan: docs/PLAN-bulk-issue-lists.md
+- Bulk is for the SAW only: he ticks lists together and gets one table to cut from; ticking, N/A and CUT COMPLETE stay on each
+  house's own list; labels optional at roll-out; short lists show in WAITING. Office-side "issue by house type" DROPPED.
+- Hands: plain = standard; H / HAND / HANDED = mirror of standard; LH and RH are their own templates. Titles always say
+  "TYPE x" + hand. A plain type where LH/RH exist is left for a person.
+- One name per template (Emmet Road "4C"/"4B" was a mistake); the template name is the name.
+- Still open (not built): tick lines / count pieces inside the batch, a separate "labelled" tick, "Make handed copy" of a
+  template, paste rows from Excel, standard stores kit per project, search in the Material drop-down.
+
