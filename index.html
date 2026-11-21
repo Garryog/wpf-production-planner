@@ -4054,6 +4054,8 @@ function matCopyDlg(pid,done){
   if(!lsMatEditOk())return;
   const st={from:'',busy:false,load:false,err:'',msg:'',tick:new Set(),seen:new Set()};
   const ov=lsDlg('<div id="mc-body"></div>',640);
+  // (Tester round 1, item 8) not closed while a copy runs (✕ or the grey background): it says so; the result is a toast as well
+  ov.addEventListener('click',e=>{if(!st.busy)return;const x=e.target;if(x===ov||(x&&x.id==='pod-x')){e.stopImmediatePropagation();e.preventDefault();toast('Copying — wait a moment, it closes after');}},true);
   const cid=src=>'M:'+pid+':'+src.id;
   const here=src=>LST.m.get(cid(src))||[src.name,...(src.aliases||[])].map(n=>lsMatClash(pid,n,'')).find(Boolean)||null; // the material on THIS project that already answers to it
   const srcMats=()=>st.from?lsMats(st.from,'',false):[];
@@ -4084,16 +4086,19 @@ function matCopyDlg(pid,done){
     if(q('mc-none'))q('mc-none').onclick=()=>{st.tick.clear();draw();};
     if(q('mc-ok'))q('mc-ok').onclick=async()=>{if(st.busy||!lsMatEditOk())return;
       st.busy=true;st.err='';st.msg='';draw();
-      let add=0,al=0,lost=false,why='';
-      try{await lsMatFresh(pid);}catch(e){lost=true;why=e.message;}
+      let add=0,al=0,lost=false,why='',gone=0;
+      // (Tester round 1, item 8) BOTH projects read again now: a material retired on the source since the window opened is not copied,
+      // one renamed there is copied under its new name
+      try{await Promise.all([lsMatFresh(pid),lsMatFresh(st.from)]);}catch(e){lost=true;why=e.message;}
+      if(!lost){const act=new Set(srcMats().map(m=>m.id));[...st.tick].forEach(id=>{if(!act.has(id)){gone++;st.tick.delete(id);}});}
       if(!lost)for(const m of srcMats().filter(m=>st.tick.has(m.id))){
         if(here(m)){al++;st.tick.delete(m.id);continue;} // added meanwhile (another screen, or a lost reply)
         try{await lsWrite('project_materials',{id:cid(m),project_id:pid,name:String(m.name).trim(),kind:m.kind,aliases:(m.aliases||[]).filter(Boolean),sort:lsMats(pid,'',true).length});add++;st.tick.delete(m.id);}
         catch(e){if(/already used/.test(e.message)){try{await lsMatFresh(pid);}catch(e2){}al++;st.tick.delete(m.id);continue;} // 409 / 23505: it is here (same id, or that name / spelling) — re-read, never a second one
           lost=true;why=e.message;break;}}
       st.busy=false;
-      const sum='✓ '+add+' added'+(al?' · '+al+' already here':'');
-      if(lost){st.err=(add||al?sum+'. ':'')+'Stopped — '+why+'. The rest may have been added — press Copy again, nothing is added twice.';}
+      const sum='✓ '+add+' added'+(al?' · '+al+' already here':'')+(gone?' · '+gone+' no longer in use on '+lsProjName(st.from)+' (not copied)':'');
+      if(lost){st.err=(add||al?sum+'. ':'')+'Stopped — '+why+'. The rest may have been added — press Copy again, nothing is added twice.';toast(st.err,true);}
       else{st.msg=sum;toast(sum);}
       draw();if(done)done();};
   };
