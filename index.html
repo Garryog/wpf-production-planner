@@ -615,7 +615,7 @@ body.del-dragging #del-wkbar .wkb-btn:not(:disabled):not(.nodrop),body.del-dragg
 .sb-bad{font-size:12px;color:#c0392b;font-weight:700;font-family:Arial,sans-serif}
 .sb-chs{display:flex;flex-wrap:wrap;gap:4px;min-width:0}
 .sb-chip{background:#eaf0f8;border:1px solid #c4cdd9;border-radius:6px;padding:4px 8px;font-size:13px;font-weight:700;color:#14335c;cursor:pointer;min-height:40px;max-width:100%;overflow-wrap:anywhere;text-align:left}
-.sb-chip b{color:#0d6e46}.sb-chip .sb-fu,.sb-hn .sb-fu{white-space:nowrap}.sb-ln{font-weight:600;color:var(--t3);font-size:11px}.sb-chip.sb-cut{text-decoration:line-through;opacity:.65;background:#e7f6ec;border-color:#9fd8b4}.sb-chip.sb-chk{border-color:#c0392b;color:#c0392b}
+.sb-chip b{color:#0d6e46}.sb-chip .sb-fu,.sb-hn .sb-fu{overflow-wrap:anywhere;word-break:break-word}.sb-chip,.sb-hn,.sb-hn b{min-width:0;max-width:100%;overflow-wrap:anywhere}.sb-ln{font-weight:600;color:var(--t3);font-size:11px}.sb-chip.sb-cut{text-decoration:line-through;opacity:.65;background:#e7f6ec;border-color:#9fd8b4}.sb-chip.sb-chk{border-color:#c0392b;color:#c0392b}
 .sb-done .sb-it,.sb-done .sb-tot{text-decoration:line-through;opacity:.55}
 .sb-hs{background:#fff;border:1px solid var(--border);border-radius:8px;padding:6px 12px;margin-bottom:12px}
 .sb-hh{font-weight:800;color:#14335c;font-size:15px;margin-bottom:4px}
@@ -7827,13 +7827,16 @@ function sbNotesHTML(){return SB.notes.map((t,i)=>`<div class="sb-nl"><span>ℹ 
   house is shown by its PHYSICAL unit: Floor and Unit (apart, as everywhere) — else its WO — with the list name smaller after it; the
   project first when the batch spans projects; a list with no job shows its name. Two the same get "(2)". houseLabels (Stores pop-up,
   labels) is not touched.*/
-function sbUnit(l){const wos=(l&&l.wos)||[],o=wos.map(w=>DB.orders.find(x=>x.wo===w)).find(Boolean);
-  return{f:o?fuF(o):'',u:o?fuU(o):'',wo:wos[0]||'',name:String((l&&l.name)||'').replace(/\s+/g,' ').trim()||'(no name)',proj:String((l&&l.project)||'').replace(/\s+/g,' ').trim()};}
-function sbUnitTxt(l){const h=sbUnit(l),id=[h.f?'Floor '+h.f:'',h.u?'Unit '+h.u:''].filter(Boolean).join(' ')||h.wo;return id?id+' ("'+h.name+'")':'"'+h.name+'"';}
+// us: every unit the list is for (one per work order; the same Floor / Unit once) — a list on several WOs names each (attack3)
+function sbUnit(l){const wos=(l&&l.wos)||[],us=[],seen=new Set();
+  wos.forEach(w=>{const o=DB.orders.find(x=>x.wo===w),f=o?fuF(o):'',u=o?fuU(o):'',k=f||u?'fu|'+f+'|'+u:'wo|'+w;if(seen.has(k))return;seen.add(k);us.push({f,u,wo:w});});
+  return{us,name:String((l&&l.name)||'').replace(/\s+/g,' ').trim()||'(no name)',proj:String((l&&l.project)||'').replace(/\s+/g,' ').trim()};}
+function sbUnitsOut(us,one){const sh=us.length>3?us.slice(0,2):us;return sh.map(one).join(' + ')+(us.length>3?' + '+(us.length-2)+' more':'');}
+function sbUnitTxt(l){const h=sbUnit(l),id=sbUnitsOut(h.us,x=>[x.f?'Floor '+x.f:'',x.u?'Unit '+x.u:''].filter(Boolean).join(' ')||x.wo);return id?id+' ("'+h.name+'")':'"'+h.name+'"';}
 function sbLabels(bl){const multi=new Set(bl.map(l=>matKey(sbUnit(l).proj))).size>1,seen=new Map(),out=new Map();
-  bl.forEach(l=>{const h=sbUnit(l),fu=h.f||h.u,key=matKey((multi?h.proj:'')+'|'+(fu?h.f+'|'+h.u:h.wo||'§'+h.name)+'|'+(fu||h.wo?h.name:'')),n=(seen.get(key)||0)+1;seen.set(key,n);
-    const id=fu?[h.f?`<span class="sb-fu">Floor ${escA(h.f)}</span>`:'',h.u?`<span class="sb-fu">Unit ${escA(h.u)}</span>`:''].filter(Boolean).join(' '):h.wo?`<span class="sb-fu">${escA(h.wo)}</span>`:escA(h.name);
-    out.set(l.id,(multi&&h.proj?escA(h.proj)+' — ':'')+id+(fu||h.wo?` <small class="sb-ln">${escA(h.name)}</small>`:'')+(n>1?' ('+n+')':''));});
+  bl.forEach(l=>{const h=sbUnit(l),any=h.us.length>0,key=matKey((multi?h.proj:'')+'|'+(any?h.us.map(x=>x.f||x.u?x.f+'|'+x.u:x.wo).join('+'):'§'+h.name)+'|'+(any?h.name:'')),n=(seen.get(key)||0)+1;seen.set(key,n);
+    const id=any?sbUnitsOut(h.us,x=>x.f||x.u?[x.f?`<span class="sb-fu">Floor ${escA(x.f)}</span>`:'',x.u?`<span class="sb-fu">Unit ${escA(x.u)}</span>`:''].filter(Boolean).join(' '):`<span class="sb-fu">${escA(x.wo)}</span>`):escA(h.name);
+    out.set(l.id,(multi&&h.proj?escA(h.proj)+' — ':'')+id+(any?` <small class="sb-ln">${escA(h.name)}</small>`:'')+(n>1?' ('+n+')':''));});
   return out;}
 function sawBatchHTML(bl,away){
   const pl=n=>n!==1?'s':'';away=away||0;

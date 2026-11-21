@@ -36,6 +36,8 @@ const sleep = F.sleep;
     rec('two projects: project first; a unit with HTML is shown as text', b.chips.join('|') === 'Aderrig — Floor GF Unit 12 Type B kitchen ×2|Lucan — Floor 2 Unit <b>7</b> Type B kitchen ×2' && !b.bold, b.chips.join('|'));
     const lb = await p.evaluate(() => { const l = lsList('L1'); return sbUnitTxt(l) + ' / ' + sbUnitTxt({ name: 'Type B kitchen', wos: [] }); });
     rec('drop-out note text names the unit; a list with no job falls back to its name', lb === 'Floor GF Unit 12 ("Type B kitchen") / "Type B kitchen"', lb);
+    const many = await p.evaluate(() => sbUnitTxt({ name: 'Type B kitchen', wos: ['WO-1', 'WO-2', 'WO-3', 'WO-5'] }) + ' / ' + sbUnitTxt({ name: 'Type B kitchen', wos: ['WO-1', 'WO-4', 'WO-2'] }));
+    rec('a list on several WOs names each unit; more than 3 → the first two "+ N more"; the same unit once', many === 'Floor GF Unit 12 + Floor 1 Unit 14 + 2 more ("Type B kitchen") / Floor GF Unit 12 + Floor 1 Unit 14 ("Type B kitchen")', many);
     await p.setViewportSize({ width: 360, height: 740 }); await sleep(200);
     const sw = await p.evaluate(() => ({ sw: document.documentElement.scrollWidth, vw: innerWidth, low: [...document.querySelectorAll('.sb-chip')].filter(c => c.getBoundingClientRect().height < 40).length }));
     rec('360 px: no sideways scroll, chips at least 40 px tall', sw.sw <= sw.vw && !sw.low, JSON.stringify(sw));
