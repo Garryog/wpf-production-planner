@@ -48,7 +48,8 @@ const rowOf = (bd, item) => bd.rows.find(r => r.t.startsWith(item)) || { chips: 
     rec('A2 "Oak — 1 sheet for this batch · 1 still to cut"', /— 1 sheet for this batch · 1 still to cut/.test(oak.h), oak.h);
     rec('A2 "mfc  white" (case / spaces) is the same board', b.boards.length === 2, b.boards.map(x => x.h).join(' | '));
     const side = rowOf(mw, 'Side');
-    rec('A2 Side: TOTAL 8 with one chip per house, project first (batch spans 2 projects)', /TOTAL\s*8/.test(side.t) && side.chips.map(c => c.t).join('|') === 'Aderrig — House 1 ×2|Aderrig — House 2 ×4|Lucan — House 3 ×2', JSON.stringify(side));
+    // (Manager 21 Nov) chips name the physical unit — Floor / Unit, else the WO — with the list name small after it; project first
+    rec('A2 Side: TOTAL 8 with one chip per house, project first (batch spans 2 projects), unit / WO then list name', /TOTAL\s*8/.test(side.t) && side.chips.map(c => c.t).join('|') === 'Aderrig — WO-1 House 1 ×2|Aderrig — Unit 2 House 2 ×4|Lucan — Floor GF Unit 3 House 3 ×2', JSON.stringify(side));
     const shelf = rowOf(mw, 'Shelf');
     rec('A6 "2x2" shown red "check quantity", never in a total', /TOTAL\s*0/.test(shelf.t) && /not added — check quantity/.test(shelf.t) && shelf.chips[0] && shelf.chips[0].chk, JSON.stringify(shelf));
     rec('A2 top line "3 houses · 2 projects · 0 of 13 pieces cut"', /3 houses · 2 projects · 0 of 13 pieces cut/.test(b.top), b.top);
@@ -74,7 +75,7 @@ const rowOf = (bd, item) => bd.rows.find(r => r.t.startsWith(item)) || { chips: 
     await F.tapRow(p, 'data-rna', 'L1:3'); await F.send(p);
     await clickSel(p, '#wl-tab-batch'); await sleep(100);
     b = await batch(p);
-    rec('A5 N/A on House 1\'s Back: not in the batch (Oak now House 3 only)', rowOf(board(b, 'Oak'), 'Back').chips.map(c => c.t).join() === 'Lucan — House 3 ×1' && /⏸ 1 waiting/.test(b.houses[0]), JSON.stringify(board(b, 'Oak')) + b.houses[0]);
+    rec('A5 N/A on House 1\'s Back: not in the batch (Oak now House 3 only)', rowOf(board(b, 'Oak'), 'Back').chips.map(c => c.t).join() === 'Lucan — Floor GF Unit 3 House 3 ×1' && /⏸ 1 waiting/.test(b.houses[0]), JSON.stringify(board(b, 'Oak')) + b.houses[0]);
     rec('A5 … it shows in ⏸ WAITING as today', /WAITING — 1/.test(await view(p)));
     await p.evaluate(() => { wlShowBatch = false; wlShowHold = true; render(); document.querySelector('[data-relg]').click(); }); await F.send(p);
     await p.evaluate(() => { wlShowHold = false; wlShowBatch = true; render(); }); await sleep(100);
@@ -85,12 +86,12 @@ const rowOf = (bd, item) => bd.rows.find(r => r.t.startsWith(item)) || { chips: 
     await F.tapRow(p, 'data-rt', 'L2:2'); await F.send(p); await sleep(100);
     v = await view(p);
     rec('A4 last line ticked on House 2 → it finishes by itself as before (✓ DONE has it)', !!(await p.evaluate(() => listDone('L2').saw)) && /DONE — 1/.test(v), v.slice(0, 300));
-    rec('A4 House 2 left the batch with a one-line note', (await tab(p)) === '⚡ BATCH — 2 houses' && /"House 2" left the batch — cut complete/.test(v), (await tab(p)) + ' ' + v.slice(0, 300));
+    rec('A4 House 2 left the batch with a one-line note', (await tab(p)) === '⚡ BATCH — 2 houses' && /Unit 2 \("House 2"\) left the batch — cut complete/.test(v), (await tab(p)) + ' ' + v.slice(0, 300));
     rec('A4 storage follows', (await p.evaluate(() => localStorage.getItem('wpfSawBatch'))).includes('"L1","L3"'));
     // A8 Open list: two houses with the same name, one on a later day; a Customer filter on
     await p.evaluate(() => { wlShowUpcoming = true; render(); }); await addB(p, 'L4'); await p.evaluate(() => { wlShowUpcoming = false; wlCust = 'Aderrig Homes'; wlShowBatch = true; render(); }); await sleep(100);
     b = await batch(p);
-    rec('A8 two houses called "House 1": the chips say "House 1" and "House 1 (2)"', b.houses.some(h => /^Aderrig — House 1 \(2\)/.test(h)) && b.houses.some(h => /^Aderrig — House 1 /.test(h)), b.houses.join(' || '));
+    rec('A8 two lists called "House 1": told apart by their unit (WO-1 / Unit 9), the list name after it', b.houses.some(h => /^Aderrig — WO-1 House 1 /.test(h)) && b.houses.some(h => /^Aderrig — Unit 9 House 1 /.test(h)), b.houses.join(' || '));
     const go = async id => { await p.evaluate(id => [...document.querySelectorAll('.sb-hl [data-sbgo]')].find(x => x.dataset.sbgo === id).click(), id); await sleep(250);
       return p.evaluate(id => { const c = [...document.querySelectorAll('[data-wlcard]')].find(e => e.dataset.wlcard === id); if (!c) return { found: false, tab: (document.querySelector('.wl-tabs .on') || {}).id };
         const r = c.getBoundingClientRect(); return { found: true, flash: c.classList.contains('wl-flash'), inView: r.top < innerHeight && r.bottom > 0, tab: (document.querySelector('.wl-tabs .on') || {}).id, name: c.querySelector('.wn').textContent, wo: c.innerText.includes('WO-4') }; }, id); };
@@ -112,7 +113,7 @@ const rowOf = (bd, item) => bd.rows.find(r => r.t.startsWith(item)) || { chips: 
     D.update(S.db, 'lists', D.find(S.db, 'lists', 'L3'), { archived: true });
     await p.evaluate(async () => { lsReset(); await lsLoad(); render(); }); await sleep(200);
     v = await view(p);
-    rec('A7 an archived list drops out with the note', /"House 3" left the batch — list archived/.test(v) && (await tab(p)) === '⚡ BATCH — 2 houses', v.slice(0, 300));
+    rec('A7 an archived list drops out with the note', /Floor GF Unit 3 \("House 3"\) left the batch — list archived/.test(v) && (await tab(p)) === '⚡ BATCH — 2 houses', v.slice(0, 300));
     // A7 new Rev mid-batch: a changed line goes back to uncut (the line engine) — check Side on L1 after its line is replaced
     // escaping
     D.update(S.db, 'lists', D.find(S.db, 'lists', 'L4'), { name: '<img src=x onerror=window.__x=1>' });

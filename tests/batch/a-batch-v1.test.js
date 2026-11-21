@@ -20,7 +20,7 @@ const row = { id: 'main', version: 1, nid: 5, orders: [H.order({ wo: 'WO-1', due
     let b = await p.evaluate(() => ({ h: [...document.querySelectorAll('.sb-bh')].map(x => x.innerText).join('|'), rows: [...document.querySelectorAll('.sb-row')].map(x => x.innerText.replace(/\s+/g, ' ')), top: document.querySelector('.sb-top').innerText }));
     // 2×1.44 + 1.44 + 4×1.44 = 10.08 m² → 10.08/5.75×1.1 = 1.93 → 2 sheets
     rec('board "MFC White — 2 sheets for this batch · 2 still to cut"', /MFC White — 2 sheets for this batch · 2 still to cut/.test(b.h), b.h);
-    rec('Side TOTAL 6 (House 1 ×2, House 2 ×4); Shelf "2x2" not added', b.rows.some(x => /^Side .*TOTAL\s*6 House 1 ×2 House 2 ×4/.test(x)) && b.rows.some(x => /^Shelf .*TOTAL\s*0 \+ 1 not added/.test(x)), b.rows.join(' || '));
+    rec('Side TOTAL 6 (House 1 ×2, House 2 ×4); Shelf "2x2" not added', b.rows.some(x => /^Side .*TOTAL\s*6 WO-1 House 1 ×2 Unit 2 House 2 ×4/.test(x)) && b.rows.some(x => /^Shelf .*TOTAL\s*0 \+ 1 not added/.test(x)), b.rows.join(' || '));
     await p.evaluate(() => { wlShowBatch = false; render(); const k = [...document.querySelectorAll('[data-rt]')].find(x => x.dataset.rt.startsWith('L1|')); k.click(); }); await sleep(200);
     await p.evaluate(() => { wlShowBatch = true; render(); }); await sleep(100);
     b = await p.evaluate(() => ({ chips: [...document.querySelectorAll('.sb-chip')].map(c => c.innerText + (c.classList.contains('sb-cut') ? '[cut]' : '')), top: document.querySelector('.sb-top').innerText }));

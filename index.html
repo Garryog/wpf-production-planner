@@ -615,7 +615,7 @@ body.del-dragging #del-wkbar .wkb-btn:not(:disabled):not(.nodrop),body.del-dragg
 .sb-bad{font-size:12px;color:#c0392b;font-weight:700;font-family:Arial,sans-serif}
 .sb-chs{display:flex;flex-wrap:wrap;gap:4px;min-width:0}
 .sb-chip{background:#eaf0f8;border:1px solid #c4cdd9;border-radius:6px;padding:4px 8px;font-size:13px;font-weight:700;color:#14335c;cursor:pointer;min-height:40px;max-width:100%;overflow-wrap:anywhere;text-align:left}
-.sb-chip b{color:#0d6e46}.sb-chip.sb-cut{text-decoration:line-through;opacity:.65;background:#e7f6ec;border-color:#9fd8b4}.sb-chip.sb-chk{border-color:#c0392b;color:#c0392b}
+.sb-chip b{color:#0d6e46}.sb-chip .sb-fu,.sb-hn .sb-fu{white-space:nowrap}.sb-ln{font-weight:600;color:var(--t3);font-size:11px}.sb-chip.sb-cut{text-decoration:line-through;opacity:.65;background:#e7f6ec;border-color:#9fd8b4}.sb-chip.sb-chk{border-color:#c0392b;color:#c0392b}
 .sb-done .sb-it,.sb-done .sb-tot{text-decoration:line-through;opacity:.55}
 .sb-hs{background:#fff;border:1px solid var(--border);border-radius:8px;padding:6px 12px;margin-bottom:12px}
 .sb-hh{font-weight:800;color:#14335c;font-size:15px;margin-bottom:4px}
@@ -7638,7 +7638,7 @@ function sbNote(t){SB.notes=[t,...SB.notes.filter(x=>x!==t)].slice(0,6);}
 function sbLists(open){sbLoad();
   const by=new Map(open.map(l=>[l.id,l])),ready=!!DB.loaded&&(!V2()||LST.loaded);
   if(ready){const drop=new Set();
-    SB.ids.forEach(id=>{const l=V2()?lsList(id):(DB.lists||[]).find(x=>x.id===id),nm='"'+String((l&&l.name)||id)+'"';
+    SB.ids.forEach(id=>{const l=V2()?lsList(id):(DB.lists||[]).find(x=>x.id===id),nm=l?sbUnitTxt(l):'"'+id+'"';
       if(by.has(id)){if(SB.away.delete(id))sbNote(nm+' is back on the saw queue — back in the batch');return;}
       const s=l&&l.archived?lsSupersededBy(l):null;
       // (Tester round 1, item 5) only a finished / archived / replaced / deleted list leaves for good; one that is on hold or waiting
@@ -7823,13 +7823,25 @@ function printLabels(lsArr,mode){
   ticks each house's own list (tap a house to go to it). Waiting (N/A) lines are not in it; "check quantity" lines are red and never
   added in.*/
 function sbNotesHTML(){return SB.notes.map((t,i)=>`<div class="sb-nl"><span>ℹ ${escA(t)}</span><button data-sbnx="${i}" title="Hide this note">✕</button></div>`).join('');}
+/*(Manager 21 Nov) lists made by ✓ Confirm are named after their template, so several houses can be "Type B kitchen". In the ⚡ BATCH tab a
+  house is shown by its PHYSICAL unit: Floor and Unit (apart, as everywhere) — else its WO — with the list name smaller after it; the
+  project first when the batch spans projects; a list with no job shows its name. Two the same get "(2)". houseLabels (Stores pop-up,
+  labels) is not touched.*/
+function sbUnit(l){const wos=(l&&l.wos)||[],o=wos.map(w=>DB.orders.find(x=>x.wo===w)).find(Boolean);
+  return{f:o?fuF(o):'',u:o?fuU(o):'',wo:wos[0]||'',name:String((l&&l.name)||'').replace(/\s+/g,' ').trim()||'(no name)',proj:String((l&&l.project)||'').replace(/\s+/g,' ').trim()};}
+function sbUnitTxt(l){const h=sbUnit(l),id=[h.f?'Floor '+h.f:'',h.u?'Unit '+h.u:''].filter(Boolean).join(' ')||h.wo;return id?id+' ("'+h.name+'")':'"'+h.name+'"';}
+function sbLabels(bl){const multi=new Set(bl.map(l=>matKey(sbUnit(l).proj))).size>1,seen=new Map(),out=new Map();
+  bl.forEach(l=>{const h=sbUnit(l),fu=h.f||h.u,key=matKey((multi?h.proj:'')+'|'+(fu?h.f+'|'+h.u:h.wo||'§'+h.name)+'|'+(fu||h.wo?h.name:'')),n=(seen.get(key)||0)+1;seen.set(key,n);
+    const id=fu?[h.f?`<span class="sb-fu">Floor ${escA(h.f)}</span>`:'',h.u?`<span class="sb-fu">Unit ${escA(h.u)}</span>`:''].filter(Boolean).join(' '):h.wo?`<span class="sb-fu">${escA(h.wo)}</span>`:escA(h.name);
+    out.set(l.id,(multi&&h.proj?escA(h.proj)+' — ':'')+id+(fu||h.wo?` <small class="sb-ln">${escA(h.name)}</small>`:'')+(n>1?' ('+n+')':''));});
+  return out;}
 function sawBatchHTML(bl,away){
   const pl=n=>n!==1?'s':'';away=away||0;
   const awayTxt=away?' · '+away+' away (off the saw queue for now)':'';
   if(!bl.length&&away)return `<div class="sb-top"><b>0 showing${awayTxt}</b><button class="btn btn-s" id="sb-empty" style="min-height:40px">✕ Empty batch</button></div>
     <div class="sb-hint">The houses in this batch are on hold or waiting for their check — they show here again when they are back on the saw queue.</div>`;
   if(!bl.length)return `<div class="flr-none">The batch is empty — on 🪚 TO DO, tap <b>＋ Add to batch</b> on each house you are cutting together.</div>`;
-  const hl=houseLabels(bl),rows=combineLists(bl,'saw',{withCut:true});
+  const hl=sbLabels(bl),rows=combineLists(bl,'saw',{withCut:true});
   const sn=o=>new Map(sheetNeed(bl,'','',Object.assign({anyDate:true,relOnly:'saw'},o)).mats.map(g=>[matKey(g.mat),g]));
   const sT=sn({}),sD=sn({todoOnly:true});
   let pcs=0,pcut=0;rows.forEach(g=>g.shares.forEach(s=>{if(typeof s.q==='number'){pcs+=s.q;if(s.cut)pcut+=s.q;}}));
@@ -7839,7 +7851,7 @@ function sawBatchHTML(bl,away){
   const chips=g=>{const per=new Map();g.shares.forEach(s=>{const x=per.get(s.lid)||per.set(s.lid,{lid:s.lid,h:s.h,n:0,nc:0,bad:[],all:0,cut:0}).get(s.lid);
       x.all++;if(s.cut)x.cut++;if(typeof s.q==='number'){x.n+=s.q;if(s.cut)x.nc+=s.q;}else x.bad.push(s.q);});
     return [...per.values()].map(x=>{const all=x.cut===x.all,q=[x.n?String(x.n):'',...x.bad].filter(Boolean).join(' + ');
-      return `<button class="sb-chip${all?' sb-cut':''}${x.bad.length?' sb-chk':''}" data-sbgo="${escA(x.lid)}" title="${all?'Ticked cut on its own list':'Go to this house\'s list to tick it'}">${all?'✓ ':''}${escA(x.h)} <b>×${escA(q)}</b>${x.bad.length?' ⚠ check quantity':''}${!all&&x.cut?' · '+(x.nc||x.cut)+' cut':''}</button>`;}).join('');};
+      return `<button class="sb-chip${all?' sb-cut':''}${x.bad.length?' sb-chk':''}" data-sbgo="${escA(x.lid)}" title="${all?'Ticked cut on its own list':'Go to this house\'s list to tick it'}">${all?'✓ ':''}${hl.get(x.lid)||escA(x.h)} <b>×${escA(q)}</b>${x.bad.length?' ⚠ check quantity':''}${!all&&x.cut?' · '+(x.nc||x.cut)+' cut':''}</button>`;}).join('');};
   const row=g=>{const done=g.shares.every(s=>s.cut);
     return `<div class="sb-row${done?' sb-done':''}"><div class="sb-it"><b>${escA(g.item)||'—'}</b>${g.L||g.W?` <span class="sb-dm">${escA(g.L)} × ${escA(g.W)}</span>`:''}${g.note?` <span class="sb-nt">· ${escA(g.note)}</span>`:''}</div>
       <div class="sb-tot"><small>TOTAL</small>${g.qty}${g.bad?`<div class="sb-bad">+ ${g.bad} not added — check quantity</div>`:''}</div><div class="sb-chs">${chips(g)}</div></div>`;};
@@ -7847,7 +7859,7 @@ function sawBatchHTML(bl,away){
     const ord=gs.filter(g=>!g.shares.every(s=>s.cut)).concat(gs.filter(g=>g.shares.every(s=>s.cut))); // a fully cut row goes to the bottom of its board
     return `<div class="sb-board"><div class="sb-bh">${escA(bname(k))} <span>— ${T?T.sheets+' sheet'+pl(T.sheets)+' for this batch · '+(D&&D.sheets?D.sheets+' still to cut':'all cut'):'no sheets counted (no sizes)'}${T&&T.check?' <b style="color:#c0392b">⚠ check units</b>':''}</span></div>${ord.map(row).join('')}</div>`;};
   const house=l=>{const o=(l.wos||[]).map(w=>DB.orders.find(x=>x.wo===w)).find(Boolean),tr=tickableRows(l,'saw'),nt=tr.filter(r=>rowTicked(l.id,rowKey(r))).length,nh=listHoldRows(l,'saw','hold').length;
-    return `<div class="sb-hl"><div class="sb-hn"><b>${escA(hl.get(l.id))}</b>${nP>1?'':' <span class="dsh-t">'+escA(l.project||'')+'</span>'} ${(l.wos||[]).map(w=>woChip(w)).join('')} ${o?fuHTML(o,'lst-chip'):''}</div>
+    return `<div class="sb-hl"><div class="sb-hn"><b>${hl.get(l.id)}</b>${nP>1?'':' <span class="dsh-t">'+escA(l.project||'')+'</span>'} ${(l.wos||[]).map(w=>woChip(w)).join('')}</div>
       <div class="sb-ha"><span class="sb-cnt">cut ${nt} of ${tr.length}</span>${nh?`<span class="sb-w">⏸ ${nh} waiting</span>`:''}<button class="btn btn-g" data-sbgo="${escA(l.id)}">Open list</button><button class="btn btn-s" data-sblbl="${escA(l.id)}" title="Optional — print this house's labels">🏷 Labels</button></div></div>`;};
   return `<div class="sb-top"><b>${bl.length} house${pl(bl.length)} · ${nP} project${pl(nP)} · ${pcut} of ${pcs} piece${pl(pcs)} cut${awayTxt}</b><button class="btn btn-s" id="sb-empty" style="min-height:40px">✕ Empty batch</button></div>
     <div class="sb-hint">This table is to cut from. Tick the lines on each house's own list — tap a house to go to it.</div>
