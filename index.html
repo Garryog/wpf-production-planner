@@ -6541,7 +6541,7 @@ function lsCopyDlg(pid){
     const src=from?lsCache().all.filter(l=>l.pid===from&&!l.archived).sort((a,b)=>(b.tpl?1:0)-(a.tpl?1:0)||String(a.name).localeCompare(String(b.name))):[];
     ov.querySelector('#cp-body').innerHTML=`<div style="font-weight:800;color:#14335c;font-size:17px;margin-bottom:8px">⧉ Copy into ${escA(lsProjName(pid))} as a template</div>
       <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">${others.map(p=>`<button class="btn ${p.id===from?'btn-g':'btn-s'}" data-cpp="${escA(p.id)}">${escA(p.name)}</button>`).join('')||'<span style="color:var(--t3)">No other project has lists yet.</span>'}</div>
-      ${from?src.map(l=>`<div class="wl-drow"><b>${escA(tplName(l))}</b><span class="dsh-t">${l.tpl?'Template':'Live list'} · Rev ${+l.rev||1} · ${l.saw} saw / ${l.fit} fittings</span><button class="btn btn-g" data-cpl="${escA(l.id)}" style="font-size:12px">Copy</button></div>`).join('')||'<div style="color:var(--t3)">Nothing to copy in this project.</div>':''}
+      ${from?src.map(l=>`<div class="wl-drow"><b>${escA(l.tpl?tplName(l):l.name)}</b><span class="dsh-t">${l.tpl?'Template':'Live list'} · Rev ${+l.rev||1} · ${l.saw} saw / ${l.fit} fittings</span><button class="btn btn-g" data-cpl="${escA(l.id)}" style="font-size:12px">Copy</button></div>`).join('')||'<div style="color:var(--t3)">Nothing to copy in this project.</div>':''}
       <div id="cp-err" style="color:#b42318;font-weight:700;font-size:13px;min-height:18px"></div>`;
     ov.querySelectorAll('[data-cpp]').forEach(b=>b.onclick=()=>{from=b.dataset.cpp;draw();});
     ov.querySelectorAll('[data-cpl]').forEach(b=>b.onclick=async()=>{
@@ -6553,7 +6553,8 @@ function lsCopyDlg(pid){
         if(!map)return;
         const lines=await lsCopyLines(s.id,map);lsFlagMats(lines,pid);
         const r=s.ltype==='snag'?'other':s.ltype||'house';
-        const res=await lsSaveList({id:uid('L'),name:tplName(s),project_id:pid,is_template:true,list_type:r,type_name:tplName(s),source:'template',wos:[]},lines,whoNow(),'Copied from '+s.project+' — '+s.name+' rev '+(+s.rev||1));
+        const nm=String(s.tpl?tplName(s):s.name||'').trim()||'Copied list'; // (Tester round 1, item 9) a live list gives its OWN name, never an old type name
+        const res=await lsSaveList({id:uid('L'),name:nm,project_id:pid,is_template:true,list_type:r,type_name:nm,source:'template',wos:[]},lines,whoNow(),'Copied from '+s.project+' — '+s.name+' rev '+(+s.rev||1));
         ov.remove();lpfSet(pid);LH.kind='tpl';render();toast('Copied — "'+res.list.name+'" is now a template in '+lsProjName(pid));
       }catch(e){err('Not copied — '+e.message);}
     });
