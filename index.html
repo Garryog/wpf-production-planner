@@ -4605,7 +4605,8 @@ function ltiConfirm(wos,green){
     for(const w of go){const tid=rs.get(w).tid;
       // (Tester round 1, item 4) Confirm all green: the template is read again just before its list is made; a row that is no longer
       // green against it (renamed / re-handed on another PC meanwhile) is skipped with the reason — a person decides
-      if(green){let s=null;try{await lsReloadList(tid);const o=DB.orders.find(x=>x.wo===w);s=o?lsSuggest(o):null;}catch(e){}
+      if(green){let s=null;try{await lsReloadList(tid);}catch(e){bad++;LTI.res[w]={err:e.message};LTI.busy.delete(w);ltiAfter();continue;} // could not read it: Not saved + Retry, as any failed save
+        {const o=DB.orders.find(x=>x.wo===w);s=o?lsSuggest(o):null;}
         if(!s||s.level!=='strong'||s.tid!==tid){sk++;LTI.res[w]={err:'skipped — no longer green'+(s&&s.why?' ('+s.why+')':'')+'. Check it and tap ✓ Confirm',again:()=>{if(ltiHandOk(w))ltiConfirm([w]);}};LTI.busy.delete(w);ltiAfter();continue;}}
       try{const l=await confirmList(w,tid,by);ok++;if(l.already)al++;LTI.done.unshift({wo:w,name:l.name,tpl:ltiTplName(tid),already:!!l.already,gotMsg:l.gotMsg||''});delete LTI.pick[w];}
       catch(e){bad++;LTI.res[w]={err:e.message};}
