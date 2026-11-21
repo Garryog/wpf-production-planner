@@ -605,7 +605,7 @@ body.del-dragging #del-wkbar .wkb-btn:not(:disabled):not(.nodrop),body.del-dragg
 .sb-hint{font-size:12px;color:var(--t3);margin:0 0 10px}
 .sb-mem,.sb-nl{font-size:12px;font-weight:700;color:#7a4a00;background:#fff4d6;border:1px solid #e0a43a;border-radius:6px;padding:5px 8px;margin-bottom:6px;overflow-wrap:anywhere}
 .sb-nl{color:#14335c;background:#eaf2ff;border-color:#9cbce8;display:flex;gap:8px;align-items:center;justify-content:space-between}
-.sb-nl button{flex:none;border:1px solid #9cbce8;background:#fff;border-radius:5px;padding:2px 8px;cursor:pointer;min-height:28px}
+.sb-nl button{flex:none;border:1px solid #9cbce8;background:#fff;border-radius:5px;padding:2px 12px;cursor:pointer;min-height:40px;min-width:40px}
 .sb-board{background:#fff;border:1px solid var(--border);border-radius:8px;margin-bottom:12px;overflow:hidden}
 .sb-bh{background:#eaf0f8;color:#14335c;font-weight:800;font-size:15px;padding:7px 12px;overflow-wrap:anywhere}
 .sb-bh span{font-weight:700;font-size:13px}
@@ -614,7 +614,7 @@ body.del-dragging #del-wkbar .wkb-btn:not(:disabled):not(.nodrop),body.del-dragg
 .sb-tot{font-family:monospace;font-weight:800;font-size:17px;color:#14335c}.sb-tot small{font-size:10px;color:var(--t3);font-family:Arial,sans-serif;margin-right:4px}
 .sb-bad{font-size:12px;color:#c0392b;font-weight:700;font-family:Arial,sans-serif}
 .sb-chs{display:flex;flex-wrap:wrap;gap:4px;min-width:0}
-.sb-chip{background:#eaf0f8;border:1px solid #c4cdd9;border-radius:6px;padding:4px 8px;font-size:13px;font-weight:700;color:#14335c;cursor:pointer;min-height:32px;max-width:100%;overflow-wrap:anywhere;text-align:left}
+.sb-chip{background:#eaf0f8;border:1px solid #c4cdd9;border-radius:6px;padding:4px 8px;font-size:13px;font-weight:700;color:#14335c;cursor:pointer;min-height:40px;max-width:100%;overflow-wrap:anywhere;text-align:left}
 .sb-chip b{color:#0d6e46}.sb-chip.sb-cut{text-decoration:line-through;opacity:.65;background:#e7f6ec;border-color:#9fd8b4}.sb-chip.sb-chk{border-color:#c0392b;color:#c0392b}
 .sb-done .sb-it,.sb-done .sb-tot{text-decoration:line-through;opacity:.55}
 .sb-hs{background:#fff;border:1px solid var(--border);border-radius:8px;padding:6px 12px;margin-bottom:12px}
@@ -7518,7 +7518,7 @@ function sheetNeed(ls,fromISO,toISO,opt){
   opt=opt||{};const since=opt.cutSince||'';
   const day=at=>at?isoOf(new Date(at)):'';
   const num=v=>{const n=parseFloat(String(v==null?'':v).replace(',','.'));return isFinite(n)?n:NaN;};
-  const by={};let noSize=0,noQty=0,badQty=0,lines=0;
+  const by=Object.create(null);let noSize=0,noQty=0,badQty=0,lines=0; // (Tester round 1, item 7) no prototype: a board called "__proto__" / "constructor" is just a name
   (ls||[]).forEach(l=>{
     const d=listDeadline(l);if(!opt.anyDate&&(!d||(fromISO&&d<fromISO)||(toISO&&d>toISO)))return;
     const dn=listDone(l.id).saw,hb=holdsOf(l.id),tk=rowTicks(l.id),ro=!!opt.relOnly&&!!listDone(l.id)[opt.relOnly]&&relOpen(l,opt.relOnly);
@@ -7588,24 +7588,29 @@ let wlCust='';            // saw/stores: one-tap customer filter over the day's 
   the planner record, never shared with another device. Storage blocked → kept in memory for this page (the batch says "not
   remembered"). A house that is cut complete, archived, replaced or no longer on the saw queue drops out by itself, with a note.*/
 let wlShowBatch=false;    // saw: the ⚡ BATCH tab
-const SB={ids:[],mem:false,read:false,notes:[]};
+const SB={ids:[],mem:false,read:false,notes:[],away:new Set()}; // away: in the batch but off the saw queue for now (on hold, waiting for its check)
 function sbLoad(){if(SB.read)return;SB.read=true;
   try{const v=JSON.parse(localStorage.getItem('wpfSawBatch')||'null');if(v&&Array.isArray(v.ids))SB.ids=[...new Set(v.ids.filter(x=>typeof x==='string'&&x))].slice(0,300);}
   catch(e){SB.mem=true;}} // blocked, or not ours to read: start empty
 function sbSave(){try{if(SB.ids.length)localStorage.setItem('wpfSawBatch',JSON.stringify({ids:SB.ids,at:new Date().toISOString()}));else localStorage.removeItem('wpfSawBatch');SB.mem=false;}catch(e){SB.mem=true;}}
 function sbHas(id){sbLoad();return SB.ids.includes(id);}
-function sbToggle(id){sbLoad();const i=SB.ids.indexOf(id);if(i>=0)SB.ids.splice(i,1);else SB.ids.push(id);sbSave();}
-function sbClear(){sbLoad();SB.ids=[];sbSave();}
+function sbToggle(id){sbLoad();const i=SB.ids.indexOf(id);if(i>=0){SB.ids.splice(i,1);SB.away.delete(id);}else SB.ids.push(id);sbSave();}
+function sbClear(){sbLoad();SB.ids=[];SB.away.clear();sbSave();}
 function sbNote(t){SB.notes=[t,...SB.notes.filter(x=>x!==t)].slice(0,6);}
 // open: the saw's open lists (TO DO, today and later days). Returns the batch's lists in the order they were added. Only once the
 // lists have loaded does a house that is not open drop out (a page still loading never empties the batch).
 function sbLists(open){sbLoad();
   const by=new Map(open.map(l=>[l.id,l])),ready=!!DB.loaded&&(!V2()||LST.loaded);
-  if(ready){const gone=SB.ids.filter(id=>!by.has(id));
-    if(gone.length){gone.forEach(id=>{const l=V2()?lsList(id):(DB.lists||[]).find(x=>x.id===id),nm='"'+String((l&&l.name)||id)+'"';
-        const s=l&&l.archived?lsSupersededBy(l):null;
-        sbNote(nm+' left the batch — '+(!l?'no longer on the planner':s?'replaced by "'+s.name+'" (add the new list if it is needed)':l.archived?'list archived':listDone(id).saw?'cut complete':'no longer on the saw queue'));});
-      SB.ids=SB.ids.filter(id=>by.has(id));sbSave();}}
+  if(ready){const drop=new Set();
+    SB.ids.forEach(id=>{const l=V2()?lsList(id):(DB.lists||[]).find(x=>x.id===id),nm='"'+String((l&&l.name)||id)+'"';
+      if(by.has(id)){if(SB.away.delete(id))sbNote(nm+' is back on the saw queue — back in the batch');return;}
+      const s=l&&l.archived?lsSupersededBy(l):null;
+      // (Tester round 1, item 5) only a finished / archived / replaced / deleted list leaves for good; one that is on hold or waiting
+      // for its check stays in the batch (hidden) and shows again when it is back on the queue
+      const why=!l?'no longer on the planner':s?'replaced by "'+s.name+'" (add the new list if it is needed)':l.archived?'list archived':listDone(id).saw?'cut complete':'';
+      if(why){drop.add(id);SB.away.delete(id);sbNote(nm+' left the batch — '+why);}
+      else if(!SB.away.has(id)){SB.away.add(id);sbNote(nm+' is off the saw queue for now (on hold or waiting for its check) — hidden from the batch until it is back');}});
+    if(drop.size){SB.ids=SB.ids.filter(id=>!drop.has(id));sbSave();}}
   return SB.ids.map(id=>by.get(id)).filter(Boolean);}
 // A name is REQUIRED on every tick-off — blank records make the audit trail worthless.
 // Remembered per device, so it's one-time friction at each bench.
