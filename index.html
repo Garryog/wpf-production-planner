@@ -4999,14 +4999,21 @@ function suggestTpl(o,templates,projects){
     else if(handUnknown)hw='hand not known — confirm singly';
     else if(fk.hand!==gk.hand||(fk.code&&gk.code&&fk.code!==gk.code))hw='title says '+tkLbl(fk)+', template is '+tkLbl(gk)+' — check the hand'; // the hand must always be the same; the type too when both name one (a type missing on one side is left to the matcher above, as before)
     if(hw){strong=false;if(!aw&&!oRoom&&!ow)why.push(hw);}
-    return{t,score,strong,why,cHit};
+    // (Manager, 21 Nov) a handed unit is amber in this release whatever its spelling (H / HAND / HANDED / MIRROR / LH / RH): a person confirms
+    else if(fk.hand){strong=false;if(!aw&&!oRoom&&!ow)why.push('handed unit ('+tkLbl(fk)+') — check it and tap ✓ Confirm');}
+    const hx=!!fk.code&&fk.why!=='hand unclear'&&gk.why!=='hand unclear'&&gk.code===fk.code&&gk.hand===fk.hand; // the template's type and hand read cleanly and equal the title's
+    return{t,score,strong,why,cHit,hx};
   }).filter(x=>x&&x.score>0).sort((a,b)=>b.score-a.score||String(sgTplName(a.t)).localeCompare(String(sgTplName(b.t))));
   if(!sc.length)return none(f.code?'No "Type '+f.code.toUpperCase()+'" template for this project':'No template matches the title',p.id);
   if(sc.length>1)sc.forEach(x=>{if(!x.cHit)x.strong=false;}); // a name in the title (no type) is green only when no other template could fit
   const b=sc[0],st=sc.filter(x=>x.strong),alts=sc.map(x=>x.t.id);
   ts.slice().sort((a,c)=>String(sgTplName(a)).localeCompare(String(sgTplName(c)))).forEach(t=>{if(!alts.includes(t.id))alts.push(t.id);});
   const strong=b.strong&&(st.length===1||st[0].score-st[1].score>=2);
-  return{level:strong?'strong':'weak',pid:p.id,tid:b.t.id,alts,why:(strong?'Matches ':'Best guess — ')+(b.why.join(', ')||'room')+(!strong&&st.length>1?' (more than one template fits)':'')};
+  // (Manager, 21 Nov) an AMBER best guess prefers the template whose hand equals the title's (both read cleanly): "TYPE 1A H" with "Type 1A"
+  // and "Type 1A H" suggests "Type 1A H". Only the amber pick changes — never the level.
+  const bb=!strong&&!b.hx?(sc.find(x=>x.hx)||b):b;
+  if(bb!==b){alts.splice(alts.indexOf(bb.t.id),1);alts.unshift(bb.t.id);}
+  return{level:strong?'strong':'weak',pid:p.id,tid:bb.t.id,alts,why:(strong?'Matches ':'Best guess — ')+(bb.why.join(', ')||'room')+(!strong&&st.length>1?' (more than one template fits)':'')};
 }
 /* suggestTpl:end */
 function lsProjForCust(c){return projForCust(c,lsProjects());}

@@ -56,7 +56,16 @@ rec('plain "TYPE 1" vs "Type 1 Handed" → not green', s.level !== 'strong', JSO
 s = S('HOUSE 14 TYPE 1 HANDED KITCHEN', [T('a', 'Type 1')]);
 rec('"TYPE 1 HANDED" vs plain "Type 1" → not green', s.level !== 'strong', JSON.stringify(s));
 s = S('HOUSE 14 TYPE 1 HANDED KITCHEN', [T('a', 'Type 1 Handed')]);
-rec('"TYPE 1 HANDED" vs "Type 1 Handed" → still green', s.level === 'strong', JSON.stringify(s));
+// (Manager 21 Nov) a handed unit is amber in this release, however the hand is spelled — the exact-hand template is the best guess
+rec('"TYPE 1 HANDED" vs "Type 1 Handed" → amber, best guess "Type 1 Handed"', s.level === 'weak' && s.tid === 'a', JSON.stringify(s));
+for (const [t, n] of [['TYPE 1 HAND', 'Type 1 Hand'], ['TYPE 1 MIRROR', 'Type 1 Mirror'], ['TYPE 1 H', 'Type 1 H'], ['TYPE 1 LH', 'Type 1 LH'], ['TYPE 1 RH', 'Type 1 RH']]) {
+  s = S('HOUSE 14 ' + t + ' KITCHEN', [T('a', n)]); rec('"' + t + '" vs "' + n + '" → amber (handed units are confirmed singly)', s.level === 'weak' && s.tid === 'a', JSON.stringify(s)); }
+s = S('HOUSE 14 TYPE 1A H KITCHEN', [T('p', 'Type 1A'), T('h', 'Type 1A H')]);
+rec('"TYPE 1A H" with "Type 1A" + "Type 1A H" → amber best guess is "Type 1A H" (the same hand)', s.level === 'weak' && s.tid === 'h' && s.alts[0] === 'h', JSON.stringify(s));
+s = S('HOUSE 14 TYPE 1A LH KITCHEN', [T('p', 'Type 1A'), T('h', 'Type 1A H'), T('l', 'Type 1A LH')]);
+rec('"TYPE 1A LH" with plain / H / LH templates → amber best guess "Type 1A LH"', s.level === 'weak' && s.tid === 'l', JSON.stringify(s));
+s = S('HOUSE 14 TYPE 1A KITCHEN', [T('p', 'Type 1A'), T('h', 'Type 1A H')]);
+rec('plain "TYPE 1A" with "Type 1A" + "Type 1A H" → still green on "Type 1A"', s.level === 'strong' && s.tid === 'p', JSON.stringify(s));
 s = S('HOUSE 14 TYPE 1 KITCHEN', [T('a', 'Type 1')]);
 rec('"TYPE 1" vs "Type 1" → still green', s.level === 'strong' && s.tid === 'a', JSON.stringify(s));
 s = S('HOUSE 14 TYPE 1 KITCHEN', [T('a', 'Type 1'), T('b', 'Type 1 LH'), T('c', 'Type 1 RH')]);
