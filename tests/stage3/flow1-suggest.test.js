@@ -68,6 +68,8 @@ r = s('HOUSE 40 TYPE C KITCHEN', 'Glenveagh Homes Ltd - Ballymastone Ph1'); rec(
 r = s('HOUSE 40 TYPE D KITCHEN', CH); rec('none: "TYPE D KITCHEN" — no Type D, the other types never offered → grey', lv(r, 'none') && !r.tid, J(r));
 // (updated 20 Nov 2026, Garry: one name per template) the hidden type name is no longer read — the bed count must be in the template's NAME
 r = s('TYPE B 2 BED KITCHEN', CH, T.map(t => t.id === 'T2' ? { ...t, name: 'Type B 3-bed kitchen' } : t)); rec('none: "TYPE B 2 BED" vs the Type B 3-bed template → not suggested', lv(r, 'none'), J(r));
+// (Tester round 1) and with the bed count ONLY in the old hidden type name (old data, not yet re-saved): still never green
+r = s('TYPE B 2 BED KITCHEN', CH); rec('"TYPE B 2 BED" vs "Type B kitchen" whose OLD type name is "Type B 3-bed" → not green, the reason names the old type name', r.level !== 'strong' && /old type name says "3 bed"/.test(r.why), J(r));
 r = s('SNAG - HOUSE 12 HINGES', CH); rec('none: a snag title → grey', lv(r, 'none'), J(r));
 r = s('HOUSE 14 - TYPE B KITCHEN', 'CAIRN HOMES'); rec('none: customer heading with no project → grey, says "no project"', lv(r, 'none') && !r.pid && /project/i.test(r.why), J(r));
 r = s('HOUSE 14 - TYPE B KITCHEN', 'KILMURRY LTD - PARKSIDE'); rec('none: project has no templates → grey, says so', lv(r, 'none') && r.pid === 'P4' && /template/i.test(r.why), J(r));

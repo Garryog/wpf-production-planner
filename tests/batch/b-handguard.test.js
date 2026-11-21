@@ -40,6 +40,10 @@ eq('template "T2 LH"', K('T2 LH', 1), '2|LH');
 eq('template "Type 1 Handed"', K('Type 1 Handed', 1), '1|H');
 eq('template "Kitchen A"', K('Kitchen A', 1), 'A|');
 eq('template "3 bed 4C"', K('3 bed 4C', 1), '4C|');
+for (const [t, w] of [['TYPE 2 L.H.', '2|LH'], ['TYPE 2 L-H', '2|LH'], ['TYPE 2 L H', '2|LH'], ['TYPE 2 R.H.', '2|RH'], ['TYPE 2 LHS', '2|LH'], ['TYPE 2 RHS', '2|RH'], ['TYPE 2 LEFT', '2|LH'], ['TYPE 2 RIGHT', '2|RH'],
+  ['TYPE 2 MIRROR', '2|H'], ['TYPE 2 MIRRORED', '2|H'], ['TYPE 2 OPPOSITE', '2|H'], ['TYPE 2 OPP', '2|H'], ['TYPE 2 KITCHEN MIRROR', '2||hand unclear'], ['TYPE 2 KITCHEN LEFT SIDE', '2||hand unclear'],
+  ['TYPE 2 LEFTOVER UNITS', '2|'], ['TYPE 2 HANDLES', '2|'], ['HOUSE 4 TYPE 2', '2|'], ['BLOCK H TYPE 2', '2|'], ['4H BLOCK TYPE 2', '2|']]) eq('"' + t + '"', K(t), w);
+for (const [t, w] of [['Type 1 L.H.', '1|LH'], ['Type 1 R-H', '1|RH'], ['Type 1 Left', '1|LH'], ['Type 1 Mirrored', '1|H'], ['Type 1 Opp', '1|H'], ['Type 1 kitchen Left', '1||hand unclear']]) eq('template "' + t + '"', K(t, 1), w);
 eq('template "Island kitchen" doesn\'t read as a type', K('Island kitchen', 1), "||name doesn't read as a type");
 // suggestTpl
 const P = [{ id: 'P1', name: 'Aderrig', customer: 'Aderrig Homes', cien_names: ['Aderrig Homes'] }];
@@ -64,7 +68,11 @@ rec('"BLOCK H" never reads as a hand (no hand reason given)', !/hand/.test(s.why
 s = S('HANDED HOUSE 14 TYPE 2 KITCHEN', [T('c', 'Type 2 Handed'), T('d', 'Type 2')]);
 rec('"HANDED" before TYPE → never green', s.level !== 'strong', JSON.stringify(s));
 s = S('HOUSE 14 TYPE 2 KITCHEN', [T('c', 'Type 2', { typeName: 'Type 2 LH' })]);
-rec('the old hidden type name is not used (plain "Type 2" name, type name "2 LH") → green', s.level === 'strong', JSON.stringify(s));
+rec('(Tester round 1) an OLD type name with a hand ("Type 2 LH") on template "Type 2" → not green, the reason names the old type name', s.level !== 'strong' && /old type name says/.test(s.why), JSON.stringify(s));
+s = S('HOUSE 14 TYPE 2 KITCHEN', [T('c', 'Type 2', { typeName: 'Type 2' })]);
+rec('… an old type name equal to the name changes nothing (green)', s.level === 'strong', JSON.stringify(s));
+s = S('HOUSE 14 TYPE 2 2 BED KITCHEN', [T('c', 'Type 2', { typeName: 'Type 2 3 bed' })]);
+rec('… bed count only in the old type name → not green, "old type name says \"3 bed\""', s.level !== 'strong' && /old type name says "3 bed"/.test(s.why), JSON.stringify(s));
 s = S('HOUSE 14 ISLAND KITCHEN', [T('k', 'Island kitchen')]);
 rec('a title with no TYPE whose template name is in it stays green as before (no hand either side)', s.level === 'strong', JSON.stringify(s));
 s = S('HOUSE 14 ISLAND KITCHEN', [T('k', 'Island kitchen LH')]);

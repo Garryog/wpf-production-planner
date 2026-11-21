@@ -4889,11 +4889,14 @@ const TK_DROP=new Set(['TYPE','HOUSE','HSE','STD','STANDARD','KITCHEN','KITCHENS
 const TK_CODE=/^(\d{1,2}[A-Z]?|[A-Z]{1,2}\d{0,2}[A-Z]?)$/;
 function typeKey(text,isTpl){
   let s=' '+String(text==null?'':text).toUpperCase()+' ';
-  s=s.replace(/\bL\s*\/\s*H\b/g,' LH ').replace(/\bR\s*\/\s*H\b/g,' RH ').replace(/\b([A-Z]{1,2}) ?- ?(\d{1,2})\b/g,'$1$2');
+  // (Tester round 1, item 2) other ways of writing a hand: L.H. / L-H / L H / L/H / LHS / LEFT (HAND/HANDED) = LH, the same for RH;
+  // MIRROR / MIRRORED / OPPOSITE / OPP = H (the mirror). Whole words only — never inside another word.
+  s=s.replace(/\b(L|R)\s*[.\/\-]?\s*H\b\.?/g,(m,x)=>' '+x+'H ').replace(/\b(L|R)HS\b/g,' $1H ')
+    .replace(/\b(LEFT|RIGHT)\s*-?\s*HAND(?:ED)?\b/g,(m,x)=>x==='LEFT'?' LH ':' RH ').replace(/\bLEFT\b/g,' LH ').replace(/\bRIGHT\b/g,' RH ')
+    .replace(/\b(MIRROR|MIRRORED|OPPOSITE|OPP)\b/g,' HANDED ').replace(/\b([A-Z]{1,2}) ?- ?(\d{1,2})\b/g,'$1$2');
   const w=s.replace(/[^A-Z0-9]+/g,' ').trim().split(' ').filter(Boolean),used=new Set();
   // a hand word at i (one or two words: LEFT HAND / RIGHT HANDED) → [hand, words used]
-  const handAt=i=>{const x=w[i]||'',y=w[i+1]||'';if(TK_HAND[x])return[TK_HAND[x],1];
-    if((x==='LEFT'||x==='RIGHT')&&(y==='HAND'||y==='HANDED'))return[x==='LEFT'?'LH':'RH',2];return null;};
+  const handAt=i=>{const x=w[i]||'';return TK_HAND[x]?[TK_HAND[x],1]:null;}; // LEFT/RIGHT HAND(ED) were made LH/RH above
   // "1AH" = "1A H", "2LH" = "2 LH": a hand glued to a code that has a number in it
   const split=t=>{for(const suf of['HANDED','HAND','LH','RH','H'])if(t.length>suf.length&&t.endsWith(suf)){const k=t.slice(0,-suf.length);if(TK_CODE.test(k)&&/\d/.test(k))return[k,TK_HAND[suf]];}return[t,''];};
   let ci=-1,code='',why='';
@@ -4926,15 +4929,16 @@ function suggestTpl(o,templates,projects){
   const fk=typeKey(o.title,false),tks=new Map(ts.map(t=>[t.id,typeKey(sgTplName(t),true)]));
   // hand guard: a plain title where the project has an LH / RH template of that type — a person decides (Garry: never matched automatically)
   const handUnknown=!!fk.code&&!fk.hand&&ts.some(t=>{const k=tks.get(t.id);return k.code===fk.code&&(k.hand==='LH'||k.hand==='RH');});
-  const sc=ts.map(t=>{
-    const g=sgFeat(sgTplName(t));
+  // one template scored from its name (txt) — or, for the old-type-name check, from name + old type name as main did (phs = names for the "whole name in the title" test)
+  const evalT=(t,txt,phs)=>{
+    const g=sgFeat(txt);
     if(t.ltype==='kitchen'&&!g.kinds.size)g.kinds.add('kitchen');
     if(g.code&&f.code&&g.code!==f.code)return null;   // a different type
     if(g.beds&&f.beds&&g.beds!==f.beds)return null;   // a different number of bedrooms
     const kHit=[...g.kinds].some(k=>f.kinds.has(k));
     if(g.kinds.size&&f.kinds.size&&!kHit)return null; // a different room
     const cHit=!!(g.code&&g.code===f.code),bHit=!!(g.beds&&g.beds===f.beds);
-    const ph=[sgTplName(t)].map(sgNorm).some(x=>x.length>=4&&(' '+f.n+' ').includes(' '+x+' '));
+    const ph=phs.map(sgNorm).some(x=>x.length>=4&&(' '+f.n+' ').includes(' '+x+' '));
     const more=[...g.words].filter(w=>f.words.has(w)).length,miss=[...g.words].filter(w=>!f.words.has(w)).length;
     const score=(cHit?4:0)+(kHit?2:0)+(bHit?1:0)+(ph?3:0)+more-miss*0.5;
     // the title names a room this template doesn't cover ("KITCHEN & WARDROBES" for a kitchen template) → amber. A utility
@@ -4945,13 +4949,28 @@ function suggestTpl(o,templates,projects){
     const why=[cHit?'type '+f.code.toUpperCase():'',kHit?[...g.kinds].filter(k=>f.kinds.has(k)).join(' + '):'',bHit?f.beds+' bed':'',ph&&!cHit?'name':''].filter(Boolean);
     if(aw)why.push((qx||aw)+' — check it');
     else if(oRoom)why.push('title names another room too — check it');
+    return{t,g,score,strong,why,cHit,aw,oRoom};};
+  const sc=ts.map(t=>{
+    const r=evalT(t,sgTplName(t),[sgTplName(t)]);
+    /*(Tester round 1, item 1) an OLD template whose stored type name still differs from its name (until its next save): matching stays at
+      least as strict as main — whatever in the old type name would have blocked or demoted the match there (bed count, room, another
+      type, a hand) keeps it off green, with the reason. The old type name never PROMOTES a match and is never shown as the name.*/
+    const old=String(t.typeName||'').trim();let ow='';
+    if(r&&old&&t.name&&sgNorm(old)!==sgNorm(t.name)){
+      const r0=evalT(t,[t.name,old].join(' '),[t.name,old]),ok=typeKey(old,true),g2=sgFeat([t.name,old].join(' ')),ng=r.g;
+      const says=[g2.beds&&f.beds&&g2.beds!==f.beds&&g2.beds!==ng.beds?g2.beds+' bed':'',g2.code&&f.code&&g2.code!==f.code?'type '+g2.code.toUpperCase():'',
+        g2.kinds.size&&f.kinds.size&&![...g2.kinds].some(k=>f.kinds.has(k))?[...g2.kinds].join(' / '):'',ok.hand&&ok.hand!==tks.get(t.id).hand?ok.hand:''].filter(Boolean);
+      if(!r0||!r0.strong||ok.why==='hand unclear'||says.length)ow='old type name says "'+(says.join(', ')||old)+'" — rename the template (or save it) to confirm';}
+    if(!r)return null;
+    let{score,strong,why,cHit,aw,oRoom}=r;
+    if(ow){strong=false;why.push(ow);}
     // hand guard (20 Nov): green only when the hand of the title and the template are exactly the same (and the type, when both have one)
     const gk=tks.get(t.id);let hw='';
     if(fk.why==='hand unclear')hw='hand unclear in the title — check it';
     else if(gk.why==='hand unclear')hw='hand unclear in the template name — check it';
     else if(handUnknown)hw='hand not known — confirm singly';
     else if(fk.hand!==gk.hand||(fk.code&&gk.code&&fk.code!==gk.code))hw='title says '+tkLbl(fk)+', template is '+tkLbl(gk)+' — check the hand'; // the hand must always be the same; the type too when both name one (a type missing on one side is left to the matcher above, as before)
-    if(hw){strong=false;if(!aw&&!oRoom)why.push(hw);}
+    if(hw){strong=false;if(!aw&&!oRoom&&!ow)why.push(hw);}
     return{t,score,strong,why,cHit};
   }).filter(x=>x&&x.score>0).sort((a,b)=>b.score-a.score||String(sgTplName(a.t)).localeCompare(String(sgTplName(b.t))));
   if(!sc.length)return none(f.code?'No "Type '+f.code.toUpperCase()+'" template for this project':'No template matches the title',p.id);

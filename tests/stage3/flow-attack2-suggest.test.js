@@ -54,5 +54,7 @@ r = s('HOUSE 14 TYPE B KITCHEN (NO APPLIANCES)'); rec('N12 "(NO APPLIANCES)" —
 r = s('HOUSE 14 TYPE D KITCHEN'); rec('N13 "TYPE D KITCHEN" (no Type D template) is not green', notGreen(r), J(r));
 // (updated 20 Nov 2026, Garry: one name per template) the hidden type name is no longer read — the bed count must be in the template's NAME
 r = s('HOUSE 14 TYPE B 2-BED KITCHEN', CH, T.map(t => t.id === 'T2' ? { ...t, name: 'Type B 3-bed kitchen' } : t)); rec('N14 "TYPE B 2-BED KITCHEN" when the template is "Type B 3-bed" is not green', notGreen(r), J(r));
+// (Tester round 1) and with the bed count ONLY in the old hidden type name (old data, not yet re-saved): still never green
+r = s('HOUSE 14 TYPE B 2-BED KITCHEN'); rec('N14b the same when "3-bed" is only in the OLD type name → not green (as on main)', notGreen(r), J(r));
 r = s('HOUSE 14 KITCHEN'); rec('N15 "HOUSE 14 KITCHEN" (no type) is not green', notGreen(r), J(r));
 console.log(fail + ' failed of ' + (pass + fail));
