@@ -4586,23 +4586,29 @@ function ltiAfter(){if(document.querySelector('#iprev .lti-host')){document.quer
 // hand guard (20 Nov): a single ✓ Confirm where the title and the template are the same type but a different hand asks first
 function ltiHandOk(w){const o=DB.orders.find(x=>x.wo===w),r=ltiRows().find(x=>x.o.wo===w),t=r&&r.tid?lsList(r.tid):null;if(!o||!t)return true;
   const fk=typeKey(o.title,false),gk=typeKey(tplName(t),true);
-  if(!fk.code||!gk.code||fk.code!==gk.code||fk.hand===gk.hand)return true;
-  return confirm('Template is '+tkLbl(gk)+', title says '+tkLbl(fk)+' — use it anyway?');}
-function ltiConfirm(wos){
+  const uc=k=>k.why==='hand unclear';
+  if(fk.hand===gk.hand&&!uc(fk)&&!uc(gk))return true; // (Tester round 1, item 3) asked whenever the hands differ (or one can't be read) — also when one side names no type
+  const lb=(k,nm)=>(k.code?tkLbl(k):'"'+nm+'"')+(uc(k)?' (hand unclear)':!k.code&&!k.hand?' (standard)':'');
+  return confirm('Template is '+lb(gk,tplName(t))+', title says '+lb(fk,String(o.title||'').trim())+' — use it anyway?');}
+function ltiConfirm(wos,green){
   wos=wos.filter(w=>!LTI.busy.has(w));if(!wos.length)return;
   officeWho(async by=>{
     const rs=new Map(ltiRows().map(r=>[r.o.wo,r]));
     const go=wos.filter(w=>rs.get(w)&&rs.get(w).tid);
     go.forEach(w=>{LTI.busy.add(w);delete LTI.res[w];});ltiAfter();
-    let ok=0,bad=0,al=0;
+    let ok=0,bad=0,al=0,sk=0;
     for(const w of go){const tid=rs.get(w).tid;
+      // (Tester round 1, item 4) Confirm all green: the template is read again just before its list is made; a row that is no longer
+      // green against it (renamed / re-handed on another PC meanwhile) is skipped with the reason — a person decides
+      if(green){let s=null;try{await lsReloadList(tid);const o=DB.orders.find(x=>x.wo===w);s=o?lsSuggest(o):null;}catch(e){}
+        if(!s||s.level!=='strong'||s.tid!==tid){sk++;LTI.res[w]={err:'skipped — no longer green'+(s&&s.why?' ('+s.why+')':'')+'. Check it and tap ✓ Confirm',again:()=>{if(ltiHandOk(w))ltiConfirm([w]);}};LTI.busy.delete(w);ltiAfter();continue;}}
       try{const l=await confirmList(w,tid,by);ok++;if(l.already)al++;LTI.done.unshift({wo:w,name:l.name,tpl:ltiTplName(tid),already:!!l.already,gotMsg:l.gotMsg||''});delete LTI.pick[w];}
       catch(e){bad++;LTI.res[w]={err:e.message};}
       LTI.busy.delete(w);ltiAfter();
     }
     const g1=go.length===1&&LTI.done[0]&&LTI.done[0].gotMsg;
     if(g1&&!bad){toast(g1,true);return;}
-    toast(bad?ok+' list'+(ok!==1?'s':'')+' made, '+bad+' NOT saved — tap ↻ Retry on '+(bad!==1?'those rows':'that row'):ok+' list'+(ok!==1?'s':'')+' made ✓'+(al?' ('+al+' already made on another screen)':''),!!bad);
+    toast((bad?ok+' list'+(ok!==1?'s':'')+' made, '+bad+' NOT saved — tap ↻ Retry on '+(bad!==1?'those rows':'that row'):ok+' list'+(ok!==1?'s':'')+' made ✓'+(al?' ('+al+' already made on another screen)':''))+(sk?' · '+sk+' skipped — no longer green':''),!!(bad||sk));
   });
 }
 // "✓ Use <Excel list>": attach that uploaded list to the WO. A failure keeps WHICH list was chosen, so ↻ Retry attaches
@@ -4626,7 +4632,7 @@ function ltiBind(){
   q('[data-ltiedit]',b=>b.onclick=()=>openListEditor(b.dataset.ltiedit));
   q('[data-ltiview]',b=>b.onclick=()=>lsViewDlg(b.dataset.ltiview));
   q('[data-ltiretry]',b=>b.onclick=()=>{const w=b.dataset.ltiretry,r=LTI.res[w]||{};if(r.again)r.again();else ltiConfirm([w]);}); // ↻ Retry does the SAME thing again: an Excel list stays that Excel list, a link stays that link
-  q('#lti-all',b=>b.onclick=()=>{const qm=ltiQMatch();ltiConfirm(ltiRows().filter(r=>r.lvl==='strong'&&r.tid&&(!qm||qm(r))).map(r=>r.o.wo));}); // with a search on: only the green jobs the search is showing (the number on the button)
+  q('#lti-all',b=>b.onclick=()=>{const qm=ltiQMatch();ltiConfirm(ltiRows().filter(r=>r.lvl==='strong'&&r.tid&&(!qm||qm(r))).map(r=>r.o.wo),true);}); // with a search on: only the green jobs the search is showing (the number on the button)
   q('[data-ltixl]',b=>b.onclick=()=>{const i=b.dataset.ltixl.indexOf('|');ltiUse(b.dataset.ltixl.slice(0,i),b.dataset.ltixl.slice(i+1));});
   q('[data-ltistd]',b=>b.onclick=()=>lsNewStd(b.dataset.ltistd));
   q('[data-ltichg]',b=>b.onclick=()=>{LTI.open=LTI.open===b.dataset.ltichg?'':b.dataset.ltichg;ltiAfter();});
