@@ -82,7 +82,9 @@ for (const [tt, w] of mat) for (const [pn, ts] of [['onlyH', onlyH], ['onlyP', o
 }
 // usability (not safety): a unit titled with H / LH / RH is never green even against its exact-hand template — every handed unit
 // is confirmed one by one. Same on origin/main (the round-4 allow-list refuses a title word shorter than 3 letters it doesn't know).
-rec('usability: "TYPE 1A H" / "TYPE 1A LH" / "TYPE 1A RH" go green on their exact-hand template', !exact.length, exact.join(' | '));
+// (round 2, decided 21 Nov) a handed unit is NOT green even on its exact-hand template: it stays amber WITH a reason and is confirmed singly
+const exactR = []; for (const [tt, w] of mat) for (const [pn, ts] of [['onlyH', onlyH], ['both', both]]) if (w[pn]) { const r = sug(NEW, 'HOUSE 14 ' + tt + ' KITCHEN', ts); exactR.push([pn + ':' + tt, r.level, r.why]); }
+rec('decided: "TYPE 1A H" / "LH" / "RH" vs their exact-hand template → amber with a reason (confirmed singly), never green', exactR.every(([, l, why]) => l !== 'strong' && /check it|hand|title also says/.test(why)), exactR.map(x => x.join(' ')).join(' | '));
 if (OLD) rec('origin/main: "TYPE 1A LH" vs exact "Type 1A LH" is also not green (so this is not new)', !green(OLD, 'HOUSE 14 TYPE 1A LH KITCHEN', [T('l', 'Type 1A LH')]), sug(OLD, 'HOUSE 14 TYPE 1A LH KITCHEN', [T('l', 'Type 1A LH')]).why);
 // "both" with plain "TYPE 1A" where only an H (no LH/RH) exists next to the plain one: plain = standard → green on the plain one
 rec('plain "TYPE 1A" with "1A" + "1A H" (no LH/RH) → green on "1A" (plain = standard, Garry)', green(NEW, 'HOUSE 14 TYPE 1A KITCHEN', [T('p', 'Type 1A'), T('h', 'Type 1A H')]) === 'p', sug(NEW, 'HOUSE 14 TYPE 1A KITCHEN', [T('p', 'Type 1A'), T('h', 'Type 1A H')]).why);
@@ -97,7 +99,7 @@ if (OLD) rec('origin/main: "TYPE 2 KITCHEN" vs template "Type 2" (type name "Typ
 rec('branch: the same → still not green (a wardrobe list on a kitchen)', !green(NEW, 'HOUSE 14 TYPE 2 KITCHEN', tw), JSON.stringify(sug(NEW, 'HOUSE 14 TYPE 2 KITCHEN', tw)));
 const tl = [T('a', 'Type 2', { typeName: 'Type 2 LH' })];
 if (OLD) rec('origin/main: plain "TYPE 2" vs template "Type 2" (type name "Type 2 LH") → ' + sug(OLD, 'HOUSE 14 TYPE 2 KITCHEN', tl).level, true);
-rec('branch: plain "TYPE 2" vs template "Type 2" whose hidden type name says "Type 2 LH" → green (Garry: the name wins; INFO — the hidden LH is now invisible AND ignored)', green(NEW, 'HOUSE 14 TYPE 2 KITCHEN', tl) === 'a');
+rec('decided (round 2): plain "TYPE 2" vs template "Type 2" whose hidden type name says "Type 2 LH" → amber, the reason names the old type name', !green(NEW, 'HOUSE 14 TYPE 2 KITCHEN', tl) && /old type name says/.test(sug(NEW, 'HOUSE 14 TYPE 2 KITCHEN', tl).why), sug(NEW, 'HOUSE 14 TYPE 2 KITCHEN', tl).why);
 // a template whose name has no type but whose type name had one stops matching (safe direction — fewer greens)
 const tn = [T('a', 'Kitchen layout A', { typeName: 'Type B' })];
 if (OLD) rec('origin/main: "TYPE B" vs template "Kitchen layout A" (type name "Type B") → ' + sug(OLD, 'HOUSE 14 TYPE B KITCHEN', tn).level, true);
