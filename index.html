@@ -4595,6 +4595,14 @@ function ltiHandOk(w){const o=DB.orders.find(x=>x.wo===w),r=ltiRows().find(x=>x.
   if(fk.hand===gk.hand&&!uc(fk)&&!uc(gk))return true; // (Tester round 1, item 3) asked whenever the hands differ (or one can't be read) — also when one side names no type
   const lb=(k,nm)=>(k.code?tkLbl(k):'"'+nm+'"')+(uc(k)?' (hand unclear)':!k.code&&!k.hand?' (standard)':'');
   return confirm('Template is '+lb(gk,tplName(t))+', title says '+lb(fk,String(o.title||'').trim())+' — use it anyway?');}
+// (round 2, items 1 + 3) the template as the database has it NOW: null when it was deleted or archived (on another PC)
+async function ltiTplFresh(tid){const r=await lsGet('lists?select=*&id=eq.'+encodeURIComponent(tid));if(!r.length)return null;lsPut('lists',r);
+  const ln=await lsGet('list_lines?select=*&list_id=eq.'+encodeURIComponent(tid));LST.full.add(tid);lsPut('list_lines',ln);const t=lsList(tid);return t&&!t.archived?t:null;}
+// ↻ Retry on any row that failed or was skipped: the template is read again first, then it goes like a single ✓ Confirm (the hand question included)
+async function ltiRetry(w){const r=ltiRows().find(x=>x.o.wo===w);if(!r||!r.tid){ltiAfter();return;}
+  let t=null;try{t=await ltiTplFresh(r.tid);}catch(e){LTI.res[w]={err:e.message};ltiAfter();return;}
+  if(!t){LTI.res[w]={err:'that template no longer exists. Pick another template'};delete LTI.pick[w];ltiAfter();return;}
+  ltiAfter();if(ltiHandOk(w))ltiConfirm([w]);}
 function ltiConfirm(wos,green){
   wos=wos.filter(w=>!LTI.busy.has(w));if(!wos.length)return;
   officeWho(async by=>{
@@ -4605,9 +4613,10 @@ function ltiConfirm(wos,green){
     for(const w of go){const tid=rs.get(w).tid;
       // (Tester round 1, item 4) Confirm all green: the template is read again just before its list is made; a row that is no longer
       // green against it (renamed / re-handed on another PC meanwhile) is skipped with the reason — a person decides
-      if(green){let s=null;try{await lsReloadList(tid);}catch(e){bad++;LTI.res[w]={err:e.message};LTI.busy.delete(w);ltiAfter();continue;} // could not read it: Not saved + Retry, as any failed save
+      if(green){let s=null,t=null;try{t=await ltiTplFresh(tid);}catch(e){bad++;LTI.res[w]={err:e.message};LTI.busy.delete(w);ltiAfter();continue;} // could not read it: Not saved + Retry, as any failed save
+        if(!t){sk++;LTI.res[w]={err:'skipped — no longer green: that template no longer exists (archived or removed on another screen). Pick another template'};LTI.busy.delete(w);ltiAfter();continue;} // (round 2, item 3) never made from a cached copy
         {const o=DB.orders.find(x=>x.wo===w);s=o?lsSuggest(o):null;}
-        if(!s||s.level!=='strong'||s.tid!==tid){sk++;LTI.res[w]={err:'skipped — no longer green'+(s&&s.why?' ('+s.why+')':'')+'. Check it and tap ✓ Confirm',again:()=>{if(ltiHandOk(w))ltiConfirm([w]);}};LTI.busy.delete(w);ltiAfter();continue;}}
+        if(!s||s.level!=='strong'||s.tid!==tid){sk++;LTI.res[w]={err:'skipped — no longer green'+(s&&s.why?' ('+s.why+')':'')+'. Check it and tap ✓ Confirm'};LTI.busy.delete(w);ltiAfter();continue;}}
       try{const l=await confirmList(w,tid,by);ok++;if(l.already)al++;LTI.done.unshift({wo:w,name:l.name,tpl:ltiTplName(tid),already:!!l.already,gotMsg:l.gotMsg||''});delete LTI.pick[w];}
       catch(e){bad++;LTI.res[w]={err:e.message};}
       LTI.busy.delete(w);ltiAfter();
@@ -4637,7 +4646,7 @@ function ltiBind(){
   q('[data-ltichk]',b=>b.onclick=()=>lsViewDlg(b.dataset.ltichk,{check:true})); // h19: the same — view first, then Confirm
   q('[data-ltiedit]',b=>b.onclick=()=>openListEditor(b.dataset.ltiedit));
   q('[data-ltiview]',b=>b.onclick=()=>lsViewDlg(b.dataset.ltiview));
-  q('[data-ltiretry]',b=>b.onclick=()=>{const w=b.dataset.ltiretry,r=LTI.res[w]||{};if(r.again)r.again();else ltiConfirm([w]);}); // ↻ Retry does the SAME thing again: an Excel list stays that Excel list, a link stays that link
+  q('[data-ltiretry]',b=>b.onclick=()=>{const w=b.dataset.ltiretry,r=LTI.res[w]||{};if(r.again)r.again();else ltiRetry(w);}); // ↻ Retry does the SAME thing again: an Excel list stays that Excel list, a link stays that link
   q('#lti-all',b=>b.onclick=()=>{const qm=ltiQMatch();ltiConfirm(ltiRows().filter(r=>r.lvl==='strong'&&r.tid&&(!qm||qm(r))).map(r=>r.o.wo),true);}); // with a search on: only the green jobs the search is showing (the number on the button)
   q('[data-ltixl]',b=>b.onclick=()=>{const i=b.dataset.ltixl.indexOf('|');ltiUse(b.dataset.ltixl.slice(0,i),b.dataset.ltixl.slice(i+1));});
   q('[data-ltistd]',b=>b.onclick=()=>lsNewStd(b.dataset.ltistd));
