@@ -28,7 +28,7 @@ const row = { id: 'main', version: 1, nid: 5, orders: [H.order({ wo: 'WO-1', due
     rec('nothing to tick in the batch', await p.evaluate(() => !document.querySelector('.wl [data-rt],.wl [data-rna]')));
     // storage blocked: kept in memory, says "not remembered"
     await p.evaluate(() => { const o = Storage.prototype.setItem; Storage.prototype.setItem = function (k, v) { if (k === 'wpfSawBatch') throw new Error('QuotaExceededError'); return o.call(this, k, v); };
-      SB.read = true; SB.ids = []; SB.mem = false; wlShowBatch = false; render(); document.querySelector('[data-wlsel="L2"]').click(); wlShowBatch = true; render(); });
+      localStorage.removeItem('wpfSawBatch'); SB.read = true; SB.ids = []; SB.mem = false; wlShowBatch = false; render(); document.querySelector('[data-wlsel="L2"]').click(); wlShowBatch = true; render(); });
     const m = await p.evaluate(() => ({ ids: SB.ids.join(), txt: document.querySelector('.wl').innerText }));
     rec('storage blocked: the batch is held in memory and says "Not remembered on this device"', m.ids === 'L2' && /Not remembered on this device/.test(m.txt), m.ids + ' ' + m.txt.slice(0, 200));
     rec('the planner record never carries the batch', !S.patches.some(x => JSON.stringify(x).includes('wpfSawBatch')));

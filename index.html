@@ -7612,13 +7612,19 @@ let wlCust='';            // saw/stores: one-tap customer filter over the day's 
   remembered"). A house that is cut complete, archived, replaced or no longer on the saw queue drops out by itself, with a note.*/
 let wlShowBatch=false;    // saw: the ⚡ BATCH tab
 const SB={ids:[],mem:false,read:false,notes:[],away:new Set()}; // away: in the batch but off the saw queue for now (on hold, waiting for its check)
-function sbLoad(){if(SB.read)return;SB.read=true;
-  try{const v=JSON.parse(localStorage.getItem('wpfSawBatch')||'null');if(v&&Array.isArray(v.ids))SB.ids=[...new Set(v.ids.filter(x=>typeof x==='string'&&x))].slice(0,300);}
-  catch(e){SB.mem=true;}} // blocked, or not ours to read: start empty
+const SB_MAX=300;
+// force (round 2, item 6): read the device's storage again — before every change and when the tab gets focus, so a second tab on the
+// same device never brings back houses this one removed (or loses ones it added). Blocked storage: the page's own copy is kept.
+function sbLoad(force){if(SB.read&&(!force||SB.mem))return;SB.read=true; // after a failed write the stored copy is stale: this page's copy wins
+  try{const raw=localStorage.getItem('wpfSawBatch');const v=JSON.parse(raw||'null');
+    SB.ids=v&&Array.isArray(v.ids)?[...new Set(v.ids.filter(x=>typeof x==='string'&&x))].slice(0,SB_MAX):[];SB.away.forEach(id=>{if(!SB.ids.includes(id))SB.away.delete(id);});}
+  catch(e){SB.mem=true;}} // blocked, or not ours to read: keep what this page has
 function sbSave(){try{if(SB.ids.length)localStorage.setItem('wpfSawBatch',JSON.stringify({ids:SB.ids,at:new Date().toISOString()}));else localStorage.removeItem('wpfSawBatch');SB.mem=false;}catch(e){SB.mem=true;}}
 function sbHas(id){sbLoad();return SB.ids.includes(id);}
-function sbToggle(id){sbLoad();const i=SB.ids.indexOf(id);if(i>=0){SB.ids.splice(i,1);SB.away.delete(id);}else SB.ids.push(id);sbSave();}
-function sbClear(){sbLoad();SB.ids=[];SB.away.clear();sbSave();}
+function sbToggle(id){sbLoad(true);const i=SB.ids.indexOf(id);if(i>=0){SB.ids.splice(i,1);SB.away.delete(id);}
+  else if(SB.ids.length>=SB_MAX){toast('The batch is full ('+SB_MAX+' houses) — finish or take some out first',true);return;}else SB.ids.push(id);sbSave();}
+function sbClear(){sbLoad(true);SB.ids=[];SB.away.clear();sbSave();}
+window.addEventListener('focus',()=>{if(!SB.read)return;const was=SB.ids.join();sbLoad(true);if(SB.ids.join()!==was&&ROLE==='saw')render();});
 function sbNote(t){SB.notes=[t,...SB.notes.filter(x=>x!==t)].slice(0,6);}
 // open: the saw's open lists (TO DO, today and later days). Returns the batch's lists in the order they were added. Only once the
 // lists have loaded does a house that is not open drop out (a page still loading never empties the batch).
@@ -7630,10 +7636,10 @@ function sbLists(open){sbLoad();
       const s=l&&l.archived?lsSupersededBy(l):null;
       // (Tester round 1, item 5) only a finished / archived / replaced / deleted list leaves for good; one that is on hold or waiting
       // for its check stays in the batch (hidden) and shows again when it is back on the queue
-      const why=!l?'no longer on the planner':s?'replaced by "'+s.name+'" (add the new list if it is needed)':l.archived?'list archived':listDone(id).saw?'cut complete':'';
+      const why=!l?'no longer on the planner':s?'replaced by "'+s.name+'" (add the new list if it is needed)':l.archived?'list archived':listDone(id).saw?'cut complete':!(+l.saw>0)?'no saw lines left on it (changed by a new revision)':''; // (round 2, item 4)
       if(why){drop.add(id);SB.away.delete(id);sbNote(nm+' left the batch — '+why);}
       else if(!SB.away.has(id)){SB.away.add(id);sbNote(nm+' is off the saw queue for now (on hold or waiting for its check) — hidden from the batch until it is back');}});
-    if(drop.size){SB.ids=SB.ids.filter(id=>!drop.has(id));sbSave();}}
+    if(drop.size){sbLoad(true);SB.ids=SB.ids.filter(id=>!drop.has(id));sbSave();}}
   return SB.ids.map(id=>by.get(id)).filter(Boolean);}
 // A name is REQUIRED on every tick-off — blank records make the audit trail worthless.
 // Remembered per device, so it's one-time friction at each bench.
@@ -7810,8 +7816,11 @@ function printLabels(lsArr,mode){
   ticks each house's own list (tap a house to go to it). Waiting (N/A) lines are not in it; "check quantity" lines are red and never
   added in.*/
 function sbNotesHTML(){return SB.notes.map((t,i)=>`<div class="sb-nl"><span>ℹ ${escA(t)}</span><button data-sbnx="${i}" title="Hide this note">✕</button></div>`).join('');}
-function sawBatchHTML(bl){
-  const pl=n=>n!==1?'s':'';
+function sawBatchHTML(bl,away){
+  const pl=n=>n!==1?'s':'';away=away||0;
+  const awayTxt=away?' · '+away+' away (off the saw queue for now)':'';
+  if(!bl.length&&away)return `<div class="sb-top"><b>0 showing${awayTxt}</b><button class="btn btn-s" id="sb-empty" style="min-height:40px">✕ Empty batch</button></div>
+    <div class="sb-hint">The houses in this batch are on hold or waiting for their check — they show here again when they are back on the saw queue.</div>`;
   if(!bl.length)return `<div class="flr-none">The batch is empty — on 🪚 TO DO, tap <b>＋ Add to batch</b> on each house you are cutting together.</div>`;
   const hl=houseLabels(bl),rows=combineLists(bl,'saw',{withCut:true});
   const sn=o=>new Map(sheetNeed(bl,'','',Object.assign({anyDate:true,relOnly:'saw'},o)).mats.map(g=>[matKey(g.mat),g]));
@@ -7833,7 +7842,7 @@ function sawBatchHTML(bl){
   const house=l=>{const o=(l.wos||[]).map(w=>DB.orders.find(x=>x.wo===w)).find(Boolean),tr=tickableRows(l,'saw'),nt=tr.filter(r=>rowTicked(l.id,rowKey(r))).length,nh=listHoldRows(l,'saw','hold').length;
     return `<div class="sb-hl"><div class="sb-hn"><b>${escA(hl.get(l.id))}</b>${nP>1?'':' <span class="dsh-t">'+escA(l.project||'')+'</span>'} ${(l.wos||[]).map(w=>woChip(w)).join('')} ${o?fuHTML(o,'lst-chip'):''}</div>
       <div class="sb-ha"><span class="sb-cnt">cut ${nt} of ${tr.length}</span>${nh?`<span class="sb-w">⏸ ${nh} waiting</span>`:''}<button class="btn btn-g" data-sbgo="${escA(l.id)}">Open list</button><button class="btn btn-s" data-sblbl="${escA(l.id)}" title="Optional — print this house's labels">🏷 Labels</button></div></div>`;};
-  return `<div class="sb-top"><b>${bl.length} house${pl(bl.length)} · ${nP} project${pl(nP)} · ${pcut} of ${pcs} piece${pl(pcs)} cut</b><button class="btn btn-s" id="sb-empty" style="min-height:40px">✕ Empty batch</button></div>
+  return `<div class="sb-top"><b>${bl.length} house${pl(bl.length)} · ${nP} project${pl(nP)} · ${pcut} of ${pcs} piece${pl(pcs)} cut${awayTxt}</b><button class="btn btn-s" id="sb-empty" style="min-height:40px">✕ Empty batch</button></div>
     <div class="sb-hint">This table is to cut from. Tick the lines on each house's own list — tap a house to go to it.</div>
     ${SB.mem?'<div class="sb-mem">⚠ Not remembered on this device (its storage is blocked) — the batch lasts until this page is closed.</div>':''}
     ${[...boards.keys()].sort((a,b)=>bname(a).localeCompare(bname(b))).map(board).join('')||'<div class="flr-none">Nothing to cut in these houses.</div>'}
@@ -7861,7 +7870,7 @@ function renderWorkList(app,mode){
   const srtDue=(a,b)=>(listDueKey(a)||'9999').localeCompare(listDueKey(b)||'9999');
   const relRows=l=>listHoldRows(l,mode,'rel').length;
   const open=rel.filter(l=>!listDone(l.id)[mode]||relOpen(l,mode)).sort(srtDue);
-  const showB=mode==='saw'&&wlShowBatch,bl=mode==='saw'?sbLists(open):[]; // saw ⚡ BATCH: this device's batch
+  const showB=mode==='saw'&&wlShowBatch,bl=mode==='saw'?sbLists(open):[],nAway=mode==='saw'?Math.max(0,SB.ids.length-bl.length):0; // saw ⚡ BATCH: this device's batch (nAway: hidden while off the queue)
   const closed=rel.filter(l=>listDone(l.id)[mode]&&!relOpen(l,mode)).sort((a,b)=>String(listDone(b.id)[mode].at).localeCompare(String(listDone(a.id)[mode].at)));
   // The bench sees TODAY's work plus anything not cleared from past days — nothing else.
   const dueNow=open.filter(l=>dueToday(l,todayISO));                              // cut/pick by today, incl. overdue + cut-by on the non-working days ahead
@@ -7910,17 +7919,17 @@ function renderWorkList(app,mode){
   app.innerHTML=`<div class="wl"><h1>${cfg.icon} ${cfg.title}<span>today + anything not cleared · updates automatically</span></h1>
     ${mode==='fit'?dkBarHTML():''}<div class="wl-tabs">
       <button id="wl-tab-todo" class="${!wlShowDone&&!showB?'on':''}">${mode==='saw'?'🪚':'🧰'} TO DO — ${nNow} today${nOd?` <span style="color:#ffb3a7">(${nOd} overdue)</span>`:''}</button>
-      ${mode==='saw'&&(bl.length||showB)?`<button id="wl-tab-batch" class="${showB?'on':''}">⚡ BATCH — ${bl.length} house${bl.length!==1?'s':''}</button>`:''}
+      ${mode==='saw'&&(bl.length||nAway||showB)?`<button id="wl-tab-batch" class="${showB?'on':''}">⚡ BATCH — ${nAway?bl.length+' showing · '+nAway+' away':bl.length+' house'+(bl.length!==1?'s':'')}</button>`:''}
       <button id="wl-tab-hold" class="${wlShowHold?'on':''}">⏸ WAITING — ${nHold}</button>
       <button id="wl-tab-done" class="${wlShowDone?'on':''}">✓ DONE — ${closed.length}</button>
       <span class="wl-print"><button id="wl-pr1" title="Paper fallback — today's work and anything overdue, with tick boxes and initials">🖨 Print today</button><button id="wl-pr3" title="Paper fallback for a longer outage — the next 3 days">🖨 Next 3 days</button></span>
     </div>
     ${mode==='saw'?sbNotesHTML():''}
-    ${wlShowHold?`<div class="wl-hint">Rows parked because ${mode==='saw'?'the material':'stock'} isn't in. When it arrives, tap <b>ARRIVED — RELEASE</b> and the rows go straight back on the ${mode==='saw'?'saw':'stores'} queue as due work.</div>`+holdBookHTML(holdModes):wlShowDone?doneScreen():showB?sawBatchHTML(bl):`
+    ${wlShowHold?`<div class="wl-hint">Rows parked because ${mode==='saw'?'the material':'stock'} isn't in. When it arrives, tap <b>ARRIVED — RELEASE</b> and the rows go straight back on the ${mode==='saw'?'saw':'stores'} queue as due work.</div>`+holdBookHTML(holdModes):wlShowDone?doneScreen():showB?sawBatchHTML(bl,nAway):`
     ${mode==='saw'?sawNewListHTML(open)+waitListHTML()+sheetNeedHTML():''}
     ${custs.length>1?`<div class="wl-cust"><span>Customer:</span><button class="${!wlCust?'on':''}" data-wlc="">All · ${visAll.length+phAll.length}</button>${custs.map(c=>`<button class="${wlCust===c?'on':''}" data-wlc="${escA(c)}">${escA(c)} · ${nCu(c)}</button>`).join('')}</div>`:''}
     ${visible.length>1?`<div style="font-size:12px;color:var(--t3);margin:-4px 0 10px">${mode==='saw'?'Cutting several houses together? Tap <b>＋ Add to batch</b> on each list, then <b>⚡ Open batch</b> — one table grouped by board, with every house\'s share.':'Cutting several houses together? Tick the box on each list for a combined table with per-house quantities and location labels.'}</div>`:''}
-    ${mode==='saw'?(bl.length?`<div class="wl-selbar"><b>${bl.length} house${bl.length!==1?'s':''} ticked →</b>
+    ${mode==='saw'?(bl.length||nAway?`<div class="wl-selbar"><b>${bl.length} house${bl.length!==1?'s':''} ticked${nAway?' ('+nAway+' away)':''} →</b>
       <button class="btn2" id="wl-bopen">⚡ Open batch</button>
       <button class="btn3" id="wl-lblsel">🏷 Labels for selected</button>
       <button class="btn3" id="wl-clrsel">✕ Clear</button></div>`:''):selLists.length?`<div class="wl-selbar"><b>${selLists.length} house${selLists.length!==1?'s':''} selected</b>
