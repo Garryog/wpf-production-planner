@@ -112,7 +112,9 @@ const row0 = () => { const r = F.v2Row(); r.orders.push(H.order({ wo: 'WO-3', cu
       const nwp = await ctx.newPage(); nwp.on('pageerror', e => (S.errors = S.errors || []).push(String(e)));
       await S3.attach({ ctx, page: nwp }, S);
       await nwp.goto('https://wpf.test/?view=office'); await nwp.waitForFunction(() => typeof loadDB === 'function' && typeof XLSX !== 'undefined');
-      await nwp.evaluate(async () => { await loadDB(); localStorage.setItem('wpfPin_saw', '9000'); setRole('saw'); lsReset(); await lsLoad(); render(); }); await sleep(300);
+      // (round 3) the page's own start-up lsLoad() may still be running here: a lsReset() under it marks the lists loaded with an
+      // EMPTY cache (tests/batch/attack3-loaded.test.js, check A) and the batch is dropped. Wait for that load to finish — no timing.
+      await nwp.evaluate(async () => { await loadDB(); localStorage.setItem('wpfPin_saw', '9000'); setRole('saw'); while (LST.loading) await LST.loading; if (!LST.loaded) await lsLoad(); render(); });
       const nb = await nwp.evaluate(() => ({ tab: (document.getElementById('wl-tab-batch') || {}).textContent || null, ids: SB.ids.join(), notes: SB.notes.join(' / ') }));
       const left = ['L1', 'L2', 'L3'].filter(id => !doneIds.includes(id));
       rec('new saw page (same device): houses finished by the old screen left the batch with a note; ' + left.join(',') + ' stays', nb.ids === left.join() && /cut complete/.test(nb.notes), JSON.stringify(nb));
