@@ -4920,7 +4920,7 @@ function typeKey(text,isTpl){
   const handAt=i=>{const x=w[i]||'';return TK_HAND[x]?[TK_HAND[x],1]:null;}; // LEFT/RIGHT HAND(ED) were made LH/RH above
   // "1AH" = "1A H", "2LH" = "2 LH": a hand glued to a code that has a number in it
   const split=t=>{for(const suf of['HANDED','HAND','LH','RH','H'])if(t.length>suf.length&&t.endsWith(suf)){const k=t.slice(0,-suf.length);if(TK_CODE.test(k)&&/\d/.test(k))return[k,TK_HAND[suf]];}return[t,''];};
-  let ci=-1,code='',why='';
+  let ci=-1,code='',why='',nx='';
   const ti=w.map((x,i)=>x==='TYPE'?i:-1).filter(i=>i>=0);
   if(ti.length){ci=ti[0]+1;if(ti.filter(i=>TK_CODE.test(split(w[i+1]||'')[0])&&!TK_DROP.has(w[i+1])).length>1)why='two types';}
   else if(isTpl){const t0=/^T(\d{1,2}[A-Z]?)$/.exec(w[0]||'');
@@ -4932,11 +4932,17 @@ function typeKey(text,isTpl){
   if(ci>=0&&w[ci]&&!TK_DROP.has(w[ci])&&TK_CODE.test(split(w[ci])[0])){
     const[k,h]=split(w[ci]);code=k;used.add(ci);if(h)hs.push(h);
     let j=ci+1,a;while((a=handAt(j))){hs.push(a[0]);for(let q=0;q<a[1];q++)used.add(j+q);j+=a[1];}
+    if(isTpl&&w[j])nx=w[j]; // (round 2, item 2) the word straight after the type (and its hand): suggestTpl checks it can be understood
   }else if(!why)why=ti.length?'no type after TYPE':isTpl?'name doesn\'t read as a type':'no TYPE in the title';
   if(new Set(hs).size>1)why='hand unclear';hand=hs[0]||'';
   for(let i=0;i<w.length;i++){if(used.has(i))continue;const a=handAt(i);if(a&&w[i]!=='H'){why='hand unclear';break;}} // a bare H elsewhere is never a hand
-  return{code,hand,why};
+  return{code,hand,why,nx};
 }
+/*(Tester round 2, item 2) a template name with a word straight after its type that the matcher can't place ("Type 1 LHD", "Reversed",
+  "Flipped", "(L)", "Lft"…) may be a hand nobody listed: never green, unless that word is in the title too. Known: room words, bed counts,
+  numbers and the matcher's own words (SG_STOP). Only ever demotes.*/
+function tkOddWord(k,f){const x=String((k&&k.nx)||'').toLowerCase();if(!x||/^\d+$/.test(x)||/^\d(bed|beds|b)$/.test(x))return'';
+  if(TK_DROP.has(x.toUpperCase())||SG_STOP.has(x)||SG_POS.has(x)||SG_FLOOR.has(x)||SG_ROOM[x]||/^(floor|flr|rev|revision|version|new|old|v\d+|r\d+)$/.test(x)||(f&&f.words&&f.words.has(x)))return'';return x;}
 function tkLbl(k){return k.code?k.code+(k.hand?' '+k.hand:''):'?';}
 // (20 Nov, one name per template) every template here is matched by its NAME only; kept inside this block so the pure tests can load it
 function sgTplName(t){return t?String(t.name||t.typeName||''):'';}
@@ -4981,7 +4987,7 @@ function suggestTpl(o,templates,projects){
       const r0=evalT(t,[t.name,old].join(' '),[t.name,old]),ok=typeKey(old,true),g2=sgFeat([t.name,old].join(' ')),ng=r.g;
       const says=[g2.beds&&f.beds&&g2.beds!==f.beds&&g2.beds!==ng.beds?g2.beds+' bed':'',g2.code&&f.code&&g2.code!==f.code?'type '+g2.code.toUpperCase():'',
         g2.kinds.size&&f.kinds.size&&![...g2.kinds].some(k=>f.kinds.has(k))?[...g2.kinds].join(' / '):'',ok.hand&&ok.hand!==tks.get(t.id).hand?ok.hand:''].filter(Boolean);
-      if(!r0||!r0.strong||ok.why==='hand unclear'||says.length)ow='old type name says "'+(says.join(', ')||old)+'" — rename the template (or save it) to confirm';}
+      if(!r0||!r0.strong||ok.why==='hand unclear'||tkOddWord(ok,f)||says.length)ow='old type name says "'+(says.join(', ')||old)+'" — rename the template (or save it) to confirm';}
     if(!r)return null;
     let{score,strong,why,cHit,aw,oRoom}=r;
     if(ow){strong=false;why.push(ow);}
@@ -4989,6 +4995,7 @@ function suggestTpl(o,templates,projects){
     const gk=tks.get(t.id);let hw='';
     if(fk.why==='hand unclear')hw='hand unclear in the title — check it';
     else if(gk.why==='hand unclear')hw='hand unclear in the template name — check it';
+    else if(tkOddWord(gk,f))hw='can\'t tell the hand from the template name "'+sgTplName(t)+'" — check it';
     else if(handUnknown)hw='hand not known — confirm singly';
     else if(fk.hand!==gk.hand||(fk.code&&gk.code&&fk.code!==gk.code))hw='title says '+tkLbl(fk)+', template is '+tkLbl(gk)+' — check the hand'; // the hand must always be the same; the type too when both name one (a type missing on one side is left to the matcher above, as before)
     if(hw){strong=false;if(!aw&&!oRoom&&!ow)why.push(hw);}

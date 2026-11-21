@@ -77,6 +77,15 @@ s = S('HOUSE 14 ISLAND KITCHEN', [T('k', 'Island kitchen')]);
 rec('a title with no TYPE whose template name is in it stays green as before (no hand either side)', s.level === 'strong', JSON.stringify(s));
 s = S('HOUSE 14 ISLAND KITCHEN', [T('k', 'Island kitchen LH')]);
 rec('… but never against a handed template', s.level !== 'strong', JSON.stringify(s));
+// (Tester round 2, item 2) a word straight after the type in a template name that the matcher can't place → never green, unless the title has it
+for (const n of ['Type 1 LHD', 'Type 1 RHD', 'Type 1 Reversed', 'Type 1 Flipped', 'Type 1 (L)', 'Type 1 (R)', 'Type 1 Lft', 'Type 1 Handing', 'Type 1 Mir']) {
+  s = S('HOUSE 14 TYPE 1 KITCHEN', [T('x', n)]);
+  rec('template "' + n + '" on plain "TYPE 1" → not green, "can\'t tell the hand"', s.level !== 'strong' && /can't tell the hand/.test(s.why), JSON.stringify(s));
+}
+s = S('HOUSE 14 TYPE B ISLAND KITCHEN', [T('x', 'Type B island')]);
+rec('"Type B island" still green when the title says ISLAND too', s.level === 'strong', JSON.stringify(s));
+for (const n of ['Type B semi', 'Type B 3 bed', 'Type B kitchen', 'Type B ground floor', 'Type B v2'])
+  rec('ordinary "' + n + '" stays green on "TYPE B KITCHEN"' + (/3 bed/.test(n) ? ' 3 BED' : ''), S('HOUSE 14 TYPE B ' + (/3 bed/.test(n) ? '3 BED ' : '') + 'KITCHEN', [T('x', n)]).level === 'strong');
 // mixed hands never share a template: every combination
 const hands = ['', ' H', ' LH', ' RH'];
 let bad = [];
