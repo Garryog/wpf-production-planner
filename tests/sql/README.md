@@ -28,3 +28,23 @@ the guard can be run again afterwards.
 
 Expected last line: `ALL LIST GUARD CHECKS PASSED`. Three `ERROR:` lines are expected on the way (each announced by an
 `-- expected next:` line) — they are the restore refusing on purpose.
+
+## server-backup.sql — 23 Nov "Nightly server backup" (pg_cron)
+
+Run: `tests/sql/run-server-backup.sh` (same needs as above; makes `wpf_serverbackup_test`, runs the checks, drops it again).
+
+The runner cuts the Stage 1 box (which makes `planner_backups`) and the six 23 Nov grey boxes out of `SUPABASE_CHANGES.md` word for
+word. Local Postgres has no `pg_cron`, so the one line `create extension if not exists pg_cron;` is swapped for
+`pg-cron-stub.sql` (a stand-in with the same `cron.job`, `cron.schedule`, `cron.unschedule` names); the test runs the job's stored
+command itself, as one string, the way pg_cron does. The session clock is set to UTC+13 on purpose ("today" must mean the UTC date).
+
+What it checks: the job block run twice gives ONE job at `20 0 * * *` and changes no data; a night's run takes one copy
+`nightly · server` whose payload is exactly `{orders, nid, settings}` from the `main` record (settings without `listStore` /
+`listStoreAt`, as the app's `bakSettings()`), `orders_count` = jobs in the copy; copies older than 30 days go, newer ones (30 days
+minus 1 hour, 29 days, yesterday 23:59:59 UTC) stay; the planner record is not changed; a second run, or an office copy already
+taken today, adds nothing; a copy from yesterday 23:59:59 UTC does not count as today; no `main` record / orders missing / not a
+list → no copy and **nothing pruned**; json (not jsonb) columns and missing settings work; Garry's look-up boxes run; Undo run twice
+leaves no job and keeps every backup; the block can be run again after Undo. Expected last line: `ALL SERVER BACKUP CHECKS PASSED`.
+
+`server-backup-shape.test.js` (in the full suite, no database needed) checks the same shape against `backupNow()`,
+`bakSettings()` and `tryDailyBackup()` in index.html, so a change to the app's backup shows up as a failing test.
