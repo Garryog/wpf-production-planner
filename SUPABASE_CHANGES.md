@@ -34,6 +34,7 @@ screen is open.
 3. Clear the editor. Copy everything in the SECOND grey box, paste, **Run**.
    Expected: one row with a number under `schedule` (the job's number). A red error: stop and send a screenshot.
    (If Supabase asks to confirm running a query that changes things, press **Run** / confirm.)
+   Supabase may warn this is a destructive query — that's only the 30-day clean-up of old backups inside the nightly job. It does not touch the planner.
 4. Check the job is there: paste the THIRD grey box, **Run**. Expected: one row — `planner-nightly-backup`, `20 0 * * *`,
    `active = true`, `right_copy = true`.
 5. **Next morning** (after 00:20 UTC): paste the FOURTH grey box, **Run**. The top row should be from about 00:20 today with
