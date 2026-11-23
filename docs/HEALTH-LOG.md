@@ -2,6 +2,83 @@
 
 Weekly read-only check of the live planner (main branch + Supabase project WPF-Tracker). Newest entry at the top.
 
+## Mon 23 Nov 2026 — AMBER
+
+**Live?** Yes. Live record version 237, 661 jobs (616 last week). Last save Fri 20 Nov 09:13 UTC, by Garry. Five releases went live this week (#11–#15: board width, list fixes, quicker sync, green strip / step badge, Deliveries). The old-screen guard is on in the database.
+
+**1. Data safety: OK**
+- I compared every backup from 16 Nov to the live record, each one against the next:
+  - No due dates were blanked and no notes were lost or shortened.
+  - No hand-set hours changed, no board steps went backwards, and no delivery ticks were removed.
+  - No duplicate WO numbers.
+  - 45 jobs were added and none went missing.
+- The server logs show no failed saves (no 4xx/5xx on the planner, apart from the usual one bare 401 probe a day) and no Postgres errors. No screen was refused as "out of date".
+- 18 Nov Cienapps import (before it, a backup "moving 27 work orders to Shipped"): 204 due dates were updated from Cienapps. None of them were jobs whose date had been held or set by hand.
+- **4 jobs where Cienapps is behind the board.** Cienapps says 7 (Assembly complete) and the board says 8 (Palleted). The board kept 8, which is correct by design. The jobs are WO-2765-12, -13 and -15 (Kilmurry Lodge Hotel) and WO-2726-4 (Elliotts Aderrig 4). Their Cienapps delivery dates (30 Oct / 6 Nov) are already past.
+- Editors this week: Garry (313 changes), Johnny Glynn (20, on 19 Nov), plus the import. The 19 and 20 Nov daily backups were taken by an office screen with no name picked ("? [office]").
+
+**2. Backups: AMBER**
+- Backups exist for 16, 17, 18 (two), 19 and 20 Nov. **There were none on Sat 21 or Sun 22 Nov**, because no office screen was open; last week Garry's PC stayed on over the weekend. Nothing was lost, because nothing changed after Fri 09:13. But the three saves between 08:50 and 09:13 on Friday are not in any backup yet.
+- The newest backup (20 Nov, 661 jobs) reads back fine and matches the live jobs.
+- Backup size roughly doubled on 19 Nov (350 KB to 640–670 KB). The 18 Nov import added about 800 history lines. Still tiny.
+
+**3. Supabase health: OK**
+- Pro plan, healthy. The database is 49 MB (40 MB last week); 27 MB of that is still the empty cp_tracker table.
+- Security advisor: the same as last week (14 functions with a mutable search path, and 4 docket/list functions anyone can call). The fix for the first is still pending on health/2026-11-16-function-search-path.
+- Performance advisor: info notices only.
+
+**4. Usage: AMBER (same picture as last week)**
+- Garry made 160 cutting lists this week, so there are 138 live lists across 8 projects, plus 53 templates.
+- The Saw and Stores screens still aren't used:
+  - 0 lines cut and 0 lists marked saw-done this week.
+  - 1 line got out (17 Nov).
+  - Only 1 list has ever been sent.
+  - All 9 list events were made by Garry.
+- Most lists are on jobs at steps 7–9, which are already assembled or later.
+- Of the 250 jobs at steps 4–6 (ready for or in production):
+  - 32 have a list.
+  - 145 are marked "no list needed".
+  - About 73 have neither.
+- Holds: only the two old October example holds (L201, L203) are still open. There are 0 stores dockets in use (1 test).
+
+**5. Security: AMBER**
+- **The Drawing office PIN is still the default 8888.** It was flagged last week. All other PINs have been changed.
+- The repo has no secret keys, emails or phone numbers. The publishable key is in the repo, as expected.
+- Anyone with the public key can still read the plan data and PINs. This stays until the sign-in stage.
+
+**Last week's items**
+- clear-all-guard and function-search-path are still not merged.
+- The 21 missing jobs and the Drawing office PIN: there is no sign either was done.
+
+**Fixes ready (not on main)**
+- `health/2026-11-23-server-backup` (docs and tests only) adds a pending "Nightly server backup (pg_cron)" step to SUPABASE_CHANGES.md:
+  - The database copies the planner itself at 00:20 UTC each night, so no screen needs to be open.
+  - It only prunes copies older than 30 days, and only when today's copy is good.
+  - It comes with an undo step.
+  - Tests: SQL checks on a throwaway database, including 12 deliberate breakages, all caught after the Tester added a check. The full suite shows nothing new.
+  - Manager: GO WITH CONDITIONS. The condition (a line explaining Supabase's "destructive" warning) is done.
+  - Real pg_cron could not be tested here. The real proof is a "nightly · server" row the morning after Garry runs it.
+- `health/2026-11-23-clear-all-guard-refresh` is last week's Clear All guard brought up to date with main:
+  - It was 107 commits behind. The merge had no conflicts.
+  - The Tester's Low is fixed: the board is checked again after the name and after the PIN.
+  - Tests: 56/56 targeted. The full suite shows nothing new.
+  - Manager: GO. It replaces health/2026-11-16-clear-all-guard.
+
+**Test-suite housekeeping**
+- stage1 t4 (2,500 jobs in under 10 s) now fails every time on the test machine, on main too. It's only timing; no data is lost.
+- The ACCEPTED-FAILURES wording ("occasional") needs updating, and Garry needs to re-accept it.
+
+**Later idea (Architect)**
+- Don't prune old backups when today's copy has 0 jobs and the previous one had jobs.
+- This protects against a wrongly emptied board being copied for 30 days.
+
+**For Garry**
+1. Approve the nightly backup: merge A, run boxes 1–4, then check box 4 the next morning.
+2. Merge the Clear All refresh and tell the office it needs the Admin PIN.
+3. Set the Drawing office PIN.
+4. Check the 4 Kilmurry/Elliotts jobs in Cienapps (step 7 vs 8).
+5. Decide on Saw/Stores use.
+
 ## Mon 16 Nov 2026 — AMBER (first check; no earlier week to compare)
 
 **Live?** Yes. The new saving system (version / updated_by / updated_at, backups table, cutting-list tables) has been live since 10 Nov. Live record: version 54, 616 jobs, last save Fri 13 Nov 15:41 by Garry.
