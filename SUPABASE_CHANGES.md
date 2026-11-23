@@ -4,6 +4,102 @@ Newest at the top. Each block must be run in Supabase BEFORE the matching code g
 
 ---
 
+## 2026-11-23 — Nightly server backup (pg_cron) — PENDING, NOT YET RUN — weekly health check, needs Garry's OK
+
+**Why (plain English):** the daily safety copy is only taken when an **office** screen is open. Nobody had one open on
+Saturday 21 or Sunday 22 Nov, so there was **no backup for two days** (last one: Fri 20 Nov 08:50 UTC). This change makes the
+**database take the copy itself, every night at 00:20 UTC** (00:20 Irish winter time, 01:20 summer time), whether or not any
+screen is open.
+
+**What it does:**
+- Turns on `pg_cron`, Supabase's built-in timer (it is available on the project, just not switched on yet).
+- Adds ONE nightly job called `planner-nightly-backup`. Each night it:
+  1. copies the planner record (`production_planner`, id `main`) into `planner_backups` — **only if there is no backup with
+     today's date (UTC) yet** (the same "one a day" rule the office screens use). The copy reads `nightly · server` under
+     "reason", and its job count and contents are in **exactly the same shape** as the app's own copies (`orders`, `nid`,
+     `settings` — with the lists switch left out, as every app backup does), so it can be pasted back the same way;
+  2. deletes copies **older than 30 days** by the database's own clock (the same rule the app uses). Nothing newer is ever
+     touched, and it only deletes when a good copy for today exists — so if the copy ever fails, the old ones are kept.
+- The office screens carry on as before. After a nightly copy they see "today is done" and skip theirs; "Clear Week" and the
+  other "before …" copies are not affected. Settings → Backup "Last good backup" shows the nightly copy.
+- **No new table, so no GRANT lines are needed.** No app change, no data changed or deleted (apart from the same 30-day clean-up
+  the app already does). Safe to run twice (the job is removed by name and made again — never two of them).
+
+**When:** any time. The app works the same with or without it.
+
+### Steps for Garry
+1. Go to https://supabase.com/dashboard and open the WPF project. Left menu **SQL Editor** → **New query**.
+2. **Read-only check first** (changes nothing). Paste the FIRST grey box, **Run**. Expected: one row
+   `pg_cron_available = 1`, `backups_table = true`, `main_record = 1`. Anything else: **stop** and send a screenshot.
+3. Clear the editor. Copy everything in the SECOND grey box, paste, **Run**.
+   Expected: one row with a number under `schedule` (the job's number). A red error: stop and send a screenshot.
+   (If Supabase asks to confirm running a query that changes things, press **Run** / confirm.)
+4. Check the job is there: paste the THIRD grey box, **Run**. Expected: one row — `planner-nightly-backup`, `20 0 * * *`,
+   `active = true`, `right_copy = true`.
+5. **Next morning** (after 00:20 UTC): paste the FOURTH grey box, **Run**. The top row should be from about 00:20 today with
+   reason `nightly · server`, and `orders_count` = `jobs_in_copy` (about the number of jobs on the board). (If a screen was open
+   and had already taken that day's copy before 00:20, the job rightly does nothing that night — one copy a day.)
+6. If no copy appeared: paste the FIFTH grey box, **Run** and send a screenshot (it shows each night's run and any error).
+
+```sql
+select (select count(*) from pg_available_extensions where name = 'pg_cron') as pg_cron_available,
+       to_regclass('public.planner_backups') is not null as backups_table,
+       (select count(*) from public.production_planner where id = 'main') as main_record;
+```
+
+```sql
+-- ===================== NIGHTLY SERVER BACKUP — pg_cron job 'planner-nightly-backup', every night 00:20 UTC =====================
+create extension if not exists pg_cron;
+-- safe to run twice: the job of the same name (if any) goes first, so there is only ever one
+select cron.unschedule(jobid) from cron.job where jobname = 'planner-nightly-backup';
+select cron.schedule('planner-nightly-backup', '20 0 * * *', $job$
+-- 1. one copy a day: only when no backup (from a screen or from here) has today's date (UTC) — the app's rule.
+--    Same shape as the app's backupNow(): {orders, nid, settings}, settings without the lists switch (listStore / listStoreAt);
+--    orders_count = the number of jobs in the copy. Works whether the columns are json or jsonb.
+insert into public.planner_backups(reason, orders_count, payload)
+select 'nightly · server', jsonb_array_length(p.orders::jsonb),
+       jsonb_build_object('orders', p.orders::jsonb, 'nid', p.nid,
+         'settings', case when jsonb_typeof(p.settings::jsonb) = 'object' then p.settings::jsonb - 'listStore' - 'listStoreAt' else '{}'::jsonb end)
+  from public.production_planner p
+ where p.id = 'main' and jsonb_typeof(p.orders::jsonb) = 'array'
+   and not exists (select 1 from public.planner_backups b
+                    where (b.taken_at at time zone 'UTC')::date = (now() at time zone 'UTC')::date);
+-- 2. copies older than 30 days go, by the database clock (the app's rule) — only when a good copy for today exists
+delete from public.planner_backups
+ where taken_at < now() - interval '30 days'
+   and exists (select 1 from public.planner_backups b
+                where (b.taken_at at time zone 'UTC')::date = (now() at time zone 'UTC')::date
+                  and jsonb_typeof(b.payload->'orders') = 'array');
+$job$);
+```
+
+```sql
+select jobname, schedule, active, command like '%nightly · server%' as right_copy from cron.job where jobname = 'planner-nightly-backup';
+```
+
+```sql
+select id, taken_at, reason, orders_count, jsonb_array_length(payload->'orders') as jobs_in_copy from public.planner_backups order by taken_at desc limit 5;
+```
+
+```sql
+select start_time, status, return_message from cron.job_run_details
+ where jobid in (select jobid from cron.job where jobname = 'planner-nightly-backup') order by start_time desc limit 7;
+```
+
+**Undo** (stops the nightly job; every backup already taken is kept; safe to run twice). Leave `pg_cron` itself switched on —
+it does nothing without a job, and switching it off would also remove any other timed job added later.
+
+```sql
+-- UNDO THE NIGHTLY SERVER BACKUP — removes the job only, keeps every backup
+select cron.unschedule(jobid) from cron.job where jobname = 'planner-nightly-backup';
+```
+
+**Tested** on a throwaway local Postgres (never the live project) with a stand-in for `pg_cron`: `tests/sql/run-server-backup.sh`
+(takes the grey boxes above word for word). Also `tests/sql/server-backup-shape.test.js` (part of the full suite) checks the copy
+still has the same shape as the app's `backupNow()`.
+
+---
+
 ## 2026-11-18 — Empty-save guard + "restore a list to an old revision" — PENDING, NOT YET RUN — Garry decided YES (17 Nov evening)
 
 **Why (plain English):** on 17 Nov some templates opened looking empty on the live site. A save from a window like that would have
