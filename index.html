@@ -2392,7 +2392,9 @@ function renderBoard(app){
   const sn=document.getElementById('btn-snap');if(sn)sn.onclick=exportSnapshot;
   const ca=document.getElementById('btn-clearall');
   if(ca)ca.onclick=()=>DB.orders.length?officeWho(async by=>{ /*health 16 Nov: name first (goes on the backup reason via whoTag), then the Admin PIN*/
-    if(!lsAdminOk())return;
+    const none=()=>DB.orders.length?false:(toast('Nothing to clear — the board is already empty'),true); // another screen may have emptied it meanwhile (Tester H1)
+    if(none())return;
+    if(!lsAdminOk()||none())return;
     const typed=prompt('This deletes ALL '+DB.orders.length+' orders from the planner. A safety backup is saved to the database first.\n\nType DELETE to confirm:');
     if(typed!=='DELETE'){if(typed!==null)toast('Not deleted — you must type DELETE');return;}
     if(!await backupFirst('Clear all orders',by))return;
