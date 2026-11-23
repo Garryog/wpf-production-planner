@@ -79,6 +79,8 @@ Weekly read-only check of the live planner (main branch + Supabase project WPF-T
 4. Check the 4 Kilmurry/Elliotts jobs in Cienapps (step 7 vs 8).
 5. Decide on Saw/Stores use.
 
+**Garry's reply (23 Nov):** Drawing office PIN left as it is for now (his decision). Soft release of the Saw screen planned for this week, so next check should look at how the saw is using it.
+
 ## Mon 16 Nov 2026 — AMBER (first check; no earlier week to compare)
 
 **Live?** Yes. The new saving system (version / updated_by / updated_at, backups table, cutting-list tables) has been live since 10 Nov. Live record: version 54, 616 jobs, last save Fri 13 Nov 15:41 by Garry.
