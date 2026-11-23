@@ -48,3 +48,8 @@ leaves no job and keeps every backup; the block can be run again after Undo. Exp
 
 `server-backup-shape.test.js` (in the full suite, no database needed) checks the same shape against `backupNow()`,
 `bakSettings()` and `tryDailyBackup()` in index.html, so a change to the app's backup shows up as a failing test.
+
+`run-server-backup-attack.sh` (Tester, 23 Nov) runs `server-backup-attack.sql` on another throwaway database: a broken backup
+dated today stops the prune; 00:00:00 UTC today counts as today, 23:59:59.999 yesterday does not; 2,500 jobs with quotes/HTML/€/emoji
+copied exactly; orders saved as a text string → no copy, nothing pruned; the job works as a table owner that is not superuser
+and has no BYPASSRLS with RLS on (like Supabase's postgres role). Expected last line: `ALL SERVER BACKUP ATTACK CHECKS PASSED`.
