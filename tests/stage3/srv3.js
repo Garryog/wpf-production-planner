@@ -73,6 +73,8 @@ async function handle(S, route) {
       if (S.row && (!S.row.settings || S.row.settings.listStore !== 'v2') && !S.noSwitchCheck) return J(route, 400, { code: 'P0001', message: 'switched off: the cutting lists are on the old store' });
       const args = JSON.parse(req.postData() || '{}');
       S.rpcCalls.push({ fn: rpc[1], args });
+      // (18 Nov) before the empty-save guard SQL is run, the database has no p_empty_ok: PostgREST finds no such function (nothing runs)
+      if (rpc[1] === 'save_list_revision' && S.db.sql18 === 'before' && 'p_empty_ok' in args) return J(route, 404, { code: 'PGRST202', message: 'Could not find the function public.save_list_revision(p_by, p_empty_ok, p_expect, p_lines, p_list, p_reason) in the schema cache', details: null, hint: 'Perhaps you meant to call the function public.save_list_revision(p_by, p_expect, p_lines, p_list, p_reason)' });
       const out = f(S.db, args);
       if (S.dropReply && S.dropReply-- > 0) return route.abort('connectionreset'); // it landed, the reply is lost
       return J(route, 200, out);

@@ -41,9 +41,9 @@ const made = (S, wo) => S.db.t.lists.filter(l => (l.wos || []).includes(wo) && !
     await t.page.evaluate(() => document.querySelector('[data-lticonf="WO-1"]').click());
     await F.sleep(700);
     const l1 = D.find(S.db, 'lists', 'WO:WO-1'), ll1 = S.db.t.list_lines.filter(x => x.list_id === 'WO:WO-1');
-    rec('✓ Confirm WO-1: list WO:WO-1 made from Type B kitchen rev 1, attached to WO-1, named after the house, lines copied', l1 && l1.wos.join() === 'WO-1' && l1.template_id === 'T1' && l1.source === 'template' && l1.name === '14' && ll1.length === 4 && l1.created_by === 'Ann', JSON.stringify(l1 && { w: l1.wos, n: l1.name, by: l1.created_by }));
+    rec('✓ Confirm WO-1: list WO:WO-1 made from Type B kitchen rev 1, attached to WO-1, named after the template type (Part 4, Garry 10 Nov — was the house "14"), lines copied', l1 && l1.wos.join() === 'WO-1' && l1.template_id === 'T1' && l1.source === 'template' && l1.name === 'Type B 3-bed' && ll1.length === 4 && l1.created_by === 'Ann', JSON.stringify(l1 && { w: l1.wos, n: l1.name, by: l1.created_by }));
     p = await panel(t.page);
-    rec('WO-1 leaves the panel; the result line says so', p && !p.rows.some(r => r.startsWith('WO-1:')) && /✓ WO-1 — "14" from Type B 3-bed/.test(p.t), p && p.t.slice(0, 300));
+    rec('WO-1 leaves the panel; the result line says so', p && !p.rows.some(r => r.startsWith('WO-1:')) && /✓ WO-1 — "Type B 3-bed" from Type B 3-bed/.test(p.t), p && p.t.slice(0, 300));
     // change the template on the amber row
     await t.page.evaluate(() => document.querySelector('[data-ltichg="WO-3"]').click());
     await t.page.evaluate(() => { const s = document.querySelector('[data-ltisel="WO-3"]'); s.value = 'T2'; s.onchange(); });

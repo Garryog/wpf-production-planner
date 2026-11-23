@@ -15,6 +15,17 @@ const j = JSON.stringify;
 const HEAD_A = /id="del-wkbar"/.test(require('fs').readFileSync(require('path').join(__dirname, '../../index.html'), 'utf8'));
 const MAIN0 = A.gitShow('origin/main');
 const MAIN = HEAD_A && MAIN0 && !/id="del-wkbar"/.test(MAIN0) ? (A.gitShow('ba6ecd8') || MAIN0) : MAIN0;
+// FINAL round, 14 Nov 2026 (list window release re-point). Two things changed when the Deliveries weeks release (which carries this
+// Project filter) went live on main on 13 Nov and main was merged into the cutting-list window branch:
+//  (a) origin/main now HAS the filter, so it is no longer "an old-version screen" for check 12c/12d — the old version there is the
+//      last one before the filter (ba6ecd8, the same commit this file already used while main was behind);
+//  (b) this branch = origin/main + the cutting-list window, which changes three other screens ON PURPOSE with the lists switch ON
+//      (see LW_NORM below). Check 11 [lists ON] compares with origin/main after taking exactly those three out, and checks they
+//      are really there. With the switch OFF nothing is taken out: the page must still be character-for-character origin/main.
+// When the list window is on main too, LW is false and both go back to a plain comparison with origin/main.
+const HEADSRC = require('fs').readFileSync(require('path').join(__dirname, '../../index.html'), 'utf8');
+const PREFILTER = MAIN0 && /function lpfSec\(/.test(MAIN0) ? (A.gitShow('ba6ecd8') || null) : MAIN; // a version from before the Project filter
+const LW = !!MAIN && /pm-ls/.test(HEADSRC) && !/pm-ls/.test(MAIN); // HEAD has the list window, origin/main does not (yet)
 const wait = (p, ms) => p.evaluate(ms => new Promise(r => setTimeout(r, ms)), ms || 80);
 
 const snap = p => p.evaluate(() => {
@@ -42,7 +53,18 @@ async function openHtml(browser, S, html, role, vp, lsInit) {
   return t;
 }
 // the page, with the bits that legitimately differ run to run taken out
-const appHtml = p => p.evaluate(() => document.getElementById('app').innerHTML.replace(/\s+/g, ' '));
+// R1 (19 Nov): Settings → ⏱ Sync speed (#set-sync) is a deliberate new panel — taken out on both sides before comparing
+const appHtml = p => p.evaluate(() => { document.querySelectorAll('#app #set-sync').forEach(e => e.remove()); return document.getElementById('app').innerHTML.replace(/\s+/g, ' '); });
+// LW_NORM — the page with the cutting-list window's three deliberate lists-ON changes taken out (counted, so the test can say they were there):
+//  1. PM screen: the read-only "📋 cutting list …" status on each job row (class pm-lr on the row + a .pm-ls span) — plan step 7
+//  2. saw / Production Manager: the default list owner is "Production Manager, Garry and Drawing office" (was "Production Manager") — Garry 13 Nov
+//  3. Settings: the "💾 Storage on this device" panel (#set-store) — L10 (shown with lists ON; hidden with lists OFF, Garry's answer 8 = B)
+const appHtmlLW = p => p.evaluate(() => { const app = document.getElementById('app'), n = { pm: 0, owner: 0, store: 0 };
+  app.querySelectorAll('.pm-ls').forEach(e => { e.remove(); n.pm++; }); app.querySelectorAll('.pm-lr').forEach(e => e.classList.remove('pm-lr'));
+  app.querySelectorAll('#set-store').forEach(e => { e.remove(); n.store++; });
+  app.querySelectorAll('#set-sync').forEach(e => e.remove()); // R1 (19 Nov): Sync speed panel, deliberate
+  const h = app.innerHTML.replace(/\s+/g, ' ').replace(/owner Production Manager, Garry and Drawing office/g, () => { n.owner++; return 'owner Production Manager'; });
+  return { h, n }; });
 
 (async () => {
   const browser = await H.chromium.launch();
@@ -329,15 +351,18 @@ const appHtml = p => p.evaluate(() => document.getElementById('app').innerHTML.r
         ['office', 'b'], ['office', 'd'], ['office', 'h'], ['office', 'i'], ['office', 'x'], ['office', 's']];
       const diffs = [];
       for (const on of [true, false]) {
-        const grab = async html => { const S = X.server(on ? {} : { off: true }); const out = {};
+        const lwn = { pm: 0, owner: 0, store: 0 };
+        const grab = async (html, lw) => { const S = X.server(on ? {} : { off: true }); const out = {};
           let cur = null, t = null;
           for (const [role, sub] of views.concat(on ? [] : [['office', 'l'], ['design', null]])) {
             if (role !== cur) { if (t) await t.page.context().close(); t = await openHtml(browser, S, html, role, { width: 1280, height: 900 }, LSI); cur = role; }
             await t.page.evaluate(async ({ role, sub }) => { if (role === 'office') showTab(sub); if (role === 'prod') { prodTab = sub; render(); } await new Promise(r => setTimeout(r, 120)); }, { role, sub });
-            out[role + (sub ? ':' + sub : '')] = await appHtml(t.page);
+            if (lw) { const r = await appHtmlLW(t.page); out[role + (sub ? ':' + sub : '')] = r.h; Object.keys(lwn).forEach(k => { lwn[k] += r.n[k]; }); }
+            else out[role + (sub ? ':' + sub : '')] = await appHtml(t.page);
           }
           if (t) await t.page.context().close(); out._err = (S.errors || []).length; return out; };
-        const a = await grab(HEADHTML), b = await grab(MAIN);
+        const a = await grab(HEADHTML, LW && on), b = await grab(MAIN);
+        if (LW && on) rec('11 lists switch ON, list window release: the three deliberate changes ARE on these screens (PM list status, the three list owners named, Settings → Storage on this device) — they are taken out before the comparison below', lwn.pm > 0 && lwn.owner > 0 && lwn.store === 1, j(lwn));
         const names = Object.keys(a).filter(k => k !== '_err');
         const same = names.filter(k => a[k] === b[k]), diff = names.filter(k => a[k] !== b[k]);
         diff.forEach(k => { let i = 0; while (i < a[k].length && a[k][i] === b[k][i]) i++; diffs.push((on ? 'ON ' : 'OFF ') + k + ' @' + i + ': HEAD «' + a[k].slice(Math.max(0, i - 60), i + 120) + '» MAIN «' + b[k].slice(Math.max(0, i - 60), i + 120) + '»'); });
@@ -358,7 +383,7 @@ const appHtml = p => p.evaluate(() => document.getElementById('app').innerHTML.r
       rec('12a picking / clearing the filter saves NOTHING to the database (no new saved fields): 0 writes, record version and settings unchanged', writes.length === 0 && S.row.version === v0 && j(S.row.settings) === set0, j(writes.slice(0, 5)) + ' ' + j(S.patches.slice(-1)).slice(0, 300));
       rec('12b the only thing kept is one value on the device (wpfListProj)', await pn.evaluate(() => localStorage.getItem('wpfListProj')) === 'P1');
       // same device, old version opened (it shares localStorage with the new one)
-      const old = await openHtml(browser, S, MAIN, 'office', { width: 1280, height: 900 }, { wpfListProj: 'P1' });
+      const old = await openHtml(browser, S, PREFILTER || MAIN, 'office', { width: 1280, height: 900 }, { wpfListProj: 'P1' }); // an old version = one from before the filter (origin/main has it since 13 Nov)
       const o = await old.page.evaluate(async () => { showTab('l'); await new Promise(r => setTimeout(r, 100)); return { rows: document.querySelectorAll('[data-lhrow]').length, issue: document.querySelectorAll('[data-ltirow]').length, bar: !!document.getElementById('lpf'), oldSel: !!document.getElementById('lh-proj') }; });
       rec('12c an old-version screen with the new remembered value on the same device: works as before, shows every project (6 lists, 8 to issue)', o.rows === 6 && o.issue === 8 && !o.bar && o.oldSel, j(o));
       // old screen makes a list; new screen (filtered) picks it up

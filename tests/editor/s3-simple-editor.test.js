@@ -23,12 +23,12 @@ const set = (k, v) => `(()=>{const e=document.querySelector('.pod-ovl [data-mr="
   // ---- a new list: the bar
   const a = await pg.evaluate(() => { openListEditor(null, 'WO-2', 'P1'); const ov = document.querySelector('.pod-ovl'), bar = ov.querySelector('.me-bar');
     const vis = el => !!el && !el.hidden && !el.closest('details:not([open]) > div') && getComputedStyle(el).display !== 'none';
-    return { first: bar.querySelector('button').id, firstCls: bar.querySelector('button').className, barBtns: [...bar.querySelectorAll(':scope > button')].map(b => b.id),
+    return { startIds: [...ov.querySelectorAll('#me-start button')].map(b => b.id).join(), first: bar.querySelector('button').id, firstCls: bar.querySelector('button').className, barBtns: [...bar.querySelectorAll(':scope > button')].map(b => b.id),
       more: !!ov.querySelector('#me-more'), moreOpen: ov.querySelector('#me-more').open, unitVis: vis(ov.querySelector('#me-addunit')), unitInDom: !!ov.querySelector('#me-addunit'),
       keysHidden: ov.querySelector('.me-keys').hidden, carcInMore: !!ov.querySelector('#me-more #me-carc'), nocutInMore: !!ov.querySelector('#me-more #me-nocut'),
       units: ov.querySelector('#me-units').checked, font: getComputedStyle(ov.querySelector('[data-mr="0|item"]')).fontSize, longHelp: /Rows with a length or width go to the/.test(ov.querySelector('.pod-in').innerText) }; });
   rec('"＋ Heading" is the first button, and green', a.first === 'me-addhdr' && /btn-g/.test(a.firstCls), J(a));
-  rec('the bar keeps only + Heading, + Row, Insert from template, Import from Excel (Garry 9 Nov) and "?" (everything else under More)', J(a.barBtns) === J(['me-addhdr', 'me-addsaw', 'me-instpl', 'me-impxl', 'me-help']), J(a.barBtns));
+  rec('the bar keeps only + Heading, + Row, Project materials and "?" (12 Nov: template / Excel / old list are under ONE "Start from…" at the top; everything else under More)', J(a.barBtns) === J(['me-addhdr', 'me-addsaw', 'me-mats', 'me-help']) && a.startIds === 'me-instpl,me-impxl,me-findold', J(a.barBtns));
   rec('More holds No cutting / No fittings, Unit blocks and the carcass / door colours; it starts closed', a.more && !a.moreOpen && a.carcInMore && a.nocutInMore, J(a));
   rec('unit blocks hidden by default on a new list (Unit blocks unticked, "+ Unit block" not shown)', !a.units && !a.unitVis && a.unitInDom, J(a));
   rec('help and keyboard hints are behind "?" (hidden until pressed); no long help text on screen', a.keysHidden && !a.longHelp, J(a));
@@ -75,10 +75,10 @@ const set = (k, v) => `(()=>{const e=document.querySelector('.pod-ovl [data-mr="
   // ---- Insert from template: a house-type template goes in whole (headings, sub-headings, bought in)
   await pg.evaluate(() => { openListEditor(null, 'WO-2', 'P1'); document.getElementById('me-instpl').click(); });
   await F.sleep(100);
-  await pg.evaluate(() => document.querySelector('[data-itt="T1"]').click());
+  await pg.evaluate(() => document.querySelector('[data-itt="T1"]').click()); await new Promise(r => setTimeout(r, 600)); await pg.evaluate(() => { const hk = document.getElementById('it-hok'); if (hk) hk.click(); }); // (16 Nov) How many? / Name it → Insert
   await F.sleep(400);
   const ins = await pg.evaluate(() => { const ov = document.querySelector('.pod-ovl'); return { n: document.querySelectorAll('.pod-ovl').length, rows: [...ov.querySelectorAll('[data-row]')].map(r => r.className.replace(/\s+/g, ' ') + ':' + (r.querySelector('[data-mr$="|item"]') || {}).value), buy: (ov.querySelector('[data-mbuy="3"]') || {}).checked, t: document.getElementById('toast').textContent }; });
-  rec('Insert from template (house type): the whole template goes in, no "how many units" question', ins.n === 1 && ins.rows.length === 5 && /Added 5 rows from template Type A/.test(ins.t), J(ins));
+  rec('Insert from template (house type): the whole template goes in, no "how many units" question', ins.n === 1 && ins.rows.length === 5 && /Added template Type A/.test(ins.t) /* (16 Nov) the toast wording changed with How many? / Name it */, J(ins));
   rec('…headings stay headings / sub-headings and Bought in stays ticked', /me-h/.test(ins.rows[0]) && /me-hs/.test(ins.rows[1]) && ins.buy === true, J(ins.rows));
   await pg.evaluate(() => document.querySelectorAll('.pod-ovl').forEach(x => x.remove()));
   // ---- phone: Heading / Sub-heading box and the Bought in tick are on the cards
