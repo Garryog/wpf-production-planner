@@ -1,0 +1,735 @@
+# Plan — the cutting list window (small release, target Wed 18 Nov 2026)
+
+Branch `feature/list-window`, cut from `main` (12 Nov, after the Shipped steps release). Goes live AFTER the Deliveries weeks
+release (Mon 16 Nov); when that is merged to `main`, `main` is merged into this branch.
+Garry, 12 Nov: "i really want to get working on the cutting list side of planner". Requests: ROADMAP sections L1–L12, DD1,
+"Decisions 10 Nov 2026, 16:18", "Garry 10–12 Nov".
+
+## Goal
+Making a cutting list is one obvious path: open it from the job → fill the rows → one big Save → "Saved ✓ — list is with the
+Saw & Stores". Nobody picks a project by hand, the Cienapps work order number is always there, and there are as few buttons
+as possible. The production manager is old-school; buy-in depends on this being simple.
+
+## Where the code comes from
+Most of L1–L12 was already built and attacked on `feature/project-details-v2` (10–12 Nov), mixed in with the PM / sequence /
+spec-sheet work that is NOT part of this release. This release **ports only the list-window commits** onto `main` and leaves
+the rest behind:
+
+| Piece | Commits on project-details-v2 (in order) |
+|---|---|
+| Matching key "same house" (project + floor + unit), JS only | 7141f0f, fde9ddf, bbf8622 (JS parts only — no SQL) |
+| L1 + L3 Floor / Unit / Title boxes, find the WO | 3c29ded, b32232d, eb9f773, 5fd2d5a |
+| L4 P-number last resort, purple "not from Cienapps", two PCs | 39f230d, 641b56b, 419e580, 1d17d08 |
+| L7, L6 wording | 7f46cbc, 7e47894 |
+| L8 ✕ Close, Saved ✓ panel | 351eb55, d744ca2 |
+| Customer = project (L5) | f2aaa48, e7323af, 319a6cb |
+| L6 New material first time | fee4b2f |
+| L11 + L12 + list name not pre-filled | cd7163a |
+| L10 storage bar + Settings | 871609e |
+| Tests | the test files those commits add or change, 2a2534e, 5d9ebc1, 63226eb (attack 5) |
+| Later, after the Deliveries release is on main: L9 | 8c5903b, d23371e, 1199eb2 |
+| Later, own decision (see Q1): L4b merge on import | 2973ddd, 889ee7f, e7ba7e2 |
+
+Left behind on purpose: spec sheets ("✎ Project details"), PM sequence, pre-production pool, upload matching, every SQL block.
+**No database change in this release.**
+
+## The window — wireframe in words
+
+Opened from a job (the normal way):
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ ✍ New cutting list                                              [ ✕ Close ]  │
+│ WO-2617-4 · ASPECT ATHENRY                       [ Due Fri 14 Nov · Wk 46 ]  │  ← WO always shown (L2); due badge (DD1)
+│ Floor [ 7  ]  Unit [ 231 ]  Title [ Kitchen type B          ]                │  ← three boxes (L1)
+│ List name (optional) [                    ]   e.g. "Kitchen — Type B"        │  ← empty, free name (item 7)
+│ Start from: [ Standard blank list ▾ ]                                        │  ← ONE choice (item 1)
+│              · Standard blank list · A template… · An Excel file… · An old list…
+│──────────────────────────────────────────────────────────────────────────────│
+│ #  Description        Qty   L     W     Material ▾   Edging 1  Edging 2  Note │  ← "Qty" hint in the empty box (L7)
+│ 1  [            ]    [Qty] [L]   [W]   [        ▾]  …                         │     Material ▾ ends with "＋ New material…" (L6)
+│ [ ＋ Row ] [ ＋ Heading ]                                   More ▾            │  ← More ▾: undo, no cutting / no fittings,
+│                                                                               │     unit blocks, carcass / door material,
+│                                                                               │     🧱 Project materials (add / edit), help
+│                                   [   SAVE LIST → SAW & STORES   ]            │  ← one big button
+└──────────────────────────────────────────────────────────────────────────────┘
+after Save:   Saved ✓ — list is with the Saw & Stores            [ Close ]       (L8)
+```
+
+- **Project line.** WO known → the project is the WO's customer, shown as text; found or made automatically (item 2). No
+  drop-down, no "Pick the project." message. A project picker appears ONLY when the window is opened with no work order
+  (＋ New list on the Lists page): then Project ▾ first, then Work order ▾ listing only that project's jobs (item 4).
+- **Work order ▾ (no-WO path only).** This project's live jobs, earliest due first, no date last:
+  `WO-2617-4 · Fl 7 · Unit 231 · Kitchen B · due 14 Nov`; shipped / on-hold left out; `✓ has a list` on jobs that have one.
+- **WO blank (L3).** "Find the Cienapps WO" looks it up by project + floor + unit: one match fills in and says what matched;
+  several → short pick list; none → "No Cienapps job found" and, only after the person confirms, a P-number (purple, "not from
+  Cienapps") (L4).
+- **Start from… (item 1).** Replaces the separate "📐 Insert from template", "📥 Import Excel" buttons in the window and the
+  need to go to "Find old list" first. Shown only on a NEW list that has no typed rows yet (after that it would overwrite
+  work — it then asks first). "Insert from template" for adding a second unit to a list in progress moves under More ▾.
+- **Save as template** and 🕘 History: shown only to the Drawing office and Admin roles (item 1). Everyone else never sees them.
+- **✕ Close** top right at all times; asks only when something was typed and not saved. Clicking outside does nothing (L8).
+- **Phone (360 px):** same order top to bottom, one card per row as today, the Save button full width and always in reach.
+
+Lists page: the top bar keeps `＋ New list` and `🔍 Find old list`; `📥 Import Excel` moves into the window's Start from…
+(ASSUMED — see Q3).
+
+## Key questions for Garry (built on the recommended answer; say if different)
+1. **P-number → Cienapps WO merge when the import arrives (second half of L4).** You already listed this as release 4 of
+   the small releases. (a) **Recommended:** keep it as its own release right after this one — this release makes P-numbers
+   rare (confirmed last resort, flagged purple) and warns "two jobs for one house"; (b) put the merge into this release (more
+   to test, likely past 18 Nov).
+2. **Who may "Save as template".** (a) **Recommended / built:** Drawing office and Admin only; (b) also Production Manager.
+3. **"📥 Import Excel" on the Lists page top bar.** (a) **Recommended / built:** only inside the window under "Start from…";
+   (b) keep the top-bar button as well.
+4. **Floor or Unit blank on either side when looking up the WO.** (a) **Recommended / built:** no automatic match — the
+   person picks from the project's jobs; (b) match on the one that is filled in.
+
+## What must NOT change
+- One live list per work order. Saved lists, templates, materials and projects are untouched (no migration).
+- What the saw and stores see, tick and print. Revisions, checks, holds.
+- Excel import still reads the current template (and the Floor / Unit / WO cells when present).
+- Lists switched OFF: the old screens behave exactly as today.
+- An old screen left open (today's live version) must not be able to damage a list made in the new window.
+- Nothing is ever deleted; no other app's stored copies are removed (L10).
+
+## Risks
+- The port drops the spec-sheet / sequence code the original commits sat beside — every conflict needs reading, not guessing.
+- Two PCs making a list for the same job, or a P-number for the same house, at the same moment.
+- Customer renamed in Cienapps → a second project for the same customer (rule: one project per customer however spelled;
+  a "contains" fit is asked, never assumed).
+- Two units with the same number in different blocks (floor / block must be part of the match).
+- Fewer buttons must not hide something the Drawing office uses daily (templates, Excel) — they stay one tap away.
+
+## Acceptance checks (Tester)
+1. From a job: window opens with WO, project, floor, unit, title filled; no project picker; type rows; Save; "Saved ✓ — list
+   is with the Saw & Stores"; Close. The saw sees it.
+2. Customer with no project yet → project made from the customer, once; second list for the same customer reuses it.
+3. No WO: pick project → WO list shows only that project's jobs, due-date order, shipped / on hold missing, "has a list" marked.
+4. WO blank, floor + unit typed: one match fills in; two matches → pick; none → P-number only after confirm, shown purple.
+5. "＋ New material…" works first time, with and without an existing project; asked once.
+6. Empty Qty box shows "Qty". List name empty on open; a typed name is found in Find old list and in the template list.
+7. ✕ Close with nothing typed closes at once; with typed rows asks; outside click does nothing.
+8. "Save as template" not on screen for Saw, Stores, PM, office; there for Drawing office and Admin.
+9. Start from… template / Excel / old list each fill the rows; changing it after typing asks first.
+10. Storage full / blocked: the bar says how to fix it; Settings shows device storage; nothing deleted.
+11. Attacks: two PCs at once · old screen open · phone 360 px · WO with blank floor/unit · two units same number in different
+    blocks · P-number then import · customer renamed in Cienapps · Excel import through the new window · template save by a
+    non-Drawing role.
+
+## Build steps (Coder — small commits, full suite before handing over)
+1. Port the matching key (JS only) + its tests.
+2. Port L1 + L3 (boxes, find the WO, Excel job cells).
+3. Port L4a (P-number last resort, purple flag, two PCs) — without the spec-sheet lines.
+4. Port L7, L6, L8, customer = project, L11 + L12, list name, L10.
+5. Port the tests that belong to 1–4 (update expectations only where the change is intended; say which).
+6. NEW: project shown as text when the WO is known (picker only with no WO).
+7. NEW: "Start from…" single choice; move the rest under More ▾; "Save as template" / History only Drawing office + Admin.
+8. NEW tests for 6–7 in `tests/listwin/`.
+9. Full suite; compare with the `main` baseline; anything new failing is fixed or listed in ACCEPTED-FAILURES for Garry.
+Later runs: merge `main` after the Deliveries release → L9 + DD1 badge (item 8) → Tester → Manager.
+
+## Progress log
+
+- **12 Nov 2026, 15:27** — plan written (session …5ys5PB). A second scheduled run (session …AqWY5P3m) had started at the same time; it
+  found this plan when it came to push (58 minutes later, nothing else pushed), kept this plan as the plan and merged its build in.
+  What it built follows.
+
+# What was built — run of 12 Nov (session …AqWY5P3m)
+
+The window as built differs from the wireframe above in three small ways: the WO number and due date are in the title bar;
+"Start from… ▾" is a drop-down button at the top right (not a select) and stays there after rows are typed (it ADDS rows, never
+overwrites); "🧱 Project materials" is a button under the rows, not under More. With the job known the Project / Work order
+pickers are folded behind "Change job ▾" rather than removed.
+
+## Decisions taken without asking (most reasonable reading — say if any is wrong)
+1. Reused the work already built and tested on `feature/project-details-v2` (Part 3 + Part 4, L1–L12) by cherry-picking it onto
+   `main`; nothing else from that branch came across (no PM sequence, no spec sheet, no date tools, no Pre-production role).
+2. Project materials: office, PMs, Management, Production Manager and Drawing office add / change with no PIN (Garry 9–11 Nov, B4);
+   saw, stores, driver and floor screens are read-only. Needed for "New material works first time".
+3. Johnny uses the **Drawing office** screen for now — the separate Pre-production screen is part of Job B and is not in this release.
+4. No database change in this release. (`pMerged`, a small note kept inside the existing settings record, needs no SQL.)
+5. The automatic P-number → Cienapps WO merge (L4b) is NOT in this release — it needs SQL and is item 4 in Garry's small-release
+   order. Until then a P-number is flagged purple "not from Cienapps", and the Cutting Lists page says when a Cienapps WO now exists
+   for its house.
+6. L9 (＋ Add cutting list on the delivery card) and the rest of DD1 (due tag on Cutting Lists home and lists-needed rows) wait
+   until `release/deliveries-weeks` is merged to `main` — that release brings the delivery card window and the due tag they use.
+
+## Build steps
+| # | Step | Status |
+|---|---|---|
+| 1 | Port L1–L4a (boxes, find the WO, P-number last resort, flags) from the Job B branch | done 12 Nov |
+| 2 | Port L5–L8, L10–L12, list name not pre-filled, template search | done 12 Nov |
+| 3 | Materials with no PIN for office / PM / Management / Production Manager / Drawing office | done 12 Nov |
+| 4 | Simple layout: title bar WO + due, Change job, ONE Start from…, big Save, Save as template by role | done 12 Nov |
+| 5 | Tester attack 1 + fixes | done 12 Nov (see progress) |
+| 6 | Old tests moved to the new layout; full suite; ACCEPTED-FAILURES tidied for this branch | done 12 Nov |
+| 7 | Ownership: "no list yet" warnings to the Drawing office only; PM sees list status read-only | done 12 Nov — PM part; who else sees the warnings is question 7 |
+| 8 | Merge `main` once the Deliveries weeks release is in; then L9 (delivery card) and DD1 on Lists home / lists-needed | waits for Mon 16 Nov |
+| 9 | Phone: "Use these rows" button in the old-list finder; Esc closes the little panels first | done 12 Nov |
+| 10 | Tester round 2, Manager verdict | done 12 Nov — interim GO WITH CONDITIONS |
+| 11 | Simplicity polish: one Close, Save pinned to the bottom on phones, the 4 small keyboard points; Tester re-attack of the round-2 fixes | done 13 Nov (polish run 3; Tester rounds 3 + 3b and fixes run 4) |
+| 12 | After main is merged: full suite, Tester, final Manager GO, GO-LIVE doc, pull request (not merged) | waits for Mon 16 Nov |
+
+## More questions for Garry (found by the Tester) (recommended answer first)
+1. **Two lists on one work order.** Today the window lets a second list be saved on a WO that already has one (it was allowed on
+   3 Nov so a kitchen list and a wardrobe list could share a WO). Now it asks first. **A (recommended): keep asking** — "WO already
+   has a list — don't save / save anyway". B: never allow a second list. C: allow silently as before.
+2. **P-number → Cienapps WO merge (L4b).** **A (recommended): next small release after this one** (it needs one SQL block run in
+   Supabase first). B: hold this release until it is in.
+3. **Who may save a template.** **A (recommended): Drawing office and Admin only, everywhere** — also take the button off the
+   Cutting Lists page rows for everyone else, and the Production Manager PIN no longer opens it. B: leave the Lists page as it is.
+4. **Customer spelled one letter differently in Cienapps** ("Aderig Homes"). Today that quietly makes a second project.
+   **A (recommended): ask** "Is this project Aderrig? Yes / No — make a new project". B: leave it.
+
+## Progress log — build
+### 12 Nov 2026 (scheduled run 1)
+- Branch cut from `main` (cf70ab9). ROADMAP sections copied. 19 commits cherry-picked from `feature/project-details-v2`
+  (B0 key, L1/L3, L4a, L1b, two-PC P-numbers, fold-in flags, L5, L6, L7, L8, L10, L11/L12, round-5 fixes) with the spec-sheet and
+  job-info-edit parts left out. Helpers `seqKind`, `seqKinds`, `dShort` and the shared test helpers brought over. `tests/run-all.sh` added.
+- Simple layout built (step 4). Screenshots: `node tests/list-window/shots.js` (fake database).
+- **Tester attack 1** (9 files in `tests/list-window/`, 362 checks): 1 Critical, 4 High, 4 Medium, 7 Low.
+  - Critical (already on the live site, not from this work): Edit on a template, an archived list or a shipped job's list opened
+    it EMPTY and Save wiped its rows. **Fixed** — the rows are fetched before the window opens.
+  - High, fixed: title bar kept the old WO after "Change job"; old-list rows under a unit block were multiplied; a second list
+    could be saved on a WO silently (now asked — question 1).
+  - High, not fixed: P-number's house gets a second list when the Cienapps WO arrives (needs L4b — question 2). Two PCs pressing
+    Save in the same second can still both save (the check asks the database just before saving; a true tie needs the database rule).
+  - Medium fixed: phone title bar, Ctrl+S, cursor starts in the first box. Left: finder button on phones, Esc with a panel open,
+    Save as template still reachable from the Lists page (question 3), one-letter customer typo (question 4).
+- Old tests moved to the new rules (said here as the plan asks): s3 bar order, attack3 F8 button, e9 Save as template by role, e5 /
+  stage3 attack2-screens / s1s3-screens / s4-editor (materials with no PIN — the Job B branch's versions), l3 read-only Floor box,
+  s4 waits for a template's rows; two Tester checks corrected (due "due ?" agreement, unit-block quantities).
+- **Full suite (197 files, one at a time, fake Supabase):** 3,984 pass / 75 fail, then 9 stage3 checks fixed by the test updates
+  above → **66 fail: 27 are the known ones on ACCEPTED-FAILURES (unchanged by this branch) + 39 from the Tester's new attack files**,
+  each listed in ACCEPTED-FAILURES under "Cutting-list window release", pending Garry.
+- Not done yet: steps 7–10. No Manager verdict yet, so no pull request.
+- Another scheduled run started this job at the same minute; its plan commit (15:27) was merged, no code clash.
+
+### 12 Nov 2026, late (scheduled run 2, 18:23–21:40 UTC)
+- `release/deliveries-weeks` is NOT on `main` yet, so `main` was not merged and item 8 (L9, DD1 on Lists home) is still waiting.
+- **Coder (5 commits):** "Save as template" is Drawing office / Admin only everywhere (Lists page rows too; the Production Manager
+  PIN no longer opens it) · phone: "Use these rows" in view and tap-sized; a second press asks · Esc closes the little panel first;
+  Tab from an empty last row goes to Save · PM screen shows each job's list status as plain read-only text (PMs already had no
+  list buttons or nags) · "⚠ 2 lists on WO-…" tag on the Cutting Lists page.
+- **Tester round 2** (6 new files, 259 checks): no Critical. 1 High — an Excel file for a DIFFERENT house went into the open list
+  with no warning. 2 Medium, 4 Low.
+- **Coder fixes (8 commits), all of the above:** the Excel file's WO / Floor / Unit are checked against the open job and ONE
+  question is asked before any row goes in · a WO typed from another project files the list under the WO's project (customer =
+  project) · PM status wraps on phones · the "add a second time?" question only when the rows are really there · Start from…
+  closes when a choice is made · Esc leaves the cursor in the row · the 2-lists tag ignores case / spaces · photo-only jobs say
+  "photo list made".
+- **Full suite (203 files): 4,254 pass / 64 fail** — 27 long-standing, 26 round 1, 11 round 2 "(info)"; every one is on
+  ACCEPTED-FAILURES. No file got worse.
+- **Manager: interim GO WITH CONDITIONS** for items 1–7, 9 and ownership on 18 Nov. No Blockers, no database change, nothing
+  unescaped, lists OFF unchanged apart from the Settings storage section. Conditions: main (with Deliveries) merged in and the
+  suite + Tester re-run; step 11 done; Garry's answers below. Item 8 recommended as its own small release after 18 Nov.
+  The Manager also notes: "Keep one…" removes an EMPTY duplicate P-number job (a copy is kept in settings, last 300).
+- Not a final GO, so no pull request and no GO-LIVE doc yet.
+- Left as found: an old list with NO work order can't be saved after an edit — the same on the live site today (question 9).
+
+## Questions added 12 Nov, late (recommended answer first)
+5. **"＋ New template" with the Production Manager PIN.** **A (recommended): Drawing office / Admin only**, same as Save as template. B: leave it.
+6. **Drawing office PIN remembered on a shared PC.** **A (recommended): forget it when the list window closes.** B: forget after 30 minutes. C: leave.
+7. **Who sees "Cutting lists to issue" warnings.** **A (recommended): Drawing office (Johnny) only.** B: office and Production Manager too (as built today).
+8. **Settings → "Storage on this device" when lists are OFF.** **A (recommended): show it.** B: hide it.
+9. **Old list with no work order, edited.** **A (recommended): let it save without one** (new lists still need a job). B: keep forcing a work order.
+10. **Item 8 (＋ Add cutting list on the delivery card, due badge on Lists home).** **A (recommended): its own small release right after 18 Nov** — it can't be built until Deliveries is live on the 16th, leaving one day to test. B: hold the whole release for it.
+11. **Default "list owner" name shown to the saw** ("Tell the Production Manager"). **A (recommended): change to "Drawing office".** B: leave.
+
+### 13 Nov 2026, 00:40 UTC (scheduled run 3, started 21:24 on the 12th)
+- **Two runs overlapped again.** Run 2 was still working when this one started (its last push was 3 hours old, so the
+  "pushed in the last 30 minutes" check let this run through). Both did a Tester round 2. Run 2's 10 commits were merged in
+  (8b4d379): its Excel "different house" question and its old-list marker kept; this run's "list name never filled from the
+  sheet name" kept. Nothing lost. `release/deliveries-weeks` is still NOT on `main`, so item 8 still waits.
+- **Tester round 2b** (5 new files, 248 checks): 2 High, 8 Medium, 6 Low.
+- **Coder — fixed (21 commits):**
+  - F1 High: Floor 1 · Unit 12 with Title "BLOCK B…" filled in Block A's work order by itself. Now a job whose title names
+    another block is never filled in — it is offered as "not sure"; the look-up waits until the Title box is left.
+  - F2 High (flag only, no merge): a house that already has a list under a P-number is no longer put on "Cutting lists to
+    issue" when its Cienapps WO arrives — it says "List already made under P-…"; the import preview says the same.
+  - F3/F4: customer → project is asked, never assumed ("Lucan Developments Ltd" vs project Lucan; "Aderrig Park Homes" vs
+    Aderrig). Links by itself only when it is the same customer once Ltd / PLC / The… are ignored.
+  - F5/F11/F12: templates (new, edit, archive, copy from another project) Drawing office / Admin only; Admin not asked twice;
+    a PIN typed at that question is not remembered.
+  - F7 (already live): a new P-number's typed due date, value and hours are no longer blanked when a material is picked.
+  - F9: saving a list that was archived on another screen says so instead of "list is with the Saw & Stores".
+  - F13 list name not taken from the Excel sheet name · F14 · F15 saw screen says "Tell the Drawing office" · F16 phone button size.
+  - Step 11: Tab / Shift+Tab stay inside the window and reach Save; ✕ with only empty rows closes without asking; on phones the
+    big Save is pinned to the bottom; ONE Close (top right — the second Close beside Save is gone).
+- **Not fixed, on purpose:** two PCs pressing Save in the same second (needs a database rule — with L4b); F6 an old screen wipes
+  the duplicate-P-number safety copies (go-live step: close every screen); F10 Excel columns in an unusual order (already live).
+- **Test expectations changed by the Coder (each follows a deliberate change):** stage3/flow5-saw + s1s3-screens (owner wording),
+  editor/x1-excel-template (name blank), editor/attack1-editor E + seq/l5-l12-window + seq/attack5-window (Drawing office PIN for
+  templates; no bottom Close), seq/l3-find-wo (look-up on leaving Title).
+- **Full suite (209 files): 4,490 pass / 57 fail** — 25 long-standing, 26 round 1, 6 round 2; all on ACCEPTED-FAILURES. No older
+  file worse than before this run.
+- **Manager: GO WITH CONDITIONS (interim)** — no Blockers, no database change, everything escaped, lists OFF unchanged, test
+  changes legitimate, main path has no pop-up questions. Two "should fix" for the next run:
+  1. The F2 flag matches on house + job type only — a P-number list for Block A could hide Block B's WO (same floor / unit) from
+     "Cutting lists to issue", and the Lists tab count then disagrees with the panel. Use the block-in-title check there too.
+  2. A Drawing office PIN typed for something else (✓ Check, materials) on a shared PC is still remembered and still opens the
+     template buttons (Garry decision 2 below).
+  Conditions for the final GO: those two; Tester re-attack of this run's fixes and step 11; `main` merged in after Deliveries
+  goes live Mon 16 Nov + full suite + final review; go-live day: close every screen first.
+- Not a final GO, so no pull request and no GO-LIVE doc yet.
+
+## Questions added 13 Nov (recommended answer first) — 1–11 above are still open; built on the recommended answers
+12. **Drawing office PIN on a shared PC (replaces 6).** **A (recommended): only the Drawing office / Admin screen, or the PIN
+    typed at that moment, opens templates — a remembered PIN never does.** B: leave as built.
+    As built (answer A): templates are made and changed on the Drawing office screen only (Admin: open the Drawing office
+    screen with the Admin PIN).
+13. **Two PCs saving a list for the same job in the same second.** **A (recommended): accept for 18 Nov; fix with the database
+    rule in the L4b release.** B: hold this release.
+14. **An old screen left open can wipe the duplicate-P-number safety copies.** **A (recommended): accept, with "close every
+    screen" on the go-live list.** B: fix first.
+15. **This scheduled task has now run twice at once on two days.** **A (recommended): keep ONE schedule for this job, at least
+    4 hours apart.** B: leave it.
+
+### 13 Nov 2026, 05:10 UTC (scheduled run 4, started 00:23)
+- **Overlap again, no harm.** Run 3 was still finishing when this run started (its last code push was 66 minutes old, so the
+  30-minute check let this run through; it pushed its progress entry at 00:38). This run did only what run 3 left for "next
+  run" — the Tester re-attack — on top of run 3's work. Nothing clashed. `release/deliveries-weeks` is still NOT on `main`, so
+  item 8 (L9, DD1 on Lists home) and the merge of `main` still wait.
+- **Tester round 3** (7 files `attack3-*`, 465 checks) on run 3's unreviewed changes: no Critical, 3 High, 4 Medium, 8 Low.
+- **Coder — fixed (10 commits):**
+  - High: a flat in BLOCK B could not get a P-number when BLOCK A had the same floor / unit numbers — Save kept pushing the
+    list onto Block A's work order. And a P-number list for Block B hid Block A's job from "Cutting lists to issue". One shared
+    block rule now covers both (this was also the Manager's "should fix 1"); the Lists tab count agrees with the panel.
+  - High (phones): when the pinned Save refused (e.g. a missing quantity) the red reason was off the screen, so Save looked
+    dead. The reason now shows right above Save and the cursor goes to the row.
+  - Medium: Save pressed straight from the Floor / Unit / Title box was silently lost — it now looks the WO up and saves in one
+    press · phone More ▾ no longer sits under the Save bar · the box being typed in is never under the Save bar · a window
+    opened from a Cienapps WO whose house already has a list under a P-number says so and asks before saving a second list.
+  - Low: ✕ asks when only a material was picked or "Bought in" ticked · Tab / Shift+Tab stay inside the finder and the Saved ✓
+    panel · clearer wording when no work order is found · blank Floor / Unit labels in an Excel file no longer make junk
+    headings · a template archived on another PC says so.
+  - Templates and a remembered PIN (Manager's "should fix 2", question 12 answer A): templates are made and changed on the
+    **Drawing office screen only**. A PIN remembered from something else never opens them. Admin: open the Drawing office
+    screen with the Admin PIN. Using a template (Start from…) is still open to everyone.
+- **Tester round 3b** (3 files `attack3b-*`, 244 checks) on those fixes: no Critical or High; 2 Medium, 4 Low — **all fixed
+  (6 commits):** a real heading that says just "Floor" in an Excel list was being dropped (caused by the fix above) · "B Block
+  Apt 105" was read as a different block from "BLOCK B APT 105" · press Save and drag off no longer saves · Ctrl+S works from
+  the Floor / Unit / Title / List name boxes · "No Cienapps work order found for Floor 9 · Unit 99 — check the floor and unit,
+  or press Make a P-number instead" · Save from the Floor box saves in one press.
+- **Test expectations changed by the Coder (each follows the deliberate template-PIN change):** editor/attack1-editor,
+  list-window/attack1-layout, seq/attack5-window, seq/l5-l12-window, stage3/flow-attack2-race type the PIN when asked;
+  editor/e9-templates and list-window/attack1-unloaded use the Drawing office screen. One Tester check (attack3 N2b) had its
+  set-up corrected; the Manager read it and agrees.
+- **Full suite on the final code (219 files, one at a time, fake Supabase): 5,183 pass / 71 fail.** Compared file by file with
+  the run-3 code (4,490 / 57, re-run at the start of this run and matching): no older file is worse — attack1-jobs has one
+  fail fewer (5), stage1 t17-exportbase gave 10 this time (it gives 8 or 10 from run to run, already noted). The other 13 are
+  new "(info)" checks from round 3, listed on ACCEPTED-FAILURES for Garry. All 10 new attack3 / attack3b files: 0 real fails.
+- **Manager (reviewed the round-3 fixes; the six small 3b fixes after it were re-attacked by the suite only): interim GO WITH
+  CONDITIONS** for items 1–7, 9 and ownership. No Blockers; both earlier "should fix" items closed; no database change;
+  everything escaped; lists OFF unchanged; no test weakened. Notes: a job whose title names NO block can still be taken for the
+  same house as one that names a block (it is asked / offered, never two jobs made silently).
+  Conditions left for the final GO: Deliveries live and `main` merged in, then full suite + Tester + final review; Garry's
+  answers; go-live day: close every screen and phone first.
+- **Simplicity count.** Opened from a job the window has 9 buttons outside the rows (Drawing office 10): ✕ Close · Change job ▾ ·
+  Start from… ▾ · ＋ Heading · ＋ Row · 🧱 Project materials · More ▾ · ? · Save. See question 16.
+- Not a final GO, so no pull request and no GO-LIVE doc yet. **Nothing is left to build until Deliveries is on `main`** — a run
+  before then has nothing to do.
+
+## Questions added 13 Nov, run 4 (recommended answer first)
+16. **Fewer buttons in the list window (9 today).** **A (recommended): move "?" help and "Change job" under More ▾ — leaves 7;
+    "🧱 Project materials" stays in view because you asked for it to be obvious (L6).** B: also move Project materials under
+    More ▾ (6 buttons; "＋ New material…" is still in every row's Material list). C: leave as it is.
+17. **A job with no block in its title, same floor and unit as a job that names a block** (e.g. "APT 12 KITCHEN" and "BLOCK B
+    APT 12"). **A (recommended / built): treat as possibly the same flat — the person is asked.** B: treat as different flats.
+18. **This task keeps starting while the last run is still working (three times now; runs take 3–5 hours).** **A
+    (recommended): pause it until Deliveries is merged on Mon 16 Nov, then run it once a day.** B: leave it.
+
+### 13 Nov 2026, 07:45 UTC (scheduled run 5, started 06:23)
+- **Nothing new to build.** `release/deliveries-weeks` is still NOT on `main` (main unchanged since 12 Nov), no other run was
+  working, no new requests from Garry on any branch. **No app code changed on this branch in this run.**
+- **Used the time for a rehearsal of Monday's merge** (kept off this branch — parked as
+  `parked/list-window-plus-deliveries-rehearsal-2026-11-13`, NOT for merging or release): this branch + the Deliveries weeks
+  release put together, to find out in advance how well they fit.
+  - They clash in **11 places in 3 files** (8 in `index.html`, 2 in ROADMAP, 1 test). All small, all "both sides added
+    something to the same line" — each was settled by keeping BOTH changes:
+    saved settings keep the Deliveries release marker and the P-number safety copies · the step drop-down keeps the Shipped
+    question and the Deliveries store stamp · Cutting Lists rows keep the project name under the list and the "⚠ 2 lists" tag ·
+    template buttons keep "Drawing office only" and the new project filter · "lists to issue" keeps the project filter and the
+    P-number rule · the saw card shows both the P-number warning and the "job has moved" banner · the PM row shows both the
+    site-ready chip and the list status.
+  - **Full suite on the rehearsal (250 files, fake Supabase): 6,176 pass / 98 fail. No page errors, nothing real broken by
+    the merge.** The 98 = this branch's known ~71 + the Deliveries release's own 10 (on its list) + 13 checks that compare a
+    screen "with lists OFF" against `main` and so cannot pass until Deliveries is ON `main` (list-window attack2-basics 7,
+    attack2-finder-pm-tag 2, lists-filter attack1 "11" 2, dates attack5 B8 / B9 2) + one unsteady check (next point).
+    After the real merge: the first 9 of those 13 should pass by themselves; the last 4 compare with a saved copy of the old
+    screens and will need their expectation moved for the PM's read-only list status (a deliberate change) — Coder to say so.
+- **Found, not fixed (for the Tester / Coder on the next run):** `list-window/attack3-two-pcs-old` T1 is unsteady — 2 fails
+  on most runs, 5 on about one run in three, the same on this branch as on the rehearsal (so not caused by the merge).
+  When two PCs answer "Is this project Aderrig? — Yes" in the same split second, PC A's job is sometimes left with no project
+  and the customer spelling is not remembered. Nothing is lost (the person is asked again), but the "[LOW] T1 … PC B" check
+  is failing and is NOT yet on ACCEPTED-FAILURES — to be fixed or listed next run. Not touched now so the code the Manager
+  reviewed stays exactly as reviewed.
+- **So Monday is not a one-click job but it is a known one:** merge `main`, settle the same 11 places the same way (the parked
+  branch shows how), full suite, Tester, final Manager review. About one run. L9 / the due badge on Lists home (item 8) come
+  after that — question 10 still stands.
+- No Manager GO yet (conditions unchanged), so no pull request and no GO-LIVE doc. Questions 1–18 are still open; nothing new.
+
+## Bug check asked for by Garry, 13 Nov 15:20 — "check for any bugs in relations to the editing of project material or making any changes to material or lists"
+Checked: live Supabase logs (last 24 h: 31 list saves, 24 materials added, 2 edited — no failed request), live data consistency
+(counts, duplicates, two live lists per WO, n_saw/n_fit: all clean), and probes on this branch with the fake database
+(/tmp probes, not committed). Found — to FIX IN THIS RELEASE, each with a test:
+- **M1 (High) Materials window loses typing.** Each row has its own Save; pressing Save on one row redraws the window and throws
+  away unsaved edits on every other row and a half-typed new material. Closing the window with unsaved edits gives no warning.
+  Fix: keep unsaved row edits across a redraw (or one "Save all changes" button), and ask before closing with unsaved edits.
+- **M2 (High) Renamed material shows as "⚠ not on the project list".** The rename keeps the old name as an alias, but the list
+  window's material box matches by exact name only, so every existing list and template row using the old name turns amber, and
+  the old name stays on the saw's list. Fix: match through aliases (show and save the current name), on lists and templates.
+- **M3 (Medium) No warning when a material in use is retired (Active unticked) or changed Sheet ↔ Fitting.** Rows using it turn
+  amber "not on the project list" with no notice. Fix: say "used on N lists / templates" and ask first; a sized row keeps showing it.
+- **M4 (Low) "＋ Add new material…" with the name of an existing FITTING on a row that has sizes** says "already on the project
+  list — picked" but the box stays empty. Fix: say it is a fitting and cannot go on a sized row (or pick it).
+- **M5 (Low, live data) A template has two names — its name and its "type name" — and they can disagree.** Live: Emmet Road
+  template named "4C" has type "4B" (made by copying 4B), so two templates show as "4B" in the pickers. Fix: copying a template
+  sets the type name to the new name; show ONE name in pickers (Simplicity). Garry told to retype it by hand meanwhile.
+
+### 13 Nov 2026, 13:10 UTC (scheduled run 6, started 12:23)
+- **Still waiting for Deliveries.** `release/deliveries-weeks` is NOT on `main` yet (main unchanged since 12 Nov), so the merge,
+  the final Tester round and the final Manager review cannot be done. No other run was working.
+- **One new commit by someone else since run 5** (10:56, Garry's own session): "Cap Left" and "Cap Right" added to the edging
+  drop-downs. Checked here with the full suite — nothing broken by it.
+- **Fixed the unsteady two-PC check from run 5** (`list-window/attack3-two-pcs-old` T1): when two PCs answer "Is this project
+  Aderrig? — Yes" in the same split second, the second PC used to be told "changed on another screen" and its job was left
+  with no project. Now the planner reads the project again and adds the second customer spelling beside the first — up to
+  three tries, nothing of the other PC's is overwritten. The test was run 6 times in a row: steady, T1 / T1b / T1c all pass
+  (its one remaining fail is "(info) O2", already on ACCEPTED-FAILURES). One small function changed (`ltiLink`), 3 lines.
+- **Full suite after both changes (219 files, fake Supabase): 5,183 pass / 71 fail** — the same 71 as run 4, file by file; all
+  on ACCEPTED-FAILURES. No new failing test.
+- **Read Garry's 13 Nov notes on `feature/dates-deliveries`** (P-work order categories, project stock components with
+  "FROM STOCK" lines on the cutting list, build order: cutting list module before the PM sequence). They are plans for the
+  release AFTER this one and are not built here — "＋ New P-number" in the list window will ask for the category when that is
+  built. Nothing in them changes this release.
+- Manager: no new review (interim GO WITH CONDITIONS from run 4 stands; the T1 fix is for the final review to look at). No
+  pull request, no GO-LIVE doc yet. Questions 1–18 still open; nothing new. Next real work: the run after Deliveries is on `main`.
+- **Parked, not pushed to this branch.** While this run was working, Garry's own session pushed again (12:42, templates in
+  numerical order — Type 2 before Type 10). One run at a time: these two commits sit on
+  `parked/list-window-run-2026-11-13-1310`, exactly one step ahead of `feature/list-window` as it was at 12:42 (the full
+  suite was run before that 12:42 change; the template and two-PC tests were re-run on top of it — same results). The next
+  run, or Garry's session, takes them in with a plain fast-forward merge.
+
+## Garry's answers — 13 Nov 2026, afternoon (live, in the session of run 6)
+Questions 1–18 above were put to Garry as one list of 17; his answers, with the old question numbers:
+| Question | Garry's answer | What it means for the code |
+|---|---|---|
+| P-number → Cienapps WO merge (key 1 / Tester 2) | **A** — its own small release straight after this one | no change |
+| ＋ Add cutting list on the delivery card + due badge on Lists home (10) | **A** — its own small release after this one | no change |
+| Two PCs saving a list for one job in the same second (13) | **A** — accept for this release; database rule in the P-number release | no change; stays on ACCEPTED-FAILURES, now signed off |
+| Old screen can wipe the P-number safety copies (14) | **A** — accept; "close every screen and phone" on the go-live list | no change; signed off |
+| Fewer buttons in the window (16) | **"don't know"** | left as built (9 buttons); Garry to look at the screenshots and say |
+| Second list on a WO that has one (Tester 1) | **A** — ask first | as built |
+| Floor or Unit blank in the look-up (key 4) | **A** — no automatic match, the person picks | as built |
+| Customer spelled a little differently (Tester 4) | **A** — ask "Is this project …?" | as built |
+| No block in the title vs a job that names one (17) | **A** — ask | as built |
+| Old list with no work order, edited (9) | **B** — "either Cienapps or a P-number": it must have a work order | as built (it was never changed) |
+| Import Excel (key 3) | **A** — only in the window under "Start from…" | as built |
+| Who may make / change templates (key 2, Tester 3, 5, 12) | **B — the Production Manager too** (changes his 12 Nov answer "Drawing office and Admin only") | **CHANGED 13 Nov:** the Production Manager screen and PIN now open Save as template, ＋ New template, edit / archive a template and ⧉ Copy from another project, like the Drawing office and Admin. A PIN remembered on a shared PC still never opens them. |
+| Who sees "Cutting lists to issue" (7) | **B** — office and Production Manager too | as built |
+| Default list owner the saw is told (11) | **B** — leave as "Production Manager" | **CHANGED BACK 13 Nov** (it had been switched to "Drawing office"); a project's own "list owner" still wins |
+| Settings → Storage on this device with lists OFF (8) | **B** — hide it | **CHANGED 13 Nov:** hidden while lists are OFF — except on a device that could not keep its backup copy, because the warning bar tells the person to go there |
+| This scheduled task (15, 18) | **A** — fewer runs | **DONE:** now once a day (19:43) instead of every 3 hours |
+| When does Deliveries go on `main`? | **"as soon as you can"** | Only Garry merges to `main` (merge = live). The release has had its Manager GO WITH CONDITIONS since 12 Nov and needs no SQL — it is ready for him to merge; the checklist's rule is Mon–Wed. |
+
+### 13 Nov 2026, 16:00 UTC (run 6 continued — Garry live in the session)
+- **Garry answered every open question** (table above). Recorded in ROADMAP too.
+- **Three small code changes from his answers** (one commit): the Production Manager may make and change templates (screen,
+  and PIN typed when asked — a remembered PIN still never opens them); the default list owner the saw is told is back to
+  "Production Manager"; Settings "Storage on this device" is hidden while lists are OFF, unless that device could not keep its
+  backup copy. Everything else he chose was already built that way.
+- **The parked fix from earlier today is now on this branch** (two PCs answering "Is this project …? Yes" together), on top of
+  the three changes Garry's own session pushed today (Cap Left / Cap Right, templates in numerical order, 🖨 Print on the View window).
+- **Tests.** New file `list-window/g13-prod-templates` — 41 checks, all pass. Full suite on the new code (221 files, fake
+  Supabase): **5,143 pass / 227 fail** = the same 71 known ones + **156 old checks that still expect the Production Manager
+  to be refused** (or the saw to be told "Drawing office"). Those 156 were compared name by name: every one is about that
+  rule, none is anything else. They are listed on ACCEPTED-FAILURES as out of date, for the Tester to rewrite in the final
+  round. The simple ones (9 files) were moved to the new rule already.
+- **Not done here:** no Tester attack round and no Manager review of today's changes — both happen in the final round after
+  Deliveries is on `main`. No pull request yet.
+- **Scheduled task:** changed from every 3 hours to once a day (19:43 Irish time), as Garry chose.
+- **Still for Garry:** (1) merge the Deliveries weeks release — only he merges to `main`; (2) look at the list window and say
+  whether "?" help and "Change job" should move under More (question 16).
+- **Garry, 13 Nov (later, live): "can we send to Production Manager and me and drawings".** The saw's "no list yet" line and the
+  Production Manager's late-lists rows now name all three by default — "owner Production Manager, Garry and Drawing office"
+  (a project's own "list owner" still wins). It is wording on the screens only: the planner sends no messages. All three
+  already see "Cutting lists to issue" on their own screens (office, Production Manager, Drawing office).
+- **Garry, 13 Nov (live, with a screenshot of WO-2648-54):** a template brought into a new list was put UNDER the blank standard
+  headings and rows. **Fixed:** when nothing has been typed, picked or ticked in the window, the template REPLACES the blank
+  layout (Undo brings it back); when anything has been typed, the template is added and what was typed stays. New test
+  `list-window/g13-template-replaces-blank` (6 checks, pass); the 11 files that use the template insert give the same results as before.
+- **Garry, 13 Nov (live): "where are all these jobs — not in cutting list to issue"** (Aspect Athenry jobs due 16–18 Nov). They
+  were in the panel but out of sight: live has about 366 jobs waiting for a list (the "only jobs ticked for delivery" switch is
+  off), the panel shows the first 40, late and earliest first, with "Show all N" at the bottom. Garry said yes to a picker and
+  search. **Built: a search box on the "Cutting lists to issue" panel** — type a customer, WO, floor, unit or title (several
+  words allowed, e.g. "aspect 71") and it looks through EVERY job waiting for a list, shows "3 of 64", ✕ Clear puts the first
+  40 back. New test `stage3/g13-lti-search` (12 checks, pass); the 13 files that use the panel give the same results as before.
+  **The project picker was NOT built here on purpose:** the Deliveries weeks release already has one for the whole Cutting
+  Lists page ("All projects ▾" — every section follows it, this panel included). It arrives when Deliveries is merged in;
+  building a second one here would only clash with it. Until then, typing the customer in the search box does the same job.
+
+## AFTER this release — Garry, 13 Nov 16:41–16:46 (not in the 18 Nov scope)
+Garry agreed to: (1) issue lists for MANY units in one go (tick several work orders of the same house type → one template → all go
+to the saw), (2) copy a project's materials from another project, (3) one name per template (see M5). Also offered, not yet chosen:
+paste rows from Excel, a standard stores kit per project, search in the Material drop-down.
+**HANDING — Garry's warning (his words):** "we just need to be careful with handing of types. A different hand may have worktop
+capping on the opposite side. These types might be named with and with a 'H' or LH or RH".
+- Bulk issue must NEVER put an un-handed template on a handed unit, or the wrong hand on a unit. A unit's type is read WITH its hand:
+  "1A", "1A H", "1AH", "1A LH", "1A RH", "Type 1 RH", "HANDED" in the Cienapps title are different types. Normalise spacing/case only
+  ("1A H" = "1AH"); never strip the hand.
+- In the bulk screen, units are grouped by type INCLUDING hand; each group needs its own template. A group with no exact-hand
+  template is NOT issued — it says "no template for 1A H — make one" and offers "Make handed copy of 1A".
+- "Make handed copy": copies the template and swaps Cap Left ↔ Cap Right (and L/R words in notes are flagged, not changed); the copy
+  opens for a person to check and save — never issued unchecked. This is why Cap Left / Cap Right were added to the edging list.
+- If a unit's hand cannot be read from the work order, it is left out of the bulk issue and listed "hand not known — issue singly".
+- The preview before issuing shows, per unit: WO, floor, unit, title, the template and its hand, so a wrong hand is visible.
+- Tester: mixed hands in one selection, "H" inside a word (e.g. "HOUSE", "4H BLOCK"), LH/RH vs H naming on the same project,
+  a handed unit with only the un-handed template, two templates that differ only by hand.
+
+
+### 13 Nov 2026, 23:00 UTC (scheduled run 7, started 19:43)
+- **Still waiting for Deliveries.** `release/deliveries-weeks` is NOT on `main` yet, so no merge, no final round, no pull request.
+  No other run was working (last push 16:46).
+- **Garry's bug check (M1–M5 above) — M1 to M4 FIXED, each with its own test:**
+  - M1 Materials window keeps what was typed on the other rows and the half-typed new material when one row is saved; Close
+    (and Esc) asks "Close without saving?" only when something is unsaved. No new buttons.
+  - M2 a renamed material is found by its old name: the list window and templates show the current name with no ⚠, and the
+    list is stored under the new name the next time it is saved. Cut ticks are kept. No bulk rewrite of stored lists.
+  - M3 retiring a material, or switching it Sheet ↔ Fitting, says "used on N lists and N templates" and asks first; rows that
+    use it keep showing it.
+  - M4 typing an existing fitting's name on a row with sizes says plainly it is a fitting and can't go on a saw row.
+  - **M5 NOT built** — the Coder found no copy route that can make the two template names disagree; the only way is the
+    template editor's two boxes (name changed to "4C", type name left at "4B"). Question for Garry below.
+- **Tester round 4** (4 new files, 110 checks) attacked those fixes and found: **B1 High** — the Materials window could put back
+  another PC's rename or retire (caused by the M1 fix); **B2 Medium** — a cut tick lost on a note-only edit if this PC had not yet
+  picked up a rename; B3–B5 Low (a retired material typed on a row came back without asking; one question for retire + switch;
+  Materials window cramped on a phone). **All five fixed**; the four attack files now pass 109 of 109.
+- **The 156 out-of-date checks** (Production Manager and templates) were rewritten to Garry's 13 Nov rule — all pass.
+- **Full suite on the final code (232 files, fake Supabase): 5,488 pass / 68 fail** — all 68 on ACCEPTED-FAILURES; no new fail.
+- **Manager, interim: GO WITH CONDITIONS** to carry these into the final round. To check in the final round:
+  1. (Major, not yet checked on screen) after a rename, lists nobody has re-saved keep the old name, so the saw sheets and the
+     "sheets needed" totals may show ONE board under TWO names until each list is saved again. Tester to prove it; if real, the
+     Coder makes the totals treat old and new name as one board.
+  2. (Minor) every list Save now reads the project's materials first — time it on a slow phone connection.
+  3. (Minor) does "what changed" / the history show a material change nobody made when a save only re-labels a name?
+  4. Re-attack the B1–B5 fixes (two PCs in the Materials window; "was retired — bring it back?").
+- No database change. No SQL. Nothing pushed to `main`.
+
+## Question added 14 Nov (recommended answer first)
+19. **A template's two names ("Template name" and "Type name") can disagree — how to stop the next "4C / 4B"?**
+   A (recommended) — when the template name is changed and the type name was the same as the old name, the type name follows.
+   B — nothing now; "one name per template" in the next release fixes it. C — hide the Type name box now.
+   (The live Emmet Road "4C" template still needs its type name retyped by hand either way.)
+
+**Garry, 14 Nov (live): question 19 = A.** Built: when a template is renamed and its type name was the same as the old name, the
+type name follows (on screen and on Save); a type name typed differently on purpose is kept; templates that already disagree
+(live "4C" / "4B") are not touched. Test `list-window/m5-template-name-follows` 17 of 17; the 41 files that touch templates give
+the same results as before. Not yet attacked by the Tester — final round.
+
+
+### 14 Nov 2026, 01:40 UTC (run 7 continued — Garry live in the session)
+- **Deliveries weeks is LIVE.** Garry asked for the merge and chose "merge now": `main` was first merged into
+  `release/deliveries-weeks` (3 clashes with the Shipped steps release, settled keeping both; Tester attack where the two meet —
+  nothing broken by the merge; full suite 4,406 / 37, none new), then pull request #4 was merged to `main` at 23:57 on 13 Nov
+  on Garry's instruction. No database change. Garry to close and reopen every screen and phone and check in incognito.
+- **Live `main` is now merged into this branch** (commit 2de1d26; 8 clashes in index.html, 2 in docs, each settled keeping both
+  sides). ONE project picker on the Cutting Lists page (main's "All projects ▾"); the "Cutting lists to issue" search looks inside
+  the picked project. The Capacity Board step box is exactly as live.
+- **Full suite on the merged code (269 files, fake database): 6,663 pass / about 87 fail** — the same ones as each side had on
+  its own (68 here + main's) plus **3 checks that fail only because the two releases now sit together** (listed on
+  ACCEPTED-FAILURES for the Tester to re-point; they compare lists-ON screens with a version from before the list window).
+  5 timing fails when three test groups ran at once all pass when run alone.
+- **Still to do before a pull request (next run):** final Tester round on the merged code (the plan's attack list + the Manager's
+  four points from the entry above + B1–B5 and M5 re-attack), Coder fixes, Manager GO / NO-GO, GO-LIVE doc, screenshots.
+
+
+### 14 Nov 2026, 20:30–22:05 UTC (Garry's session — written up on 15 Nov from the commits; no entry was made at the time)
+- **Final Tester round on the merged code** (14 new files `tests/list-window/final-a-*` and `final-b-*`, two testers): 1 High,
+  7 Medium. 16 fix commits followed (a renamed material is ONE board on every screen and total; rows changed while "Saving…"
+  shows; ✕ during a save; template Save checks permission again at Save; on-hold jobs left out of "Find the Cienapps WO";
+  Excel "1,200" read as 1200; phone sizes; "Confirm all green" with a search on). 4 out-of-date checks re-pointed.
+
+### 15 Nov 2026, 23:30 UTC (scheduled run 8, started 19:43)
+- No other run was working (last push 14 Nov 22:03). `main` (Deliveries weeks, live since 14 Nov) was already merged in.
+- **Full suite first** (283 files, fake database): 7,243 pass / 101 fail. Older files were run on `main` too: none is worse here.
+- **Coder — leftovers of the final round, fixed:** Save on an old list with nothing changed writes nothing · a list or template
+  name this PC did not change no longer overwrites another PC's rename · the same Excel file picked twice is asked about first.
+  **Not done on purpose:** taking "📥 Import Excel" off the Cutting Lists page — see question 20.
+- **Tester round "final-2"** (5 new files `final2-*`, 217 checks) attacked the 19 fixes nobody had attacked: **no Critical, no
+  High.** 3 new Mediums, all fixed the same evening: an Excel cell "720,560" was read as a 720-metre board (now: a text size is
+  read only when it is 6000 mm or less, otherwise the box is left blank); a house whose only Cienapps job is ON HOLD was told
+  "no work order found — make a P-number" (now: told the WO number and that it is on hold; no P-number offered); two PCs renaming
+  one template left a name and Type name nobody typed together.
+- **Manager, final review: GO WITH CONDITIONS.** No blocker; items 1–7 built and tested; no database change. Conditions: Garry's
+  answers to questions 20–22, the go-live doc (written: `docs/GO-LIVE-list-window.md`), and one small gap he found — the Work
+  order drop-down did not show the job title. **Fixed:** each line is now WO · floor · unit · title · due date (title cut to 32
+  letters). The 38 test files that touch that drop-down were re-run: same results, 4 checks re-pointed. The whole suite was NOT
+  run again after that one-line change.
+- **Full suite on the final code (288 files): 7,454 pass / 106 fail**, every one listed in ACCEPTED-FAILURES ("15 Nov — final
+  round" holds the new ones). Not checked by a Tester after they were made: the three fixes of this evening and the title line
+  (the Manager read them; the suite ran after the three).
+- **Scope:** items 1–7 and 9 are in. Item 8: only the due badge in the window header; the delivery-card button and the Lists-home
+  badge are the next small release, as Garry chose on 13 Nov. P-number → WO merge: the release after.
+- **Pull request opened: `feature/list-window` → `main` (not merged — only Garry merges).** Screenshots: `docs/screens-list-window/`.
+  No further changes will be made on this branch by the scheduled task; it can be switched off.
+
+## Questions for Garry before he merges (recommended answer first; built on A)
+20. **"📥 Import Excel" on the Cutting Lists page.** You said "only in the window" (13 Nov). But the page button brings in a WHOLE
+    workbook (one list per sheet); the window brings in ONE sheet into the open list.
+    A (recommended, as built) — keep both for this release. B — take the page button away (a multi-house workbook then goes in one
+    sheet at a time). C — keep it, but tucked under a "More" menu on the page.
+21. **A house whose only Cienapps job is ON HOLD.** A (recommended, as built) — no P-number and no automatic fill; the person is
+    told the WO number and to get it taken off hold. B — allow a P-number after a confirm. C — let the list be made on the
+    on-hold job.
+22. **Buttons in the window** (old question 16, "don't know") — see the screenshots. A (recommended) — leave as it is.
+    B — move "?" and "Change job" under More.
+Also for Garry: accept or reject the rows marked pending in the "15 Nov 2026 — final round" section of ACCEPTED-FAILURES.
+
+### 16 Nov 2026 (Garry live, screenshot of WO-2659-1 House 22 on the LIVE site)
+- **"These top lines need to be removed when importing a spreadsheet."** On this branch an Excel sheet already replaced the
+  blank standard layout when nothing was typed (his screenshot is the live version). Now the same for **an old list** (Start
+  from… → An old list): it replaces the blank layout too, like a template and an Excel sheet. Anything typed is kept and the
+  rows are added.
+- **"Also need a save and close button."** Built: big green **✓ Save & close** — one press saves and closes, and the message
+  says "Saved ✓ — list is with the Saw & Stores — <name>". The old Save stays (white) and shows the Saved ✓ panel. A warning
+  (list archived on another screen) still shows the panel. On a phone both are thumb-sized, Save & close full width.
+- Tests: new `list-window/g16-xl-old-saveclose` 10/10. 63 files touching the window run on the old and new code side by side:
+  the only differences are the checks listed on ACCEPTED-FAILURES (16 Nov) — counts of Save / Close buttons and the phone's
+  "big Save" being `#me-save`. Not yet re-checked by the Tester or Manager.
+- **Garry, 16 Nov (live), three more:**
+  1. **Labels "should be one row".** The Zebra roll is **101.6 × 63.5 mm** (Garry). Labels now print ONE per label, one under
+     the other (was two across an A4 sheet); each printed page is exactly 101.6 × 63.5 mm (checked by printing to PDF). The pack
+     label prints as a thick black frame instead of a solid dark block (a Zebra prints black only). Screen preview is one column.
+  2. **"View the list after you add it as a check."** The Saved ✓ panel has **👁 View the list** — the whole saved list as the
+     saw and stores see it, with 🖨 Print. (Garry chose this over Save & close opening it.)
+  3. **"Assign it to a delivery date and vehicle" — Production Manager only (Garry).** His list window has *Delivery (Production
+     Manager)*: date + van + 🚚 Book. It books straight away (separate from saving the list) using the Deliveries page's own
+     booking: the job is ticked for delivery if it wasn't, his name is asked, moving an existing booking asks why, bank holidays
+     ask, Sundays and on-hold jobs are refused. Every other screen sees "Delivery: 🚚 Volvo Tue 27 Oct" read-only when booked.
+  - Test `list-window/g16-labels-view-delivery` 19/19. 67 related files old vs new: only 2 "(info)" checks differ (the
+    Production Manager now has a date box) — on ACCEPTED-FAILURES. Tester and Manager have not reviewed today's changes yet.
+- **Garry, 16 Nov (live): "an option to multiply a template by a quantity and name it, for example Floor 2".** Built: picking a
+  house-type template (Start from… → A template) now asks **How many?** (1) and **Name it** (optional, e.g. Floor 2) → Insert.
+  × N multiplies every number quantity (a quantity that is not a number, e.g. "as drawn", is left as typed and flagged
+  "⚠ ×N — check qty" in its note); with a name the rows go under a heading of that name (note "Type 2 × 4") and the template's
+  own headings become sub-headings under it. Once in, the quantities are ordinary totals. The unit-block template path ("How
+  many units?") also gets a Name box. Ctrl+Z takes the whole insert out. 1 + no name = exactly as before (one extra Insert press).
+  Test `list-window/g16-template-times` 11/11; 5 template test files updated for the extra Insert press / new toast wording
+  (incl. the Tester's attack4-blank-replace helper) — same results as before.
+- Tester round 4 findings (8 Medium, 8 Low) are still open for the Coder — next step.
+- **Garry, 16 Nov (live): "the option for multiplying needs to be inside the cutting list".** Changed: the multiply now lives IN
+  the list as a **× block**, not a one-off multiplication at insert.
+  - Any heading's type box has **Heading / Sub-heading / × Multiply…**. × Multiply asks how many (1–500); the rows under that
+    heading — and under its sub-headings — are then × that number: the quantity typed is for ONE, the total shows beside it
+    ("= 12") and is what the saw / stores / labels get. The × number can be changed any time in the list; every total follows.
+    Turning it back to Heading / Sub-heading keeps the TOTALS. Ctrl+Z works.
+  - A template brought in with How many? 4 / Name it "Floor 2" now becomes "Floor 2 × 4" in the list (template headings under
+    it as sub-headings, quantities for ONE).
+  - Underneath: a sub-heading inside a × block stays in the block (it used to end it) — in the window, the save check, the saved
+    lines (`lsEdLines`, `lsBlockTotals`, `lsHalfTotal`), reopening (`lsEditRows`) and a template with a × block. Only the ×
+    heading stores the number. Existing lists keep their totals (a reopened row divides back only when it divides exactly).
+  - Test `g16-template-times` rewritten, 17/17. 84 related files run old vs new: one phone check (heading-type box 36 px) fixed
+    to 40 px; no other difference.
+
+### 17 Nov 2026, 06:50–10:30 UTC (scheduled run 9)
+- No other run was working (last push 16 Nov 17:13). `main` (Deliveries weeks) was already in. Pull request #5 still open, not merged.
+- **Coder — Tester round 4 fixed (all Mediums):** an Excel sheet keeps what was typed (heading note, Bought in, material, renamed
+  heading, unit block) like a template / old list · Delivery booking from the window: Cancel at the name / reason / bank holiday
+  changes NOTHING and says "Not booked — nothing changed"; a delivered job is refused; a past date is refused; a shipped job asks
+  first; the line says which WO · ✓ Save & close pressed straight from the Floor / Unit / Title box saves in one press · an old list
+  left with the saw keeps the Saved panel so the warning is seen · a long item name no longer pushes the WO line off a Zebra label.
+- **Tester round 5** (new `attack5-multiply`, `attack5-fixes`) attacked × Multiply: **4 High** — changing Heading ↔ Sub-heading
+  around a × block changed totals silently (Hinge 24 → 8, or doubled); rows from an old list / Excel added after a × block were
+  multiplied by it. **All fixed:** every heading-type change keeps each row's total; rows added at the end get a plain heading so
+  they are never × by accident; a second template insert asks How many? / Name it; lists saved before 16 Nov keep rows under a
+  sub-heading as fixed totals (unchanged); a booking from the window keeps the Deliveries page ticks; a non-date is refused.
+- **Manager: GO WITH CONDITIONS.** One "should fix": a template inserted with the cursor in the MIDDLE of a × block went in
+  between its sub-headings and changed totals below. **Fixed** (it now goes after the whole block) + test `c17-template-mid-xblock` 5/5.
+  placeJobs (shared with the Deliveries page) checked: unchanged there. No database change.
+- **Tests (fake database), 298 files: about 7,660 pass / 129 fail.** Every file that failed was run on yesterday's code and today's
+  side by side: today fixes 19 checks and breaks none (3 that broke in between were fixed the same morning). Every failing check
+  is on ACCEPTED-FAILURES (new ones: "17 Nov 2026").
+- **Still open for Garry:** questions 20–22 (built on A), and 23–24 below. Item 8 (delivery-card button, Lists-home badge) and the
+  P-number → WO merge stay the next small releases, as Garry chose.
+
+## Questions added 17 Nov (recommended answer first; built on A)
+23. **A sub-heading inside a × block, e.g. "Stores items" under "Floor 2 × 3", set to × Multiply.** A (recommended, as built) —
+    refused, with "make it a Heading first". B — multiply again (Hinge 8 × 3 × 2 = 48).
+24. **Booking a van from the list window for a job Cienapps says is SHIPPED.** A (recommended, as built) — asked "book it anyway?".
+    B — refused.
+
+### Garry's answers — 17 Nov 2026 (live)
+- **23 → A:** a sub-heading already inside a × block cannot be set to × Multiply; the window says "make it a Heading first". As built.
+- **24 → A:** booking a van from the list window for a job Cienapps says is SHIPPED asks "book it anyway?". As built.
+- Nothing to build. Still open: questions 20–22 (built on A).
+
+### 17 Nov 2026, afternoon — Garry: "check the cutting list view button is working in all scenarios"
+- **Tester round 6** (`attack6-view-save` 78 checks, `attack6-view-entry` 29): 👁 View the list worked after every kind of save
+  (new list, WO found from Floor/Unit, P-number, edit → Rev 2, Ctrl+S, × Multiply totals = saw sheet, stores-only, saw-only,
+  bought-in, 80 rows, odd names, template, archived-meanwhile, lost reply, every role, phone 360 px, Print and pop-up blocked).
+- Found and **fixed**: **[HIGH]** View of an ARCHIVED or FINISHED list (Lists home / Find old list) showed an EMPTY table the first
+  time — its rows are now loaded before the window opens · [LOW] Esc now closes View · [LOW] a double-click on View no longer
+  opens and shuts it at once.
+- After the fix: attack6 files 107/107; the 12 other test files that open View: same results as before (no new failure).
+
+### 17 Nov 2026, ~13:00–14:00 — Garry live: "all these are now empty" (Clancy, Elliotts Aderrig templates)
+- Live database checked (read only): nothing lost — every list and template has all its rows. Cause: on the LIVE version, ✎ Edit
+  and View did not load a template's / archived list's rows first (fixed on this branch on 12 Nov). Hotfix for live: **PR #6**.
+- Saving audit (Manager) → `docs/AUDIT-2026-11-17-list-saving.md`. Guards added on live via **PR #7** and on this branch
+  (cherry-picked): a failed row fetch never marks a list loaded; a save taking away all / most rows asks first.
+  Checked here: h17-save-guards 6/6, attack6-view-save 78/78, g16-xl-old-saveclose 10/10, attack5-multiply 28/31 (as before).
+  Full suite not re-run after this change.
+
+### 17 Nov 2026, afternoon — two more from Garry (live)
+- **"Add a cutting list in the delivery window" (L9):** Deliveries page — a job card with no list has **＋ List**; the ⓘ check
+  window has **＋ Add cutting list** / **📋 Open <list>** per job. Opens the same list window (standard layout, WO filled in).
+  Office, Production Manager, Drawing office; PMs / drivers / floor see status only. Test `l9-delivery-add-list` 12/12; 19
+  delivery test files: no new failure.
+- **"Add a material/fitting to multiple templates together":** Lists → project row → **＋ Add to several templates**
+  (Drawing office / Production Manager / Admin, project with 2+ templates). Item, Qty, L × W (saw only), material, heading →
+  tick templates → one press. Each ticked template gets a new Rev with the reason; it goes at the end of that heading (heading
+  made at the end if missing); never inside a × block by accident; a template that already has that item + material is left
+  alone and named; the template is re-read first, so another PC's change is kept. Test `g17-add-to-templates` 16/16; 16
+  Lists-page test files pass.
+- Neither has been attacked by the Tester or read by the Manager yet. Full suite not re-run since this morning.
+
+## Garry's answers — 17 Nov 2026, evening (live)
+- 20 → A (keep both Import Excel buttons) · 21 → A (on-hold house: no P-number, told to get it off hold) · 22 → A (window buttons as they are).
+- Database guard against a save that empties a list → **A: yes** (SQL as a PENDING block + a tested "restore an old revision" script).
+- Driver per van per day, set by the Production Manager on Deliveries → **A: yes, with this release (#5)**.
+- Job B: two P-numbers for one house → A flag only (as built) · Cienapps customer matching an INACTIVE project → A reactivate and
+  use it · a date moved inside the 14-day window from Deliveries / the board → A counts as a Late change.
+- Not yet answered: KITCHEN ISLAND (9), Johnny's pool as built (10), upload as built (11), Mon 3 Jan 2028 (12).
+- **Driver per van per day (answer 5A) — built:** Deliveries page → each van × day cell has a **👤 driver…** box (Production Manager
+  and office), drivers from Settings → Staff (Driver role). Same driver on two vans that day → asked. The driver's phone picks his
+  van for that day ("You're on the Volvo … (set by the office)"); another driver's van → red warning. The list window's delivery
+  line says "— driver Pat". Stored in settings.vanDrv (no database change), kept 60 days. Test `g17-van-driver` 10/10; 14 delivery /
+  driver test files: same results as before.
+
+### 18 Nov 2026, 11:10–17:30 UTC (scheduled run 10, "restart")
+- No other run was working (last push 17 Nov 17:52). `main` already merged in. PR #5 still open, not merged.
+- **Coder — saving audit (17 Nov) items 1–3 done:** an EDIT save whose reply is lost now asks the database (saved / not saved /
+  "may have saved" → Save again checks first; never a double row or Rev) · Excel re-upload over a list edited in the app names the
+  typed rows (and renamed headings) it would take away; Cancel skips that sheet · **PENDING SQL (Garry's 17 Nov "yes")**: a guard in
+  `save_list_revision` refusing a save that takes away EVERY row unless the person pressed OK (`p_empty_ok`, default off — the old
+  live screen keeps working), a read-only check box to run first, a "restore a list to Rev N" box (never deletes) and an Undo box.
+  Tested on a throwaway Postgres: `tests/sql/run-list-guard.sh` 39/39. The 2 Nov Stage 3 block is now labelled ALREADY RUN — never re-run.
+- **Tester rounds 7 and 8** attacked L9 (＋ List on Deliveries), ＋ Add to several templates, driver per van per day, and the
+  lost-reply work. Found 1 High (two windows on one list could save a row twice) and ~15 Medium/Low (a removed driver coming back
+  from another PC, the driver's phone keeping yesterday's van, the template dialog closing on a drag, "(added 2/3)" headings…).
+  **All fixed** except: an old screen wipes the drivers (O1/O2/E6 — close every screen on go-live day) and the same driver on two
+  vans in the same second (T2, Low) — both on ACCEPTED-FAILURES (pending Garry).
+- **Manager: GO WITH CONDITIONS** — conditions done: SQL labels + read-only check + Undo; an OK to "TAKES AWAY…" no longer carries
+  over to a different set of rows on a retry (`c18-retry-reask` 8/8); ACCEPTED-FAILURES rows added.
+- **Full suite (fake database, 316 files) on 2de4b0f: 8,022 pass / 138 fail.** Failing files compared with this morning's code:
+  no check that passed before fails now. The last two commits (Manager's conditions, board cell) were checked on their own test
+  files (list-window + hotfix, 7 date files), not the whole suite again.
+- **Garry live, 18 Nov: "too much going on in these lines … the capacity board is just for managing dates … a record of how many
+  moves is enough".** He chose **due date only**. Capacity Board date cell is now: the due date (tap to move) + "🔁 moved N×" (tap
+  for history). Delivery date, (orig …), ⋯ and the check chips are gone from the board (still on the Deliveries cards). The PM board
+  reads the same due date, so a move shows there at once. Put on **PR #10** (`hotfix/board-row-height`, can go live on its own) and
+  merged into this branch.
+- Garry's screenshot of the "can't keep a backup copy" bar is the LIVE version; this branch (L10) already says how to fix it and
+  shows device storage in Settings.

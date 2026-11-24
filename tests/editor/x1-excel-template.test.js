@@ -57,7 +57,7 @@ rec('older layout (Colour, no Edging 2 header): note in G, Bought in from F stil
   let r1 = await rows();
   rec('editor import: the empty standard layout is replaced by the sheet (4 headings + 9 rows)', r1.length === 13 && r1[0] === 'H:House nr 18' && r1.filter(x => x.startsWith('R:')).length === 9, J(r1));
   const nm = await p.evaluate(() => (document.getElementById('me-name') || {}).value);
-  rec('editor import: the list name is taken from the sheet when empty', nm === 'House 18', nm);
+  rec('editor import: the list name is NOT taken from the sheet — it stays empty (blank = the WO number; attack2 F13, Garry: list name not pre-filled)', nm === '', nm);
   const fr2 = await p.evaluate(() => { const rows = [...document.querySelectorAll('.me-grid tbody tr')]; const r = rows.find(x => (x.querySelector('[data-mr$="|item"]') || {}).value === 'Integrated fridge'); const c = r && r.querySelector('input[data-mbuy]'); return c ? c.checked : null; });
   rec('editor import: the fridge row has Bought in ticked', fr2 === true, J(fr2));
   // undo

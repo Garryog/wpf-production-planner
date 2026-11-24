@@ -71,7 +71,7 @@ const res = []; const rec = (n, ok, d) => { res.push(ok); console.log((ok ? 'PAS
   await F.sleep(600);
   rec('saving the edit keeps it, flagged', F.line(S, 'L1:1').material === 'Mystery board' && F.line(S, 'L1:3').material_other === true && F.line(S, 'L1:2').material_other === false);
   // templates open in the editor without a work order
-  const t = await off.page.evaluate(() => { openListEditor('T1'); const o = document.querySelector('.pod-ovl'); const r = { wo: !!o.querySelector('#me-wo'), title: o.innerText.includes('template'), type: o.querySelector('#me-type').value, tn: o.querySelector('#me-tname').value }; o.remove(); return r; });
+  const t = await off.page.evaluate(async () => { openListEditor('T1'); for (let i = 0; i < 40 && !document.querySelector('.pod-ovl .me-ed'); i++) await new Promise(r => setTimeout(r, 100)); /* (12 Nov) a template's rows are fetched before the window opens */ const o = document.querySelector('.pod-ovl'); const r = { wo: !!o.querySelector('#me-wo'), title: o.innerText.includes('template'), type: o.querySelector('#me-type').value, tn: o.querySelector('#me-tname').value }; o.remove(); return r; });
   rec('a template opens with its type and no work order', !t.wo && t.title && t.type === 'kitchen' && t.tn === 'Type B 3-bed', JSON.stringify(t));
   // ---- Excel material matching
   const b64 = await off.page.evaluate(() => { const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Aderrig'], ['Side', 2, 720, 560, 'MFC Wht', ''], ['Top', 1, 1200, 560, 'Oak X', ''], ['Back', 1, 700, 600, 'Ply 18', ''], ['Hinge', 8, null, null, 'Blum', '']]), 'House 8'); return XLSX.write(wb, { type: 'base64', bookType: 'xlsx' }); });

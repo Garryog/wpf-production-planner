@@ -227,6 +227,12 @@ Garry's words: "this is messy they are all over lapping, you can drop the value 
 - **Shipped report**: pick from/to dates → every job shipped in the period with project, PM, value, invoiced status, total, Excel download.
 - **PM sequence**: shipped rows stay but grey out and are hidden by default ("show finished"); later the base for installation management (install date, fitters, site snags, sign-off) — a separate phase, not now.
 - **Johnny's CNC Schedule (later, CNC job)**: read from SharePoint on a schedule; strike-through = office processing done (CNC files), NOT cut. Mark jobs taken into the planner with an extra "In planner" tick column — tested on a COPY of his .xlsm first, never write colours into his file.
+### Release in small pieces + Job A answers (12 Nov 2026, Garry)
+- **Releases go out as small pieces.** Order: (1) the Cutting Lists project filter (PR #2, branch feature/lists-project-filter); (2) **Job A — Dates & deliveries on its own**, branch `release/deliveries-weeks`, for Garry to merge on **Mon 16 Nov**; (3) Job B (project details, PM sequence, pre-production pool) later, in its own pieces. This replaces the Manager's 11 Nov condition "release Job A with Job B" (decision C → Job A on its own first).
+- **A1** — the Production Manager gets the FULL Deliveries page as built (🚚 Deliveries button on his screen), Close week included.
+- **B1** — Saturday deliveries are allowed and NOT flagged, as built. Sundays and bank holidays are never delivery days.
+- **D1** — a loaded / on-the-road job ticked in a group week move still moves, stays on its van and is flagged "date moved after loading — check", as built (plan Q15).
+- Bank holidays: **Mon 3 Jan 2028** is the day off for New Year's Day (Sat 1 Jan 2028) — confirmed by Garry. The list also holds Sat 26 Dec 2026 and Sat 25 / Sun 26 Dec 2027, so no delivery lands on Christmas Day or St Stephen's Day.
 
 ## Progress log
 ### 2 Nov 2026 (scheduled run)
@@ -378,3 +384,62 @@ Garry sent the Aderrig cutting-list workbook ("a current high volume job … a n
 - Johnny's pool (B9) and the Cienapps upload (B10): Garry wants the points **one by one** — sent 17 Nov evening; awaiting answers.
 - Mon 3 Jan 2028 = the New Year bank holiday → **yes** (as built).
 - Garry will send one real Cienapps upload file + 5 real work orders for a dry run; and will run the 3 SQL blocks on go-live day, talked through.
+### 11 Nov 2026 (branch feature/lists-project-filter — small release on top of the live version)
+- Garry's request (11 Nov): "the cutting list page need project filters and make sure customer/project is always visible on the cutting list page."
+- Built (lists switch ON only; no database changes): one **Project** drop-down at the top of the Cutting Lists page (Office, Drawing office, Production Manager → Lists). It narrows every section — lists to issue, waiting for check, lists needed, waiting on material, the lists and the templates. Projects A–Z with counts, "No project" for anything not linked, a type-to-find box once there are 40+ projects, "✕ All projects" to reset, "N of M shown". The pick is remembered on that device; a project that no longer exists falls back to All projects. Jobs are matched to a project through its Cienapps customer names (customer = project, Garry 10 Nov).
+- The project name is now on every row and card of the page (templates too), and wraps on a phone instead of being cut off. The "lists needed" table stacks on a phone (it used to scroll sideways).
+- The filter only applies on the Cutting Lists page: the Import page's "lists to issue" panel, the tab badge, the Saw and Stores always show every project. Lists switch OFF: the page is byte-for-byte the same as before (checked against main).
+- Tests: tests/lists-filter/f1-project-filter.test.js — 75 checks, all pass. Full suite (181 files): 3,293 pass / 23 fail, every failure already on ACCEPTED-FAILURES; main gives the same failures file by file (main fails 2 more in stage1 t17). Two timing checks (editor e7 redraw, stage3 attack4-states) fail only when two suites run at once and pass alone, on main too.
+- Assumed: the project sits under the list name (not a new column) so the lists table keeps its width; the old "All projects" drop-down inside the Lists panel moved to the top bar rather than having two.
+- Next: Tester to attack; Manager review; only Garry merges.
+
+### Capacity Board: Shipped / Installed / Completed steps as a small release now (12 Nov 2026, Garry)
+Garry: "Shipped step is gone from capacity board. It is still needed" — "Need to be able to update on capacity board to shipped or
+installed or completed. The job drops off capacity board after shipping". S1 (built on Job B) is lifted onto the live version as its
+own small release, branch feature/board-shipped-steps. Plan: docs/PLAN-board-shipped-steps.md.
+
+### List window — Garry's answers, 13 Nov 2026 (full table: docs/PLAN-list-window.md, "Garry's answers — 13 Nov")
+- P-number → Cienapps WO merge, and "＋ Add cutting list" on the delivery card + due badge on Lists home: each its own small release after the list window.
+- Accepted for this release: two PCs saving a list for one job in the same second; an old screen wiping the P-number safety copies (go-live: close every screen and phone).
+- Templates: the **Production Manager too** (with Drawing office and Admin) — replaces the 12 Nov "Drawing office and Admin only".
+- "Cutting lists to issue": office and Production Manager see them as well as the Drawing office. Default list owner told to the saw stays "Production Manager".
+- An old list with no work order must be given one (Cienapps WO or P-number) before it saves. Import Excel only under "Start from…".
+- Settings "Storage on this device": hidden while lists are OFF (shown if the device could not keep its backup copy).
+- Buttons in the list window (9): not decided — Garry to look at screenshots.
+- Deliveries weeks: Garry wants it live as soon as possible (was Mon 16 Nov).
+
+### Template buttons back (19 Nov 2026, Garry, live)
+Garry's words: "the edit button for the cutting lists templates is gone. i need that button." / "i need the last features i had for creating templates."
+- The Office screen (and PM / Management, as before 18 Nov) shows ✎ Edit and Archive on templates, 📐 Save as template (Lists rows and the
+  list window, which also gives "Update template" for the same name), ＋ New template and ⧉ Copy from another project again.
+- Who may make or change a template is unchanged: Drawing office / Production Manager screens straight away; any other screen asks for the
+  Drawing office, Production Manager or Admin PIN at the click; a remembered PIN never opens templates (plan question 12).
+- Open question: should the Office screen opened with the Admin PIN count as Admin (no PIN question at each click)?
+
+
+### Green strip, step badge, Check opens the list (19 Nov 2026, Garry, live)
+- **Green strip:** a job's left edge is green when its cutting list is sorted — a live list (not archived, not a template), a photo of the
+  list, or "No list needed". Capacity Board rows, Lists page rows, Deliveries cards. A 4 px strip drawn *inside* any colour bar already there
+  (the Deliveries cards keep their red/amber/green readiness bar). One rule: `woListOk`. Built on feature/green-step-check.
+- **Step badge:** the job's Cienapps step (short name) as a small grey badge beside the WO number on every page (`stepBadge`). The board
+  keeps its step drop-down instead.
+- **✓ Check** on a new list opens the whole list read-only first; "✓ Confirm checked" at the bottom checks it (same PIN / who rules),
+  "Not right — edit" opens the list window, Close changes nothing.
+- Open question: a list still "Waiting for check" already counts as "has a list" (green). Say if it should stay un-green until checked.
+
+### Deliveries fixes (19 Nov 2026, Garry) — plan docs/PLAN-deliveries-19nov.md, branch feature/deliveries-19nov
+- Customer / project band at the top of every Deliveries card (pool, van cells, Later); the tick sits in it.
+- Booking onto a van + day that already has ANY job asks first (names the jobs and customers). Cancel changes nothing.
+- Tick cards, then book from the blue bar: Put on [van] [day] → 🚚 Book N.
+- × = "Take off board": two steps, type the WO (DELETE for a job added by hand) + a name. Loaded / dispatched / delivered refused.
+  Jobs added by hand are archived in 📚 Past weeks, never erased.
+- Un-ship = BOTH: "↩ Back to Deliveries" on the 📦 Shipped card and on every job row in 📚 Past weeks (name + reason; the old
+  stamps go into the job's history; Cienapps 9 → shipBack so the next import does not ship it again). ↩ Clear status asks + a name.
+- (20 Nov, Garry) ↩ Back to Deliveries is **never** offered for step 10 (installed) or 11 (completed / invoiced) — only for a delivered
+  job (on the board or since) or a Cienapps step-9 job.
+- (20 Nov) A "taken off the board" record is only cleared when the SAME hand job (its hidden id) is back on the board — never by its
+  reference alone (references like "Remedial" get reused). Go-live: close every old screen (old × erases hand jobs).
+- ＋ List / ＋ Add cutting list: choose the template first ("Start this list from: Type A / Type B / Blank standard layout").
+  A template going into a list takes out untouched blank rows and empty standard sub-headings (a colour alone is not "typed").
+- Open question: should Cutting Lists → ＋ New list (and the "lists needed" rows) also ask "Start this list from:" first? Built for
+  the Deliveries ＋ List and the ⓘ window's ＋ Add cutting list only.

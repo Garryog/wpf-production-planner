@@ -149,35 +149,60 @@ Phase 2: 17 column L · 18 settings numbers · 19 delivery date in dialog/engine
 **Note for Job B:** `moveDates(jobs, change, reason, by, {src:'pmseq', frozenDays:14, requestOnly:true})` → store `rows` as a change request; `apply()` later.
 
 ---
-## Go-live checklist (dates & deliveries) — Manager's conditions, 10 Nov 2026
+## Go-live checklist — Job A released ON ITS OWN ("Deliveries weeks"), planned Mon 16 Nov 2026
+Branch `release/deliveries-weeks` = what is live (10 Nov release + the Cutting Lists project filter, PR #2) + Job A. Rewritten 12 Nov
+for a release on its own (Garry, 12 Nov: small pieces). The Manager's 10 Nov conditions are all still in it.
 
-**Before**
-1. The 10 Nov release is live and has settled first (its own checklist, docs/GO-LIVE-2026-11-10.md, done; no open problems).
-2. Go live on a **Monday, Tuesday or Wednesday** — never Thursday/Friday (Close week, run sheets and the weekend need watching).
+**Database: nothing to run before this release.** Job A adds no table, no column and no new top-level save key — everything is
+inside the planner record's `orders` and `settings`, which exist today. The app asks the database for exactly the same tables as the
+live version (checked). The only SQL linked to Job A is **old-screen guard v2** (SUPABASE_CHANGES.md, top block): **optional**, Garry
+says yes or no, and it is run **AFTER** the new code is live (step 8) — never before.
+
+**Before (Friday / Monday morning)**
+1. The Cutting Lists project filter (PR #2) is live and has had at least one working day with no problems.
+2. Go live on a **Monday, Tuesday or Wednesday**, in the morning — never Thursday/Friday (Close week, run sheets and the weekend
+   need watching). Planned: **Mon 16 Nov**.
 3. Every PC's clock is set automatically (Windows: Settings → Time → "Set time automatically" ON). Week tabs and "this week" come
    from the PC's own date.
-4. Old-screen guard v2 (SUPABASE_CHANGES.md, top block) — only if Garry says yes. It is run AFTER deploy (step 7).
+4. Take a backup first: **⬇ Download full backup (JSON)** — keep the file and note the time.
+5. Garry decides yes / no on old-screen guard v2. If yes, try it once on a Supabase TEST project first.
 
 **Go-live**
-5. Deploy. Check in an **incognito** window: Deliveries shows the week tabs (This week · Next week · +2 · +3 · Later); move one test
-   job's due date and move it back (tap the due date, pick a reason); the dot says **Synced**; Settings → Delivery dates shows **3 / 5 / 14**.
-6. Close and reopen, **in person**, every office PC, the saw and stores screens, the floor screen, and **every driver's phone**.
-   A screen left open on the old version can still "Clear Week" every week's bookings and its driver screen shows next week's Tuesday
-   as this Tuesday.
-7. (If approved) make one normal save from the new screen, then run old-screen guard v2.
-8. The person who plans the vans answers the one-time question on Deliveries: bookings from before the week tabs are for
-   **This week** or **Next week**.
+6. Garry merges `release/deliveries-weeks` into `main`. Wait for GitHub Pages (2–3 minutes).
+7. Check in an **incognito** window (Chrome): Deliveries shows the sticky week bar and the week tabs (Wk 47 · 16 Nov ● this week ·
+   next weeks · Later); tap a pool card's due date, pick a date and a reason, then move it back; the dot says **Synced**;
+   Settings → Delivery dates shows **3 / 5 / 14**; Cutting Lists still has its Project filter.
+8. (Only if guard v2 was approved) make one normal save from the new screen (type a note on a job), then run old-screen guard v2.
+9. **Close and reopen, in person, every screen:** every office PC, the Production Manager's PC, the saw and stores screens, the
+   floor screen, and **every driver's phone** (Chrome). A screen left open on the old version can still "Clear Week" every week's
+   bookings, shows next week's Tuesday as this Tuesday on the driver screen, and drops the answer to the old-bookings question.
+   It can also (Tester attack 6, 12 Nov): **move a next-week booking to another day and land it on the wrong Friday** — the person
+   on the old screen sees "this Friday", every new screen files it under next week's Friday; and its save **puts Settings →
+   Delivery dates back to 3 / 5 / 14** for any PC opened afterwards. So: do not change the Delivery dates numbers until every
+   screen has been reopened (or old-screen guard v2 is on — it refuses every old screen's save).
+10. The person who plans the vans answers the one-time question on Deliveries: bookings from before the week tabs are for
+    **This week** or **Next week**.
+11. Spot-check on the Production Manager's own PC and one Android phone in Chrome: tap the due date, "→ Wk N", drag a card onto
+    Next ▶, "Move ticked to week…". (Never verified on real hardware — fake database only so far.)
 
-**Rollback**
-9. FIRST undo guard v2 (re-run the 3 Nov guard SQL), THEN put the older code back.
-10. Before going back, check the **Next week / +2 / +3** tabs: the older code has no weeks and shows every booking on this week's days.
+**Rollback** (if something is badly wrong)
+12. If guard v2 was run: FIRST undo it (re-run the 3 Nov guard SQL, SUPABASE_CHANGES.md "2026-11-03 — Old-screen guard"), THEN put
+    the older code back. The other way round no screen can save.
+13. Before going back, look at the **next weeks'** tabs: the older code has no weeks and shows every booking on this week's days.
     Write those bookings down (or Export each week) so they can be re-booked.
+14. Going back = Garry reverts the merge on GitHub (the version before is `main` as it was with PR #2). No data is deleted either way:
+    the extra fields (delivery week, date history, reasons) are simply ignored by the older code. Then close and reopen every screen again.
 
 **Who to tell**
+- **Production Manager:** a new **🚚 Deliveries** button on his screen (Today stays his home). It is the full Deliveries page (Garry, A1):
+  week bar ◀ Prev / Next ▶, tap a due date to change it (date → reason), "→ Wk N" / "Move to week…" on a card, tick several +
+  "Move ticked to week…", drag a card onto a week tab, book vans, **Close week**.
 - **Office:** "Clear Week" is now **Close week** (one week at a time; not-delivered jobs come back to To plan marked "rebook").
   To change a date, **tap the due date** (board row or delivery card) and pick a reason. **Dates to change in Cienapps** (Export
   Changes) lists every due / delivery date to **type into Cienapps by hand** — it stays until an import shows Cienapps has it.
+  Saturday deliveries are allowed and not flagged (B1); Sundays and bank holidays are not delivery days.
 - **Drivers:** run sheets and the driver screen are now **dated** (pick the day from the list; next week's days are marked).
+  A job already loaded whose week is moved stays on the van, flagged "date moved after loading — check" (D1).
 - **Saw / stores:** a card can show "this job has moved" and "⏳ moved out — don't cut early".
 - **PMs:** booked deliveries within 5 working days show **"site not confirmed"** — tap to confirm the site is ready
   (or "Site ready for all" per customer).
@@ -488,7 +513,8 @@ Conditions
 - [ ] Spot-check on the Production Manager's own PC and an Android phone in Chrome: tap the due date, → Wk, drag onto Next ▶, Move ticked.
 - [ ] Release Mon–Wed only, with Job B, using the Go-live checklist above. Add to "Who to tell": the PM's 🚚 Deliveries button.
 
-Garry's decisions
+Garry's decisions — **ANSWERED 12 Nov 2026: A1, B1, D1 (all as built, no code change); C → Job A on its own first, in small
+pieces (branch `release/deliveries-weeks`, Mon 16 Nov).** The options as they were put:
 - **A. Production Manager on Deliveries:** (1) full page as built, Close week included. **Recommended**, because Close week takes a
   backup first. (2) Same, but no Close week or old-bookings answer. (3) No Deliveries button.
 - **B. Saturday deliveries:** (1) allowed and not flagged, as built. **Recommended.** (2) Flag them.
@@ -498,3 +524,92 @@ Garry's decisions
 
 Process notes: the Coder changed the Tester's attack5 F2 expected result (on the lead's call, logged). The Tester should confirm it on
 the Job B merge. No Tester re-attack has been run since the attack5 fixes; that re-attack happens on the Job B merge.
+
+### 12 Nov 2026 — Coder: Job A prepared as a release of its own, branch `release/deliveries-weeks` (for Garry to merge Mon 16 Nov)
+Garry, 12 Nov: releases go out as small pieces; answers **A1, B1, D1** (all "as built" — no behaviour change). Recorded in ROADMAP and above.
+- **Branch** = `feature/dates-deliveries` (ba6ecd8) + `origin/main` (history only, clean) + the Cutting Lists project filter
+  (`feature/lists-project-filter`, PR #2, which goes live first). Two conflicts in index.html, both kept: the lists-to-issue row has
+  the project tag AND the "⏳ moved out — don't cut early" badge; the "lists needed" table has the Project column AND the week-aware
+  van label. ROADMAP: both sides kept.
+- **Carried over from the Job B branch** (`feature/project-details-v2`, 115 commits to index.html since ba6ecd8 read): only
+  `eae424a` — bank-holiday list gains Sat 26 Dec 2026, Sat 25 / Sun 26 Dec 2027 and Mon 3 Jan 2028 (Garry confirmed 3 Jan 2028; the
+  comment now says so). New tests/dates/a6-bankhols.test.js (6 checks).
+- **Left on Job B** (need its tables or fields, or are not Job A's code): `87e7cc4` history tidy "keeps the richer line" (only differs
+  from today's tidy when a line carries a change request / fixed-window mark — Job B fields; without them it is the same rule);
+  `9c53642` date engine for the PM sequence; `2d7d0d2`, `b517aba`, `42a6355`, `5949f4c`, `705c89c` (sequence date tools);
+  `c9cdb31` (pre-production "processed" wording); `d23371e` (ⓘ ＋ Add cutting list on delivery cards, L9); `321a561` (🔢 Sequence
+  button on Deliveries); everything on sequence, requests, upload, P-numbers, spec sheet, shipped steps. L12 (WO drop-down by due date) also stays on Job B.
+- **SQL: none needed.** No table, column or top-level save key is added; the app calls exactly the same database tables as main
+  (checked). Old-screen guard v2 stays optional and is run AFTER deploy if Garry says yes. Go-live checklist above rewritten for a
+  release on its own.
+- **Tests changed (intended):** sawstores/retest-nov "2028 list" expects 3 Jan 2028 (same change as on Job B); lists-filter/attack1
+  check 11 compares with Job A before the filter (ba6ecd8) while main has no Job A yet — it then shows the filter changes no other
+  screen (116 / 0); dates/attack5-carryover B8 [lists ON] leaves out the drawing-office screen, which gained the Project filter on purpose.
+- **Full suite** (213 files incl. the 4 probes, 3 at a time): **4,126 pass / 30 fail** after the three test updates (first run 4,122 /
+  34: the 4 extra were those three tests, re-run alone and passing). The 30 = the 28 on ACCEPTED-FAILURES (attack1-oldversion ×3,
+  attack3-guard, sawstores ×2, t3, t13 ×4, t14 ×3, t16 ×2, t17 ×10, attack-poll P5, c4-queue A5) + the **2 L12 rows, which still fail
+  here** (L12 is Job B) and stay on the list. No timing flakes this run. header-late-probe still crashes on the import mapping
+  screen (pre-existing, same on main).
+- **Screenshots** (fake database): deliveries-weeks-pc.png, deliveries-duedate.png, deliveries-phone.png (360 px, no sideways page scroll).
+- **Not done / for others:** no Tester re-attack on this merged branch yet; real PC drag and Android Chrome never checked on hardware
+  (checklist step 11). The code comments at the Saturday and on-the-road rules still say "ASSUMED" — the answers are in the docs.
+- Next: Tester attacks `release/deliveries-weeks`; Manager GO / NO-GO; only Garry merges.
+
+### 12 Nov 2026 — Tester attack 6 + Manager verdict on the "Deliveries weeks" release (`release/deliveries-weeks`, 3adb928)
+**Verdict: GO WITH CONDITIONS** for Garry to merge on Mon 16 Nov.
+
+**What was run (fake database only):** every `tests/dates/*.test.js` and `tests/lists-filter/*.test.js` by the Manager: **909 pass / 6 fail**,
+the 6 all on ACCEPTED-FAILURES (attack1-oldversion ×3, attack3-guard ×1, attack4-usability L12 ×2). New
+`tests/dates/attack6-release.test.js` (commit 7114dd6): **100 pass / 5 fail** — the 5 are the findings below. The full 213-file suite
+was NOT re-run by the Manager (Coder's figure: 4,126 / 30).
+
+**Checked and fine**
+- The two hand-merged spots (10c64f7): lists-to-issue row shows the project tag AND "moved out — don't cut early", in view at 1280 and
+  360 px, filter on or off; the lists-needed table has the Project column and the van label with its date (next week, 3 weeks out, old booking).
+- The three test edits are right and no wider than needed: retest-nov only adds 3 Jan 2028; lists-filter check 11 uses ba6ecd8 only while
+  main has no week bar; attack5 B8 skips only the drawing office, only with lists ON. (That screen differs from PR #2 by one thing —
+  the date on the van badge — now pinned by attack6 B4.)
+- **No SQL needed, no new top-level save key** (save sends orders, settings, nid, version, updated_by; same database tables as main).
+- **Lists switch OFF: the Deliveries weeks DO apply** — the release is not behind the lists switch. Screens that differ from live, all
+  intended: Board, Deliveries, Export Changes, Settings, PM, management, Production Manager, driver, floor, and one label on the Cutting
+  Lists page ("On delivery board (Volvo Wed 11 Nov)"). Import, History, saw, stores, drawing office: word for word as live.
+- Week edges (Sat 23:30, Sunday, Mon 00:30, summer time, clocks back, Wk 53 → Wk 1, 3 Jan 2028): Board and Deliveries agree.
+- Fresh database (Clear All Orders + new import on the live code, then the release): opens clean; the one-time question does not appear
+  unless a hand-added job is still on a van, and answering it changes no work order.
+- Catch-up cut-off and Export Changes after a date move: correct (1 Nov in, 31 Oct out; HTML in a reason shown as text).
+- An old live screen's save keeps every date move, history, "Cienapps has" date, next-week booking and closed week. An old-screen import does not undo a date move.
+
+**Findings (none Critical)**
+1. **Medium — old screen only.** A screen still on today's version that moves a NEXT-week booking to another day: its user sees "this
+   Friday", the new screens file it under next Friday (attack6 C2a).
+2. **Medium/Low — old screen only.** An old screen's save resets Settings → Delivery dates (3 / 5 / 14) to the defaults for PCs opened
+   afterwards, if the numbers were changed (C1k). Same cause as the already-accepted "old-bookings answer dropped".
+3. **Low.** Booking a van by hand on Sat 26 Dec 2026 (St Stephen's Day) gives no "bank holiday" question; Fri 25 and Mon 28 Dec do (F).
+4. **Low.** Two PCs answering the one-time question differently: both end on the same week, but the old day notes are copied into both weeks (D1b).
+5. **Low (same as live today).** An old day note ("Tue: …") with no old bookings shows on every following week's Tuesday until someone edits it (G6).
+
+**Conditions**
+1. **Garry — go-live day:** close and reopen every screen (step 9) — findings 1 and 2 and the three accepted old-screen risks only exist
+   while an old screen is open. **Recommended: say yes to old-screen guard v2** and run it straight after step 8; it refuses every old screen's save.
+2. **Garry:** do not change Settings → Delivery dates until every screen has been reopened (or guard v2 is on).
+3. **Garry:** merge PR #2 (project filter) first with "Create a merge commit", not squash. If GitHub shows a conflict on this release on Monday, stop — back to the Coder.
+4. **Coder — before Monday, docs only:** add to checklist step 9 what an old screen can also do (findings 1 and 2), and put the 5
+   attack6 fails on ACCEPTED-FAILURES for Garry's yes/no.
+5. **Coder — before 1 Dec, small:** finding 3 (ask on a bank-holiday Saturday); findings 4 and 5 when convenient. Tester re-tests.
+6. **Garry — after today's Clear All Orders:** on Monday, if the question appears it is for hand-added jobs still on a van — answer "This week"; re-type or clear any old day notes.
+7. **Not verified:** real PC drag and Android Chrome (step 11); the full suite on this exact commit.
+
+Rollback, "who to tell" and the rest of the checklist are right for a release on its own.
+
+
+### 14 Nov 2026 — main merged in, ready for Garry's Merge button
+- Garry asked (13 Nov, late) for the merge to be done. `main` had moved on since this branch was cut (the Shipped / Installed /
+  Completed board steps went live 12 Nov), so `main` was merged INTO this branch first. 3 clashes, each settled keeping both sides:
+  the Capacity Board step box (stamps the store time AND sends steps 9–11 through the "ship?" question), the roadmap, one test.
+- **Tester attacked where the two releases meet** (tests/ship/merge-*.test.js, 162 checks): van bookings in past / this / future
+  weeks then shipped by hand, bring back, import behind / ahead, close week, two PCs, old screen + new screen, phone. **Nothing
+  broken by the merge.** 3 checks fail and fail the same way on today's live version (see ACCEPTED-FAILURES, pending Garry).
+- **Full suite on the merged code (216 files, fake database): 4,406 pass / 37 fail** = the same 30 as before + the 4 attack6 rows
+  + those 3. No new failure from the merge. No database change, no SQL.
+- Pull request opened: release/deliveries-weeks → main. NOT merged. Go-live checklist above still applies (Mon–Wed; close and
+  reopen every screen and phone — step 9).

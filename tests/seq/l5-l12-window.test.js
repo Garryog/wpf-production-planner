@@ -52,8 +52,8 @@ const donep = p => p.evaluate(() => { const d = document.querySelector('.me-dov'
     rec('L8: click outside the window → the window stays open', await ed(p));
     // ✕ Close at the top right, inside a sticky bar; the bottom button says Close (not Cancel)
     w = await p.evaluate(() => { const x = document.getElementById('me-x0'), b = x && x.closest('.me-tb'), r = x && x.getBoundingClientRect(), o = document.querySelector('.me-ed').getBoundingClientRect();
-      return { x: !!x, txt: x && x.textContent, sticky: b && getComputedStyle(b).position, right: r && o.right - r.right < 40, bottom: document.getElementById('pod-x').textContent }; });
-    rec('L8: "✕ Close" top right in a sticky bar; the bottom button says "Close"', w.x && /✕ Close/.test(w.txt) && w.sticky === 'sticky' && w.right && w.bottom === 'Close', JSON.stringify(w));
+      return { x: !!x, txt: x && x.textContent, sticky: b && getComputedStyle(b).position, right: r && o.right - r.right < 40, bottom: !!document.querySelector('.me-ed #pod-x') }; });
+    rec('L8: "✕ Close" top right in a sticky bar; no second Close at the bottom (step 11: one Close)', w.x && /✕ Close/.test(w.txt) && w.sticky === 'sticky' && w.right && !w.bottom, JSON.stringify(w));
     // nothing typed: ✕ closes without asking
     await asks(p);
     await p.evaluate(() => document.getElementById('me-x0').click()); await sleep(100);
@@ -63,8 +63,6 @@ const donep = p => p.evaluate(() => { const d = document.querySelector('.me-dov'
     await setv(p, '0|item', 'Side');
     await p.evaluate(() => { window.__confirm = false; document.getElementById('me-x0').click(); }); await sleep(100);
     rec('L8: ✕ Close after typing → "Close without saving?"; Cancel → stays open, row kept', await ed(p) && await p.evaluate(() => /Close without saving\?[\s\S]*What you typed in this list is lost/.test(window.__asked.pop() || '') && document.querySelector('[data-mr="0|item"]').value === 'Side'));
-    await p.evaluate(() => { window.__confirm = false; document.getElementById('pod-x').click(); }); await sleep(100);
-    rec('L8: bottom Close after typing → asked too; Cancel → stays', await ed(p) && await p.evaluate(() => /Close without saving/.test(window.__asked.pop() || '')));
     await p.evaluate(() => { window.__confirm = false; document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); }); await sleep(100);
     rec('L8: Esc after typing → asked; Cancel → stays', await ed(p) && await p.evaluate(() => /Close without saving/.test(window.__asked.pop() || '')));
     await p.evaluate(() => { window.__confirm = true; document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); }); await sleep(100);
@@ -108,7 +106,7 @@ const donep = p => p.evaluate(() => { const d = document.querySelector('.me-dov'
     await p.evaluate(() => { DB.listChk = false; document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); }); await sleep(100);
     rec('L8: Esc closes the finish panel', await p.evaluate(() => !document.querySelector('.pod-ovl')));
     // a template
-    await p.evaluate(() => { localStorage.setItem('wpfEditPin', pins().prod || pins().admin); openListEditor(null, '', 'P1', { tpl: true }); }); await sleep(400);
+    await p.evaluate(() => { (o => { window.prompt = (m, d) => /Enter the Drawing office, Production Manager or Admin PIN/.test(m) ? pins().design : o(m, d); })(window.prompt); /* a remembered PIN no longer opens templates (plan question 12): the PIN is typed when asked */ /* attack2 F5 (Garry Q3): templates are Drawing office / Admin only */ openListEditor(null, '', 'P1', { tpl: true }); }); await sleep(400);
     await p.evaluate(() => { const n = document.getElementById('me-name'); n.value = 'Type Z'; n.dispatchEvent(new Event('input')); });
     await fillSaw(p, 0, 'Side', '1', '700', '500', 'MFC White');
     await p.evaluate(() => document.getElementById('me-save').click()); await sleep(1000);
@@ -243,8 +241,8 @@ const donep = p => p.evaluate(() => { const d = document.querySelector('.me-dov'
     rec('L11: Aderrig only — shipped WO-5, on-hold WO-24 and Lucan\'s WO-6 left out', !wv.some(v => ['WO-5', 'WO-24', 'WO-6', 'WO-20', 'WO-26'].includes(v)) && wv.includes('WO-1') && wv.includes('WO-3'), JSON.stringify(wv));
     rec('L12: sorted by due date, soonest first, no due date last (WO-1, WO-2 22 Oct · WO-4 20 Nov · WO-3 3 Dec · WO-25 none)', JSON.stringify(wv) === JSON.stringify(['WO-1', 'WO-2', 'WO-4', 'WO-3', 'WO-25']), JSON.stringify(wv));
     const o1 = os.find(o => o.v === 'WO-1'), o4 = os.find(o => o.v === 'WO-4'), o25 = os.find(o => o.v === 'WO-25');
-    rec('L12: line "WO-1 · Fl GF · Unit 12 · due 22 Oct · has a list"', o1 && o1.t === 'WO-1 · Fl GF · Unit 12 · due 22 Oct · has a list', o1 && o1.t);
-    rec('L12: a job with no list has no "has a list"; no due date says so', o4 && o4.t === 'WO-4 · Fl T09 · Unit 13 · due 20 Nov' && o25 && o25.t === 'WO-25 · Fl T09 · Unit 31 · no due date', JSON.stringify([o4, o25]));
+    rec('L12: line "WO-1 · Fl GF · Unit 12 · HOUSE WO-1 TYPE B · due 22 Oct · has a list" (title on the line since 15 Nov)', o1 && o1.t === 'WO-1 · Fl GF · Unit 12 · HOUSE WO-1 TYPE B · due 22 Oct · has a list', o1 && o1.t);
+    rec('L12: a job with no list has no "has a list"; no due date says so', o4 && o4.t === 'WO-4 · Fl T09 · Unit 13 · HOUSE TYPE C UTILITY · due 20 Nov' && o25 && o25.t === 'WO-25 · Fl T09 · Unit 31 · NO DUE · no due date', JSON.stringify([o4, o25]));
     await closeAll(p);
     // no project: one disabled line, never all the jobs
     await p.evaluate(() => openListEditor(null, '', '')); await sleep(400);
@@ -306,7 +304,7 @@ const donep = p => p.evaluate(() => { const d = document.querySelector('.me-dov'
     rec('names: Insert from template (8 templates) has a find box; "larch" → only "Larch Type Q"', JSON.stringify(w) === '["Larch Type Q"]', JSON.stringify(w));
     await closeAll(p);
     // templates still need a name
-    await p.evaluate(() => { localStorage.setItem('wpfEditPin', pins().prod || pins().admin); openListEditor(null, '', 'P1', { tpl: true }); }); await sleep(400);
+    await p.evaluate(() => { (o => { window.prompt = (m, d) => /Enter the Drawing office, Production Manager or Admin PIN/.test(m) ? pins().design : o(m, d); })(window.prompt); /* a remembered PIN no longer opens templates (plan question 12): the PIN is typed when asked */ /* attack2 F5 (Garry Q3): templates are Drawing office / Admin only */ openListEditor(null, '', 'P1', { tpl: true }); }); await sleep(400);
     await fillSaw(p, 0, 'Side', '1', '700', '500', 'MFC White');
     await p.evaluate(() => document.getElementById('me-save').click()); await sleep(300);
     rec('names: a template with no name → "Give the template a name."', await p.evaluate(() => document.getElementById('me-err').textContent === 'Give the template a name.' && !!document.querySelector('.me-ed')));
@@ -355,7 +353,7 @@ const donep = p => p.evaluate(() => { const d = document.querySelector('.me-dov'
     const S0 = X.makeServer(X.v1Row());
     const o0 = await X.dev(browser, S0, 'office');
     await o0.page.evaluate(() => showTab('s')); await sleep(300);
-    rec('switch OFF: Settings has "💾 Storage on this device"', await o0.page.evaluate(() => !!document.getElementById('set-store')));
+    rec('switch OFF: Settings does NOT show "💾 Storage on this device" (Garry 13 Nov, question 15 answer B)', await o0.page.evaluate(() => !document.getElementById('set-store')));
     await o0.page.evaluate(() => openListEditor(null, 'WO-2')); await sleep(200);
     rec('switch OFF: the old list window — no ✕ Close bar, no project message, old name pre-fill and "Cancel"', await o0.page.evaluate(() => !document.getElementById('me-x0') && !document.getElementById('me-pm') && /Cancel/.test((document.getElementById('pod-x') || {}).textContent || '')));
     rec('switch OFF: no page errors', !(S0.errors || []).length, JSON.stringify(S0.errors));

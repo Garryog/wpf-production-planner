@@ -201,11 +201,9 @@ const LIT = () => ({ prev: document.getElementById('wkb-prev').className, next: 
     const pdrag = await p.locator('.dcell .dchip[data-dw="WO-R3"] .dchip-t').count();
     if (pdrag) { await p.locator('.dcell .dchip[data-dw="WO-R3"] .dchip-t').dragTo(p.locator('#wkb-next')); await p.waitForTimeout(150); }
     const B3 = await p.evaluate(async () => { const go = document.getElementById('wkp-go'); if (go) go.click(); await W(60); await __why('Production'); __closeAll(); const o = __g('WO-R3'); const r = { due: o.dueDate, day: o.delDay || '', rb: !!o.delRebook }; document.querySelector('[data-prodtab="today"]').click(); await W(120); r.back = { wkbar: !!document.getElementById('del-wkbar'), prodTab, h1: (document.querySelector('#app h1') || {}).textContent || '' }; ROLE = 'office'; render(); return r; });
-    // Job A merged into Job B (11 Nov 2026): with the lists switch on and the sequence tables there, Job B's "✋ Requests (N)" sits after 🧭 Today
-    const req = listsOn && await p.evaluate(() => typeof seqVis === 'function' && seqVis());
-    const expStrip = listsOn ? ['today'].concat(req ? ['req'] : [], ['deliv', 'lists', 'snags']) : ['today', 'deliv'];
+    const expStrip = listsOn ? ['today', 'deliv', 'lists', 'snags'] : ['today', 'deliv'];
     rec('B1' + tag + ' Production Manager home is still 🧭 Today; strip = ' + expStrip.join(' · ') + '; no week bar on his home', !B.home.wkbar && B.home.strip.map(x => x.replace('*', '')).join() === expStrip.join() && /^today\*/.test(B.home.strip[0]) && B.home.nStrip === 1, JSON.stringify(B.home));
-    rec('B2' + tag + ' 🚚 Deliveries: full page (week bar, date tags, → Wk buttons), the strip shown once at the top with Deliveries selected', B.del.wkbar && B.del.dqb > 0 && B.del.wkn > 0 && B.del.nStrip === 1 && B.del.stripFirst === 'prod-strip' && /^deliv\*/.test(B.del.strip[expStrip.indexOf('deliv')]), JSON.stringify(B.del));
+    rec('B2' + tag + ' 🚚 Deliveries: full page (week bar, date tags, → Wk buttons), the strip shown once at the top with Deliveries selected', B.del.wkbar && B.del.dqb > 0 && B.del.wkn > 0 && B.del.nStrip === 1 && B.del.stripFirst === 'prod-strip' && /^deliv\*/.test(B.del.strip[1]), JSON.stringify(B.del));
     rec('B3' + tag + ' he can move dates (→ Wk 47 and the quick date edit), recorded with his name', B.r1 === '2026-11-19' && B.r2 === '2026-11-20' && B.r1by === 'Tester', JSON.stringify([B.r1, B.r1by, B.r2]));
     rec('B4' + tag + ' a cloud refresh while he is on Deliveries keeps him there (one strip, week bar)', B.afterPoll === 'deliv/true/1', B.afterPoll);
     rec('B5' + tag + ' he can book a van by dragging a card onto a van cell (real drag)', B2.veh === 'IVECO' && B2.day === 'Thu', JSON.stringify(B2));
@@ -218,12 +216,9 @@ const LIT = () => ({ prev: document.getElementById('wkb-prev').className, next: 
   {
     const ROOT = path.resolve(__dirname, '..', '..');
     let oldHtml = '';
-    // Job A merged into Job B (11 Nov 2026): on the Job B branch (it has the B7 requests page) "before" is Job B just before that merge
-    // (404262a) — ea990d4 has none of Job B's screens. On the Job A branch it is still ea990d4.
-    const BASE = /function seqReqPage\(/.test(require('fs').readFileSync(path.join(ROOT, 'index.html'), 'utf8')) ? '404262a' : 'ea990d4';
-    try { oldHtml = execSync('git show ' + BASE + ':index.html', { cwd: ROOT, maxBuffer: 64 * 1024 * 1024 }).toString(); } catch (e) { oldHtml = ''; }
+    try { oldHtml = execSync('git show ea990d4:index.html', { cwd: ROOT, maxBuffer: 64 * 1024 * 1024 }).toString(); } catch (e) { oldHtml = ''; }
     const roles = ['pm', 'dash', 'design', 'saw', 'stores', 'driver', 'floor', 'prod'];
-    const grab = async (html, settings) => {
+    const grab = async (html, settings, lw) => {
       const row = { id: 'main', nid: 9, settings, orders: [O('WO-R1'), O('WO-R2', { step: '6. CUT' }), O('WO-R3', { delVeh: 'VOLVO', delDay: 'Wed', delWk: '2026-11-09', step: '8. PALLETED' })] };
       const t = await H.open({ browser, now: NOW, row, viewport: { width: 1366, height: 900 } });
       if (html) {
@@ -235,20 +230,39 @@ const LIT = () => ({ prev: document.getElementById('wkb-prev').className, next: 
           return route.fulfill({ status: 404, body: '' }); });
         await t.page.reload(); await t.page.waitForFunction(() => typeof analyzeImport === 'function'); await t.page.waitForTimeout(300);
       }
-      const out = await t.page.evaluate(async roles => { const W = ms => new Promise(r => setTimeout(r, ms)); const o = {};
-        for (const r of roles) { ls.set('wpfPin_' + r, pins()[r]); ROLE = r; render(); await W(100); o[r] = document.getElementById('app').innerText.replace(/\d{1,2}:\d{2}(:\d{2})?/g, 'hh:mm').replace(/📦 Items sent/g, '').replace(/\s+/g, ' ').replace(/🔢 Sequence 📦 Shipped/g, '🔢 Sequence').trim(); } /*S2 (11 Nov): the PM view gains a Shipped tab on purpose*/
-        ROLE = 'office'; render(); return o; }, roles);
+      // FINAL round, 14 Nov 2026 (list window release re-point): `lw` = take OUT the three things the cutting-list window release
+      // adds to these screens ON PURPOSE with the lists switch ON, so the comparison with ea990d4 (which has no list window) is
+      // about the Deliveries carry-over only: (1) the PM's read-only "📋 cutting list …" status on each job row (.pm-ls, plan step 7),
+      // (2) the default list owner named to the saw / Production Manager — "Production Manager, Garry and Drawing office" instead of
+      // "Production Manager" (Garry 13 Nov), (3) the saw's red panel "Tell the Drawing office." instead of "Tell the Production Manager."
+      // (run 3, F15). out._raw keeps the text as it really is, so the test also checks those three ARE there.
+      const out = await t.page.evaluate(async ({ roles, lw }) => { const W = ms => new Promise(r => setTimeout(r, ms)); const o = { _raw: {} };
+        const txt = () => document.getElementById('app').innerText.replace(/\d{1,2}:\d{2}(:\d{2})?/g, 'hh:mm').replace(/📦 Items sent/g, '').replace(/\s+/g, ' ').trim();
+        for (const r of roles) { ls.set('wpfPin_' + r, pins()[r]); ROLE = r; render(); await W(100); o._raw[r] = txt();
+          if (lw) { document.querySelectorAll('#app .pm-ls').forEach(e => e.remove());
+            o[r] = txt().replace(/owner Production Manager, Garry and Drawing office/g, 'owner Production Manager').replace(/Tell the Drawing office\./g, 'Tell the Production Manager.'); }
+          else o[r] = o._raw[r]; }
+        ROLE = 'office'; render(); return o; }, { roles, lw: !!lw });
       await t.close(); return out;
     };
+    const LW = /pm-ls/.test(require('fs').readFileSync(path.join(ROOT, 'index.html'), 'utf8')) && !/pm-ls/.test(oldHtml); // this code has the list window, the baseline does not
     for (const listsOn of [false, true]) {
       const settings = listsOn ? { listStore: 'v2', listStoreAt: '2026-10-20T08:00:00Z' } : {};
       const tag = listsOn ? ' [lists ON]' : ' [lists OFF]';
-      if (!oldHtml) { rec('B8' + tag + ' roles unchanged (could not read ' + BASE + ':index.html)', false); continue; }
-      const now_ = await grab(null, settings), old = await grab(oldHtml, settings);
-      const diff = roles.filter(r => r !== 'prod' && now_[r] !== old[r]);
+      if (!oldHtml) { rec('B8' + tag + ' roles unchanged (could not read ea990d4:index.html)', false); continue; }
+      const now_ = await grab(null, settings, LW && listsOn), old = await grab(oldHtml, settings);
+      if (LW && listsOn) { // the three deliberate list-window differences are really on the screens (else the re-point above hides nothing and should go)
+        const raw = now_._raw;
+        rec('B8' + tag + ' list window release: the PM sees the read-only "📋 no cutting list yet" on each of his 3 job rows, the saw is told "owner Production Manager, Garry and Drawing office", the Production Manager\'s late-list rows name the same three',
+          (raw.pm.match(/📋 no cutting list yet/g) || []).length === 3 && /owner Production Manager, Garry and Drawing office/.test(raw.saw) && (raw.prod.match(/owner Production Manager, Garry and Drawing office/g) || []).length === 3, JSON.stringify([(raw.pm.match(/📋 no cutting list yet/g) || []).length, /owner Production Manager, Garry and Drawing office/.test(raw.saw), (raw.prod.match(/owner Production Manager, Garry and Drawing office/g) || []).length]));
+      }
+      // Release "Deliveries weeks" (12 Nov 2026): the Cutting Lists page gained the Project filter on purpose (PR #2, tests/lists-filter),
+      // so with the lists switch ON the drawing-office screen is no longer the ea990d4 text — left out there only when the filter exists.
+      const lpf = listsOn && /function lpfSec\(/.test(require('fs').readFileSync(path.join(ROOT, 'index.html'), 'utf8'));
+      const diff = roles.filter(r => r !== 'prod' && !(lpf && r === 'design') && now_[r] !== old[r]);
       rec('B8' + tag + ' PM / management / drawing office / saw / stores / driver / floor screens identical to before the carry-over', !diff.length, diff.map(r => r + ': OLD "' + old[r].slice(0, 120) + '" NEW "' + now_[r].slice(0, 120) + '"').join(' || '));
       const pOld = old.prod, pNew = now_.prod, pre = listsOn ? '' : '🧭 Today 🚚 Deliveries ';
-      const strip = listsOn ? pNew.replace(/^(🧭 Today (?:✋ Requests \(\d+\) )?)🚚 Deliveries (?=📋 Lists)/u, '$1') : pNew;
+      const strip = listsOn ? pNew.replace('🧭 Today 🚚 Deliveries 📋 Lists', '🧭 Today 📋 Lists') : pNew;
       rec('B9' + tag + ' Production Manager Today screen = the old one + only the "🧭 Today 🚚 Deliveries" buttons', listsOn ? strip === pOld : pNew === pre + pOld, 'OLD "' + pOld.slice(0, 160) + '" NEW "' + pNew.slice(0, 160) + '"');
     }
   }
@@ -277,9 +291,9 @@ const LIT = () => ({ prev: document.getElementById('wkb-prev').className, next: 
       await __go('2'); out.cok = card('WO-OK');
       return out;
     });
-    rec('C1 moved job planned after its due date: board row shows "⚠ built after due" + "(orig 11 Nov Wk 46)" + the 🚚 delivery tag, nothing spills out of the cell', C.mv && C.mv.late && /orig 11 Nov Wk 46/.test(C.mv.orig) && C.mv.deliv.length === 1 && /Fri 20 Nov/.test(C.mv.deliv[0]) && !C.mv.spill, JSON.stringify(C.mv));
-    rec('C2 the chip explains itself (tooltip names the planned week and the due date)', C.mv && /Wk 48/.test(C.mv.lateTitle) && /18/.test(C.mv.lateTitle), C.mv && C.mv.lateTitle);
-    rec('C3 board row and delivery card: same tag text and colour for the moved job (grey, next week) — chip only on the board', C.mv && C.cmv && C.mv.cls === C.cmv.cls && C.mv.cls === 'grey' && C.mv.txt === C.cmv.txt && C.mv.deliv[0] === C.cmv.deliv[0], JSON.stringify([C.mv && C.mv.cls, C.cmv]));
+    rec('C1 (18 Nov: board shows the due date only) moved job: no "built after due", no "(orig …)", no 🚚 tag on the board row, nothing spills out', C.mv && !C.mv.late && !/orig/.test(C.mv.orig||'') && C.mv.deliv.length === 0 && !C.mv.spill, JSON.stringify(C.mv));
+    rec('C2 (18 Nov) no "built after due" chip on the board', C.mv && !C.mv.lateTitle, C.mv && C.mv.lateTitle);
+    rec('C3 board row and delivery card: same tag text and colour for the moved job (grey, next week) — chip only on the board', C.mv && C.cmv && C.mv.cls === C.cmv.cls && C.mv.cls === 'grey' && C.mv.txt === 'Wk '+(C.cmv.txt.match(/Wk (\d+)/)||[])[1], /*19 Nov: board shows the week only*/ JSON.stringify([C.mv && C.mv.cls, C.cmv]));
     rec('C4 due on the Friday of its own build week: no "built after due"; job planned before its due week: no chip', C.fri && !C.fri.late && C.ok && !C.ok.late && C.fri.cls === (C.cfri || {}).cls && C.ok.cls === (C.cok || {}).cls, JSON.stringify([C.fri, C.cfri, C.ok, C.cok]));
     rec('C: no page errors', !(t.server.errors || []).length, (t.server.errors || []).join(' | '));
     await t.close();

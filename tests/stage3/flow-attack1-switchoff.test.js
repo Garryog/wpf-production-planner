@@ -14,7 +14,9 @@ function row() {
   r.orders = [o('WO-1', '5. WORK ORDER PROCESSED', { delv: true, delVeh: 'VOLVO', delDay: 'Thu' }), o('WO-2', '6. JOB CUT COMPLETE'), o('WO-3', '3. READY FOR UPLOAD'), o('WO-4', '7. ASSEMBLY COMPLETE', { delv: true })];
   return r;
 }
-const norm = s => String(s).replace(/\d{1,2}:\d{2}(:\d{2})?/g, 'HH:MM').replace(/\s+/g, ' ').trim();
+const norm = s => String(s).replace(/\d{1,2}:\d{2}(:\d{2})?/g, 'HH:MM').replace(/\s+/g, ' ').trim()
+  // ALLOWED DIFFERENCE (Garry 11 / 12 Nov — S1 board steps): the board's step list also offers JOB SHIPPED / INSTALLED / COMPLETED
+  .replace(/PALLETED JOB SHIPPED INSTALLED COMPLETED/g, 'PALLETED');
 // ALLOWED DIFFERENCE (Tester, 10 Nov — dates & deliveries, Garry 9 Nov): van bookings now belong to a real week, so a
 // booking label carries its date ("Volvo Thu 12 Nov", the board's "(Volvo Thu 12 Nov)" for stage2's "(Thu)"), and the
 // dashboard's missed count reads "planned for a day already gone" (missed = by real date, any open week) for stage2's
@@ -24,8 +26,6 @@ const DAYS = '(Mon|Tue|Wed|Thu|Fri|Sat)', MON = '(Jan|Feb|Mar|Apr|May|Jun|Jul|Au
 // screen starts with its own two buttons "🧭 Today 🚚 Deliveries" (the way to the Deliveries page). Only that exact leading pair is taken off.
 const normDates = s => norm(s).replace(/^🧭 Today 🚚 Deliveries /, '').replace(new RegExp('\\b' + DAYS + ' \\d{1,2} ' + MON + '\\b', 'g'), '$1')
   .replace(new RegExp('\\(' + VANS + ' ' + DAYS + '\\)', 'g'), '($1)')
-  // ALLOWED DIFFERENCE (Garry 11 Nov — S1 board steps confirmed): the board's step list also offers JOB SHIPPED / INSTALLED / COMPLETED
-  .replace(/PALLETED JOB SHIPPED INSTALLED COMPLETED/g, 'PALLETED')
   .replace(/planned for a day already gone, not delivered|planned earlier this week, not delivered/g, '«missed»')
   .replace(/Weeks are stored when (?:a week is closed|the board is cleared) \(/g, 'Weeks are stored «close week» (')
   // ALLOWED DIFFERENCE (Coder, 10 Nov evening — Deliveries usability DD1, Garry 10 Nov): the board's due cell is the one due tag

@@ -4,6 +4,346 @@ Newest at the top. Each block must be run in Supabase BEFORE the matching code g
 
 ---
 
+## 2026-11-18 — Empty-save guard + "restore a list to an old revision" — PENDING, NOT YET RUN — Garry decided YES (17 Nov evening)
+
+**Why (plain English):** on 17 Nov some templates opened looking empty on the live site. A save from a window like that would have
+taken every row off the list. The app now asks first ("This save TAKES AWAY …"), but that question is only in the app. This
+change puts the same rule **inside the database**: a save that would take away **every** row of a list that has rows is refused,
+unless the app says the person was asked and pressed OK. So a list that opened empty on any screen — old or new — can never wipe
+the real list. Nothing is ever deleted either way (removed rows are only marked removed; that has not changed).
+
+**What it changes:** only the `save_list_revision` function. It gets one new, optional setting, `p_empty_ok` (default: off).
+- The old 5-setting version is dropped and the new one made **in one step** (`begin … commit`), so no screen ever finds it missing.
+  Because the new setting has a default, the **old live screen's** saves (which send the usual 5 settings) go to the new version
+  and work exactly as before. (A second version next to the old one was NOT used: with two versions the database cannot tell
+  which one a 5-setting save means, and every save would fail.)
+- Everything else in the function is the 2 Nov text from this file, word for word (checked with a line-by-line comparison).
+  The live database was NOT looked at: if its `save_list_revision` was ever changed by hand outside this file, running this
+  replaces that change with this file's text.
+- A refused save says: `empty save refused: this save would take away all 38 rows of "T2 LH"`. The new app shows:
+  "Not saved — the database refused it: this save would take away ALL 38 rows of "T2 LH". Nothing was changed. If the list
+  opened looking empty or short, close it and open it again."
+- When the person DID confirm, the list history line says "all 38 rows taken away (the person confirmed)".
+- No table, no column, no data is touched. The GRANT lines are for the new function (anon, authenticated, service_role, as before).
+
+**Before and after:** the new app works with or without this SQL. It only sends `p_empty_ok` when the person pressed OK to take
+away all rows; if the database doesn't know that setting yet (SQL not run), the app sends the save again without it. The **old live
+screen** (before this release) can no longer empty a whole list on purpose once this SQL is run — it shows "Not saved — empty save
+refused…". That is the safe direction; use the new version for that.
+
+**When:** any time — before or after the new app goes live. Safe to run twice.
+
+**⚠ After this is run, never re-run the 2 Nov Stage 3 block** (or paste its `save_list_revision` on its own): it would make the old
+5-setting version again NEXT TO the new one, and then every list save fails ("function … is not unique"). To undo this guard, use
+the **Undo** grey box at the end of this block (it drops the 6-setting version and puts the 2 Nov one back in one step).
+
+### Steps for Garry
+1. **Read-only check first** (changes nothing). Supabase → WPF project → **SQL Editor** → **New query**. Paste the FIRST grey box
+   (one line), **Run**. It must show **exactly one row**, reading exactly:
+   `p_list jsonb, p_lines jsonb, p_expect integer, p_by text, p_reason text`
+   Anything else — no row, two rows, or different words — **stop** and send a screenshot: live is not what this block expects.
+   (If it shows `…, p_reason text, p_empty_ok boolean`, this guard has already been run — nothing more to do.)
+2. Clear the editor. Copy everything in the SECOND grey box below, paste, **Run**.
+3. Expected result: **"Success. No rows returned"**. A red error: stop and send a screenshot (nothing is changed — it is all one step).
+4. Run the first grey box again: exactly one row, now reading `p_list jsonb, p_lines jsonb, p_expect integer, p_by text, p_reason text, p_empty_ok boolean`.
+5. Check straight away: open a cutting list on the live site, change one row, Save, close it, open it again — the change is there.
+
+```sql
+select pg_get_function_identity_arguments(oid) from pg_proc where proname='save_list_revision';
+```
+
+```sql
+-- ===================== EMPTY-SAVE GUARD — save_list_revision refuses taking away EVERY row unless p_empty_ok =====================
+begin;
+-- the old 5-setting version goes first (dropping a function never touches data); the new one answers the same 5-setting calls
+drop function if exists save_list_revision(jsonb,jsonb,int,text,text);
+-- Same as the 2 Nov function (Stage 3 block below), plus step 1b: a save that leaves NO rows on a list that has rows is
+-- refused (hint 'empty-refused') unless p_empty_ok = true — the app sends that only after "This save TAKES AWAY …" → OK.
+create or replace function save_list_revision(p_list jsonb, p_lines jsonb, p_expect int, p_by text, p_reason text, p_empty_ok boolean default false) returns jsonb language plpgsql as $$
+declare r lists%rowtype; e jsonb; nrev int; ids text[]:='{}'; ex list_lines%rowtype; isnew boolean:=false; o lists%rowtype; retired text; now_lines jsonb; t lists%rowtype;
+ chk boolean:=coalesce((p_list->>'check_req')::boolean,false);
+ nlive int:=0; wiped boolean:=false;  -- (18 Nov) rows the list has now; true = this save takes them ALL away (the person confirmed)
+begin
+ perform lists_switch_on();
+ select * into r from lists where id=p_list->>'id' for update;
+ if not found then
+  if p_expect is not null then raise exception 'stale: list % is missing', p_list->>'id'; end if;
+  if coalesce((p_list->>'one_per_wo')::boolean,false) then
+   perform lists_one_per_wo(array(select jsonb_array_elements_text(coalesce(p_list->'wos','[]'))), array[p_list->>'id']); end if;
+  if coalesce(p_list->>'replaces','')<>'' then
+   perform lists_one_replacement(p_list->>'replaces',p_list->'wos'->>0);
+   select * into o from lists where id=p_list->>'replaces' for update;
+   if not found then retired:='missing';
+   elsif o.archived then retired:='already';
+   elsif coalesce((p_list->>'replaces_keep')::boolean,false) then retired:='kept';
+   else
+    select coalesce(jsonb_object_agg(x.id,jsonb_build_array(x.kind,x.section,x.part,x.length_mm,x.width_mm,x.qty,x.unit_qty,x.material,x.edging,x.note,x.edging2)),'{}'::jsonb)
+      into now_lines from list_lines x where x.list_id=o.id and x.removed_rev is null;
+    if jsonb_typeof(p_list->'replaces_lines')='object' and not coalesce((p_list->>'replaces_force')::boolean,false) and now_lines<>p_list->'replaces_lines' then
+     raise exception 'replaced list changed: "%" was changed on another screen after it was copied', o.name using errcode='P0001', detail=o.id, hint='replaced-changed';
+    end if;
+    update lists set archived=true, updated_by=p_by,
+      log=log||jsonb_build_array(jsonb_build_object('at',now(),'by',p_by,'what','Archived','why','Replaced by "'||coalesce(p_list->>'name','(no name)')||'"')) where id=o.id;
+    insert into list_events(list_id,act,by,note) values(o.id,'archive-on',p_by,'Replaced by "'||coalesce(p_list->>'name','(no name)')||'"');
+    retired:='archived';
+   end if;
+  end if;
+  -- (4 Nov) with the check switched on, a new list waits for its check; a copy of a CHECKED template (at that template's
+  -- revision) is checked by the template's checker
+  select * into t from lists where chk and id=p_list->>'template_id' and is_template and checked_at is not null
+    and coalesce(p_list->>'source','')='template' and rev=(p_list->>'template_rev')::int;
+  insert into lists(id,project_id,name,list_type,type_name,is_template,template_id,template_rev,wos,no_cut,no_fit,source,sdate,created_by,updated_by,check_req,checked_by,checked_at,log)
+   values(p_list->>'id',p_list->>'project_id',coalesce(p_list->>'name','(no name)'),coalesce(p_list->>'list_type','house'),p_list->>'type_name',
+     coalesce((p_list->>'is_template')::boolean,false),p_list->>'template_id',(p_list->>'template_rev')::int,
+     coalesce(array(select jsonb_array_elements_text(p_list->'wos')),'{}'),coalesce((p_list->>'no_cut')::boolean,false),coalesce((p_list->>'no_fit')::boolean,false),
+     coalesce(p_list->>'source','manual'),(p_list->>'sdate')::date,p_by,p_by,
+     chk,t.checked_by,case when t.id is not null then now() end,
+     jsonb_build_array(jsonb_build_object('at',now(),'by',p_by,'what','List created','why',p_reason)
+       || case when coalesce(p_list->>'replaces','')<>'' then jsonb_build_object('replaces',p_list->>'replaces') else '{}'::jsonb end)
+     || case when t.id is not null then jsonb_build_array(jsonb_build_object('at',now(),'by',p_by,'what','Checked',
+          'why','from template "'||t.name||'" rev '||t.rev||', checked by '||coalesce(t.checked_by,'?'))) else '[]'::jsonb end)
+   returning * into r;
+  isnew:=true; nrev:=1;
+ else
+  -- 1. someone changed the list since this editor opened it: stop — the app reloads and compares again
+  if p_expect is null or r.version<>p_expect then raise exception 'stale: list % is at version %, editor had %', r.id, r.version, p_expect; end if;
+  -- 1b. (18 Nov, Garry) a save that takes away EVERY row of a list that has rows is refused — unless the app says the person
+  --     was asked "This save TAKES AWAY …" and pressed OK (p_empty_ok). A list that opened looking empty can never wipe the real one.
+  if coalesce(jsonb_array_length(case when jsonb_typeof(p_lines)='array' then p_lines end),0)=0 then
+   select count(*) into nlive from list_lines x where x.list_id=r.id and x.removed_rev is null;
+   if nlive>0 and not coalesce(p_empty_ok,false) then
+    raise exception 'empty save refused: this save would take away all % rows of "%"', nlive, r.name using errcode='P0001', detail=r.id, hint='empty-refused';
+   end if;
+   wiped:=nlive>0;
+  end if;
+  nrev:=r.rev;
+  -- 2. a locked list or a template keeps a copy of what it was, and goes up one revision. p_list.lock = the app's date rule
+  --    (cut-by today or the next working day) — the list counts as locked from this save on.
+  if r.locked or r.is_template or coalesce((p_list->>'lock')::boolean,false) then
+   insert into list_revisions(list_id,rev,lines,meta,reason,made_by)
+    values(r.id,r.rev,coalesce((select jsonb_agg(to_jsonb(x) order by x.seq) from list_lines x where x.list_id=r.id and x.removed_rev is null),'[]'),to_jsonb(r),p_reason,p_by);
+   nrev:=r.rev+1;
+  end if;
+ end if;
+ for e in select * from jsonb_array_elements(p_lines) loop
+  ids:=ids||(e->>'id');
+  select * into ex from list_lines where id=e->>'id' and list_id=r.id for update;
+  if found then
+   -- 4. content only; status is NEVER written here unless the line really changed (reset) — a tick landing mid-edit survives
+   update list_lines set seq=coalesce((e->>'seq')::int,seq), kind=coalesce(e->>'kind',kind), section=e->>'section', part=e->>'part',
+     length_mm=(e->>'length_mm')::numeric, width_mm=(e->>'width_mm')::numeric, qty=e->>'qty', unit_qty=e->>'unit_qty', material=e->>'material',
+     material_other=coalesce((e->>'material_other')::boolean,false), edging=e->>'edging', edging2=e->>'edging2', note=e->>'note',
+     snag_id=coalesce(e->>'snag_id',snag_id), removed_rev=null,
+     status=case when (e->>'reset')::boolean then 'todo' else status end,
+     status_by=case when (e->>'reset')::boolean then null else status_by end,
+     status_at=case when (e->>'reset')::boolean then null else status_at end,
+     released_at=case when (e->>'reset')::boolean then null else released_at end,
+     changed_rev=case when (e->>'reset')::boolean then nrev else changed_rev end
+    where id=ex.id   -- an unchanged line is left alone (its version and time don't move — other editors can tell what changed)
+      and (coalesce((e->>'reset')::boolean,false) or ex.removed_rev is not null
+        or row(ex.seq,ex.kind,ex.section,ex.part,ex.length_mm,ex.width_mm,ex.qty,ex.unit_qty,ex.material,ex.material_other,ex.edging,ex.edging2,ex.note)
+           is distinct from row(coalesce((e->>'seq')::int,ex.seq),coalesce(e->>'kind',ex.kind),e->>'section',e->>'part',(e->>'length_mm')::numeric,
+             (e->>'width_mm')::numeric,e->>'qty',e->>'unit_qty',e->>'material',coalesce((e->>'material_other')::boolean,false),e->>'edging',e->>'edging2',e->>'note')
+        or (e->>'snag_id' is not null and e->>'snag_id' is distinct from ex.snag_id));
+  else
+   -- 3. new lines
+   insert into list_lines(id,list_id,seq,kind,section,part,length_mm,width_mm,qty,unit_qty,material,material_other,edging,edging2,note,snag_id,src_line_id,added_rev)
+    values(e->>'id',r.id,coalesce((e->>'seq')::int,0),e->>'kind',e->>'section',e->>'part',(e->>'length_mm')::numeric,(e->>'width_mm')::numeric,
+     e->>'qty',e->>'unit_qty',e->>'material',coalesce((e->>'material_other')::boolean,false),e->>'edging',e->>'edging2',e->>'note',e->>'snag_id',e->>'src_line_id',nrev);
+  end if;
+ end loop;
+ -- 5. lines that have gone are marked removed, never deleted
+ update list_lines set removed_rev=nrev where list_id=r.id and removed_rev is null and not (id = any(ids));
+ update lists set rev=nrev, updated_by=p_by,
+   locked=case when is_template then locked else locked or coalesce((p_list->>'lock')::boolean,false) end,
+   name=coalesce(p_list->>'name',name), project_id=case when p_list ? 'project_id' then p_list->>'project_id' else project_id end,
+   list_type=coalesce(p_list->>'list_type',list_type), source=coalesce(p_list->>'source',source), type_name=case when p_list ? 'type_name' then p_list->>'type_name' else type_name end,
+   no_cut=coalesce((p_list->>'no_cut')::boolean,no_cut), no_fit=coalesce((p_list->>'no_fit')::boolean,no_fit),
+   sdate=case when p_list ? 'sdate' then (p_list->>'sdate')::date else sdate end,
+   deliver_by=case when p_list ? 'deliver_by' then (p_list->>'deliver_by')::date else deliver_by end,
+   n_saw=(select count(*) from list_lines x where x.list_id=r.id and x.removed_rev is null and x.kind='saw'),
+   n_fit=(select count(*) from list_lines x where x.list_id=r.id and x.removed_rev is null and x.kind='fit'),
+   check_req=case when isnew then check_req else chk end,                  -- (4 Nov) switch ON: an edit must be checked again
+   checked_by=case when isnew then checked_by else null end, checked_at=case when isnew then checked_at else null end,
+   log=case when isnew then log else log||jsonb_build_array(jsonb_build_object('at',now(),'by',p_by,
+     'what',case when nrev>r.rev then 'Revision '||nrev else 'List edited' end,
+     'why',case when wiped then concat_ws(' · ',p_reason,'all '||nlive||' rows taken away (the person confirmed)') else p_reason end)) end
+  where id=r.id returning * into r;
+ return jsonb_build_object('list',to_jsonb(r),'lines',(select coalesce(jsonb_agg(to_jsonb(x) order by x.seq),'[]') from list_lines x where x.list_id=r.id),'retired',retired);
+end $$;
+grant execute on function save_list_revision(jsonb,jsonb,int,text,text,boolean) to anon, authenticated, service_role;
+commit;
+notify pgrst, 'reload schema';  -- the website's API sees the new setting at once
+```
+
+**Tested:** on a throwaway local Postgres (`tests/sql/list-guard.sql`, see `tests/sql/README.md`): the Stage 3 block, then this
+block run twice; a normal save works (5 settings by name, as the app sends them, and in order); a save leaving no rows is refused
+with the message above and changes nothing; with `p_empty_ok` it works and says so in the history; an empty list saved empty, and
+a brand-new list, are not refused; only one `save_list_revision` exists, with its grants; the restore below makes a new revision
+equal to the old one, keeps ticks on unchanged rows, deletes nothing, and refuses a revision that was never kept; the read-only
+check shows the expected one row before and after; the Undo box (run twice) puts back the 2 Nov function byte for byte (same text as
+the Stage 3 block), one function, grants back, empty saves allowed again, and the guard can be run again after it. App side
+(fake Supabase): `tests/list-window/c18-edit-lost-reply.test.js`. **Also try it once on a Supabase TEST project first if you can.**
+
+### Restore a list to an old revision (only when needed — run the guard above first)
+**What it does:** makes a **new** revision of the list that is the same as Rev N (rows, sizes, materials, notes). Rows the same as
+now keep their ticks; a row whose size / material changed back has its tick cleared (it is a different piece). The current
+version is kept as a copy first (like every revision), so the restore itself can be undone the same way. Nothing is deleted.
+Only lists that keep copies can be restored: templates, and lists that are locked (with the saw). The list's name, work orders and
+sign-offs are not changed.
+1. Find the list's id: **Table Editor → lists**, search by name, copy the `id` (e.g. `L1a2b3c…`). Its history (in the app) shows the Rev numbers.
+2. SQL Editor → New query → paste the grey box → change ONLY the first line (the id, and the Rev number) → **Run**.
+3. Expected: one row showing the list, its new Rev number and its row counts. A red error explains itself (e.g. "No copy of Rev 4 is
+   kept … copies kept: Rev 1, Rev 2"). Everyone with the list open: close it and open it again.
+
+```sql
+select set_config('wpf.restore_list', 'PUT-THE-LIST-ID-HERE', false), set_config('wpf.restore_rev', '1', false); -- <<< CHANGE THIS LINE: list id, Rev number
+do $$
+declare
+  v_list text := current_setting('wpf.restore_list');
+  v_rev int := nullif(regexp_replace(current_setting('wpf.restore_rev'), '\D', '', 'g'), '')::int;
+  r lists%rowtype; snap jsonb; ls jsonb; res jsonb; kept text;
+begin
+  select * into r from lists where id = v_list;
+  if not found then raise exception 'There is no list with the id "%" — copy the id from Table Editor → lists', v_list; end if;
+  select x.lines into snap from list_revisions x where x.list_id = v_list and x.rev = v_rev;
+  if snap is null then
+    select string_agg('Rev ' || x.rev, ', ' order by x.rev) into kept from list_revisions x where x.list_id = v_list;
+    raise exception 'No copy of Rev % is kept for "%" — copies kept: %. The list is at Rev % now.', coalesce(v_rev::text, '?'), r.name, coalesce(kept, 'none'), r.rev;
+  end if;
+  if not (r.locked or r.is_template) then
+    raise exception '"%" is not locked, so a restore would not make a new revision — send a screenshot instead', r.name;
+  end if;
+  -- each row as it was at Rev N; reset = its size / material / kind changed since (a note alone keeps the tick)
+  select coalesce(jsonb_agg(e || jsonb_build_object('reset', x.id is not null and
+           jsonb_build_array(x.kind, x.section, x.part, x.length_mm, x.width_mm, x.qty, x.unit_qty, x.material, x.edging, x.edging2)
+           is distinct from jsonb_build_array(e->'kind', e->'section', e->'part', e->'length_mm', e->'width_mm', e->'qty', e->'unit_qty', e->'material', e->'edging', e->'edging2'))
+         order by (e->>'seq')::int, e->>'id'), '[]'::jsonb)
+    into ls from jsonb_array_elements(snap) e left join list_lines x on x.id = e->>'id' and x.list_id = v_list;
+  res := save_list_revision(jsonb_build_object('id', v_list, 'check_req', r.check_req), ls, r.version,
+           'Restore (SQL Editor)', 'Restored to Rev ' || v_rev, true);
+  raise notice 'Done: "%" is now Rev % — the same rows as Rev %.', r.name, res->'list'->>'rev', v_rev;
+end $$;
+select id, name, rev, n_saw, n_fit, (select count(*) from list_lines x where x.list_id = l.id and x.removed_rev is null) as rows_now,
+       log->-1->>'what' as last_change, log->-1->>'why' as why
+  from lists l where id = current_setting('wpf.restore_list');
+```
+
+### Undo the guard (only if Garry decides to take it away)
+Puts back the 2 Nov `save_list_revision` exactly as it was before the guard (5 settings, word for word from the Stage 3 block), in
+one step, and drops the 6-setting one. The new app keeps working (it then sends its rare confirmed "take every row away" save
+again without `p_empty_ok`). Safe to run twice. Nothing in any table is touched.
+1. SQL Editor → New query → paste the grey box below → **Run**. Expected: **"Success. No rows returned"**.
+2. Run the read-only check box (the first box in this block): exactly one row, `p_list jsonb, p_lines jsonb, p_expect integer, p_by text, p_reason text`.
+
+```sql
+-- ===================== UNDO THE EMPTY-SAVE GUARD — back to the 2 Nov save_list_revision =====================
+begin;
+drop function if exists save_list_revision(jsonb,jsonb,int,text,text,boolean);
+create or replace function save_list_revision(p_list jsonb, p_lines jsonb, p_expect int, p_by text, p_reason text) returns jsonb language plpgsql as $$
+declare r lists%rowtype; e jsonb; nrev int; ids text[]:='{}'; ex list_lines%rowtype; isnew boolean:=false; o lists%rowtype; retired text; now_lines jsonb; t lists%rowtype;
+ chk boolean:=coalesce((p_list->>'check_req')::boolean,false);
+begin
+ perform lists_switch_on();
+ select * into r from lists where id=p_list->>'id' for update;
+ if not found then
+  if p_expect is not null then raise exception 'stale: list % is missing', p_list->>'id'; end if;
+  if coalesce((p_list->>'one_per_wo')::boolean,false) then
+   perform lists_one_per_wo(array(select jsonb_array_elements_text(coalesce(p_list->'wos','[]'))), array[p_list->>'id']); end if;
+  if coalesce(p_list->>'replaces','')<>'' then
+   perform lists_one_replacement(p_list->>'replaces',p_list->'wos'->>0);
+   select * into o from lists where id=p_list->>'replaces' for update;
+   if not found then retired:='missing';
+   elsif o.archived then retired:='already';
+   elsif coalesce((p_list->>'replaces_keep')::boolean,false) then retired:='kept';
+   else
+    select coalesce(jsonb_object_agg(x.id,jsonb_build_array(x.kind,x.section,x.part,x.length_mm,x.width_mm,x.qty,x.unit_qty,x.material,x.edging,x.note,x.edging2)),'{}'::jsonb)
+      into now_lines from list_lines x where x.list_id=o.id and x.removed_rev is null;
+    if jsonb_typeof(p_list->'replaces_lines')='object' and not coalesce((p_list->>'replaces_force')::boolean,false) and now_lines<>p_list->'replaces_lines' then
+     raise exception 'replaced list changed: "%" was changed on another screen after it was copied', o.name using errcode='P0001', detail=o.id, hint='replaced-changed';
+    end if;
+    update lists set archived=true, updated_by=p_by,
+      log=log||jsonb_build_array(jsonb_build_object('at',now(),'by',p_by,'what','Archived','why','Replaced by "'||coalesce(p_list->>'name','(no name)')||'"')) where id=o.id;
+    insert into list_events(list_id,act,by,note) values(o.id,'archive-on',p_by,'Replaced by "'||coalesce(p_list->>'name','(no name)')||'"');
+    retired:='archived';
+   end if;
+  end if;
+  -- (4 Nov) with the check switched on, a new list waits for its check; a copy of a CHECKED template (at that template's
+  -- revision) is checked by the template's checker
+  select * into t from lists where chk and id=p_list->>'template_id' and is_template and checked_at is not null
+    and coalesce(p_list->>'source','')='template' and rev=(p_list->>'template_rev')::int;
+  insert into lists(id,project_id,name,list_type,type_name,is_template,template_id,template_rev,wos,no_cut,no_fit,source,sdate,created_by,updated_by,check_req,checked_by,checked_at,log)
+   values(p_list->>'id',p_list->>'project_id',coalesce(p_list->>'name','(no name)'),coalesce(p_list->>'list_type','house'),p_list->>'type_name',
+     coalesce((p_list->>'is_template')::boolean,false),p_list->>'template_id',(p_list->>'template_rev')::int,
+     coalesce(array(select jsonb_array_elements_text(p_list->'wos')),'{}'),coalesce((p_list->>'no_cut')::boolean,false),coalesce((p_list->>'no_fit')::boolean,false),
+     coalesce(p_list->>'source','manual'),(p_list->>'sdate')::date,p_by,p_by,
+     chk,t.checked_by,case when t.id is not null then now() end,
+     jsonb_build_array(jsonb_build_object('at',now(),'by',p_by,'what','List created','why',p_reason)
+       || case when coalesce(p_list->>'replaces','')<>'' then jsonb_build_object('replaces',p_list->>'replaces') else '{}'::jsonb end)
+     || case when t.id is not null then jsonb_build_array(jsonb_build_object('at',now(),'by',p_by,'what','Checked',
+          'why','from template "'||t.name||'" rev '||t.rev||', checked by '||coalesce(t.checked_by,'?'))) else '[]'::jsonb end)
+   returning * into r;
+  isnew:=true; nrev:=1;
+ else
+  -- 1. someone changed the list since this editor opened it: stop — the app reloads and compares again
+  if p_expect is null or r.version<>p_expect then raise exception 'stale: list % is at version %, editor had %', r.id, r.version, p_expect; end if;
+  nrev:=r.rev;
+  -- 2. a locked list or a template keeps a copy of what it was, and goes up one revision. p_list.lock = the app's date rule
+  --    (cut-by today or the next working day) — the list counts as locked from this save on.
+  if r.locked or r.is_template or coalesce((p_list->>'lock')::boolean,false) then
+   insert into list_revisions(list_id,rev,lines,meta,reason,made_by)
+    values(r.id,r.rev,coalesce((select jsonb_agg(to_jsonb(x) order by x.seq) from list_lines x where x.list_id=r.id and x.removed_rev is null),'[]'),to_jsonb(r),p_reason,p_by);
+   nrev:=r.rev+1;
+  end if;
+ end if;
+ for e in select * from jsonb_array_elements(p_lines) loop
+  ids:=ids||(e->>'id');
+  select * into ex from list_lines where id=e->>'id' and list_id=r.id for update;
+  if found then
+   -- 4. content only; status is NEVER written here unless the line really changed (reset) — a tick landing mid-edit survives
+   update list_lines set seq=coalesce((e->>'seq')::int,seq), kind=coalesce(e->>'kind',kind), section=e->>'section', part=e->>'part',
+     length_mm=(e->>'length_mm')::numeric, width_mm=(e->>'width_mm')::numeric, qty=e->>'qty', unit_qty=e->>'unit_qty', material=e->>'material',
+     material_other=coalesce((e->>'material_other')::boolean,false), edging=e->>'edging', edging2=e->>'edging2', note=e->>'note',
+     snag_id=coalesce(e->>'snag_id',snag_id), removed_rev=null,
+     status=case when (e->>'reset')::boolean then 'todo' else status end,
+     status_by=case when (e->>'reset')::boolean then null else status_by end,
+     status_at=case when (e->>'reset')::boolean then null else status_at end,
+     released_at=case when (e->>'reset')::boolean then null else released_at end,
+     changed_rev=case when (e->>'reset')::boolean then nrev else changed_rev end
+    where id=ex.id   -- an unchanged line is left alone (its version and time don't move — other editors can tell what changed)
+      and (coalesce((e->>'reset')::boolean,false) or ex.removed_rev is not null
+        or row(ex.seq,ex.kind,ex.section,ex.part,ex.length_mm,ex.width_mm,ex.qty,ex.unit_qty,ex.material,ex.material_other,ex.edging,ex.edging2,ex.note)
+           is distinct from row(coalesce((e->>'seq')::int,ex.seq),coalesce(e->>'kind',ex.kind),e->>'section',e->>'part',(e->>'length_mm')::numeric,
+             (e->>'width_mm')::numeric,e->>'qty',e->>'unit_qty',e->>'material',coalesce((e->>'material_other')::boolean,false),e->>'edging',e->>'edging2',e->>'note')
+        or (e->>'snag_id' is not null and e->>'snag_id' is distinct from ex.snag_id));
+  else
+   -- 3. new lines
+   insert into list_lines(id,list_id,seq,kind,section,part,length_mm,width_mm,qty,unit_qty,material,material_other,edging,edging2,note,snag_id,src_line_id,added_rev)
+    values(e->>'id',r.id,coalesce((e->>'seq')::int,0),e->>'kind',e->>'section',e->>'part',(e->>'length_mm')::numeric,(e->>'width_mm')::numeric,
+     e->>'qty',e->>'unit_qty',e->>'material',coalesce((e->>'material_other')::boolean,false),e->>'edging',e->>'edging2',e->>'note',e->>'snag_id',e->>'src_line_id',nrev);
+  end if;
+ end loop;
+ -- 5. lines that have gone are marked removed, never deleted
+ update list_lines set removed_rev=nrev where list_id=r.id and removed_rev is null and not (id = any(ids));
+ update lists set rev=nrev, updated_by=p_by,
+   locked=case when is_template then locked else locked or coalesce((p_list->>'lock')::boolean,false) end,
+   name=coalesce(p_list->>'name',name), project_id=case when p_list ? 'project_id' then p_list->>'project_id' else project_id end,
+   list_type=coalesce(p_list->>'list_type',list_type), source=coalesce(p_list->>'source',source), type_name=case when p_list ? 'type_name' then p_list->>'type_name' else type_name end,
+   no_cut=coalesce((p_list->>'no_cut')::boolean,no_cut), no_fit=coalesce((p_list->>'no_fit')::boolean,no_fit),
+   sdate=case when p_list ? 'sdate' then (p_list->>'sdate')::date else sdate end,
+   deliver_by=case when p_list ? 'deliver_by' then (p_list->>'deliver_by')::date else deliver_by end,
+   n_saw=(select count(*) from list_lines x where x.list_id=r.id and x.removed_rev is null and x.kind='saw'),
+   n_fit=(select count(*) from list_lines x where x.list_id=r.id and x.removed_rev is null and x.kind='fit'),
+   check_req=case when isnew then check_req else chk end,                  -- (4 Nov) switch ON: an edit must be checked again
+   checked_by=case when isnew then checked_by else null end, checked_at=case when isnew then checked_at else null end,
+   log=case when isnew then log else log||jsonb_build_array(jsonb_build_object('at',now(),'by',p_by,
+     'what',case when nrev>r.rev then 'Revision '||nrev else 'List edited' end,'why',p_reason)) end
+  where id=r.id returning * into r;
+ return jsonb_build_object('list',to_jsonb(r),'lines',(select coalesce(jsonb_agg(to_jsonb(x) order by x.seq),'[]') from list_lines x where x.list_id=r.id),'retired',retired);
+end $$;
+grant execute on function save_list_revision(jsonb,jsonb,int,text,text) to anon, authenticated, service_role;
+commit;
+notify pgrst, 'reload schema';
 ## 2026-11-11 — Merged P-numbers stay merged — PENDING, NOT YET RUN — Garry runs this with (or after) the PM sequence block, BEFORE merging `feature/project-details-v2`
 
 **Why (plain English):** when a Cienapps import folds a planner P-number into its real work order (L4b), the P-number leaves the job
@@ -938,7 +1278,11 @@ drop policy if exists "list-photos add" on storage.objects;
 create policy "list-photos add" on storage.objects for insert to anon, authenticated with check (bucket_id = 'list-photos');
 ```
 
-## 2026-11-02 — Stage 3 cutting lists + snags — PENDING, NOT YET RUN — Garry runs this BEFORE merging `feature/cutting-lists`
+## 2026-11-02 — Stage 3 cutting lists + snags — ALREADY RUN on live (in use since Nov 2026) — NEVER re-run after the 18 Nov guard
+
+> **18 Nov:** this block was run on live on the 10 Nov go-live (GO-LIVE-2026-11-10.md step 4; the cutting lists have been in
+> use since). Once the 18 Nov "Empty-save guard" block (top of this file) has been run, do NOT run this block again — its
+> `save_list_revision` would sit next to the new one and every list save would fail. See the 18 Nov block.
 
 **What it does (plain English):**
 - Creates new tables so every cutting / fittings list, and every line on it, is its own record with a permanent ID: `projects`, `project_materials`, `lists`, `list_lines`, `list_revisions` (old copies of a list each time it's revised) and `list_events` (who ticked / parked / released what, and when).
