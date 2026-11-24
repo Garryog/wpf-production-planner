@@ -1583,3 +1583,31 @@ No Tester expectation changed. One of my own checks was moved to the new rule (b
   house" memory for P-number merges); Garry's pending decisions in ACCEPTED-FAILURES (two P-numbers per house, inactive project spelling,
   storage-blocked Settings, Late-changes count, KITCHEN ISLAND); B8 CNC view is later (after Job B). Then Tester → Manager on the whole branch,
   SQL run, merge, go-live day (close every screen, incognito check).
+
+### 24 Nov 2026 — Job B brought up to date with live (branch `feature/project-details-v3`) — Garry: "how quick can you get the PM project sequence to me" → answer 2A (whole of Job B, aim Mon 30 Nov)
+- **What was done:** `main` (live, 20 Nov — 130 changes since Job B was cut) merged into a copy of `feature/project-details-v2`. 16 files
+  clashed; 92 places in `index.html`. Rule used: live behaviour kept for everything already live; every Job B addition (project details,
+  PM sequence, Cienapps upload, pre-production pool, merged P-numbers, PM date tools) wired back in. The old branch is untouched.
+- **Choices made in the merge (to be read by the Manager):**
+  - Matching key (floor / unit → house): the Job B key (it must give the same answer as the PM sequence SQL), with live's block-name
+    changes on top. Effect on the live list window: TBC / N/A count as blank, "12.0" vs "12" is asked instead of called different.
+  - A Floor / Unit the key cannot read (e.g. a name typed in the Unit box): the window now offers "Make a P-number instead…" (it gave
+    no way on).
+  - List loading: a reset while a load is on its way starts the load again (the remembered project filter was being dropped).
+  - Job B's early "＋ Add cutting list" on delivery cards (l9…) dropped in favour of live's ＋ List. Leftover unused helpers remain.
+  - Materials window on a phone: live's layout kept, Job B's `mt-tbl` layout dropped.
+  - Shipped tab: PM role gets neither "Bring back to board" nor live's "Back to Deliveries".
+  - Templates: the Pre-production role sees the template buttons but is asked for the PIN (live's rule) — Garry to decide.
+- **Full suite on the first merge commit (fake database, 405 files): 10,311 pass / 243 fail.** Against live and against the old Job B
+  branch, about 60 checks are new failures. Sorted so far:
+  - FIXED: Excel-import / typed-injection save ("Pick the work order") · remembered project filter lost after a reload.
+  - EXPECTED, test to be updated or accepted: "screen identical to an older commit / to origin/main" comparisons (Job B adds ✋ Requests,
+    the sequence button, the spec chip) · tests of Job B's dropped early ＋ Add cutting list (`seq/l9-deliv-card`, `attack7` 2d).
+  - GARRY TO DECIDE: in the list window Job B makes Floor / Unit / Title / Customer EDITABLE boxes and adds a "✎ Project details"
+    button (12 buttons outside the rows). About 12 live checks expect read-only text and fewer buttons.
+  - STILL TO LOOK AT: Materials window at 360 px (`project-details/attack2-phone`, 2 checks) · `seq/attack3-editor` "Unit box left
+    (Tab to Title)" · focus wrap does not know the spec chip (`attack3-close-keys` T8) · two speed checks (`e7-keyboard`, `t4-fleet-offline`,
+    run under load) · the 🧱 Materials / 📝 Project details buttons on Lists when the filter is "No project".
+- **Left before go-live:** finish the list above → full suite again → merge PR #17 (Deliveries badge) in once it is live → Tester on the
+  whole branch → Manager → GO-LIVE doc (SQL order: Project details, PM sequence, Merged P-numbers; the 18 Nov empty-save guard is separate)
+  → Garry runs the SQL → merge → every screen closed → incognito check. A due-date-follows-everywhere test is to be added.

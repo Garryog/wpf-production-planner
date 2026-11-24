@@ -2887,9 +2887,14 @@ async function lsLoad(){
   if(LST.loading)return LST.loading;
   LST.loading=(async()=>{
     try{
-      const[p,m,l,sn]=await Promise.all([lsGet('projects?select=*'),lsGet('project_materials?select=*'),lsGet('lists?select=*'),lsGet('snags?select=*')]);
-      lsPut('projects',p);lsPut('project_materials',m);lsPut('lists',l);lsPut('snags',sn);
-      await lsLines(l.filter(x=>!lsFinishedRow(x)).map(x=>x.id)); // finished lists' lines load when someone opens them
+      for(let go=0;go<3;go++){ // merge 24 Nov: a reset (lsReset) while this load was on its way must not leave it marked "loaded" with the projects emptied — the remembered project filter was dropped; load again instead
+        const rs=LST.rs|0;
+        const[p,m,l,sn]=await Promise.all([lsGet('projects?select=*'),lsGet('project_materials?select=*'),lsGet('lists?select=*'),lsGet('snags?select=*')]);
+        if((LST.rs|0)!==rs)continue;
+        lsPut('projects',p);lsPut('project_materials',m);lsPut('lists',l);lsPut('snags',sn);
+        await lsLines(l.filter(x=>!lsFinishedRow(x)).map(x=>x.id)); // finished lists' lines load when someone opens them
+        if((LST.rs|0)===rs)break;
+      }
       LST.loaded=true;LST.err='';lsRescue();setTimeout(()=>pMineFix(),0); // (round 3) a P-number renumbered before a reload: our list still follows it
       await specLoad(true); // Project details (9 Nov): hidden quietly until its SQL is run
       await seqLoad(true); // PM sequence (Job B part 2): hidden quietly until its SQL is run
@@ -2898,7 +2903,7 @@ async function lsLoad(){
   })();
   return LST.loading;
 }
-function lsReset(){['l','ln','p','m','s','ps','px','sq','sr','sp'].forEach(k=>LST[k].clear());LST.full.clear();LST.since={};LST.loaded=false;LST.gen++;}
+function lsReset(){['l','ln','p','m','s','ps','px','sq','sr','sp'].forEach(k=>LST[k].clear());LST.full.clear();LST.since={};LST.loaded=false;LST.gen++;LST.rs=(LST.rs|0)+1;}
 // "Changed since": newest database updated_at seen minus 30 s (catches stragglers); rows already held are skipped by version
 async function lsPoll(){
   if(!V2()||LST.polling)return;
@@ -7062,7 +7067,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     const opt=(x,ok)=>`<button class="btn btn-s" data-jpick="${E(x.o.wo)}"><b>${E(x.o.wo)}</b>${fu(x.o)?' · '+E(fu(x.o)):''}${x.o.title?' · '+E(x.o.title):''} <span style="color:var(--t3)">${E(x.o.customer||'')}</span> — ${ok?'<span style="color:#0d6e46">same house</span>':'<span class="me-jbw">not sure: '+E(x.why)+'</span>'}</button>`;
     const msg=!r?(blank?'Type the Floor and the Unit (both) — the Cienapps WO is looked up by project + floor + unit. No search while either is blank.':'Press 🔎 Find the Cienapps WO (or leave the Title box).')
       :r.st==='noproj'?'<span class="me-jbw">Pick the project first — the work order is looked up inside the project.</span>'
-      :r.st==='blank'?'<span class="me-jbw">Floor and Unit are both needed to look it up — no search was made.</span>'
+      :r.st==='blank'?(blank?'<span class="me-jbw">Floor and Unit are both needed to look it up — no search was made.</span>':'<span class="me-jbw">The planner can\'t read a house from this Floor and Unit — no search was made.</span> Check them — or <button class="btn btn-s" id="me-jmkp" style="font-size:12px;padding:2px 9px;color:#5b21b6">Make a P-number instead…</button>') /*merge 24 Nov: text the Job B key can't use (e.g. a name in the Unit box) must not leave the person stuck*/
       :r.st==='none'?'<span class="me-jbw">No Cienapps work order found'+where+'.</span> Check the floor and unit — or Cienapps may not have it yet. <button class="btn btn-s" id="me-jmkp" style="font-size:12px;padding:2px 9px;color:#5b21b6">Make a P-number instead…</button>'
       :r.st==='hold'?'<span class="me-jbw">The Cienapps job'+where+' is in the planner but it is ON HOLD: '+r.held.map(x=>'<b>'+E(x.o.wo)+'</b>'+(x.o.title?' · '+E(x.o.title):'')).join(', ')+'.</span> It is not filled in while it is on hold, and no P-number is made for it — one unit never gets two jobs. Ask for it to be taken off hold in Cienapps; it can be used after the next import.'
       :r.st==='nowo'?'<span class="me-jbw">'+E(r.wo)+' is not in the planner</span> — check the number (a new Cienapps WO arrives with the next import).'
