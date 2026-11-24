@@ -8541,11 +8541,11 @@ function renderDeliveries(app){
   const legacy=ROLE==='office'?delLegacyJobs():[];
   const tabLbl=t=>{if(t==='later')return'Later';const w=delTabWk(t);return (t==='0'?'This week · ':t==='1'?'Next week · ':'')+'Wk '+wkNum(w)+' · '+dShort(w)+(w<W0?' (past)':'');};
   const tabN=t=>t==='later'?poolOf(t).length:tagged.filter(o=>slotIn(o,delTabWk(t))).length+poolOf(t).length;
-  // pool groups: "date moved — rebook" first, then by customer (Later: by due week), WO-number order inside each
+  // pool groups: "date moved — rebook" first, then by customer (Later: by due week); inside a customer by due date (d24), then WO number
   const rebook=pool.filter(o=>o.delRebook).sort(woCmp),rest=pool.filter(o=>!o.delRebook);
   const grps={};rest.forEach(o=>{const c=later?poolWk(o):(o.customer||'(no customer)');(grps[c]=grps[c]||[]).push(o);});
   const gkeys=Object.keys(grps).sort((a,b)=>a.localeCompare(b));
-  gkeys.forEach(k=>grps[k].sort(later?((a,b)=>(a.customer||'').localeCompare(b.customer||'')||woCmp(a,b)):woCmp));
+  gkeys.forEach(k=>grps[k].sort(later?((a,b)=>(a.customer||'').localeCompare(b.customer||'')||woCmp(a,b)):((a,b)=>String(a.dueDate||'9999').localeCompare(String(b.dueDate||'9999'))||woCmp(a,b)))); // d24 (Garry 24 Nov, answer 3A): inside each customer the earliest due date first (no date last), WO number breaking ties
   const gName=k=>later?'Wk '+wkNum(k)+' — due from '+dShort(k):k;
   const gHTML=(k,lbl,list,sty)=>`<div class="dgrp">
         <div class="dgrp-h" data-grp="${escA(k)}"${sty?` style="${sty}"`:''}><span class="dgrp-n">${escA(lbl)}</span><span class="gcnt">${list.length} job${list.length!==1?'s':''} · click to select all</span></div>

@@ -24,6 +24,13 @@ const badge = (p, wo) => p.evaluate(wo => { const c = document.querySelector('.d
     rec('the badge fits inside the card', [b1, b2, b3, b4].every(b => b.w));
     const inj = await p.evaluate(() => ({ i: document.querySelectorAll('.dchip i').length, b: !!document.querySelector('.dchip[data-dw="WO-<i>5"] .dl-st') }));
     rec('a WO with < > in it is shown as text', inj.i === 0 && inj.b, JSON.stringify(inj));
+    // answer 3A: inside a customer group the pool is in due-date order (earliest first, no date last), WO number breaking ties
+    const ordr = await p.evaluate(() => { const keep = DB.orders.slice(); const mk = (wo, d) => Object.assign({}, keep.find(o => o.wo === 'WO-D1'), { wo, dueDate: d, origDueDate: d, customer: 'Zed Homes' });
+      const wk = keep.find(o => o.wo === 'WO-D1').dueDate; const plus = n => { const x = new Date(wk + 'T12:00:00'); x.setDate(x.getDate() + n); return x.toISOString().slice(0, 10); };
+      const mon = (() => { const x = new Date(wk + 'T12:00:00'); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x.toISOString().slice(0, 10); })(); const at = n => { const x = new Date(mon + 'T12:00:00'); x.setDate(x.getDate() + n); return x.toISOString().slice(0, 10); };
+      DB.orders.push(mk('WO-Z1', at(4)), mk('WO-Z2', at(1)), mk('WO-Z3', at(3)), mk('WO-Z0', at(3))); render();
+      const got = [...document.querySelectorAll('#dpool .dchip')].map(c => c.dataset.dw).filter(w => /^WO-Z/.test(w)); DB.orders = keep; render(); return got; });
+    rec('pool: inside a customer the earliest due date comes first, WO number breaking ties', ordr.join() === 'WO-Z2,WO-Z0,WO-Z3,WO-Z1', ordr.join());
     // mark from the card
     await p.evaluate(() => sessionStorage.setItem('wpfWho', 'Mary'));
     await p.click('.dchip[data-dw="WO-D1"] [data-dlna]'); await sleep(500);
