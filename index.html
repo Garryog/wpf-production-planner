@@ -343,6 +343,14 @@ details.lti-other{margin-bottom:14px}details.lti-other>summary{cursor:pointer;fo
 .selbar button.selbook{background:#0d6e46;color:#fff;border-radius:6px;text-decoration:none;font-weight:700;font-size:13px;padding:7px 12px;min-height:34px}
 .selbar button.selbook:disabled{background:#9fb3a8;cursor:default}
 @media(max-width:600px){.selbar{gap:8px}.selbar .selput{width:100%}.selbar select{flex:1 1 120px}}
+/* d24 (Garry 24 Nov: "no bar appears to put on van"): the bar was at the top of the page — out of sight once you scroll down to tick
+   cards. It now stays at the bottom of the screen for as long as anything is ticked. */
+#del-selbar{position:fixed;left:12px;right:12px;bottom:10px;z-index:60;margin:0;padding:10px 14px;font-size:14px;background:#14335c;color:#fff;border:2px solid #ffd27a;border-radius:10px;box-shadow:0 6px 24px rgba(10,20,40,.35);max-height:46vh;overflow:auto}
+#del-selbar button:not(.selbook){color:#cfe0ff;font-size:13px}
+#del-selbar select{font-size:15px;min-height:40px}
+#del-selbar button.selbook{font-size:15px;min-height:40px;padding:8px 16px}
+body:has(#del-selbar){padding-bottom:120px}
+body:has(#del-selbar) .toast{bottom:150px}
 .del-grid{width:100%;min-width:1100px;border-collapse:collapse}
 .del-grid th{background:#f5f6f8;border:1px solid var(--border);padding:6px 8px;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--t2)}
 .del-grid th:first-child{width:106px;text-align:left}
