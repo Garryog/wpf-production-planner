@@ -350,6 +350,7 @@ details.lti-other{margin-bottom:14px}details.lti-other>summary{cursor:pointer;fo
 #del-selbar select{font-size:15px;min-height:40px}
 #del-selbar button.selbook{font-size:15px;min-height:40px;padding:8px 16px}
 body:has(#del-selbar){padding-bottom:120px}
+@media(max-width:700px){body:has(#del-selbar){padding-bottom:260px}}
 body:has(#del-selbar) .toast{bottom:150px}
 .del-grid{width:100%;min-width:1100px;border-collapse:collapse}
 .del-grid th{background:#f5f6f8;border:1px solid var(--border);padding:6px 8px;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--t2)}
@@ -8465,7 +8466,7 @@ async function addPodPhotos(files,pk){
    list"): one worded badge on every job card — green "LIST ADDED" (tap = open it), green "PAPER LIST PHOTO", grey "NO LIST NEEDED",
    red "NO LIST YET". The people who make lists (office, Production Manager, Drawing office) get ＋ List and "No list needed" on a
    red one and "undo" on a grey one; everyone else sees the status only. Same rule as the green strip (woListOk). No database change. */
-function dlCan(){return !['pm','driver','dash','floor','saw','stores'].includes(ROLE||'');}
+function dlCan(){return V2()&&!['pm','driver','dash','floor','saw','stores'].includes(ROLE||'');}
 function dlBadge(o,st){
   if(!o||o.manual)return'';
   const w=escA(o.wo),can=dlCan();
