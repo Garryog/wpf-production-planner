@@ -86,7 +86,7 @@ tr.lst-ok>td:first-child{box-shadow:inset 4px 0 0 #2d9e54}
 .dl-st.na{background:#e6e9ee;border-color:#aeb7c4;color:#3d4a5c}
 .dl-st.no{background:#fff;border-color:#b42318;color:#b42318}
 .dl-st .dl-tx{flex:1 1 auto;min-width:0}
-.dl-st button{font:inherit;font-size:11px;font-weight:700;border-radius:4px;padding:3px 7px;min-height:24px;cursor:pointer;border:1px solid currentColor;background:#fff;color:inherit;white-space:nowrap}
+.dl-st button{font:inherit;font-size:11px;font-weight:700;border-radius:4px;padding:3px 8px;min-height:30px;cursor:pointer;border:1px solid currentColor;background:#fff;color:inherit;white-space:nowrap}
 button.dl-st{cursor:pointer;width:100%;text-align:left;font-family:inherit}
 .dchip.done .dl-st{opacity:.6}
 .stp-b{display:inline-block;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:10px;font-weight:600;line-height:1.4;color:#4a5568;background:#eef1f5;border:1px solid #d5dbe3;border-radius:4px;padding:0 5px;margin-left:5px;white-space:nowrap;vertical-align:middle;text-transform:none;letter-spacing:0;text-decoration:none;max-width:min(100%,240px);overflow:hidden;text-overflow:ellipsis;box-sizing:border-box}
@@ -8473,7 +8473,7 @@ function dlBadge(o,st){
     return `<button class="dl-st ok" data-dlopen="${w}" title="This job has a cutting list — tap to open it">📋 LIST ADDED ✓${n>1?' ('+n+')':''}</button>`;}
   if(phHas(o))return `<div class="dl-st ok" title="A photo of the paper cutting list is on this job">📷 PAPER LIST PHOTO ✓</div>`;
   if(lsNA(o))return `<div class="dl-st na" title="${escA('Marked no list needed'+(o.listNA.by?' by '+o.listNA.by:'')+(o.listNA.at?' · '+fmt(o.listNA.at):''))}"><span class="dl-tx">⊘ NO LIST NEEDED</span>${can&&!st?`<button data-dlnaundo="${w}" title="Undo — this job does need a cutting list">undo</button>`:''}</div>`;
-  return `<div class="dl-st no" title="No cutting list on this job yet"><span class="dl-tx">✗ NO LIST YET</span>${can&&!st?`${V2()?`<button class="dlist-add" data-dladd="${w}" title="＋ Add a cutting list for ${w} (opens the cutting list window)">＋ List</button>`:''}<button data-dlna="${w}" title="This job does not need a cutting list">No list needed</button>`:''}</div>`;
+  return `<div class="dl-st no" title="No cutting list on this job yet"><span class="dl-tx">✕ NO LIST YET</span>${can&&!st?`${V2()?`<button class="dlist-add" data-dladd="${w}" title="＋ Add a cutting list for ${w} (opens the cutting list window)">＋ List</button>`:''}<button data-dlna="${w}" title="This job does not need a cutting list">No list needed</button>`:''}</div>`;
 }
 function dlOpen(wo){const ls2=lists().filter(l=>(l.wos||[]).includes(wo));if(!ls2.length)return;
   if(ls2.length>1||!V2()){showReadiness([wo],wo,true);return;} // several lists: the check window names each one
