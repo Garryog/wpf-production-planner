@@ -1650,3 +1650,24 @@ No Tester expectation changed. One of my own checks was moved to the new rule (b
   choice: "the capacity board is just for managing dates … due date only"). m25 check A5b records it.
 - **Still to do:** Manager on the whole branch · docs/GO-LIVE for Job B (SQL order) · dry-run with Garry's real Cienapps upload file ·
   full suite once more on the final commit.
+
+### 25 Nov 2026, afternoon — Manager, final full run, dry run with Garry's real files
+- **Manager: GO WITH CONDITIONS.** No Critical / High in the merge-week changes. He ran the Project details, PM sequence and Merged
+  P-numbers SQL twice each on a throwaway Postgres 16 (no errors; pg-check ALL PASSED; JS = SQL 3,564 house keys + 63 line keys match;
+  the 18 Nov guard is independent). Conditions: full suite on the final commit (done, below) · go-live doc (written:
+  docs/GO-LIVE-project-sequence.md) · dry run with a real upload file (done, below).
+- **Full suite on 86e88da (410 files): 10,579 pass / 226 fail.** Against the previous full run: no new failing check except the two
+  rows added to ACCEPTED-FAILURES today (A5b, attack7 2b) and four load-sensitive checks that pass when run alone
+  (deliveries attack19-1-twopc, editor e7-keyboard, seq attack10-speed, stage1 s11-pend).
+- **Dry run — Garry's four real files** (Aderrig A2: GR FL Kitchens, GR FL Robes/Joinery, 1st FL Kitchens, 1st FL Robes/Joinery),
+  read by the planner's upload reader and its add / skip / not-sure preview on the fake database (`tests/merge25/real-dryrun.js`;
+  the files themselves are not in the repo):
+  - all four read with no error and no warning: 14 + 15 + 24 + 25 = **78 lines** (19 kitchens, 19 utilities, 40 robes), header
+    found, the 22-column robes files (3 CHILDREN groups) read the same as the 27-column kitchens files;
+  - first upload: all 78 would be ADDED, none skipped, none "not sure"; the same file loaded again: all SKIPPED (nothing doubled);
+  - two identical robe lines in one apartment (A77 RT1 ×2, A83 RT13 ×2) are kept as TWO rows, not treated as a duplicate;
+  - things in the files for Garry / the PM to know: "1st FL Kitchens" has the Qty column EMPTY on every line; its 12 utility lines
+    are named "Block A2 GR FL Utilities" although the floor is 1st.
+  - Garry: "I will get the PM to use the same file for Cienapps upload and planner upload."
+  - NOT covered by this dry run: the matching of these rows to the real work orders when they arrive (needs the Cienapps work order
+    export for the same apartments).
