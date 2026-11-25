@@ -80,7 +80,7 @@ const HDR = ['WO #', 'Title', 'Customer', 'Due Date', 'Step', 'Sub-Total'];
     await pick('WO-9', '9. JOB SHIPPED', true); await sleep(300);
     j = await job('WO-9'); asked = await p.evaluate(() => window.__asked);
     const onDel = await p.evaluate(() => { const o = DB.orders.find(x => x.wo === 'WO-9'); return typeof delAll === 'function' ? delAll().includes(o) : null; });
-    rec('a job ticked for delivery set to 9 by hand: shipped, still on Deliveries (confirm says so)', j.sh && j.delv && onDel !== false && /stays on 🚚 Deliveries/.test(asked[0] || ''), JSON.stringify({ j, onDel, asked }));
+    rec('a job ticked for delivery set to 9 by hand: shipped, off Deliveries, tag kept (confirm says it comes off, d20 — Garry 20 Nov)', j.sh && j.delv && onDel === false && /comes off 🚚 Deliveries/.test(asked[0] || ''), JSON.stringify({ j, onDel, asked }));
     // ---- Bring back to board: the old step comes back
     await p.evaluate(() => { showTab('h'); window.__shDone = true; }); await sleep(200);
     await p.evaluate(() => { const c = document.getElementById('sh-done'); if (c && !c.checked) { c.checked = true; c.onchange(); } }); await sleep(200);
