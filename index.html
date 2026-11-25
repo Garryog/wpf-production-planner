@@ -2805,6 +2805,13 @@ function woInfoEdHTML(o){if(!o)return woInfoHTML(o);
   const b=(cls,k)=>{const l=POV_F[k],v=povVal(o,k),pv0=o.pov&&o.pov[k],pv=pv0&&typeof pv0==='object'&&String(pv0.cien==null?'':pv0.cien).trim()!==v?pv0:null;
     return `<div class="${cls}"><label>${l}</label><input class="wo-ed${pv?' wo-ov':''}" data-woi="${l}" data-woe="${k}" value="${escA(v)}" title="${escA(v)}${k==='customer'?' — changing the customer needs the Admin PIN':''}${pv?' — changed in the planner (Cienapps: '+escA(pv.cien||'(blank)')+')':''}" autocomplete="off">${pv?`<div class="wo-ovn" title="Cienapps says ${escA(pv.cien||'(blank)')}">Cienapps: ${escA(pv.cien||'(blank)')} <button data-woundo="${k}" title="Put the Cienapps value back">↺</button></div>`:''}</div>`;};
   return b('wf','floor')+b('wf','unit')+b('wt','title')+b('wc','customer');}
+/* Garry 25 Nov (1A): the job's Floor / Unit / Title / Customer are read-only in the list window; they are corrected HERE — a small
+   window opened with ✎ beside the work order in the project sequence (same people as may edit project details). Same rules as before:
+   Cienapps is not changed, the change is listed in Export Changes, ↺ puts the Cienapps value back, the customer needs the Admin PIN. */
+function woInfoDlg(wo){const o=DB.orders.find(x=>x.wo===wo);if(!o||!specEditOk())return;
+  const ov=lsDlg(`<div style="font-weight:800;color:#14335c;font-size:16px;margin-bottom:8px">✎ Job details — ${escA(o.wo)}</div><div class="wo-info" id="woi-dlg">${woInfoEdHTML(o)}</div><div style="font-size:12px;color:var(--t3);margin-top:8px">Saved as you leave each box. Cienapps is not changed — the change is listed in Export Changes.</div>`,640);
+  woInfoBind(ov.querySelector('#woi-dlg'),o);}
+document.addEventListener('click',e=>{const b=e.target&&e.target.closest&&e.target.closest('[data-woiedit]');if(!b)return;e.preventDefault();e.stopPropagation();woInfoDlg(b.dataset.woiedit);},true);
 function woInfoBind(root,o){if(!root||!o)return;
   const redo=()=>{root.innerHTML=woInfoEdHTML(o);woInfoBind(root,o);};
   root.querySelectorAll('[data-woe]').forEach(i=>i.onchange=()=>{const k=i.dataset.woe;
@@ -4349,7 +4356,7 @@ function specBtn(pid,cls){if(!specVis()||!pid)return'';const c=specCount(pid),re
   return `<button class="btn btn-s spec-btn${red?' spec-red':''}${cls?' '+cls:''}" data-specopen="${escA(pid)}" title="Project details (spec sheet): ${c.ok} of ${c.n} signed off">📝 Details ${c.ok}/${c.n}</button>`;}
 // a WO's project (customer = project) and a list's
 function specPidOfWO(o){const p=o&&lsProjForCust(o.customer);return p?p.id:'';}
-document.addEventListener('click',e=>{const b=e.target&&e.target.closest&&e.target.closest('[data-matsopen]');if(!b)return;e.preventDefault();e.stopPropagation();if(lsMatEditOk()&&lsProjName(b.dataset.matsopen))lsMaterialsDlg(b.dataset.matsopen,()=>{if(typeof render==='function')render();});},true); // Garry 25 Nov: the PM adds project materials from the sequence window
+document.addEventListener('click',e=>{const b=e.target&&e.target.closest&&e.target.closest('[data-matsopen]');if(!b)return;e.preventDefault();e.stopPropagation();if(lsMatEditOk()&&lsProjName(b.dataset.matsopen)){const pid=b.dataset.matsopen,upd=()=>document.querySelectorAll('[data-matsopen]').forEach(x=>{if(x.dataset.matsopen===pid)x.textContent='🧱 Materials ('+lsMats(pid,'',false).length+')';});lsMaterialsDlg(pid,upd);const iv=setInterval(()=>{upd();if(!document.getElementById('mt-body'))clearInterval(iv);},700);}},true); // Garry 25 Nov: the PM adds project materials from the sequence window
 document.addEventListener('click',e=>{const b=e.target&&e.target.closest&&e.target.closest('[data-specopen]');if(!b)return;e.preventDefault();e.stopPropagation();lsSpecDlg(b.dataset.specopen);},true);
 /* Who may do what (Garry, 11 Nov): values and extra items — Project Managers, Office, Management (and the Drawing office and
    Production Manager keep it; Pre-production = Drawing office rights, Garry 10 Nov); SIGN-OFF — Project Managers only (from another screen: the Project Manager or Admin PIN,
@@ -4894,7 +4901,7 @@ function seqPageHTML(pid){
   const rows=seqRows(pid),can=seqCanEdit(pid),lim=addDayISO(todayLocal(),seqFixedDays()),todo=can&&!rows.length?seqJobsToStart(pid):[],tk=seqTicks(pid);
   [...tk].forEach(id=>{if(!rows.some(r=>r.id===id))tk.delete(id);}); // a row gone / removed elsewhere is unticked
   const tr=(r,i)=>{const o=seqJob(r),fx=seqFixedAt(o),d=seqRowDate(r,o),mv=o?(o.dueHist||[]).length:0,soon=!o&&!r.wo&&r.req_date&&r.req_date<=lim;
-    const wo=r.wo?`${fx?'<span class="seq-fx" title="Inside the fixed window — changes need the Production Manager">🔒</span> ':''}<b>${escA(r.wo)}</b>${o?'':' <small class="seq-grey">(not in the planner)</small>'}`:`<span class="seq-wait">⏳ no WO yet</span>${soon?' <span class="seq-red">due soon — no WO number</span>':''}${seqWaitOld(r)?` <button class="seq-old" data-seqold="${escA(r.id)}" title="Still waiting after ${seqWaitWks()} weeks — tap to check">⏳ not in Cienapps yet?</button>`:''}`;
+    const wo=r.wo?`${fx?'<span class="seq-fx" title="Inside the fixed window — changes need the Production Manager">🔒</span> ':''}<b>${escA(r.wo)}</b>${o?(SPEC_ED.includes(ROLE)?` <button class="btn btn-s" data-woiedit="${escA(r.wo)}" style="padding:1px 7px;font-size:12px;min-height:28px" title="Correct this job's floor / unit / title / customer">✎</button>`:''):' <small class="seq-grey">(not in the planner)</small>'}`:`<span class="seq-wait">⏳ no WO yet</span>${soon?' <span class="seq-red">due soon — no WO number</span>':''}${seqWaitOld(r)?` <button class="seq-old" data-seqold="${escA(r.id)}" title="Still waiting after ${seqWaitWks()} weeks — tap to check">⏳ not in Cienapps yet?</button>`:''}`;
     const req=d?`<span class="${o&&!o.delivDate?'seq-grey':''}" title="${o?(o.delivDate?'Delivery date':'No delivery date yet — this is the build date'):'Required date (set before the WO exists)'}">${escA(dShort(d))}</span>${fx?' 🔒':''}`:'<span class="seq-grey">—</span>';
     return `<tr class="seq-r${fx?' seq-fixed':''}${r.is_new?' seq-new':''}" data-seqr="${escA(r.id)}"${can?' draggable="true"':''}>
       ${can?`<td class="seq-hd" title="${fx?'Fixed — inside the next '+seqFixedDays()+' days':'Drag to move'}">⠿</td><td class="seq-tk"><input type="checkbox" data-seqtick="${escA(r.id)}"${tk.has(r.id)?' checked':''} title="Tick for the date tools"></td>`:''}<td class="seq-n" data-l="#">${i+1}</td><td data-l="WO">${wo}${r.is_new?' <span class="seq-newb">🆕 new — place in sequence</span>':''}${(q=>q?`<div class="seq-rq" data-seqrq="${escA(q.id)}">✋ request sent — ${escA(seqReqSum(q))} · “${escA(seqReqWhy(q))}” · ${escA(q.asked_by||'')}${ROLE==='pm'&&can?` <button class="btn btn-s" data-seqrqw="${escA(q.id)}">Withdraw</button>`:''}</div>`:'')(seqReqOfRow(r.id))}</td>
@@ -10099,7 +10106,7 @@ function renderPM(app){
       ${sched.length?`<div class="pm-sec">🚚 SCHEDULED — on a van${sched.some(siteNotOk)&&siteCanOk()?` <button class="btn btn-s" data-sitecust="${escA(c)}" style="margin-left:8px;min-height:36px">✓ Site ready for all ${sched.filter(siteNotOk).length}</button>`:''}</div>`+sched.map(o=>row(`<b>${escA(o.wo)}</b>${stepBadge(o)}${fuHTML(o,'flr-fu','font-size:12px')}<span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-x">${escA(slotLblO(o))}${slotWk(o)!==thisWk()?' (Wk '+wkNum(slotWk(o))+')':''} · ${stageLbl(o)}</span>${siteChip(o)}${lsTxt(o)}`,V2()?' pm-lr':'')).join(''):''}
       ${delivWk.length?`<div class="pm-sec" style="color:#0d6e46">✓ DELIVERED THIS WEEK</div>`+delivWk.map(o=>row(`<b>${escA(o.wo)}</b>${stepBadge(o)}${fuHTML(o,'flr-fu','font-size:12px')}<span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-x" style="color:#0d6e46">${o.delDelivAt?new Date(o.delDelivAt).toLocaleDateString('en-IE',{weekday:'short',day:'numeric',month:'short'})+' '+dStageTime(o):''}${o.delivBy?' · '+escA(o.delivBy):''}</span>`)).join(''):''}
       ${past.length?`<div class="pm-sec" style="color:var(--t3)">📚 DELIVERED — PAST WEEKS</div>`+past.map(j=>row(`<b>${escA(j.wo)}</b>${stepBadge(j.wo)}${fuHTML(j,'flr-fu','font-size:12px')}<span class="dsh-t">${escA(j.t||'')}</span><span class="dsh-x">${new Date(j._at).toLocaleDateString('en-IE',{day:'numeric',month:'short'})}${j.vBy?' · '+escA(j.vBy):''}</span>`)).join(''):''}
-      ${coming.length?`<div class="pm-sec" style="color:#8a6d00">📅 COMING UP — due, not yet on the delivery board</div>`+coming.map(o=>row(`<b>${escA(o.wo)}</b>${stepBadge(o)}${fuHTML(o,'flr-fu','font-size:12px')}<span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-x">due ${fmt(o.dueDate)}${o.plannedWeek?' · build '+wkLbl(o.plannedWeek):''}</span>${lsTxt(o)}`,V2()?' pm-lr':'')).join(''):''}
+      ${coming.length?`<div class="pm-sec" style="color:#8a6d00">📅 COMING UP — due, not yet on the delivery board</div>`+coming.map(o=>row(`<b>${escA(o.wo)}</b>${stepBadge(o)}${fuHTML(o,'flr-fu','font-size:12px')}<span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-x">${o.delivDate&&o.delivDate!==o.dueDate?'<b>required on site '+escA(fmt(o.delivDate))+'</b> · ':''}due ${fmt(o.dueDate)}${o.plannedWeek?' · build '+wkLbl(o.plannedWeek):''}</span>${lsTxt(o)}`,V2()?' pm-lr':'') /*merge 25 Nov (Tester m1 A2): the PM sees the Required date he set in the sequence*/).join(''):''}
     </div>`;
   };
   app.innerHTML=`<div class="dsh">
@@ -12717,6 +12724,15 @@ function dmRow(o,ch,opts){
 function moveDates(jobs,change,reason,by,opts){
   opts=opts||{};reason=reason||{};change=change||{};jobs=(jobs||[]).filter(j=>j!=null);
   const rows=jobs.map(j=>{const o=dmFind(j);return o?dmRow(o,change,opts):{wo:typeof j==='string'?j:(j&&j.wo)||'',skipped:'not on the planner any more',flags:[]};});
+  /* merge 25 Nov (Garry 17 Nov: "a date moved inside the fixed window from Deliveries / the board counts as a Late change"; Tester m1 H2/H3):
+     a person's move made OUTSIDE the sequence window (Capacity Board, Deliveries, the date window) is marked (fx) and counted as a
+     direct change too — only when the sequence tables exist; never for the import, an Undo or a PM (his go through a request). */
+  const fxAuto=opts.frozenDays==null&&!['cienapps','undo','pmseq'].includes(opts.src||'planner')&&ROLE!=='pm'&&typeof seqVis==='function'&&seqVis();
+  if(fxAuto)rows.forEach(r=>{if(r.skipped||r.fixed)return;const o=dmFind(r.wo);if(o&&seqWoRow(o.wo)&&dmFixedAt(o,[r.dueCh?r.to:'',r.dTo],seqFixedDays()))r.fixed=true;});
+  const fxCount=res=>{if(!fxAuto)return;try{const g={};
+      (res.rows||[]).filter(r=>!r.skipped&&!r.needReq&&r.fixed).forEach(r=>{const sr=seqWoRow(r.wo);if(!sr||!sr.project_id)return;(g[sr.project_id]=g[sr.project_id]||[]).push({r,id:sr.id});});
+      Object.keys(g).forEach(pid=>{seqReqDirect(pid,'date',{ids:g[pid].map(x=>x.id),wos:g[pid].map(x=>x.r.wo),change:{},preview:{rows:g[pid].map(x=>seqReqPrevRow(x.r))},why:String(reason.why||''),note:String(reason.note||''),by:by||''}).catch(e=>console.warn('Late change not counted: '+e.message));});
+    }catch(e){console.warn('Late change not counted: '+e.message);}};
   const apply=()=>{
     const at=nowISO(),src=opts.src||'planner',why=String(reason.why||''),note=String(reason.note||'').trim();
     const res={moved:0,weeksKept:0,pulled:0,flagged:0,skipped:[],rows:[]},done=new Set();
@@ -12725,6 +12741,7 @@ function moveDates(jobs,change,reason,by,opts){
       if(!o){res.skipped.push({wo:typeof j==='string'?j:(j&&j.wo)||'',why:'not on the planner any more'});return;}
       if(done.has(o))return;done.add(o);
       const r=dmRow(o,change,opts);res.rows.push(r);
+      if(fxAuto&&!r.skipped&&!r.fixed&&seqWoRow(o.wo)&&dmFixedAt(o,[r.dueCh?r.to:'',r.dTo],seqFixedDays()))r.fixed=true;
       if(r.skipped){res.skipped.push({wo:o.wo,why:r.skipped});return;}
       if(r.needReq){(res.needReq=res.needReq||[]).push(r);return;} /*seq: a PM's change inside the fixed window waits for the Production Manager*/
       const what=[],fx=r.fixed?{fx:1}:{},rq=opts.reqId?{rq:String(opts.reqId)}:{};
@@ -12780,7 +12797,7 @@ function moveDates(jobs,change,reason,by,opts){
       logEdit(o,what.join(' · ')+(src==='cienapps'?' (Cienapps import)':src==='group'?' (group move)':src==='pmseq'?' (PM sequence'+(r.fixed?', fixed window':'')+')':src==='undo'?' (undo)':''),by||'',[why,note].filter(Boolean).join(': '));
       res.moved++;if(r.flags.length)res.flagged++;
     });
-    if(res.moved){if(res.pulled&&typeof updDelBadge==='function')updDelBadge();sched();}
+    if(res.moved){if(res.pulled&&typeof updDelBadge==='function')updDelBadge();sched();fxCount(res);}
     return res;
   };
   return{rows,apply,change,reason,opts};

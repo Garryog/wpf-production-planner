@@ -7,16 +7,16 @@ const { H, D, rec, sleep } = X;
   const browser = await H.chromium.launch();
   const S = X.makeServer();
   const of = await X.dev(browser, S, 'office');
-  await of.page.evaluate(() => { showTab('l'); }); await sleep(300);
-  await of.page.evaluate(() => document.querySelector('[data-lhedit="L1"]').click()); await sleep(500);
-  const before = await of.page.evaluate(() => [...document.querySelectorAll('#me-woinfo [data-woe]')].map(i => i.dataset.woe + '=' + i.value + (i.disabled || i.readOnly ? '(ro)' : '')));
-  rec('list window: Floor, Unit, Title, Customer are editable boxes', before.length === 4 && before.every(x => !/\(ro\)/.test(x)), before.join(' | '));
+  // Garry 25 Nov (1A): the boxes are read-only in the list window; they are edited in the ✎ Job details window (from the sequence)
+  await of.page.evaluate(() => { woInfoDlg('WO-1'); }); await sleep(400);
+  const before = await of.page.evaluate(() => [...document.querySelectorAll('#woi-dlg [data-woe]')].map(i => i.dataset.woe + '=' + i.value + (i.disabled || i.readOnly ? '(ro)' : '')));
+  rec('✎ Job details window: Floor, Unit, Title, Customer are editable boxes', before.length === 4 && before.every(x => !/\(ro\)/.test(x)), before.join(' | '));
   await of.page.evaluate(() => { const i = document.querySelector('[data-woe="title"]'); i.value = 'HOUSE 1 TYPE B — CORRECTED'; i.onchange(); }); await sleep(200);
   await of.page.evaluate(() => { const i = document.querySelector('[data-woe="unit"]'); i.value = '12A'; i.onchange(); }); await sleep(200);
   let o = await of.page.evaluate(() => { const o = DB.orders.find(x => x.wo === 'WO-1'); return JSON.parse(JSON.stringify(o)); });
   rec('title and unit changed on the job, Cienapps values remembered', o.title === 'HOUSE 1 TYPE B — CORRECTED' && o.unit === '12A' && o.pov && o.pov.title.cien === 'HOUSE WO-1 TYPE B' && o.pov.unit.cien === '12', JSON.stringify(o.pov));
   rec('logged on the job: who, old, new', (o.log || []).some(l => /Title changed in the planner: "HOUSE WO-1 TYPE B" → "HOUSE 1 TYPE B — CORRECTED"/.test(l.what) && l.by), JSON.stringify((o.log || []).slice(-2)));
-  rec('the box shows amber with the Cienapps value and ↺', await of.page.evaluate(() => document.querySelector('[data-woe="title"]').classList.contains('wo-ov') && /Cienapps: HOUSE WO-1 TYPE B/.test(document.getElementById('me-woinfo').innerText)));
+  rec('the box shows amber with the Cienapps value and ↺', await of.page.evaluate(() => document.querySelector('[data-woe="title"]').classList.contains('wo-ov') && /Cienapps: HOUSE WO-1 TYPE B/.test(document.getElementById('woi-dlg').innerText)));
   await sleep(1500);
   rec('saved to the database', ((S.row.orders || []).find(x => x.wo === 'WO-1') || {}).title === 'HOUSE 1 TYPE B — CORRECTED');
   // shown everywhere: the saw card
@@ -37,8 +37,8 @@ const { H, D, rec, sleep } = X;
   const imp3 = await of.page.evaluate(() => { const p = analyzeImport(prepImport([{ wo: 'WO-1', title: 'HOUSE 1 TYPE B — CORRECTED', unit: '12A', step: '3. In production', dueDate: '2026-10-22' }]), 'file'); applyImport(p); const o = DB.orders.find(x => x.wo === 'WO-1'); return { pov: o.pov || null, n: povList().length, log: (o.log || []).slice(-2).map(l => l.what) }; });
   rec('Cienapps catches up: the override clears itself and drops off Export Changes', imp3.pov === null && imp3.n === 0 && imp3.log.some(w => /no longer on Export Changes/.test(w)), JSON.stringify(imp3));
   // ↺ back to Cienapps value
-  await of.page.evaluate(() => { showTab('l'); }); await sleep(300);
-  await of.page.evaluate(() => document.querySelector('[data-lhedit="L1"]').click()); await sleep(500);
+  // Garry 25 Nov (1A): the boxes are read-only in the list window; they are edited in the ✎ Job details window (from the sequence)
+  await of.page.evaluate(() => { woInfoDlg('WO-1'); }); await sleep(400);
   await of.page.evaluate(() => { const i = document.querySelector('[data-woe="floor"]'); i.value = '1st'; i.onchange(); }); await sleep(100);
   await of.page.evaluate(() => document.querySelector('[data-woundo="floor"]').click()); await sleep(100);
   o = await of.page.evaluate(() => JSON.parse(JSON.stringify(DB.orders.find(x => x.wo === 'WO-1'))));

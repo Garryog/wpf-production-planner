@@ -1628,3 +1628,25 @@ No Tester expectation changed. One of my own checks was moved to the new rule (b
   "No project".
 - After these: every check that differed from live or from the old Job B branch is either fixed or listed in ACCEPTED-FAILURES
   ("25 Nov 2026 — Job B brought up to date"). Full suite to be run again on this commit.
+
+### 25 Nov 2026, later — second full run, Tester on the merge seams, fixes
+- **Full suite (fake database, 406 files) on 54e375a: 10,316 pass / 225 fail.** Every failing check is one that also fails on live or
+  on the old Job B branch, or is listed in ACCEPTED-FAILURES "25 Nov 2026 — Job B brought up to date". Changes made after that run
+  were checked on the 121 date / sequence / delivery / project-details files (no new failure) — the whole suite has NOT been re-run on the last commit.
+- **Tester (tests/merge25/, 4 files, 280 checks):** no Critical, no High. Held: due dates follow sequence → board, Deliveries (tag, week
+  tab), list window badge, lists to issue, Pre-production pool, Today, Management, history; and back from the board, "→ Wk" and "Move
+  to week…"; a booked job comes off the van with "rebook" from both sides; two PCs agree; every role × lists ON / OFF / sequence SQL not
+  run draws with no error; booking bar, list badge, pool order; list window; ~890 button presses, nothing undefined.
+- **Found and fixed:**
+  - [Medium] the PM's page showed only the build date — the "Coming up" rows now say **required on site <date>** when it differs.
+  - [Medium] a date moved inside the fixed window from the Capacity Board / Deliveries / the date window was not marked or counted as
+    a Late change (Garry's 17 Nov answer said it should be) — it is now marked in the history and counted as "changed directly"
+    (only when the sequence tables exist; never for the import, an Undo, or a PM, whose changes go through a request).
+  - [Medium] with the list window boxes read-only (1A) there was no way left to correct a job's Floor / Unit / Title / Customer —
+    a **✎** beside each work order in the sequence table opens a small "Job details" window (same people as may edit project details;
+    same rules: Cienapps not changed, listed in Export Changes, ↺ puts the Cienapps value back, customer needs the Admin PIN).
+  - [Low] the 🧱 Materials count in the sequence window updates after a material is added.
+- **Left as it is (Garry to confirm):** the Capacity Board row shows the due date only, not the required-on-site date (his 18 Nov
+  choice: "the capacity board is just for managing dates … due date only"). m25 check A5b records it.
+- **Still to do:** Manager on the whole branch · docs/GO-LIVE for Job B (SQL order) · dry-run with Garry's real Cienapps upload file ·
+  full suite once more on the final commit.
