@@ -114,10 +114,64 @@ Rules: rank by the leading number. "Shipped" = step 9 only (left the factory →
 - (4 Nov, Garry) When a job's STEP is changed in the planner itself (not only on import) to 7. ASSEMBLY COMPLETE or 8. PALLETED, it is auto-ticked for delivery (delv=true, no van/day), same rule as the import. Never untags.
 
 - (4 Nov, Garry) Be more aware of SIMPLEST use, especially for production and stores. REMOVE the "Paper list issued" option. Maybe allow attaching a PHOTO of a list instead. In the cutting list rename "Colour" to "Material".
+- (11 Nov, Garry — Project details, docs/PLAN-project-details.md) Spec sign-off: PMs only. Projects stay red until every spec item is filled and signed off; a project can have several specs (rooms, house types, robes). Materials and spec values: PM, office, Management (+ Drawing office, Production Manager). Changing a job's Customer in the planner: Admin only. A spec is not applied to a cutting list — it only gives the material choices for the list (templates keep their materials).
+- (11 Nov, Garry, answers — S1 / S2 / L4b and the date tools, docs/PLAN-project-details.md) (1) Step 11 "Completed and invoiced" set by
+  hand does NOT tick "Installation complete" — kept separate (CHANGED from the assumed answer). (2) A shipped job's step can't be set
+  backwards by hand; use "Bring back to board" — yes. (3)+(4) PMs get the 📦 Shipped tab: view and tick Installed; "Bring back to board" is
+  office-only; the PM filter starts on his own PM — yes. (5) Project / PM filters as built — yes. (6) P-number → WO merge by a tick,
+  pre-ticked only when certain — yes. (7) At a merge the planner's due date wins (Cienapps' listed under Dates to change) — yes. (8) Both
+  booked → the WO's booking kept and flagged — yes. (9) A "not sure" pair is offered again on every import — yes. Sequence rows: the
+  earlier-placed row is kept, the other retired — yes. Mon 3 Jan 2028 is a bank holiday — yes. Bulk "Set date" onto a bank holiday /
+  Sunday MOVES to the next delivery day (build date: next working day before it), and the preview says so (CHANGED).
 
 - (4 Nov, Garry, answers) Photo of a list REPLACES the paper option: on a WO with no typed list, attach a photo (phone camera or file); the saw must be able to open it; it is a stop-gap to be removed later once the typed system is in place (keep it simple, easy to switch off). Docket cancel ASKS "Did these items leave stores?" (Yes = stay got out; No = back to 'to pick'). Dockets are for FITTINGS (stores items) only for now — cutting-list (saw) items are not docketed, so no per-WO quantity split is needed.
 
-<!-- Copied 12 Nov 2026 from feature/project-details-v2 for the list-window release (branch feature/list-window) -->
+### Dates & deliveries decisions (9 Nov 2026, Garry) — Job A, plan docs/PLAN-dates-deliveries.md
+- Order of work: "Dates & deliveries first"; PM sequence, Cienapps upload and Johnny's pool go WITH project details (Job B); CNC view after both.
+- Already built 4 Nov: step 7 ASSEMBLY COMPLETE / 8 PALLETED (planner or import) ticks the job for delivery, logged; one-off catch-up button.
+- A1 Deliveries page in WEEKS: tabs This week / Next week / +2 / +3 / Later, each with its own vehicle × Mon–Sat grid and day notes; past weeks keep working. To Plan pool grouped by due week. "In store — ready, no delivery date" section (assembled/palleted, not on a van, days in store, amber after 14 days). A3 poster and Excel export per week.
+- A2 Due date editable on the Capacity Board row AND the delivery card/pool: date picker + reason (Customer delay · Site not ready · Production · Materials · Design/drawings · Other + note). One change moves the job on both pages.
+- A3 Planned week follows the new due week UNLESS already cut (step 6+ or saw ticks): week stays, flagged "due date moved — check week".
+- A4 A job booked on a van/day whose due date changes comes OFF the van, back into the To Plan pool of its new week, flagged "date moved — rebook" (logged). Never silently keep the old booking.
+- A5 Every date change stores who/when/old/new/reason; original due date kept (origDueDate); "moved N×" badge on board row and delivery card.
+- A6 Every planner date change is listed in Export Changes; a re-import still carrying the old Cienapps date does NOT put it back (planner date wins until Cienapps matches, then the override clears).
+- A7 Knock-on: cutting-list due date, saw cut-by and stores pick date move with it; saw and stores show "this job has moved" on the card for a day.
+- A8 Delivery date per job (Cienapps column L "Delivery/install date" when present, else set in the planner); build due date works back from it (default 3 working days, Settings). Changing the delivery date moves the build dates; changing the build date alone still allowed (flag if after delivery).
+- A9 "Don't build too early": a not-yet-cut job whose due date moves out by more than 14 days is flagged (and suggested to move out of the current planned week).
+- A10 Site-ready confirmation by PM or office; jobs on the delivery board within N working days (Settings, default 5) without it show amber "site not confirmed"; who/when logged.
+- A11 GROUP moving of due (and delivery) dates with one reason — from board group-select/groups, by project/customer, or ticked cards on the delivery page; same A3–A7 rules; summary of what moved and what was flagged.
+- Not wanted: a weekly date-changes report.
+
+### Project details + PM sequence + upload + Johnny's pool decisions (9 Nov 2026, Garry) — Job B, plan docs/PLAN-project-details.md
+- Order: Job B branch is cut from feature/dates-deliveries once Job A has a Manager GO; the CNC view comes after both.
+- B1 Spec sheet per project (Kitchens list of 22 items; Robes and Schools drafts): blank/"TBC" = not signed off, red; sign-off records who/when; changing a signed-off value drops it to proposed; material items from the project's materials, edging items from the edging codes; one spec per project; red "SPEC NOT SIGNED OFF: …" chip on the cutting-list window and saw/stores list headers; spec block on the printed list. Only the spec part of the Projects hub (project_spec_items) — not locations or snags.
+- B2 Floor, Unit, Title, Customer editable in the cutting-list window: planner override on the job, shown everywhere, kept through re-imports, logged, listed in Export Changes; clears itself when an import brings the same value.
+- B3 "✎ Project details" and "Materials" beside the Project picker in the list window, and in plain view on the Cutting Lists page.
+- B4 Project materials editable/addable from the PM view and office/planning views; saw, stores, drivers read-only.
+- B5 Each project has an assigned Project Manager (managed PM list in Settings; until Stage 4 logins a PM picks his name once per phone). PM view shows only his projects by default (toggle "all projects"); Production Manager and office see all; unassigned projects listed for the office to assign.
+- B6 PM sequence table per project: ONE ROW PER WORK ORDER (kitchen, utility, quartz, robes separate) in required order, each with its required date (the job's delivery date from Job A). Reorder by drag and move up/down/to position, PC and phone; edit dates there with Job A's reason/history/knock-on rules incl. group moves. New WOs from an import land at the bottom flagged "new — place in sequence". Full reorder history.
+- B7 Rolling two-week FIXED window: jobs due in the next 14 days are fixed; a PM sends a CHANGE REQUEST with a reason, the Production Manager approves (applies with all Job A rules) or refuses (PM notified); logged and counted on the delivery scorecard. Outside the window the PM changes freely. Office/Production Manager can change inside it (logged, reason required).
+- B8 CNC view (later): START LINKED, PHASE OUT LATER — first read Johnny's sheet (CNC Schedule 2025.xlsm) and use sequence + dates only for priority and "out of step" flags; later the planner builds the CNC plan (colour-first ±2 days, cut-by = due − 7, 30 sheets/machine/day less colour changes, carry-over). Frozen-window jobs must not be re-ordered by the auto-plan.
+- B9 (17:42) Johnny's PRE-PRODUCTION POOL: one ordered pool of WOs from all PMs' sequences due within at least the next 3 weeks (Settings, default 3, min 3), ordered by due date then PM sequence; own "Pre-production" role/PIN; columns WO, project, PM, floor/unit, title, due, cut-by, sheets, material, spec status, list status, fixed badge, moved-N×, PROCESSED tick (= Cienapps 5. WORK ORDER PROCESSED; who/when; in Export Changes if Cienapps behind); his own order without changing the PMs'; amber/red/out-of-step flags; filters; "changed since you last looked"; phone and PC; "no WO yet" rows included; designed for the CNC view and automatic sheet reading later.
+- B10 (17:45) Cienapps UPLOAD FILE → sequence table: PM uploads the same 27-column file (header may be missing); one row per line "waiting for WO number" (children info only); added in file order at the bottom or a chosen position; DUPLICATES (project+floor+unit+product+name) SKIPPED and listed — never add the same work twice; preview before save; import WOs matched by project + floor + unit + product/name; a confident single match takes the row over, otherwise the PM confirms with one tap (never guessed); waiting rows older than N weeks (Settings, 3) flagged "not in Cienapps yet?".
+- B11 Make dates easy for PMs: bulk set (whole house / block / from here down), spread dates at a pace skipping weekends and Irish bank holidays, push/pull from here, line offsets per product type, dates follow the order (optional), paste from the contractor's programme, week timeline with factory hours (red over 350 h) and the fixed window greyed, one-line preview + 10-minute Undo, nudges on the PM's home screen, read-only progress per row — all with the same reason/history/window/knock-on rules. Wireframe to Garry for yes/no before building.
+- **Several PMs per project (Garry, 10 Nov 2026):** a project can have two or three PMs. All of them share everything — each sees and can
+  change the whole project (work orders, sequence, dates); history shows who did what. Still ONE sequence table per project. A change-request
+  answer is shown to the PM who asked (the others see it in the history). Only the office and the Production Manager add or remove PMs.
+  "Unassigned" = a project with no PM at all. This replaces "an assigned Project Manager" (one) in B5.
+- **Garry's answers, 10 Nov 2026 (live):** (1) Two identical lines in one house in the Cienapps upload are KEPT as two rows (could be two
+  wardrobes). Loading the same file again still adds nothing. (2) Johnny (Pre-production) can add/edit project materials without a PIN and
+  will be doing some cutting lists — he gets the same list and materials rights as the Drawing office. (3) Old-version screens: Garry is not
+  worried about them — the "old screen drops the sequence settings" failure is accepted (close every screen on go-live day). (4) YES to the
+  PM date tools (B11 a–j) — "PMs need lots of date tools". (5) The project sequence view, per project, is also wanted for the office and
+  despatch (read it from the Deliveries page; ASSUMED look-only for stores and drivers, office can edit as already built).
+
+### Shipped tab + late steps on the board (10 Nov 2026, Garry, go-live day) — add to Job B
+Garry's words: "i need a step in the capacity job shipped plus installed and completed. i will need project and PM filters on the shipped tab for the PMs". And: the Shipped tab "might come in useful when we get to installation management" — it STAYS a main tab and is the starting point for installation management later (fitter, install date, site snags, sign-off). Do not build a separate screen for that.
+- **S1 — Capacity Board step drop-down:** add JOB SHIPPED, INSTALLED and COMPLETED after 8. PALLETED so the office can move a job on by hand (today the drop-down is Cienapps steps 1–8 only). Architect to confirm with Garry before building: exact wording (Cienapps ladder is 9. JOB SHIPPED / 10. INSTALLED TO BE INVOICE / 11 …; "Completed" = today's "Installation complete" mark?), and what the next Cienapps import does to a hand-set step — default: same rule as the existing overrides (the planner's choice holds until Cienapps moves the job on). A hand-set shipped job leaves the board and week totals exactly like an imported one.
+- **S2 — Shipped tab filters:** Project filter and PM filter (PM comes from the project → PM assignment in Job B). Phone-first, same style as the other filters.
+- No duplicates rule unchanged: shipped jobs are kept, never deleted.
+
 ### Cutting list job boxes + Cienapps WO number always (10 Nov 2026, Garry, go-live day) — add to Job B, do EARLY (staff are entering real lists now)
 Garry's words: "cutting list need to break out floor, unit and title into their own boxes. use cienapps work order number at all times. could we look for cienapps number if it not pre-populated. If cienapps wo number cannot be found force new p-number as a last resort".
 - **L1 — Separate boxes:** in the cutting list window (new list, Import Excel preview, Find old list / copy, Edit job info) Floor, Unit and Title are each their own box — never one combined text. Excel template + import: keep reading the current template; if the job info block gains Floor / Unit / Title cells, accept both layouts.
@@ -125,6 +179,14 @@ Garry's words: "cutting list need to break out floor, unit and title into their 
 - **L3 — Look it up when it is blank:** search the planner's jobs by the matching key from B0 — project (customer name) + floor + unit (trimmed, case-insensitive). Exactly one match → fill it in and show what was matched. Several → the person picks from the short list. Typing a WO number by hand is still allowed but must exist in the planner.
 - **L4 — P-number only as a last resort:** no Cienapps job found → say so plainly and make a new P-number only after the person confirms. It is flagged (purple, "not from Cienapps"), and when a later Cienapps import brings a job with the same project + floor + unit the list moves onto the Cienapps WO and the P-number job is merged into it — NEVER two jobs for one unit (Garry: "the most important thing is to avoid duplication's"). One-list-per-WO rule unchanged.
 - Architect: confirm with Garry before building — what happens when floor or unit is blank on either side (default: no automatic match, person picks), and whether Title takes part in the match (default: no, it is only shown).
+
+### Delivery page usability — TOP PRIORITY for buy-in (10 Nov 2026, Garry, go-live day)
+Garry's words: "for the delivery planner due date of jobs need to be edit able in the pool of jobs down for delivery. i need very clear week navigation between week in the delivery page. make it very easy for job in the delivery pool to be moved to other weeks. the easy usability of this page is very important for buy in of the whole planner system wit hthe production manager".
+- Job A (A1 weeks, A2 due date on card/pool, A11 group move) already covers the function. Before it is released, Architect + Tester review the Deliveries page as the Production Manager would use it, and the Coder closes any gap:
+  - **D1** due date editable straight on every To Plan pool card (one tap → date → reason), not only inside a dialog.
+  - **D2** week navigation impossible to miss: big ◀ Prev / Next ▶ plus the week tabs, the week number and Monday date always visible ("Wk 46 · 9 Nov"), "This week" button, the current week highlighted, job count per week on each tab.
+  - **D3** moving a pool job to another week in one or two taps: "→ Next week" / "Move to week…" on each card, tick several + "Move ticked to week…", and drag onto a week tab on a PC. Same A3–A7 rules and reason.
+- Test with the Production Manager's real use in mind (PC first, then phone). This page decides whether he adopts the planner.
 
 ### Cutting list window — Garry's first real use on the live system (10 Nov 2026, 16:11) — do with L1–L4, EARLY
 Garry's words: "i need to be able to click into delivery card and be able to add a cutting list. add new material does not see to work in cutting list. where do i add the project list of materials. you qty in the qty column same as L and W. how do you get out of the cutting list without hitting cancel. need clearer step with list is completed that list is saved and list can be closed. says it cant save". (Screenshot: New cutting list for WO-2617-4, Project = "— pick the project —", red "Pick the project.", amber "This device can't keep a backup copy … (storage full or blocked)".) Live data at the time: no real projects yet, only the two migrated example ones.
@@ -151,6 +213,10 @@ Garry's words: "the work order due date are not prominent in all screens. the wo
 - **L12** — the Work order drop-down in the list window (L11) is sorted by DUE DATE, earliest first (no date last), and each line shows the due date: "WO-2617-4 · Fl 7 · Unit 231 · due 14 Nov". (Supersedes "in WO order" in L11.)
 - **DD1** — audit EVERY screen that shows a work order (Capacity Board, Deliveries pool/cards/weeks, Shipped, Cutting Lists home + lists needed + list window header, Saw, Stores, dockets, PM views, prints) and make the due date prominent and in ONE consistent style everywhere: same badge, same format ("Fri 14 Nov · Wk 46"), red when overdue, amber when due this week, "moved N×" where it applies. Architect lists the screens where it is missing or small today; Tester checks each one at PC and phone width.
 
+### Delivery pool cards are messy (10 Nov 2026, 16:30, Garry — screenshot of the ASPECT ATHENRY group in the To Plan pool)
+Garry's words: "this is messy they are all over lapping, you can drop the value and just put a total down the bottom. add the dues date to these cards".
+- **D4** — pool cards must never overlap: WO, Floor and Unit badges fit inside the card (wrap or shrink), nothing spills into the next card, at PC and phone width. Drop the € value from each card; show the group total value once at the bottom of the group. Add the due date to every card in the DD1 style (red overdue, amber this week). Same fix on the cards in the week grids if they share the layout. Part of the Deliveries usability pass (D1–D3), before Thursday's release.
+
 ### Garry 10–12 Nov (voice call 10 Nov evening + 12 Nov) — decisions not yet recorded
 - **PRIORITY (12 Nov):** the cutting list window is the NEXT job, as its own small release (target Wed 18 Nov), after the Deliveries weeks release on Mon 16 Nov. PM page, Drawing page and the rest of Job B wait. Scope = L1–L12 + DD1 (list window part) + the items below.
 - **Simplicity is the main focus** (Garry: the production manager is "old school"; buy-in depends on it). List window: ONE obvious path — open from the job, fill rows, one big Save. Templates / Import Excel / Find old list go behind a single "Start from…" choice at the top; "Save as template" only for Drawing office / Admin. Fewest buttons on every screen.
@@ -161,23 +227,6 @@ Garry's words: "the work order due date are not prominent in all screens. the wo
 - **Shipped report**: pick from/to dates → every job shipped in the period with project, PM, value, invoiced status, total, Excel download.
 - **PM sequence**: shipped rows stay but grey out and are hidden by default ("show finished"); later the base for installation management (install date, fitters, site snags, sign-off) — a separate phase, not now.
 - **Johnny's CNC Schedule (later, CNC job)**: read from SharePoint on a schedule; strike-through = office processing done (CNC files), NOT cut. Mark jobs taken into the planner with an extra "In planner" tick column — tested on a COPY of his .xlsm first, never write colours into his file.
-
-### Dates & deliveries decisions (9 Nov 2026, Garry) — Job A, plan docs/PLAN-dates-deliveries.md
-- Order of work: "Dates & deliveries first"; PM sequence, Cienapps upload and Johnny's pool go WITH project details (Job B); CNC view after both.
-- Already built 4 Nov: step 7 ASSEMBLY COMPLETE / 8 PALLETED (planner or import) ticks the job for delivery, logged; one-off catch-up button.
-- A1 Deliveries page in WEEKS: tabs This week / Next week / +2 / +3 / Later, each with its own vehicle × Mon–Sat grid and day notes; past weeks keep working. To Plan pool grouped by due week. "In store — ready, no delivery date" section (assembled/palleted, not on a van, days in store, amber after 14 days). A3 poster and Excel export per week.
-- A2 Due date editable on the Capacity Board row AND the delivery card/pool: date picker + reason (Customer delay · Site not ready · Production · Materials · Design/drawings · Other + note). One change moves the job on both pages.
-- A3 Planned week follows the new due week UNLESS already cut (step 6+ or saw ticks): week stays, flagged "due date moved — check week".
-- A4 A job booked on a van/day whose due date changes comes OFF the van, back into the To Plan pool of its new week, flagged "date moved — rebook" (logged). Never silently keep the old booking.
-- A5 Every date change stores who/when/old/new/reason; original due date kept (origDueDate); "moved N×" badge on board row and delivery card.
-- A6 Every planner date change is listed in Export Changes; a re-import still carrying the old Cienapps date does NOT put it back (planner date wins until Cienapps matches, then the override clears).
-- A7 Knock-on: cutting-list due date, saw cut-by and stores pick date move with it; saw and stores show "this job has moved" on the card for a day.
-- A8 Delivery date per job (Cienapps column L "Delivery/install date" when present, else set in the planner); build due date works back from it (default 3 working days, Settings). Changing the delivery date moves the build dates; changing the build date alone still allowed (flag if after delivery).
-- A9 "Don't build too early": a not-yet-cut job whose due date moves out by more than 14 days is flagged (and suggested to move out of the current planned week).
-- A10 Site-ready confirmation by PM or office; jobs on the delivery board within N working days (Settings, default 5) without it show amber "site not confirmed"; who/when logged.
-- A11 GROUP moving of due (and delivery) dates with one reason — from board group-select/groups, by project/customer, or ticked cards on the delivery page; same A3–A7 rules; summary of what moved and what was flagged.
-- Not wanted: a weekly date-changes report.
-
 ### Release in small pieces + Job A answers (12 Nov 2026, Garry)
 - **Releases go out as small pieces.** Order: (1) the Cutting Lists project filter (PR #2, branch feature/lists-project-filter); (2) **Job A — Dates & deliveries on its own**, branch `release/deliveries-weeks`, for Garry to merge on **Mon 16 Nov**; (3) Job B (project details, PM sequence, pre-production pool) later, in its own pieces. This replaces the Manager's 11 Nov condition "release Job A with Job B" (decision C → Job A on its own first).
 - **A1** — the Production Manager gets the FULL Deliveries page as built (🚚 Deliveries button on his screen), Close week included.
@@ -293,6 +342,48 @@ Garry's words: "this is messy they are all over lapping, you can drop the value 
 - **D4** — pool cards must never overlap: WO, Floor and Unit badges fit inside the card (wrap or shrink), nothing spills into the next card, at PC and phone width. Drop the € value from each card; show the group total value once at the bottom of the group. Add the due date to every card in the DD1 style (red overdue, amber this week). Same fix on the cards in the week grids if they share the layout. Part of the Deliveries usability pass (D1–D3), before Thursday's release.
 
 
+
+### Aderrig templates + list grouping (11 Nov 2026, Garry, live)
+Garry sent the Aderrig cutting-list workbook ("a current high volume job … a number of apartment kitchens are on the one page").
+- **Done on the LIVE planner at Garry's request (11 Nov):** 17 cutting-list templates under project ELLIOTTS ADERRIG 4 — Kitchen Type
+  1L, 1R, 1AL, 2L, 2R, 4L, 4R, 6L, 6R and the PV versions 1L/1R/2L/2R/4L/4R/6L/6R PV — plus project material "Lorenzo 38mm". Added
+  only; nothing existing changed. Made by running the live app code on the fake database, replaying the same `save_list_revision`
+  calls on live and checking every line matched (by "Claude (for Garry, 11 Nov)").
+- **Garry's rules for them:** tap left OFF (the one in the file is wrong); NO extractors — WPF does not supply them on this project;
+  no robe templates (robes come off the CNC); worktop sizes are the standard ones (type 6 = 3300 + 900); a run over 3600 uses the
+  4100 long worktop (a small quantity was ordered for kitchens over 3900) — noted on the 4L / 4R lines.
+- **L and R matter:** "Kitchen Type 2R" and "Kitchen Type 1L" — the L / R is the hand (left / right) and must never be dropped,
+  merged or guessed when lists are generated or matched (the workbook also writes "6_L_", "1L V" — treat as a person-to-confirm).
+- **GR1 — grouping (wanted):** a way to group several apartments' lists on one page (as the workbook does per block / floor:
+  "B2 1st Fl 056–067"), for making, viewing and printing. Architect to plan.
+- **GR2 — add an item to more than one template at once (wanted):** e.g. add the right tap to all 17 templates in one go. Architect to plan.
+- **Start-up (Garry, 11 Nov):** build the database of cutting lists for CURRENT jobs early — "if production can see the ease of use
+  of the system we will have more success. having jobs ready to go from the start will help".
+- (11 Nov, Garry, later) Start the real lists with CURRENT work orders, not old / delivered ones: Garry clears the orders and does a
+  fresh Cienapps import on 12 Nov; lists for apartments are made after that. "Clear All Orders" only removes orders and untags lists —
+  templates, projects and materials stay (checked in the code); safety copy of the 17 templates: docs/restore/aderrig-templates-2026-11-11.sql.
+- (11 Nov, Garry) **Cutting Lists page: project filter, and the customer / project always visible** on the page. Released as a SMALL
+  release of its own on top of the live version (branch feature/lists-project-filter), not waiting for the big release.
+- (11 Nov, Garry) **"Speed up the new system" = get features live faster**: small tested releases as each piece is ready.
+- (12 Nov, Garry, answers — Job A Deliveries) **A1** the Production Manager gets the FULL Deliveries page as built, Close week
+  included. **B1** Saturday deliveries are allowed and not flagged. **D1** a loaded / on-the-road job ticked in a group week move
+  still moves, stays on its van and is flagged. **C** superseded: releases now go out as small pieces on top of live, in this order
+  (Garry: "yes all important"): 1 Cutting Lists project filter (PR #2) · 2 Deliveries week tabs + due-date editing (Job A) ·
+  3 Shipped steps 9/10/11 + Project filter on Shipped · 4 P-number → WO merge.
+
+### Agreed weekly capacity per project (Garry, 17 Nov 2026) — plan: docs/PLAN-project-week-capacity.md
+- Office / Production Manager set, per project, an agreed amount per week: **apartments** or **€ value**.
+- Over the amount → **warn in red** (nothing blocked or moved). One apartment = one apartment number (kitchen + utility + robes = 1).
+- Counts in the work order's **delivery week**. **One figure + exceptions** for single weeks.
+- Lives in the PM sequence (Job B); no database change (planner settings).
+
+### Garry's answers — 17 Nov 2026, evening (live)
+- Two P-numbers for one house → **flag only** (as built). Cienapps customer matching an INACTIVE project → **reactivate it and use it**
+  (change to build). A date moved inside the 14-day window from Deliveries / the board → **counts as a Late change** (change to build).
+- "HOUSE TYPE B KITCHEN ISLAND" → **part of the kitchen** (as built).
+- Johnny's pool (B9) and the Cienapps upload (B10): Garry wants the points **one by one** — sent 17 Nov evening; awaiting answers.
+- Mon 3 Jan 2028 = the New Year bank holiday → **yes** (as built).
+- Garry will send one real Cienapps upload file + 5 real work orders for a dry run; and will run the 3 SQL blocks on go-live day, talked through.
 ### 11 Nov 2026 (branch feature/lists-project-filter — small release on top of the live version)
 - Garry's request (11 Nov): "the cutting list page need project filters and make sure customer/project is always visible on the cutting list page."
 - Built (lists switch ON only; no database changes): one **Project** drop-down at the top of the Cutting Lists page (Office, Drawing office, Production Manager → Lists). It narrows every section — lists to issue, waiting for check, lists needed, waiting on material, the lists and the templates. Projects A–Z with counts, "No project" for anything not linked, a type-to-find box once there are 40+ projects, "✕ All projects" to reset, "N of M shown". The pick is remembered on that device; a project that no longer exists falls back to All projects. Jobs are matched to a project through its Cienapps customer names (customer = project, Garry 10 Nov).
@@ -365,3 +456,22 @@ Garry's words: "the edit button for the cutting lists templates is gone. i need 
   A template going into a list takes out untouched blank rows and empty standard sub-headings (a colour alone is not "typed").
 - Open question: should Cutting Lists → ＋ New list (and the "lists needed" rows) also ask "Start this list from:" first? Built for
   the Deliveries ＋ List and the ⓘ window's ＋ Add cutting list only.
+
+
+### Simpler import (25 Nov 2026, Garry) — NEXT release after the PM sequence goes live
+Garry: "we need to look more at the import and merge. there is too many questions and things to check over when importing".
+Inventory (25 Nov): 5 kinds of tick / choice before Apply (each per job), 13 information boxes, and after Apply the "Cutting lists to
+issue" panel and customer → project links. Target: one screen — headline counts, ONE "Needs you" box, everything else under a closed
+"details" line, one Apply button; non-urgent checks on a "To check" list that stays until cleared.
+Garry's decisions (25 Nov):
+- **1. Drawing-stage work orders:** "Some drawing jobs are just drawing tasks that will never become a factory work order. If a work
+  order is drawing stage and has a floor and unit you can proceed and import it. If the work order does not have a floor and unit ignore
+  it." → no "bring in" ticks: drawing stage WITH floor and unit = imported; WITHOUT = left out quietly. (Replaces the 17 Nov rule.)
+- **2 → A:** a due date changed in Cienapps where the job still fits its planned week is taken automatically and listed under details;
+  only changes that make a job LATE, and dates the planner had moved, are asked.
+- **3 → A:** a P-number and a Cienapps WO that are certainly the same house (same project, floor, unit, one-to-one) merge automatically
+  and are reported — an "undo merge" is built FIRST (there is none today). (Replaces the 11 Nov merge-by-tick rule for certain pairs.)
+- **4 → A:** "not sure" merges and "shipped but no dispatch record" move to a "To check" list outside the import.
+- **5 → A:** "Cutting lists to issue" leaves the import; it lives on the Cutting Lists page with a count badge; the import says "N lists to issue →".
+Open point for the Architect: a drawing-stage job brought in is not checked against P-numbers in the same import (two jobs for one
+house until the next import) — to be closed in this release.

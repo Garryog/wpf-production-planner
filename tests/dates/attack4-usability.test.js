@@ -303,9 +303,12 @@ const XSS = '<img src=x onerror="window.__xss=(window.__xss||0)+1">';
       out.opts = s ? [...s.options].slice(1).map(o => o.textContent.replace(/\s+/g, ' ').trim()) : null;
       return out;
     });
+    // (merge of Job A into Job B, 10 Nov night) L12 is part of the NEW list window (lists switch ON + a project picked) and is
+    // tested there: tests/seq/l5-l12-window.test.js (sorted by due, "· due 22 Oct", "has a list"). This row has no lists
+    // switch, so it gets the OLD window — which must stay exactly as it was (WO order, no due text).
     const order = (L.opts || []).map(x => (x.match(/WO-\d+/) || [''])[0]);
-    rec('L12: list window WO drop-down sorted by due date (earliest first, no date last)', order.join() === 'WO-200,WO-050,WO-100,WO-300', JSON.stringify(L));
-    rec('L12: each WO line shows its due date ("· due 14 Nov")', (L.opts || []).length && L.opts.filter(x => /WO-300/.test(x) === false).every(x => /due \d{1,2} \w{3}/.test(x)), JSON.stringify(L.opts));
+    rec('L12 (switch OFF): the old list window\'s WO drop-down is unchanged — WO order, no due text (L12 lives in the new window, tests/seq/l5-l12-window)', order.join() === 'WO-050,WO-100,WO-200,WO-300', JSON.stringify(L));
+    rec('L12 (switch OFF): old window lines carry no "· due" text', (L.opts || []).length === 4 && L.opts.every(x => !/· due /.test(x)), JSON.stringify(L.opts));
     await t.close();
   }
 
