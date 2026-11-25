@@ -24,6 +24,8 @@ p = P([COLS, ['Unit', 2, 720, 560, 'MFC White'], ['Unit'], ['Shelf', 1, 500, 300
 rec('a part called "Unit" (qty + sizes) stays a part; a lone "Unit" heading stays a heading; no meta', p.meta.unit === '' && p.rows[0].k === 'part' && p.rows[0].item === 'Unit' && p.rows[1].k === 'hdr' && p.rows[1].item === 'Unit', JSON.stringify([p.meta, p.rows.map(r => r.k + ':' + r.item)]));
 p = P([['WO', 'WO-9', 'Floor', 'T10'], COLS, ['Side', 2, 720, 560, 'MFC White']]);
 rec('"WO | WO-9 | Floor | T10" (no unit): read, unit blank', p.meta.wo === 'WO-9' && p.meta.floor === 'T10' && p.meta.unit === '', JSON.stringify(p.meta));
+p = P([['Floor', 'T09', 'Unit', '12'], COLS, ['Side', 2, 720, 560, 'MFC White'], ['Unit', 2], ['Floor', 1]]);
+rec('(round 2) once the parts have started, "Unit | 2" / "Floor | 1" are parts, the job stays T09 / 12', p.meta.floor === 'T09' && p.meta.unit === '12' && p.rows.filter(r => r.k === 'part').map(r => r.item).join() === 'Side,Unit,Floor', JSON.stringify([p.meta, p.rows.map(r => r.item)]));
 p = P([['Nr of units', 3], COLS, ['Side', 2, 720, 560, 'MFC White']]);
 rec('"Nr of units" is still the units, not the Unit', p.meta.unit === '' && p.rows.some(r => r.k === 'hdr' && r.units === 3), JSON.stringify([p.meta, p.rows]));
 

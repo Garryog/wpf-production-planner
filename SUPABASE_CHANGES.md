@@ -344,6 +344,656 @@ end $$;
 grant execute on function save_list_revision(jsonb,jsonb,int,text,text) to anon, authenticated, service_role;
 commit;
 notify pgrst, 'reload schema';
+## 2026-11-11 — Merged P-numbers stay merged — PENDING, NOT YET RUN — Garry runs this with (or after) the PM sequence block, BEFORE merging `feature/project-details-v2`
+
+**Why (plain English):** when a Cienapps import folds a planner P-number into its real work order (L4b), the P-number leaves the job
+list and is remembered in the planner settings (`pMerged`). The new code never lets it come back, even from a screen that was not
+refreshed. But a screen still running an OLDER version of the planner does not know about merges: if it still shows the P-number and
+saves, it could put the P-number back beside the work order — two jobs for one house. This SQL makes the database refuse such a save.
+That old screen shows "Save failed"; whoever is using it refreshes and gets the new version (and sees the work order instead).
+
+**What it changes:** one new function and one new trigger on `production_planner` (`pp_pmerged_guard`). It only looks at the job
+numbers. No table, no column, no data is touched, so no GRANT lines. Works whether `orders` / `settings` are stored as json or jsonb.
+Safe to run twice.
+
+**Rollback:** `drop trigger if exists pp_pmerged_guard on production_planner;`
+**Restoring a backup taken before a merge:** drop the trigger FIRST (line above). Otherwise the database refuses the restore, because
+the backup still has the merged P-number as a job. Once the restore is done, run the block again to put the rule back.
+
+### Steps for Garry
+1. Supabase → WPF project → **SQL Editor** → **New query**. Copy everything in the grey box below, paste, **Run**. "Success. No rows returned" = done.
+2. Close and reopen every PC, saw, stores, floor screen and driver's phone on go-live day anyway.
+
+```sql
+-- ===================== MERGED P-NUMBERS STAY MERGED (L4b, attack9 M4) =====================
+-- A save may not bring back a P-number that the planner record lists as merged (settings.pMerged[].wo) and that is no longer a job.
+create or replace function pp_pmerged_guard() returns trigger language plpgsql set search_path = public as $$
+declare back text;
+begin
+  if new.orders is null then return new; end if;
+  select string_agg(distinct n->>'wo', ', ') into back
+    from jsonb_array_elements(case when jsonb_typeof(new.orders::jsonb)='array' then new.orders::jsonb else '[]'::jsonb end) n
+   where n->>'wo' ~ '^P-[0-9]+$'
+     and exists(select 1 from jsonb_array_elements(case when jsonb_typeof(coalesce(old.settings::jsonb->'pMerged','[]'::jsonb))='array'
+                  then old.settings::jsonb->'pMerged' else '[]'::jsonb end) t where t->>'wo' = n->>'wo')
+     and not exists(select 1 from jsonb_array_elements(case when jsonb_typeof(old.orders::jsonb)='array' then old.orders::jsonb else '[]'::jsonb end) o
+                  where o->>'wo' = n->>'wo');
+  if back is not null then
+    raise exception '% was merged into its Cienapps work order — this screen is out of date. Refresh the page.', back;
+  end if;
+  return new;
+end $$;
+drop trigger if exists pp_pmerged_guard on production_planner;
+create trigger pp_pmerged_guard before update on production_planner for each row execute function pp_pmerged_guard();
+```
+Checked twice on a throwaway Postgres (orders/settings as jsonb and as json): `tests/seq/pg-pmerged.sql` → ALL PMERGED CHECKS PASSED.
+
+---
+
+## 2026-11-10 — PM sequence & pre-production (Job B part 2) — PENDING, NOT YET RUN — Garry runs this AFTER the Stage 3 and Project details blocks and BEFORE merging `feature/project-details-v2`
+
+**What it does (plain English):**
+- Adds **one or more Project Managers** (a project can have two or three — Garry, 10 Nov) and the optional **date rules**
+  (robes = kitchen + 5 working days, …) to each project. Adding or removing a project's PMs is written to the history by
+  the database. (The old single `pm` column from Stage 3 is kept and no longer used — nothing is dropped.)
+- New table `project_seq`: each project's **sequence** — one row per work order (or future work order "waiting for a WO
+  number" from the Cienapps upload file) in the order the site needs them. The DATABASE keeps the rules: loading the same
+  file again adds nothing (two identical lines in one house — e.g. two wardrobes — are kept as two rows, Garry 10 Nov, and a
+  re-load still adds nothing), a WO number can only be on one row, the order only changes through one controlled step that
+  logs who moved what from where to where, and rows are never deleted (only marked removed).
+- New table `seq_requests`: **change requests** for jobs in the fixed two-week window. A request needs a reason; it can be
+  decided only once (two Production Managers can't both approve); a refusal needs a reason; nothing in it can be rewritten.
+- New table `seq_pre`: **Johnny's pre-production pool** — his own order and his "Processed" tick (who / when, stamped by the
+  database). Reading his spreadsheet later can tick, but never un-tick what he ticked by hand.
+- **(Job B part 3, added 10 Nov) The matching key:** the database works out, for every sequence row, which house it is for
+  (`house_key` = floor + unit, typed any way: "T09" = "t9 " = "Block T09", "Apt 07" = "No. 7" = "7", "GF" = "Ground" = "0") with
+  exactly the same rule as the planner (`seq_key_txt`, `seq_key_code`, `seq_floor_key`, `seq_unit_key`, `seq_house_key`;
+  `seq_line_key` now uses them). Loading the Cienapps file after "Start the sequence" no longer adds a second row for a house
+  that already has its work order (the file's kitchen line is matched to that house's kitchen row). A floor that could be a
+  level OR a block ("G", "L1") is never treated as the same as the level by the database — a person decides.
+- Every add / match / move / date / request / tick is written to `project_events` (the history table from the Project details
+  block) by the database. The app can read it, never write it.
+- Writes only while the lists are switched on (same rule as snags, materials and the spec sheet). No DELETE for the app.
+  Every new table has its own GRANT lines (30 Oct rule). The planner record and existing tables are untouched.
+
+**If you deploy the code without running this first:** the Sequence tab, PM assignment, change requests and the
+Pre-production view simply don't appear (the screens check once per page load). Everything else works as before.
+
+**Tested:** run twice on a throwaway Postgres set up like Supabase (after the Stage 1, Stage 3, Stores dockets and Project
+details blocks, each twice); `tests/seq/pg-check.sql` checks every rule above — ALL SEQ PG CHECKS PASSED (10 Nov). Re-checked
+after the matching key was added (10 Nov, later): the block run twice on two fresh throwaway databases, ALL SEQ PG CHECKS PASSED
+both times (60 key pairs + 8 line keys from `tests/seq/b0-pairs.json`, the claim rule); also run over the earlier version of
+this block with a row in it — the row's keys were put right, nothing written to the history.
+
+### Steps for Garry
+1. Supabase → WPF project → **SQL Editor** → **New query**. Copy everything in the grey box below, paste, **Run**.
+2. Expected result: **"Success. No rows returned"**. A red error: stop and send a screenshot — do not merge.
+3. Check: **Table Editor** shows `project_seq`, `seq_requests` and `seq_pre` (all empty).
+4. Safe to run twice (nothing is duplicated, no data touched).
+
+```sql
+-- ===================== PM SEQUENCE & PRE-PRODUCTION — project_seq, seq_requests, seq_pre =====================
+-- Runs AFTER the Stage 3 block and the Project details block (needs projects, lists_touch, lists_writable, project_events).
+-- Safe to run twice. Nothing is deleted: the app gets NO delete permission on any of these tables.
+
+-- Projects: the Project Managers (one or more names; empty = Unassigned) and the per-project date rules.
+-- (The single `pm` column made by Stage 3 is kept, unused by the new screens — never dropped.)
+alter table projects add column if not exists pm text;
+alter table projects add column if not exists pms text[] not null default '{}'::text[];
+alter table projects add column if not exists seq_rules jsonb not null default '{}'::jsonb;
+
+-- Adding / removing a project's PMs is written to the history by the database.
+create or replace function projects_pm_log() returns trigger language plpgsql security definer set search_path=public as $$
+begin
+  if new.pms is distinct from old.pms then
+    insert into project_events(project_id,entity,entity_id,act,old,new,by)
+    values(new.id,'project',new.id,'pm',jsonb_build_object('pms',to_jsonb(old.pms)),jsonb_build_object('pms',to_jsonb(new.pms)),coalesce(new.updated_by,'?'));
+  end if;
+  if new.seq_rules is distinct from old.seq_rules then
+    insert into project_events(project_id,entity,entity_id,act,old,new,by)
+    values(new.id,'project',new.id,'rules',jsonb_build_object('seq_rules',old.seq_rules),jsonb_build_object('seq_rules',new.seq_rules),coalesce(new.updated_by,'?'));
+  end if;
+  return null;
+end $$;
+drop trigger if exists projects_pm_log on projects;
+create trigger projects_pm_log after update on projects for each row execute function projects_pm_log();
+
+-- Tidy a text the way Cienapps exports need it: full-width letters / no-break spaces normalised, spaces collapsed, trimmed.
+create or replace function seq_txt(v text) returns text language sql immutable as $$
+ select nullif(btrim(regexp_replace(normalize(coalesce(v,''),NFKC),'\s+',' ','g')),'')
+$$;
+-- The matching key (B0, Job B part 3) — the SAME rule as the planner's keyNorm / keyTxt / keyTxtD / keyCode / keyFloor /
+-- keyUnit / keyHouseStr / keyLineStr (index.html, b0key block); tests/seq/b0-pairs.json is checked against both. Same project +
+-- same floor + same unit = the same house: "T09" = "t9 " = "Block T09" = "T09 Block"; "Apt 07" = "No. 7" = "7" = "7 (Type B)";
+-- "GF" = "Ground" = "0"; "-1" = "Basement" (never "1"). A floor that could be a level OR a block ("G", "L1") is kept apart from
+-- the level, and a placeholder (TBC, N/A, a bare "Apt" or "Block") counts as blank — the database never treats them as the
+-- same house; a person decides.
+-- Text: superscript digits kept apart ("7²" ≠ 72), NFKC, zero-width characters out, accented letters → base letters from a
+-- fixed list (no extension needed), ß → ss. Case and punctuation are kept here.
+create or replace function seq_key_norm(s text) returns text language sql immutable as $$
+ select replace(translate(regexp_replace(normalize(regexp_replace(coalesce(s,''),'[\u00B2\u00B3\u00B9\u2070-\u2079\u2080-\u2089]',' \&','g'),NFKC),
+   '[\u00AD\u180E\u200B-\u200F\u2060\uFEFF]','','g'),
+   'ÀÁÂÃÄÅàáâãäåÇçÈÉÊËèéêëÌÍÎÏìíîïÑñÒÓÔÕÖØòóôõöøÙÚÛÜùúûüÝýÿŸ'||U&'\2010\2011\2012\2013\2014\2015\2212\FE58',
+   'AAAAAAaaaaaaCcEEEEeeeeIIIIiiiiNnOOOOOOooooooUUUUuuuuYyyY--------'),'ß','ss')
+$$;
+-- (round 3) a floor / unit holding a superscript ("7²") or a letter outside the fixed accent list (Ł, Œ, İ …) can't be keyed
+-- safely: it counts as blank, so the database never treats it as the same house as anything.
+create or replace function seq_key_odd(s text) returns boolean language sql immutable as $$
+ select coalesce(s,'') ~ '[\u00B2\u00B3\u00B9\u2070-\u2079\u2080-\u2089]' or seq_key_norm(s) ~ '[^\x01-\x7F]'
+$$;
+-- Every run of anything but A-Z / 0-9 → one space, trimmed, upper case.
+create or replace function seq_key_txt(s text) returns text language sql immutable as $$
+ select upper(btrim(regexp_replace(seq_key_norm(s),'[^A-Za-z0-9]+',' ','g')))
+$$;
+-- The same, but a dot BETWEEN two digits is kept (units such as "2.05").
+create or replace function seq_key_txtd(s text) returns text language sql immutable as $$
+ select upper(replace(btrim(regexp_replace(regexp_replace(replace(seq_key_norm(s),'#',' '),'([0-9])\.(?=[0-9])','\1#','g'),'[^A-Za-z0-9#]+',' ','g')),'#','.'))
+$$;
+-- A code of text that is already tidied: letter runs and digit runs (a dotted number is one run) joined with "-", leading
+-- zeros off each number ("T 09" = "T09" = "T9" → T-9).
+create or replace function seq_key_code2(x text) returns text language sql immutable as $$
+ select coalesce(string_agg(case when y.m[1] ~ '^[0-9]' then regexp_replace(y.m[1],'^0+(?=[0-9])','') else y.m[1] end,'-' order by y.o),'')
+ from regexp_matches(coalesce(x,''),'[A-Z]+|[0-9]+(?:\.[0-9]+)?','g') with ordinality as y(m,o)
+$$;
+create or replace function seq_key_code(t text) returns text language sql immutable as $$ select seq_key_code2(seq_key_txt(t)) $$;
+-- A floor: a level is "#n" (GF / Ground / 0 / 00 → #0, 1st / First / Level 1 / 01 → #1, Basement / -1 / Level -1 → #-1); a
+-- block or code is its code (Block T09 / T09 Block → T-9); "G" and "L1" / "F1" / "FL1" stay as their code (never equal to a
+-- level). '' = blank (also TBC / N/A / a bare "Block").
+create or replace function seq_floor_key(s text) returns text language plpgsql immutable as $$
+declare x text; y text; m text[]; i int;
+  nn text := '^(T ?B ?[CAD]( .*)?|TO BE (CONFIRMED|ADVISED|DECIDED)( .*)?|N ?A|NONE|NIL|UNKNOWN|NOT KNOWN|XX+)$';
+begin
+  if seq_key_odd(s) then return ''; end if;
+  m := regexp_match(seq_key_norm(s),'^\s*(?:(?:LEVEL|FLOOR|LVL|FLR|STOREY)\s*)?-\s*([0-9]+)\s*$','i'); -- -1, —1, Level -1: below ground
+  if m is not null then y := regexp_replace(m[1],'^0+(?=[0-9])',''); return '#'||case when y='0' then '0' else '-'||y end; end if;
+  m := regexp_match(seq_key_norm(s),'^\s*(?:BLOCK|BLK)\s*-\s*([0-9]+)\s*$','i'); -- "Block -1" is not "Block 1"
+  if m is not null then return '-'||regexp_replace(m[1],'^0+(?=[0-9])',''); end if;
+  x := seq_key_txt(s);
+  if x='' or x ~ nn or x ~ '^(BLOCK|BLK|FLOOR|FLR|LEVEL|LVL|STOREY)$' then return ''; end if;
+  m := regexp_match(x,'^(BLOCK|BLK) (.+)$'); if m is null then m := regexp_match(x,'^(BLOCK|BLK)([0-9].*)$'); end if;
+  if m is not null then return case when m[2] ~ nn then '' else seq_key_code(m[2]) end; end if;
+  m := regexp_match(x,'^(.+) (BLOCK|BLK)$');
+  if m is not null then return case when m[1] ~ nn then '' else seq_key_code(m[1]) end; end if;
+  for i in 1..5 loop
+    m := regexp_match(x,'^(FLOOR|FLR|LEVEL|LVL|STOREY) (.+)$'); if m is null then m := regexp_match(x,'^(FLOOR|FLR|LEVEL|LVL|STOREY)([0-9].*)$'); end if;
+    if m is not null then y := m[2];
+    else m := regexp_match(x,'^(.+) (FLOOR|FLR|LEVEL|LVL|STOREY)$'); y := case when m is null then x else m[1] end; end if;
+    exit when y=x; x := y;
+  end loop;
+  if x ~ nn then return ''; end if;
+  if x ~ '^(G ?F|GRD|GND|GRND|GROUND|0+)$' then return '#0'; end if;
+  if x ~ '^[0-9]+$' then return '#'||regexp_replace(x,'^0+(?=[0-9])',''); end if;
+  m := regexp_match(x,'^([0-9]+) ?(ST|ND|RD|TH)$'); if m is not null then return '#'||regexp_replace(m[1],'^0+(?=[0-9])',''); end if;
+  y := case x when 'FIRST' then '1' when 'SECOND' then '2' when 'THIRD' then '3' when 'FOURTH' then '4' when 'FIFTH' then '5'
+    when 'SIXTH' then '6' when 'SEVENTH' then '7' when 'EIGHTH' then '8' when 'NINTH' then '9' when 'TENTH' then '10' end;
+  if y is not null then return '#'||y; end if;
+  if x='BASEMENT' then return '#-1'; end if;
+  return seq_key_code(x);
+end $$;
+-- A unit: a bracketed house type taken off ("7 (Type B)" → 7); APT / APARTMENT / UNIT / NO / NR / NUMBER / HOUSE / HSE / PLOT /
+-- POS / POSITION in front taken off (also "APT07"); then 7 / 7A / 2.05 (leading zeros off, "7 a" = 7A), else its code
+-- ("12-14" → 12-14). '' = blank (also TBC / N/A / a bare "Apt").
+create or replace function seq_unit_key(s text) returns text language plpgsql immutable as $$
+declare x text := seq_key_txtd(regexp_replace(seq_key_norm(s),'\(\s*TYPE[^)]*\)',' ','gi')); m text[]; i int;
+begin
+  if seq_key_odd(s) then return ''; end if;
+  for i in 1..5 loop
+    m := regexp_match(x,'^(APARTMENT|APT|UNIT|NUMBER|NO|NR|HOUSE|HSE|PLOT|POSITION|POS) (.+)$');
+    if m is null then m := regexp_match(x,'^(APARTMENT|APT|UNIT|NUMBER|NO|NR|HOUSE|HSE|PLOT|POSITION|POS)([0-9].*)$'); end if;
+    exit when m is null; x := m[2];
+  end loop;
+  if x='' or x ~ '^(T ?B ?[CAD]( .*)?|TO BE (CONFIRMED|ADVISED|DECIDED)( .*)?|N ?A|NONE|NIL|UNKNOWN|NOT KNOWN|XX+)$' or x ~ '^(APARTMENT|APT|UNIT|NUMBER|NO|NR|HOUSE|HSE|PLOT|POSITION|POS)$' then return ''; end if;
+  m := regexp_match(x,'^([0-9]+)(\.[0-9]+)? ?([A-Z]{0,2})$');
+  if m is not null then return regexp_replace(m[1],'^0+(?=[0-9])','')||coalesce(m[2],'')||coalesce(m[3],''); end if;
+  return seq_key_code2(x);
+end $$;
+-- The house: floor|unit, null when either is blank (then nothing is ever treated as the same house automatically).
+create or replace function seq_house_key(f text, u text) returns text language sql immutable as $$
+ select case when seq_floor_key(f)='' or seq_unit_key(u)='' then null else seq_floor_key(f)||'|'||seq_unit_key(u) end
+$$;
+-- The "same work" key: floor|unit|product|name, the same normalising (Garry: never add the same work twice). Null when the
+-- line has no product and no name.
+create or replace function seq_line_key(f text, u text, p text, n text) returns text language sql immutable as $$
+ select case when seq_key_txt(p)='' and seq_key_txt(n)='' then null
+   else concat_ws('|',seq_floor_key(f),seq_unit_key(u),seq_key_txt(p),seq_key_txt(n)) end
+$$;
+
+-- One row per work order (or future work order, "waiting for WO number") in the PM's required order.
+create table if not exists project_seq(id text primary key, project_id text not null references projects(id),
+  pos int not null default 0,
+  state text not null default 'waiting' check(state in('waiting','matched','removed')),
+  wo text, floor text, unit text, product text, name text, descr text,
+  kind text not null default 'kitchen' check(kind in('kitchen','utility','quartz','robes','other')),
+  children jsonb not null default '[]'::jsonb, line_key text,
+  req_date date, own_date boolean not null default false, is_new boolean not null default false,
+  src text check(src in('upload','import','manual','start')), upload_id text, line_no int,
+  matched_at timestamptz, matched_by text, match_how text check(match_how in('auto','confirmed','start','import')),
+  why text, version int not null default 1, created_at timestamptz not null default now(), created_by text,
+  updated_at timestamptz not null default now(), updated_by text);
+create unique index if not exists ps_wo_uq on project_seq(upper(wo)) where wo is not null and state<>'removed';
+-- (Garry 10 Nov) two identical lines in one house are two rows: no unique "same line" index — seq_insert counts instead
+drop index if exists ps_line_uq;
+create index if not exists ps_line_ix on project_seq(project_id, line_key) where line_key is not null and state<>'removed';
+-- (Job B part 3) the house each row is for (floor|unit, worked out by the database — see seq_house_key)
+alter table project_seq add column if not exists house_key text;
+create index if not exists ps_house_ix on project_seq(project_id, house_key, kind) where house_key is not null and state<>'removed';
+create index if not exists ps_proj_pos on project_seq(project_id, pos);
+create index if not exists ps_upd on project_seq(updated_at);
+
+-- The sequence rules, kept by the database so an old or out-of-date screen can't break them.
+create or replace function ps_rules() returns trigger language plpgsql as $$
+declare rpc boolean := coalesce(current_setting('wpf.seq',true),'')='rpc';
+begin
+  new.wo := upper(seq_txt(new.wo)); new.floor := seq_txt(new.floor); new.unit := seq_txt(new.unit);
+  new.product := seq_txt(new.product); new.name := seq_txt(new.name); new.descr := seq_txt(new.descr);
+  new.why := seq_txt(new.why);
+  new.line_key := seq_line_key(new.floor,new.unit,new.product,new.name);
+  new.house_key := seq_house_key(new.floor,new.unit);
+  if tg_op='INSERT' then
+    perform pg_advisory_xact_lock(hashtext('seq:'||new.project_id));
+    select coalesce(max(pos),0)+1 into new.pos from project_seq where project_id=new.project_id and state<>'removed';
+    if new.state='removed' then raise exception 'seq: a new row cannot be removed'; end if;
+    new.state := case when new.wo is not null then 'matched' else 'waiting' end;
+    if new.wo is not null then new.matched_at := coalesce(new.matched_at, now()); new.matched_by := coalesce(new.matched_by, new.created_by, new.updated_by); end if;
+    new.created_at := now(); new.created_by := coalesce(new.created_by, new.updated_by);
+    return new;
+  end if;
+  if new.project_id<>old.project_id then raise exception 'seq: a row cannot change project'; end if;
+  if not rpc then
+    -- positions, states and WO numbers only change through the seq_* functions (they lock the project and log the move)
+    if new.pos<>old.pos then raise exception 'seq: use seq_move to change the order'; end if;
+    if new.state<>old.state then raise exception 'seq: use seq_match / seq_unmatch / seq_remove / seq_restore'; end if;
+    if new.wo is distinct from old.wo then raise exception 'seq: use seq_match to set a WO number'; end if;
+    new.matched_at := old.matched_at; new.matched_by := old.matched_by; new.match_how := old.match_how;
+    new.created_at := old.created_at; new.created_by := old.created_by;
+  end if;
+  if new.state='removed' and old.state='removed' and (new.req_date is distinct from old.req_date) then
+    raise exception 'seq: row is removed';
+  end if;
+  return new;
+end $$;
+drop trigger if exists ps_rules on project_seq;
+create trigger ps_rules before insert or update on project_seq for each row execute function ps_rules();
+drop trigger if exists project_seq_touch on project_seq;
+create trigger project_seq_touch before update on project_seq for each row execute function lists_touch();
+-- Rows saved before the matching key (an earlier run of this block): work their keys out again. Only rows whose keys
+-- changed are touched (their version goes up; nothing is written to the history); a second run touches nothing.
+update project_seq set updated_by=coalesce(updated_by,'(key update)')
+ where line_key is distinct from seq_line_key(floor,unit,product,name) or house_key is distinct from seq_house_key(floor,unit);
+
+create or replace function ps_log() returns trigger language plpgsql security definer set search_path=public as $$
+declare a text;
+begin
+  if tg_op='INSERT' then a := 'add';
+  elsif new.state='removed' and old.state<>'removed' then a := 'remove';
+  elsif old.state='removed' and new.state<>'removed' then a := 'restore';
+  elsif new.wo is not null and old.wo is null then a := 'match';
+  elsif new.wo is null and old.wo is not null then a := 'unmatch';
+  elsif new.req_date is distinct from old.req_date then a := 'date';
+  elsif row(new.floor,new.unit,new.product,new.name,new.descr,new.kind,new.own_date,new.children)
+        is distinct from row(old.floor,old.unit,old.product,old.name,old.descr,old.kind,old.own_date,old.children) then a := 'edit';
+  else return null; -- position-only changes are logged by seq_move; flags (is_new) are not history
+  end if;
+  insert into project_events(project_id,entity,entity_id,act,old,new,by)
+  values(new.project_id,'seq',new.id,a,
+    case when tg_op='UPDATE' then jsonb_build_object('wo',old.wo,'state',old.state,'req_date',old.req_date,'pos',old.pos,
+      'floor',old.floor,'unit',old.unit,'product',old.product,'name',old.name) end,
+    jsonb_build_object('wo',new.wo,'state',new.state,'req_date',new.req_date,'pos',new.pos,'floor',new.floor,'unit',new.unit,
+      'product',new.product,'name',new.name,'why',new.why,'how',new.match_how),
+    coalesce(new.updated_by,new.created_by,'?'));
+  return null;
+end $$;
+drop trigger if exists ps_log on project_seq;
+create trigger ps_log after insert or update on project_seq for each row execute function ps_log();
+
+-- Renumber a project's live rows 1..n in the order given (internal; callers hold the project lock).
+create or replace function seq_renumber(p_project text, p_order text[]) returns void language plpgsql security definer set search_path=public as $$
+begin
+  perform set_config('wpf.seq','rpc',true);
+  update project_seq s set pos=o.n from unnest(p_order) with ordinality o(id,n)
+   where s.id=o.id and s.project_id=p_project and s.pos<>o.n;
+  perform set_config('wpf.seq','',true);
+end $$;
+
+-- Move a block of rows (in the order given) to just under p_after (null = to the top). Refused as 'stale' when any row
+-- changed since the screen read it — the anchor row too (p_after_ver = the anchor's version the screen read; null = not
+-- checked). Every move is logged with who, old position and new position.
+-- (10 Nov, Tester round 1: p_after_ver added. The old 5-argument version is dropped first so the block stays re-runnable.)
+drop function if exists seq_move(text[],text,int[],text,text);
+create or replace function seq_move(p_ids text[], p_after text, p_expect int[], p_after_ver int, p_by text, p_why text default null)
+returns jsonb language plpgsql security definer set search_path=public as $$
+declare pj text; x text; n int; ord text[]; rest text[]; i int; before jsonb; r record; moved jsonb := '[]'::jsonb;
+begin
+  if not lists_writable() then raise exception 'seq: lists are not switched on'; end if;
+  if coalesce(array_length(p_ids,1),0)=0 then return jsonb_build_object('ok',false,'err','nothing to move'); end if;
+  select project_id into pj from project_seq where id=p_ids[1];
+  if pj is null then return jsonb_build_object('ok',false,'err','not found'); end if;
+  perform pg_advisory_xact_lock(hashtext('seq:'||pj));
+  select count(*) into n from project_seq where id=any(p_ids) and project_id=pj and state<>'removed';
+  if n<>array_length(p_ids,1) then return jsonb_build_object('ok',false,'err','rows not in one project'); end if;
+  if p_expect is not null then
+    for i in 1..array_length(p_ids,1) loop
+      if not exists(select 1 from project_seq where id=p_ids[i] and version=p_expect[i]) then
+        return jsonb_build_object('ok',false,'err','stale'); end if;
+    end loop;
+  end if;
+  if p_after is not null and (p_after=any(p_ids) or not exists(select 1 from project_seq where id=p_after and project_id=pj and state<>'removed')) then
+    return jsonb_build_object('ok',false,'err','bad anchor'); end if;
+  if p_after is not null and p_after_ver is not null and not exists(select 1 from project_seq where id=p_after and version=p_after_ver) then
+    return jsonb_build_object('ok',false,'err','stale'); end if;
+  select jsonb_object_agg(id,pos) into before from project_seq where project_id=pj and state<>'removed';
+  select array_agg(id order by pos,created_at,id) into rest from project_seq where project_id=pj and state<>'removed' and id<>all(p_ids);
+  rest := coalesce(rest,'{}');
+  if p_after is null then ord := p_ids || rest;
+  else
+    ord := '{}';
+    foreach x in array rest loop ord := ord || x; if x=p_after then ord := ord || p_ids; end if; end loop;
+  end if;
+  perform seq_renumber(pj, ord);
+  perform set_config('wpf.seq','rpc',true);
+  update project_seq set is_new=false, updated_by=coalesce(p_by,updated_by) where id=any(p_ids);
+  perform set_config('wpf.seq','',true);
+  for r in select id,pos from project_seq where id=any(p_ids) loop
+    if (before->>r.id)::int<>r.pos then
+      insert into project_events(project_id,entity,entity_id,act,old,new,by)
+      values(pj,'seq',r.id,'move',jsonb_build_object('pos',(before->>r.id)::int),jsonb_build_object('pos',r.pos,'why',p_why),coalesce(p_by,'?'));
+      moved := moved || jsonb_build_object('id',r.id,'from',(before->>r.id)::int,'to',r.pos);
+    end if;
+  end loop;
+  return jsonb_build_object('ok',true,'moved',moved);
+end $$;
+
+-- Add rows (Cienapps upload lines, new WOs from an import, "start the sequence") in the order given, at the bottom or
+-- under p_after. The claim rule (Job B part 3, the same in the planner): lines in the order given each CLAIM the first
+-- unclaimed live row with the same line key (floor + unit + product + name); a line with no WO that finds none claims the first
+-- unclaimed live row with NO line key in the same house (house_key) and of the same kind (an island line only an island row) —
+-- a row made by "Start the sequence" (Manager condition 1), or a line with no product / name loaded before. A line that claims a row is SKIPPED (and listed). So a file with two identical
+-- "W2 BED 2" lines adds 2 the first time and 0 when loaded again (a file with three adds 1 more).
+-- A WO already on a live row is SKIPPED too — never added twice.
+create or replace function seq_insert(p_project text, p_rows jsonb, p_after text, p_by text)
+returns jsonb language plpgsql security definer set search_path=public as $$
+declare e jsonb; k text; w text; ex text; added text[] := '{}'; skipped jsonb := '[]'::jsonb; ord text[]; rest text[]; x text;
+  claimed text[] := '{}'; hk text; kd text; how text; isl boolean;
+begin
+  if not lists_writable() then raise exception 'seq: lists are not switched on'; end if;
+  if not exists(select 1 from projects where id=p_project) then return jsonb_build_object('ok',false,'err','no project'); end if;
+  perform pg_advisory_xact_lock(hashtext('seq:'||p_project));
+  for e in select * from jsonb_array_elements(coalesce(p_rows,'[]'::jsonb)) loop
+    k := seq_line_key(e->>'floor',e->>'unit',e->>'product',e->>'name');
+    w := upper(seq_txt(e->>'wo'));
+    hk := seq_house_key(e->>'floor',e->>'unit'); kd := coalesce(e->>'kind','kitchen');
+    isl := seq_key_txt(concat_ws(' ',e->>'name',e->>'product',e->>'descr')) ~ '(^| )ISLAND( |$)';
+    ex := null; how := 'line';
+    if k is not null then
+      select id into ex from project_seq where project_id=p_project and line_key=k and state<>'removed'
+        and id<>all(added) and id<>all(claimed) order by pos,created_at,id limit 1;
+    end if;
+    -- no row with this line: a line with no WO claims a row with NO line key in the same house, of the same kind, and an
+    -- island only an island (a Start-the-sequence row; also a line with no product / name loaded before — same file twice)
+    if ex is null and w is null and hk is not null then how := 'house';
+      select id into ex from project_seq s where s.project_id=p_project and s.line_key is null and s.house_key=hk and s.kind=kd
+        and (seq_key_txt(concat_ws(' ',s.descr,s.name,s.product)) ~ '(^| )ISLAND( |$)')=isl
+        and s.state<>'removed' and s.id<>all(added) and s.id<>all(claimed) order by s.pos,s.created_at,s.id limit 1;
+    end if;
+    if ex is not null then claimed := claimed || ex;
+      skipped := skipped || jsonb_build_object('line_no',e->'line_no','line_key',k,'existing_id',ex,'why','already in the sequence','by',how);
+      continue; end if;
+    if w is not null then select id into ex from project_seq where upper(wo)=w and state<>'removed'; end if;
+    if ex is not null then
+      skipped := skipped || jsonb_build_object('line_no',e->'line_no','wo',w,'existing_id',ex,'why','WO already in a sequence');
+      continue; end if;
+    if exists(select 1 from project_seq where id=e->>'id') then
+      skipped := skipped || jsonb_build_object('line_no',e->'line_no','existing_id',e->>'id','why','already saved');
+      continue; end if;
+    insert into project_seq(id,project_id,wo,floor,unit,product,name,descr,kind,children,req_date,own_date,is_new,src,upload_id,
+      line_no,match_how,why,created_by,updated_by)
+    values(e->>'id',p_project,w,e->>'floor',e->>'unit',e->>'product',e->>'name',e->>'descr',coalesce(e->>'kind','kitchen'),
+      coalesce(e->'children','[]'::jsonb),(e->>'req_date')::date,coalesce((e->>'own_date')::boolean,false),
+      coalesce((e->>'is_new')::boolean,false),coalesce(e->>'src','manual'),e->>'upload_id',(e->>'line_no')::int,
+      case when w is not null then coalesce(e->>'match_how','import') end,e->>'why',p_by,p_by);
+    added := added || (e->>'id');
+  end loop;
+  if p_after is not null and array_length(added,1)>0
+     and exists(select 1 from project_seq where id=p_after and project_id=p_project and state<>'removed') and p_after<>all(added) then
+    select array_agg(id order by pos,created_at,id) into rest from project_seq where project_id=p_project and state<>'removed' and id<>all(added);
+    ord := '{}';
+    foreach x in array rest loop ord := ord || x; if x=p_after then ord := ord || added; end if; end loop;
+    perform seq_renumber(p_project, ord);
+  end if;
+  return jsonb_build_object('ok',true,'added',to_jsonb(added),'skipped',skipped);
+end $$;
+
+-- A waiting row takes a Cienapps WO number (auto match or the PM's one-tap confirm). Refused when the WO is already on
+-- another live row, or the row is no longer waiting, or it changed since the screen read it.
+create or replace function seq_match(p_id text, p_wo text, p_expect int, p_how text, p_by text)
+returns jsonb language plpgsql security definer set search_path=public as $$
+declare r record; w text := upper(seq_txt(p_wo)); o text;
+begin
+  if not lists_writable() then raise exception 'seq: lists are not switched on'; end if;
+  select * into r from project_seq where id=p_id;
+  if r.id is null then return jsonb_build_object('ok',false,'err','not found'); end if;
+  perform pg_advisory_xact_lock(hashtext('seq:'||r.project_id));
+  select * into r from project_seq where id=p_id;
+  if r.state<>'waiting' then return jsonb_build_object('ok',false,'err','not waiting','wo',r.wo); end if;
+  if p_expect is not null and r.version<>p_expect then return jsonb_build_object('ok',false,'err','stale'); end if;
+  if w is null then return jsonb_build_object('ok',false,'err','no WO'); end if;
+  select id into o from project_seq where upper(wo)=w and state<>'removed';
+  if o is not null then return jsonb_build_object('ok',false,'err','WO already in a sequence','existing_id',o); end if;
+  perform set_config('wpf.seq','rpc',true);
+  update project_seq set wo=w, state='matched', matched_at=now(), matched_by=p_by,
+    match_how=case when p_how in('auto','confirmed','start','import') then p_how else 'confirmed' end, is_new=false, updated_by=p_by, why=null
+   where id=p_id;
+  perform set_config('wpf.seq','',true);
+  return jsonb_build_object('ok',true);
+end $$;
+
+create or replace function seq_unmatch(p_id text, p_expect int, p_by text, p_why text)
+returns jsonb language plpgsql security definer set search_path=public as $$
+declare r record;
+begin
+  if not lists_writable() then raise exception 'seq: lists are not switched on'; end if;
+  if seq_txt(p_why) is null then return jsonb_build_object('ok',false,'err','reason needed'); end if;
+  select * into r from project_seq where id=p_id;
+  if r.id is null then return jsonb_build_object('ok',false,'err','not matched'); end if;
+  perform pg_advisory_xact_lock(hashtext('seq:'||r.project_id));
+  select * into r from project_seq where id=p_id; -- re-read under the project lock
+  if r.state<>'matched' then return jsonb_build_object('ok',false,'err','not matched'); end if;
+  if p_expect is not null and r.version<>p_expect then return jsonb_build_object('ok',false,'err','stale'); end if;
+  perform set_config('wpf.seq','rpc',true);
+  update project_seq set wo=null, state='waiting', matched_at=null, matched_by=null, match_how=null, updated_by=p_by, why=p_why where id=p_id;
+  perform set_config('wpf.seq','',true);
+  return jsonb_build_object('ok',true);
+end $$;
+
+-- Take a row out of the sequence (kept, marked removed — never deleted) / put it back at the bottom.
+create or replace function seq_remove(p_id text, p_expect int, p_by text, p_why text)
+returns jsonb language plpgsql security definer set search_path=public as $$
+declare r record; ord text[];
+begin
+  if not lists_writable() then raise exception 'seq: lists are not switched on'; end if;
+  if seq_txt(p_why) is null then return jsonb_build_object('ok',false,'err','reason needed'); end if;
+  select * into r from project_seq where id=p_id;
+  if r.id is null then return jsonb_build_object('ok',false,'err','not live'); end if;
+  perform pg_advisory_xact_lock(hashtext('seq:'||r.project_id));
+  select * into r from project_seq where id=p_id; -- re-read under the project lock
+  if r.state='removed' then return jsonb_build_object('ok',false,'err','not live'); end if;
+  if p_expect is not null and r.version<>p_expect then return jsonb_build_object('ok',false,'err','stale'); end if;
+  perform set_config('wpf.seq','rpc',true);
+  update project_seq set state='removed', updated_by=p_by, why=p_why where id=p_id;
+  perform set_config('wpf.seq','',true);
+  select array_agg(id order by pos,created_at,id) into ord from project_seq where project_id=r.project_id and state<>'removed';
+  if ord is not null then perform seq_renumber(r.project_id, ord); end if;
+  return jsonb_build_object('ok',true);
+end $$;
+
+create or replace function seq_restore(p_id text, p_expect int, p_by text, p_why text default null)
+returns jsonb language plpgsql security definer set search_path=public as $$
+declare r record; np int;
+begin
+  if not lists_writable() then raise exception 'seq: lists are not switched on'; end if;
+  select * into r from project_seq where id=p_id;
+  if r.id is null then return jsonb_build_object('ok',false,'err','not removed'); end if;
+  perform pg_advisory_xact_lock(hashtext('seq:'||r.project_id));
+  select * into r from project_seq where id=p_id; -- re-read under the project lock
+  if r.state<>'removed' then return jsonb_build_object('ok',false,'err','not removed'); end if;
+  if p_expect is not null and r.version<>p_expect then return jsonb_build_object('ok',false,'err','stale'); end if;
+  if r.wo is not null and exists(select 1 from project_seq where upper(wo)=upper(r.wo) and state<>'removed') then
+    return jsonb_build_object('ok',false,'err','WO already in a sequence'); end if;
+  -- (Garry 10 Nov) the same line may be there twice (two wardrobes), so a removed line can always come back
+  select coalesce(max(pos),0)+1 into np from project_seq where project_id=r.project_id and state<>'removed';
+  perform set_config('wpf.seq','rpc',true);
+  update project_seq set state=case when wo is not null then 'matched' else 'waiting' end, pos=np, updated_by=p_by, why=p_why where id=p_id;
+  perform set_config('wpf.seq','',true);
+  return jsonb_build_object('ok',true,'pos',np);
+end $$;
+
+-- Change requests for the fixed two-week window (PM asks, Production Manager approves or refuses).
+create table if not exists seq_requests(id text primary key, project_id text not null references projects(id),
+  kind text not null check(kind in('date','move')), seq_ids text[] not null, wos text[] not null default '{}',
+  change jsonb not null, preview jsonb, why text not null, note text,
+  status text not null default 'open' check(status in('open','approved','refused','withdrawn','direct')),
+  asked_by text not null, asked_at timestamptz not null default now(),
+  decided_by text, decided_at timestamptz, answer text, applied jsonb, applied_at timestamptz, seen_at timestamptz,
+  version int not null default 1, updated_at timestamptz not null default now(), updated_by text);
+create index if not exists sr_proj on seq_requests(project_id, status);
+create index if not exists sr_upd on seq_requests(updated_at);
+
+create or replace function sr_rules() returns trigger language plpgsql as $$
+begin
+  if tg_op='INSERT' then
+    if new.status not in('open','direct') then raise exception 'req: a new request is open (or a direct change)'; end if;
+    if seq_txt(new.why) is null then raise exception 'req: reason needed'; end if;
+    if seq_txt(new.asked_by) is null then raise exception 'req: who is asking'; end if;
+    if coalesce(array_length(new.seq_ids,1),0)=0 then raise exception 'req: no rows'; end if;
+    new.asked_at := now();
+    if new.status='direct' then new.decided_by := new.asked_by; new.decided_at := now();
+    else new.decided_by := null; new.decided_at := null; new.answer := null; new.applied := null; new.applied_at := null;
+      perform pg_advisory_xact_lock(hashtext('seq:'||new.project_id));
+      if exists(select 1 from seq_requests where status='open' and project_id=new.project_id and seq_ids && new.seq_ids) then
+        raise exception 'req: open request exists for one of these rows'; end if;
+    end if;
+    return new;
+  end if;
+  if row(new.id,new.project_id,new.kind,new.seq_ids,new.change,new.why,new.asked_by,new.asked_at)
+     is distinct from row(old.id,old.project_id,old.kind,old.seq_ids,old.change,old.why,old.asked_by,old.asked_at) then
+    raise exception 'req: a request cannot be rewritten (withdraw it and ask again)'; end if;
+  if old.status='open' then
+    if new.status not in('open','approved','refused','withdrawn') then raise exception 'req: bad status'; end if;
+    if new.status<>'open' then
+      if seq_txt(new.decided_by) is null then raise exception 'req: who decided'; end if;
+      if new.status='refused' and seq_txt(new.answer) is null then raise exception 'req: a refusal needs a reason'; end if;
+      new.decided_at := now();
+    else new.decided_by := null; new.decided_at := null; new.answer := null;
+    end if;
+    if new.status<>'approved' then new.applied := null; new.applied_at := null;
+    elsif new.applied is not null then new.applied_at := now(); end if;
+  else
+    if new.status<>old.status or new.decided_by is distinct from old.decided_by or new.answer is distinct from old.answer then
+      raise exception 'req: already decided by %', old.decided_by; end if;
+    new.decided_at := old.decided_at;
+    if old.applied is not null then new.applied := old.applied; new.applied_at := old.applied_at;
+    elsif new.applied is not null then
+      if old.status not in('approved','direct') then raise exception 'req: only an approved request is applied'; end if;
+      new.applied_at := now();
+    end if;
+  end if;
+  return new;
+end $$;
+drop trigger if exists sr_rules on seq_requests;
+create trigger sr_rules before insert or update on seq_requests for each row execute function sr_rules();
+drop trigger if exists seq_requests_touch on seq_requests;
+create trigger seq_requests_touch before update on seq_requests for each row execute function lists_touch();
+
+create or replace function sr_log() returns trigger language plpgsql security definer set search_path=public as $$
+declare a text;
+begin
+  if tg_op='INSERT' then a := case when new.status='direct' then 'direct' else 'ask' end;
+  elsif new.status<>old.status then a := new.status;
+  elsif new.applied is not null and old.applied is null then a := 'applied';
+  else return null; end if;
+  insert into project_events(project_id,entity,entity_id,act,old,new,by)
+  values(new.project_id,'req',new.id,a,
+    case when tg_op='UPDATE' then jsonb_build_object('status',old.status) end,
+    jsonb_build_object('status',new.status,'kind',new.kind,'wos',new.wos,'change',new.change,'why',new.why,'answer',new.answer),
+    coalesce(case when tg_op='INSERT' then new.asked_by else coalesce(new.decided_by,new.updated_by) end,'?'));
+  return null;
+end $$;
+drop trigger if exists sr_log on seq_requests;
+create trigger sr_log after insert or update on seq_requests for each row execute function sr_log();
+
+-- Johnny's pre-production pool: his own order and his PROCESSED tick (= CNC files done), per sequence row.
+create table if not exists seq_pre(seq_id text primary key references project_seq(id), wo text,
+  pre_key double precision, processed boolean not null default false,
+  processed_at timestamptz, processed_by text, processed_src text check(processed_src in('tick','sheet')), note text,
+  version int not null default 1, updated_at timestamptz not null default now(), updated_by text);
+create index if not exists sp_upd on seq_pre(updated_at);
+
+create or replace function sp_rules() returns trigger language plpgsql as $$
+begin
+  if tg_op='UPDATE' and old.processed and not new.processed and coalesce(new.processed_src,'')='sheet' and old.processed_src='tick' then
+    -- reading Johnny's sheet never clears a tick he made by hand
+    new.processed := true; new.processed_src := old.processed_src; new.processed_at := old.processed_at; new.processed_by := old.processed_by;
+  end if;
+  if new.processed then
+    if tg_op='INSERT' or not old.processed then
+      new.processed_at := now(); new.processed_by := coalesce(seq_txt(new.processed_by), new.updated_by, '?');
+      new.processed_src := coalesce(new.processed_src,'tick');
+    else new.processed_at := old.processed_at; new.processed_by := old.processed_by; new.processed_src := old.processed_src;
+    end if;
+  else new.processed_at := null; new.processed_by := null; new.processed_src := null;
+  end if;
+  return new;
+end $$;
+drop trigger if exists sp_rules on seq_pre;
+create trigger sp_rules before insert or update on seq_pre for each row execute function sp_rules();
+drop trigger if exists seq_pre_touch on seq_pre;
+create trigger seq_pre_touch before update on seq_pre for each row execute function lists_touch();
+
+create or replace function sp_log() returns trigger language plpgsql security definer set search_path=public as $$
+begin
+  if (tg_op='INSERT' and new.processed) or (tg_op='UPDATE' and new.processed<>old.processed) then
+    insert into project_events(project_id,entity,entity_id,act,old,new,by)
+    values((select project_id from project_seq where id=new.seq_id),'pre',new.seq_id,
+      case when new.processed then 'processed' else 'unprocessed' end, null,
+      jsonb_build_object('wo',new.wo,'src',new.processed_src), coalesce(new.updated_by,'?'));
+  end if;
+  return null;
+end $$;
+drop trigger if exists sp_log on seq_pre;
+create trigger sp_log after insert or update on seq_pre for each row execute function sp_log();
+
+-- Row level security: everyone using the app can read; add and change only while the lists are on the new store. Nobody deletes.
+alter table project_seq enable row level security;
+drop policy if exists "project_seq read" on project_seq;
+create policy "project_seq read" on project_seq for select to anon, authenticated using (true);
+drop policy if exists "project_seq add" on project_seq;
+create policy "project_seq add" on project_seq for insert to anon, authenticated with check (lists_writable());
+drop policy if exists "project_seq edit" on project_seq;
+create policy "project_seq edit" on project_seq for update to anon, authenticated using (lists_writable()) with check (lists_writable());
+alter table seq_requests enable row level security;
+drop policy if exists "seq_requests read" on seq_requests;
+create policy "seq_requests read" on seq_requests for select to anon, authenticated using (true);
+drop policy if exists "seq_requests add" on seq_requests;
+create policy "seq_requests add" on seq_requests for insert to anon, authenticated with check (lists_writable());
+drop policy if exists "seq_requests edit" on seq_requests;
+create policy "seq_requests edit" on seq_requests for update to anon, authenticated using (lists_writable()) with check (lists_writable());
+alter table seq_pre enable row level security;
+drop policy if exists "seq_pre read" on seq_pre;
+create policy "seq_pre read" on seq_pre for select to anon, authenticated using (true);
+drop policy if exists "seq_pre add" on seq_pre;
+create policy "seq_pre add" on seq_pre for insert to anon, authenticated with check (lists_writable());
+drop policy if exists "seq_pre edit" on seq_pre;
+create policy "seq_pre edit" on seq_pre for update to anon, authenticated using (lists_writable()) with check (lists_writable());
+
+-- Grants (30 Oct rule). No DELETE / TRUNCATE for anyone using the app.
+grant select, insert, update on project_seq, seq_requests, seq_pre to anon, authenticated;
+revoke delete, truncate on project_seq, seq_requests, seq_pre from anon, authenticated;
+grant all on project_seq, seq_requests, seq_pre to service_role;
+grant execute on function seq_txt(text), seq_line_key(text,text,text,text), seq_key_norm(text), seq_key_odd(text), seq_key_txt(text), seq_key_txtd(text),
+  seq_key_code2(text), seq_key_code(text), seq_floor_key(text), seq_unit_key(text), seq_house_key(text,text) to anon, authenticated, service_role;
+grant execute on function seq_move(text[],text,int[],int,text,text), seq_insert(text,jsonb,text,text), seq_match(text,text,int,text,text),
+  seq_unmatch(text,int,text,text), seq_remove(text,int,text,text), seq_restore(text,int,text,text) to anon, authenticated, service_role;
+revoke execute on function seq_renumber(text,text[]) from public, anon, authenticated;
 ```
 
 ---
@@ -414,6 +1064,186 @@ once the record has the marker; before any new-code save nothing is refused; a w
 leaves settings alone is fine; rolling back to the 3 Nov guard lets the older code save again. The app shows "NOT SAVED — the database
 refused this screen because it is out of date. Refresh the page" when refused (`tests/dates/c9-guard-v2.test.js`).
 **Also try it once on a Supabase TEST project before going live.**
+
+---
+
+## 2026-11-11 — Project details (spec sheets) — PENDING, NOT YET RUN — Garry runs this AFTER the Stage 3 block and BEFORE merging `feature/project-details-v2` (carried over from `feature/project-details`, 11 Nov)
+
+**What it does (plain English):**
+- Makes a new table `project_specs`: a project's named spec sheets. A project can have several (Garry, 11 Nov), e.g.
+  "Kitchens", "Kitchen Type B", "Robes". A spec can be marked "not used any more"; it is never deleted.
+- Makes a new table `project_spec_items`: one row per item on a spec sheet ("Project details": Carcass Material,
+  Hinges, Worktop Colour …) with its value, its status (Not specified / Proposed / Signed off) and who signed it off and when.
+- The DATABASE keeps the rules, so an old or out-of-date screen can't break them: a blank or "TBC" value is always "Not
+  specified" and can never be signed off; changing a signed-off value drops it back to "Proposed" and clears the signer;
+  a sign-off can't be re-dated or re-named afterwards. A project always keeps at least one spec in use, and nothing can be
+  saved or signed on a spec that was marked "not used any more". One row per item per spec (two PCs can't make two).
+- Makes a history table `project_events`: every add / change / sign-off is written there BY THE DATABASE (who, when, old
+  value, new value). The app can read it but never write, change or delete it.
+- Nothing is deleted: the app gets NO delete permission on either table. Writes are only taken while the lists are switched
+  on (the same rule as snags and materials). The existing planner record and tables are untouched.
+- Every new table has its own GRANT lines (30 Oct rule).
+
+**If you deploy the code without running this first:** the "📝 Project details" buttons and the red "SPEC NOT SIGNED OFF"
+chips simply don't appear (the screens check once per page load and hide them quietly). Everything else in the release —
+materials for PMs / office, editing Floor / Unit / Title / Customer — works without it.
+
+**Tested:** run twice on a throwaway Postgres set up like Supabase (after the Stage 1, Stage 3 and Stores dockets blocks);
+`tests/project-details/pg-check.sql` checks every rule above — ALL PG CHECKS PASSED (11 Nov, with the several-specs change).
+
+### Steps for Garry
+1. Supabase → WPF project → **SQL Editor** → **New query**. Copy everything in the grey box below, paste, **Run**.
+2. Expected result: **"Success. No rows returned"**. A red error: stop and send a screenshot — do not merge.
+3. Check: **Table Editor** shows `project_specs`, `project_spec_items` and `project_events` (all empty). **Database → Triggers** shows
+   `pspec_rules`, `pspec_log` and `project_specs_touch` on `project_specs`, and
+   `psi_rules`, `psi_log` and `project_spec_items_touch` on `project_spec_items`.
+4. Safe to run twice (nothing is duplicated, no data touched).
+
+```sql
+-- ===================== PROJECT DETAILS (spec sheets) — project_specs + project_spec_items + project_events =====================
+-- Runs AFTER the Stage 3 block (it needs projects, project_materials, lists_touch and lists_writable). Safe to run twice.
+-- A project can have several specs (Garry, 11 Nov): e.g. "Kitchens", "Kitchen Type B", "Robes". Retired, never deleted.
+create table if not exists project_specs(id text primary key, project_id text not null references projects(id),
+  name text not null, spec_type text not null default 'kitchens' check(spec_type in('kitchens','robes','schools')),
+  sort int not null default 0, active boolean not null default true,
+  version int not null default 1, updated_at timestamptz not null default now(), updated_by text);
+create unique index if not exists pspec_uq on project_specs(project_id, lower(trim(name)));
+create or replace function pspec_rules() returns trigger language plpgsql as $$
+begin
+  new.name := btrim(regexp_replace(regexp_replace(normalize(coalesce(new.name,''),NFKC),'[\u200B-\u200D\uFEFF]','','g'),'\s+',' ','g'));
+  if new.name='' then raise exception 'a spec needs a name'; end if;
+  if tg_op='UPDATE' and new.project_id<>old.project_id then raise exception 'a spec stays on its project'; end if;
+  -- a project keeps at least one spec in use (two PCs retiring the last two at the same moment take turns here),
+  -- otherwise nothing would be left to sign off and the project would quietly go green
+  if tg_op='UPDATE' and old.active and not new.active then
+    perform pg_advisory_xact_lock(hashtext('pspec:'||new.project_id));
+    if not exists(select 1 from project_specs s where s.project_id=new.project_id and s.id<>new.id and s.active) then
+      raise exception 'a project keeps at least one spec'; end if;
+  end if;
+  return new;
+end $$;
+drop trigger if exists pspec_rules on project_specs;
+create trigger pspec_rules before insert or update on project_specs for each row execute function pspec_rules();
+drop trigger if exists project_specs_touch on project_specs;
+create trigger project_specs_touch before update on project_specs for each row execute function lists_touch();
+
+create table if not exists project_spec_items(id text primary key, project_id text not null references projects(id),
+  spec_id text not null references project_specs(id),
+  item text not null, sort int not null default 0, is_extra boolean not null default false,
+  value text, material_id text references project_materials(id),
+  status text not null default 'not-specified' check(status in('not-specified','proposed','signed-off')),
+  signed_by text, signed_at timestamptz, note text,
+  version int not null default 1, updated_at timestamptz not null default now(), updated_by text);
+alter table project_spec_items add column if not exists spec_id text references project_specs(id); -- only matters if an earlier draft of this block was run
+do $$ begin if not exists(select 1 from project_spec_items where spec_id is null) then alter table project_spec_items alter column spec_id set not null; end if; end $$;
+alter table project_spec_items drop constraint if exists psi_signed_needs_value;
+-- TBC, T.B.C., TBA, "to be confirmed / advised" = not signed off (pasted no-break spaces, tabs and full-width letters count too)
+create or replace function psi_tbc(v text) returns boolean language sql immutable as $$
+ select coalesce(upper(btrim(regexp_replace(normalize(coalesce(v,''),NFKC),'\s+',' ','g'))),'')
+   ~ '^(|T\.? ?B\.? ?C\.?|T\.? ?B\.? ?A\.?|TO BE (CONFIRMED|ADVISED))$'
+$$;
+alter table project_spec_items add constraint psi_signed_needs_value check(status<>'signed-off' or not psi_tbc(value));
+drop index if exists psi_uq;
+create unique index psi_uq on project_spec_items(spec_id, lower(trim(item)));
+
+
+-- Who changed what on a project, written ONLY by the database (the app can read it, never write or change it)
+create table if not exists project_events(id bigserial primary key, project_id text, entity text, entity_id text,
+  act text, old jsonb, new jsonb, by text, at timestamptz default now());
+create index if not exists pe_entity on project_events(entity_id);
+
+-- The spec rules, kept by the database so an old or out-of-date screen can't break them:
+--   blank or TBC = not specified (never signed off) · any other value = proposed · signed off records who and when ·
+--   changing a signed-off value drops it back to proposed.
+create or replace function psi_rules() returns trigger language plpgsql as $$
+begin
+  new.value := nullif(regexp_replace(normalize(coalesce(new.value,''),NFKC),'^\s+|\s+$','','g'),'');
+  new.item := btrim(regexp_replace(normalize(new.item,NFKC),'\s+',' ','g'));
+  if tg_op='UPDATE' then new.spec_id := old.spec_id; end if;                         -- an item stays on its spec
+  select s.project_id into new.project_id from project_specs s where s.id=new.spec_id; -- and on that spec's project
+  -- nothing is saved or signed on a spec that was marked "not used any more" (another screen may have just done that)
+  -- (takes its turn with a retire happening at the same moment, so a save can't slip in just after one)
+  perform pg_advisory_xact_lock_shared(hashtext('pspec:'||new.project_id));
+  if (tg_op='INSERT' or new.value is distinct from old.value or new.status is distinct from old.status or new.item is distinct from old.item)
+     and exists(select 1 from project_specs s where s.id=new.spec_id and not s.active) then
+    raise exception 'this spec is not used any more'; end if;
+  if psi_tbc(new.value) then
+    new.status := 'not-specified';
+  elsif tg_op='UPDATE' and old.status='signed-off' and new.status='signed-off' and new.value is distinct from old.value then
+    new.status := 'proposed';
+  elsif new.status='not-specified' then
+    new.status := 'proposed';
+  end if;
+  if new.status<>'signed-off' then new.signed_by := null; new.signed_at := null;
+  elsif tg_op='INSERT' or old.status<>'signed-off' then
+    new.signed_at := now(); new.signed_by := coalesce(nullif(btrim(regexp_replace(coalesce(new.signed_by,''),'[\u200B-\u200D\uFEFF]','','g')),''), new.updated_by, '?');
+  else new.signed_at := old.signed_at; new.signed_by := old.signed_by; -- a sign-off can't be re-dated or re-named
+  end if;
+  return new;
+end $$;
+drop trigger if exists psi_rules on project_spec_items;
+create trigger psi_rules before insert or update on project_spec_items for each row execute function psi_rules();
+drop trigger if exists project_spec_items_touch on project_spec_items;
+create trigger project_spec_items_touch before update on project_spec_items for each row execute function lists_touch();
+
+create or replace function psi_log() returns trigger language plpgsql security definer set search_path=public as $$
+begin
+  if tg_op='UPDATE' and new.value is not distinct from old.value and new.status=old.status and new.item=old.item then return null; end if;
+  insert into project_events(project_id,entity,entity_id,act,old,new,by)
+  values(new.project_id,'spec',new.id,
+    case when tg_op='INSERT' then 'add' when new.status='signed-off' and old.status<>'signed-off' then 'sign-off'
+         when old.status='signed-off' and new.status<>'signed-off' then 'unsign' else 'edit' end,
+    case when tg_op='UPDATE' then jsonb_build_object('value',old.value,'status',old.status,'item',old.item) end,
+    jsonb_build_object('value',new.value,'status',new.status,'item',new.item,'signed_by',new.signed_by),
+    coalesce(new.updated_by,'?'));
+  return null;
+end $$;
+-- ... and the same for the specs themselves: added, renamed, marked "not used any more", brought back
+create or replace function pspec_log() returns trigger language plpgsql security definer set search_path=public as $$
+begin
+  if tg_op='UPDATE' and new.name=old.name and new.active=old.active and new.spec_type=old.spec_type then return null; end if;
+  insert into project_events(project_id,entity,entity_id,act,old,new,by)
+  values(new.project_id,'spec-sheet',new.id,
+    case when tg_op='INSERT' then 'add' when old.active and not new.active then 'retire'
+         when new.active and not old.active then 'bring-back' else 'rename' end,
+    case when tg_op='UPDATE' then jsonb_build_object('name',old.name,'active',old.active,'spec_type',old.spec_type) end,
+    jsonb_build_object('name',new.name,'active',new.active,'spec_type',new.spec_type),
+    coalesce(new.updated_by,'?'));
+  return null;
+end $$;
+drop trigger if exists pspec_log on project_specs;
+create trigger pspec_log after insert or update on project_specs for each row execute function pspec_log();
+drop trigger if exists psi_log on project_spec_items;
+create trigger psi_log after insert or update on project_spec_items for each row execute function psi_log();
+
+-- Row level security: everyone using the app can read; add and change only while the lists are on the new store
+-- (the same rule as snags and materials). Nobody can delete.
+alter table project_specs enable row level security;
+drop policy if exists "project_specs read" on project_specs;
+create policy "project_specs read" on project_specs for select to anon, authenticated using (true);
+drop policy if exists "project_specs add" on project_specs;
+create policy "project_specs add" on project_specs for insert to anon, authenticated with check (lists_writable());
+drop policy if exists "project_specs edit" on project_specs;
+create policy "project_specs edit" on project_specs for update to anon, authenticated using (lists_writable()) with check (lists_writable());
+alter table project_spec_items enable row level security;
+drop policy if exists "project_spec_items read" on project_spec_items;
+create policy "project_spec_items read" on project_spec_items for select to anon, authenticated using (true);
+drop policy if exists "project_spec_items add" on project_spec_items;
+create policy "project_spec_items add" on project_spec_items for insert to anon, authenticated with check (lists_writable());
+drop policy if exists "project_spec_items edit" on project_spec_items;
+create policy "project_spec_items edit" on project_spec_items for update to anon, authenticated using (lists_writable()) with check (lists_writable());
+alter table project_events enable row level security;
+drop policy if exists "project_events read" on project_events;
+create policy "project_events read" on project_events for select to anon, authenticated using (true);
+
+-- Grants (30 Oct rule). No DELETE for anyone using the app. project_events: read only (the database writes it).
+grant select, insert, update on project_specs, project_spec_items to anon, authenticated;
+grant select on project_events to anon, authenticated;
+grant execute on function psi_tbc(text) to anon, authenticated, service_role;
+grant all on project_specs, project_spec_items, project_events to service_role;
+grant usage, select on sequence project_events_id_seq to service_role;
+```
+
 
 ---
 

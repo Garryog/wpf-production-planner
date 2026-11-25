@@ -1,0 +1,1673 @@
+# Plan: Project details (spec sheet), job-info edits, Projects & Materials in reach — 9 Nov 2026
+
+Architect plan for Garry's 9 Nov request (he picked all four items). Built on `feature/project-details`, branched from
+`feature/list-excel-template`. Everything here is Stage 3 (lists switch ON, `V2()`): with the switch off none of it is
+reachable and the app behaves exactly as today. Only the spec sheet needs new database tables; the screens hide it quietly
+until the SQL is run (same pattern as the stores-dockets probe).
+
+## Goal
+1. Every project has a **Project details** sheet (Garry's spec checklist). Blank or "TBC" = not signed off, shown red.
+   The saw, stores and the cutting-list window see a red **SPEC NOT SIGNED OFF: …** chip; the printed list carries the spec.
+2. **Floor, Unit, Title, Customer** can be corrected in the cutting-list window. The planner keeps the correction through
+   Cienapps imports and lists it in **Export Changes** so Garry types it into Cienapps (Cienapps stays the master).
+3. **Projects and Materials are one tap away**: beside the Project picker in the list window, and in plain view on the
+   Cutting Lists page.
+4. **Project Managers, the office and planning can edit/add materials** themselves (no Production Manager PIN). Saw,
+   stores, drivers and the floor screen stay read-only.
+
+## Key questions (built with the recommended answer — Garry can change any of them)
+1. **Who can SIGN OFF a spec item?** A) Drawing office, Production Manager and Project Managers sign off directly; the
+   office can type values but signing off asks for one of those PINs (**recommended**). B) Anyone who can edit. C) Drawing
+   office only.
+2. **Projects whose spec has never been filled in** show the red chip with every item (e.g. "SPEC NOT SIGNED OFF: Carcass
+   Material, Carcass Edging, Exposed Material +18"). A) Yes, red from day one — that is the push to fill it in
+   (**recommended**, matches the 3 Nov "show ALL unsigned items" answer). B) Only once someone has started the sheet.
+3. **The Management view** (Garry's dashboard) and materials: A) read-only, like today, with the Admin PIN to edit
+   (**recommended** — it's a viewing screen). B) Edit freely like the office.
+4. **Changing the Customer of a job** in the list window also changes which project the job belongs to (customer = project).
+   A) Allow it, with a warning line under the box (**recommended**). B) Floor, Unit and Title only; Customer stays Cienapps-only.
+5. **Robes and Schools checklists** are still Garry's DRAFTS from 22 Oct (in docs/PLAN-projects-hub.md). Built as drafted;
+   Garry to correct the lists (a one-line change each).
+
+## Decisions taken (unattended run — reasonable reading, written down)
+- D1 One spec per project, variations in "Other Information" (Garry's request). "Other Information" is free text, never
+  blocks sign-off and is NOT in the red chip.
+- D2 The checklist depends on the project type (Kitchens / Robes / Schools / Other=Kitchens list). Rows are created the
+  first time an item is edited (no bulk insert for every project); an untouched item shows as "Not specified".
+  "+ Extra item" adds a project-only item.
+- D3 Material items (any item whose name has "Material", plus "Worktop Colour") are a drop-down of the project's sheet
+  materials + "TBC" + "＋ Add new material…" (opens the Materials window). Edging items ("Edging"/"Edgeing") are a drop-down of
+  the edging codes (`lsProjEdges`) + "Other…" (type). Every other item is typed.
+- D4 Status rules (enforced in the DATABASE as well, so an old or stale screen can't break them):
+  blank or "TBC" → *Not specified*; any other value → *Proposed*; *Signed off* records who and when.
+  Changing a signed-off value drops it back to *Proposed* (signer cleared). "TBC"/blank can never be signed off.
+- D5 Two PCs: every spec save is version-checked (like materials) — the second one is told "changed on another screen
+  meanwhile — showing it as it is now" and nothing is overwritten. Two PCs creating the same item at once: one wins, the
+  other is told and shown the saved value. Every change is written to `project_events` by the database (who, when, old,
+  new) and shown as History in the sheet.
+- D6 Job-info edits (item 2) live on the job in the planner record (no new column): the field itself takes the planner value
+  (so it shows everywhere), and `o.pov[field] = {cien, by, at}` remembers Cienapps' value. Import: same value as the
+  planner's → the override clears itself (logged); a different value → the planner's value is kept, the preview says
+  "planner value kept (Cienapps: …)". Planner WOs (P-numbers) are edited directly, never listed as overrides (they aren't in
+  Cienapps yet). "↺ Use Cienapps value" undoes an override. Who may edit: whoever can open the list window today.
+- D7 Export Changes gets a second section **"Job details changed in the planner — enter these in Cienapps"** (WO, field,
+  Cienapps value, planner value, who, when) and a second sheet "Job details" in the Changes Excel. It empties itself as
+  imports catch up; it has no "Mark as applied" (the import is the proof).
+- D8 Materials editing (item 4): new `lsMatEditOk()` — Project Managers, Office, Production Manager and Drawing office edit
+  without a PIN; Saw, Stores, Drivers and Floor screen get "read-only on this screen"; Management keeps the PIN prompt.
+  Templates and projects keep today's `lsEditOk()` rule (not part of this request).
+
+## What changes — screens (wireframes in words)
+**A. Project details window** (`lsSpecDlg(pid)`) — opened from the list window, the Cutting Lists page, the PM Projects tab,
+the Production Manager / Drawing office Lists tab.
+```
+📝 Project details — Aderrig Ph2            Kitchens          14 of 21 signed off   [🖨 Print] [🧱 Materials]
+┌───────────────────────────┬──────────────────────────────┬─────────────────────┬──────────────────────┐
+│ Item                      │ Value                        │ Status              │                      │
+│ Carcass Material          │ [18mm MFC White        ▾]    │ ✓ Signed off        │ M. Burke · 9 Nov     │
+│ Hinges                    │ [Hettich Stock          ]    │ Proposed            │ [✓ Sign off]         │
+│ Worktop Colour            │ [TBC                   ▾]    │ NOT SIGNED OFF (red)│                      │
+│ …                         │                              │                     │ [History]            │
+│ Other Information         │ [ free text, 3 lines    ]    │ (notes)             │                      │
+│ ＋ Extra item  [name    ] [Add]                                                                        │
+└──────────────────────────────────────────────────────────────────────────────────────────────────────┘
+```
+A value saves when the box loses focus (or a choice is picked). Phones (< 700 px): one card per item, same boxes, big
+buttons. Read-only screens show the same sheet without boxes or buttons.
+
+**B. Cutting-list window** (`lsEditor`):
+- Top line: red **SPEC NOT SIGNED OFF: Hinges, Handles, Worktop Colour +2** (tap = opens Project details).
+- Beside the Project picker: **[✎ Project details] [🧱 Materials]**.
+- Floor / Unit / Title / Customer become editable boxes. Changed boxes turn amber with "Planner: 3 · Cienapps: 2 ↺".
+  Saving the list saves them (logged on the job: "Title changed in the planner: OLD → NEW (Cienapps: …) by Name").
+**C. Saw / Stores list cards**: the red chip in the card header (next to the TBC chip). **Printed saw/stores lists**: red
+  banner per list + a "Project details" block per project at the end of the print (all items, signed or not).
+**D. Cutting Lists page** (office Lists tab, Production Manager, Drawing office): toolbar shows
+  **[🏗 Projects] [🧱 Materials ▾ project] [📝 Project details ▾ project]**; each project group header shows
+  "📝 Details 14/21" (red if any open) next to Materials / Templates.
+**E. Project Managers view**: a third tab **🏗 Projects** — each active project with "📝 Details x/21" and "🧱 Materials".
+**F. Export Changes**: the new "Job details" section and Excel sheet (D7).
+
+## Data
+- No change to `production_planner` columns. Jobs get an optional `pov` object (old data without it loads unchanged).
+- New table `project_spec_items` + `project_events` (from PLAN-projects-hub.md), with a rules trigger and a history trigger
+  — see the PENDING block in SUPABASE_CHANGES.md (runs AFTER the Stage 3 block).
+- Polling: spec rows join the existing 10/60-second list poll (changed rows only) once the probe finds the table.
+
+## Cienapps impact
+Import: Floor / Unit / Title / Customer respect planner overrides (D6). Export: the new Job details section + sheet.
+Week / step export unchanged.
+
+## What must NOT change
+Lists switch OFF = today's app. Board, import preview/Apply counts, week/step Export Changes, saw ticking, templates/project
+editing rights, materials rules (aliases, active/retired, never deleted, sheet vs fitting), TBC line chips.
+
+## Risks
+Two PCs on the same spec item or material (version check); an import racing a planner edit (Apply re-checks the latest job);
+an old screen saving a signed-off value (database trigger drops it to Proposed); 360 px phones; red chip everywhere on day
+one (Q2); the SQL not yet run (sheet hidden, nothing breaks).
+
+## Acceptance checks
+1. A spec item set to blank or TBC can't be signed off (screen AND database); the list window, saw card, stores card and
+   print show the red chip; the saw can still tick.
+2. Changing a signed-off value drops it to Proposed and the chip returns; History shows who/when/old/new.
+3. Two PCs edit the same spec item: the second is refused and shown the first one's value. Two PCs add the same extra item:
+   one row.
+4. Before the SQL: no spec buttons, no chip, no errors; materials and job-info edits still work.
+5. Floor/Unit/Title/Customer edited in the list window show on the board, saw/stores, prints and labels; the job history has
+   who/when/old/new; Export Changes lists it; the Excel has a Job details sheet.
+6. Re-import with Cienapps' old value: the planner value is kept and the preview says so. Re-import with the planner's value:
+   the override disappears from Export Changes.
+7. PM, Office, Production Manager, Drawing office add/edit materials with no PIN; Saw/Stores/Driver/Floor can't.
+8. 360 px phone: Project details, Materials and the list window header usable, no sideways scroll.
+9. Full suite: no new failures outside ACCEPTED-FAILURES.
+
+## Build steps
+1. SQL PENDING block + fake database (tests/) for `project_spec_items` / `project_events` with the same rules; check the SQL
+   on a throwaway Postgres.
+2. `lsMatEditOk()` + PM Projects tab + Projects/Materials buttons on the Lists page and list window (items 3, 4).
+3. Job-info overrides: editable boxes, `pov`, history, import rule, Export Changes section + Excel sheet (item 2).
+4. Spec: probe, load/poll, `SPEC_LISTS`, `specOpen(pid)`, `lsSpecDlg`, sign-off, History (item 1).
+5. Red chip in list window, saw/stores cards, prints; spec block on prints; x/21 on the Lists page and PM tab.
+6. Full suite → Tester → fixes → Manager.
+
+---
+## Progress log
+
+### 9 Nov 2026 (evening run 1) — all four items built, Tester round 1 fixed, Manager GO WITH CONDITIONS
+- **Architect:** this plan. Built with the recommended answer to Q1–Q5 (unattended run) — Garry still to confirm them.
+- **Coder** (8581e18, 3df4d16, 6275cf0, 816583e):
+  - Pending SQL block "Project details" at the top of SUPABASE_CHANGES.md (`project_spec_items` + `project_events`,
+    rules + history triggers, GRANTs, no DELETE). Run twice on a throwaway Postgres; tests/project-details/pg-check.sql
+    ALL PG CHECKS PASSED (fresh database and upgrade of the earlier draft). Fake database: tests/project-details/dbp.js / srvp.js.
+  - Item 1: Project details window (`lsSpecDlg`), checklist per project type, material / edging drop-downs, sign-off,
+    un-sign, extra items, History, Print; red chip on the list window, saw and stores cards, Lists page, PM tab;
+    red banner + spec block on printed saw/stores sheets. Hidden quietly until the SQL is run.
+  - Item 2: Floor / Unit / Title / Customer editable in the list window (`woInfoEdHTML`, `jobInfoSet`, `o.pov`);
+    import keeps the planner value and clears it when Cienapps catches up; job history; Export Changes "Job details"
+    section + Excel sheet.
+  - Item 3: 🧱 Materials and 📝 Project details on the Lists page toolbar and project headers; ✎ Project details and
+    Materials beside the Project picker.
+  - Item 4: `lsMatEditOk` — PM, Office, Production Manager, Drawing office edit materials without a PIN; Saw, Stores,
+    Drivers, Floor read-only; Management keeps the PIN. PM view has a new 🏗 Projects tab.
+- **Tester round 1** (attack1-merge / -spec / -phone / -pg): 1 High, 4 Medium, 6 Low. All fixed except 1c (an OLD-version
+  tab running a Cienapps import overwrites a planner correction) → added to ACCEPTED-FAILURES (close every screen on
+  go-live day), Garry to confirm.
+- **Full suite** (HEAD 816583e, 181 files, one at a time): 3,309 pass / 38 fail. Baseline (feature/list-excel-template):
+  3,206 pass / 26 fail. Every baseline failure is the same; the new ones:
+  - attack1-merge 1c (accepted-failures, pending Garry);
+  - 11 checks in OLD tests that test the rules Garry changed on 9 Nov — they expect the office to need a PIN to add a
+    material (stage3 s1s3-screens ×2, attack2-screens G1/G7, s4-editor ×2, editor e5-columns ×3) and the Floor / Unit /
+    Title / Customer boxes to be read-only text (stage3 coder-wo-cols ×2). **Next run: Tester rewrites these to the new
+    rule** (office/PM add materials without a PIN; boxes editable), then re-run the full suite.
+  - e7 redraw timing (also slow on the baseline run — two suites ran side by side).
+- **Manager:** item 3 GO; item 4 GO (once Garry confirms Q3); items 1 and 2 GO WITH CONDITIONS (SQL first, Garry's answers
+  to Q1/Q2/Q5, 1c accepted, every screen closed and reopened at release). Release order: list-excel-template first,
+  then this branch; Stage 3 SQL, then Project details SQL.
+- **Waiting on Garry:** Q1–Q5 above; yes/no on the 1c accepted-failure row.
+- **Next run:** Tester updates the 11 old checks + attacks the Materials window at 360 px; full suite; Manager final verdict;
+  then screenshots and the final summary.
+
+### 11 Nov 2026 — Garry's answers (replace the recommended defaults)
+1. **Sign-off: Project Managers only.** (Built: the PM view signs off directly; any other screen needs the PM or Admin PIN, and the name is recorded.)
+2. **Red until everything is filled and signed off.** A project can have **several specs** (e.g. different rooms / house types, or robes). Built: named specs per project, each with its own checklist type; the chip stays red while ANY active spec has an item not signed off ("Robes: Hinges" when there is more than one).
+3. **Materials: PM, office and Management** add/edit (no PIN). Drawing office and Production Manager keep it too (Garry, 11 Nov). Saw, stores, drivers, floor read-only.
+4. **Changing a job's Customer: Admin only** (Admin PIN each time). Floor, Unit and Title stay editable from the list window.
+5. **Who fills in the spec: PM, office and Management** (+ Drawing office and Production Manager keep it). Robes / Schools lists stay as drafted until corrected.
+6. **A spec is not applied to a cutting list.** The project keeps its materials list; a list made into a template keeps its materials. The spec only **gives the material choices for the cutting list**: the spec's chosen materials come first in the cutting-list Material drop-down ("From the project details").
+7. Still open: yes/no on the ACCEPTED-FAILURES row attack1-merge 1c (old-version screen importing).
+
+**Architect change (from answer 2/6):** new table `project_specs` (id, project_id, name, spec_type kitchens/robes/schools, sort, active — retired, never deleted). `project_spec_items` gets `spec_id`; one item name per spec. A project with no spec yet shows its default checklist (named after the project type) and the first edit creates it. Project details window: one tab per spec, "＋ Add spec" (name + type), rename / "not used any more". Print and the printed saw/stores sheets: one block per spec.
+
+### 11 Nov 2026 (run 2) — Garry's answers built; Tester rounds 2–4; Manager GO WITH CONDITIONS, no Blockers
+- **Coder** (16794ad, 2a22f09, 30ffedd, b35c7bb, e4861f2, 9db5b98):
+  - Several specs per project (`project_specs`; tabs, ＋ Add spec, Rename, Not used any more / Bring back — never deleted).
+    The project stays red until every item on every spec in use is signed off; the chip reads "Kitchens: … · Robes: …".
+  - Sign-off: Project Managers only. On the PM screen directly; on any other screen the PM (or Admin) PIN is asked EVERY
+    time and the Project Manager's own name is asked and recorded.
+  - Marking a spec "not used any more" while it has open items also needs a Project Manager (Manager issue 1); the database
+    writes spec add / rename / retire / bring-back to the history, keeps one spec in use per project (two PCs can't retire
+    the last two) and refuses saves on a retired spec.
+  - Materials and spec values: PM, office, Management, Drawing office, Production Manager — no PIN. Saw, stores, drivers,
+    floor read-only. Materials window works on a 360 px phone.
+  - Customer of a job: Admin PIN every time (also for ↺). Floor, Unit, Title unchanged.
+  - The spec's materials come first in the cutting-list Material drop-down ("From the project details (spec)"); the other
+    project materials are still listed below. Nothing is applied to a list or a template.
+  - SQL block (now dated 11 Nov) run twice on a fresh throwaway Postgres and as an upgrade of the 9 Nov draft:
+    tests/project-details/pg-check.sql ALL PG CHECKS PASSED; two-session retire race script OK.
+- **Tester:** round 2 — the 11 old checks that tested the pre-9-Nov rules rewritten to the new rules (s1s3-screens,
+  attack2-screens, s4-editor, e5-columns, coder-wo-cols: all pass); attack2-spec / -cust / -mats / -phone / -pg: 1 High
+  (two PCs could retire every spec → project went green), 4 Medium, Lows. Rounds 3 and 4: all fixed and re-tested.
+  Project-details files now: p1 0/30, p2 0/24, p3 0/28, attack1-spec 0/35, attack1-phone 0/10, attack2-spec 0/81,
+  attack2-cust 0/14, attack2-mats 0/13, attack2-phone 0/11; attack1-merge 1 of 18 (1c).
+- **Full suite** (HEAD 9db5b98, 188 files, one at a time): **3,472 pass / 27 fail**. Same known failures as the parent
+  branch, plus: attack1-merge 1c (ACCEPTED-FAILURES, pending Garry); the 2,500-job timing check (passes alone); and two
+  "WITH proposed guard" checks in stage1 t16-oldtab-overwrite — NOT from this branch: `origin/main` moved on 10 Nov
+  (release/2026-11-10) and that test uses main as its "old screen"; it fails the same way on feature/list-excel-template.
+- **Manager (final, 11 Nov):** item 1 GO WITH CONDITIONS, item 2 GO WITH CONDITIONS, items 3 and 4 GO. No Blockers.
+  Conditions: (a) Garry's yes/no on 1c; (b) `origin/main` is 4 commits ahead (the 10 Nov release) — bring it into this
+  branch and re-run the full suite before merging (merges cleanly, not yet tested together); (c) SQL first, in order:
+  Stage 3 → Photo of a list → Project details; (d) merge feature/list-excel-template first, then this branch; (e) close
+  and reopen every screen on go-live day, incognito check; (f) Admin and PM PINs must not be the built-in defaults.
+- **Questions for Garry (multiple choice sent):** Q-A material drop-down: spec's materials first + the rest (built) or ONLY
+  the spec's materials; Q-B Admin PIN as a backstop for sign-off (built) or PM PIN only; Q-C changing a PROJECT's customer
+  in the Projects window: Admin only too?; 1c yes/no.
+- **Note:** this entry was written on the old branch `feature/project-details`; carried over onto `feature/project-details-v2` on 11 Nov (afternoon run), see Part 4 progress.
+- Screenshots (fake database): docs/screens-project-details/ (remake with `node tests/project-details/screens.js`).
+- **Next:** on Garry's go-ahead — merge the 10 Nov release into this branch, full suite, Manager confirm. Nothing else to build.
+
+---
+# Part 2 — PM sequence, change requests, Cienapps upload, Johnny's pool, date tools (B5–B11) — 10 Nov 2026
+
+Architect, unattended scheduled run, 10 Nov 2026. Garry's decisions B5–B11 of 9 Nov are recorded in docs/ROADMAP.md.
+Builds on `feature/project-details` (Part 1 B1–B4 built) rebased on `feature/dates-deliveries` (Job A built).
+Like Part 1 it is **Stage 3 only** (lists switch ON, `V2()`). With the switch off, or before the SQL below is run, none of
+it shows and the app is exactly as today. Open questions use the recommended answer, marked ASSUMED (Garry to confirm).
+**B11 date tools (step 12) are NOT built until Garry says yes to the wireframe at the end of this part.**
+
+## Goal
+Each project has a named Project Manager, and he keeps one list per project: every work order (kitchen, utility, quartz,
+robes) in the order the site needs them, each with its required (delivery) date. He can drag rows, set dates in bulk,
+spread them, paste the contractor's programme, or load the same Excel he uploads to Cienapps, on PC or phone. The next
+two weeks are fixed: changes there go to the Production Manager to approve. Johnny gets one list of everything due in
+the next three weeks or more, from every project, in order, and ticks each work order off as he processes it. The CNC
+plan built later will read this list.
+
+## Key questions — ASSUMED (recommended answer used; Garry to confirm)
+1. **The PM list** = Settings → Staff, people ticked "PM" (the tick box is already there). A PM picks his name once per
+   phone/PC and it is remembered until Stage 4 logins. Names are not typed freely (they must match the assignment).
+2. **Who assigns a PM to a project:** the office and the Production Manager. A PM cannot claim a project himself.
+3. **The fixed window is 14 CALENDAR days from today** (due today + 14 is fixed; today + 15 is free), moving forward
+   every day. Alternative: 14 working days (about 3 weeks). Settings number, default 14 (allowed 7–30).
+4. **Which date makes a job "fixed":** its build (due) date OR its delivery date falls within the window, overdue
+   included. Moving a job INTO the window from outside also needs a request.
+5. **Mixed changes** (e.g. "push from here down" over 3 fixed rows and 10 free ones): the 10 change now and the 3 go to
+   the Production Manager as one request. The preview says so before Save.
+6. **Who approves:** Production Manager only. The office and the Production Manager can still change fixed jobs
+   directly: reason required, logged and counted the same way.
+7. **Editing a required date sets the delivery date, and build date = delivery − 3 working days** (Job A `delivLead`).
+   Both shown in the preview. A job with no delivery date shows its build date in grey.
+8. **Waiting rows (no WO yet) are never "fixed".** One dated within 14 days shows red "due soon — no WO number".
+9. **Date on a waiting row vs Cienapps' date when the WO arrives:** the PM's date wins, goes through the date rules and
+   appears in "Dates to change in Cienapps". If it lands in the fixed window it becomes a change request automatically.
+10. **Bank holiday / weekend in a spread or paste** → next working day. A single typed date → Job A's warning.
+11. **Johnny's role:** new view "Pre-production", default PIN **1010**, changed by Admin like the others. He picks his
+    name once (Staff tick "Pre-production").
+12. **Pool horizon** = build due date within today + 7 × weeks (Settings, default 3, minimum 3): day 21 in, day 22 out.
+    Overdue unprocessed jobs always in. A row leaves the pool once cut (step 6+), shipped or on hold.
+    **Amber** = due within 21 days and not processed. **Red** = past cut-by and not processed.
+13. **Cut-by** (CNC) = due − 7 calendar days, moved to the working day before if not a working day.
+14. **Out of step:** a not-processed row is flagged when a row above it in Johnny's order has a cut-by more than 2 working
+    days LATER (Garry's colour window), or same project + same date in the reverse of the PM's sequence.
+15. **"Changed since you last looked"** is kept per person per device until Stage 4.
+16. **Cienapps WO titles:** matching assumes the WO title carries the upload line's Name (e.g. "HOUSE TYPE B QUARTZ").
+    **Garry: send 5 real WO titles + the upload lines they came from** so the matcher can be checked before go-live.
+17. **Old jobs at go-live:** nothing added automatically. On a project's first visit the PM (or office) taps "Start the
+    sequence from today's jobs (N)" — every live, not-shipped WO in due-date order. After that, new WOs are added on each import.
+18. **Undo** (10 minutes, this screen only) puts dates and positions back. Jobs taken off vans are NOT put back on — listed
+    "rebook these".
+
+## Data design — new tables (decided: tables, not the planner record)
+Why: rows, positions, requests and Johnny's ticks are edited by many people at once; projects already live in the Stage 3
+tables; the planner record is already large (Job A cut `dueHist` to 30 for save speed). Version-checked rows plus database
+rules, as for `project_spec_items`. **Dates of matched jobs stay where they are** (`o.dueDate`, `o.delivDate`, `o.dueHist` in
+`orders`, written only by `moveDates`). The tables never hold a second copy of a job's date.
+
+SQL: new PENDING block "PM sequence & pre-production" in SUPABASE_CHANGES.md, run AFTER Stage 3 and Part 1 (needs `projects`,
+`lists_touch`, `lists_writable`, `project_events`). Re-runnable, GRANT lines, no DELETE, checked twice on a throwaway Postgres
+(`tests/seq/pg-check.sql`).
+- `alter table projects add column if not exists pm text;` `… seq_rules jsonb not null default '{}'`
+  (`{follow:bool, offsets:{utility:int, quartz:int, robes:int, other:int}}` working days after the house's kitchen).
+  Trigger `projects_pm_log` (after update when `pm` changes) → `project_events(entity 'project', act 'pm')`.
+- **`project_seq`** (one row per future or actual WO): `id text pk` ('Q'+uid) · `project_id text not null references
+  projects(id)` · `pos int` (1..n per project, DATABASE-set) · `state text not null default 'waiting' check in
+  ('waiting','matched','removed')` · `wo text` · `floor, unit, product, name, descr text` · `kind text not null default
+  'kitchen' check in ('kitchen','utility','quartz','robes','other')` · `children jsonb not null default '[]'` (CHILDREN 1–4,
+  info only) · `line_key text` (DB-computed) · `req_date date` (waiting rows only) · `own_date boolean default false` ·
+  `is_new boolean default false` · `src text check in ('upload','import','manual')` · `upload_id text`, `line_no int` ·
+  `matched_at timestamptz, matched_by text, match_how text check in ('auto','confirmed','start')` · `why text` ·
+  `version int default 1`, `created_at`, `created_by`, `updated_at`, `updated_by`.
+  Indexes: unique `(upper(btrim(wo)))` where `wo is not null and state<>'removed'`; unique `(project_id, line_key)` where
+  `line_key is not null and state<>'removed'`; `(project_id,pos)`; `(updated_at)`.
+  Trigger `ps_rules` (before insert/update): NFKC + trim every text (trailing spaces). `line_key := upper(floor|unit|product|name)`
+  spaces collapsed, when product or name present. `wo` set → `state='matched'`. INSERT takes
+  `pg_advisory_xact_lock(hashtext('seq:'||project_id))` and sets `pos=max+1`. A change of `pos` is REFUSED unless
+  `current_setting('wpf.seq',true)='rpc'`. `state` cannot go back to 'waiting' except via `seq_unmatch`. Plus `project_seq_touch`.
+  Trigger `ps_log` (after): `project_events(entity 'seq')`, act add / match / unmatch / remove / restore / date / edit, old/new
+  jsonb incl. `why`. Pos-only changes not logged (the functions log moves).
+- Functions (security definer, `set search_path=public`, set `wpf.seq='rpc'` locally, project advisory lock, own
+  `project_events` row with `why`): `seq_move(p_ids text[], p_after text, p_expect int[], p_by text, p_why text)` — block
+  move under `p_after` (null = top), 'stale' if any version differs, renumber 1..n, clear `is_new`, log old→new pos.
+  `seq_insert(p_project text, p_rows jsonb, p_after text, p_by text) returns jsonb {added, skipped:[{line_no,line_key,existing_id,why}]}`.
+  `seq_match(p_id, p_wo, p_expect, p_how, p_by)` refuses if the WO is on another live row or the row is matched.
+  `seq_unmatch(p_id,p_expect,p_by,p_why)` · `seq_remove(…,p_why)` (state 'removed', never deleted) · `seq_restore(…)`.
+- **`seq_requests`**: `id text pk` · `project_id` · `kind check in ('date','move')` · `seq_ids text[] not null` · `wos text[]` ·
+  `change jsonb not null` · `preview jsonb` · `why text not null` · `note` · `status default 'open' check in
+  ('open','approved','refused','withdrawn','direct')` · `asked_by not null`, `asked_at default now()` · `decided_by`,
+  `decided_at`, `answer` · `applied jsonb`, `applied_at` · `seen_at` · `version`, `updated_at`, `updated_by`.
+  Trigger `sr_rules`: insert only 'open' or 'direct' (direct: decided_by = asked_by, decided_at = now()); `why` not blank;
+  open → approved / refused (`answer` required) / withdrawn; `decided_at` set by the database; once decided only
+  `applied`/`applied_at` (once) and `seen_at` change; insert refused 'open request exists' when `seq_ids` overlap another open
+  request. Trigger `sr_log` → `project_events(entity 'req')`.
+- **`seq_pre`** (Johnny): `seq_id text pk references project_seq(id)` · `wo` · `pre_key double precision` (null = default order)
+  · `processed_at`, `processed_by`, `processed_src check in ('tick','sheet')` · `note` · `version`, `updated_at`, `updated_by`.
+  Trigger stamps/clears processed_at; `pre_log` → `project_events(entity 'pre')`.
+- RLS on all three: read anon/authenticated; insert/update `with check (lists_writable())`. Grants: select, insert, update on
+  the three tables; execute on the six functions; all to service_role; revoke delete, truncate.
+- **Planner record** (no new column / top-level key): settings `seqFixedDays` (14), `preWks` (3, min 3), `seqWaitWks` (3) →
+  `fullSettings`, `settingsFrom`, `applyPlan`. `DB.pins.pre`. Staff role `'pre'`. `dueHist` entries gain optional `fx:1` and
+  `rq:'<request id>'`; `src` can be `'pmseq'` or `'undo'`.
+- **Browser**: `LS_T` += `project_seq:'sq'`, `seq_requests:'sr'`, `seq_pre:'sp'`; loaded/polled only when `SEQP.st==='ok'`.
+  Probe `SEQP` = copy of `SPECP`/`specLoad` (`project_seq?select=id&limit=1`). Probe with a table, never a column (`specMissing`
+  doesn't know 42703). `project_events` read only when History opens. Poll 10 s on sequence / pool / requests screens, else 60 s.
+  localStorage: `wpfMe_pm`, `wpfMe_pre`, `wpfSeen_<role>_<name>`.
+
+## How a sequence-row date edit flows (one path for every tool, B6/B7/B11)
+1. The tool builds per-job targets `change.per[wo]={deliv:X, due:dmShiftWd(X,-delivLead())}`; offsets (B11d) add the house's
+   other rows (not `own_date`). Waiting rows get `{req_date}` separately.
+2. Preview: `moveDates(wos, change, reason, me, {src:'pmseq', frozenDays:seqFixedDays(), requestOnly:ROLE==='pm'})`. `dmRow` adds
+   flags `'fixed'` (`seqFixedAt(o,to)`) and `'request-open'`. With `requestOnly`, `apply()` skips fixed rows into `res.needReq`.
+   One-line summary `seqPreviewLine()` (B11h).
+3. `pickReason(…, DATE_WHY)`, reason required. Save → `apply()` writes the free jobs exactly as Job A (week follows unless cut,
+   off the van "rebook" unless loaded, `dueHist` src 'pmseq', `origDueDate`, `dueKeep`/`delivKeep` → Dates to change in Cienapps,
+   saw/stores banner, A9 hold, `sched()`). Waiting rows: version-checked PATCH `req_date` + `why`.
+4. `res.needReq` → one `seq_requests` row (date, open). Office/Production Manager: fixed rows applied with `fx:1` + one 'direct' row.
+5. Approve: `seqDecide(id,'approved')` = version-checked PATCH `status=eq.open` (claim first; a second Production Manager is told
+   "already approved by X — nothing done"), then re-run `moveDates` on TODAY's data with `{src:'pmseq', reqId}` (by "PM (approved
+   by X)"), then PATCH `applied`. Preview shows "changed since asked" if the job moved meanwhile. A claim with no `applied` after
+   2 minutes shows "Approved — not applied yet [Apply now]". Refuse = `answer` required, nothing moves; PM nudged until `seen_at`.
+6. Reorders inside the window (fixed rows among themselves, or a row put above a fixed row) = a 'move' request; outside it
+   `seq_move` runs at once.
+7. Match hand-over (B10): after `seq_match`, if `row.req_date` ≠ the job's delivery date → steps 2–4 with reason
+   {why:'Sequence date', note:'set before the WO existed'}, `requestOnly:true`.
+
+## Screens (word wireframes)
+**PM view** (`renderPMV2`): name strip "👤 John Burke · [Not you?]" (`seqMe('pm')`). Nudge bar (`seqNudgesHTML`): "4 rows no date ·
+2 dates passed · 12 waiting for WO (3 over 3 wks) · 2 to place · 1 request answered". Tabs: 🚚 Deliveries · 🩹 Snags · 🏗 Projects ·
+**🔢 Sequence** — only his projects unless "☐ All projects" (others read-only).
+**Sequence page PC** (`seqPage(pid)`):
+```
+🔢 Aderrig Ph2 · PM John Burke   [⬆ Cienapps file] [📋 Paste programme] [🗓 Weeks] [⚙ Date rules] [📜 History] [↶ Undo 9 min]
+To place (2): WO-2611-3 T09 14 "HOUSE TYPE C BED 2" → [✓ T09·14 W2 BED 2] [Pick…] [＋ Add at bottom]
+Tick: [Whole house] [Whole block] [From here down]  3 ticked → [📅 Set date] [↔ Spread] [⏩ Push/pull] [# Move to…]
+⠿ ☐ #  WO              Flr Unit Prod Name                  Required        Build    Progress                 Moved
+⠿ ☐ 1  🔒 WO-2604-7    T09 12   K8   HOUSE TYPE B          Thu 19 Nov 🔒   16 Nov   list✓ proc✓ cut —        2×
+⠿ ☐ 2  WO-2604-8       T09 12   K2   HOUSE TYPE B UTILITY  [ 3 Dec 📅]     30 Nov   list — proc —
+⠿ ☐ 3  ⏳ no WO yet    T09 13   K8   HOUSE TYPE C          [10 Dec 📅]     —        waiting 1 wk
+⠿ ☐ 4  ✋ request sent  WO-2604-9 … "pull to 18 Nov — Site ready early" [Withdraw]
+⠿ ☐ 9  🆕 WO-2611-1 new — place in sequence  [▲][▼]
+```
+Fixed rows greyed; date and handle open "✋ Request a change". **Phone (360 px)**: one card per row with [▲][▼][# Move to][📅];
+tick mode = sticky bottom bar; no drag; no sideways scroll.
+**Cienapps file** (`seqUploadDlg(pid)`): project first → file → preview "18 lines → 16 new rows, 2 skipped (already in the
+sequence: …)", "Add: ◉ at the bottom ○ after row [#]". Children as grey text. Nothing saved until [Save 16 rows].
+**Production Manager**: tab **✋ Requests (N)** (`seqReqPage`) — cards with [✓ Approve] [✗ Refuse — reason], then last 30 decided.
+Today banners "🏗 3 projects have no PM — assign", "✋ 2 change requests waiting".
+**Office / Production Manager**: "PM ▾" per project in `lsProjectsDlg` / `lsProjHubHTML`, "Unassigned (N)" first, "🔢 Sequence".
+**Pre-production view** (`renderPre`, role `pre`):
+```
+🗂 Pre-production — due by Tue 1 Dec (3 wks) [weeks: 3 ▾]  Filters: PM ▾ Project ▾ Material ▾ [Not processed ▾]  [✓ Seen all]
+⠿ My# Due# WO          Project      PM      Flr Unit Title           Due     Cut-by  Sheets Material       Spec  List  Badges           ✓
+⠿ 1   2    WO-2604-7   Aderrig Ph2  J.Burke T09 12   HOUSE TYPE B   19 Nov  12 Nov  14     H1146 Grey Oak  ⚠     ✓     🔒 fixed · 2×     [☐]
+⠿ 2   1    WO-2603-2   Lucan        M.Kelly A1  4    TYPE A KITCHEN 18 Nov  11 Nov  12     W980 White      ✓     —     RED past cut-by  [☐]
+⠿ 3   5    ⏳ no WO yet Aderrig Ph2  J.Burke T09 13   HOUSE TYPE C   ~7 Dec  …                                         ↻ changed since you looked
+```
+"Due#" = default order (due date, then PM sequence) beside his own order. Phone: cards with [▲][▼][✓ Processed], filters in a drawer.
+**Week timeline** (`seqWeeksPage(pid|'mine')`): 8 board weeks + Later; header "Factory 340 / 350 h" (`wkHrs`/`wkCap`), red when
+over; chips drag between weeks (shift by whole weeks, same flow); fixed weeks grey, a fixed chip opens a request. Phone: stacked
+weeks, chip → "Move to week ▾".
+**Scorecard** (`scorecardHTML`): "Late changes" column — that week's requests "3 (2✓ 1✗) + 1 direct" (only when `SEQP` ok).
+**Export Changes**: "⚙ Processed by pre-production — set 5. WORK ORDER PROCESSED in Cienapps (N)" + Excel sheet "Processed";
+clears itself when an import brings step 5+.
+
+## What changes in code (names for the Coder)
+- Roles: `'pre'` in `ROLE_LBL`, `pins()` (default '1010'), URL/localStorage role list, `startAutoRefresh`, `rolePicker` (V2),
+  View PINs row (V2), staff role columns, `render()` → `renderPre` (the role list is copied in ~8 places — all of them).
+- `seqMe(role)` from `staffFor(role)` once per device → `setWho` (`officeWho` only lists admin/office/prod). `pmMine(pid)`.
+  `seqCanEdit(pid)`: pm + own project, office, prod. `seqFixedDays()`, `preWks()` (≥3), `seqWaitWks()`.
+- Engine (`moveDates`/`dmTarget`/`dmDelivTarget`/`dmRow`): `change.per`, flags `'fixed'`/`'request-open'`, `opts.frozenDays`,
+  `opts.requestOnly` → `res.needReq`, `opts.reqId` → `dueHist.rq`, `fx`. `dmHistHTML` labels. `woProgrammed(o)` = step 5 OR
+  processed in `seq_pre`. `seqFixedAt(o,to)` = `min(dueDate, delivDate||dueDate, to) <= addDayISO(todayLocal(), seqFixedDays())`.
+  `dateCanMove()` stays office/prod; PM edits go only through the sequence page.
+- Sequence: `SEQP`/`seqLoad`, `seqRows(pid)`, `seqRowDate(r)`, `seqPage`, `seqBind` (HTML5 drag on PC; ▲▼/Move to everywhere),
+  `seqMoveDo` → `lsRpc('seq_move')`, `seqStart(pid)`, `seqReconcile(pids)` after `applyImport` and on opening a sequence
+  (confident → `seq_match` + hand-over; ambiguous → "To place"; no waiting rows in that house → insert at bottom `is_new`;
+  23505 from another PC → reload silently).
+- Upload: `seqReadUpload(aoa)` (header by content: ≥4 of qty/floor/unit/product/name/description/price, trimmed; no header → fixed
+  27-column layout when column D looks like `^[A-Z]{1,2}\d{1,2}$` and column A is 1), `seqKind`, `seqLineKey`, `seqUploadDlg`.
+- Matching `seqMatchFind(o)`: same project (`lsProjForCust`), floor + unit equal after normalising (upper, no spaces/punctuation,
+  T09 = T9); score title words (product code +3, each non-generic name word +2; HOUSE/TYPE ignored); QUARTZ/UTILITY/BED/ROBE/KITCHEN
+  and the BED number must AGREE; confident = one best ≥ 3 and next ≤ best − 2.
+- Requests: `seqReqMake`, `seqDecide`, `seqReqPage`, `seqReqWithdraw`, `seqReqSeen`.
+- Pool: `preRows()`, `preDefKey(r)` (due day, project, pos), `preKey(r)` = `pre_key ?? preDefKey`; drag = midpoint of neighbours;
+  `preOutOfStep`, `preSeen`, `preTick(seqId)`, `preMaterial(o)`, `cncCutBy(o)`.
+- Date tools: `seqDateDlg(rowIds, mode)` set / spread / push / paste, `seqSpread`, `seqOffsets`, `seqFollowOrder`, `seqPaste`
+  (`parseDateIE`), `seqPreviewLine`, `SEQ_UNDO` (memory, 10 min, refused for a job changed since), `seqProgress(o)`.
+- `renderExport` + Changes Excel: Processed section. `scorecardHTML`: Late changes.
+
+## B8 — what the CNC view (built later) will read; design only, not built now
+Per WO: `project_seq.pos`, `seqRowDate` and `o.dueDate`, `cncCutBy(o)`, `seqFixedAt(o)`, Johnny's `preKey`, `seq_pre.processed_*`
+(+ step ≥ 5), `o.sheets` (Cienapps; m²/5.75 fallback), `preMaterial(o)`. **Phase 1 (linked):** the planner reads "CNC Schedule
+2025.xlsm" (machine, material, strike-through); a strike-through fills `seq_pre` with `processed_src:'sheet'` (never clears a hand
+tick); sequence + dates only set priority and flag "out of step". **Phase 2 (planner plans):** colour first within ±2 days, never
+later than cut-by + 2, 30 sheets/machine/day less colour changes, carry-over. **Rule: fixed-window jobs are never re-ordered or moved
+to another day by the auto-plan** — they keep Johnny's order and day as locked blocks placed first; only non-fixed jobs are grouped
+by colour around them. Johnny's `pre_key` is the tie-break.
+
+## What must NOT change
+Lists switch OFF = today's app. Before the SQL = today's Stage 3 screens. Job A rules and every date-change entry point,
+`dueKeep`/`delivKeep`, Export Changes date rows, "Mark as applied". Customer = project linking. Spec sheet, materials rights,
+PM Deliveries content (only filtered). Import preview/Apply counts. No planner field written by the pool or sequence except through
+`moveDates`. Never delete a row.
+
+## Risks
+Two PCs dragging (anchors), two Production Managers deciding (claim first), request vs direct change ("changed since asked"),
+upload twice / two PCs (database skips duplicates). Old-version office screen moving a fixed job: allowed, not counted — close every
+screen at go-live. Wrong auto-match (strict rule, Q16 sample, `seq_unmatch`). 300-row projects (previews capped 50, one `sched()`).
+Bank holidays known to 2028 only — flag spreads into 2029. 360 px phones. `projects.pm` read before the SQL → one table probe.
+
+## Acceptance checks
+1. Before SQL / switch off: nothing new, no errors. After: probe shows everything.
+2. Office assigns a PM; PM picks his name once; sees only his projects; "All projects" read-only; Unassigned listed.
+3. Start the sequence; drag, ▲▼, Move to 1, whole house to top on PC and 360 px; History who/when/old→new.
+4. Upload sample (27 cols, trailing spaces, C house with two W2): 1 row per line; again: 0 added, all skipped; no header: same.
+5. Import: confident matches take over (position, date, history; PM date → Dates to change in Cienapps); ambiguous → To place;
+   no waiting rows → bottom "new"; same import on two PCs → no duplicates.
+6. Fixed window (today Mon 16 Nov 2026): 30 Nov fixed, 1 Dec free; moving a free job to 25 Nov needs a request; mixed push splits.
+7. Approve applies with all Job A rules; two approvers → one applies, other told; refuse needs reason; scorecard counts.
+8. Office direct change in the window: reason required, `fx`, counted "direct".
+9. Pool: day 21 in, 22 out; weeks ≥ 3; amber/red/out-of-step; Johnny's drag leaves PM order; tick logged; import at step 5 =
+   processed; tick at step 4 in Export Changes; PM date change → "changed since you last looked".
+10. Tools a–j (after Garry's yes): spread "2 houses per week" from Tue 22 Dec 2026 skips 25–28 Dec; push 3 working days; offsets;
+    follow-the-order; paste with 2 unmatched; timeline red over 350 h; preview line; Undo 10 min; nudges; progress chips.
+11. Full suite: no new failures outside ACCEPTED-FAILURES. SQL twice on a throwaway Postgres: ALL PG CHECKS PASSED.
+
+## Build steps (small commits, in this order)
+1. SQL PENDING block + `tests/seq/pg-check.sql` + fake database routes. 2. B5: probe + load/poll, PM assignment, Unassigned list,
+`seqMe`, `pmMine`, role `pre` plumbing + PIN + staff column, settings keys. 3. B6a: sequence page read-only + `seqProgress` + `seqStart`.
+4. B6b: `seq_move` + History. 5. Engine: `change.per`, `fixed`, `requestOnly`/`needReq`, `reqId`/`fx`, `woProgrammed` (Job A tests
+still pass). 6. B6c: row date edit (single, whole house), waiting-row `req_date`. 7. B10a: upload + preview + `seq_insert`.
+8. B10b: `seqMatchFind` (tests first) + `seqReconcile` + To place + hand-over + "not in Cienapps yet?". 9. B7: requests, Production
+Manager tab, claim-approve-apply, refuse, 'direct', nudge, scorecard. 10. B9a: pool read-only. 11. B9b: tick + Export Changes,
+Johnny's order, out of step, changed-since. 12. B11 tools — ONLY after Garry's yes on the wireframe, one commit each.
+13. B8 design final, nothing built. Full suite → Tester → fixes → Manager.
+
+## B11 wireframe for Garry (sent 10 Nov for yes / no)
+```
+THE SEQUENCE TABLE (one per project, one row per work order, first to last)
+ #  WO / status      Floor Unit Product Name                 Required date   Progress
+ 1  🔒 WO-2604-7     T09   12   K8      HOUSE TYPE B         Thu 19 Nov 🔒   list ✓ · processed ✓
+ 2  WO-2604-8        T09   12   K2      HOUSE TYPE B UTILITY Thu 3 Dec       list —
+ 3  ⏳ no WO yet     T09   13   K8      HOUSE TYPE C         Thu 10 Dec      waiting 1 week
+ 9  🆕 WO-2611-1 — new, place it in the sequence
+ - PC: drag rows. Phone: ▲ ▼ and "Move to number…". Tick boxes for the tools below.
+ - 🔒 = inside the next 14 days: tap = "Request a change" to the Production Manager.
+a) BULK SET — tick rows, or "Whole house" / "Whole block" / "From here down", one date + one reason.
+b) SPREAD — rows, start date, pace ("2 houses a week", "1 a working day", "every Tuesday"); skips weekends/bank holidays; preview.
+c) PUSH / PULL — "everything from this row down: later by 3 working days" (or weeks); one reason; preview shows knock-ons.
+d) DATE RULES per project (optional) — robes = kitchen + 5 working days, quartz = kitchen + 10; any row can be set by hand.
+e) DATES FOLLOW THE ORDER (optional per project) — drag a row and it takes the date of the place it lands on.
+f) PASTE THE PROGRAMME — two columns from the contractor's Excel (plot or WO, date); unmatched listed.
+g) WEEK VIEW — weeks across the top, jobs as chips to drag; factory hours per week, red over 350 h; next 2 weeks grey.
+h) BEFORE SAVING one line ("3 jobs come off vans, 1 already cut — flagged, 2 cutting lists move"); AFTER: Undo for 10 minutes.
+i) PM HOME SCREEN — "4 rows with no date · 2 dates passed · 12 waiting for a WO number · 1 change request answered".
+j) PROGRESS ON EACH ROW (look only) — list ready · processed by Johnny · cut · assembled · in store · on a van · delivered.
+SAME RULES FOR EVERY TOOL: reason every time, full history, next 14 days need the Production Manager's OK, build week, van,
+saw and stores follow the new date like any other date change.
+```
+
+## Progress log — Part 2
+
+### 10 Nov 2026 (scheduled run, 07:00–08:50 UTC) — steps 1–4 built, Tester round 1 fixed, Manager GO WITH CONDITIONS (checkpoint)
+- **Branch:** the 9 Nov Part 1 work + this plan were rebased cleanly onto the latest Job A (`feature/dates-deliveries` 7d3fec5, Manager GO)
+  and pushed as **`feature/project-details-v2`** — this is now the Job B branch. Force-pushing the old `feature/project-details` was refused,
+  so that branch is **SUPERSEDED — do not merge it** (it is Part 1 on top of list-excel-template only). The one-run-at-a-time check must
+  look at `feature/project-details-v2` too.
+- **Part 1 leftover:** Tester rewrote the 11 old checks to Garry's 9 Nov rules (a2c3990) — none was a real bug; all pass.
+- **Step 1 SQL** (93e7b21, 7728b9d): PENDING block "PM sequence & pre-production" at the top of SUPABASE_CHANGES.md. Run twice on a
+  throwaway Postgres 16 set up like Supabase after Stage 1 / Stage 3 / Stores dockets / Project details (each twice):
+  tests/seq/pg-check.sql **ALL SEQ PG CHECKS PASSED**, project-details pg-check still passes, upgrade from the first draft leaves one seq_move.
+- **Steps 2–4** (b35d55a, d179001, 1d23e98): B5 PM assignment, pick-your-name once per device, PM sees only his projects ("All projects"
+  read-only), Pre-production role (PIN 1010, placeholder page), Settings seqFixedDays 14 (7–30) / preWks 3 (3–12) / seqWaitWks 3 (1–12);
+  B6a read-only sequence page, progress chips, 🔒 fixed badge, "Start the sequence from today's jobs"; B6b reorder (▲▼, Move to, drag on
+  PC, Whole house) through seq_move with versions, History.
+  Coder ASSUMED: office/Production Manager open the sequence from Lists → 🏗 Projects → 🔢 Sequence; PM filter applies to Deliveries and
+  Projects (not Snags), a PM with no projects sees everything; Start-the-sequence puts the job title in the description; the Pre-production
+  button/PIN/staff column only show once the tables exist; the name question pops up once per page load.
+- **Tester round 1** (1517cac): 1 High (poll never brought other PCs' changes — seq_pre order), 3 Medium (free row above fixed rows; anchor
+  not version-checked; lost reply said "Not moved"), 4 Low. Fixed: c024c49, 7728b9d (seq_move p_after_ver), aea6021, 35d7214, c74e9ca.
+  #7 (old screen drops the three new Settings numbers) → ACCEPTED-FAILURES, pending Garry.
+- **Full suite** at c74e9ca (213 files): **3,904 pass / 30 fail**. Baseline at the rebased start (206 files): 3,704 / 41. Every failure is on
+  ACCEPTED-FAILURES except stage3/attack4-states M3, which failed once with two suites' worth of load and passes 4/4 alone (timing, not a bug).
+- **Manager: GO WITH CONDITIONS** (fine to build on, not releasable alone). Before the next steps:
+  1. (before step 7) rows made by "Start the sequence" have no same-work key, so a later upload of the same houses would add a second
+     "no WO yet" row per line → step 7 must also skip an upload line whose floor + unit + kind already has a matched row of that product, or
+     seqStart fills product/name. 2. (before step 7, Garry) the database treats two identical lines in one house (e.g. two "W2 BED 2") as
+     the same work — see Garry's question. 3. (before step 6) time the sequence page at 300 rows × 2,500 jobs on a throttled phone; build a
+     WO→job lookup if slow. 4. (before steps 8/9) seq_remove / seq_restore re-read after the lock, seq_unmatch takes the lock; pg-check to
+     cover all six functions and direct writes to seq_requests / seq_pre. 5. (step 9) office/prod moves of fixed rows also write a 'direct'
+     request row so the scorecard counts them.
+- **Next run:** Manager conditions 1, 3, 4 → steps 5–10 (engine, row dates, upload + matching, requests, Johnny's pool) → Tester → full
+  suite → Manager. B11 tools only after Garry's yes.
+
+### 10 Nov 2026 (later, Garry live) — several PMs per project
+- Garry: a project can have two or three PMs; all share everything; one sequence per project; a request answer goes to the PM who asked;
+  only office + Production Manager add/remove PMs (ROADMAP). Replaces Key question 1/2's single PM.
+- Built (21b1f56 SQL `projects.pms text[]`, history on `pms`, old `pm` column kept unused; c1342bd app tick-list "Save PMs", version-checked;
+  31c7b1d tests incl. new tests/seq/s5-multi-pm). SQL re-run twice on the throwaway Postgres: ALL SEQ PG CHECKS PASSED, project-details check passes.
+- tests/seq + tests/project-details all pass except the 3 accepted (attack1-oldtab ×2, attack1-merge 1c). **Full suite NOT re-run after this
+  change — next run does it.** ASSUMED: no upper limit on the number of PMs.
+
+### 10 Nov 2026 (later, Garry live) — his answers built; row dates + first date tools
+- Garry's answers (ROADMAP): two identical lines in a house kept; Johnny edits materials + cutting lists; old screens accepted; YES to B11;
+  sequence view for office and despatch.
+- c6f5abe SQL: same-line index no longer unique, seq_insert counts (same file twice adds nothing, two identical lines kept), locks re-read
+  (Manager condition 4), switched-off checks for all six functions. 4a37411 Johnny = Drawing office rights + Cutting lists tab.
+  321a561 "🔢 Sequence" on Deliveries, Stores and the Driver's phone (stores/driver look-only). SQL re-run twice: ALL SEQ PG CHECKS PASSED.
+- Dates: 147806f WO→job lookup (Manager condition 3) · 9c53642 engine (change.per, fixed, requestOnly/needReq, fx) · e17ae45 required date on
+  a row · b671e36 bulk set (whole house / block / from here down) · a93e93f push/pull · adfa796 spread · 4f271c0 one-line preview + Undo
+  10 min · 599e991 PM nudges. Tests tests/seq/s8, s9, s10.
+- ASSUMED (Garry to confirm): "2 houses per week" = both houses on the same day, a week apart; a PM may Undo his own change even inside the
+  fixed window; push/pull of a job with no delivery date moves the build date only.
+- **Full suite** at 599e991 (220 files): **4,013 pass / 32 fail** — all on ACCEPTED-FAILURES (t17 and e7 are the timing ones).
+- **Not yet done:** Tester attack + Manager verdict on this date batch. Still to build: change requests (a PM's change inside the 14 days is
+  only listed today, not sent), upload + matching, Johnny's pool page, B11 d/e/f/g (offsets, dates follow order, paste, week view).
+
+### 11 Nov 2026 (scheduled run) — B7 change requests built
+- **Branch note:** an earlier pass of this run (before a restart) had merged feature/dates-deliveries in (cb34346) and built B7 on top of
+  it. The instruction was NOT to merge Job A (it is being tested), so B7 was re-applied straight onto bd50e9b without the merge; the merged
+  version is kept only as a local branch `local-backup/b7-on-merge-0520a57` (not pushed). One conflict: the Production Manager's tab strip —
+  this branch's strip kept (no 🚚 Deliveries tab, that is Job A's), "✋ Requests (N)" added, tabs 44 px tall.
+- cafd8dd B7 a: a PM's change to a job inside the fixed window sends ONE open request (`seqReqMake`, kind 'date' or 'move'); in a mixed change
+  the free jobs change at once and the fixed ones are asked, said in the preview before Save ("✋ Send the request" / "Save dates + send
+  request"); the row shows "✋ request sent — what · “why” · who [Withdraw]" (`seqReqWithdraw`); a job already asked is not asked again
+  ("Already waiting for the Production Manager — withdraw that request first"); if another PC asked a moment before, the database refuses
+  and the PM is told in plain words. Office / Production Manager changes to fixed jobs (dates or order) write a 'direct' row (Manager
+  condition 5) — it never blocks the change.
+- f18adfe B7 b+c: Production Manager "✋ Requests (N)" tab (`seqReqPage`): waiting cards oldest first with what was asked, why, "If you
+  approve now: …" worked out on today's data and "⚠ changed since asked"; [✓ Approve] claims first (`seqDecide`: PATCH with version AND
+  status=eq.open — a second Production Manager at the same moment is told "Already approved by X — nothing done"), then makes the change
+  (`moveDates` src 'pmseq' + reqId, or `seq_move` for order changes) and records `applied`; [✗ Refuse — reason required]; claimed but not
+  applied after 2 min → "Approved — not applied yet [Apply now]"; last 30 decided below. Today banner "✋ N change requests waiting".
+- 680b601 B7 d+e: the answer goes to the PM who asked (not the project's other PMs): "✋ Your change request — … ✓ APPROVED / ✗ REFUSED by X
+  “reason”" on his screen until he taps ✓ Seen (`seen_at`). Scorecard "Late changes" column (requests asked that week: "5 (4✓ 1✗) + 2
+  direct"; withdrawn not counted), only when the sequence tables exist.
+- b7d24d8 fixes found by the new tests: approving a date request reloads the planner record first, so it is made on TODAY's data (the
+  Production Manager's screen could be up to 45 s behind; offline = "Approved — not applied yet", nothing changed); Withdraw and ✓ Seen are
+  44 px on phones.
+- 8f3bbfc tests/seq/s11-requests.test.js — 56 checks, all pass. s4 / s8 / s9 updated: their "request coming soon" checks are now real
+  requests (intended change).
+- **SQL:** none. The seq_requests table / sr_rules / sr_log in the PENDING block already support everything (open / direct inserts,
+  withdraw, claim, applied, seen_at; the fake database in tests/seq/dbs.js follows the same rules). pg-check not re-run (SQL unchanged).
+- **Full suite** (238 test files + 4 probes, 3 at a time) at 8f3bbfc: **5,045 pass / 36 fail** — the 35 on ACCEPTED-FAILURES + editor e7
+  redraw timing (passes alone). header-late-probe still crashes on the import mapping screen (pre-existing). No new failures.
+- **ASSUMED (Garry to confirm):** any PM of the project may withdraw a waiting request (not only the one who asked); only the Production
+  Manager answers requests (the office does not see the Requests tab, but can still change fixed jobs directly with a reason); approving
+  applies exactly the dates / position asked for, even if the job was moved since (the card warns first); a refused or withdrawn request
+  can be asked again; "Late changes" counts by the week the request was asked; requests exist only with the lists switch ON and the
+  sequence tables installed (switch OFF = today's app).
+- Next: Tester (B7 — see the report) → Manager.
+
+### 11 Nov 2026 (scheduled run) — attack6 fixes
+- 1c4dff4 fix 1+3 (MEDIUM 5a/5b, LOW 4): the PM's answer strip reads `applied` (`seqAnsOut`): "⚠ Approved by X — but not changed:
+  WO-7 (already shipped)" / "— but not moved: the rows are no longer in the sequence", plus "🚚 came off van — rebook: …" and
+  "already cut — build week kept: …"; approved but not yet made = "being made now". Old rows without these fields still show.
+- 7310664 fix 2+6 (MEDIUM 6, LOW 7): "Apply now" (and the apply straight after Approve) re-reads the request first; already applied →
+  "Already applied by X at hh:mm — nothing done". It then claims the apply with a version-checked PATCH (`updated_by` = 'apply:<name>',
+  held 2 min) so two taps / a stale second screen can't both apply; this screen may retry its own failed claim. The 2-minute timer now
+  uses the database's clock: a lower bound built from the `updated_at` of rows received + `performance.now()`, taking the smaller of
+  that and this PC's own reading — a PC running fast can no longer show "Apply now" early (a slow PC shows it a little late — safe).
+  No SQL: `updated_by` on a decided request is already allowed by sr_rules.
+- d6c06d4 fix 4 (LOW 8b): an office / Production Manager ↶ Undo of a change inside the fixed window writes its own 'direct' row with
+  reason "Undo" (scorecard counts it; the job's history marks it fixed window). A PM's Undo is unchanged.
+- Finding 5 (info: seqReqMake from another project's PM is not refused by the database) left for Stage 4 logins as instructed.
+- attack6: 45 / 45 pass. s11 56 / 56. tests/seq: 1,260 pass / 6 fail, all six on ACCEPTED-FAILURES.
+- **Full suite** (239 test files + 4 probes, 3 at a time) at d6c06d4: **5,089 pass / 37 fail** — the 35 on ACCEPTED-FAILURES + two
+  timing ones that pass alone (editor e7 redraw 972 ms; stage1 t4 2,500-job merge 12.5 s, 6.5 s alone — another run was using the
+  machine). header-late-probe still crashes on the import mapping screen (pre-existing). No new failures. No SQL.
+- Next: Tester (re-run attack6) → Manager.
+
+### 11 Nov 2026 (scheduled run) — Job A (69eb600+) merged into Job B
+- First on Job A, ba6ecd8 (Manager issue 2): the date-history tidy now also works for a job WITH a delivery date (a stale screen's
+  identical repeat is compared with the last line of the same date field, so the delivery line in between no longer hides it).
+  New tests/dates/a5-histdedup.test.js 12 / 12: repeat with a delivery date shown once; a genuine back-and-forth 12→19, 19→12, 12→19
+  is all kept, with and without a delivery date. (The check fails on the old code, as it should.)
+- Merged origin/feature/dates-deliveries (ba6ecd8) into Job B with a normal merge commit. One conflict, the Production Manager's tab
+  strip: Job A's shared `prodStrip` (used with the lists switch off and on) is kept, with Job B's "✋ Requests (N)" added after
+  🧭 Today when the sequence tables exist (and its tab still loads the lists data). Strip with lists on:
+  🧭 Today · ✋ Requests (N) · 🚚 Deliveries · 📋 Lists · 🩹 Snags · 📦 Items sent. Lists off: 🧭 Today · 🚚 Deliveries.
+- attack5-carryover B1/B2/B8/B9 (Job A's Tester file) updated for the merge, not for a bug: the expected strip includes ✋ Requests
+  when it shows, and "screens unchanged" compares with Job B just before this merge (404262a) — the old baseline ea990d4 has none of
+  Job B's screens. On the Job A branch the file still uses ea990d4. attack5 115 / 0. **Tester: please confirm these four changes.**
+- The two attack4 L12 rows were already off ACCEPTED-FAILURES (removed at the 10 Nov merge); attack4 45 / 0.
+- tests/dates + tests/seq: 1,970 pass / 14 fail before the attack5 fix-up — the 10 accepted rows + the 4 attack5 checks above.
+- **Full suite** (242 test files + 4 probes, 3 at a time): **5,311 pass / 36 fail** — the 35 on ACCEPTED-FAILURES + editor e7 redraw
+  timing (891 ms; 634 ms alone, passes). No new failures. header-late-probe still crashes (pre-existing). No SQL, no new saved field.
+- Next: Tester (re-attack on the merge, incl. confirming attack5 F2 and the B1/B2/B8/B9 changes) → Manager.
+
+### 11 Nov 2026 — Manager verdict on B7 + Job A merge
+- **B7 change requests (cafd8dd…d6c06d4): GO WITH CONDITIONS** (fine to build on; Job B is not releasable yet anyway). **Job A merge
+  (de0d4dc): GO WITH CONDITIONS.** Manager re-ran on the fake database: s11 56/56, attack6 45/45, attack5-carryover 115/0,
+  a5-histdedup 12/12. Full suite NOT re-run by the Manager (Coder's 5,311 / 36 taken as reported). Merge conflict resolution read and
+  correct: one shared `prodStrip`, ✋ Requests only when the sequence tables exist, lists-off strip unchanged.
+- Key issues: (1) [Should fix, Coder] after a change is made, recording "applied" can fail with only a console line (e.g. the PM taps
+  ✓ Seen in those seconds → version moved; or a network blip). The screen says "Approved ✓", but 2 minutes later every Production
+  Manager screen shows "Approved — not applied yet [Apply now]", and tapping it re-applies the old request over any later change —
+  the attack6 fix-2 problem by another door. Found by reading, not reproduced. Fix: re-read and retry the `applied` write while the claim
+  is this screen's; if it still fails, a sticky warning "changed, but not recorded — do not tap Apply now". Same for `seqReqDirect`
+  (scorecard silently under-counts). (2) [Should fix, Tester] no test proves a real page/server clock gap: attack6 part 7 is [info], moves
+  `decided_at` in the page only and does not check its second value; the fake database and the browser share one clock. Add a test with
+  the page clock ±5 min from the fake server: "Apply now" never early, and not later than 2 min + one poll after the screen first saw the
+  row. The design itself (lower bound from rows received + performance.now, never ahead of the database) is sound. (3) [Garry] office /
+  Production Manager date moves made on Deliveries, the board or the pool (Job A tools) inside the 14 days are NOT counted as "direct"
+  in Late changes — only moves from the sequence page are. The Production Manager will mostly use Deliveries, so the column will
+  under-count. (4) [Process, Tester] the merge has not had its Tester re-attack; the four attack5 edits (B1/B2/B8/B9 now vs 404262a) are
+  reasonable but unconfirmed, and B8/B9 no longer check Job A's screens against the old ea990d4 baseline on this branch. The B11 a–c / h / i
+  date batch (bulk, spread, push, preview, Undo) still has no dedicated Tester attack (attack6 parts 8–9 cover part of it).
+  (5) [Note] every request ever made is loaded on every screen (no age limit) — fine now, look again after a few months.
+- ASSUMED calls judged: any PM of the project withdraws — agree (Garry: PMs share everything); only the Production Manager answers,
+  office changes directly with a reason — agree, but see Garry's decision on cover when he is off; approve applies exactly what was asked
+  even if moved since, card warns — agree, the Approve confirm box should repeat the "⚠ changed since asked" line (Coder, small);
+  refused / withdrawn can be asked again — agree; Late changes by week asked, withdrawn not counted — agree; only with lists ON + tables
+  — agree; another project's PM can still send a request from code until Stage 4 — accept (no real logins yet; same as every table).
+- Apply-claim (`updated_by='apply:<name>'`, 2 min on the database's clock): sound as a soft lock — it stops two taps and a stale second
+  screen; a screen that dies mid-apply is taken over after 2 min, which re-applies the same dates (harmless unless someone moved the job in
+  those 2 min). It relies on the `applied` write landing — issue 1.
+- Conditions before the Job B release: issues 1 and 2 fixed and tested; Tester re-attack on the merge confirms the attack5 edits; Garry
+  answers issue 3; full suite re-run with nothing new outside ACCEPTED-FAILURES. Before go-live (unchanged): run the PENDING "PM sequence &
+  pre-production" SQL first, close and reopen every screen, check in an incognito window; rollback = leave `main` as it is.
+- Recommended next order: (a) the fixes above + Tester on the merge and the B11 a–c batch; (b) L4b P-number → WO merge (staff are making
+  lists now; "avoid duplications"); (c) S1 + S2 (small, asked for on go-live day, no dependency); (d) B10 upload + matching as soon as Garry
+  sends the 5 real WO titles + their upload lines + one real 27-column file (if they are late, do B9 first); (e) B9 Johnny's pool;
+  (f) B11 d/e/f/g last.
+
+### 11 Nov 2026 (scheduled run) — Manager issue 1 fixed
+- **6494632** — after an approved change is made, "applied" is written with up to 4 tries (waits 0.4 / 1 / 2.5 s), re-reading the
+  request each time, so a ✓ Seen (version moved) or a network blip in those seconds no longer loses it. If it still fails: a warning
+  that stays (sticky toast + red line on the request card) **"Changed, but not recorded — do NOT tap Apply now; tell the office"**; that
+  card has no Apply now on this screen (only "Try to record it again", which records and never re-applies).
+- **The real guard, on every screen:** before a date request is made (approve or Apply now, after the planner is re-read), if any of its
+  jobs' date history already carries `rq:<request id>`, the change is NOT made again — "applied" is recorded instead (`fromHist:1`) and
+  the user is told "Already made earlier … not made again". So a second screen's "Apply now" can no longer undo a later change.
+- `seqReqDirect`: the same row is retried 4 times (a lost reply is found by re-reading — never two rows); still failing → sticky warning
+  "Changed, but not counted in "Late changes" (WO-…) … Tell the office".
+- The Approve confirm box repeats the card's "⚠ changed since asked" line (and says approving makes exactly what was asked).
+- Tests: `tests/seq/s11-requests.test.js` part 17 (+14 checks, 70/70): fails twice then works; fails always → warning, Apply now refused
+  here and on a fresh second screen with the office's later date kept; ✓ Seen racing the write; direct row lost reply / always failing;
+  confirm box with and without the warning. Full suite: **5,325 pass / 36 fail** = the 35 accepted + e7 redraw timing (982 ms); nothing new.
+  (Tester's in-progress `tests/seq/attack7-*` not run.)
+- Left: an **order** (move) request has no per-job marker like `rq:` — if its "applied" write fails for good, this screen refuses, but
+  another screen's Apply now (after 2 min) would move the rows again. Rare (4 failed tries + someone taps Apply now elsewhere); a guard would
+  need the request id in the seq_move history (SQL) — Architect / Garry to decide.
+
+
+### 11 Nov 2026 (scheduled run) — attack7 fixes
+- **4f12911** fix 1 (HIGH, Manager condition 2): `srvAge` uses the database's clock ALONE once any row has come in (no longer the smaller
+  of that and this PC's clock), so a PC running 5 min slow shows "Apply now" on time; before any row arrives it still uses the PC clock.
+  The requests page now sets one timer (`seqReqTick`) that redraws it the moment an approval — or another screen's claim — passes 2 minutes
+  (waits while a dialog is open or someone is typing). attack7 1a: fast 123 s, right 125 s, slow 127 s after the claim (was: slow ~7 min).
+- **87e7cc4** fix 2 (MEDIUM): `dueHistTidy` — of two identical moves it keeps the richer line (request `rq` > fixed window `fx` >
+  "approved by"), else the earlier, in the first one's place; so a slow stale screen's repeat no longer replaces the approval's line.
+  New tests/seq/a7-histtidy.test.js 6/6 (incl. a genuine back-and-forth with rq / fx lines all kept, tidy twice = once).
+  **Job A not changed:** feature/dates-deliveries has no requests, rq or fx marks, so there the rule is unchanged (keep the earlier).
+- **5949f4c** fix 4 (LOW): sequence "push by weeks" keeps a Saturday delivery on Saturday (`isDelivDay`, like Deliveries); build dates
+  stay working days; push by working days unchanged. (Spread / set not changed — they count working days on purpose.)
+- **6274e29** fix 5 (LOW): ↶ Undo on the sequence page 44 px tall on phones.
+- **4ee0363** test fix-up (s11 part 14, attack6 part 7): the claim times in those two tests were set on the page's fake date; with fix 1 the
+  timer reads the database's clock (the fake database = the Node process), so they now use that. Checks unchanged.
+- Issue 3 (Manager; attack7 2b — Deliveries moves inside the 14 days not counted as "direct") added to ACCEPTED-FAILURES as
+  **pending — Garry to decide**.
+- Tests: attack7 52 / 53 (only 2b), s11 70/70, attack6 45/45, a7-histtidy 6/6. **Full suite** (244 test files + 4 probes, 3 at a time):
+  5,379 pass / 41 fail = the 36 on ACCEPTED-FAILURES + 5 timing (dates attack3-guard ×3, attack1-perf export 7.3 s, editor e7 920 ms) —
+  all pass alone (attack3-guard then shows only its accepted row). header-late-probe still crashes (pre-existing). No SQL.
+- Left: issue 3 for Garry; the order-request guard noted in the previous entry.
+
+---
+
+# Part 3 — the matching key (B0), upload + matching (B10), cutting-list job boxes (L1–L4), late steps (S1–S2)
+*(Architect, scheduled run 10 Nov 2026 13:00 UTC)*
+
+**Plain English for Garry.** Today each screen decides for itself whether two lines are "the same house" (PM sequence, Cienapps
+upload, WO import, cutting-list window). Part 3 gives the whole planner **one rule**: same project + same floor + same unit is the
+same house. It is written once, used everywhere, and the database checks it the same way. Three answers: **Same** — the planner
+acts on its own; **Different** — left alone; **Not sure** — a person taps once to confirm. The planner never guesses. On top of
+that: cutting lists always find their Cienapps WO by floor and unit; a P-number is made only when no WO can be found and is folded
+into the real WO when Cienapps sends it; the board gets Shipped / Installed / Completed; the Shipped tab gets Project and PM filters.
+
+## Key questions — ASSUMED (recommended answer used; Garry to confirm)
+1. Floor "G" on its own — Ground or Block G? (a) ask a person ("not sure") **[rec]** (b) always Ground.
+2. "L1" / "F1" — Level 1 or a block called L1/F1? (a) not sure, a person taps **[rec]** (b) always Level 1.
+3. A floor number on one side and a block code on the other, same unit ("0 / 22" vs "T09 / 22"): (a) not sure, one tap **[rec]** (b) different.
+4. Floor/unit read only from the WO title ("BLOCK T09 APT 12"): (a) never automatic, shown as a suggestion **[rec]** (b) automatic.
+5. Blank floor or unit on either side: no automatic match; a person picks **[rec]**.
+6. Title takes part in the match? No, only shown **[rec]**.
+7. Does a WO made from an upload line carry the block (T09) in Cienapps Floor / Reference? Garry to send 5 real WOs + the upload
+   lines they came from + one real 27-column upload file. **Needed before steps 7–8.**
+8. Merging a P-number into a WO: (a) a tick in the import preview, pre-ticked when certain **[rec]** (b) fully automatic.
+9. P-job's hand-typed due date differs from Cienapps' at the merge: (a) keep the planner's date, list Cienapps' under "Dates to
+   change in Cienapps" (A6) **[rec]** (b) take Cienapps'.
+10. S1 wording: store Cienapps' text "9. JOB SHIPPED", "10. INSTALLED TO BE INVOICE", "11. COMPLETED AND INVOICED", show "Job
+    shipped / Installed / Completed"; Completed also ticks "Installation complete". (a) yes **[rec]** (b) Completed = installation complete only.
+11. Shipped tab PM filter starts on this device's PM: (a) yes **[rec]** (b) always "All".
+12. Release L1–L4 before the rest of Job B (staff are typing lists now; no new SQL): (a) yes, after their own Tester + Manager GO **[rec]** (b) wait.
+13. WO lookup (L3) includes shipped jobs? (a) no, live jobs only **[rec]** (b) yes.
+
+## B0 — the matching key (one family, pure JS, between `/* b0key:start */ … /* b0key:end */`)
+- `keyTxt(s)`: NFKC → drop zero-width chars → `[^A-Za-z0-9]+` → one space (BEFORE upper-casing, so JS and Postgres agree) → trim → upper.
+- `keyCode(t)`: letter and digit runs, leading zeros dropped per digit run (lone "0" kept), tokens joined with "-": "T 09" = "T09" = "T9".
+- `keyFloor(s)` → `{k,t}` with t = `lvl` | `code` | `amb` (with `.lvl`) | blank. Leading FLOOR/FLR/LEVEL/LVL/STOREY/BLOCK/BLK dropped.
+  GF, G F, GRD, GROUND, GROUND FLOOR, 0, 00 → 0 lvl. Digits → lvl. 1ST/2ND…, FIRST…NINTH, LEVEL n → lvl. BASEMENT → -1 lvl.
+  "G" alone → amb(0). Ln / Fn / FLn → amb(n). Else → code via keyCode.
+- `keyUnit(s)`: drop leading APT/APARTMENT/UNIT/NO/NR/NUMBER/HOUSE/HSE/PLOT/POS/POSITION (also glued: "APT07");
+  `^0*(\d+) ?([A-Z]{0,2})$` → "7A"; else keyCode.
+- `keyTitleBits(title)`: BLOCK x, FLOOR/LEVEL n, GF, APT/UNIT/HOUSE/NO/PLOT n; skips "TYPE x"; only when Floor/Unit blank; source 'title'.
+- `keyProj(o)`: `o.pid` → `lsProjForCust(o.customer).id` → ''. `jobKey(o)` uses the planner's current values (B2 overrides count); `rowKey(r)` for sequence/upload rows.
+- `keyMatch(a,b)` → `{r:'same'|'different'|'unsure', why}`: project differs → different; project unknown → unsure; floor and unit
+  both present and either differs → different (lvl/lvl, code/code by k; amb vs code/amb by k; amb vs lvl → unsure if equal number
+  else different; lvl vs code → unsure); any blank / amb / title-sourced → unsure; else same. Different beats unsure.
+- `keyHouseStr(f,u)` = floorK|unitK (null if either blank); `keyLineStr(f,u,p,n)` = f|u|keyTxt(p)|keyTxt(n) (null if p and n blank).
+  These must equal the SQL results. `woKey`/`woNorm` unchanged (they identify the WO; B0 identifies the house).
+- **Database: the same normalising is ported into SQL** (`seq_key_txt`, `seq_key_code`, `seq_floor_key`, `seq_unit_key`,
+  `seq_house_key`, `seq_line_key` rewritten), new column `project_seq.house_key` set by `ps_rules`. The DB recomputes keys on every
+  write so an old screen can't leave a stale key. SQL never reads titles and never answers "unsure".
+- **Proof JS = SQL:** one fixture `tests/seq/b0-pairs.json`; `tests/seq/b0-key.test.js` (node + the loaded app); `pg-check.sql`
+  reads the same file and checks the SQL strings, and that an unsure/different pair never gets equal non-null keys.
+- Example pairs (34) are in the fixture: T09/12 vs "t09 "/"12 " same; T09 vs T9 same; "Block T09" same; full-width "１２" same;
+  Apt 7 / APT07 / Apartment 7 / No. 7 / Unit 007 / House 7 / Plot 07 all same; 7A vs 7 different; "7 a" vs 7A same; T09 vs T10
+  different; other project different; GF = 0 = 00 = Ground = GRD same; G vs 0 unsure; G vs Block G same; 1st = First floor =
+  Level 1 = 01 same; L1 vs 1 unsure; L1 vs L01 same; blank floor unsure; blank floor + different unit different; 0/22 vs T09/22
+  unsure; B vs Basement unsure; 12-14 vs 12 different; from title unsure; customer not linked unsure.
+
+## What changes
+**B10a upload (step 7):** `seqReadUpload(aoa)` finds the header by content (≥4 of qty/floor/unit/product/name/description/price);
+no header → fixed 27-column layout; CHILDREN 1–4 info only. Preview groups: Will be added · Skipped — already in the sequence ·
+❓ Might already be there ([Skip] default / [Add anyway]). Nothing saved before [Save N rows]. Same claim rule in JS and in
+`seq_insert`: lines in file order each claim the first unclaimed live row with the same line_key, else the first unclaimed row with
+null line_key and the same house_key + kind (Start-the-sequence rows — Manager condition 1). Same file twice adds 0; two identical lines kept.
+**B10b matching (step 8):** `seqReconcile(pids)` after `applyImport` and when a sequence opens. Candidates = waiting rows with
+keyMatch ≠ different and same `seqKind`. Certain = exactly one "same" (or identical lines → first by position), no "unsure", not
+wanted by another WO in the same import → `seq_match(…'auto')` + date hand-over. Otherwise "To place / confirm" one tap; none →
+🆕 at the bottom. Never a second row for a WO (unique index + functions refuse). Waiting rows older than seqWaitWks → "⏳ not in Cienapps yet?".
+**L1** (`openListEditor2`; V1 editor untouched): new list with no WO and Copy-to-new get Floor | Unit | Title boxes + "🔎 Find the
+Cienapps WO" (also on Unit blur); WO picked → existing B2 boxes; P-number panel filled from the boxes; Excel import / Lists preview:
+`lsParseGrid` meta gains floor, unit, wo (labels Floor / Unit / WO / Work order), old template still reads.
+**L2:** WO chip on every list surface; P-number shows purple "P-1004 · not from Cienapps".
+**L3** `keyFind(pid,floor,unit)` over live jobs (key map built once per redraw): one same, no unsure → filled, green "Matched
+WO-… · Floor T09 · Unit 12 · title" [Not this one]; several / unsure → short pick list; floor or unit blank → no search; found WO
+already has a live list → "Open it instead?"; hand-typed WO must exist.
+**L4:** none found → plain message + [Make a P-number instead…] with confirm; lookup re-run on Save; second P for the same house +
+kind refused; P-jobs store `pid`. Merge: `analyzeImport` gains `plan.pMerge`; preview section "P-numbers that now have a Cienapps WO"
+pre-ticked only when certain and one-to-one. `pMerge(P,W,by)` at Apply: W survives, Cienapps fields win, higher step; lists move
+(both live lists → refused "archive one first"); planner fields copied only where W has none (both booked → keep W's, flag, log;
+P already cut → keep P's week); due date per Q9; logs merged; sequence row handed over (keeps position + Johnny's tick); P leaves
+DB.orders like Delete, full snapshot kept in settings `pMerged` (last 300).
+**S1:** MANUAL_STEPS += the three Cienapps texts; setting one: confirm, `shippedAt`, `shippedStep`, `stepHand{from,to,at,by}`;
+10/11 → installedAt; 11 → completeAt/By; on a van stays on Deliveries until delivered. Next import: steps only move forward, so the
+planner's 9 holds against Cienapps' 8 and shows in Export Changes. "↩ Bring back to board" restores `stepHand.from`.
+**S2:** `renderShipped` Project + PM filters (both lists), remembered on the device, PM defaults to this device's PM; hidden with lists off / SEQP not ok; 360 px.
+
+**Data:** orders `pid`, `pNotSame[]`, `stepHand`; settings `pMerged`. Pending SQL block (unrun): key functions, `house_key` + index,
+claim rule in `seq_insert`, GRANT execute.
+
+## What must NOT change
+Lists switch OFF = today's app; V1 editor; woKey/woNorm; import counts; no import removes a job; renumberP; one live list per WO;
+B2 overrides and Export Changes; Job A date rules (moveDates only); steps only move forward; shipped jobs and rows never deleted.
+
+## Risks
+Wrong merge (mitigated: tick, kind must agree, refused with two lists, snapshot kept) · floor aliases too loose/strict (Q1–Q3
+default to not sure) · JS/SQL drift (one fixture) · upload layout differs (Q7 sample, preview) · two PCs importing (re-look-up,
+unique index) · old screens (close every screen on go-live day) · speed (key map once per redraw).
+
+## Acceptance checks
+1 b0-key pairs pass in node and app; pg-check twice. 2 Find the WO (Block T09 / Apt 012; G vs 0 asks; blank unit no search; two WOs pick).
+3 P-number confirm, purple, second refused. 4 Merge moves list/booking/sequence, P gone, snapshot kept, date kept; two PCs once; two lists refused.
+5 Upload: 1 row per line, same file 0, two W2 BED 2 → 2, no header same, after Start not doubled. 6 WO import matching cases.
+7 S1 steps and import. 8 S2 filters. 9 Full suite: nothing new outside ACCEPTED-FAILURES.
+
+## Build steps (small commits)
+1 B0 functions + `b0-pairs.json` + `b0-key.test.js`. 2 SQL key functions + house_key + claim rule; pg-check twice. 3 L1 + L3.
+4 L4a (confirmed P, pid, duplicate-P refusal, purple chip). 5 L1b Excel job-info fields. 6 L4b merge. 7 B10a upload (needs Q7
+sample). 8 B10b matching. 9 S1. 10 S2. 11 Full suite → Tester → Manager (steps 3–6 can go first as their own batch if Q12 = yes).
+
+## Progress log — Part 3
+
+### 10 Nov 2026 (scheduled run, afternoon) — Coder: steps 1–5 built (B0, SQL, L1 + L3, L4a, L1b)
+- 7141f0f B0 key functions (b0key block) + tests/seq/b0-pairs.json (34 plan pairs + 26 extra + 8 line keys) + b0-key.test.js (node and in the app).
+  **Deviation:** the sequence-row key is `seqRowKey` — `rowKey` already exists (the saw/stores line key).
+  **Reading of the rules (Coder):** an ambiguous floor ("G", "L1") is "same" against the SAME code ("G" = "Block G", "L1" = "L01"),
+  "unsure" against a level with the same number, and "unsure" against another ambiguous code with the same number ("F1" vs "L1");
+  "Block x" is always a code ("Block 1" vs "1" = unsure). House key: a level is "#n" ("#0|22"), a code is its code ("T-9|12").
+- e5884f6 SQL (PENDING block): seq_key_* / seq_floor_key / seq_unit_key / seq_house_key, seq_line_key rewritten, project_seq.house_key + index,
+  claim rule in seq_insert (lines with a WO never claim by house). Run twice on fresh throwaway Postgres 16 (C.UTF-8): ALL SEQ PG CHECKS PASSED both
+  times; project-details pg-check passes; upgrade over the earlier block recomputes keys with no history rows. Fake database uses the same functions.
+- 3c29ded L1 + L3 (Floor / Unit / Title / WO number boxes, Find the Cienapps WO, keyFind), 39f230d L4a (P-number last resort, Save re-check,
+  second P refused, pid, purple "not from Cienapps"), b32232d L1b (Excel Floor / Unit / WO cells). Tests tests/seq/l3-find-wo, l4-pnumber, l1b-excel-job.
+- **Full suite** at b32232d (225 files): 4,290 pass / 32 fail — the same 32 as before (all on ACCEPTED-FAILURES or pre-existing at 7368d79; e7 redraw is timing).
+- Not built (as instructed): L4b merge, B10 upload/matching, S1/S2. Next: Tester on steps 1–5 → Manager.
+
+### 10 Nov 2026 (later) — Coder round 2 after Tester attack 3 (d55096f)
+- fde9ddf key round 2 (JS = SQL): basement "-1" kept apart from 1; placeholders (TBC/TBA/N/A/?/-, bare Apt/House/No/Unit/Block) = blank;
+  accents → base letters from one fixed list (no unaccent), ß → ss; dotted units ("2.05"); "7 (Type B)" → 7; "A Block" = "Block A";
+  "12.0"/"12", "7, 2nd floor"/"7", "Floor 1 Block A"/"Block A Floor 1" → unsure; superscripts kept apart ("7²" ≠ 72, Coder's call);
+  title units skip "n BED" / "n OF"; seqKind: KITCHEN wins, "n BED" not robes, ISLAND = other, seqKinds for the P check; claim rule:
+  island only claims island, a line with no product/name not added twice. New tests/seq/b0-fuzz.json (1,200 strings, JS = SQL; a
+  3,196-string run also 0 differences). SQL run twice on fresh throwaway Postgres: ALL SEQ PG CHECKS PASSED; attack3-pgrace 4/4.
+- eb9f773 lsParseGrid: "Unit | 2" / "Floor | 1" after the parts start are parts. 641b56b P-numbers on two PCs (lists follow the renumber
+  in the list tables; one job per house + kind — database checked before a P is made, a same-moment duplicate folded in); typed WO of
+  another project / house asked.
+- Tester checks that still fail by design: attack3-key / attack3-pg "house keys unchanged since the fixture" ×18 (the fixture recorded the
+  OLD keys — the Tester should refresh hk); attack3-key LOW "2.05" (Garry/coordinator asked for 2.05 kept); attack3-pg pair 6 (SQL null
+  handling in the check: one side is null, the check reads that as FAIL); attack3-pg (c) (sends kind 'robes' by hand — the planner now
+  sends 'kitchen' for that title, so the database must not second-guess the kind).
+- Full suite (229 files): 4,572 pass / 48 fail = the 29 known accepted + the 19 attack3-key above.
+
+---
+
+# Part 4 — the cutting-list window after Garry's first live use (L5–L12)
+*(Architect, scheduled run 10 Nov 2026 evening — ASSUMED calls can be changed by Garry. Decisions: ROADMAP 10 Nov 16:11–16:27.)*
+
+**Plain English for Garry.** The list window works first time: the project fills itself from the work order's customer, "＋ New material"
+always works, Qty looks like L and W, after Save it says "Saved ✓" and there is always a ✕ to get out, delivery cards can start or open a
+list, the WO drop-down shows only this project's jobs (soonest due first), the list name is yours to type, and the "can't keep a backup copy"
+message says what is wrong and how to fix it. No new SQL — all of it could go live before the pending SQL.
+
+## Key questions (ASSUMED)
+1. L5: WO's customer has no project → make it straight away when the window opens, no PIN (same as Garry's 3 Nov no-PIN link rule).
+2. L8: click on the grey area outside the window does nothing; only ✕ / Close / Esc close it, asking first if anything is unsaved.
+3. L12: list name left blank is saved as the WO number.
+4. L9: delivery-card list buttons for office, Production Manager, Drawing office, Pre-production only, lists switch ON only.
+5. L10: Settings shows storage used + can DOWNLOAD the old Quoting-tool copies; NO delete button yet (Garry to say yes first; then Admin PIN, `wpf_…` keys only).
+6. L11: changing the project on a NEW list clears a WO from another project (message); on an existing list the WO is kept, marked "(other project)".
+
+## What changes
+- **L5** new `lsEnsureCustProj(o)` (body taken from `ltiLinkBind` "＋ New project": reload projects; `lsProjFind(customer)` → `ltiLink`; else
+  `lsWrite('projects',{id,name:c,customer:c,cien_names:[c]})`; on duplicate refusal reload and use the existing). `ltiLinkBind` calls it (one copy).
+  Editor: whenever a WO is known and `st.pid` blank (open, `jbChoose`, `me-wo` change, typed WO) call it; "Setting up project '<customer>'…";
+  then grey "Project: X — from the WO's customer". Customer fits two projects → picker + "'<customer>' fits more than one project — pick one".
+  WO with no customer → "This WO has no customer in Cienapps — pick the project, or ＋ New project… at the bottom of the list". No-WO list keeps
+  the picker: "Pick the project — or ＋ New project… at the bottom of the list". "＋ New project…" in the window: no PIN.
+- **L6** `addMat`: no project + WO known → `lsEnsureCustProj` then carry on; no WO → `st.matAfter=i`, focus `#me-pid` "Pick the project — then the
+  new material is added", reopen the prompt after. Suspected bug: select has `onchange` AND `oninput` → name asked twice; fix (change only / `st.addBusy`).
+  `#me-mats` → "🧱 Project materials (add / edit)", never greyed (runs L5 first); same wording on Lists-home `data-lhmat`. "No materials yet" →
+  "This project has no materials yet — [Set up project materials now]" (opens `lsMaterialsDlg`).
+- **L7** `placeholder="Qty"` on PC and phone qty boxes.
+- **L8** sticky top bar: title left, **✕ Close** right. Bottom "Cancel" → "Close". `closeEd()` compares a snapshot of
+  `{rows,name,wo,pid,ltype,tname,noCut,noFit,jb,pw}` taken after the first draw (redraws from other screens' updates must not count) → confirm
+  "Close without saving? What you typed in this list is lost."; Esc same; `ov.onclick` no longer closes. After a successful save the window stays
+  with a finish panel matching what happened: "Saved ✓ — list is with the Saw & Stores" + saw/Stores row counts + WO; waiting check
+  (`lsWaitCheck`) "Saved ✓ — waiting to be checked before the saw sees it"; revision "Saved ✓ — Rev n is with the Saw & Stores"; template
+  "Template saved ✓". Buttons [Close] (big, focused) and [Edit it again]. `lsSavedYet` lost-reply messages unchanged.
+- **L9** (AFTER Job A's D4 card redesign is merged in) ⓘ on every non-manual delivery card (lists ON + allowed role), tooltip "Cutting list / readiness";
+  in `showReadiness` "NO LIST YET [＋ Add cutting list]" → `lsNewStd(wo)`; live list → [Open list]. New `lsLiveListOf(wo)` lifted from `jbLive`.
+- **L10** `devStore()`: every localStorage item grouped Planner (`wpf`+capital or `wpfPending:`) / old Quoting tool (`wpf_`) / Other, size = chars×2,
+  plus `navigator.storage.estimate()`. `writePend` records QuotaExceededError (full) vs SecurityError (blocked). Messages: full → "This device's storage
+  for the planner is full — old Quoting-tool copies use X MB. Your work still saves to the database while this page is open and online. Fix: Settings →
+  Storage on this device."; blocked → "This browser is blocking storage (private window or a browser setting) — use a normal Chrome window."
+  Settings panel "💾 Storage on this device" (table, estimate, fix steps, [⬇ Download a copy of the old Quoting-tool copies]). Nothing deleted.
+- **L11 + L12** `woOpts(pid)`: jobs with `keyProj(o)===pid`, minus shipped / on hold / delDone / delDelivAt; sorted due date (none last) then WO;
+  line "WO-2617-4 · Fl 7 · Unit 231 · due 14 Nov" + " · has a list"; customer→project worked out once per redraw. No project → one disabled line
+  "— pick the project first (or type the WO number below) —"; typed WO sets the project. The chosen WO ALWAYS stays an option (marked "(other
+  project)" / "(shipped)") so `keep()` never wipes `st.wo`. List name: stop pre-filling (`defName` ×3, `lsTplDlg` → template type name, `confirmList` →
+  template type name); label "List name (optional)", placeholder "e.g. Kitchen — Type B"; blank → WO number (P-number: set in `go()` after it's made).
+  Templates still need a name. `lsStdHouse` heading row stays. Filter box in "📐 Insert from template" when the project has > 6 templates.
+
+## Wireframe
+PC: `✍ New cutting list … ✕ Close` / Project [Aspect Athenry ▾] · "from the WO's customer" · [🧱 Project materials (add / edit)] · [✎ Project details] /
+Work order [WO-2617-4 · Fl 7 · Unit 231 · due 14 Nov ▾] + job boxes · List name (optional) · Type / grid with Qty · L · W placeholders /
+[Close] … [Save list → Saw & Stores] / after Save green panel + [Close] [Edit it again]. Phone 360 px: sticky ✕, one field per line, ≥44 px buttons.
+
+## Must NOT change
+Lists switch OFF = today's app (V1 editor, no L9 buttons; only the storage panel). One live list per WO. L1–L4, B0 key, woKey/woNorm, B2 overrides.
+Due dates only through moveDates. Tapping a delivery card still selects it. `lsProject` fallback in `lsSaveManual`. `matOther`. Nothing in localStorage deleted.
+
+## Risks
+Two PCs making the same project (reload + 409 path). "Contains" rule picks the wrong project (shown + changeable). Drop-down speed (once per redraw).
+Stale close-snapshot. Saw/stores must still show WO + Floor/Unit when the name no longer holds the house. Old tests expecting "House 18" names → update.
+
+## Acceptance checks
+1 project fills / made once / two PCs one project / two matches → pick / no customer → message. 2 New material with no project → led through, asked once,
+saved and picked. 3 Qty placeholder. 4 ✕/Close/Esc with and without changes; outside click nothing. 5 four finish messages. 6 delivery card add/open list;
+driver/stores no buttons; switch OFF none. 7 storage full message + Settings sizes, nothing removed. 8 drop-down filter/sort/format/has-a-list/empty/typed WO/
+chosen WO never vanishes. 9 name not pre-filled; blank → WO; typed name found in Find old list, Lists search, Insert-from-template. 10 full suite.
+
+## Build steps
+1 failing tests for the double prompt + outside-click close · 2 L7 + L6 wording · 3 L8 · 4 L5 · 5 L6 carry-on + double-fire fix · 6 L11 + L12 + names +
+insTpl filter · 7 L9 (after D4 is merged) · 8 L10 · 9 full suite → Tester → Manager.
+
+## Progress log — Part 4
+
+### 10 Nov 2026 (evening) — Coder: build steps 1–6 and 8 (L5, L6, L7, L8, L10, L11, L12 + names). Step 7 (L9 delivery-card buttons) NOT built — waits for Job A's D4 card redesign to be merged.
+- 7f46cbc step 1: failing tests first (New material asked twice; outside click closed the window) — tests/seq/l5-l12-window.test.js.
+- 7e47894 step 2 (L7 + L6 wording): Qty placeholder (PC + phone); "🧱 Project materials (add / edit)" in the window (never greyed) and on Lists home;
+  "This project has no materials yet — [Set up project materials now]".
+- 351eb55 step 3 (L8): sticky top bar with ✕ Close; bottom "Cancel" → "Close"; ✕ / Close / Esc ask "Close without saving?" only when something
+  changed since the window opened (snapshot after the first draw; a project set by the app re-bases it); Esc is ignored when another window is on top;
+  outside click does nothing. After Save: finish panel "Saved ✓ — list is with the Saw & Stores" / "…waiting to be checked…" / "Rev n is with…" /
+  "Template saved ✓", row counts + WO, [Close] (focused) and [Edit it again]. The toast is still shown. A finish panel left open goes when another
+  list window opens.
+- f2aaa48 step 4 (L5): `lsEnsureCustProj(o,opt)` — reload projects; fits one → use; fits two or more → {many} (projForCust gained an optional 3rd
+  argument that collects them); a project with the customer's name → `ltiLink`; else make {name = customer, cien_names [customer]}; duplicate refused
+  (two PCs) → reload and link. `ltiLinkBind` "＋ New project" uses it with {make:true} (its old behaviour). Window: on open / WO picked / WO found or
+  typed → "Setting up project '<customer>'…", then grey "Project: X — from the WO's customer"; two fit → buttons "pick one"; no customer / no WO →
+  the plain messages; "＋ New project…" in the window has no PIN (name box starts with the WO's customer).
+- fee4b2f step 5 (L6): "＋ Add new material…" with no project: WO known → L5 first, then the name is asked; no WO → "Pick the project — then the new
+  material is added" + project box focused, asked as soon as a project is picked (drop-down, "pick one" button or ＋ New project). Asked once: the
+  select's input + change both fired → per-element guard.
+- cd7163a step 6 (L11 + L12 + names): WO drop-down = the picked project's jobs (`keyProj` rule, customer→project worked out once per customer per
+  redraw), minus shipped / on hold / delivered, sorted due date (none last) then WO: "WO-2617-4 · Fl 7 · Unit 231 · due 14 Nov · has a list".
+  No project → one disabled line. The chosen WO always stays an option, marked (shipped) / (delivered) / (on hold) / (other project) / (customer not
+  linked to a project) / (not in the planner). New list + project changed → a WO of another project is taken off, said why; existing list keeps it.
+  List name not pre-filled (editor ×3, template dialog → template type name, ✓ Confirm → template type name); label "List name (optional)",
+  placeholder "e.g. Kitchen — Type B"; blank → the WO number (P-number: set when it is made); templates must have a name. "📐 Insert from template"
+  gets a find box when the project has more than 6 templates.
+- 871609e step 8 (L10): `writePend` records full (QuotaExceededError) vs blocked (SecurityError); the toast and the save bar say which, with the fix.
+  Settings "💾 Storage on this device" (Lists ON and OFF): Planner / old Quoting tool (wpf_…) / Other with item counts and sizes (characters × 2),
+  the biggest wpf_ items, `navigator.storage.estimate()`, fix steps, [⬇ Download a copy of the old Quoting-tool copies]. No delete button; nothing removed.
+- d744ca2 fixes found by the full suite: a "Saved ✓" panel arriving after a newer list window opened is dropped (the toast says it); the materials
+  button tooltip said "colours" (Garry's no-"Colour" rule); "Make new list from this" keeps a blank name blank (was " (new)").
+- Old checks updated as intended changes (2a2534e, 5d9ebc1): l3-find-wo "list name filled from the job (unit)" → not pre-filled; stage3/coder-fu-edge-std
+  "list name 31" → blank; stage3/coder-wo-cols "WO-3 — Unit 31" → "WO-3 · Fl 2 · Unit 31 · due 28 Oct"; stage3/flow3-confirm list name "14" →
+  "Type B 3-bed" (×2 checks); stage3/s5s6-templates dialog name "1" → "Type B 3-bed", and A8 "editor closed" now looks for the editor, not any window;
+  stage3/c6-write "editor closed" ×2 → editor gone, "Saved ✓" panel shown; stage3/s4-editor: after moving a NEW list to another project and back,
+  the test picks WO-1 again (L11 took it off).
+- New tests: tests/seq/l5-l12-window.test.js — 71 checks (acceptance 1–5, 7–9 + switch OFF + 360 px), all pass.
+- **Full suite.** Starting point 8dc7968 (232 files): 4,697 pass / 31 fail (the 19 attack3-key fixture checks were fixed by aa4e466; 29 on ACCEPTED-FAILURES
+  + attack3-editor and attack4-fold "two PCs, the same house: ONE P-job" — pre-existing, Job B). This branch (233 files): full run at 2a2534e, then the
+  159 list files again at 5d9ebc1: 4,765 pass / 34 fail = the same 31 as the start + 3 timing (e7 redraw, t17 A'1/A'2 — each passes / matches the
+  start when run alone; another coder was running tests at the same time).
+- ASSUMED (as written in the plan, decided for this run): no-PIN project from the WO's customer; outside click does nothing; blank name = WO number;
+  storage panel download only (no delete); new list loses another project's WO, existing list keeps it marked. Coder calls: two projects fitting
+  → one-tap buttons as well as the drop-down; the native WO drop-down can't be photographed open, so the screenshot shows it as a list box.
+- Screenshots (fake database, ×2): /tmp/claude-0/shots/b-list-window-wo.png, b-saved.png, b-storage.png, b-list-window-phone.png.
+- Next: step 7 (L9) after D4 is merged → Tester → Manager.
+
+### 10 Nov 2026 (late) — Coder: fix round after Tester attack 5 (tests/seq/attack5-window.test.js, 63226eb)
+- e7323af fixes 1–3. **L5 linking:** the window links a customer to a project by itself only when they are the same once case, spaces and
+  punctuation are ignored (name, customer or a Cienapps spelling). A "contains" / builder-only fit is ASKED: "Is this project 'Kilcock Park'?
+  [Yes, use it] [No — make project 'Park Homes']" (Yes adds the customer to that project's Cienapps names, so it is certain next time). Same rule
+  for the window's first pick, a WO picked / found / typed, the standard-layout list and "type a new list" on Lists. **One project per customer
+  however spelled:** projects whose names match once normalised are one customer — the OLDEST is used (projects have no created_at, so the time
+  inside the id; hand-made ids like "P1" count as older); after making a project the app looks again and uses the oldest twin; nothing is deleted.
+  A new project's name loses a trailing full stop / comma so the database's one-name rule stops a same-moment twin ("Race Homes." → "Race
+  Homes"; the customer heading is kept as written in cien_names). **Esc** with a window opened over the list (materials, insert from template,
+  which sheet) closes that window only. **WO drop-down dates** are read as real dates: "TBC", "10/11/2026", "2026-02-30" = no date → last,
+  shown "due ?"; leading spaces trimmed. **Offline:** "No connection — the project couldn't be set up. Check the internet and try again; you can
+  still type the list." + [Try again]. The attack5 offline check was updated to this wording (it expected the old text).
+- 319a6cb (found by the full suite): "the same customer" also ignores company words (Homes, Ltd, Developments… — the existing SG_CO list), so
+  "ADERRIG HOMES" still goes to project "Aderrig" by itself (Garry's 3 Nov rule; dozens of tests rely on it). "Park Homes" vs "Kilcock Park" is
+  still asked. **Coder's call beyond the instruction** (which said case / spaces / punctuation only) — Garry/coordinator to confirm.
+- 1d17d08 fix 4 (flag only, no redesign): "⚠ Two P-numbers for one house — P-1001 / P-1002" also on the saw and stores list cards and in the list
+  window of either P-job. ACCEPTED-FAILURES: attack3-editor part 7 and attack4-fold part 1 "pending — Garry to decide (flag only vs Keep one
+  moves the list)"; attack5 has no separate twin check. The two attack5 Lows left as they are (inactive project, blocked-storage sign-in) are
+  listed there too as "pending — Garry to decide", so no failing test is unlisted.
+- New checks in tests/seq/l5-l12-window.test.js (now 81, all pass): contains fit asked, Yes / No, next WO certain; P-twin warning on saw,
+  stores and both list windows. attack5-window: 78 of 80 pass (the two Lows above).
+- **Full suite (234 files) at 319a6cb:** 4,854 pass / 35 fail = the 31 failing at the start (8dc7968) + attack5's 2 pending Lows + t17 A'1/A'2
+  (timing — alone it shows only the usual 8). attack3-pgrace / attack4-jsvssql skip without a throwaway Postgres, as before.
+- **Known risks left as they are (Garry to decide):** an inactive project is not looked at for its Cienapps spellings (a WO of that customer
+  gets a new project); when the browser blocks storage the sign-in comes back so Settings → Storage can't be reached (the plain message still
+  shows); the lsReset race (a list reload resetting while the window works out the project) is not handled beyond the existing reload.
+
+### 10 Nov 2026, 23:30 UTC — run started 19:03 stopped early: another run was working on Job A at the same time
+- This run (19:03) pushed D1–D4 + DD1 to feature/dates-deliveries at 20:44. A second run (session …6KJgyRq2ks8b8ntT) then attacked and fixed
+  it on that branch (pushed 22:59, Manager GO WITH CONDITIONS). This run's own Tester round 4 + fixes were NOT pushed onto it, to avoid a clash;
+  they are parked on **`parked/job-a-fixes-run-2026-11-10-1903`** (7 commits on top of acddf20). Next run: compare and carry over what the
+  other run did not cover — above all **77d1acd: the Production Manager's screen has no way into Deliveries** (High; Garry's buy-in goal),
+  bc814ba (hidden on-hold ticked jobs moved by "Move ticked to week"), 127e933 (week bar as drop target at 1366×768), da0f017 (one due-tag
+  colour rule + "⚠ built after due" chip), and tests/dates/attack4-usability.test.js from 3cdd65d (name clash: the other run also has an attack4 file).
+- Part 4 (L5–L12) above is complete apart from L9, Tester attack 5 fixed (e7323af, 1d17d08, 319a6cb), full suite 4,854 / 35 (31 as at start +
+  2 pending Lows + 2 timing). Not yet done: Manager verdict on Part 4, L9 (after the D4 cards are merged in), merge of feature/dates-deliveries.
+- Decisions for Garry from this batch: P-number twins (flag only vs "Keep one" moves the list), company words ignored when matching a customer
+  to a project (319a6cb), inactive project reuse, Production Manager gets the full Deliveries page.
+
+### 10 Nov 2026 (night) — Job A merged in, L9 built
+- bf37ca9 merge of feature/dates-deliveries (Job A, d9d59bc: Deliveries D1–D4, DD1, attack4 fixes). Four conflicts, all in the date-move engine
+  (`dmTarget`, `DM_FLAG`, `dmDelivTarget`, `dmRow`), each kept both sides: Job B's per-job sequence targets (`ch.per`, per-job delivClear for Undo),
+  the fixed window (`dmFixedAt`, the 'fixed' flag) and Job A's week moves (`ch.toWk` → `wkMoveTo`, "no working days left" = skipped) and its
+  wording "delivery date is a Sunday or bank holiday" (Saturday deliveries allowed, ASSUMED by Job A). Settings keys: Job A added none, so
+  fullSettings / settingsFrom / applyPlan are Job B's unchanged. Card layout (D4) and week bar came in with no conflict.
+- **Deviation:** the two dates attack4-usability "L12" checks still failed after the merge — they open the list window with the lists switch
+  OFF, which shows the OLD window (L12 is a new-window feature and must not change the old one). They were rewritten (same place) to check the
+  switch-OFF window is unchanged, and pass; L12 itself is covered by tests/seq/l5-l12-window. Their two ACCEPTED-FAILURES rows removed.
+- 8c5903b L9 a: `lsLiveListOf(wo)` (lifted from the list window's `jbLive`, which now calls it) and `l9Ok()` = lists switch ON + office /
+  Production Manager / Drawing office / Pre-production.
+- d23371e L9 b: ⓘ on every non-manual delivery card when `l9Ok()` (also loaded / on-the-road cards, which had none), tooltip "Cutting list /
+  readiness — <readiness>". The readiness window ("Cutting & fittings check", from ⓘ and when jobs are put on the board) shows, per WO:
+  no live list → "📋 NO LIST YET" + [＋ Add cutting list] (`lsNewStd(wo)`: WO, project from the customer, House heading); live list →
+  [📂 Open list]. The tap re-checks: if another PC made the list meanwhile, it opens that one ("already has a cutting list — opening it").
+  Buttons 36 px tall on PC, 44 px on phones. Tapping the card itself still selects it. Switch OFF: nothing changes (same ⓘ, tooltip and
+  "NO LIST ISSUED — upload/attach…" text). Manual jobs: no buttons.
+- 1199eb2 L9 c: tests/seq/l9-deliv-card.test.js — 29 checks (cards, Add, Open, selecting, two PCs, roles, switch OFF, 360 + 1366 px, an
+  `<img onerror>` title escaped), all pass. tests/harness.js gained an opt-in `H_DSF=2` env var for sharp screenshots (default unchanged).
+- **Full suite** (235 test files + the 4 probes, 3 at a time). After the merge (bf37ca9): 4,871 pass / 35 fail. After L9 (1199eb2):
+  **4,901 pass / 34 fail** = 31 on ACCEPTED-FAILURES (dates attack1-oldversion ×3, attack3-guard, project-details attack1-merge 1c, sawstores ×2,
+  seq attack1-oldtab ×2, stage1 t13 ×4, t14 ×3, t16 ×2, t17 ×10, t3, stage3 attack-poll P5, c4-queue A5) + editor e7 redraw timing (passes alone,
+  87 / 510 ms) + the 2 pre-existing Job B checks NOT on the list (seq attack3-editor and attack4-fold "two PCs, the same house: ONE P-job").
+  dates attack1-perf "other PC (B) save landed" failed once in the merge run and passes alone (11/11). header-late-probe still crashes on the
+  import mapping screen (pre-existing, untouched).
+- ASSUMED (from the plan): the list buttons live in the ⓘ readiness window, not on the card face (tapping the card must keep selecting it).
+  The Deliveries tab is only shown to the office today, so in practice only the office sees L9; the other three roles are allowed if they ever do.
+- Screenshots (fake database, ×2): /tmp/claude-0/-home-claude/c3803803-dab5-550b-80e7-23e78ca71940/scratchpad/shots/l9-pool-card-1366.png,
+  l9-readiness-add-1366.png, l9-readiness-open-1366.png.
+- Next: Tester (L9 + the merge) → Manager.
+
+### 11 Nov 2026, ~00:30 UTC — merge of the two overlapping runs (session …6KJgyRq2ks8b8ntT)
+- This run merged Job A (dates-deliveries d9d59bc) into Job B (bf37ca9) and built L9 (8c5903b, d23371e, 1199eb2, e25ea7f; full suite 4,901 / 34)
+  while the 19:03 run pushed Part 4 round-5 fixes (to 2b9b227). Merged both (e5e8cfa): one conflict in `lsNewStd` (kept `lsProjAutoId` + added
+  `lsLiveListOf` / `l9Ok`), both progress entries kept, duplicate ACCEPTED-FAILURES rows dropped. After the merge tests/seq + c10 + attack4: all pass
+  except the accepted ones (attack1-oldtab ×2, attack3-editor P-job, attack4-fold P-job, attack5-window 2 Lows). L9 tests 29/29, attack4 45/0.
+- Still to do in Job B: carry over what is useful from `parked/job-a-fixes-run-2026-11-10-1903` (esp. 77d1acd Production Manager way into Deliveries,
+  bc814ba hidden on-hold jobs moved by "Move ticked", 127e933, da0f017) onto Job A; Manager verdict on Part 4; Tester on the B11 date batch; change
+  requests; upload + matching (B10); Johnny's pool page; B11 d/e/f/g.
+
+### 11 Nov 2026 (scheduled run, afternoon) — Coder: Part 1 carried over from the old branch; S1, S2, L4b built
+- **Part 1 (old branch `feature/project-details`, Garry's 11 Nov answers) cherry-picked onto this branch:** b3d9cfe (16794ad), c25e94c (2a22f09),
+  3cca06b (30ffedd), 09854ee (b35c7bb), 793aa43 (e4861f2), f05eab3 (9db5b98); progress entries merged into Part 1's log (647f27d).
+  Conflicts: the list store keeps both `px` (project_specs) and this branch's `sq/sr/sp`; who-may-edit uses Garry's 11 Nov list plus
+  **Pre-production** (Drawing office rights, Garry 10 Nov) — sign-off stays **Project Managers only**; five Stage 3 / editor tests took the
+  11 Nov versions. SQL: the "Project details" block is now the 11 Nov version (project_specs). On a fresh throwaway Postgres 16 (Stage 1 →
+  Stage 3 → Stores dockets → Project details → PM sequence, each run twice): project-details pg-check **ALL PG CHECKS PASSED**, seq pg-check
+  **ALL SEQ PG CHECKS PASSED**, stores-docket pg-check passed, guard v2 passed, attack3-pg 0 failed of 45; attack2-pg prints the one Low it
+  printed on the old branch (FINDING 3: a spec item can point at another project's material — FK only).
+- **S1** (6eeca5b): the board step drop-down has 9. JOB SHIPPED / 10. INSTALLED TO BE INVOICE / 11. COMPLETED AND INVOICED (Cienapps' exact
+  text, shown JOB SHIPPED / INSTALLED / COMPLETED). Confirm first; then exactly like an imported shipped job (shippedAt/shippedStep — off the
+  board and week totals, a job on a van stays on Deliveries); 10 → installed, 11 → installed + Installation complete; logged "(set by hand)";
+  on Export Changes while Cienapps is behind; an import that is behind leaves it ("planner is ahead"), one that moves on takes over;
+  "↩ Bring back to board" puts the step from before back. tests/seq/s12-ship-steps 20/20.
+- **S2** (code in 6eeca5b, test 202111e): Shipped tab Project + PM filters on both lists, remembered per device, full width / 16 px at 360 px,
+  names escaped; hidden and not applied with the lists off or the sequence tables missing. The PM view has its own 📦 Shipped tab.
+  tests/seq/s13-ship-filters 23/23.
+- **L4b** (2973ddd): import preview "🔗 P-numbers that now have a Cienapps WO" using the B0 key (keyMatch / jobKey / pKindsMeet — no new
+  matching). Pre-ticked only when "same" and one-to-one; "not sure" shown unticked with the reason; one P ticked for two WOs (or two for one)
+  refused before anything is imported. Ticked: live list moves (refused when both have one — database asked), history / date history /
+  booking / planner week / hand hours / notes onto the WO where it has none, higher step, sequence row handed over (same row), P-job off the
+  job list with a full copy on the WO (`pFrom`, permanent) and in settings `pMerged`. Two PCs → merged once. tests/seq/l4b-pmerge 23/23.
+  It does NOT close ACCEPTED-FAILURES attack3-editor / attack4-fold (two P-numbers for one house before Cienapps has the WO) — noted there.
+- **Tests moved to the 11 Nov rules** (found by the full suite): e5-columns (Management adds materials with no PIN), s6-pre-lists (sign-off
+  asks Pre-production for the PM PIN), attack5-carryover B8 (the PM view's new Shipped tab) — 4b684e0, 6e790e2, 14af2fc; all pass alone.
+- **Full suite** (252 test files + 4 probes, 3 at a time, at 2973ddd): **5,585 pass / 47 fail** = 24 on ACCEPTED-FAILURES (dates attack1-oldversion
+  ×3, attack3-guard ×1, project-details attack1-merge 1c, sawstores ×2, seq attack1-oldtab ×2, attack3-editor, attack4-fold, attack5-window ×2,
+  attack7 2b, stage1 t17 ×10) + 5 from the three tests above (now pass alone: e5 19/0, s6 8/0, attack5-carryover 115/0) + editor e7 redraw
+  913 ms (timing; passes alone). header-late-probe still crashes (pre-existing). No new failure outside ACCEPTED-FAILURES.
+- **ASSUMED (Garry to confirm):** (1) S1 wording Q10 rec — Completed also ticks "Installation complete". (2) A shipped job's step can't be
+  set backwards by hand ("steps only move forward"); Bring back to board also clears an "installed" mark set by hand. (3) Q11 rec — the PM
+  filter starts on this device's PM. (4) PMs get their own 📦 Shipped tab (Garry: filters "for the PMs"); they can tick Installation complete,
+  "Bring back to board" stays office-only. (5) Project filter lists only projects that have shipped / on-hold jobs, plus "No project linked";
+  PM filter has "none assigned". (6) Q8 rec — merge by tick, pre-ticked only when certain. (7) Q9 rec — planner's due date kept, Cienapps'
+  under Dates to change in Cienapps. (8) At a merge the P-job's week wins over the automatic week of a WO new in that import; hand hours
+  win over estimates; both booked → the WO's booking kept and flagged. (9) A "not sure" pair left unticked is offered again (unticked) on
+  every import — no "not the same house" memory yet (plan's pNotSame, not built). (10) Pre-production keeps spec / materials editing
+  (Drawing office rights) but, like the Drawing office, can't sign off.
+- **Left:** Tester + Manager on S1 / S2 / L4b and the Part 1 carry-over; B10 upload / matching (needs Garry's Q7 sample); pNotSame.
+- **Later the same afternoon — Tester attack 8 (0632203) findings fixed** (tests/seq/attack8-dates.test.js: was 58 / 7, now **65 / 0**):
+  099b53c 4c HIGH — sequence Undo re-reads the planner first (like Approve); a job changed on another PC since is left ("changed since by X —
+  not undone"), the other jobs are still undone. eae424a 1a/1h/1j — the bank-holiday list now has the actual days as well as the substitutes
+  (Sat 26 Dec 2026, Sat 25 / Sun 26 Dec 2027) and **Mon 3 Jan 2028 (ASSUMED substitute for Sat 1 Jan — Garry to confirm)**. 2d7d0d2 1i/1h — a
+  delivery pushed / pulled by weeks onto a Sunday or bank holiday is fitted in the same week exactly like Deliveries' Move to week (the day
+  before in that week, else the one after — so Fri 18 Dec +1 week → Thu 24 Dec, Mon 2 Nov −1 week → Tue 27 Oct). b517aba 1h/1j/2d — the
+  preview says when a delivery was moved off a holiday, and warns when a date is in the past. e0bca98 5b — PM nudges count only his own projects
+  even with "All projects" ticked. A bulk SET to a holiday is not moved (the person picked it) — the preview's existing bank-holiday warning
+  shows instead (ASSUMED). Spread already uses working days.
+- **Full suite** at e0bca98 (254 test files + 4 probes): **5,722 pass / 44 fail** = ACCEPTED-FAILURES rows (dates attack1-oldversion ×3,
+  attack3-guard, attack1-merge 1c, sawstores ×2, seq attack1-oldtab ×2, attack3-editor, attack4-fold, attack5-window ×2, attack7 2b, stage1 t17 ×8)
+  + editor e7 redraw 842 ms (timing) + **5 in the Tester's new tests/seq/attack8-merge.test.js** (A1a, A1b2, A1d, A1d2 ×2): they compare
+  screens with code from before S1/S2 and see the new board step options (JOB SHIPPED / INSTALLED / COMPLETED) and the PM's 📦 Shipped tab —
+  intended changes; the Tester should allow them as attack5 B8 now does (not changed by the Coder). tests/seq: all others pass; tests/dates:
+  only the accepted rows.
+- **Evening — Tester attack 9 (17e680c) findings fixed** (attack9-pmerge was 25 / 4 → **29 / 0**; attack9-ship-spec 16 / 1 → **17 / 0**):
+  889ee7f M4 HIGH — the save merge treats settings `pMerged` / the WO's `pFrom` as a tombstone: a merged P-number edited on a stale
+  screen is dropped again, the WO's history says the change was not kept, and that screen is told to make it on the WO; merged
+  P-numbers are never reused. For screens running an OLDER version: new **PENDING SQL "Merged P-numbers stay merged"** (trigger
+  `pp_pmerged_guard`, refuses a save that brings one back; no table / column / GRANT) — tests/seq/pg-pmerged.sql passes twice, json and
+  jsonb, and with every other block run (seq pg-check still passes). 618ace8 M3b — merge re-reads the database first ("already merged by X
+  on another screen", nothing done again; two PCs at the same moment → one pFrom, one pMerged entry, one merge line; no false sequence
+  warning); M5 — when both have a sequence row, ONE stays: the earlier-placed one (ASSUMED), the other retired with a reason (seq_remove,
+  never deleted), its date carried over if the kept row has none. e7ba7e2 M9 — a P-number already shipped by hand is offered (never
+  pre-ticked, "P-number already shipped"); merging moves the shipped mark onto the WO. 58e591d T2a — a PM with no projects starts on PM: All.
+- **Full suite** at 58e591d (256 test files + 4 probes): **5,765 pass / 47 fail** = the accepted rows (dates attack1-oldversion ×3,
+  attack3-guard, attack1-merge 1c, sawstores ×2, seq attack1-oldtab ×2, attack3-editor, attack4-fold, attack5-window ×2, attack7 2b,
+  stage1 t17 ×10) + e7 redraw and dates a5-histdedup 3b (timing; both pass alone) + attack8-merge ×5 (the Tester is updating those
+  expectations for S1/S2). tests/seq otherwise all pass.
+
+### 11 Nov 2026 — Manager verdict (afternoon run)
+Reviewed f4a7719..41ab040 on `feature/project-details-v2`. Re-run by the Manager: all 50 files in tests/seq + tests/project-details, plus
+tests/dates (27), stage1 t17, e5-columns, s1s3-screens, s4-editor (81 of 256 files). Only ACCEPTED-FAILURES rows fail; attack8-merge 68/0,
+attack8-dates 65/0, attack9-pmerge 29/0, attack9-ship-spec 17/0, l4b 23/0, s12 20/0, s13 23/0. The other 175 files: not re-run (the
+5,765 / 47 figure is the Coder's). Throwaway Postgres 16: every pending block in go-live order (Stage 1 → guard → Stage 3 → Photo →
+Stores dockets → Project details → PM sequence → Merged P-numbers → guard v2) run twice, then the whole set twice again — no errors;
+seq / project-details / stores-docket pg-checks, attack3-pg (0/45), pg-pmerged, attack3-pgrace and attack4-jsvssql all pass.
+- **Part 1 carry-over: GO.** Every line the six 11 Nov commits added on the old branch is on this branch; the only differences are the
+  intended merges (`px` beside `sq/sr/sp`, Pre-production added to SPEC_ED). Project details SQL is byte-identical to the old branch's.
+- **S1 hand-set steps 9/10/11: GO WITH CONDITIONS** — Garry confirms ASSUMED 1–2 (Completed also ticks Installation complete; steps only move forward).
+- **S2 Shipped filters + PM Shipped tab: GO WITH CONDITIONS** — Garry confirms ASSUMED 3–5.
+- **L4b merge + attack9 + "Merged P-numbers stay merged" SQL: GO WITH CONDITIONS.** Nothing is deleted (full copy on the WO `pFrom`
+  and in `pMerged`; sequence rows retired, never deleted); merged once on two PCs; a stale screen can't bring a P back. The trigger is
+  safe, re-runnable, independent of the other blocks, works with both old-screen guards and with junk in orders/settings.
+  Issues: (Low, Coder) restoring a planner backup taken before a merge is refused by the trigger — add "drop the trigger first" to the
+  block's Rollback note; (Low, Coder) give `pp_pmerged_guard` `set search_path = public` like the other functions (Supabase advisor);
+  (Note, Garry) a "not sure" pair left unticked keeps two jobs for one house on the board until someone ticks it; ASSUMED 6–9 and M5
+  (earlier sequence row kept) need Garry's yes.
+- **attack8 B11 date fixes: GO WITH CONDITIONS** — bank-holiday list checked against the Irish rules 2026–2028 (correct); Garry confirms
+  Mon 3 Jan 2028.
+- **Job A + Job B release: NOT YET — GO WITH CONDITIONS once:** (1) Garry answers the open items (ACCEPTED-FAILURES 1c, two P-numbers
+  flag vs Keep one, attack7 2b, attack5-window ×2, the ASSUMED list); (2) SQL run in the order above, guard v2 only after the new code
+  has saved once; (3) `origin/main` is ahead by history only (same files as 4bb9bed) and merges cleanly — merge it in, full suite once;
+  (4) go-live day: close/reopen every screen, incognito check, PINs not the defaults. B10 upload is not built (needs the Q7 sample) — it
+  is not needed for this release.
+- **11 Nov (live) — Garry's answers** (ROADMAP "11 Nov, Garry, answers"): all the ASSUMED calls confirmed except two, now built:
+  0624b07 step 11 by hand no longer ticks "Installation complete"; 42a6355 bulk "Set date" onto a Sunday / bank holiday moves to the
+  next delivery day and the preview says so (new tests/seq/s14-set-holiday 5/5).
+
+### 11 Nov 2026 (evening, Garry live) — Johnny's CNC sheet received: what is in it (for B8 / B9)
+Garry sent `CNC Schedule 2025.xlsm` ("this is what he works from for managing CNC"). The file itself is NOT in this repo (the repo
+is public and the sheet holds customer / project names). What the planner needs to know about it:
+- **478 tabs.** One master tab per year — **`CNC work 2026`** (1,779 jobs) — plus one tab per machine per day, named
+  `CNC 1 09.11.2026`, `CNC 2 …`, `CNC 3 …` (about 150 each since Oct 2023; a few odd names: `CNC 1 + 2`, `Running`, `Shane CNC`,
+  `Sheet8`; dates written `09.11.2026` or `23.10.26`). Also `16mm Cutter tracker` (not needed).
+- **Master tab columns:** PROJECT · Room ID (free text, e.g. "Block H1 Robe B101", "House 10") · **Job ID** · Material 1 · Qty 1 ·
+  Material 2 · Qty 2 · Material 3 · Qty 3 (Qty = sheets). **No due date, no machine, no date** on the master tab.
+- **Job ID = the Cienapps work order number**: `2766_01` = WO-2766-1. 1,747 of 1,779 rows are in that shape; 32 are something else
+  (hand names like "RM_Compact_LH", joined jobs) — these go to a person, never guessed (B0 rule).
+- **Strike-through = done**, and it is **per material**, not per job: 1,540 jobs fully struck, 136 part-struck (e.g. Material 1 and 2
+  cut, Material 3 not), about 100 not started.
+- **Day tabs:** title cell = machine + date, then Project · Room ID · Job ID · Material 1 · Sheets · Material 2 · Sheets · Material 3 ·
+  Sheets. The header row moves (row 2 or row 4) and there is a junk "Column1…" row under it — find the header by content. The machine
+  and the planned day of a job come ONLY from which tab it is on.
+- **What this changes in the plan (ASSUMED, Garry to confirm):** (1) match a sheet row to a planner job by WO number from the Job ID —
+  no project/floor/unit guessing needed; (2) "processed" in Johnny's pool = the job is on the master tab; "cut" = all its materials
+  struck; part-struck shows "2 of 3 materials cut"; (3) machine + CNC day = the newest day tab the job is on; (4) sheets per material
+  come from the Qty columns (better than Cienapps' single sheet count); (5) "out of step" = a job on the master tab not struck whose
+  cut-by date (due − 7) has passed, or a job due inside 3 weeks that is not on the master tab at all.
+
+### 11 Nov 2026 (evening, Garry live) — what Johnny's strike-through means + a real Cienapps export
+- **Garry: a strike-through on Johnny's CNC list means the job's files are SENT TO THE MACHINE and the Cienapps unit labels and
+  Crystal reports are PRINTED** — i.e. the job is PROCESSED (Cienapps "5. WORK ORDER PROCESSED"), NOT cut. This replaces the earlier
+  ASSUMED reading ("struck = cut"). So for B9: strike-through (all materials) fills Johnny's PROCESSED tick; part-struck = "2 of 3
+  materials sent"; on the sheet but not struck = queued for processing; "cut" still comes only from Cienapps step 6 / the saw ticks.
+- **Cienapps work-order export received** (23 WOs; file not stored — public repo). Columns: Reference · Floor · To process · Unit ·
+  Due Date · Step · Customer · Title · Order # · Sub-total · # WO · Installation date · Shipping date · Created on · Total · Sales Rep ·
+  Type · Planned · WO Type · PO. Useful for B0 / B10: Floor is written "G", "GF", "LGF", "0", "1", "2", "T12", "Multiple" or blank;
+  Unit is "Apt 51", "X1", "63", "Multiple" or blank (8 of 23 have neither); Reference = order-line-floor-unit ("2796-15-2-APT 51");
+  # WO = "WO-2796-15"; there is a "To process" 0/1 column and a "Planned" 0/1 column the import does not use yet; several WOs of one
+  order share a Title. Tester: use these shapes (not the names) in the B0 key attacks — "LGF", "T12", "X1", "Multiple", blank/blank.
+
+---
+
+# Part 5 — B9 Johnny's pre-production pool
+*(Architect, 11 Nov 2026 22:00 UTC, unattended scheduled run — every key question uses the recommended answer, marked ASSUMED, Garry to confirm.)*
+
+## Goal (plain English)
+Johnny gets one list on the Pre-production screen of every work order to be processed in the next 3 weeks (or more if he picks),
+across every PM's projects, starting in due-date order. He drags it into his own working order without changing any PM's sequence,
+and ticks **Processed** when the CNC files are sent and the labels printed. Export Changes lists the ticks that still need
+"5. WORK ORDER PROCESSED" in Cienapps. Red/amber flags show what is late; a marker shows what a PM changed since he last looked.
+His spreadsheet stays in use; later the CNC view reads his tick and his order.
+
+## Key questions (ASSUMED — Garry to confirm)
+1. **Jobs due soon with no PM sequence row** (sequence not started, or no project): SHOWN with a grey tag "not in a PM sequence" /
+   "no project", sorted by due date; Cienapps step 5+ still shows them processed; they can't be ticked or moved until the PM/office
+   presses "Start the sequence". Top strip: "N jobs have no PM sequence: <project> (PM …), …". Why: `seq_pre` must point at a sequence
+   row; making a row by itself would change the PM's table; a planner-record field breaks the "pool writes no planner field" rule. No SQL.
+2. **Processed:** Cienapps step 5–11 → "✓ processed (Cienapps)", worked out on screen, nothing written. Johnny's tick writes `seq_pre`
+   (database stamps who/when). Cienapps below 5 → listed in Export Changes "set 5. WORK ORDER PROCESSED in Cienapps"; clears itself when an
+   import brings 5+. Un-tick allowed (own or sheet tick) with a reason (Ticked by mistake / Files need redoing / Other) in `seq_pre.note`,
+   logged by the database; refused when Cienapps says 5+ ("Cienapps says processed — change it there"). Waiting rows can't be ticked.
+3. **Johnny's order:** never-moved row → `preDefKey` = build-due day + fraction (project name, then PM position), so it follows its date.
+   Moved row → `pre_key` = midpoint of its neighbours (top = first − 1, bottom = last + 1); it stays put. New rows slot in by due date.
+   "↺ Back to due-date order" clears every `pre_key` after a confirm.
+4. **Out of step** (Part 2 Q14, processed rows ignored both sides): a not-processed row is flagged when a not-processed row ABOVE it has a
+   cut-by more than 2 working days later, or a row above is the same project + same due date with a HIGHER PM position. The default order
+   is never out of step.
+5. **Waiting rows ("⏳ no WO yet") are in the pool**: build due = `req_date` − `delivLead()` working days, shown with "~"; undated ones not
+   listed (footer count). Movable, not tickable.
+6. **Two PCs:** version-checked writes; a clash reloads the row, "changed on another screen — check and try again". Johnny reordering while a
+   PM moves a date: no clash (date on the job, order in `seq_pre`); the row gets "changed since you last looked".
+7. **Who:** Pre-production role with his name picked (`seqMe('pre')`), lists on. Office / Production Manager open the view with its PIN if he's off.
+8. **Amber** = not processed and build due within 7 × `preWks()` days (rows shown only because he picked more weeks are not amber).
+   **Red** = not processed and today after cut-by (cut-by day itself amber). Overdue unprocessed rows always listed.
+9. **"Changed since you last looked"** = due/delivery date, waiting row date or PM position changed, or new to the pool; per person per
+   device; first visit on a device = baseline (nothing flagged). "✓ Seen all" clears all; tapping a badge clears one.
+10. **Default filter = Not processed**; "All" one tap away.
+
+## What changes
+- **Pre-production → 🗂 Pool** (`renderPre` ~4181) replaces the placeholder. Header "Due by <date> (N wks) [weeks ▾ preWks()…12]" (device
+  only, `wpfPreWks`, never Settings). Filters PM / Project / Material / Processed (Not / Processed / All) in `PREV`, fold-out on a phone.
+  [✓ Seen all] [↺ Back to due-date order]. Strips: no-PM-sequence (Q1), red count past cut-by. Columns: My# · Due# · WO / "⏳ no WO yet" ·
+  Project · PM · Flr · Unit · Title · Due (`dueTag`, read-only) · Cut-by · Sheets (`o.sheetsCien`) · Material · Spec · List · Badges
+  (🔒 fixed, 🔁 moved N×, OUT OF STEP, ↻ changed, grey "not in a PM sequence") · ✓ Processed (who/when). PC: drag, ▲▼, # Move to.
+  Phone 360 px: cards (`.seq-tbl` card CSS ~255), ▲▼, # Move to, ✓ Processed ≥36 px; no drag, no sideways scroll.
+- **Export Changes** (`renderExport` ~10496): panel "⚙ Processed by pre-production — set 5. WORK ORDER PROCESSED in Cienapps (N)" only when
+  `seqVis()`: WO, Floor, Unit, Title, Customer, Cienapps step now, Processed by, When; own Excel button; Changes Excel gets a "Processed"
+  sheet when not empty. P-numbers, on hold, shipped left out.
+- **New functions** beside `renderPre`: `cncCutBy(due)` (= due − 7, then back with `isWorkDay` until a working day — not `prevWorkDay`,
+  which steps one day too far on a working day); `preDue(r,o)`; `preRows()` = live `LST.sq` rows + WO jobs from `DB.orders` (not manual)
+  with no live row (`seqWoRow`), base filter as `seqJobsToStart` (~4223), minus `woCut` / `isShipped` / `isOnHold` / `delDone` /
+  `dStage==='deliv'`, due ≤ today + 7 × weeks; `preDefKey`, `preKey`, `preOutOfStep(list)` (one pass, running max); `preProcessed(r,o)` →
+  `{on,src:'cienapps'|'tick'|'sheet',by,at}`; `preMaterial(o)` (distinct saw-line `mat` on the WO's live lists via a map built once per
+  redraw, else `specMatNames(pid)` grey "(spec)"); spec cell `specCount(pid)`; list cell `seqProgress(o,r).list`; `preWrite(seqId,patch)`
+  (POST when no `LST.sp` row, else PATCH `seq_pre?seq_id=eq.X&version=eq.V`; 409/23505/empty → GET, `lsPut`, throw "changed on another
+  screen"; NOT `lsWrite`, which filters on `id`); `preTick`, `preUntick` (`pickReason` → note); `preMove(id,{up|down|to|onto})` (midpoint
+  on the list as shown; gap < 1e-6 → "use Back to due-date order"); `preReset()`; `preSig`, `preSeen` (localStorage
+  `wpfSeen_pre_<name>`; blocked storage → nothing flagged); `preBind(root)` (pattern of `seqBind` ~4250–4284, `data-prer`); `preCienRows()`.
+- **Changed:** `woProgrammed(o)` (~10746) also true when the job's row is ticked in `seq_pre` and step < 6 (step 5 only when `!seqVis()`).
+  `lsRedraw` / `mergedRender` skip redraw while a pool drag is armed (`PREV.drag`).
+- **Data / SQL: NONE new.** `seq_pre` (PENDING "PM sequence & pre-production" block) already has `pre_key`, `processed`, `processed_by/at/src`,
+  `note`, `version`, stamping, "a sheet tick never clears a hand tick", `sp_log`, RLS, GRANTs. Reorders are not written to history (ASSUMED);
+  ticks / un-ticks are. Poll already 10 s for ROLE pre.
+
+## Must NOT change
+Lists OFF or SQL not run → old message, no new Export panel, no errors. The pool never changes a PM sequence (no `seq_move` / `seq_insert`
+/ `project_seq` writes) and never writes a planner field; it cannot move dates. Job A rules, Export Changes' existing sections, import
+counts, the Pre-production 📋 Cutting lists tab, `seqProgress` and the PM sequence page unchanged.
+
+## Risks
+Few tickable rows at go-live (Q1 — strip names PMs to press Start). Two Johnny devices (version checks). Redraw mid-drag (`PREV.drag`).
+Speed with ~2,000 jobs (maps once per redraw). Storage blocked → "changed since" off. Phones: Chrome only.
+
+## What the CNC view (B8) will read later
+Per WO: Johnny's order (`preKey`, tie-break / locked order), processed = `preProcessed().on`, `cncCutBy`, `seqFixedAt`, `o.sheetsCien`
+(per-material sheets from his sheet later), `preMaterial`, `project_seq.pos`. Sheet reader (not built): Job ID `2766_01` → WO-2766-1; all
+materials struck → `preWrite({processed:true, processed_src:'sheet'})`; never un-ticks; never re-ticks a row Johnny un-ticked after the sheet
+last changed (compare `seq_pre.updated_at`); only rows with a sequence row.
+
+## Acceptance checks
+1. SQL not run / lists OFF: old message, Export Changes unchanged, no console errors.
+2. Today Wed 11 Nov 2026, preWks 3: due Wed 2 Dec in (day 21), Thu 3 Dec out; weeks ▾ 4 brings 3 Dec in, not amber; preWks 2 acts as 3.
+3. Due 1 Nov, unprocessed, not cut → listed, red; at step 6 / saw ticked → gone; on hold / shipped → gone.
+4. Cut-by: due Tue 8 Dec → Tue 1 Dec; Sat 12 Dec → Fri 4 Dec; Fri 1 Jan 2027 → Thu 24 Dec 2026; Wed 24 Mar 2027 → Tue 16 Mar. Red from the day after.
+5. Default order due → project → PM position (Due# = My#). Drag on PC, ▲ / # Move to on 360 px. `project_seq` untouched. Order holds after reload; a new WO slots in by date.
+6. Out of step cases as Q4; processed never flagged; Back to due-date order clears.
+7. Tick at step 4 → stamped, in Export Changes + Excel sheet; import at step 5 → line gone. Step 5 never ticked → "✓ processed (Cienapps)", no `seq_pre` row.
+8. Un-tick asks a reason, history "unprocessed"; refused at Cienapps 5+.
+9. No sequence row → grey tag, not tickable / movable, named in strip. Waiting row "⏳ no WO yet", "~" date, movable not tickable.
+10. Two PCs tick the same row → one database row, second told + reloaded. PM date change → "↻ changed" within 2 min; Seen all clears; new device flags nothing.
+11. Filters each narrow; 360 px no sideways scroll, buttons ≥36 px.
+12. Full suite: nothing new outside ACCEPTED-FAILURES; Job A tests pass after the `woProgrammed` change.
+
+## Build steps (one commit each)
+1. B9a pool read-only (cut-by, rows, default order, processed, material/spec/list cells, amber/red, 🔒 🔁, no-sequence strip; fake `seq_pre` POST/PATCH routes in tests/seq/srvs.js if missing).
+2. B9b tick + un-tick + Export Changes panel + Excel sheet + `woProgrammed`.
+3. B9c Johnny's order (drag / ▲▼ / Move to), Back to due-date order, out of step, changed since, Seen all, drag redraw guard.
+4. B9d filters, fold-out, weeks ▾, 360 px pass.
+5. Tester → fixes → Manager.
+
+## Progress log — Part 5
+
+### 11 Nov 2026 (scheduled run, night) — Coder: B9a–B9d built
+Built on `feature/project-details-v2`, one commit per step, all pushed. **No SQL, no new save key, no planner-record field** — the pool
+reads the planner, `project_seq` and `seq_pre`, and writes `seq_pre` only (never `project_seq`, never `seq_move` / `seq_insert`).
+- **B9a** (32ba13e) pool, read-only: `cncCutBy`, `preDue`, `preRows` (live sequence rows + WOs with no live row; cut / shipped / on hold /
+  delivered left out; due ≤ today + 7 × weeks), default order due → project → PM position (`dk` = day number + fraction), My# / Due#,
+  `preProcessed` (Cienapps 5–11 worked out, nothing written; else the `seq_pre` tick), material (saw lines on the WO's live lists, else the
+  spec's materials in grey "(spec)"), spec n/n, list ✓, sheets, 🔒 / 🔁, red (past cut-by) / amber (due within `preWks()` weeks), strips
+  (jobs with no PM sequence by project + PM; red count), footer counts. Processed filter (Not / Processed / All) is in this step.
+  tests/seq/b9a-pool.test.js **27 / 0** (fixture tests/seq/b9fix.js, today Wed 11 Nov 2026).
+- **B9b** (96198a9) ✓ Processed tick / ↺ un-tick (reason Ticked by mistake / Files need redoing / Other → `seq_pre.note`; refused at
+  Cienapps 5+), `preWrite` (POST, or PATCH `seq_id=eq.X&version=eq.V`; 409 / 23505 / empty reply → re-read the row, "changed on another
+  screen"), Export Changes panel "⚙ Processed by pre-production — set 5. WORK ORDER PROCESSED in Cienapps (N)" + its own Excel + a
+  "Processed" sheet in the Changes Excel, `woProgrammed` also true for a ticked job below step 6 (only while the pool is visible).
+  tests/seq/b9b-tick.test.js **20 / 0**; dates attack1-engine 25 / 0, c1-engine 22 / 0.
+- **B9c** (0b5e2e9) Johnny's order: drag (PC), ▲ ▼, # Move to (My# number) → `pre_key` midpoint (top = first − 1, bottom = last + 1; gap
+  < 1e-6 refused → "Back to due-date order first"), ↺ Back to due-date order (confirm, clears every `pre_key`), OUT OF STEP (one pass,
+  processed ignored), "↻ changed" since you last looked (localStorage `wpfSeen_pre_<name>`, first visit = baseline, tap clears one,
+  ✓ Seen all), `mergedRender` holds off while a pool drag is armed (`PREV.drag`). tests/seq/b9c-order.test.js **25 / 0**.
+- **B9d** (44a440e) filters PM / Project / Material (each with a "none" choice, ✕ Clear), weeks ▾ `preWks()`…12 (this device only,
+  `wpfPreWks`), filters fold away on a phone, 360 px cards (no sideways scroll, buttons 40 px). tests/seq/b9d-filters.test.js **15 / 0**.
+- **Old test moved to the new behaviour:** tests/seq/s2-pm-assign "Pre-production placeholder page" now checks the pool page (the
+  placeholder is gone on purpose) — 39 / 0.
+- **Full suite** (261 test files + 4 probes, 3 at a time, at 44a440e): **5,893 pass / 40 fail**, all failing before B9 too:
+  ACCEPTED-FAILURES rows — dates attack1-oldversion ×3, attack3-guard, project-details attack1-merge 1c, sawstores ×2, seq attack1-oldtab ×2,
+  attack3-editor, attack4-fold, attack5-window ×2, attack7 2b, stage1 t17 ×10, t13 ×4, t14 ×3 (C7, D4a, D4b), t3, stage3 attack-poll P5,
+  c4-queue A5; plus stage1 t16 ×2 "WITH proposed guard" (informational, as before); plus three NOT on the list that fail identically at
+  4294cd2 (before B9, checked in a worktree): sawstores retest-nov B (2028 list has Mon 3 Jan 2028 — the ASSUMED substitute holiday),
+  stage2 coder-r2 #4 (board step dropdown has the S1 steps), stage3 flow-attack1-switchoff office/b (same cause); plus editor e7 redraw
+  timing (passes alone, 23 / 0). header-late-probe still crashes (pre-existing). attack8-merge now passes. **No new failure.**
+- **ASSUMED (Garry to confirm):** (1) A sequence row whose WO is not in the planner is left out of the pool (nothing to process). (2) A job
+  with no due date is not listed (footer count). (3) My# / Due# number the whole pool (filters hide rows but keep the numbers); "# Move to"
+  takes a My# number; ▲ ▼ and drag move among the rows shown. (4) The Export Changes panel appears only when there is at least one
+  line (so Export Changes looks exactly as before otherwise). (5) Re-ticking keeps the last un-tick reason in `note` (history has every
+  tick / un-tick). (6) The pool's buttons are for ROLE Pre-production only, with the lists switched on (`v2`); everyone else, and the
+  "switching" state, sees it read-only. (7) The "changed" baseline is never taken while the tables are still loading. (8) P-numbers are
+  in the pool (they need processing) but never in the Export Changes panel.
+- **Left:** Tester → fixes → Manager (build step 5). Not built: the sheet reader (B8 / later, as the plan says).
+
+### 12 Nov 2026 (scheduled run, night) — Coder: Tester attack10 findings fixed
+attack10-pool **84 / 0** (was 77 / 7), attack10-speed **16 / 0** (was 11 / 5); b9a 27 / 0, b9b 20 / 0, b9c 25 / 0, b9d 15 / 0;
+l4b-pmerge 23 / 0, attack9-pmerge 29 / 0. No Tester expectation changed.
+- 690065e **6f HIGH**: when a P-number merge retires one of two sequence rows, the retired row's `seq_pre` (Processed tick + pool place)
+  goes onto the kept row (both ticked → stays processed; both placed → the WO row's place). Original ticker kept in `processed_by`, the
+  original time in the note (the database stamps a new `processed_at` — **ASSUMED** acceptable, no SQL); history logged by the person merging.
+- d7625ce **3b HIGH**: a never-moved row's default key = day + its own fraction (project name first 3 letters → PM position → WO), no longer
+  its rank among that day's rows, so moved rows don't jump when same-day WOs arrive or leave. Default order now follows that key (two
+  projects sharing the first 3 letters can interleave by position — **ASSUMED** fine). No-room guard 1e-6 → 1e-9 (my b9c check moved with it).
+- e01c03a **P1/P2/P3**: filter boxes capped at 360 px (no 1,689 px page); "Not you?" 36 px on the pool strip.
+- bf82ce6 **D2/D3**: drag guard only while the pool is on screen, expires after 30 s, cleared by Escape / any mouse-pointer release /
+  page hidden / the Cutting lists tab; the 2-minute auto refresh respects it.
+- b27642b **1e / 4e / 4f LOW**: a lost reply re-reads the row (already as asked = saved, no "Not saved"); storage full → told once;
+  the seen map remembers its horizon (`_lim`), so rows that only come into view are remembered quietly, not "changed".
+- 8525328 tests moved to Garry's confirmed rules (11 Nov): sawstores retest-nov B (Mon 3 Jan 2028 holiday) 79 / 79, stage2 coder-r2 #4
+  (steps 1-11) 13 / 0, stage3 flow-attack1-switchoff office/b (S1 steps folded as an allowed difference) 12 / 0.
+- **Full suite** (263 test files + 4 probes, 3 at a time, at 8525328): **5,995 pass / 38 fail** = the ACCEPTED-FAILURES rows as before
+  (dates attack1-oldversion ×3, attack3-guard, attack1-merge 1c, sawstores ×2, seq attack1-oldtab ×2, attack3-editor, attack4-fold,
+  attack5-window ×2, attack7 2b, stage1 t17 ×10, t13 ×4, t14 ×3, t3, attack-poll P5, c4-queue A5) + t16 ×2 "WITH proposed guard"
+  (informational) + 2 timing under load (editor e7 redraw, stage1 s11-pend 2,500-job copy) that pass alone (23 / 0, 3 / 0). No new failure.
+
+### 12 Nov 2026 (scheduled run, night) — Coder: Tester attack11 findings fixed
+- 809b1a9 **A1b MEDIUM**: default key bands = first 2 letters → stable hash of the WHOLE project name (256) → PM position (1024) →
+  WO (rows with no position only); day numbers counted from 1 Jan 2026; no-room guard 1e-12 (13 moves fit between two never-moved
+  neighbours). Each project's rows stay together and 3b still holds. **Tester check relaxed (it was stricter than its title):** two
+  same-day projects with the same first letters ("Aderrig North" / "Aderrig Park") are ordered by the name hash, not alphabetically —
+  a single number per row can't hold the whole name; the check now accepts either order, each project together (**ASSUMED**, Garry to confirm).
+- 1f20bfe **L2 LOW**: a drop after the 30 s guard ran out still moves the row (the drag data names it), or says "drag again".
+- 86b50d9 **X1 LOW**: a lost-reply re-read counts as saved only when the row was written by this person; otherwise "already ticked by
+  <name> on another screen" / "changed by <name> on another screen".
+- attack11 **31 / 0**, attack10-pool 84 / 0, attack10-speed 16 / 0, b9a 27 / 0, b9b 20 / 0, b9c 25 / 0 (gap check moved to 1e-12), b9d 15 / 0.
+- **Full suite** (264 test files + 4 probes, at 86b50d9): **6,026 pass / 38 fail** = the same ACCEPTED-FAILURES rows + t16 ×2
+  informational + editor e7 redraw timing and stage1 t4 2,500-job timing (accepted row; both timing under load). No new failure.
+
+### 12 Nov 2026 — Manager verdict on B9 (Johnny's pool)
+**Verdict: GO WITH CONDITIONS** (reviewed plan 4294cd2, code 32ba13e..e610fe1, tests b9a–b9d, attack10-pool/-speed, attack11, 8525328, 809b1a9).
+Re-run by the Manager on the fake database: b9a 27/0, b9b 20/0, b9c 25/0, b9d 15/0, attack10-pool 84/0, attack10-speed 16/0, attack11 31/0,
+l4b-pmerge 23/0, attack9-pmerge 29/0, s2-pm-assign 39/0, dates c1-engine 22/0, attack1-engine 25/0, attack2-site 30/0, c3-export-import 12/0,
+c8-deliv-engine 13/0, sawstores retest-nov 79/79, stage2 coder-r2 13/0, stage3 flow-attack1-switchoff 12/0, weeks 10/0, datasafety 11/0,
+project-details attack1-phone 10/0. Full suite not re-run by the Manager (Coder's 6,026 / 38, all on ACCEPTED-FAILURES or timing).
+Checked in the code: no new SQL (every column used — `wo`, `pre_key`, `processed*`, `note`, `version`, `updated_by` — is in the existing
+`seq_pre` block); no new top-level save key, no planner-record field written (only `localStorage` `wpfPreWks` / `wpfSeen_pre_<name>`);
+the pool writes `seq_pre` only (no `project_seq`, `seq_move`, `seq_insert`, no date writes); lists OFF → old message, no Export panel,
+`woProgrammed` unchanged; every data value in the pool / Export panel / reason dialog goes through `escA`.
+
+**Key issues**
+1. **Should fix (Coder, then Tester)** — the drag redraw guard does not work in a real Chrome drag. Chrome fires `pointercancel` the moment
+   a native drag starts; `preDragOff` listens for it, so `PREV.drag` is cleared straight away AND a redraw is forced mid-drag. Manager probe
+   (real Playwright mouse drag, headless Chromium): events `dragstart → pointercancel`, `PREV.drag` empty mid-drag, 2 redraws. The drop
+   still lands (the attack11 L2 fallback reads the row from the drag data), so the move is not lost — but the "never redraw under a drag"
+   protection is dead. Fix: don't disarm on `pointercancel` (keep Escape / dragend / page hidden / 30 s). attack10-speed D1b logs the
+   mid-drag value ("during=") without checking it — Tester to assert the guard is armed mid real drag.
+2. **Garry (adoption)** — a job with no PM sequence row can't be ticked or moved (Q1, ASSUMED). At go-live most projects won't have a sequence
+   started, so Johnny may find most of his pool greyed out. The strip names the PMs, but someone has to press "Start the sequence".
+3. **Note (safe for Job A)** — `woProgrammed` now also counts Johnny's tick (lists on, Cienapps below step 6). Its only caller is the date
+   engine's preview flag: a due move on a ticked job now says "programmed (step 5) — take it out of the nest" and marks the board chip.
+   Correct intent, nothing moved or blocked; Job A tests pass. Wording says "step 5" even when Cienapps is at step 4 — Coder may reword.
+4. **Accepted — 809b1a9 loosened attack11 A1b.** The check's title was "each project kept together"; the old regex also demanded
+   alphabetical order, which the plan never asked for. Acceptable. Side effect: projects sharing the first 2 letters on the same day sort in
+   a fixed but not alphabetical order, and about 1 in 256 such pairs share a band and interleave by PM position. Cosmetic.
+5. **Note** — 8525328 test updates match Garry's recorded 11 Nov answers (ROADMAP: Mon 3 Jan 2028 bank holiday; S1 steps 1–11). OK.
+   P-number merge carry (6f) gives the tick a new "processed" time (original in the note) — ASSUMED, acceptable.
+
+**Conditions before merge to main**
+- [ ] Issue 1 fixed + Tester re-check (mid-drag armed, drop still lands, guard still expires).
+- [ ] Garry answers the decisions below (and the Part 5 ASSUMED Q1–Q10 + Coder ASSUMED (1)–(8) stand unless he says otherwise).
+- [ ] The existing "PM sequence & pre-production" SQL block (already PENDING for earlier parts) is run in Supabase first — nothing new for B9.
+- [ ] After deploy: incognito check of Pre-production → Pool as Johnny (tick one test job at step 4, see it in Export Changes, un-tick it);
+  Chrome only on phones.
+- [ ] Tell Johnny (pool, ticks, Export Changes list) and the PMs/office ("Start the sequence" so his jobs become tickable).
+- Rollback: the pool is part of the whole Job B branch; if it misbehaves, switching the new lists off hides it (old message), or go back
+  to the previous `main` commit.
+
+**Garry's decisions**
+- D1 Jobs with no PM sequence: (a) as built — shown, not tickable until the PM presses Start **[recommended]**; (b) let Johnny tick them
+  anyway (needs a new place to store the tick — more work, maybe SQL).
+- D2 Ticked-but-not-yet-step-5 jobs whose date moves: (a) flag "programmed — take it out of the nest" as built **[recommended]**;
+  (b) only flag when Cienapps itself says step 5.
+- D3 Same-day projects with the same first letters: (a) fixed order, each project kept together, as built **[recommended]**;
+  (b) must be strictly alphabetical (more work).
+- D4 Export Changes "Processed" panel: (a) only shown when there is something to set in Cienapps, as built **[recommended]**; (b) always shown.
+
+**Process notes:** Tester's real-mouse drag test recorded the mid-drag guard state but didn't assert it (missed issue 1). Coder loosened
+a Tester check (A1b) himself — justified here, but it should be flagged to the Tester for sign-off rather than changed in the fix commit.
+
+- 12 Nov (Manager issue 1, cde4bde): pointercancel no longer ends a pool drag (real Chrome fires it at drag start) — new tests/seq/b9e-realdrag.test.js (real mouse) 3 / 0 (fails on the old code); b9a–d, attack10 ×2, attack11 and the Manager's probes pass.
+
+---
+
+# Part 6 — B10 Cienapps upload file → sequence table + WO matching
+*(Architect, unattended scheduled run 12 Nov 2026 — every key question uses the recommended answer, marked ASSUMED, Garry to confirm.)*
+
+**Plain English for Garry.** A PM opens his project's 🔢 Sequence page, taps **⬆ Cienapps file** and picks the same 27-column file the
+office uploads to Cienapps. Before anything is saved the planner shows: each line → one row "⏳ waiting for a WO number"; lines already
+in the sequence → skipped and listed; lines it isn't sure about → skipped unless he taps "Add anyway". When the Cienapps import later
+brings the WO numbers, each WO takes over its row on its own only when there is exactly one possible row; any doubt → a "To place /
+confirm" list, one tap. A WO is never added twice, never guessed, never merged quietly. Rows still waiting after 3 weeks get
+"⏳ not in Cienapps yet?". **No new SQL** — it uses the PM sequence block already waiting to be run.
+
+## Already exists (not rebuilt)
+B0 key family (`keyFloor`, `keyUnit`, `seqRowKey`, `jobKey`, `keyMatch`, `keyHouseStr`, `keyLineStr`), `seqKind`; PENDING SQL
+`seq_insert` (claim rule, skips a WO already on a row), `seq_match` (refuses a WO on another live row / a row no longer waiting),
+`seq_remove`, DB-worked `house_key` / `line_key`; app `seqStart`, `seqWaitWks`, nudge counts, 🆕 badge; hook point `applyImport`
+(`PMERGE_RUN`). Not built: `seqReadUpload`, preview, `seqReconcile`, To place / confirm, date hand-over; imports never set `is_new`.
+
+## Key questions — ASSUMED
+1. **Q7 (no sample came):** match by the B0 key as built. WO Floor "T12" = row "T12" → automatic; Cienapps "0" / "GF" / blank against
+   a block code → "not sure", a person taps. **[rec]**
+2. Floor/Unit "Multiple" / "Various" / "All": never certain (browser-only guard; key and SQL unchanged). **[rec]**
+3. Project with no sequence yet: preview offers "☑ Start the sequence from today's jobs first (N)", ticked by default; upload lines then claim those rows by house — no double. **[rec]**
+4. Qty above 1: one row, preview warns "Qty 2 — one row; check how Cienapps makes the WOs". **[rec]**
+5. A new WO with no possible row in a project that has a sequence: added at the bottom "🆕 new — place in sequence"; a project with no sequence is left alone. **[rec]**
+6. P-numbers never take a waiting row (the L4b merge runs first and hands their row over). **[rec]**
+7. Several candidate rows that are IDENTICAL lines (two "W2 BED 2"): taken in position order, one WO each. Different names in the same house + kind (BED 1 / BED 2): a person decides; the row whose Name equals the WO Title is listed first, never chosen on its own. **[rec]**
+8. ⏳ row tap → "Uploaded <date> by <name>, file <name>, line N. Check Cienapps." [Keep waiting] / [Remove this row…] (reason, `seq_remove`, kept in History, never deleted). **[rec]**
+
+## What changes (index.html, V2 only, hidden unless `seqVis()`)
+- **⬆ Cienapps file** in the `seqPageHTML` top bar when `seqCanEdit(pid)`; from the hub/office the project is picked first. .xlsx/.xls/.csv.
+- **`seqReadUpload(aoa)`** → `{lines,warn,err}`: header found by content in the first 10 rows (≥4 of Qty/Floor/Unit/Product/Name/Description/Price, trimmed, NFKC); no header → fixed 27-column layout only if most rows have a number in A and a Product in D, else "This doesn't look like a Cienapps upload file — nothing loaded."; CHILDREN 1–4 kept as info, never rows; blank rows dropped; kind = `seqKind(name+' '+descr)`.
+- **`seqClaimPreview(pid,lines)`**: the `seq_insert` claim rule in the browser → Will be added / Skipped — already there / ❓ might already be there (keyMatch "unsure", same kind).
+- **Preview** (dialog; cards at 360 px): header with project, file name, line count; Start-first tick; the three groups; ⚠ Qty lines; "Put them: ◉ at the bottom ○ under row #"; [Cancel] [Save N rows]. Save → `seq_insert(pid, rows, p_after, by)` src 'upload', upload_id, line_no, why "Cienapps upload: <file>"; toast uses the database's counts ("another screen added some meanwhile — N skipped" if they differ).
+- **`seqReconcile(pids)`** after `PMERGE_RUN` in `applyImport` and when a sequence page opens (editors only): re-read rows; every live, not-shipped, non-P job of a project with ≥1 row and no row of its own; candidates = waiting rows, same project + `seqKind`, keyMatch ≠ different. Certain (one "same" and no "unsure", or an identical-line group in order; no Multiple; no title-sourced key; no other WO in the run wants the row) → `seq_match(…'auto')`. No candidates → `seq_insert` with the WO, `is_new:true`, src 'import'. Else nothing written → To place / confirm. A database refusal = another PC did it: re-read, no error. Import result: "Sequence: 5 matched · 2 added as 🆕 · 3 to confirm [Open]".
+- **To place / confirm** (`seqConfirmHTML(pid)`, worked out each time, nothing stored) at the top of the sequence page; one tap → `seq_match(…'confirmed')` or `seq_insert` is_new; version-checked, stale → "changed on another screen". **Possible doubles** (a 🆕 row + a same/unsure waiting row): [Use the waiting row] retires the 🆕 row (`seq_remove`, "double") then matches; on failure `seq_restore`. Counted in the nudge `place`.
+- **Dates to agree:** matched row whose `req_date` ≠ the job's delivery date → "Row asked 12 Dec · Cienapps 19 Dec — [Use 12 Dec] [Keep 19 Dec]"; [Use] goes through `moveDates(…{src:'pmseq', requestOnly: ROLE==='pm'})` with reason "Sequence date — set before the WO existed"; either button clears `req_date`.
+- **⏳ flag:** waiting row older than `seqWaitWks()` weeks → "⏳ not in Cienapps yet?" → Q8 dialog.
+- **Data / SQL:** NONE new. No planner-record field, no top-level save key.
+
+## Must NOT change
+Lists OFF / SQL not run = today's app (no button, no panel, `seqReconcile` does nothing); `applyImport` counts and rules; no import
+removes a job or row; B0 key, `woKey`/`woNorm`, JS = SQL fixtures; `seq_insert` / `seq_match` SQL; L4b merge; Johnny's pool; Job A
+date rules (only `moveDates` moves a date); B7 fixed window; rows never deleted.
+
+## Risks
+Two PCs (re-read + DB refusals; leftovers show as possible doubles) · Cienapps layout differs (falls back to a person) · header words
+/ trailing spaces (content + trim) · wrong project picked (preview names it; nothing saved before Save) · big files (keys once) · phones: Chrome, 360 px.
+
+## Acceptance checks
+1 Same file twice → second adds 0, all "Skipped". 2 Two identical "W2 BED 2" in one house → 2 rows; again → 0. 3 No header = same
+result; trailing spaces read; the WO export file refused. 4 K8 with children → one row. 5 Start then upload → claims by house, no
+double; "0" vs "T09" under ❓. 6 One WO / two different-name rows → confirm; two WOs / one row → both listed, first confirmed takes it;
+one WO / two identical rows → auto, first by position. 7 "Apt 7" = "APT07" = "7" automatic; blank floor → confirm; same unit T09 vs
+T10 never matched. 8 "Multiple" never automatic; P never takes a waiting row; after P→WO merge no second row. 9 Two PCs reconcile the
+same import → each WO on exactly one row. 10 Waiting > 3 weeks → ⏳; Remove asks a reason, row stays in History. 11 Lists OFF / SQL
+not run → nothing new. 12 360 px usable, no sideways scroll. 13 Full suite: nothing new outside ACCEPTED-FAILURES.
+
+## Build steps (one commit each)
+1 `seqReadUpload` + tests/seq/b10a-read.test.js. 2 `seqClaimPreview` + preview counts = fake-DB `seq_insert` counts. 3 Button, preview,
+Start-first, position, Save. 4 `seqReconcile` + import hook + page-open + 🆕 at the bottom. 5 To place / confirm + possible doubles +
+nudge. 6 Dates to agree + ⏳ dialog. 7 360 px pass, full suite → Tester → Manager.
+
+## Progress log — Part 6
+
+### 12 Nov 2026 (scheduled run) — Coder: B10 steps 1–6 built
+Built on `feature/project-details-v2`, one commit per step, all pushed. **No SQL, no new save key, no planner-record field** — it uses
+`seq_insert` / `seq_match` / `seq_remove` / `seq_restore` from the PENDING PM-sequence block and the existing `project_seq` columns
+(`children`, `upload_id`, `line_no`, `why`, `is_new`, `req_date`). The fake database already had every route; nothing added to it.
+- **7815e86 step 1** `seqReadUpload(aoa, r0)` + `seqUpBook(file bytes)`: header found by its words in the first 10 rows (≥4 of Qty /
+  Floor / Unit / Product / Name / Description / Price; trailing spaces, any order / case; CHILDREN n QTY / PRODUCT / NAME / DESCRIPTION /
+  PRICE), else the fixed 27-column layout only when most rows have a number in A and a product code in D; CHILDREN kept on the line
+  as info (K8 + fitting kit + door kit = ONE line); blank rows dropped; kind = `seqKind(name + description)`; Qty ≠ 1 warned; Floor /
+  Unit "Multiple / Various / All" flagged. The Cienapps **work-order export** is refused with its own message. .xlsx / .xls / .csv.
+  tests/seq/b10a-read **21 / 0** (fixture tests/seq/b10fix.js: the create-cienapps-upload 27-column shape, 5 lines per house).
+- **a3fa460 step 2** `seqClaimPreview(pid, lines, extra)` = the `seq_insert` claim rule in the browser (line key, else a no-line-key
+  row of the same house + kind, island only island) → Will be added / Skipped / ❓ (keyMatch "unsure", same kind, rows not already
+  claimed by another line of the file); `extra` = the rows "Start first" is about to make; `seqUpRows`, `seqStartRows` (seqStart now
+  uses it). tests/seq/b10b-preview **11 / 0**: preview counts = fake-DB `seq_insert` counts (Start then upload, same file twice = 0,
+  two identical W2 BED 2 = 2 then 0, three = 1 more, "T09" vs "GF" ❓).
+- **db41859 step 3** "⬆ Cienapps file" in the sequence page's top bar (editors only; hub / office reach it through the page they open).
+  Preview window: project, file, line count; "Start the sequence from today's jobs first (N)" ticked by default when the project has no
+  sequence; the three groups (❓ with "Add anyway"); ⚠ Qty; "Put them: at the bottom / under row #"; Cancel / Save N rows. Save →
+  `seq_insert` (src upload, one upload_id, line_no, why "Cienapps upload: <file>"); toast uses the database's counts ("another screen
+  added some meanwhile — N skipped"); a lost reply keeps the window ("Nothing is added twice if you press Save again" — same row ids).
+  tests/seq/b10c-upload-ui **26 / 0** (incl. lists off, SQL not run, stores look-only, escaping, 360 px).
+- **f0f68f6 step 4** `seqReconcile(pids, fresh)` (one run at a time per screen; re-reads the rows first): certain → `seq_match(…'auto')`;
+  a WO NEW in this import with no possible row → `seq_insert` 🆕 (is_new, src import) at the bottom; anything else nothing written. Hook:
+  after `PMERGE_RUN` in `applyImport` (`SEQ_REC_RUN`), result line on the import screen "🔢 Sequence: N matched · N added as 🆕 · N to
+  confirm [Open <project>]"; and when an editor opens a sequence page (office window / PM tab, at most once a minute per project).
+  tests/seq/b10d-reconcile **27 / 0**.
+- **db79c34 step 5** "📌 To place / confirm" (`seqConfirmHTML`, worked out each time): "which row is it?" (row whose Name = WO title
+  first, then "same", then position; never chosen on its own) → `seq_match(…'confirmed')` version-checked; ➕ None of these → 🆕 row;
+  "Not in the sequence yet (N)" → ➕ one / ➕ all at the bottom; possible doubles → [Use the waiting row] (`seq_remove` "double", then
+  `seq_match`; on failure `seq_restore`). PM nudge chip "N to place / confirm". tests/seq/b10e-confirm **22 / 0**.
+- **60d92ef step 6** "📅 Dates to agree" (live matched jobs whose row date ≠ the job's delivery date): [Use 12 Dec] → `seqDatesSave`
+  (moveDates src 'pmseq', fixed window → a PM's change request) with reason "Sequence date — set before the WO existed", [Keep 19 Dec];
+  both clear `req_date` (version-checked PATCH). "⏳ not in Cienapps yet?" on rows waiting > `seqWaitWks()` weeks → "Uploaded <date> by
+  <name>, file <name>, row N … check Cienapps" (file from the row's note, else its "add" line in History) → Keep waiting / Remove this
+  row… (Not ordered / cancelled, Uploaded twice, Wrong project, Other → `seq_remove`, kept). tests/seq/b10f-dates-wait **19 / 0**.
+- **c9cdb31 Manager B9 note 3**: a job Johnny ticked processed while Cienapps is below 5 → preview flag "processed by pre-production —
+  take it out of the nest" (and the due-moved window says the same); a real step-5 job keeps "programmed (step 5)". tests/seq/b9f-progmsg **4 / 0**.
+- **Deviations (Coder calls — Garry / Manager to confirm):**
+  1. **Opening a page never adds rows; 🆕 rows only for WOs that are NEW in this import** (plan: every job of the project with no row, on
+     import and on page open). Key question 5 says "a new WO"; adding on page open also broke 13 checks in 8 existing test files whose
+     sequences deliberately don't hold every WO, and would re-add rows a PM had taken out. Older WOs with no row are listed under
+     To place / confirm "Not in the sequence yet" (➕ one / all). Matching (certain → auto) still runs on import and on page open.
+  2. A WO whose row was **taken out** (removed, kept) is never matched or added again by B10.
+  3. The nudge is its own chip "N to place / confirm" (confirm + not in the sequence + possible doubles); "N new rows to place" (🆕) unchanged.
+  4. `line_no` = the row number in Excel; the ⏳ window says "row N".
+  5. Dates to agree also lists a job with **no** delivery date ("Cienapps no delivery date"); if the date engine skips the job (e.g.
+     delivered) the row keeps its date. Only live jobs are listed.
+  6. The ⏳ flag shows on look-only screens too (their window has no buttons). Qty 0 is warned like Qty 2.
+  7. Upload / confirm writes are by the screen's own name (`lqBy`), no extra "who are you?" step; Use (dates) asks like the date tools (`seqBy`).
+- **ASSUMED answers used as written:** Q1–Q4, Q6–Q8 (Q5 as in deviation 1).
+- **Full suite** (272 test files + 4 probes, 3 at a time, at c9cdb31): **6,131 pass / 37 fail** = the ACCEPTED-FAILURES rows (dates
+  attack1-oldversion ×3, attack3-guard, attack1-merge 1c, sawstores ×2, seq attack1-oldtab ×2, attack3-editor, attack4-fold,
+  attack5-window ×2, attack7 2b, stage1 t17 ×10, t13 ×4, t14 ×3, t3, attack-poll P5, c4-queue A5) + t16 ×2 "WITH proposed guard"
+  (informational) + **seq attack9-pmerge M8** — timing under load (its 6 s wait for the merge ran out; passes alone, 29 / 0 twice).
+  editor e7 and stage1 t4 passed in the run. header-late-probe still crashes (pre-existing). **No new failure.**
+- **Left:** step 7 (360 px pass over the whole page — each new piece already checked at 360 px in its own test) → Tester → Manager.
+
+### 12 Nov 2026 (scheduled run, later) — Coder: attack12 fixes + step 7
+Tester attack12 (d15d436) fixed on `feature/project-details-v2`, one commit each, pushed. **No SQL change, no new save key, no planner-record field.**
+attack12-upload **32 / 0** (was 28 / 4), attack12-match **25 / 0** (was 14 / 11), attack12-confirm **30 / 0** (was 24 / 6), attack12-drag 11 / 0.
+No Tester expectation changed. One of my own checks was moved to the new rule (b10b island line → ❓ "revised line?", M6).
+- **c400f0e H2** — "G", "LGF", "UGF", "FF", "SF", "TF" and "1F" against a block code are now "not sure", never "different" (plan Q3).
+  `keyFloor` marks them as "level or block" and `keyFlr` asks a person. G against T09 changes from different to not sure; L1 against L2 and FF against 2 stay different.
+  **SQL: no change needed.** The house and line key strings are unchanged (LGF still keys as "LGF"). The database never answers "not sure"; it only works out keys.
+  On a throwaway Postgres 16 (blocks run twice in go-live order): pg-check **ALL SEQ PG CHECKS PASSED**, attack4-jsvssql **3 / 0** (3,564 house-key and 63 line-key cases, JS = SQL).
+  b0-pairs.json: pair 57 is now "unsure", plus 9 new pairs. b0-key 329 / 0, attack3-key 149 / 0, attack4-key 99 / 0.
+  **5fd2d5a follow-up:** a WO typed in the cutting-list window whose house is now "not sure" against the boxes (G / 13 against T09 / 13) is still asked about. This was caught by attack4-fold in the full suite.
+- **4ef0a0d H1 + H3**
+  - A WO with no usable house (Floor or Unit blank, or "Multiple") stays out of the `want` map, so it never blocks certain matches. It goes to To confirm on its own.
+  - Its "which row" list: the house in its Reference ("order-line-floor-unit") first, shown as "suggestion … — not sure". Otherwise its title / floor gives the list. With no unit anywhere there is no list, only "➕ Add at the bottom". It never gets a 🆕 row by itself.
+  - A waiting row with no unit (a TOTAL row saved earlier) never takes part in a certain match and blocks nobody.
+  - **H3:** a row whose Name differs from the WO title (after keyTxt normalising) is never taken automatically. A blank title keeps the single-candidate automatic match.
+- **b3bcf66 M7** — an upload line's kind comes from its Name first, the Description only when the Name names no kind.
+  `seqKind`: "KITCHEN ISLAND" counts as an island when the text also names an island on its own. "KITCHEN ISLAND" alone stays a kitchen, which keeps attack4-key passing.
+- **58518ab H4** — totals (TOTAL / SUBTOTAL / GRAND TOTAL) and rows with no floor, no unit and no product (notes, headings, children with no parent line) are not lines. The preview lists them under "🚫 Not read (N)" with their row numbers.
+- **4b9e8c4 L8** — the headers "Product Code" and "Code" are read as Product.
+- **30a037b M6** — an upload line for a house + kind the sequence already has under another Name shows as ❓ "revised line? — this house already has …", skipped unless a person ticks Add anyway.
+- **d7f7616 M5**
+  - The "taken out" list is now per project.
+  - A row retired by "Use the waiting row" (reason "double …") no longer hides its WO: a WO left with no live row is offered again under "Not in the sequence yet".
+  - A row taken out by hand stays out of that list. It shows as a grey line "WO taken out by <name> <date> — "reason" [Put back]", which uses `seq_restore`.
+- **705c89c L9** — "Use <date>" moves a Sunday or bank holiday to the next delivery day, like the 📅 Set tool, and a toast says so. A Saturday is kept.
+- **86b5d6e L10** — the ⏳ age counts from the Irish local date the row was saved.
+- **b8457ab L11** — the Close button is at least 36 px, only in the upload and ⏳ windows.
+- **d3489ab** tests/seq/b10g-fixes **6 / 0** (H1 no-house WO, H4 Not read, M5 Put back, M6 revised line).
+- **470fa96 step 7** — a 360 px pass with every B10 panel on screen at once: nudge, confirm (long names, a suggestion, a double, a taken-out line), Dates to agree, ⏳ and its window, the upload preview and the refusal window.
+  On phones the nudge chips, ⬆ Cienapps file and the ⏳ flag are 36 px, and confirm buttons are 40 px. tests/seq/b10h-360 **7 / 0**.
+- **ASSUMED (lead's plan amendments, Garry to confirm):** H1, H2, H3, H4, M5, M6, M7, L8–L11 as written above.
+  Coder calls within them:
+  - LGF / UGF are "level or block" with no level number, so they are "not sure" against any level as well.
+  - The Reference is read only when it has at least 4 "-" parts.
+  - The "Put back" line is shown only while the WO is still live and has no other live row.
+  - Phone sizes raised as listed.
+- **Re-runs:** b10a 21, b10b 11, b10c 26, b10d 27, b10e 22, b10f 19, b10g 6, b10h 7, b9f 4, b0-key 329, b0-claim 8, l4b-pmerge 23, attack9-pmerge 29 — all with 0 failures.
+- **Full suite** (278 test files + 4 probes, 3 at a time, at 470fa96): **6,268 pass / 38 fail**.
+  - The ACCEPTED-FAILURES rows, as before.
+  - t16 ×2 "WITH proposed guard" (informational).
+  - **seq attack4-fold "typed WO-3 with boxes G / 13: asked"** — caused by H2, fixed in 5fd2d5a. attack4-fold is now 16 / 1, only its accepted row.
+  - **stage3 attack4-states M3** — timing under load; passes alone (33 / 0).
+  - After 5fd2d5a all 55 tests/seq files were re-run: only accepted rows fail. header-late-probe still crashes (pre-existing).
+  - **No new failure.**
+- **Left:** Tester re-run → Manager.
+
+### 12 Nov 2026 (scheduled run, later still) — Coder: attack12b Lows
+- ca6faa6 **L1**: the nudge's "over N wks" count uses `seqWaitOld` (Irish local date).
+- 5e7455c **L2**: the Dates to agree button names the real day, e.g. "Use Tue 29 Dec (26 Dec is a bank holiday)".
+- fc14276 + latest **L3**: the Reference is anchored on the order-line number pair (two digit parts in a row). Anything in front of them is a prefix; the next part is the floor and the rest is the unit.
+  - "WPF-2796-15-2-APT 51" → 2 / APT 51; "2796-15-T12-APT-51" → T12 / APT-51; "A-B-C-D", "2604-WO-50" and "2796-15-0-" → no suggestion.
+  - "Read from the right" alone would have broken attack12b F4 / F5, so I used the order-line anchor (ASSUMED).
+- 5c09d99 **L4**: 📜 History is 36 px on phones.
+- **M1 (F9 / F11) left as built.** A "KITCHEN ISLAND" line is a kitchen, so the house's kitchen WO goes to To confirm (safe, one extra tap).
+  Added to ACCEPTED-FAILURES as "pending Garry: is a 'KITCHEN ISLAND' line an island or a kitchen?".
+- My b10f check follows the L2 wording ("Use Fri 11 Dec").
+- **Numbers:**
+  - attack12b-fixes **34 / 2** (only F9 / F11).
+  - b10f 19 / 0, b10g 6 / 0, b10h 7 / 0, attack12-match 25 / 0.
+  - All 63 tests/seq files before the L3 round-2 fix: 2,103 pass / 12 fail. That is the accepted rows (attack1-oldtab ×2, attack3-editor, attack4-fold, attack5-window ×2, attack7 2b) + F9 / F11, + F4 / F5 and b10f (all three fixed since).
+
+### 12 Nov 2026 — Manager verdict on B10
+**GO WITH CONDITIONS** (to carry on to the next Job B part; not a go-live — the whole branch still waits for the PENDING SQL and Garry's merge).
+- **Re-run at 59fc5f7 on the fake database (never real Supabase, no network-guard hits):** all 63 tests/seq files — only accepted rows fail
+  (attack1-oldtab, attack3-editor, attack4-fold, attack5-window ×2, attack7 2b, attack12b F9 / F11); b10a–h 21/11/26/27/22/19/6/7, b9e 3, b9f 4,
+  attack12-upload 32, -match 25, -confirm 30, -drag 11, attack12b 34 / 2, b0-key 329, b0-claim 8, attack3-key 149, attack4-key 99,
+  l4b-pmerge 23, attack9-pmerge 29 — all 0 fails. Job A sample: dates c1-engine 22, attack1-engine 25, c8-deliv-engine 13 — 0 fails.
+  The whole 278-file suite was NOT re-run at HEAD (last full run 470fa96); commits since touch only seq code.
+- **SQL:** no change to SUPABASE_CHANGES.md or pg-check.sql in 1a7a378..HEAD. Throwaway Postgres 16 (Stage 1, Stage 3, Stores dockets,
+  Project details, PM sequence, Merged P-numbers blocks each run twice): pg-check **ALL SEQ PG CHECKS PASSED**; attack4-jsvssql **3 / 0**
+  (3,564 house keys + 63 line keys, JS = SQL). H2's claim checked: the SQL only compares key strings (equal or not) — it has no "not sure";
+  H2 changed only the browser's "different" → "not sure", never the key strings, so the browser is only MORE careful than the database.
+- **Code:** matches the plan; no new save key / planner field / SQL; data values in the new panels go through escA; no debug left;
+  lists off / SQL not run → nothing (b10c / b10d / b10e). Deviations 1–4 and H1–H4, M5–M7, L1–L11 accepted as reasonable.
+- **Conditions:** (1) Garry answers M1 (KITCHEN ISLAND) — today safe either way (to confirm, one tap). (2) Before staff rely on it, dry-run
+  ONE real Cienapps upload file and the matching WO import through the preview (Q7 sample never came; all tests use a made-up 27-column file).
+  (3) Garry confirms Coder deviation 1 (no 🆕 rows on page open). (4) Full suite once more before the branch goes to Garry for merge.
+- **Residual risk (Note):** an upload line with a typo in floor / unit ("different" from the WO) leaves a ⏳ waiting row AND the WO gets a 🆕 row —
+  two rows for one house until the ⏳ flag (3 weeks) or a PM spots it. Nothing is guessed or merged; visible, not silent.
+- **Left in Job B:** B11 d/e/f/g (date rules per product, dates follow the order, paste the programme, week view); pNotSame ("not the same
+  house" memory for P-number merges); Garry's pending decisions in ACCEPTED-FAILURES (two P-numbers per house, inactive project spelling,
+  storage-blocked Settings, Late-changes count, KITCHEN ISLAND); B8 CNC view is later (after Job B). Then Tester → Manager on the whole branch,
+  SQL run, merge, go-live day (close every screen, incognito check).
+
+### 24 Nov 2026 — Job B brought up to date with live (branch `feature/project-details-v3`) — Garry: "how quick can you get the PM project sequence to me" → answer 2A (whole of Job B, aim Mon 30 Nov)
+- **What was done:** `main` (live, 20 Nov — 130 changes since Job B was cut) merged into a copy of `feature/project-details-v2`. 16 files
+  clashed; 92 places in `index.html`. Rule used: live behaviour kept for everything already live; every Job B addition (project details,
+  PM sequence, Cienapps upload, pre-production pool, merged P-numbers, PM date tools) wired back in. The old branch is untouched.
+- **Choices made in the merge (to be read by the Manager):**
+  - Matching key (floor / unit → house): the Job B key (it must give the same answer as the PM sequence SQL), with live's block-name
+    changes on top. Effect on the live list window: TBC / N/A count as blank, "12.0" vs "12" is asked instead of called different.
+  - A Floor / Unit the key cannot read (e.g. a name typed in the Unit box): the window now offers "Make a P-number instead…" (it gave
+    no way on).
+  - List loading: a reset while a load is on its way starts the load again (the remembered project filter was being dropped).
+  - Job B's early "＋ Add cutting list" on delivery cards (l9…) dropped in favour of live's ＋ List. Leftover unused helpers remain.
+  - Materials window on a phone: live's layout kept, Job B's `mt-tbl` layout dropped.
+  - Shipped tab: PM role gets neither "Bring back to board" nor live's "Back to Deliveries".
+  - Templates: the Pre-production role sees the template buttons but is asked for the PIN (live's rule) — Garry to decide.
+- **Full suite on the first merge commit (fake database, 405 files): 10,311 pass / 243 fail.** Against live and against the old Job B
+  branch, about 60 checks are new failures. Sorted so far:
+  - FIXED: Excel-import / typed-injection save ("Pick the work order") · remembered project filter lost after a reload.
+  - EXPECTED, test to be updated or accepted: "screen identical to an older commit / to origin/main" comparisons (Job B adds ✋ Requests,
+    the sequence button, the spec chip) · tests of Job B's dropped early ＋ Add cutting list (`seq/l9-deliv-card`, `attack7` 2d).
+  - GARRY TO DECIDE: in the list window Job B makes Floor / Unit / Title / Customer EDITABLE boxes and adds a "✎ Project details"
+    button (12 buttons outside the rows). About 12 live checks expect read-only text and fewer buttons.
+  - STILL TO LOOK AT: Materials window at 360 px (`project-details/attack2-phone`, 2 checks) · `seq/attack3-editor` "Unit box left
+    (Tab to Title)" · focus wrap does not know the spec chip (`attack3-close-keys` T8) · two speed checks (`e7-keyboard`, `t4-fleet-offline`,
+    run under load) · the 🧱 Materials / 📝 Project details buttons on Lists when the filter is "No project".
+- **Left before go-live:** finish the list above → full suite again → merge PR #17 (Deliveries badge) in once it is live → Tester on the
+  whole branch → Manager → GO-LIVE doc (SQL order: Project details, PM sequence, Merged P-numbers; the 18 Nov empty-save guard is separate)
+  → Garry runs the SQL → merge → every screen closed → incognito check. A due-date-follows-everywhere test is to be added.
+
+### 25 Nov 2026 — Garry's answers (live) and what was done
+- **1 → A:** Floor / Unit / Title / Customer stay READ-ONLY in the list window (as live). Job B's editable boxes are not used there.
+- **2 → A:** "✎ Project details" sits under More ▾ in the list window. Garry also: "PM should be able to add project materials in their
+  window also" → the PM's sequence window has a **🧱 Materials (n)** button (same roles as may edit materials: PM, office, management,
+  Production Manager, Drawing office, Pre-production).
+- **3 → A:** Pre-production is asked for the PIN before changing a template. **4 → A:** PMs see shipped jobs, cannot send them back.
+- **5 — NOT decided:** Garry: "we need to look more at the import and merge. there is too many questions and things to check over when
+  importing". Architect to list every question / tick the import shows today and propose what can be automatic. The Job B matching key
+  stays in for now (the sequence SQL needs it).
+- **6 → A:** Garry will send one real Cienapps upload file for a dry run. **7:** go live "as soon as possible". **8 → A:** everyone from day one.
+- PR #17 (Deliveries list badge, booking bar at the bottom, pool in due-date order) merged by Garry 25 Nov and merged into this branch.
+- Also fixed: Materials window on a phone (both layouts kept — Job B's big tap targets and live's) · the ⚠ SPEC NOT SIGNED OFF chip is a
+  real button (the list window's Tab wrap knows it) · 🧱 Materials / 📝 Project details on Lists ask for the project when the filter is
+  "No project".
+- After these: every check that differed from live or from the old Job B branch is either fixed or listed in ACCEPTED-FAILURES
+  ("25 Nov 2026 — Job B brought up to date"). Full suite to be run again on this commit.
+
+### 25 Nov 2026, later — second full run, Tester on the merge seams, fixes
+- **Full suite (fake database, 406 files) on 54e375a: 10,316 pass / 225 fail.** Every failing check is one that also fails on live or
+  on the old Job B branch, or is listed in ACCEPTED-FAILURES "25 Nov 2026 — Job B brought up to date". Changes made after that run
+  were checked on the 121 date / sequence / delivery / project-details files (no new failure) — the whole suite has NOT been re-run on the last commit.
+- **Tester (tests/merge25/, 4 files, 280 checks):** no Critical, no High. Held: due dates follow sequence → board, Deliveries (tag, week
+  tab), list window badge, lists to issue, Pre-production pool, Today, Management, history; and back from the board, "→ Wk" and "Move
+  to week…"; a booked job comes off the van with "rebook" from both sides; two PCs agree; every role × lists ON / OFF / sequence SQL not
+  run draws with no error; booking bar, list badge, pool order; list window; ~890 button presses, nothing undefined.
+- **Found and fixed:**
+  - [Medium] the PM's page showed only the build date — the "Coming up" rows now say **required on site <date>** when it differs.
+  - [Medium] a date moved inside the fixed window from the Capacity Board / Deliveries / the date window was not marked or counted as
+    a Late change (Garry's 17 Nov answer said it should be) — it is now marked in the history and counted as "changed directly"
+    (only when the sequence tables exist; never for the import, an Undo, or a PM, whose changes go through a request).
+  - [Medium] with the list window boxes read-only (1A) there was no way left to correct a job's Floor / Unit / Title / Customer —
+    a **✎** beside each work order in the sequence table opens a small "Job details" window (same people as may edit project details;
+    same rules: Cienapps not changed, listed in Export Changes, ↺ puts the Cienapps value back, customer needs the Admin PIN).
+  - [Low] the 🧱 Materials count in the sequence window updates after a material is added.
+- **Left as it is (Garry to confirm):** the Capacity Board row shows the due date only, not the required-on-site date (his 18 Nov
+  choice: "the capacity board is just for managing dates … due date only"). m25 check A5b records it.
+- **Still to do:** Manager on the whole branch · docs/GO-LIVE for Job B (SQL order) · dry-run with Garry's real Cienapps upload file ·
+  full suite once more on the final commit.
+
+### 25 Nov 2026, afternoon — Manager, final full run, dry run with Garry's real files
+- **Manager: GO WITH CONDITIONS.** No Critical / High in the merge-week changes. He ran the Project details, PM sequence and Merged
+  P-numbers SQL twice each on a throwaway Postgres 16 (no errors; pg-check ALL PASSED; JS = SQL 3,564 house keys + 63 line keys match;
+  the 18 Nov guard is independent). Conditions: full suite on the final commit (done, below) · go-live doc (written:
+  docs/GO-LIVE-project-sequence.md) · dry run with a real upload file (done, below).
+- **Full suite on 86e88da (410 files): 10,579 pass / 226 fail.** Against the previous full run: no new failing check except the two
+  rows added to ACCEPTED-FAILURES today (A5b, attack7 2b) and four load-sensitive checks that pass when run alone
+  (deliveries attack19-1-twopc, editor e7-keyboard, seq attack10-speed, stage1 s11-pend).
+- **Dry run — Garry's four real files** (Aderrig A2: GR FL Kitchens, GR FL Robes/Joinery, 1st FL Kitchens, 1st FL Robes/Joinery),
+  read by the planner's upload reader and its add / skip / not-sure preview on the fake database (`tests/merge25/real-dryrun.js`;
+  the files themselves are not in the repo):
+  - all four read with no error and no warning: 14 + 15 + 24 + 25 = **78 lines** (19 kitchens, 19 utilities, 40 robes), header
+    found, the 22-column robes files (3 CHILDREN groups) read the same as the 27-column kitchens files;
+  - first upload: all 78 would be ADDED, none skipped, none "not sure"; the same file loaded again: all SKIPPED (nothing doubled);
+  - two identical robe lines in one apartment (A77 RT1 ×2, A83 RT13 ×2) are kept as TWO rows, not treated as a duplicate;
+  - things in the files for Garry / the PM to know: "1st FL Kitchens" has the Qty column EMPTY on every line; its 12 utility lines
+    are named "Block A2 GR FL Utilities" although the floor is 1st.
+  - Garry: "I will get the PM to use the same file for Cienapps upload and planner upload."
+  - NOT covered by this dry run: the matching of these rows to the real work orders when they arrive (needs the Cienapps work order
+    export for the same apartments).
