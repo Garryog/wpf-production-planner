@@ -4903,7 +4903,7 @@ function seqPageHTML(pid){
       <td data-l="Progress" class="seq-prog">${o?seqProgHTML(o,r):''}</td><td data-l="Moved">${mv?`<span class="dm-chip" title="Due date changed ${mv} time${mv!==1?'s':''}">🔁 ${mv}×</span>`:''}</td>
       ${can?`<td class="seq-mv"><button class="btn btn-s" data-sequp="${escA(r.id)}" title="Up one"${i?'':' disabled'}>▲</button><button class="btn btn-s" data-seqdn="${escA(r.id)}" title="Down one"${i<rows.length-1?'':' disabled'}>▼</button><button class="btn btn-s" data-seqto="${escA(r.id)}" title="Move to a position number"># Move to…</button></td>`:''}</tr>`;};
   return `<div class="exp-panel seq-pg-wrap" id="seq-pg" data-pid="${escA(pid)}">
-    <div class="seq-top">${seqTitleHTML(pid)}<span style="flex:1"></span>${can&&rows.length?`<label class="seq-all" title="Moving one row moves every row of the same house (same floor + unit) with it"><input type="checkbox" id="seq-house"${SEQV.house?' checked':''}> Whole house</label>`:''}${seqUndoBtn(pid)}${can?'<button class="btn btn-s" id="seq-up" title="Load the Cienapps upload file (.xlsx / .xls / .csv): one row per line, waiting for a WO number — preview first">⬆ Cienapps file</button>':''}${lsMatCan()?`<button class="btn btn-s" data-matsopen="${escA(pid)}" title="This project's materials — add or change them here">🧱 Materials (${lsMats(pid,'',false).length})</button>`:''}<button class="btn btn-s" id="seq-hist">📜 History</button></div>
+    <div class="seq-top">${seqTitleHTML(pid)}<span style="flex:1"></span>${can&&rows.length?`<label class="seq-all" title="Moving one row moves every row of the same house (same floor + unit) with it"><input type="checkbox" id="seq-house"${SEQV.house?' checked':''}> Whole house</label>`:''}${seqUndoBtn(pid)}${can?'<button class="btn btn-s" id="seq-up" title="Load the Cienapps upload file (.xlsx / .xls / .csv): one row per line, waiting for a WO number — preview first">⬆ Cienapps file</button>':''}${lsMatCan()?`<button class="btn btn-s" data-matsopen="${escA(pid)}" style="min-height:36px" title="This project's materials — add or change them here">🧱 Materials (${lsMats(pid,'',false).length})</button>`:''}<button class="btn btn-s" id="seq-hist">📜 History</button></div>
     ${can?'':`<div class="seq-ro">👁 Read-only — ${ROLE==='pm'?'this is not one of your projects':'only the project\'s PM, the office or the Production Manager change the sequence'}.</div>`}
     ${can?seqConfirmHTML(pid)+seqAgreeHTML(pid):''}
     ${todo.length?`<div class="seq-start"><button class="btn btn-g" id="seq-start">▶ Start the sequence from today's jobs (${todo.length})</button> <span>Every live work order of this project that isn't shipped, in due-date order. You can reorder them after.</span></div>`:''}
@@ -6500,20 +6500,6 @@ async function lsEnsureCustProj(o,opt){
    refusing a duplicate name (two PCs at once) → read again and use that one. Two projects fitting the customer equally →
    {st:'many'} (a person picks — never guessed); no customer → {st:'nocust'}. opt.make: skip the "fits" look (the
    "＋ New project" button on Lists: the person asked for that project). */
-async function lsEnsureCustProj(o,opt){
-  opt=opt||{};const c=String(o&&o.customer||'').trim();if(!c)return{st:'nocust'};
-  const reload=async()=>lsPut('projects',await lsGet('projects?select=*'));
-  await reload();
-  if(!opt.make){const a=lsProjAuto(c);if(a.p)return{st:'ok',p:a.p};if(a.many)return{st:'many',ps:a.many};if(a.ask&&!opt.noAsk)return{st:'ask',p:a.ask,c};}
-  const tw=lsProjTwins(c,true); // already a project of that name (any case / punctuation, maybe inactive, maybe made on another PC a moment ago): link to it
-  if(tw.length)return{st:'ok',p:await ltiLink(o,lsProjOldest(tw).id)};
-  let made;const nm=c.replace(/\s+/g,' ').replace(/[\s.,;:]+$/,'')||c; // "Race Homes." is made as "Race Homes": the database's one-name rule then stops a twin made at the same moment
-  try{made=await lsWrite('projects',{id:uid('P'),name:nm,customer:c,cien_names:[c]});}
-  catch(x){await reload();const t2=lsProjTwins(c,true);if(t2.length)return{st:'ok',p:await ltiLink(o,lsProjOldest(t2).id)};throw x;}
-  await reload();const old=lsProjOldest(lsProjTwins(c,true))||made; // another PC made a twin at the same moment ("Race Homes."): both use the oldest
-  if(old.id!==made.id)return{st:'ok',p:await ltiLink(o,old.id)};
-  return{st:'ok',p:LST.p.get(made.id)||made,made:true};
-}
 function ltiLinkBind(){
   // Garry (3 Nov, answer 9): anyone in the office links a customer to a project — no PIN. A failure's ↻ Retry does the same link again.
   const fail=(w,e,again)=>{LTI.res[w]={err:e.message,again};ltiAfter();};

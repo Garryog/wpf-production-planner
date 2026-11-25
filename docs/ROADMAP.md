@@ -443,3 +443,22 @@ Garry's words: "the edit button for the cutting lists templates is gone. i need 
   A template going into a list takes out untouched blank rows and empty standard sub-headings (a colour alone is not "typed").
 - Open question: should Cutting Lists → ＋ New list (and the "lists needed" rows) also ask "Start this list from:" first? Built for
   the Deliveries ＋ List and the ⓘ window's ＋ Add cutting list only.
+
+
+### Simpler import (25 Nov 2026, Garry) — NEXT release after the PM sequence goes live
+Garry: "we need to look more at the import and merge. there is too many questions and things to check over when importing".
+Inventory (25 Nov): 5 kinds of tick / choice before Apply (each per job), 13 information boxes, and after Apply the "Cutting lists to
+issue" panel and customer → project links. Target: one screen — headline counts, ONE "Needs you" box, everything else under a closed
+"details" line, one Apply button; non-urgent checks on a "To check" list that stays until cleared.
+Garry's decisions (25 Nov):
+- **1. Drawing-stage work orders:** "Some drawing jobs are just drawing tasks that will never become a factory work order. If a work
+  order is drawing stage and has a floor and unit you can proceed and import it. If the work order does not have a floor and unit ignore
+  it." → no "bring in" ticks: drawing stage WITH floor and unit = imported; WITHOUT = left out quietly. (Replaces the 17 Nov rule.)
+- **2 → A:** a due date changed in Cienapps where the job still fits its planned week is taken automatically and listed under details;
+  only changes that make a job LATE, and dates the planner had moved, are asked.
+- **3 → A:** a P-number and a Cienapps WO that are certainly the same house (same project, floor, unit, one-to-one) merge automatically
+  and are reported — an "undo merge" is built FIRST (there is none today). (Replaces the 11 Nov merge-by-tick rule for certain pairs.)
+- **4 → A:** "not sure" merges and "shipped but no dispatch record" move to a "To check" list outside the import.
+- **5 → A:** "Cutting lists to issue" leaves the import; it lives on the Cutting Lists page with a count badge; the import says "N lists to issue →".
+Open point for the Architect: a drawing-stage job brought in is not checked against P-numbers in the same import (two jobs for one
+house until the next import) — to be closed in this release.
