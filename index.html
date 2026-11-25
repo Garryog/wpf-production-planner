@@ -4233,7 +4233,7 @@ function lsMaterialsDlg(pid,after){
       <td><input type="checkbox" data-mtv="${escA(m.id)}"${t.act?' checked':''}></td><td><button class="btn btn-g" data-mts="${escA(m.id)}" style="font-size:12px;padding:4px 10px">Save</button></td></tr>`;};
     ov.querySelector('#mt-body').innerHTML=`<div class="mt-head"><div style="font-weight:800;color:#14335c;font-size:17px;flex:1;min-width:0">🧱 Materials — ${escA(p.name)}</div><button class="btn btn-s" id="pod-x">✕ Close</button></div>
       <div style="font-size:12px;color:var(--t3);margin-bottom:10px">Sheet materials are the only boards the office can pick on this project's lists. Other spellings from Excel files are remembered as aliases. Untick Active to retire a material — it is never deleted.</div>
-      <table class="lst-tbl"><thead><tr><th>Name</th><th>Kind</th><th>Also called</th><th>Active</th><th></th></tr></thead><tbody>${ms.map(row).join('')||'<tr><td colspan="5" style="color:var(--t3)">No materials yet.</td></tr>'}
+      <table class="lst-tbl mt-tbl"><thead><tr><th>Name</th><th>Kind</th><th>Also called</th><th>Active</th><th></th></tr></thead><tbody>${ms.map(row).join('')||'<tr><td colspan="5" style="color:var(--t3)">No materials yet.</td></tr>'}
       <tr><td><input id="mt-new-n" value="${escA(nw.n)}" placeholder="e.g. 18mm MFC White" style="${LS_INP};width:100%"></td><td><select id="mt-new-k" style="${LS_INP}"><option value="sheet">Sheet (saw)</option><option value="other"${nw.k==='other'?' selected':''}>Fitting / other</option></select></td><td></td><td></td>
         <td><button class="btn btn-g" id="mt-add" style="font-size:12px;padding:4px 10px">＋ Add</button></td></tr></tbody></table><div id="mt-msg" style="font-size:12px;color:#b42318;font-weight:700;margin-top:6px"></div>`;
     const msg=t=>{const e=ov.querySelector('#mt-msg');if(e)e.textContent=t;};
@@ -4344,11 +4344,12 @@ function specOpenTxt(open,max){max=max||3;const cut=(a,m)=>a.slice(0,m).join(', 
   return[...g.entries()].map(([k,a])=>(k?k+': ':'')+cut(a,g.size>1?2:max)).join(' · ');} // several specs: "Kitchens: Hinges, Handles +4 · Robes: Mirror"
 // The red chip: "SPEC NOT SIGNED OFF: Hinges, Handles, Worktop Colour +2" — tap to open the sheet. Never blocks anything.
 function specChip(pid,big){const o=specOpen(pid);if(!o.length)return'';
-  return `<span class="spec-chip" data-specopen="${escA(pid)}" role="button" tabindex="0"${big?' style="font-size:14px"':''} title="Project details not signed off: ${escA(o.join(', '))} — tap to open. Production is not blocked.">⚠ SPEC NOT SIGNED OFF: ${escA(specOpenTxt(o))}</span>`;}
+  return `<button type="button" class="spec-chip" data-specopen="${escA(pid)}" style="border:0;font-family:inherit;text-align:left${big?';font-size:14px':''}" title="Project details not signed off: ${escA(o.join(', '))} — tap to open. Production is not blocked.">⚠ SPEC NOT SIGNED OFF: ${escA(specOpenTxt(o))}</button>`;} /*merge 25 Nov: a real button, so the list window's Tab wrap knows it*/
 function specBtn(pid,cls){if(!specVis()||!pid)return'';const c=specCount(pid),red=c.ok<c.n;
   return `<button class="btn btn-s spec-btn${red?' spec-red':''}${cls?' '+cls:''}" data-specopen="${escA(pid)}" title="Project details (spec sheet): ${c.ok} of ${c.n} signed off">📝 Details ${c.ok}/${c.n}</button>`;}
 // a WO's project (customer = project) and a list's
 function specPidOfWO(o){const p=o&&lsProjForCust(o.customer);return p?p.id:'';}
+document.addEventListener('click',e=>{const b=e.target&&e.target.closest&&e.target.closest('[data-matsopen]');if(!b)return;e.preventDefault();e.stopPropagation();if(lsMatEditOk()&&lsProjName(b.dataset.matsopen))lsMaterialsDlg(b.dataset.matsopen,()=>{if(typeof render==='function')render();});},true); // Garry 25 Nov: the PM adds project materials from the sequence window
 document.addEventListener('click',e=>{const b=e.target&&e.target.closest&&e.target.closest('[data-specopen]');if(!b)return;e.preventDefault();e.stopPropagation();lsSpecDlg(b.dataset.specopen);},true);
 /* Who may do what (Garry, 11 Nov): values and extra items — Project Managers, Office, Management (and the Drawing office and
    Production Manager keep it; Pre-production = Drawing office rights, Garry 10 Nov); SIGN-OFF — Project Managers only (from another screen: the Project Manager or Admin PIN,
@@ -4902,7 +4903,7 @@ function seqPageHTML(pid){
       <td data-l="Progress" class="seq-prog">${o?seqProgHTML(o,r):''}</td><td data-l="Moved">${mv?`<span class="dm-chip" title="Due date changed ${mv} time${mv!==1?'s':''}">🔁 ${mv}×</span>`:''}</td>
       ${can?`<td class="seq-mv"><button class="btn btn-s" data-sequp="${escA(r.id)}" title="Up one"${i?'':' disabled'}>▲</button><button class="btn btn-s" data-seqdn="${escA(r.id)}" title="Down one"${i<rows.length-1?'':' disabled'}>▼</button><button class="btn btn-s" data-seqto="${escA(r.id)}" title="Move to a position number"># Move to…</button></td>`:''}</tr>`;};
   return `<div class="exp-panel seq-pg-wrap" id="seq-pg" data-pid="${escA(pid)}">
-    <div class="seq-top">${seqTitleHTML(pid)}<span style="flex:1"></span>${can&&rows.length?`<label class="seq-all" title="Moving one row moves every row of the same house (same floor + unit) with it"><input type="checkbox" id="seq-house"${SEQV.house?' checked':''}> Whole house</label>`:''}${seqUndoBtn(pid)}${can?'<button class="btn btn-s" id="seq-up" title="Load the Cienapps upload file (.xlsx / .xls / .csv): one row per line, waiting for a WO number — preview first">⬆ Cienapps file</button>':''}<button class="btn btn-s" id="seq-hist">📜 History</button></div>
+    <div class="seq-top">${seqTitleHTML(pid)}<span style="flex:1"></span>${can&&rows.length?`<label class="seq-all" title="Moving one row moves every row of the same house (same floor + unit) with it"><input type="checkbox" id="seq-house"${SEQV.house?' checked':''}> Whole house</label>`:''}${seqUndoBtn(pid)}${can?'<button class="btn btn-s" id="seq-up" title="Load the Cienapps upload file (.xlsx / .xls / .csv): one row per line, waiting for a WO number — preview first">⬆ Cienapps file</button>':''}${lsMatCan()?`<button class="btn btn-s" data-matsopen="${escA(pid)}" title="This project's materials — add or change them here">🧱 Materials (${lsMats(pid,'',false).length})</button>`:''}<button class="btn btn-s" id="seq-hist">📜 History</button></div>
     ${can?'':`<div class="seq-ro">👁 Read-only — ${ROLE==='pm'?'this is not one of your projects':'only the project\'s PM, the office or the Production Manager change the sequence'}.</div>`}
     ${can?seqConfirmHTML(pid)+seqAgreeHTML(pid):''}
     ${todo.length?`<div class="seq-start"><button class="btn btn-g" id="seq-start">▶ Start the sequence from today's jobs (${todo.length})</button> <span>Every live work order of this project that isn't shipped, in due-date order. You can reorder them after.</span></div>`:''}
@@ -6033,8 +6034,8 @@ function lsHomeBind(){
     if(hit){lpfSet(hit.id);render();}else toast('No single project matches "'+pq.value.trim()+'" — pick it from the list');};
   const x=document.getElementById('lh-x');if(x)x.onclick=()=>{Object.assign(LH,{q:'',type:'',kind:'live',rev:'',state:''});lpfSet('');render();};
   const pj=document.getElementById('lh-projs');if(pj)pj.onclick=()=>lsProjectsDlg();
-  const lm=document.getElementById('lh-mats');if(lm)lm.onclick=()=>{if(LH.proj)lsMaterialsDlg(LH.proj);else lsPickProj('🧱 Materials',id=>lsMaterialsDlg(id));};
-  const lsp=document.getElementById('lh-spec');if(lsp)lsp.onclick=()=>{if(LH.proj)lsSpecDlg(LH.proj);else lsPickProj('📝 Project details',id=>lsSpecDlg(id));};
+  const lm=document.getElementById('lh-mats');if(lm)lm.onclick=()=>{if(lhPid())lsMaterialsDlg(lhPid());else lsPickProj('🧱 Materials',id=>lsMaterialsDlg(id));};
+  const lsp=document.getElementById('lh-spec');if(lsp)lsp.onclick=()=>{if(lhPid())lsSpecDlg(lhPid());else lsPickProj('📝 Project details',id=>lsSpecDlg(id));};
   const sn=document.getElementById('lh-sent');if(sn){sn.onclick=()=>dkReportDlg();dkShow();}
   // (Garry, 4 Nov) one "＋ New list" — the standard layout; an empty list is under More ▾ → Blank list
   const nw=document.getElementById('lh-new');if(nw)nw.onclick=()=>lsNewStd('',lhPid());
@@ -7233,13 +7234,12 @@ function openListEditor2(listId,presetWo,presetPid,opt){
           ${st.newWO?`<div style="font-size:12px;color:#5b21b6;font-weight:700;padding:7px 0">New work order ${escA(nextPNumber())} <button class="btn btn-s" id="me-pick" style="font-size:11px;padding:2px 8px">use an existing WO instead</button></div>`
           :`<div style="display:flex;gap:6px"><select id="me-wo" style="${inp};max-width:340px">${woOpts()}</select>
             ${ex?'':`<button class="btn btn-s" id="me-new" style="font-size:12px;white-space:nowrap">＋ New P-number</button>`}</div>`}</div>
-        ${st.newWO?'':`<div class="wo-info" id="me-woinfo">${woInfoEdHTML(DB.orders.find(x=>x.wo===st.wo))}</div>`}`}
+        ${st.newWO?'':`<div class="wo-info" id="me-woinfo">${woInfoHTML(DB.orders.find(x=>x.wo===st.wo))}</div>`}`}
         ${pjDiff?`<div class="wo-info"><div class="wc"><label>Project</label><div class="wo-ro" id="me-pjro" title="${escA(pjN)}">${escA(pjN)}</div></div></div>`:''}
         <div><label>${st.tpl?'Template name':'List name (optional)'}</label><input id="me-name" value="${escA(st.name)}" placeholder="e.g. Kitchen — Type B" title="${st.tpl?'The template\'s name':'A name for this list — any words, searchable later. Left blank, the list is named after its work order'}" style="${inp};width:170px"></div>
         ${st.tpl?typeHTML:''}
         ${lwDelHTML()}
         <span style="flex:1"></span>
-        ${specVis()?`<button class="btn btn-s" id="me-spec" style="font-size:12px;white-space:nowrap"${st.pid?'':' disabled'} title="The project's spec sheet">✎ Project details</button>`:''}
         ${sim?'<button class="btn btn-s" id="me-jobtog" style="font-size:12px;white-space:nowrap" title="Pick a different work order or project for this list">Change job ▾</button>':''}
         <details class="me-more me-start" id="me-start"${st.startOpen?' open':''}><summary class="btn btn-s" style="font-size:13px;white-space:nowrap" title="Fill this list from a template, an Excel file or an old list — or just type the rows below">Start from… ▾</summary><div class="me-morep">
           <button class="btn btn-s me-big" id="me-instpl" title="Adds the rows of one of the project's templates (a house type) — change anything for this house">📐 A template…</button>
@@ -7262,6 +7262,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
         <button class="btn btn-s me-big" id="me-mats" style="white-space:nowrap" title="The project's boards, materials and fittings — add or change them here">🧱 Project materials (add / edit)</button>
         <details class="me-more" id="me-more"${st.moreOpen?' open':''}><summary class="btn btn-s me-big">More ▾</summary><div class="me-morep">
           ${st.undo.length?'<button class="btn btn-s" id="me-undo" title="Ctrl+Z">↶ Undo</button>':''}
+          ${specVis()?`<button class="btn btn-s" id="me-spec" style="font-size:12px;white-space:nowrap"${st.pid?'':' disabled'} title="The project's spec sheet">✎ Project details</button>`:''}
           ${st.tpl?'':typeHTML.replace('<div>','<div class="me-defc" style="display:block">')}
           <label class="me-flag"><input type="checkbox" id="me-nocut"${st.noCut?' checked':''}> No cutting on this job</label>
           <label class="me-flag"><input type="checkbox" id="me-nofit"${st.noFit?' checked':''}> No fittings on this job</label>
@@ -7421,7 +7422,6 @@ function openListEditor2(listId,presetWo,presetPid,opt){
     ov.querySelectorAll('[data-mepp]').forEach(b=>b.onclick=()=>{keep();st.pid=b.dataset.mepp;st.pauto=false;st.pmsg=null;edges=lsProjEdges(st.pid);draw();projSet();});
     on('me-matsnow',()=>{keep();if(st.pid)lsMaterialsDlg(st.pid,()=>draw());});
     const msp=g('me-spec');if(msp)msp.onclick=()=>{keep();if(st.pid)lsSpecDlg(st.pid);};
-    {const wi=g('me-woinfo');if(wi)woInfoBind(wi,DB.orders.find(x=>x.wo===st.wo));}
     g('me-pid').onchange=e=>{keep();
       if(e.target.value==='__new'){const o=st.wo?DB.orders.find(x=>x.wo===st.wo):null; // (L5) no PIN — the customer = project rule
         const n=prompt('New project name:',String(o&&o.customer||'').trim());if(!n||!n.trim()){draw();return;}
@@ -7432,7 +7432,7 @@ function openListEditor2(listId,presetWo,presetPid,opt){
       draw();if(cl){const er=g('me-err');if(er)er.textContent=cl;}projSet();};
     // the name boxes keep st up to date as you type: a redraw (picking a colour, adding a row) no longer puts back the old name
     const nm=g('me-name');if(nm)nm.oninput=()=>{tplNameTo(nm.value);};const tn0=g('me-tname');if(tn0)tn0.oninput=()=>{st.tname=tn0.value;tnFollow=false;};
-    const w=g('me-wo');if(w)w.onchange=()=>{const prev=st.wo;st.wo=w.value;{const hw=g('me-hwo'),hd=g('me-due'),oo=DB.orders.find(x=>x.wo===st.wo);if(hw&&st.wo){hw.textContent=st.wo;{const hs=g('me-hstp');if(hs)hs.outerHTML=stepBadge(st.wo,'me-hstp');}if(hd)hd.outerHTML=lwDueTag(oo)||'<span id="me-due"></span>';}else if(!!hw!==!!st.wo)setTimeout(()=>{keep();draw();},0);} /*the title bar always shows the WO the list is for*/if(st.pmsg&&st.pmsg.st!=='busy')st.pmsg=null;const wi=g('me-woinfo');if(wi){const wo0=DB.orders.find(x=>x.wo===st.wo);wi.innerHTML=woInfoEdHTML(wo0);woInfoBind(wi,wo0);}
+    const w=g('me-wo');if(w)w.onchange=()=>{const prev=st.wo;st.wo=w.value;{const hw=g('me-hwo'),hd=g('me-due'),oo=DB.orders.find(x=>x.wo===st.wo);if(hw&&st.wo){hw.textContent=st.wo;{const hs=g('me-hstp');if(hs)hs.outerHTML=stepBadge(st.wo,'me-hstp');}if(hd)hd.outerHTML=lwDueTag(oo)||'<span id="me-due"></span>';}else if(!!hw!==!!st.wo)setTimeout(()=>{keep();draw();},0);} /*the title bar always shows the WO the list is for*/if(st.pmsg&&st.pmsg.st!=='busy')st.pmsg=null;const wi=g('me-woinfo');if(wi){const wo0=DB.orders.find(x=>x.wo===st.wo);wi.innerHTML=woInfoHTML(wo0);} /*Garry 25 Nov (1A): read-only in the list window, as live*/
       const h0=R()[0];if(opt.std&&h0&&h0.k==='hdr'&&!h0.sub&&(!String(h0.item||'').trim()||h0.item===lsStdHouse(DB.orders.find(x=>x.wo===prev)))){ // standard layout: the house heading follows the work order
         h0.item=lsStdHouse(DB.orders.find(x=>x.wo===st.wo));const hi=ov.querySelector('[data-mr="0|item"]');if(hi)hi.value=h0.item;}
       const o=DB.orders.find(x=>x.wo===st.wo),p=o&&lsProjAuto(o.customer).p;if(!st.pid&&p){keep();st.pid=p.id;st.pauto=true;edges=lsProjEdges(p.id);draw();}

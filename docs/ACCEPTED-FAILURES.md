@@ -253,3 +253,12 @@ No new failing check against the base run except checks that compare with "origi
 |---|---|---|
 | sync attack1-roles-bytes "vs main", attack1-twopc "B really runs origin/main code" | main now HAS the quick check (R1 live 19 Nov), so "main" is no longer the old code | Tester pins these to the pre-R1 commit |
 | attack2-basics / attack2-finder-pm-tag "Deliveries tab reads the same as origin/main" | the Deliveries page changed on purpose (customer band, ticks, bar) | Tester re-points |
+
+## 25 Nov 2026 — Job B brought up to date with live (branch feature/project-details-v3) — out of date by the merge, not app faults — pending Garry
+| Check(s) | Why | Fix |
+|---|---|---|
+| seq attack8-merge A1a / A1b / A1b2 / A1d / A1d2 / A1e (9 checks) "screen = commit ba6ecd8 / 404262a" | they compare whole screens with commits from 11 Nov; 130 live changes have gone in since | Tester re-points to today's live + Job B's own additions |
+| dates attack5-carryover B1 / B2 / B9 [lists ON]; lists-filter attack1-filter 11 (ON and OFF) "same as origin/main" | Job B adds ✋ Requests to the Production Manager's strip and the 🔢 Project sequence button; the screens differ from live on purpose | Tester adds the Job B pieces to the expected screens |
+| seq l9-deliv-card (4 checks); seq attack7-merge-clock 2d (2 checks) | they test Job B's EARLY "＋ Add cutting list" on delivery cards; live's ＋ List / list badge (17–25 Nov) replaced it and has its own tests (list-window/l9-delivery-add-list, deliveries/d24-list-badge) | Tester retires these two |
+| seq attack3-editor "Unit box left (Tab to Title): searched" | live changed the rule: the look-up runs on 🔎 Find or on leaving the TITLE box, not the Unit box | Tester re-points to the Title box |
+| editor e7-keyboard "redraw under 150 ms / 800 ms" (236 / 808 ms); stage1 t4-fleet-offline "2,500 jobs under 10 s" (11.7 s) | speed checks run with three test files at once on a 2-core machine | re-run alone before go-live; a real slow-down would be a bug |

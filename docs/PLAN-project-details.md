@@ -1611,3 +1611,20 @@ No Tester expectation changed. One of my own checks was moved to the new rule (b
 - **Left before go-live:** finish the list above → full suite again → merge PR #17 (Deliveries badge) in once it is live → Tester on the
   whole branch → Manager → GO-LIVE doc (SQL order: Project details, PM sequence, Merged P-numbers; the 18 Nov empty-save guard is separate)
   → Garry runs the SQL → merge → every screen closed → incognito check. A due-date-follows-everywhere test is to be added.
+
+### 25 Nov 2026 — Garry's answers (live) and what was done
+- **1 → A:** Floor / Unit / Title / Customer stay READ-ONLY in the list window (as live). Job B's editable boxes are not used there.
+- **2 → A:** "✎ Project details" sits under More ▾ in the list window. Garry also: "PM should be able to add project materials in their
+  window also" → the PM's sequence window has a **🧱 Materials (n)** button (same roles as may edit materials: PM, office, management,
+  Production Manager, Drawing office, Pre-production).
+- **3 → A:** Pre-production is asked for the PIN before changing a template. **4 → A:** PMs see shipped jobs, cannot send them back.
+- **5 — NOT decided:** Garry: "we need to look more at the import and merge. there is too many questions and things to check over when
+  importing". Architect to list every question / tick the import shows today and propose what can be automatic. The Job B matching key
+  stays in for now (the sequence SQL needs it).
+- **6 → A:** Garry will send one real Cienapps upload file for a dry run. **7:** go live "as soon as possible". **8 → A:** everyone from day one.
+- PR #17 (Deliveries list badge, booking bar at the bottom, pool in due-date order) merged by Garry 25 Nov and merged into this branch.
+- Also fixed: Materials window on a phone (both layouts kept — Job B's big tap targets and live's) · the ⚠ SPEC NOT SIGNED OFF chip is a
+  real button (the list window's Tab wrap knows it) · 🧱 Materials / 📝 Project details on Lists ask for the project when the filter is
+  "No project".
+- After these: every check that differed from live or from the old Job B branch is either fixed or listed in ACCEPTED-FAILURES
+  ("25 Nov 2026 — Job B brought up to date"). Full suite to be run again on this commit.
