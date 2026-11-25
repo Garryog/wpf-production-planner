@@ -194,6 +194,7 @@ const LIT = () => ({ prev: document.getElementById('wkb-prev').className, next: 
     });
     // real drag: book a van as the Production Manager, and drop on the week bar
     await p.locator('.dchip[data-dw="WO-R2"] .dchip-t').count().then(async n => { if (!n) await p.evaluate(async () => { await __go('1'); }); });
+    await p.setViewportSize({ width: (p.viewportSize() || { width: 1400 }).width, height: 2200 }); // d24: the cards are one line taller (list badge) — keep the card and the van cell on one screen for the real drag
     await p.locator('.dchip[data-dw="WO-R2"] .dchip-t').dragTo(p.locator('.dcell[data-cell^="IVECO|Thu|"]'));
     await p.waitForTimeout(150);
     const B2 = await p.evaluate(async () => { const ov = __ovl().join(); if (document.querySelector('.pod-ovl [data-why]')) await __why('Production'); __closeAll(); const o = __g('WO-R2'); return { ov: ov.slice(0, 200), veh: o.delVeh, day: o.delDay, wk: o.delWk }; });

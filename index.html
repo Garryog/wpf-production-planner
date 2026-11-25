@@ -80,6 +80,15 @@ button,input,select{font-family:inherit;cursor:pointer}
 tr.lst-ok>td:first-child{box-shadow:inset 4px 0 0 #2d9e54}
 .lst-ok:not(tr){box-shadow:inset 4px 0 0 #2d9e54}
 .dchip.lst-ok,.dcell .dchip.lst-ok,.dpool .dchip.lst-ok{box-shadow:inset 4px 0 0 #2d9e54}
+/* d24 (Garry 24 Nov): the cutting list status in WORDS on every Deliveries card — green list added, grey no list needed, red no list yet */
+.dl-st{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin-top:4px;padding:3px 6px;border-radius:5px;font-size:11px;font-weight:800;letter-spacing:.2px;border:1px solid;box-sizing:border-box;max-width:100%}
+.dl-st.ok{background:#0d6e46;border-color:#0d6e46;color:#fff}
+.dl-st.na{background:#e6e9ee;border-color:#aeb7c4;color:#3d4a5c}
+.dl-st.no{background:#fff;border-color:#b42318;color:#b42318}
+.dl-st .dl-tx{flex:1 1 auto;min-width:0}
+.dl-st button{font:inherit;font-size:11px;font-weight:700;border-radius:4px;padding:3px 8px;min-height:30px;cursor:pointer;border:1px solid currentColor;background:#fff;color:inherit;white-space:nowrap}
+button.dl-st{cursor:pointer;width:100%;text-align:left;font-family:inherit}
+.dchip.done .dl-st{opacity:.6}
 .stp-b{display:inline-block;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:10px;font-weight:600;line-height:1.4;color:#4a5568;background:#eef1f5;border:1px solid #d5dbe3;border-radius:4px;padding:0 5px;margin-left:5px;white-space:nowrap;vertical-align:middle;text-transform:none;letter-spacing:0;text-decoration:none;max-width:min(100%,240px);overflow:hidden;text-overflow:ellipsis;box-sizing:border-box}
 .dchip-top b .stp-b{display:block;width:max-content;max-width:100%;margin:2px 0 0}/*attack19: on a Deliveries card the step sits on its own line under the WO — never under the card buttons*/
 .wo-num{font-family:monospace;font-size:11px;color:var(--t2)}
@@ -355,6 +364,15 @@ details.lti-other{margin-bottom:14px}details.lti-other>summary{cursor:pointer;fo
 .selbar button.selbook{background:#0d6e46;color:#fff;border-radius:6px;text-decoration:none;font-weight:700;font-size:13px;padding:7px 12px;min-height:34px}
 .selbar button.selbook:disabled{background:#9fb3a8;cursor:default}
 @media(max-width:600px){.selbar{gap:8px}.selbar .selput{width:100%}.selbar select{flex:1 1 120px}}
+/* d24 (Garry 24 Nov: "no bar appears to put on van"): the bar was at the top of the page — out of sight once you scroll down to tick
+   cards. It now stays at the bottom of the screen for as long as anything is ticked. */
+#del-selbar{position:fixed;left:12px;right:12px;bottom:10px;z-index:60;margin:0;padding:10px 14px;font-size:14px;background:#14335c;color:#fff;border:2px solid #ffd27a;border-radius:10px;box-shadow:0 6px 24px rgba(10,20,40,.35);max-height:46vh;overflow:auto}
+#del-selbar button:not(.selbook){color:#cfe0ff;font-size:13px}
+#del-selbar select{font-size:15px;min-height:40px}
+#del-selbar button.selbook{font-size:15px;min-height:40px;padding:8px 16px}
+body:has(#del-selbar){padding-bottom:120px}
+@media(max-width:700px){body:has(#del-selbar){padding-bottom:260px}}
+body:has(#del-selbar) .toast{bottom:150px}
 .del-grid{width:100%;min-width:1100px;border-collapse:collapse}
 .del-grid th{background:#f5f6f8;border:1px solid var(--border);padding:6px 8px;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--t2)}
 .del-grid th:first-child{width:106px;text-align:left}
@@ -10169,7 +10187,9 @@ function showReadiness(wos,ctx,always){
   const lsOf=w=>V2()?lists().filter(l=>(l.wos||[]).includes(w)):[];
   const listBtns=o=>{if(!canL||o.manual||dStage(o))return''; // (attack7 C5) as on the card: not for a job already loaded / on the road / delivered
 const ls2=lsOf(o.wo);
-    if(!ls2.length)return `<button class="btn btn-g" data-rdadd="${escA(o.wo)}" style="${lbtn}" title="Opens the cutting list window for ${escA(o.wo)} — work order, floor, unit and title filled in">＋ Add cutting list</button>`;
+    if(!ls2.length&&lsNA(o))return `<button class="btn btn-s" data-dlnaundo="${escA(o.wo)}" style="${lbtn}" title="Undo — this job does need a cutting list">Undo "no list needed"</button>`;
+    if(!ls2.length&&phHas(o))return'';
+    if(!ls2.length)return `<button class="btn btn-s" data-dlna="${escA(o.wo)}" style="${lbtn}" title="This job does not need a cutting list">No list needed</button><button class="btn btn-g" data-rdadd="${escA(o.wo)}" style="${lbtn}" title="Opens the cutting list window for ${escA(o.wo)} — work order, floor, unit and title filled in">＋ Add cutting list</button>`;
     return ls2.slice(0,3).map(l=>`<button class="btn btn-s" data-rdopen="${escA(l.id)}" style="${lbtn}" title="Open the list in the cutting list window">📋 Open ${escA(String(l.name||'list').slice(0,24))}</button>`).join('');};
   const chip=(ok,txtOk,txtNo)=>ok?`<span class="ls-ok" style="font-size:13px">${txtOk}</span>`:`<span class="ls-no" style="font-size:13px">${txtNo}</span>`;
   const rowH=i=>{
@@ -10178,7 +10198,8 @@ const ls2=lsOf(o.wo);
     return `<div style="display:flex;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);flex-wrap:wrap">
       <b style="font-family:monospace;color:#14335c">${escA(o.wo)}</b>${o.manual?'':stepBadge(o)}
       <span style="flex:1;min-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escA(o.title||'')}</span>
-      ${!s?`<span class="ls-no" style="font-size:13px">📋 NO LIST YET${canL&&!o.manual?'':' — the Drawing office makes it in 📋 Cutting Lists'}</span>`
+      ${!s&&!o.manual&&lsNA(o)?`<span class="dl-st na" style="margin:0;font-size:13px">⊘ NO LIST NEEDED${o.listNA.by?' · '+escA(o.listNA.by):''}</span>`
+        :!s?`<span class="ls-no" style="font-size:13px">📋 NO LIST YET${canL&&!o.manual?'':' — the Drawing office makes it in 📋 Cutting Lists'}</span>`
         :`<span class="rdy-pill rdy-${s.lvl}">${RDY_LBL[s.lvl]}</span>${sideChipHTML('saw',s.saw,s.sawAt,true)}${sideChipHTML('fit',s.fit,s.fitAt,true)}`}
       ${listBtns(o)}
     </div>`;
@@ -10193,6 +10214,7 @@ const ls2=lsOf(o.wo);
   ov.onclick=e=>{if(e.target===ov||e.target.id==='pod-x')ov.remove();};
   ov.querySelectorAll('[data-rdadd]').forEach(b=>b.onclick=()=>{ov.remove();lsNewChoose(b.dataset.rdadd);}); /*d19-6: templates first*/ // the same window as Cutting Lists → ＋ New list, on this job
   ov.querySelectorAll('[data-rdopen]').forEach(b=>b.onclick=()=>{ov.remove();openListEditor(b.dataset.rdopen);});
+  dlBind(ov);ov.querySelectorAll('[data-dlna],[data-dlnaundo]').forEach(b=>b.addEventListener('click',()=>ov.remove())); // d24: the card behind shows the new status
 }
 let drvUploading=false;
 function podKey(veh,day,wk){return veh+'|'+day+'|'+(wk||thisWk());} /*dates: the booking's own week*/
@@ -10351,18 +10373,50 @@ async function addPodPhotos(files,pk){
   drvUploading=false;render();
 }
 
+/* d24 (Garry 24 Nov: "it needs to be much clearer in the deliveries window that there is a list added or there is no need for a
+   list"): one worded badge on every job card — green "LIST ADDED" (tap = open it), green "PAPER LIST PHOTO", grey "NO LIST NEEDED",
+   red "NO LIST YET". The people who make lists (office, Production Manager, Drawing office) get ＋ List and "No list needed" on a
+   red one and "undo" on a grey one; everyone else sees the status only. Same rule as the green strip (woListOk). No database change. */
+function dlCan(){return V2()&&!['pm','driver','dash','floor','saw','stores'].includes(ROLE||'');}
+function dlBadge(o,st){
+  if(!o||o.manual)return'';
+  const w=escA(o.wo),can=dlCan();
+  if(woListSet().has(o.wo)){const n=lists().filter(l=>(l.wos||[]).includes(o.wo)).length;
+    return `<button class="dl-st ok" data-dlopen="${w}" title="This job has a cutting list — tap to open it">📋 LIST ADDED ✓${n>1?' ('+n+')':''}</button>`;}
+  if(phHas(o))return `<div class="dl-st ok" title="A photo of the paper cutting list is on this job">📷 PAPER LIST PHOTO ✓</div>`;
+  if(lsNA(o))return `<div class="dl-st na" title="${escA('Marked no list needed'+(o.listNA.by?' by '+o.listNA.by:'')+(o.listNA.at?' · '+fmt(o.listNA.at):''))}"><span class="dl-tx">⊘ NO LIST NEEDED</span>${can&&!st?`<button data-dlnaundo="${w}" title="Undo — this job does need a cutting list">undo</button>`:''}</div>`;
+  return `<div class="dl-st no" title="No cutting list on this job yet"><span class="dl-tx">✕ NO LIST YET</span>${can&&!st?`${V2()?`<button class="dlist-add" data-dladd="${w}" title="＋ Add a cutting list for ${w} (opens the cutting list window)">＋ List</button>`:''}<button data-dlna="${w}" title="This job does not need a cutting list">No list needed</button>`:''}</div>`;
+}
+function dlOpen(wo){const ls2=lists().filter(l=>(l.wos||[]).includes(wo));if(!ls2.length)return;
+  if(ls2.length>1||!V2()){showReadiness([wo],wo,true);return;} // several lists: the check window names each one
+  if(dlCan()&&!dStage(DB.orders.find(x=>x.wo===wo)||{}))openListEditor(ls2[0].id);else lsViewDlg(ls2[0].id);} // status-only people (and a job already loaded): read-only view
+function dlBind(root){
+  const stop=b=>{b.onmousedown=e=>e.stopPropagation();b.draggable=false;};
+  root.querySelectorAll('[data-dlopen]').forEach(b=>{stop(b);b.onclick=e=>{e.stopPropagation();dlOpen(b.dataset.dlopen);};});
+  root.querySelectorAll('[data-dlna]').forEach(b=>{stop(b);b.onclick=e=>{e.stopPropagation();const w=b.dataset.dlna;if(!dlCan())return;
+    officeWho(by=>{const o=DB.orders.find(x=>x.wo===w);if(!o)return;
+      if(woListSet().has(w)||phHas(o)){toast(w+' has a cutting list now — left as it is');render();return;} // another screen added one meanwhile
+      if(!lsNA(o)){o.listNA={k:'none',by,at:nowISO()};logEdit(o,'Cutting list: no list needed',by);sched();}
+      render();toast(w+' — no list needed ✓');});};});
+  root.querySelectorAll('[data-dlnaundo]').forEach(b=>{stop(b);b.onclick=e=>{e.stopPropagation();const w=b.dataset.dlnaundo;if(!dlCan())return;
+    officeWho(by=>{const o=DB.orders.find(x=>x.wo===w);if(!o)return;
+      if(o.listNA){delete o.listNA;logEdit(o,'Cutting list: "no list needed" undone',by);sched();}
+      render();toast(w+' — needs a cutting list again');});};});
+}
 function dchip(o){ /*d19-1: the customer band is on every card now (showCust gone)*/
   const st=dStage(o);
-  const rd=(!st&&!o.manual)?woReady(o.wo):null; // one colour per job until it's loaded — detail behind the ⓘ button
+  let rd=(!st&&!o.manual)?woReady(o.wo):null; // one colour per job until it's loaded — detail behind the ⓘ button
+  if(rd&&rd.saw==='nolist'&&lsNA(o))rd=null; // d24: "no list needed" — nothing to cut or pick, so no red NOT READY on the card
   return `<div class="dchip${rd?' rdy-'+rd.lvl:''}${st==='deliv'?' done':''}${st==='disp'?' dispd':''}${st==='load'?' loadd':''}${o.manual?' manual':''}${delSel.has(o.wo)?' sel':''}${!o.manual&&woListOk(o)?' lst-ok':''}" draggable="true" data-dw="${escA(o.wo)}" title="Click to select · drag onto a day${o.manual?' · added manually':''}${!o.manual&&woListOk(o)?' · green strip: cutting list sorted':''}">
     <div class="dchip-c${String(o.customer||'').trim()?'':' none'}" title="${escA(o.customer||'')}"><span class="dtick" role="checkbox" aria-checked="${delSel.has(o.wo)?'true':'false'}" title="Tick to select">${delSel.has(o.wo)?'☑':'☐'}</span><span class="dchip-cn">${String(o.customer||'').trim()?escA(o.customer):'(no customer)'}</span></div>
     <div class="dchip-top"><b>${escA(o.wo)}${o.manual?'':stepBadge(o)}</b>
-      <span class="dchip-btns">${V2()&&!o.manual&&!st&&!['pm','driver','dash','floor','saw','stores'].includes(ROLE||'')&&!lists().some(l=>(l.wos||[]).includes(o.wo))?`<button class="dinfo dlist-add" data-dladd="${escA(o.wo)}" title="＋ Add a cutting list for ${escA(o.wo)} (opens the cutting list window)" style="width:auto;padding:0 6px;font-weight:800">＋ List</button>`:''}${rd?`<button class="dinfo" data-dinfo="${escA(o.wo)}" title="${escA(RDY_LBL[rd.lvl]+(rd.why.length?' — '+rd.why.join(' · '):''))} — tap for detail">ⓘ</button>`:''}<button class="dchk${st?' on':''}" data-dd="${escA(o.wo)}" title="Status: ${dStageLbl[st]||'planned'} — tap to update (opens a menu)">${st==='deliv'?'✓':st==='disp'?'D':st==='load'?'L':'·'}</button><button data-dx="${escA(o.wo)}" title="${o.delDay?'Return to pool':'Take off board'}" aria-label="${o.delDay?'Return to pool':'Take off board'}">×</button></span>
+      <span class="dchip-btns">${rd?`<button class="dinfo" data-dinfo="${escA(o.wo)}" title="${escA(RDY_LBL[rd.lvl]+(rd.why.length?' — '+rd.why.join(' · '):''))} — tap for detail">ⓘ</button>`:''}<button class="dchk${st?' on':''}" data-dd="${escA(o.wo)}" title="Status: ${dStageLbl[st]||'planned'} — tap to update (opens a menu)">${st==='deliv'?'✓':st==='disp'?'D':st==='load'?'L':'·'}</button><button data-dx="${escA(o.wo)}" title="${o.delDay?'Return to pool':'Take off board'}" aria-label="${o.delDay?'Return to pool':'Take off board'}">×</button></span>
     </div>
     ${fuF(o)||fuU(o)?`<div class="dchip-fu">${fuHTML(o,'dfu')}</div>`:''}
     <div class="dchip-t" title="${escA(o.title)}">${escA(o.title)||'—'}</div>
     <div class="dchip-dates">${dueTag(o)}${!o.manual&&dateCanMove()?`<button class="dq-more" data-duedlg="${escA(o.wo)}" title="All date options — due and delivery dates, history">⋯</button>`:''}${o.manual?'':movedTag(o)}</div>
     ${wkBtnsOk(o)?(nw=>`<div class="dchip-wkb"><button class="dwk-btn" data-wknext="${escA(o.wo)}" data-wk="${escA(nw)}" title="Move the due date${o.delivDate?' and the delivery date':''} one week on — asks why">→ Wk ${wkNum(nw)}</button><button class="dwk-btn" data-wkpick="${escA(o.wo)}" title="Pick any week — asks why">Move to week…</button></div>`)(wkPlus(delPoolWk(o),1)):''}${o.delRebook&&!o.delDay?`<div class="dm-moved" title="${escA('Taken off '+(o.delRebook.was||'').split('|').slice(0,2).join(' ')+' by '+(o.delRebook.by||'')+(o.delRebook.why?' — '+o.delRebook.why:''))}">${o.delRebook.back?'↩ brought back — rebook':o.delRebook.nd?'🚚 not delivered Wk '+escA(o.delRebook.nd)+' — rebook':'📅 date moved — rebook'}</div>`:''}${o.dueMv&&o.dueMv.loaded&&dStage(o)&&dStage(o)!=='deliv'?`<div class="dm-moved" style="color:#b42318">📅 date moved after loading — check</div>`:''}
+    ${st==='deliv'?'':dlBadge(o,st)}
     ${st?`<div class="dstg s-${st}">${dStageLbl[st]}${dStageTime(o)?' '+dStageTime(o):''}${st==='deliv'&&o.delivBy?' — '+escA(o.delivBy):st==='load'&&o.ldBy?' — '+escA(o.ldBy):''}</div>`:''}
     ${isOnHold(o)?`<div class="rdy-tag" style="background:#fde8e8;color:#b42318" title="Step 12 in Cienapps — kept here because it's already loaded / on the road">⏸ ON HOLD in Cienapps</div>`:''}${rd?`<div class="rdy-tag">${RDY_LBL[rd.lvl]}</div>`:''}${(o.delMoves||[]).length?`<div class="dmoved" title="${escA(o.delMoves.map(m=>m.why+' — '+m.by).join(' | '))}">🚚 rebooked ×${o.delMoves.length}</div>`:''}
     ${!o.manual&&(afterDelivOn(o)||delivMvOn(o))?`<div>${delivFlagChips(o)}</div>`:''}${siteChip(o)}
@@ -10398,11 +10452,11 @@ function renderDeliveries(app){
   const legacy=ROLE==='office'?delLegacyJobs():[];
   const tabLbl=t=>{if(t==='later')return'Later';const w=delTabWk(t);return (t==='0'?'This week · ':t==='1'?'Next week · ':'')+'Wk '+wkNum(w)+' · '+dShort(w)+(w<W0?' (past)':'');};
   const tabN=t=>t==='later'?poolOf(t).length:tagged.filter(o=>slotIn(o,delTabWk(t))).length+poolOf(t).length;
-  // pool groups: "date moved — rebook" first, then by customer (Later: by due week), WO-number order inside each
+  // pool groups: "date moved — rebook" first, then by customer (Later: by due week); inside a customer by due date (d24), then WO number
   const rebook=pool.filter(o=>o.delRebook).sort(woCmp),rest=pool.filter(o=>!o.delRebook);
   const grps={};rest.forEach(o=>{const c=later?poolWk(o):(o.customer||'(no customer)');(grps[c]=grps[c]||[]).push(o);});
   const gkeys=Object.keys(grps).sort((a,b)=>a.localeCompare(b));
-  gkeys.forEach(k=>grps[k].sort(later?((a,b)=>(a.customer||'').localeCompare(b.customer||'')||woCmp(a,b)):woCmp));
+  gkeys.forEach(k=>grps[k].sort(later?((a,b)=>(a.customer||'').localeCompare(b.customer||'')||woCmp(a,b)):((a,b)=>String(a.dueDate||'9999').localeCompare(String(b.dueDate||'9999'))||woCmp(a,b)))); // d24 (Garry 24 Nov, answer 3A): inside each customer the earliest due date first (no date last), WO number breaking ties
   const gName=k=>later?'Wk '+wkNum(k)+' — due from '+dShort(k):k;
   const gHTML=(k,lbl,list,sty)=>`<div class="dgrp">
         <div class="dgrp-h" data-grp="${escA(k)}"${sty?` style="${sty}"`:''}><span class="dgrp-n">${escA(lbl)}</span><span class="gcnt">${list.length} job${list.length!==1?'s':''} · click to select all</span></div>
@@ -10662,6 +10716,7 @@ function renderDeliveries(app){
   });
   document.querySelectorAll('[data-dinfo]').forEach(b=>b.onclick=e=>{e.stopPropagation();showReadiness([b.dataset.dinfo],b.dataset.dinfo,true);});
   document.querySelectorAll('[data-dladd]').forEach(b=>{b.onclick=e=>{e.stopPropagation();lsNewChoose(b.dataset.dladd);}; /*d19-6: templates first*/b.onmousedown=e=>e.stopPropagation();b.draggable=false;}); // (Garry 17 Nov, L9) ＋ List on a delivery card
+  dlBind(document);
   dmBindChips(app); /*dates: due date on a card → Change dates*/
   bindSiteOk(app); /*dates phase 2: site ready*/
   bindMissWhy();
