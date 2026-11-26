@@ -479,3 +479,15 @@ house until the next import) — to be closed in this release.
 - **Saw and Stores (NOT BUILT YET):** ◀ Previous day / Next day ▶, up to 3 weeks ahead; a future day's list can be viewed AND ticked.
   A cut / fittings list not finished on its day shows at the top of the next working day marked "MISSED — was due <day>" until it is
   done; the job's dates are not changed.
+
+### 26 Nov 2026 — sequence numbers (Garry, live) — BUILT on branch feature/seq-numbers
+Garry: "on the project sequence … the sequence always starts at 1 upwards and that place in the sequence follows the work order
+throughout planner. when the job is shipped it falls off the sequence table". His answers: the number shows everywhere the WO shows;
+shipped rows hidden behind a "Show shipped" link.
+- The sequence a person sees and works with = the rows that are NOT shipped, numbered 1, 2, 3 … A shipped job's row stays in the
+  database (never deleted) and is listed under "Show shipped (n)" at the foot of the table. Un-ship a job and it is back in its place.
+- A "#n" badge beside the work order: Capacity Board, the cutting list window header, and every page that shows the step badge
+  (Deliveries cards, Lists pages, PM page, Shipped tab, saw / stores photo lists …). Numbering is per project. No badge for a job
+  that is in no sequence, or while the sequence tables are not installed.
+- Moves, "move to position", uploads and the duplicate check are unchanged underneath (moves are "after row X" in the database;
+  the upload still recognises a shipped house and does not add it again). No database change.
