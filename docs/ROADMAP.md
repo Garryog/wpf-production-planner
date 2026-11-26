@@ -471,7 +471,7 @@ house until the next import) — to be closed in this release.
   (due from 1 Nov 2026; a hand-untick is respected). "In store" stays 7 / 8. (PR #19)
 - **No list:** every live job without a list shows the "no list" note on the Capacity Board and is in "lists to issue" — any step.
   On 26 Nov that is about 234 jobs (177 of them before step 5). The saw / stores waiting line and the dashboard tiles keep the old rule. (PR #19)
-- **WO-BI- / WO-PF- / WO-E- duplicates (NOT BUILT YET):** when the main work order (same number without the letters) is on the board, the
+- **WO-BI- / WO-PF- / WO-E- duplicates (BUILT 26 Nov, branch feature/fold-code-wos — see the note below):** when the main work order (same number without the letters) is on the board, the
   coded line is FOLDED into it — gone from the board, Deliveries and capacity, a small note on the main WO, value counted once, nothing
   deleted; the 6 pairs on the board today are folded at the next import. A coded line whose main WO is not on the board stays its own
   job (76 WO-BI- today) and is folded when the main WO arrives. WO-D- keeps the drawing-stage rule. Plan: reuse the P-number merge
@@ -479,3 +479,13 @@ house until the next import) — to be closed in this release.
 - **Saw and Stores (NOT BUILT YET):** ◀ Previous day / Next day ▶, up to 3 weeks ahead; a future day's list can be viewed AND ticked.
   A cut / fittings list not finished on its day shows at the top of the next working day marked "MISSED — was due <day>" until it is
   done; the job's dates are not changed.
+
+- **Coded work orders — as built (26 Nov):** fold in the import's reading step + coded jobs already on the board folded after every
+  import (lists on). Extra rules from the review: a coded job that cannot be folded yet (loaded / on the road, or both it and the
+  main job have a live cutting list) stays and keeps getting its Cienapps updates; once folded, a coded line never comes back as a
+  new job, even after the main job ships; its site-ready mark, cut tick, notes, list and delivery booking move to the main job,
+  its "no list needed" mark does not; the first full copy is always kept on the main job. Known gap: an out-of-date screen can bring
+  a folded coded job back until the next import folds it again (close old screens on go-live).
+- **Project sequence (Garry 26 Nov, NOT BUILT YET):** numbering always 1 upwards; a job's number ("#7") shown beside the work order
+  everywhere the WO shows; a shipped job drops off the table and the rest renumber; shipped rows behind a "Show shipped (n)" link.
+- **Build order (Garry 26 Nov):** 1) coded work orders, 2) sequence numbers, 3) Saw and Stores day buttons + missed lists.
