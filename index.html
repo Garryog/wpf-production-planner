@@ -6225,7 +6225,7 @@ let sawWaitOpen=false;
 function waitListHTML(){
   if(!V2())return'';
   const today=todayLocal();
-  const rows=listsNeeded().map(o=>lsNeedInfo(o,today)).sort((a,b)=>(a.due||'9999').localeCompare(b.due||'9999')); // earliest "list due by" first
+  const rows=listsNeeded(true).map(o=>lsNeedInfo(o,today)).sort((a,b)=>(a.due||'9999').localeCompare(b.due||'9999')); // earliest "list due by" first
   if(!rows.length)return'';
   const red=rows.filter(r=>r.onDel),amb=rows.filter(r=>!r.onDel),late=amb.filter(r=>r.late).length;
   const line=({o,cut,due,late,onDel})=>`<div class="wl-drow wait-row" data-waitwo="${escA(o.wo)}" style="${late?'background:#c0392b;color:#fff;':''}border-radius:5px;padding:5px 8px;flex-wrap:wrap"><b>${escA(o.wo)}</b>${stepBadge(o)}<span class="dsh-c">${escA(o.customer||'')}</span><span class="dsh-t">${fuHTML(o)}</span><span class="dsh-x">${onDel?'<b>🚚 '+escA(slotLblO(o))+'</b> · ':''}${late?'⚠ OVERDUE · ':''}cut by ${cut?fmt(cut):'—'} · list due by ${due?fmt(due):'—'} · owner ${escA(lsOwnerFor(o))}</span></div>`;
@@ -8826,7 +8826,7 @@ function listParked(l){
 }
 function workLists(){return lists().filter(l=>!listParked(l));}
 let lstShowFin=false; // library: completed lists hidden unless asked for
-function listsNeeded(){ // WOs scheduled to deliver inside the lead time with NO cutting list tagged
+function listsNeeded(soon){ // WOs with NO cutting list tagged. soon = true: only those the floor is waiting on (on the delivery board, due inside the lead time, or at steps 5-8) — the saw / stores line and the Today / Management tiles; default: every live job (s26)
   const tagged=new Set();lists().forEach(l=>(l.wos||[]).forEach(w=>tagged.add(w)));
   const v2=V2();
   const lim=v2?lsAddWorkDays(todayLocal(),listLead()):new Date(Date.now()+listLead()*86400000).toISOString().slice(0,10); // V2: lead in working days (Christmas, bank holidays)
@@ -8836,7 +8836,7 @@ function listsNeeded(){ // WOs scheduled to deliver inside the lead time with NO
     if(DB.listDelOnly===true&&!o.delv)return false; // (Garry, 9 Nov) start-up: only jobs ticked for delivery need a list — the long backlog is left out, never marked
     const planned=o.delv&&o.delDay;                 // already on the delivery board
     const dueSoon=o.dueDate&&o.dueDate<=lim;        // due date inside the lead window
-    return planned||dueSoon||v2;  // V2: every live job without a list (s26, Garry 26 Nov: jobs on the Capacity Board were missing from "lists to issue", and a new job showed no "no list" note) — was steps 5-8 only (3 Nov)
+    return planned||dueSoon||(v2&&(!soon||lsProcessed(o)));  // V2: every live job without a list (s26, Garry 26 Nov: jobs on the Capacity Board were missing from "lists to issue", and a new job showed no "no list" note) — was steps 5-8 only (3 Nov)
   }).sort((a,b)=>(a.dueDate||'9999').localeCompare(b.dueDate||'9999'));
 }
 // Cienapps 5. WORK ORDER PROCESSED to 8. PALLETED: the cutting list should exist (it is issued with the work order).
@@ -10083,7 +10083,7 @@ function renderDash(app){
   const sawDone=workLists().filter(l=>(l.saw||0)>0&&listDone(l.id).saw);
   const fitOpen=workLists().filter(l=>(l.fit||0)>0&&!listDone(l.id).fit);
   const fitDone=workLists().filter(l=>(l.fit||0)>0&&listDone(l.id).fit);
-  const needed=listsNeeded();
+  const needed=listsNeeded(true);
   const srt=(a,b)=>(listDueKey(a)||'9999').localeCompare(listDueKey(b)||'9999');
   const tile=(n,lbl,sub,color)=>`<div class="dsh-tile" style="border-top:4px solid ${color}"><div class="dsh-n" style="color:${color}">${n}</div><div class="dsh-l">${lbl}</div>${sub?`<div class="dsh-s">${sub}</div>`:''}</div>`;
   const jrow=o=>`<div class="dsh-row"><b>${escA(o.wo)}</b>${fuHTML(o,'flr-fu','font-size:12px')}<span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-c">${escA(o.customer||'')}</span><span class="dsh-x">${escA(slotLblO(o))}</span></div>`;
@@ -13882,7 +13882,7 @@ function renderProd(app){
   const holds=allHolds(['saw','fit'],'hold');
   const missNo=missedJobs().filter(o=>!o.missWhy);
   const moved=all.filter(o=>(o.delMoves||[]).length);
-  const lnRows=V2()?listsNeeded().map(o=>lsNeedInfo(o)).sort((a,b)=>(b.late-a.late)||(b.onDel-a.onDel)||(a.due||'9999').localeCompare(b.due||'9999')):null; // lists switch on
+  const lnRows=V2()?listsNeeded(true).map(o=>lsNeedInfo(o)).sort((a,b)=>(b.late-a.late)||(b.onDel-a.onDel)||(a.due||'9999').localeCompare(b.due||'9999')):null; // lists switch on
   const lnLate=(lnRows||[]).filter(r=>r.late),lnIssue=(lnRows||[]).filter(r=>!r.late),lnChk=lsWaitCheckLists(); // + lists waiting for their check (Garry, 4 Nov)
   const dot=l=>`<span class="rdy-dot rdy-${l}"></span>`;
   const rRow=o=>{const r=rdy(o);return `<div class="dsh-row">${dot(r.lvl)}<b>${escA(o.wo)}</b>${fuHTML(o,'flr-fu','font-size:12px')}<span class="dsh-t">${escA(o.title||'')}</span><span class="dsh-c">${escA(o.customer||'')}</span><span class="dsh-x">${escA(slotLblO(o))} · <b class="rdy-t-${r.lvl}">${escA(r.why.join(' · '))}</b></span></div>`;};

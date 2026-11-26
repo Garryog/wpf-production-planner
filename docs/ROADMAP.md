@@ -462,3 +462,20 @@ Garry's decisions (25 Nov):
 - **5 → A:** "Cutting lists to issue" leaves the import; it lives on the Cutting Lists page with a count badge; the import says "N lists to issue →".
 Open point for the Architect: a drawing-stage job brought in is not checked against P-numbers in the same import (two jobs for one
 house until the next import) — to be closed in this release.
+
+### 26 Nov 2026 (Garry, live) — decisions
+- **Storage full bar:** cause was another tool's items (32 × `ph:…`, ~10 MB) on the same web address. Garry saved them to `ph-backup.json`
+  and removed them. Planner change: the safety copy goes to the browser's large store when the small one is full (PR #19).
+- **Deliveries cards:** unit (house) number and title more prominent (PR #19).
+- **Job Cut:** a job at 6 JOB CUT COMPLETE is auto-ticked for delivery — all of them, incl. the 109 already there, at the next import
+  (due from 1 Nov 2026; a hand-untick is respected). "In store" stays 7 / 8. (PR #19)
+- **No list:** every live job without a list shows the "no list" note on the Capacity Board and is in "lists to issue" — any step.
+  On 26 Nov that is about 234 jobs (177 of them before step 5). The saw / stores waiting line and the dashboard tiles keep the old rule. (PR #19)
+- **WO-BI- / WO-PF- / WO-E- duplicates (NOT BUILT YET):** when the main work order (same number without the letters) is on the board, the
+  coded line is FOLDED into it — gone from the board, Deliveries and capacity, a small note on the main WO, value counted once, nothing
+  deleted; the 6 pairs on the board today are folded at the next import. A coded line whose main WO is not on the board stays its own
+  job (76 WO-BI- today) and is folded when the main WO arrives. WO-D- keeps the drawing-stage rule. Plan: reuse the P-number merge
+  (lists, bookings, sequence rows and history move across; a full copy is kept on the main WO).
+- **Saw and Stores (NOT BUILT YET):** ◀ Previous day / Next day ▶, up to 3 weeks ahead; a future day's list can be viewed AND ticked.
+  A cut / fittings list not finished on its day shows at the top of the next working day marked "MISSED — was due <day>" until it is
+  done; the job's dates are not changed.
