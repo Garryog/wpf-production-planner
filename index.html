@@ -2228,7 +2228,7 @@ function renderBoard(app){
       ${weeks.map(w=>`<option value="${w}"${!mixed&&cur===w?' selected':''}>${wkLbl(w)}</option>`).join('')}`;
 
   // lists switch on: "📋 no list" on jobs at step 5-8 with no cutting list — red once the list is late
-  const lnTd=todayLocal(),lnMap=V2()?new Map(listsNeeded().filter(lsProcessed).map(o=>[o.wo,lsNeedInfo(o,lnTd)])):null;
+  const lnTd=todayLocal(),lnMap=V2()?new Map(listsNeeded().map(o=>[o.wo,lsNeedInfo(o,lnTd)])):null; /*s26: every job without a list, not only steps 5-8*/
   // spec TBC on any live list of the job (Garry, 4 Nov): a red chip on the row — it never blocks anything
   const tbcMap=V2()?(()=>{const m=new Map();lists().forEach(l=>{const t=lsTbc(lsView(l.id).rows);if(t.length)(l.wos||[]).forEach(w=>m.set(w,[...new Set([...(m.get(w)||[]),...t])]));});return m;})():null;
   const lnChip=o=>lsTbcChip(tbcMap&&tbcMap.get(o.wo))+(phHas(o)?`<span class="ph-chip" data-phwo="${escA(o.wo)}" title="A photo of the paper list is attached — tap to see it">📷 photo list</span>`:'')+(n=>n?`<span class="ls-nochip${n.late?' late':''}" title="No cutting list yet — ${n.late?'LATE, was due':'due by'} ${n.due?fmt(n.due):'—'}">📋 no list</span>`:'')(lnMap&&lnMap.get(o.wo));
@@ -2760,7 +2760,10 @@ function ovrHolds(ov,cs){if(!ov)return false;const a=stepRank(cs),b=stepRank(ov)
 /* Garry, 4 Nov: a job whose step is set to 7 ASSEMBLY COMPLETE or 8 PALLETED in the planner is ticked for delivery
    (pool, no van/day). Never untags; a job already tagged keeps its van/day; a hand-untag at this step or later is
    respected (same rule as the import); shipped jobs are left alone. On hold still hides it from the board (delHidden). */
-function delvAutoOk(o){const n=stepNo(o&&o.step);return !!o&&(n===7||n===8)&&!o.delv&&!o.shippedAt&&!ovrHolds(o.delvOverride,o.step);}
+/* s26 (Garry 26 Nov: 'When job is down as "Job Cut" auto tick that for delivery'): 6 JOB CUT COMPLETE is ticked for delivery too
+   (pool, no van / day) — same rules as 7 / 8: never untags, a hand-untick is respected. "In store" is still 7 / 8 only. */
+function stepAutoDeliv(s){const n=stepNo(s);return n===6||stepForDelivery(s)||(n===null&&/^job\s*cut(\s*complete)?$/i.test(stepWords(s)));}
+function delvAutoOk(o){return !!o&&stepAutoDeliv(o.step)&&!o.delv&&!o.shippedAt&&!ovrHolds(o.delvOverride,o.step);}
 // (10 Nov) the one-off catch-up skips old jobs: only those due on/after the cut-off (default 1 Nov 2026) — older 7/8 jobs are delivered, Cienapps just never moved them to Shipped
 const DELV_CATCHUP_FROM='2026-11-01';
 function delvCatchUpOk(o,from){return delvAutoOk(o)&&!!o.dueDate&&o.dueDate>=(from||DELV_CATCHUP_FROM);}
@@ -8833,7 +8836,7 @@ function listsNeeded(){ // WOs scheduled to deliver inside the lead time with NO
     if(DB.listDelOnly===true&&!o.delv)return false; // (Garry, 9 Nov) start-up: only jobs ticked for delivery need a list — the long backlog is left out, never marked
     const planned=o.delv&&o.delDay;                 // already on the delivery board
     const dueSoon=o.dueDate&&o.dueDate<=lim;        // due date inside the lead window
-    return planned||dueSoon||(v2&&lsProcessed(o));  // V2: also every live job at steps 5-8 (Garry, 3 Nov)
+    return planned||dueSoon||v2;  // V2: every live job without a list (s26, Garry 26 Nov: jobs on the Capacity Board were missing from "lists to issue", and a new job showed no "no list" note) — was steps 5-8 only (3 Nov)
   }).sort((a,b)=>(a.dueDate||'9999').localeCompare(b.dueDate||'9999'));
 }
 // Cienapps 5. WORK ORDER PROCESSED to 8. PALLETED: the cutting list should exist (it is issued with the work order).
@@ -10792,7 +10795,7 @@ function renderDeliveries(app){
     if(from===null)return;if(!/^\d{4}-\d{2}-\d{2}$/.test(from.trim())){toast('Type the date as YYYY-MM-DD, e.g. 2026-11-01');return;}
     const js=DB.orders.filter(o=>delvCatchUpOk(o,from.trim()));if(!js.length){toast('Nothing to tag');render();return;}
     const older=DB.orders.filter(delvAutoOk).length-js.length;
-    if(!confirm('Tick '+js.length+' job'+(js.length===1?'':'s')+' at 7 ASSEMBLY COMPLETE / 8 PALLETED, due from '+fmt(from.trim())+', for delivery?'+(older?'\n\n'+older+' older job'+(older===1?'':'s')+' at 7/8 are left alone (already delivered).':'')+'\n\nThey go into the pool (no van or day). Jobs already on the board, shipped, or untagged by hand are left as they are.'))return;
+    if(!confirm('Tick '+js.length+' job'+(js.length===1?'':'s')+' at 6 JOB CUT COMPLETE / 7 ASSEMBLY COMPLETE / 8 PALLETED, due from '+fmt(from.trim())+', for delivery?'+(older?'\n\n'+older+' older job'+(older===1?'':'s')+' at 7/8 are left alone (already delivered).':'')+'\n\nThey go into the pool (no van or day). Jobs already on the board, shipped, or untagged by hand are left as they are.'))return;
     officeWho(by=>{let n=0;DB.orders.filter(o=>delvCatchUpOk(o,from.trim())).forEach(o=>{if(delvAuto(o,by,'Tagged for delivery — already at '+o.step+' (one-off catch-up)'))n++;});
       updDelBadge();sched();render();toast(n+' job'+(n===1?'':'s')+' ticked for delivery');});
   };
@@ -11936,7 +11939,7 @@ function analyzeImport(input,source){
         if(cs)o.cienStep=cs;
         if(isHoldC){o.cienHold=true;if(!isDraw)unsched.push(r.key);}
         else if(r.dueBad){if(!isDraw)unsched.push(r.key);flags.push('new job with an unreadable due date — left unscheduled (not put in this week)');}
-        if(stepForDelivery(cs)){o.delv=true;if(!isDraw)autoTag.push(o.wo);} // 7 ASSEMBLY COMPLETE / 8 PALLETED → on the delivery board (no van/day)
+        if(stepAutoDeliv(cs)){o.delv=true;if(!isDraw)autoTag.push(o.wo);} // 7 ASSEMBLY COMPLETE / 8 PALLETED → on the delivery board (no van/day)
         if(r.has.sheets)o.sheetsCien=r.sheets;
         if(r.has.delivDate){o.delivDate=r.delivDate;o.origDelivDate=r.delivDate;if(o.dueDate&&o.dueDate>r.delivDate)flags.push('build date after the delivery date — check');} /*dates phase 2*/
         if(adds)o.adds=adds;
@@ -11977,12 +11980,14 @@ function analyzeImport(input,source){
         const c=!ps||stepOnHold(ps)?1:stepCmp(cs,ps);
         if(c===null){stepDiffs.push({wo:ex.wo,title:ex.title||'',planner:ps,cien:cs,why:"can't tell which is further on — nothing moved"});}
         else if(c>0){newStep=cs;set.step=cs;what.push('step: '+sh(ps||'(none)')+' → '+sh(cs));
-          if(stepForDelivery(cs)&&!ex.delv&&!ex.shippedAt){
+          if(stepAutoDeliv(cs)&&!ex.delv&&!ex.shippedAt){
             if(ovrHolds(ex.delvOverride,cs))flags.push('untagged from delivery by hand at '+sh(ex.delvOverride)+' — not auto-tagged');
             else{set.delv=true;autoTag.push(ex.wo);what.push('auto-tagged for delivery');}}} // never untags
         else if(c<0){stepDiffs.push({wo:ex.wo,title:ex.title||'',planner:ps,cien:cs,why:'planner is ahead — stays on the Export Changes list for Cienapps'});}
         else stepDiffs.push({wo:ex.wo,title:ex.title||'',planner:ps,cien:cs,why:'same stage, different wording — nothing moved'});
       }else if(cs&&cs===ps&&origStep[ex.wo]!==undefined&&origStep[ex.wo]!==cs)synced.push({wo:ex.wo,key:r.key,step:cs}); // Cienapps has caught up
+      // s26: a job ALREADY at Job Cut / Assembly Complete / Palleted and never ticked is ticked at this import (same cut-off as the catch-up: due from 1 Nov 2026 — older ones are long delivered); a hand-untick is respected
+      if(!set.delv&&!ex.delv&&!ex.shippedAt&&!isHoldC&&!isOnHold(ex)&&stepAutoDeliv(set.step||ps)&&!ovrHolds(ex.delvOverride,set.step||ps)&&ex.dueDate&&String(set.dueDate||ex.dueDate)>=DELV_CATCHUP_FROM){set.delv=true;autoTag.push(ex.wo);what.push('auto-tagged for delivery (already at '+sh(set.step||ps)+')');}
       if(cs&&ex.cienStep!==cs)fill.cienStep=cs;
       if(cs&&ex.delvOverride&&!ovrHolds(ex.delvOverride,cs))fill.delvOverride=undefined;     // Cienapps has moved beyond the planner's untag
       if(cs&&ex.completeOverride&&!ovrHolds(ex.completeOverride,cs))fill.completeOverride=undefined;
