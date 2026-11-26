@@ -325,7 +325,7 @@ const donep = p => p.evaluate(() => { const d = document.querySelector('.me-dov'
     const st0 = await X.dev(browser, S, 'office'), sp = st0.page;
     await sp.evaluate(b => { localStorage.setItem('wpf_quotes_backup', b); localStorage.setItem('wpf_doctor_backup', 'y'.repeat(1000)); localStorage.setItem('someOtherApp', 'z'); }, big);
     const keys0 = await sp.evaluate(() => Object.keys(localStorage).sort());
-    await sp.evaluate(() => { const si = Storage.prototype.setItem; window.__si = si; Storage.prototype.setItem = function (k, v) { if (/^wpfPending/.test(k)) throw new DOMException('The quota has been exceeded.', 'QuotaExceededError'); return si.call(this, k, v); };
+    await sp.evaluate(() => { try{Object.defineProperty(window,'indexedDB',{get(){return undefined;},configurable:true});}catch(e){} try{PIDB.db=Promise.resolve(null);}catch(e){} /*s26: no large store either — nowhere on this device to keep a copy*/ const si = Storage.prototype.setItem; window.__si = si; Storage.prototype.setItem = function (k, v) { if (/^wpfPending/.test(k)) throw new DOMException('The quota has been exceeded.', 'QuotaExceededError'); return si.call(this, k, v); };
       DB.orders.find(o => o.wo === 'WO-3').notes = 'changed here'; writePend(); });
     await sleep(200);
     w = await sp.evaluate(() => ({ fail: DB.pendFail, why: DB.pendWhy, txt: document.body.innerText }));
@@ -346,7 +346,7 @@ const donep = p => p.evaluate(() => { const d = document.querySelector('.me-dov'
     await st0.close();
     // blocked
     const st1 = await X.dev(browser, S, 'office');
-    await st1.page.evaluate(() => { Storage.prototype.setItem = function () { throw new DOMException('Access is denied for this document.', 'SecurityError'); }; DB.orders.find(o => o.wo === 'WO-3').notes = 'again'; writePend(); }); await sleep(200);
+    await st1.page.evaluate(() => { try{Object.defineProperty(window,'indexedDB',{get(){return undefined;},configurable:true});}catch(e){} try{PIDB.db=Promise.resolve(null);}catch(e){} /*s26: no large store either — nowhere on this device to keep a copy*/ Storage.prototype.setItem = function () { throw new DOMException('Access is denied for this document.', 'SecurityError'); }; DB.orders.find(o => o.wo === 'WO-3').notes = 'again'; writePend(); }); await sleep(200);
     rec('L10: storage blocked → "This browser is blocking storage (private window or a browser setting) — use a normal Chrome window."', await st1.page.evaluate(() => DB.pendWhy === 'blocked' && /This browser is blocking storage \(private window or a browser setting\) — use a normal Chrome window\./.test(document.body.innerText)));
     await st1.close();
     // lists switched off: the storage panel is there (the only Part 4 change with lists off), the list window is the old one

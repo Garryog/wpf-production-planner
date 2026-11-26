@@ -20,7 +20,7 @@ const res = []; const rec = (n, ok, d) => { res.push(ok); console.log((ok ? 'PAS
   const S2 = makeServer({ id: 'main', version: 1, orders: [H.order({ wo: 'WO-1' })], nid: 3, settings: {} });
   const C = await open(browser, S2, {});
   S2.offline = true;
-  const bar = await C.page.evaluate(async () => { const si = Storage.prototype.setItem; Storage.prototype.setItem = function (k, v) { if (String(k).indexOf('wpfPending') === 0) throw new DOMException('full', 'QuotaExceededError'); return si.call(this, k, v); }; DB.orders[0].notes = 'x'; await saveDB(); return document.getElementById('savebar').textContent; });
+  const bar = await C.page.evaluate(async () => { try{Object.defineProperty(window,'indexedDB',{get(){return undefined;},configurable:true});}catch(e){} try{PIDB.db=Promise.resolve(null);}catch(e){} /*s26: no large store either — nowhere on this device to keep a copy*/ const si = Storage.prototype.setItem; Storage.prototype.setItem = function (k, v) { if (String(k).indexOf('wpfPending') === 0) throw new DOMException('full', 'QuotaExceededError'); return si.call(this, k, v); }; DB.orders[0].notes = 'x'; await saveDB(); await new Promise(r => setTimeout(r, 300)); /*s26: the large store answers a moment later*/ return document.getElementById('savebar').textContent; });
   rec('storage full: bar says NOT kept on device', /could NOT keep/.test(bar), bar);
   await C.close();
   await browser.close();
