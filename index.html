@@ -865,8 +865,27 @@ function valAt(pl,p){
   const s=(pl.settings||{})[p[1]];
   return p.length===2?s:isPO(s)?s[p[2]]:undefined;
 }
+/* s26 (Garry 26 Nov: "This device's storage for the planner is full" — 9.86 MB of another tool's photos on the same web address):
+   the browser's small store (localStorage, about 5 MB for the whole address) is shared with every other page on this address.
+   When it is full the safety copy goes into the browser's LARGE store instead (IndexedDB — thousands of MB), one record per tab,
+   the same content. On opening, copies from both stores are recovered (the newer one of a tab wins). The small store is still
+   tried first every time: it is written at once, which matters when a tab is closing. Nothing of another tool is ever deleted. */
+const PIDB={db:null,
+  open(){if(PIDB.db)return PIDB.db;PIDB.db=new Promise(res=>{try{if(!window.indexedDB)return res(null);const r=indexedDB.open('wpfPlannerSafe',1);
+      r.onupgradeneeded=()=>{try{r.result.createObjectStore('pend');}catch(e){}};r.onsuccess=()=>res(r.result);r.onerror=()=>res(null);r.onblocked=()=>res(null);}catch(e){res(null);}
+      setTimeout(()=>res(null),4000);});return PIDB.db;},
+  tx(mode,fn){return PIDB.open().then(db=>new Promise(res=>{if(!db)return res(null);try{const t=db.transaction('pend',mode),st=t.objectStore('pend');let out=null;const q=fn(st);
+      if(q)q.onsuccess=()=>{out=q.result;};t.oncomplete=()=>res(out===null||out===undefined?true:out);t.onerror=()=>res(null);t.onabort=()=>res(null);}catch(e){res(null);}})).catch(()=>null);},
+  put(id,rec){return PIDB.tx('readwrite',st=>{st.put(JSON.stringify(rec),id);}).then(r=>!!r);},
+  del(id){return PIDB.tx('readwrite',st=>{st.delete(id);}).then(r=>!!r);},
+  all(){return PIDB.open().then(db=>new Promise(res=>{if(!db)return res({});try{const t=db.transaction('pend','readonly'),st=t.objectStore('pend'),out={},c=st.openCursor();
+      c.onsuccess=()=>{const k=c.result;if(!k)return;try{const v=JSON.parse(k.value);if(v)out[String(k.key)]=v;}catch(e){}k.continue();};t.oncomplete=()=>res(out);t.onerror=()=>res(out);t.onabort=()=>res(out);}catch(e){res({});}
+      setTimeout(()=>res({}),2500);})).catch(()=>({}));}};
+let PEND_IDB={},pendBig=false,pendBigP=null; // copies found in the large store at start-up · this tab's copy is in the large store · its last write
+function pendWarn(){if(!DB.pendWarned){DB.pendWarned=true;toast(pendWhyMsg()||"This device can't keep a backup copy of your changes (storage full or blocked) — keep this page open until it says Saved",true);}}
 function writePend(){
   clearTimeout(pendT);pendT=null;
+  let rec=null;
   try{
     if(!BASE||!DB.loaded)return;
     const bs=noWB(BASE),mine=snapLite(),d=pdiff(bs,mine);
@@ -874,12 +893,22 @@ function writePend(){
     // also keep "mine" for anything an unconfirmed save touched — e.g. a tick sent then removed again here
     const has=new Set(d.map(e=>JSON.stringify(e.p)));
     us.forEach(ud=>ud.forEach(e=>{const k=JSON.stringify(e.p),pre=JSON.stringify(e.p.slice(0,2));if(has.has(k)||has.has(pre))return;has.add(k);d.push({p:e.p,b:e.b,m:valAt(mine,e.p)});}));
-    if(d.length)localStorage.setItem(PEND_MY,JSON.stringify({at:Date.now(),d,us,uv:UNSURE.map(x=>USV.get(x)||0)}));
+    if(d.length){rec={at:Date.now(),d,us,uv:UNSURE.map(x=>USV.get(x)||0)};localStorage.setItem(PEND_MY,JSON.stringify(rec));}
     else localStorage.removeItem(PEND_MY);
     DB.pendFail=false;DB.pendWhy='';
-  }catch(e){DB.pendFail=true;DB.pendWhy=storeErrKind(e);console.warn('Planner: could NOT keep unsaved changes on this device',e&&e.message);
-    // say it once, in plain words: a crash or closed tab now would lose what hasn't reached the database — and (L10) why, and the fix
-    if(!DB.pendWarned){DB.pendWarned=true;toast(pendWhyMsg()||"This device can't keep a backup copy of your changes (storage full or blocked) — keep this page open until it says Saved",true);}}
+    if(pendBig){pendBig=false;pendBigP=PIDB.del(TAB_ID);} // the small store took it (or nothing is unsaved): the large-store copy of this tab is out of date
+  }catch(e){
+    const kind=storeErrKind(e);
+    if(rec){ // s26: the small store is full or blocked — keep the same copy in the large store
+      const r0=rec;pendBig=true;DB.pendFail=false;DB.pendWhy='';DB.pendSmall=kind;
+      try{localStorage.removeItem(PEND_MY);}catch(e2){} // an older, smaller copy of this tab must not outlive the newer one
+      const pr=pendBigP=PIDB.put(TAB_ID,r0).then(ok=>{if(pendBigP!==pr)return ok; // a newer write has taken over
+        if(!ok){pendBig=false;DB.pendFail=true;DB.pendWhy=kind;console.warn('Planner: could NOT keep unsaved changes on this device (small store: '+kind+', large store refused)');pendWarn();}
+        updSaveBar();return ok;});
+    }else{DB.pendFail=true;DB.pendWhy=kind;console.warn('Planner: could NOT keep unsaved changes on this device',e&&e.message);
+      // say it once, in plain words: a crash or closed tab now would lose what hasn't reached the database — and (L10) why, and the fix
+      pendWarn();}
+  }
   updSaveBar();
 }
 /* L10 (Garry 10 Nov, "says it cant save"): why this device can't keep its copy, and what fills its storage. The planner shares the
@@ -897,7 +926,8 @@ function devStore(){ // every item in this browser's storage for this address, g
 }
 function fmtMB(b){b=+b||0;return b<1048576?(Math.round(b/1024*10)/10)+' KB':(Math.round(b/1048576*100)/100)+' MB';}
 function pendWhyMsg(){
-  if(DB.pendWhy==='full')return "This device's storage for the planner is full — old Quoting-tool copies use "+fmtMB(devStore().g.quote.b)+". Your work still saves to the database while this page is open and online. Fix: Settings → Storage on this device.";
+  if(DB.pendWhy==='full'){const g=devStore().g,big=g.other.b>g.quote.b?'other pages on this web address use '+fmtMB(g.other.b):'old Quoting-tool copies use '+fmtMB(g.quote.b);
+    return "This device's storage for the planner is full — "+big+". Your work still saves to the database while this page is open and online. Fix: Settings → Storage on this device.";}
   if(DB.pendWhy==='blocked')return 'This browser is blocking storage (private window or a browser setting) — use a normal Chrome window.';
   return '';
 }
@@ -909,6 +939,8 @@ function devStoreHTML(){
       +G.map(([k,l])=>'<tr data-stg="'+k+'"><td>'+escA(l)+'</td><td style="text-align:right">'+s.g[k].n+'</td><td style="text-align:right">'+fmtMB(s.g[k].b)+'</td></tr>').join('')
       +'<tr><td><b>Total</b></td><td style="text-align:right">'+(s.g.plan.n+s.g.quote.n+s.g.other.n)+'</td><td style="text-align:right"><b>'+fmtMB(s.total)+'</b></td></tr></tbody></table>'
       +(s.g.quote.keys.length?'<div style="font-size:12px;color:var(--t3);margin-top:4px">Biggest old Quoting-tool copies: '+s.g.quote.keys.slice(0,4).map(x=>escA(x.k)+' '+fmtMB(x.b)).join(' · ')+'</div>':'')
+      +(s.g.other.b>262144?'<div id="stg-other" style="font-size:12px;color:var(--t3);margin-top:4px">Biggest "Other" items (from another page on this web address — not the planner\'s): '+s.g.other.keys.slice(0,4).map(x=>escA(String(x.k).slice(0,40))+' '+fmtMB(x.b)).join(' · ')+'</div>':'')
+      +(pendBig||DB.pendSmall?'<div id="stg-big" style="font-size:13px;font-weight:700;color:#0d6e46;margin-top:6px">✓ The small store is '+(DB.pendSmall==='blocked'?'blocked':'full')+', so this device keeps its safety copy in the browser\'s large store instead. Nothing for you to do.</div>':'')
       :'<div style="font-size:13px;font-weight:700;color:#8a5a00">This browser is blocking storage (private window or a browser setting) — use a normal Chrome window.</div>')
     +'<div id="stg-est" style="font-size:12px;color:var(--t3);margin-top:6px">Browser storage for this address: checking…</div>'
     +'<p style="font-size:12px;color:var(--t2);margin:8px 0">Browsers give each web address about 5 MB for copies like these. If it is full, the planner can\'t keep a safety copy of your unsaved changes on this device (your work still saves to the database while the page is open and online). The old Quoting tool was once on this same address and its copies may still be here. <b>Fix:</b> download a copy of them below and send it to Garry — he will say when they can be removed. <b>Nothing is deleted here.</b></p>'
@@ -926,7 +958,7 @@ function devStoreBind(){
     toast('Downloaded '+Object.keys(out).length+' old Quoting-tool cop'+(Object.keys(out).length!==1?'ies':'y')+' — nothing was removed ✓');};
 }
 function pendSoon(){clearTimeout(pendT);pendT=setTimeout(writePend,300);}
-function readPend(){try{const t=pendAll();return Object.keys(t).map(k=>({id:k,...t[k]})).filter(s=>Array.isArray(s.d)&&s.d.length).sort((a,b)=>(a.at||0)-(b.at||0));}catch(e){return[];}}
+function readPend(){try{const t=pendAll();Object.keys(PEND_IDB||{}).forEach(id=>{const v=PEND_IDB[id];if(v&&(!t[id]||(+v.at||0)>(+t[id].at||0)))t[id]=v;}); /*s26: the large store's copies — a tab's newer copy wins*/return Object.keys(t).map(k=>({id:k,...t[k]})).filter(s=>Array.isArray(s.d)&&s.d.length).sort((a,b)=>(a.at||0)-(b.at||0));}catch(e){return[];}}
 window.addEventListener('pagehide',()=>{if(pendT)writePend();});
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&pendT)writePend();});
 // Server settings → a full settings object. Missing/empty keys keep what we had (same rules the old loader used).
@@ -1327,6 +1359,7 @@ function checkRow(row){
   return row;
 }
 async function loadDB(){
+  if(!DB.loaded&&!PEND_IDB._read){let big={};try{big=await PIDB.all();}catch(e){}if(!PEND_IDB._read){PEND_IDB=big||{};PEND_IDB._read=true;}} /*s26: copies kept in the browser's large store — read once, before the first load, so the load itself runs exactly as before*/
   try{
     DB.lastLoadOk=false; // set true once this refresh really got the database copy (an import's Apply checks it)
     if(SAVING)return; // a save is mid-flight — the next refresh picks the result up
@@ -1371,7 +1404,7 @@ async function loadDB(){
     // First open on this device: changes that never reached the database last time are merged in and sent now.
     // They're older than what's in the database, so on a true clash the database copy wins (ticks still win).
     // Every tab's slot on this device is merged in (oldest first); this tab then holds them all in its own slot.
-    const pend=!DB.loaded&&row?readPend():[];
+    const pend=!DB.loaded&&row?readPend().filter(s=>s.id!=='_read'):[];
     if(pend.length){
       let cur=noWB(BASE);const ren={},ku=[];
       const rid=new Set((row.settings&&Array.isArray(row.settings.saveIds)&&row.settings.saveIds)||[]);
@@ -1394,7 +1427,8 @@ async function loadDB(){
       applyPlan(cur);
       DB.loaded=true;DB.loadFailed=false;
       writePend();
-      if(!DB.pendFail)pendDrop(pend);
+      {const fin=ok=>{if(DB.pendFail||ok===false)return;pendDrop(pend);pend.forEach(s=>{if(s.id!==TAB_ID&&PEND_IDB[s.id]&&(+PEND_IDB[s.id].at||0)<=(+s.at||0)){delete PEND_IDB[s.id];PIDB.del(s.id);}});}; // s26: recovered copies of other tabs leave the large store too — only once this tab's own copy is safely kept
+        if(pendBig&&pendBigP)pendBigP.then(fin);else fin(true);}
       toast('Unsaved changes from last time were recovered — saving them now');
       sched();
       return;

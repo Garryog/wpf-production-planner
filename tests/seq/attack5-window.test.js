@@ -415,7 +415,7 @@ function row() {
       const before = await snap();
       // every setItem full (a real full device): the app keeps going, the message is the "full" one
       await p.evaluate(() => { const si = Storage.prototype.setItem; window.__si = si; window.__ri = Storage.prototype.removeItem; window.__cl = Storage.prototype.clear; window.__rm = [];
-        Storage.prototype.setItem = function (k, v) { if (this === localStorage) throw new DOMException('The quota has been exceeded.', 'QuotaExceededError'); return si.call(this, k, v); };
+        try{Object.defineProperty(window,'indexedDB',{get(){return undefined;},configurable:true});}catch(e){} try{PIDB.db=Promise.resolve(null);}catch(e){} /*s26: no large store either — nowhere on this device to keep a copy*/ Storage.prototype.setItem = function (k, v) { if (this === localStorage) throw new DOMException('The quota has been exceeded.', 'QuotaExceededError'); return si.call(this, k, v); };
         Storage.prototype.removeItem = function (k) { window.__rm.push(k); return window.__ri.call(this, k); };
         Storage.prototype.clear = function () { window.__rm.push('*CLEAR*'); }; });
       await p.evaluate(() => { DB.orders.find(o => o.wo === 'WO-3').notes = 'full device'; writePend(); if (typeof sched === 'function') sched(); }); await sleep(400);
@@ -445,7 +445,7 @@ function row() {
       const S2 = X.makeServer(row());
       const t2 = await X.dev(browser, S2, 'office');
       await t2.page.evaluate(() => { const bad = () => { throw new DOMException('Access is denied for this document.', 'SecurityError'); };
-        Storage.prototype.setItem = bad; Storage.prototype.getItem = bad; Storage.prototype.removeItem = bad; DB.orders.find(o => o.wo === 'WO-3').notes = 'blocked'; writePend(); }); await sleep(300);
+        try{Object.defineProperty(window,'indexedDB',{get(){return undefined;},configurable:true});}catch(e){} try{PIDB.db=Promise.resolve(null);}catch(e){} /*s26: no large store either — nowhere on this device to keep a copy*/ Storage.prototype.setItem = bad; Storage.prototype.getItem = bad; Storage.prototype.removeItem = bad; DB.orders.find(o => o.wo === 'WO-3').notes = 'blocked'; writePend(); }); await sleep(300);
       rec('L10 blocked (read and write throw): "This browser is blocking storage … use a normal Chrome window."', await t2.page.evaluate(() => DB.pendWhy === 'blocked' && /This browser is blocking storage/.test(document.body.innerText)));
       await t2.page.evaluate(() => showTab('s')); await sleep(500);
       const bl = await t2.page.evaluate(() => ({ tab, store: !!document.getElementById('set-store'), msg: /blocking storage/.test(document.body.innerText), picker: /Who's using this screen/.test(document.body.innerText) }));

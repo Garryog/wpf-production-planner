@@ -147,7 +147,7 @@ async function reopen(d, S, who) { const t = await newTab(d, S, who); await slee
   }
 
   // (D) device storage full / blocked during a save
-  const FULL = all => `(()=>{const si=Storage.prototype.setItem;window.__si=si;Storage.prototype.setItem=function(k,v){if(${all ? 'true' : "String(k).indexOf('wpfPending')===0"})throw new DOMException('full','QuotaExceededError');return si.call(this,k,v);};})()`;
+  const FULL = all => `(()=>{try{Object.defineProperty(window,'indexedDB',{get(){return undefined;},configurable:true});}catch(e){} try{PIDB.db=Promise.resolve(null);}catch(e){} /*s26: no large store either — nowhere on this device to keep a copy*/ const si=Storage.prototype.setItem;window.__si=si;Storage.prototype.setItem=function(k,v){if(${all ? 'true' : "String(k).indexOf('wpfPending')===0"})throw new DOMException('full','QuotaExceededError');return si.call(this,k,v);};})()`;
   {
     const { S, saw, off } = await pair(browser);
     await saw.page.evaluate(FULL(false)); await saw.page.evaluate(TICK('side')); await flush(saw.page);
@@ -191,7 +191,7 @@ async function reopen(d, S, who) { const t = await newTab(d, S, who); await slee
     const S = makeServer(base());
     const ctx = await browser.newContext({ viewport: { width: 400, height: 800 } });
     await ctx.addInitScript(() => { window.alert = () => {}; window.confirm = () => true; window.prompt = () => 'T'; try { localStorage.setItem('wpfRole', 'saw'); localStorage.setItem('wpfPin_saw', '9000'); sessionStorage.setItem('wpfWho', 'T'); } catch (e) {}
-      const gi = Storage.prototype.getItem, si = Storage.prototype.setItem; Storage.prototype.getItem = function (k) { if (String(k).indexOf('wpfPending') === 0) throw new DOMException('blocked', 'SecurityError'); return gi.call(this, k); }; Storage.prototype.setItem = function (k, v) { if (String(k).indexOf('wpfPending') === 0) throw new DOMException('blocked', 'SecurityError'); return si.call(this, k, v); }; });
+      try{Object.defineProperty(window,'indexedDB',{get(){return undefined;},configurable:true});}catch(e){} try{PIDB.db=Promise.resolve(null);}catch(e){} /*s26: no large store either — nowhere on this device to keep a copy*/ const gi = Storage.prototype.getItem, si = Storage.prototype.setItem; Storage.prototype.getItem = function (k) { if (String(k).indexOf('wpfPending') === 0) throw new DOMException('blocked', 'SecurityError'); return gi.call(this, k); }; Storage.prototype.setItem = function (k, v) { if (String(k).indexOf('wpfPending') === 0) throw new DOMException('blocked', 'SecurityError'); return si.call(this, k, v); }; });
     const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(String(e))); await attach(p, S, { name: 'blk' });
     await p.goto('https://wpf.test/?view=saw').catch(() => {});
     const ok = await p.waitForFunction(() => typeof DB !== 'undefined' && DB.loaded, null, { timeout: 15000 }).then(() => true).catch(() => false);
