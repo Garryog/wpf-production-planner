@@ -11538,6 +11538,7 @@ function normaliseRow(row){
    main work order is not there stays its own job, as before, and is folded when the main one arrives. WO-D- (drawing) is not a
    code in this sense. Nothing is deleted: a coded job already on the board is moved onto the main job with a full copy kept. */
 const CODE_WO=/^WO-(BI|PF|E)-(.+)$/;
+const CODE_SKIP=new Set(['listNA','procAt','storeAt','cienHold','delvOverride','completeOverride','codes','colour','hl','shippedAt','shippedStep','installedAt','completeAt','completeBy']); // a coded line never marks the main job "no list needed", processed, in store, on hold or shipped
 function codeBaseKey(k){const m=CODE_WO.exec(woKey(k));return m?'WO-'+m[2]:null;}
 function codeBadge(o){const ks=Object.keys((o&&o.codes)||{});if(!ks.length)return'';
   return`<span class="fu-badge" style="background:#eef6ff;border-color:#b7cdea;color:#14418f;margin-left:4px" title="${escA('Folded into this job (same work order, value counted once): '+ks.map(k=>(o.codes[k].wo||k)+(o.codes[k].title?' — '+o.codes[k].title:'')).join(' · '))}">＋${escA(ks.map(k=>(CODE_WO.exec(k)||[])[1]||'?').join('+'))}</span>`;}
@@ -11552,7 +11553,7 @@ function oddSuffix(key){const m=String(key).match(/^(.*\d)-?([G-Z])$/);return m?
    or that is already on the board as its own job, stays as its own job. */
 function combineRows(recs,board){
   board=board||new Map();
-  const by=new Map(),out=[];
+  const by=new Map();let out=[];
   const DUPK=['value','step','dueDate'],dv=(r,k)=>r.has[k]?[r.line,r[k]]:null;
   recs.forEach(r=>{
     const e=by.get(r.key);
@@ -11577,16 +11578,20 @@ function combineRows(recs,board){
     e.flags.unshift('duplicate in file ('+e.dup+' lines: '+e.dupLines.join(', ')+') — combined into one'+(parts.length?': '+parts.join(' · '):''));});
   const keep=[],folds=[],synth=new Map();
   const cfLive=o=>!!o&&!isShipped(o)&&!o.delDone&&!o.delDelivAt,cfRecOk=b=>!!b&&!(b.has.step&&(stepIsShipped(b.step)||/drawing/i.test(String(b.step))))&&!/^WO-D/.test(b.key);
+  const cfHad=(bo,k)=>!!bo&&(!!(bo.codes&&bo.codes[k])||(bo.pFrom||[]).some(x=>x&&woKey(x.wo)===k)); // already folded into this main job once
+  const cfGone=new Set();
+  out=out.filter(r=>{ // cf26, first pass: a coded line (WO-BI- / WO-PF- / WO-E-) whose main work order is here → folded, value NOT added
+    const cbk=codeBaseKey(r.key);if(!cbk)return true;
+    if(board.has(r.key))return true; // the coded JOB is still on the board (loaded, both have a list, lists off …): its line keeps updating it — it is folded after the import when that is possible (Manager cf26 #1)
+    let base=by.get(cbk);const bo=board.get(cbk);
+    const had=cfHad(bo,r.key); // folded into the main job before: never a new job again, even once the main job has shipped (Manager cf26 #2)
+    if(!(had||(base&&cfRecOk(base)&&(cfLive(bo)||!bo))||(!base&&cfLive(bo))))return true;
+    if(!base){base=synth.get(cbk);if(!base){base={wo:bo.wo,key:cbk,has:{},flags:[],synth:true};synth.set(cbk,base);keep.push(base);}}
+    base.codes=base.codes||{};base.codes[r.key]={wo:r.wo,title:r.title||'',step:r.step||'',value:r.has.value?r.value:0};
+    folds.push({wo:r.wo,base:base.wo,code:true,value:r.has.value?r.value:0,hours:null,title:r.title||'',step:r.step||''});cfGone.add(r.key);return false;});
   out.forEach(r=>{
-    const cbk=codeBaseKey(r.key);
-    if(cbk){ // cf26: a coded line (WO-BI- / WO-PF- / WO-E-) whose main work order is here → folded, value NOT added
-      let base=by.get(cbk);const bo=board.get(cbk);
-      if((base&&cfRecOk(base)&&(cfLive(bo)||!bo))||(!base&&cfLive(bo))){
-        if(!base){base=synth.get(cbk);if(!base){base={wo:bo.wo,key:cbk,has:{},flags:[],synth:true};synth.set(cbk,base);keep.push(base);}}
-        base.codes=base.codes||{};base.codes[r.key]={wo:r.wo,title:r.title||'',step:r.step||'',value:r.has.value?r.value:0};
-        folds.push({wo:r.wo,base:base.wo,code:true,value:r.has.value?r.value:0,hours:null,title:r.title||'',step:r.step||''});return;}
-    }
     const ac=acBase(r.key);
+    if(ac&&cfGone.has(ac.base)){r.flags.push('its base '+ac.base+' was folded into the main work order — kept as its own job');keep.push(r);return;} /*Manager cf26 #5*/
     if(!ac||board.has(r.key)){
       const od=!ac&&!board.has(r.key)&&oddSuffix(r.key);
       if(od&&(by.has(od.base)||board.has(od.base)))r.flags.push('suffix? — letter '+od.letter+' is not an addition letter (A–F); kept as its own job, not folded into '+od.base);
@@ -13567,14 +13572,15 @@ async function pMerge(P,W,by,wNew,code){ /*cf26: code = true folds a coded work 
   else if(pmBooked(p))PM_DEL.forEach(k=>{if(p[k]!=null&&p[k]!=='')w[k]=p[k];});
   else if(p.delv&&!w.delv)w.delv=true;
   // any other planner field the WO doesn't have yet
-  if(!code)Object.keys(p).forEach(k=>{if(PM_SKIP.has(k)||PM_DEL.includes(k))return;if((w[k]==null||w[k]===''||w[k]===false)&&p[k]!=null&&p[k]!==''&&p[k]!==false)w[k]=p[k];});
+  Object.keys(p).forEach(k=>{if(PM_SKIP.has(k)||PM_DEL.includes(k)||(code&&CODE_SKIP.has(k)))return;if((w[k]==null||w[k]===''||w[k]===false)&&p[k]!=null&&p[k]!==''&&p[k]!==false)w[k]=p[k];});
   if(p.notes&&!String(w.notes||'').includes(p.notes))w.notes=[w.notes,p.notes].filter(Boolean).join(' · ');
   // history: both logs, in time order, then the merge line
+  {const seen=new Set((w.log||[]).map(x=>String(x.at)+'|'+String(x.what)));p.log=(p.log||[]).filter(x=>!seen.has(String(x.at)+'|['+P+'] '+(x.what||'')));} // (cf26) a job folded a second time (brought back by an out-of-date screen) does not double its history
   w.log=(w.log||[]).concat((p.log||[]).map(x=>({...x,what:'['+P+'] '+(x.what||'')}))).sort((a,b)=>String(a.at||'').localeCompare(String(b.at||''))).slice(-60);
   // the sequence row (PM sequence installed): the same row is handed to the WO, so its place and Johnny's tick stay
   if(seqVis())notes.push(...await pMergeSeq(P,w.wo,by));
   // retire the P-job: a full copy stays on the WO (permanent) and in settings pMerged
-  w.pFrom=(w.pFrom||[]).filter(x=>!(code&&x&&x.wo===P)).concat([{wo:P,at,by,job:snap,...(code?{code:true}:{})}]);
+  w.pFrom=(w.pFrom||[]).concat((code&&(w.pFrom||[]).filter(x=>x&&x.wo===P).length>=3)?[]:[{wo:P,at,by,job:snap,...(code?{code:true}:{})}]); // (cf26) the FIRST full copy is never replaced; at most three copies of one coded job
   if(code){w.codes={...(w.codes||{}),[woKey(P)]:{wo:P,title:snap.title||'',step:snap.step||'',value:+snap.value||0}};}
   else DB.pMerged=(DB.pMerged||[]).concat([{at,by,wo:P,into:w.wo,why:'Cienapps WO for the same house (L4b)',job:snap}]).slice(-300);
   logEdit(w,P+(code?' (the same job under a second Cienapps number) folded into ':' (planner P-number for this house) merged into ')+w.wo+(notes.length?': '+notes.join(' · '):'')+' — its full copy is kept on this job',by);

@@ -63,6 +63,33 @@ const get = (p, wo) => p.evaluate(wo => { const o = DB.orders.find(x => x.wo ===
     const has = await q.evaluate(() => !!document.getElementById('imp-apply')); if (has) await apply(q);
     o = await get(q, 'WO-2542-17'); js = await jobs(q);
     rec('next import: the BI line is not brought back, and only ONE kept copy', !/WO-BI-2542-17/.test(js) && (o.pFrom || []).filter(x => x.wo === 'WO-BI-2542-17').length === 1, js);
+    // ---------- 3. Manager's findings (26 Nov)
+    // #1 a coded job that could not be folded (loaded on a van) still gets its Cienapps updates
+    await H.importAoa(q, [HDR, row('WO-2700-9', 'NO 90', '7. ASSEMBLY COMPLETE'), row('WO-BI-2700-9', 'NO 90 BI', '9. JOB SHIPPED')]);
+    if (await q.evaluate(() => !!document.getElementById('imp-apply'))) await apply(q);
+    o = await get(q, 'WO-BI-2700-9');
+    rec('#1 a coded job still on the board (loaded) keeps getting its Cienapps updates: now shipped', !!o && /^9\./.test(o.step || ''), JSON.stringify(o && o.step));
+    // #2 the main job ships while the BI line lags behind → the BI line is NOT brought back as a new job
+    await H.importAoa(q, [HDR, row('WO-2542-17', 'PART 5 NO 77', '9. JOB SHIPPED'), row('WO-BI-2542-17', 'PART 5 NO 77 BOUGHT IN', '3. IN PRODUCTION')]);
+    const nw2 = await q.evaluate(() => (IMPPLAN.newOrders || []).map(x => x.wo).join());
+    if (await q.evaluate(() => !!document.getElementById('imp-apply'))) await apply(q);
+    js = await jobs(q);
+    rec('#2 the main job ships while the BI line is still "in production": the BI line does not come back as a new job', !/WO-BI-2542-17/.test(nw2) && !/WO-BI-2542-17/.test(js), nw2 + ' | ' + js);
+    // #3 the coded job's photo of its list / cut tick / site-ready come across; "no list needed" does NOT
+    await q.evaluate(() => { DB.orders.push(Object.assign(JSON.parse(JSON.stringify(DB.orders.find(x => x.wo === 'WO-2600-1'))), { wo: 'WO-3000-5', unit: '95', pFrom: undefined, codes: undefined }), Object.assign(JSON.parse(JSON.stringify(DB.orders.find(x => x.wo === 'WO-2600-1'))), { wo: 'WO-BI-3000-5', unit: '95', listNA: { k: 'none', by: 'Mary', at: '2026-10-01T09:00:00Z' }, siteOk: { at: '2026-11-01T09:00:00Z', by: 'Tom' }, photoDone: { saw: { at: '2026-11-02T09:00:00Z', by: 'Sam' } }, notes: 'BI note', pFrom: undefined, codes: undefined })); });
+    out = await q.evaluate(async () => await codeFoldAll()); o = await get(q, 'WO-3000-5');
+    rec('#3 site-ready, the cut tick and the note come across to the main job', !!o && !!o.siteOk && !!(o.photoDone && o.photoDone.saw) && /BI note/.test(o.notes || ''), JSON.stringify(o && [o.siteOk, o.photoDone, o.notes]));
+    rec('#3 …but the BI line\'s "no list needed" does NOT mark the main job', !!o && !o.listNA, JSON.stringify(o && o.listNA));
+    // #4 an out-of-date screen brings the coded job back → folded again, the FIRST full copy is still there, history not doubled
+    const logN = (o.log || []).length;
+    await q.evaluate(() => { DB.orders.push({ wo: 'WO-BI-3000-5', customer: 'Kildare Homes', floor: 'T09', unit: '95', title: 'blank again', step: '1. DRAWING', value: 1, dueDate: '2026-12-10', log: [] }); });
+    await q.evaluate(async () => await codeFoldAll()); o = await get(q, 'WO-3000-5');
+    const cps = (o.pFrom || []).filter(x => x.wo === 'WO-BI-3000-5');
+    rec('#4 brought back by an old screen and folded again: the first full copy is still kept (2 copies), gone from the job list again', cps.length === 2 && cps[0].job.notes === 'BI note' && !/WO-BI-3000-5/.test(await jobs(q)), JSON.stringify(cps.map(c => c.job.title + '/' + (c.job.notes || ''))));
+    // #5 an A–F addition on a coded line that is folded stays its own job (never vanishes)
+    const r5 = await H.importAoa(q, [HDR, row('WO-4000-1', 'NO 99', '5. WORK ORDER PROCESSED', 1000), row('WO-BI-4000-1', 'NO 99 BI', '5. WORK ORDER PROCESSED', 1000), row('WO-BI-4000-1A', 'NO 99 BI EXTRA', '5. WORK ORDER PROCESSED', 250)]);
+    const n5 = (r5.plan.newOrders || []).map(x => x.wo + ':' + x.value).sort().join();
+    rec('#5 an addition line (…A) on a folded coded line is kept as its own job with its value — it does not vanish', /WO-4000-1:1000/.test(n5) && /WO-BI-4000-1A:250/.test(n5) && !/WO-BI-4000-1:/.test(n5), n5);
   } catch (e) { rec('test ran without an error', false, String(e && e.stack || e)); }
   await browser.close();
   console.log(res.filter(x => !x).length + ' failed of ' + res.length);
