@@ -500,3 +500,15 @@ house until the next import) — to be closed in this release.
 - **Project sequence (Garry 26 Nov, NOT BUILT YET):** numbering always 1 upwards; a job's number ("#7") shown beside the work order
   everywhere the WO shows; a shipped job drops off the table and the rest renumber; shipped rows behind a "Show shipped (n)" link.
 - **Build order (Garry 26 Nov):** 1) coded work orders, 2) sequence numbers, 3) Saw and Stores day buttons + missed lists.
+
+### 26 Nov 2026 — sequence numbers (Garry, live) — BUILT on branch feature/seq-numbers
+Garry: "on the project sequence … the sequence always starts at 1 upwards and that place in the sequence follows the work order
+throughout planner. when the job is shipped it falls off the sequence table". His answers: the number shows everywhere the WO shows;
+shipped rows hidden behind a "Show shipped" link.
+- The sequence a person sees and works with = the rows that are NOT shipped, numbered 1, 2, 3 … A shipped job's row stays in the
+  database (never deleted) and is listed under "Show shipped (n)" at the foot of the table. Un-ship a job and it is back in its place.
+- A "#n" badge beside the work order: Capacity Board, the cutting list window header, and every page that shows the step badge
+  (Deliveries cards, Lists pages, PM page, Shipped tab, saw / stores photo lists …). Numbering is per project. No badge for a job
+  that is in no sequence, or while the sequence tables are not installed.
+- Moves, "move to position", uploads and the duplicate check are unchanged underneath (moves are "after row X" in the database;
+  the upload still recognises a shipped house and does not add it again). No database change.
