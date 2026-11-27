@@ -4955,7 +4955,7 @@ async function seqFresh(pid){const d=await lsGet('project_seq?select=*&project_i
 function seqTitleHTML(pid){const p=LST.p.get(pid)||{name:'?'};return `<span class="seq-h">🔢 ${escA(p.name)}</span>${seqPMs(p).length?`<span class="seq-pm">· ${escA(seqPMLbl(seqPMs(p)))}</span>`:'<span class="seq-pm seq-pm-none">· no PM yet</span>'}`;}
 function seqPageHTML(pid){
   if(!seqVis()||!LST.p.has(pid))return'<div class="exp-panel">Pick a project.</div>';
-  const rows=seqRows(pid),can=seqCanEdit(pid),lim=addDayISO(todayLocal(),seqFixedDays()),todo=can&&!rows.length?seqJobsToStart(pid):[],tk=seqTicks(pid);
+  const rows=seqRows(pid),nAll=seqRowsAll(pid).length,can=seqCanEdit(pid),lim=addDayISO(todayLocal(),seqFixedDays()),todo=can&&!nAll?seqJobsToStart(pid):[],tk=seqTicks(pid); // Start only when the project has no sequence at all (shipped rows count)
   [...tk].forEach(id=>{if(!rows.some(r=>r.id===id))tk.delete(id);}); // a row gone / removed elsewhere is unticked
   const tr=(r,i)=>{const o=seqJob(r),fx=seqFixedAt(o),d=seqRowDate(r,o),mv=o?(o.dueHist||[]).length:0,soon=!o&&!r.wo&&r.req_date&&r.req_date<=lim;
     const wo=r.wo?`${fx?'<span class="seq-fx" title="Inside the fixed window — changes need the Production Manager">🔒</span> ':''}<b>${escA(r.wo)}</b>${o?(SPEC_ED.includes(ROLE)?` <button class="btn btn-s" data-woiedit="${escA(r.wo)}" style="padding:1px 7px;font-size:12px;min-height:28px" title="Correct this job's floor / unit / title / customer">✎</button>`:''):' <small class="seq-grey">(not in the planner)</small>'}`:`<span class="seq-wait">⏳ no WO yet</span>${soon?' <span class="seq-red">due soon — no WO number</span>':''}${seqWaitOld(r)?` <button class="seq-old" data-seqold="${escA(r.id)}" title="Still waiting after ${seqWaitWks()} weeks — tap to check">⏳ not in Cienapps yet?</button>`:''}`;
@@ -4972,6 +4972,7 @@ function seqPageHTML(pid){
     ${can?seqConfirmHTML(pid)+seqAgreeHTML(pid):''}
     ${todo.length?`<div class="seq-start"><button class="btn btn-g" id="seq-start">▶ Start the sequence from today's jobs (${todo.length})</button> <span>Every live work order of this project that isn't shipped, in due-date order. You can reorder them after.</span></div>`:''}
     ${rows.length?`${can?seqTickBarHTML(pid,rows,tk):''}<table class="lst-tbl seq-tbl${can?' seq-can':''}"><thead><tr>${can?'<th></th><th></th>':''}<th>#</th><th>WO</th><th>Flr</th><th>Unit</th><th>Prod</th><th>Name</th><th>Required</th><th>Build</th><th>Progress</th><th>Moved</th>${can?'<th>Move</th>':''}</tr></thead><tbody>${rows.map(tr).join('')}</tbody></table>`
+      :nAll?`<div style="color:var(--t3);padding:8px">All ${nAll} work order${nAll!==1?'s':''} in this sequence ${nAll!==1?'have':'has'} shipped.</div>`
       :`<div style="color:var(--t3);padding:8px">${todo.length?'No sequence yet for this project.':can?'No sequence yet — and no live work orders for this project in the planner.':'No sequence yet for this project.'}</div>`}
     <div class="seq-ft">🔒 = inside the next ${seqFixedDays()} days (build or delivery date) · grey date = no delivery date yet (build date shown)</div>
   </div>`;
@@ -5651,7 +5652,7 @@ const seqHk=r=>r.house_key!==undefined?r.house_key:keyHouseStr(r.floor,r.unit);
 // a row's house for the "might be" check: its own floor / unit, else its job's
 function seqRowKeyJ(r){const o=seqJob(r);return keyOf(r.project_id||r.pid,r.floor||(o?fuF(o):''),r.unit||(o?fuU(o):''),'');}
 function seqClaimPreview(pid,lines,extra){
-  const live=seqRows(pid).concat((extra||[]).map(r=>({project_id:pid,...r}))),claimed=new Set(),out={add:[],skip:[],unsure:[]};
+  const live=seqRowsAll(pid).concat((extra||[]).map(r=>({project_id:pid,...r}))),claimed=new Set(),out={add:[],skip:[],unsure:[]};
   (lines||[]).forEach(L=>{
     const k=keyLineStr(L.floor,L.unit,L.product,L.name),h=keyHouseStr(L.floor,L.unit),kd=L.kind||'kitchen',isl=seqIsl(L.name,L.product,L.descr);
     let ex=null,by='line';
@@ -5689,11 +5690,12 @@ async function seqUpFile(pid,f,redraw){
 }
 const SEQ_UP_MAX=200; // lines listed per group in the preview (the counts are always whole)
 function seqUpPreview(pid,fname,res,redraw){
-  const rows0=seqRows(pid),jobs=rows0.length?[]:seqJobsToStart(pid),upId=uid('U'),rows=seqUpRows(res.lines,fname,upId),byLine=new Map(res.lines.map((L,i)=>[L,rows[i]]));
+  const rows0=seqRowsAll(pid),jobs=rows0.length?[]:seqJobsToStart(pid),upId=uid('U'),rows=seqUpRows(res.lines,fname,upId),byLine=new Map(res.lines.map((L,i)=>[L,rows[i]]));
   const st={start:!!jobs.length,force:new Set(),busy:false};
   const ov=lsDlg(`<div id="squ"></div>`,720);ov.classList.add('squ-dlg');const $=s=>ov.querySelector(s);
   const lst=(a,f)=>a.slice(0,SEQ_UP_MAX).map(f).join('')+(a.length>SEQ_UP_MAX?`<div class="squ-l squ-more">…and ${a.length-SEQ_UP_MAX} more</div>`:'');
-  const rowLbl=r=>{const i=seqRows(pid).findIndex(x=>x.id===r.id);return (i>=0?'row #'+(i+1):'a Start row')+' '+(r.wo?r.wo:'⏳ no WO yet')+(r.wo?'':' · '+seqLineLbl(r));};
+  const rowLbl=r=>{const i=seqRows(pid).findIndex(x=>x.id===r.id);if(i<0&&r.wo&&seqRowsAll(pid).some(x=>x.id===r.id))return 'shipped — '+r.wo; // a shipped row still holds its line (never re-added)
+    return (i>=0?'row #'+(i+1):'a Start row')+' '+(r.wo?r.wo:'⏳ no WO yet')+(r.wo?'':' · '+seqLineLbl(r));};
   const draw=()=>{
     const v=seqClaimPreview(pid,res.lines,st.start?seqStartRows(jobs):null),send=v.add.length+v.unsure.filter(u=>st.force.has(u.L)).length,cur=seqRows(pid);
     const ln=L=>`<span class="squ-n">line ${+L.line_no}</span> <b>${escA(seqLineLbl(L))}</b>${L.descr&&L.name?` <span class="seq-grey">${escA(L.descr)}</span>`:''}${L.children&&L.children.length?` <span class="squ-ch" title="${escA(L.children.map(c=>[c.qty,c.product,c.name].filter(x=>x!=null&&x!=='').join(' ')).join(' · '))}">+ ${L.children.length} child item${L.children.length!==1?'s':''} (info)</span>`:''}${(L.warn||[]).map(w=>`<div class="squ-w">⚠ ${escA(w)}</div>`).join('')}`;
@@ -5725,7 +5727,7 @@ async function seqUpSave(pid,x,ov,redraw){
   const by=lqBy('');let started=0;
   try{
     if(st.start&&jobs.length){await seqFresh(pid); // Start first — only if the project still has no sequence (another screen may have started it)
-      if(!seqRows(pid).length){const sj=seqJobsToStart(pid);if(sj.length){const r0=await lsRpc('seq_insert',{p_project:pid,p_rows:seqStartRows(sj),p_after:null,p_by:by});if(!r0||!r0.ok)throw new Error((r0&&r0.err)||'not started');started=(r0.added||[]).length;}}}
+      if(!seqRowsAll(pid).length){const sj=seqJobsToStart(pid);if(sj.length){const r0=await lsRpc('seq_insert',{p_project:pid,p_rows:seqStartRows(sj),p_after:null,p_by:by});if(!r0||!r0.ok)throw new Error((r0&&r0.err)||'not started');started=(r0.added||[]).length;}}}
     const r=await lsRpc('seq_insert',{p_project:pid,p_rows:send,p_after:after,p_by:by});
     if(!r||!r.ok)throw new Error((r&&r.err)||'not saved');
     await seqFresh(pid);
@@ -5811,7 +5813,7 @@ async function seqReconcile1(pids,fresh){
   const d=await lsGet('project_seq?select=*&project_id=in.('+pids.map(id=>'"'+encodeURIComponent(id)+'"').join(',')+')');lsPut('project_seq',d,true);seqMapsDrop();
   const by=lqBy(''),out={matched:0,added:0,confirm:0,fail:0,per:{}};
   for(const pid of pids){
-    if(!seqRows(pid).length)continue;
+    if(!seqRowsAll(pid).length)continue; // a sequence whose rows have all shipped is still a sequence (new WOs land 🆕)
     const pl=seqWOPlan(pid),res={matched:0,added:0,confirm:0,fail:0};let wrote=false;
     for(const j of pl.auto){
       try{const a=await lsRpc('seq_match',{p_id:j.auto.id,p_wo:j.o.wo,p_expect:+j.auto.version||1,p_how:'auto',p_by:by});wrote=true;if(a&&a.ok)res.matched++;}
@@ -5850,7 +5852,7 @@ function seqDoubles(pl){const out=[];
 function seqConfirmCount(pid){if(!seqVis())return 0;const pl=seqWOPlan(pid);return pl.confirm.length+pl.none.length+seqDoubles(pl).length;}
 const SEQ_CF_MAX=30;
 function seqConfirmHTML(pid){
-  if(!seqCanEdit(pid)||!seqRows(pid).length)return'';
+  if(!seqCanEdit(pid)||!seqRowsAll(pid).length)return'';
   const pl=seqWOPlan(pid),db=seqDoubles(pl),n=pl.confirm.length+pl.none.length+db.length,out=seqTakenOut(pid);if(!n&&!out.length)return'';
   const pos=new Map(pl.rows.map((r,i)=>[r.id,i+1])),rl=r=>'#'+pos.get(r.id)+' '+(r.wo?r.wo:'⏳')+' · '+seqLineLbl(r);
   const jl=o=>`<b>${escA(o.wo)}</b> ${escA([fuF(o),fuU(o),o.title].filter(Boolean).join(' · '))}`;
@@ -5971,7 +5973,7 @@ function seqNudges(){
     if(!r.wo){n.wait++;hit=true;if(seqWaitOld(r))n.waitOld++; /*attack12b L1: the same Irish-local-date rule as the ⏳ flag*/}
     if(r.is_new){n.place++;hit=true;}
     if(hit)by[p.id]=(by[p.id]||0)+1;}));
-  lsProjects().filter(p=>mine?pmMine(p.id):pmShows(p.id)).forEach(p=>{if(!seqRows(p.id).length)return;const k=seqConfirmCount(p.id);if(k){n.conf+=k;by[p.id]=(by[p.id]||0)+k;}}); /*B10: To place / confirm*/
+  lsProjects().filter(p=>mine?pmMine(p.id):pmShows(p.id)).forEach(p=>{if(!seqRowsAll(p.id).length)return;const k=seqConfirmCount(p.id);if(k){n.conf+=k;by[p.id]=(by[p.id]||0)+k;}}); /*B10: To place / confirm*/
   n.pid=Object.keys(by).sort((a,b)=>by[b]-by[a])[0]||'';return n;
 }
 function seqNudgesHTML(){if(!seqVis()||ROLE!=='pm')return'';const n=seqNudges(),pl=(k,a,b)=>k+' '+(k===1?a:b),c=[];
