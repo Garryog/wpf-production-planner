@@ -4915,7 +4915,12 @@ function preSheet(rows){const ws=XLSX.utils.aoa_to_sheet([['WO #','Floor','Unit'
    Rows live in project_seq; a matched row's dates are the JOB's (o.delivDate / o.dueDate in the planner record, moved only
    by moveDates) — the table never holds a second copy. Waiting rows (no WO yet) carry their own req_date. */
 const SEQV={pid:'',house:false,drag:'',pmOpen:''}; // the project open on the PM's Sequence tab
-function seqRows(pid){return[...LST.sq.values()].filter(r=>r.project_id===pid&&r.state!=='removed').sort((a,b)=>(a.pos||0)-(b.pos||0)||String(a.created_at||'').localeCompare(String(b.created_at||''))||String(a.id).localeCompare(String(b.id)));}
+/* Garry 27 Nov: a job that has shipped / been delivered (woFinished — the one rule) leaves the sequence on screen; the rest renumber
+   1..n. seqRows = the rows still to do (waiting rows and rows whose WO isn't in the planner stay); seqRowsAll = every live row as the
+   database has it (does a sequence exist, matching, upload checks). Nothing in project_seq changes — a screen filter only. */
+function seqDone(o){return !!o&&woFinished(o);}
+function seqRows(pid){return seqRowsAll(pid).filter(r=>!seqDone(seqJob(r)));}
+function seqRowsAll(pid){return[...LST.sq.values()].filter(r=>r.project_id===pid&&r.state!=='removed').sort((a,b)=>(a.pos||0)-(b.pos||0)||String(a.created_at||'').localeCompare(String(b.created_at||''))||String(a.id).localeCompare(String(b.id)));}
 const seqWoK=w=>String(w||'').normalize('NFKC').trim().toUpperCase();
 // (Manager condition 3) one WO → job map and one WO → live row map per redraw: built on first use, dropped at the end of the
 // current task, so a page of 300 rows never scans every job per row
