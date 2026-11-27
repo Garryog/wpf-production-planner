@@ -4971,7 +4971,7 @@ function seqPageHTML(pid){
     const wo=r.wo?`${fx?'<span class="seq-fx" title="Inside the fixed window — changes need the Production Manager">🔒</span> ':''}<b>${escA(r.wo)}</b>${o?(SPEC_ED.includes(ROLE)?` <button class="btn btn-s" data-woiedit="${escA(r.wo)}" style="padding:1px 7px;font-size:12px;min-height:28px" title="Correct this job's floor / unit / title / customer">✎</button>`:''):' <small class="seq-grey">(not in the planner)</small>'}`:`<span class="seq-wait">⏳ no WO yet</span>${soon?' <span class="seq-red">due soon — no WO number</span>':''}${seqWaitOld(r)?` <button class="seq-old" data-seqold="${escA(r.id)}" title="Still waiting after ${seqWaitWks()} weeks — tap to check">⏳ not in Cienapps yet?</button>`:''}`;
     const req=d?`<span class="${o&&!o.delivDate?'seq-grey':''}" title="${o?(o.delivDate?'Delivery date':'No delivery date yet — this is the build date'):'Required date (set before the WO exists)'}">${escA(dShort(d))}</span>${fx?' 🔒':''}`:'<span class="seq-grey">—</span>';
     return `<tr class="seq-r${fx?' seq-fixed':''}${r.is_new?' seq-new':''}" data-seqr="${escA(r.id)}"${can?' draggable="true"':''}>
-      ${can?`<td class="seq-hd" title="${fx?'Fixed — inside the next '+seqFixedDays()+' days':'Drag to move'}">⠿</td><td class="seq-tk"><input type="checkbox" data-seqtick="${escA(r.id)}"${tk.has(r.id)?' checked':''} title="Tick for the date tools"></td>`:''}<td class="seq-n" data-l="#">${i+1}</td><td data-l="WO">${wo}${r.is_new?' <span class="seq-newb">🆕 new — place in sequence</span>':''}${(q=>q?`<div class="seq-rq" data-seqrq="${escA(q.id)}">✋ request sent — ${escA(seqReqSum(q))} · “${escA(seqReqWhy(q))}” · ${escA(q.asked_by||'')}${ROLE==='pm'&&can?` <button class="btn btn-s" data-seqrqw="${escA(q.id)}">Withdraw</button>`:''}</div>`:'')(seqReqOfRow(r.id))}</td>
+      ${can?`<td class="seq-hd" title="${fx?'Fixed — inside the next '+seqFixedDays()+' days':'Drag to move'}">⠿</td><td class="seq-tk"><input type="checkbox" data-seqtick="${escA(r.id)}"${tk.has(r.id)?' checked':''} title="Tick for the date tools — or tick several rows to move them together"></td>`:''}<td class="seq-n" data-l="#">${i+1}</td><td data-l="WO">${wo}${r.is_new?' <span class="seq-newb">🆕 new — place in sequence</span>':''}${(q=>q?`<div class="seq-rq" data-seqrq="${escA(q.id)}">✋ request sent — ${escA(seqReqSum(q))} · “${escA(seqReqWhy(q))}” · ${escA(q.asked_by||'')}${ROLE==='pm'&&can?` <button class="btn btn-s" data-seqrqw="${escA(q.id)}">Withdraw</button>`:''}</div>`:'')(seqReqOfRow(r.id))}</td>
       <td data-l="Floor">${escA(r.floor||(o&&o.floor)||'')}</td><td data-l="Unit">${escA(r.unit||(o&&o.unit)||'')}</td><td data-l="Product">${escA(r.product||'')}</td>
       <td data-l="Name">${escA(r.name||r.descr||(o&&o.title)||'')}</td><td data-l="Required">${req}${can&&(o||!r.wo)?` <button class="btn btn-s seq-dt" data-seqdate="${escA(r.id)}" title="${fx&&ROLE==='pm'?'Inside the fixed window — needs the Production Manager':'Change the required (delivery) date'}">📅</button>`:''}</td><td data-l="Build">${o&&o.dueDate?escA(dShort(o.dueDate)):'<span class="seq-grey">—</span>'}</td>
       <td data-l="Progress" class="seq-prog">${o?seqProgHTML(o,r):''}</td><td data-l="Moved">${mv?`<span class="dm-chip" title="Due date changed ${mv} time${mv!==1?'s':''}">🔁 ${mv}×</span>`:''}</td>
@@ -5010,6 +5010,9 @@ function seqBind(root,pid,redraw){
     else if(k==='down'){const i=rows.findIndex(r=>tk.has(r.id));rows.slice(i).forEach(r=>tk.add(r.id));}
     redraw();});
   root.querySelectorAll('[data-seqtool]').forEach(b=>b.onclick=()=>{const ids=seqRows(pid).filter(r=>tk.has(r.id)).map(r=>r.id);if(!ids.length)return toast('Tick the rows first');seqDateDlg(pid,ids,b.dataset.seqtool,redraw);});
+  const gt=root.querySelector('#seq-grpto');if(gt)gt.onclick=()=>{const rows=seqRows(pid),on=rows.filter(r=>tk.has(r.id));if(on.length<2)return toast('Tick two or more rows first'); /*gm27*/
+    const mx=rows.length-on.length+1,v=prompt('Move the '+on.length+' ticked rows together.\nThe first one goes to which position? (1 = top, '+mx+' = bottom)\nThey stay in their current order, one after another.','1');if(v===null)return;
+    const k=String(v).trim();if(!/^\d+$/.test(k)||+k<1)return toast('Type a position number from 1 to '+mx);seqMoveReq(pid,on[0].id,{to:Math.min(+k,mx)},redraw);};
   const wh=root.querySelector('#seq-house');if(wh)wh.onchange=()=>{SEQV.house=wh.checked;wh.blur();}; // blur: a focused box would hold off the live redraw
   root.querySelectorAll('[data-sequp]').forEach(b=>b.onclick=()=>seqMoveReq(pid,b.dataset.sequp,{up:1},redraw));
   root.querySelectorAll('[data-seqdn]').forEach(b=>b.onclick=()=>seqMoveReq(pid,b.dataset.seqdn,{down:1},redraw));
@@ -5017,8 +5020,8 @@ function seqBind(root,pid,redraw){
     const k=String(v).trim();if(!/^\d+$/.test(k)||+k<1)return toast('Type a position number from 1 to '+n);seqMoveReq(pid,b.dataset.seqto,{to:Math.min(+k,n)},redraw);});
   // PC: HTML5 drag (phones use ▲ ▼ / Move to)
   root.querySelectorAll('tr[data-seqr][draggable]').forEach(tr=>{
-    tr.addEventListener('dragstart',e=>{SEQV.drag=tr.dataset.seqr;tr.classList.add('seq-drag');try{e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',tr.dataset.seqr);}catch(x){}});
-    tr.addEventListener('dragend',()=>{SEQV.drag='';tr.classList.remove('seq-drag');root.querySelectorAll('.seq-over').forEach(x=>x.classList.remove('seq-over'));});
+    tr.addEventListener('dragstart',e=>{SEQV.drag=tr.dataset.seqr;tr.classList.add('seq-drag');if(tk.size>1&&tk.has(tr.dataset.seqr))root.querySelectorAll('tr[data-seqr]').forEach(x=>{if(tk.has(x.dataset.seqr))x.classList.add('seq-drag');});try{e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',tr.dataset.seqr);}catch(x){}});
+    tr.addEventListener('dragend',()=>{SEQV.drag='';root.querySelectorAll('.seq-drag').forEach(x=>x.classList.remove('seq-drag'));root.querySelectorAll('.seq-over').forEach(x=>x.classList.remove('seq-over'));});
     tr.addEventListener('dragover',e=>{if(!SEQV.drag)return;e.preventDefault();tr.classList.add('seq-over');});
     tr.addEventListener('dragleave',()=>tr.classList.remove('seq-over'));
     tr.addEventListener('drop',e=>{e.preventDefault();tr.classList.remove('seq-over');const id=SEQV.drag;SEQV.drag='';
@@ -5034,7 +5037,8 @@ function seqHouseOf(r){const o=seqJob(r),f=seqKey(r.floor||(o&&o.floor)),u=seqKe
 function seqMoveReq(pid,id,how,redraw){
   if(!seqCanEdit(pid))return toast('Read-only — only the project\'s PM, the office or the Production Manager change the sequence');
   const rows=seqRows(pid),me=rows.find(r=>r.id===id);if(!me)return;
-  const hk=SEQV.house?seqHouseOf(me):'',ids=(hk?rows.filter(r=>seqHouseOf(r)===hk):[me]).map(r=>r.id);
+  const tkd=rows.filter(r=>seqTicks(pid).has(r.id)),grp=tkd.length>1&&tkd.includes(me); /*gm27 (Garry 27 Nov): two or more ticked rows move TOGETHER, as one block in their current order, when any one of them is moved*/
+  const hk=!grp&&SEQV.house?seqHouseOf(me):'',ids=(grp?tkd:hk?rows.filter(r=>seqHouseOf(r)===hk):[me]).map(r=>r.id);
   const rest=rows.filter(r=>!ids.includes(r.id)),i0=rows.findIndex(r=>ids.includes(r.id)),iL=rows.map(r=>ids.includes(r.id)).lastIndexOf(true);
   let k;const ti0=rows.indexOf(me); // ▲ ▼ move the block one place relative to the row tapped (house-mates may be elsewhere)
   if(how.up){let j=ti0-1;while(j>=0&&ids.includes(rows[j].id))j--;if(j<0)return toast('Already at the top');k=rest.indexOf(rows[j]);}
@@ -5049,7 +5053,7 @@ function seqMoveReq(pid,id,how,redraw){
   const nw=then.split(','),jumped=rows.filter(r=>!ids.includes(r.id)&&fx(r.id)&&ids.some(m=>rows.indexOf(r)<rows.findIndex(x=>x.id===m)&&nw.indexOf(r.id)>nw.indexOf(m))).map(r=>r.id);
   const wos=a=>a.map(x=>(rows.find(r=>r.id===x)||{}).wo||'').filter(Boolean).join(', ');
   const aff=[...new Set(ids.concat(jumped))],nm=x=>{const r=rows.find(y=>y.id===x)||{};return r.wo||[r.floor,r.unit,r.name||r.descr].filter(Boolean).join(' ')||'a row';};
-  const line=ids.map(nm).join(', ')+' from #'+(i0+1)+' to #'+(k+1)+(jumped.length?' (above '+wos(jumped)+')':'');
+  const line=(ids.length>6?ids.slice(0,6).map(nm).join(', ')+' + '+(ids.length-6)+' more':ids.map(nm).join(', '))+' from #'+(i0+1)+' to #'+(k+1)+(jumped.length?' (above '+wos(jumped)+')':'');
   const go=why=>seqMoveDo(pid,ids,after,why,k+1,redraw).then(ok=>{ /*B7: fixed rows moved directly are counted*/
     if(ok&&why&&(fixed.length||jumped.length))seqReqDirect(pid,'move',{ids:aff,wos:aff.map(x=>(rows.find(r=>r.id===x)||{}).wo),change:{ids,after,to:k+1},preview:{line},why,by:lqBy('')});});
   if(!fixed.length&&!jumped.length)return go(null);
@@ -5099,7 +5103,7 @@ function seqTargets(rows,dateOf){
 function seqMv(t,reason,by){return moveDates(t.wos,{per:t.per},reason,by,{src:'pmseq',frozenDays:seqFixedDays(),requestOnly:ROLE==='pm'});}
 function seqTicks(pid){SEQV.ticks=SEQV.ticks||{};return SEQV.ticks[pid]=SEQV.ticks[pid]||new Set();}
 function seqTickBarHTML(pid,rows,tk){const n=rows.filter(r=>tk.has(r.id)).length;
-  return `<div class="seq-tbar${n?' on':''}"><span class="seq-tbl-l">Tick:</span><button class="btn btn-s" data-seqtk="house" title="Every row of the same house (floor + unit) as a ticked row">Whole house</button><button class="btn btn-s" data-seqtk="block" title="Every row on the same floor / block as a ticked row">Whole block</button><button class="btn btn-s" data-seqtk="down" title="Every row from the first ticked row down">From here down</button>${n?`<button class="btn btn-s" data-seqtk="clear">✕ Clear</button><b>${n} ticked →</b>${SEQ_TOOLS.map(k=>`<button class="btn btn-g" data-seqtool="${k}">${escA(SEQ_DT_LBL[k])}</button>`).join('')}`:'<span class="seq-grey">tick rows, then pick a tool</span>'}</div>`;}
+  return `<div class="seq-tbar${n?' on':''}"><span class="seq-tbl-l">Tick:</span><button class="btn btn-s" data-seqtk="house" title="Every row of the same house (floor + unit) as a ticked row">Whole house</button><button class="btn btn-s" data-seqtk="block" title="Every row on the same floor / block as a ticked row">Whole block</button><button class="btn btn-s" data-seqtk="down" title="Every row from the first ticked row down">From here down</button>${n?`<button class="btn btn-s" data-seqtk="clear">✕ Clear</button><b>${n} ticked →</b>${SEQ_TOOLS.map(k=>`<button class="btn btn-g" data-seqtool="${k}">${escA(SEQ_DT_LBL[k])}</button>`).join('')}${n>1?`<button class="btn btn-g" id="seq-grpto" title="Move the ${n} ticked rows together to a position — they stay in their current order. Dragging, ▲ or ▼ on any ticked row also moves them all.">🔢 Move ticked to…</button>`:''}`:'<span class="seq-grey">tick rows, then pick a tool</span>'}</div>`;}
 const SEQ_TOOLS=['set','push','spread'];
 const SEQ_DT_LBL={set:'📅 Set the required date',push:'⏩ Push / pull',spread:'↔ Spread'};
 function seqDateDlg(pid,ids,mode,redraw){
