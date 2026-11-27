@@ -1250,18 +1250,26 @@ function renumberP(base,mine,theirs,o){
 function pMergedTidy(orders,settings,N){
   const tomb=new Map(),c0=x=>((x&&x.log||[])[0]||{}).at||'';
   (settings.pMerged||[]).forEach(x=>{if(x&&x.wo&&x.into&&!tomb.has(x.wo))tomb.set(x.wo,x);});
-  orders.forEach(od=>(od.pFrom||[]).forEach(x=>{if(x&&x.wo&&!tomb.has(x.wo))tomb.set(x.wo,{wo:x.wo,into:od.wo,by:x.by,at:x.at,job:x.job});}));
+  orders.forEach(od=>(od.pFrom||[]).forEach(x=>{if(x&&x.wo&&!tomb.has(x.wo))tomb.set(x.wo,{wo:x.wo,into:od.wo,by:x.by,at:x.at,job:x.job,code:!!x.code});}));
   if(!tomb.size)return;
-  for(let i=orders.length-1;i>=0;i--){const od=orders[i],t=tomb.get(od&&od.wo);if(!t||!/^P-\d+$/.test(String(od.wo)))continue;
-    if(t.job&&c0(t.job)&&c0(od)&&c0(t.job)!==c0(od))continue; // another job with the same number — not the merged one
+  for(let i=orders.length-1;i>=0;i--){const od=orders[i],t=tomb.get(od&&od.wo);if(!t||!(/^P-\d+$/.test(String(od.wo))||t.code)||od.wo===t.into)continue; /*cf26b: a folded coded job (WO-BI- …) brought back by an out-of-date screen is taken out again at once — never two jobs for one unit*/
+    if(!t.code&&t.job&&c0(t.job)&&c0(od)&&c0(t.job)!==c0(od))continue; // another job with the same number — not the merged one
+    let late='';
+    if(t.code){const w=orders.find(x=>x.wo===t.into);if(w){ /*cf26c: what the out-of-date screen did to a folded coded job is not thrown away — van ticks, site-ready and its note go to the main job, and a copy is kept*/
+      const c=[],tk=['delLoadedAt','delDispAt','delDelivAt','delDone','ldBy','delivBy'].filter(k=>od[k]&&!w[k]);
+      if(tk.length){tk.forEach(k=>{w[k]=od[k];});['delVeh','delDay','delWk'].forEach(k=>{if(od[k]&&!w[k])w[k]=od[k];});w.delv=true;c.push(od.delDelivAt?'delivered tick':od.delDispAt?'on-the-road tick':'loaded tick');}
+      if(od.siteOk&&!w.siteOk){w.siteOk=od.siteOk;c.push('site-ready');}
+      if(od.notes&&!String(w.notes||'').includes(od.notes)){w.notes=[w.notes,od.notes].filter(Boolean).join(' · ');c.push('note');}
+      if((w.pFrom||[]).filter(x=>x&&x.wo===od.wo).length<4)w.pFrom=(w.pFrom||[]).concat([{wo:od.wo,at:new Date().toISOString(),by:'(out-of-date screen)',job:JSON.parse(JSON.stringify(od)),code:true,late:true}]);
+      late=(c.length?' — carried across: '+c.join(', '):'')+'; a copy of what that screen had is kept on this job';}}
     orders.splice(i,1);
     for(let j=N.length-1;j>=0;j--)if(N[j].path[0]==='orders'&&String(N[j].path[1]).replace(/^wo:/,'').replace(/#\d+$/,'')===od.wo)N.splice(j,1);
     N.push({path:['orders','wo:'+od.wo],gone:'merged',pm:true,into:t.into,by:t.by||''});
-    const w=orders.find(x=>x.wo===t.into);if(w)logEdit(w,'An out-of-date screen changed '+od.wo+' after it was merged into '+t.into+' — that change was NOT kept (make it on '+t.into+')','(auto-merge)');}
+    const w=orders.find(x=>x.wo===t.into);if(w)logEdit(w,'An out-of-date screen changed '+od.wo+' after it was merged into '+t.into+(late?' — check '+t.into+late:' — that change was NOT kept (make it on '+t.into+')'),'(auto-merge)');}
   // M3b: one copy of each merge
   if(Array.isArray(settings.pMerged)){const seen=new Set();settings.pMerged=settings.pMerged.filter(x=>{const k=x&&x.wo+'>'+x.into;if(seen.has(k))return false;seen.add(k);return true;});}
   orders.forEach(od=>{if(!Array.isArray(od.pFrom)||!od.pFrom.length)return;
-    const seen=new Set();od.pFrom=od.pFrom.filter(x=>{if(!x||seen.has(x.wo))return false;seen.add(x.wo);return true;});
+    const seen=new Set();od.pFrom=od.pFrom.filter(x=>{const k=x&&x.wo+(x.late?'|late':'');if(!x||seen.has(k))return false;seen.add(k);return true;}); /*cf26c: plus at most one 'late' copy (what an out-of-date screen had)*/
     const ml=new Map();(od.log||[]).forEach(x=>{const m=/^(P-\d+) \(planner P-number for this house\) merged into /.exec(String(x&&x.what||''));if(!m)return;
       const k=m[1],p=ml.get(k);if(!p||(/⚠/.test(p.what)&&!/⚠/.test(x.what))||(!!/⚠/.test(p.what)===!!/⚠/.test(x.what)&&String(x.at)<String(p.at)))ml.set(k,x);});
     if(ml.size){const keep=new Set(ml.values());od.log=od.log.filter(x=>{const m=/^(P-\d+) \(planner P-number for this house\) merged into /.exec(String(x&&x.what||''));return !m||keep.has(x);});}
@@ -11547,7 +11555,18 @@ function normaliseRow(row){
   return r;
 }
 // "+A" / "+A+C" badge for a WO with A/C lines folded into it (letters from o.adds)
-function addBadge(o){const ks=Object.keys((o&&o.adds)||{});if(!ks.length)return'';const ls=ks.map(k=>(acBase(k)||{}).letter||'?');return`<span class="fu-badge" style="background:#f6f2fd;border-color:#c9b6f0;color:#5b3fa8;margin-left:4px" title="Additions folded in: ${escA(ks.join(', '))}">+${escA(ls.join('+'))}</span>`;}
+/* cf26 (Garry 26 Nov: "you are duplicating work orders on import … the BI and other codes after the WO- need to be ignored"):
+   WO-BI-2542-17 / WO-PF-… / WO-E-… is the SAME job as WO-2542-17 (Cienapps raises a second work order for the bought-in part).
+   When the main work order is in the file (not shipped, not at drawing stage) or live on the board, the coded line is FOLDED into
+   it: it is not a job of its own, its value is NOT added again, and the main job carries a small note (o.codes). A coded line whose
+   main work order is not there stays its own job, as before, and is folded when the main one arrives. WO-D- (drawing) is not a
+   code in this sense. Nothing is deleted: a coded job already on the board is moved onto the main job with a full copy kept. */
+const CODE_WO=/^WO-(BI|PF|E)-(.+)$/;
+const CODE_SKIP=new Set(['dueMv','listNA','procAt','storeAt','cienHold','delvOverride','completeOverride','codes','colour','hl','shippedAt','shippedStep','installedAt','completeAt','completeBy']); // a coded line never marks the main job "no list needed", processed, in store, on hold or shipped
+function codeBaseKey(k){const m=CODE_WO.exec(woKey(k));return m?'WO-'+m[2]:null;}
+function codeBadge(o){const ks=Object.keys((o&&o.codes)||{});if(!ks.length)return'';
+  return`<span class="fu-badge" style="background:#eef6ff;border-color:#b7cdea;color:#14418f;margin-left:4px" title="${escA('Folded into this job (same work order, value counted once): '+ks.map(k=>(o.codes[k].wo||k)+(o.codes[k].title?' — '+o.codes[k].title:'')).join(' · '))}">＋${escA(ks.map(k=>(CODE_WO.exec(k)||[])[1]||'?').join('+'))}</span>`;}
+function addBadge(o){const cb=codeBadge(o);const ks=Object.keys((o&&o.adds)||{});if(!ks.length)return cb;const ls=ks.map(k=>(acBase(k)||{}).letter||'?');return`<span class="fu-badge" style="background:#f6f2fd;border-color:#c9b6f0;color:#5b3fa8;margin-left:4px" title="Additions folded in: ${escA(ks.join(', '))}">+${escA(ls.join('+'))}</span>`+cb;}
 // A/C suffix: one letter A–F straight after the number, with or without a dash (2557_01A, WO-2604-7-C) → base WO key, or null.
 // Other letters (R etc.) are NOT additions — those lines stay their own job and are flagged "suffix?".
 function acBase(key){const m=String(key).match(/^(.*\d)-?([A-F])$/);return m?{base:m[1],letter:m[2]}:null;}
@@ -11558,7 +11577,7 @@ function oddSuffix(key){const m=String(key).match(/^(.*\d)-?([G-Z])$/);return m?
    or that is already on the board as its own job, stays as its own job. */
 function combineRows(recs,board){
   board=board||new Map();
-  const by=new Map(),out=[];
+  const by=new Map();let out=[];
   const DUPK=['value','step','dueDate'],dv=(r,k)=>r.has[k]?[r.line,r[k]]:null;
   recs.forEach(r=>{
     const e=by.get(r.key);
@@ -11582,8 +11601,21 @@ function combineRows(recs,board){
     e.dupInfo={lines:e.dupLines,parts};
     e.flags.unshift('duplicate in file ('+e.dup+' lines: '+e.dupLines.join(', ')+') — combined into one'+(parts.length?': '+parts.join(' · '):''));});
   const keep=[],folds=[],synth=new Map();
+  const cfLive=o=>!!o&&!isShipped(o)&&!o.delDone&&!o.delDelivAt,cfRecOk=b=>!!b&&!(b.has.step&&(stepIsShipped(b.step)||/drawing/i.test(String(b.step))))&&!/^WO-D/.test(b.key);
+  const cfHad=(bo,k)=>!!bo&&(!!(bo.codes&&bo.codes[k])||(bo.pFrom||[]).some(x=>x&&woKey(x.wo)===k)); // already folded into this main job once
+  const cfGone=new Set();
+  out=out.filter(r=>{ // cf26, first pass: a coded line (WO-BI- / WO-PF- / WO-E-) whose main work order is here → folded, value NOT added
+    const cbk=codeBaseKey(r.key);if(!cbk)return true;
+    if(board.has(r.key))return true; // the coded JOB is still on the board (loaded, both have a list, lists off …): its line keeps updating it — it is folded after the import when that is possible (Manager cf26 #1)
+    let base=by.get(cbk);const bo=board.get(cbk);
+    const had=cfHad(bo,r.key); // folded into the main job before: never a new job again, even once the main job has shipped (Manager cf26 #2)
+    if(!(had||(base&&cfRecOk(base)&&(cfLive(bo)||!bo))||(!base&&cfLive(bo))))return true;
+    if(!base){base=synth.get(cbk);if(!base){base={wo:bo.wo,key:cbk,has:{},flags:[],synth:true};synth.set(cbk,base);keep.push(base);}}
+    base.codes=base.codes||{};base.codes[r.key]={wo:r.wo,title:r.title||'',step:r.step||'',value:r.has.value?r.value:0};
+    folds.push({wo:r.wo,base:base.wo,code:true,value:r.has.value?r.value:0,hours:null,title:r.title||'',step:r.step||''});cfGone.add(r.key);return false;});
   out.forEach(r=>{
     const ac=acBase(r.key);
+    if(ac&&cfGone.has(ac.base)){r.flags.push('its base '+ac.base+' was folded into the main work order — kept as its own job');keep.push(r);return;} /*Manager cf26 #5*/
     if(!ac||board.has(r.key)){
       const od=!ac&&!board.has(r.key)&&oddSuffix(r.key);
       if(od&&(by.has(od.base)||board.has(od.base)))r.flags.push('suffix? — letter '+od.letter+' is not an addition letter (A–F); kept as its own job, not folded into '+od.base);
@@ -11959,6 +11991,7 @@ function analyzeImport(input,source){
         if(r.has.sheets)o.sheetsCien=r.sheets;
         if(r.has.delivDate){o.delivDate=r.delivDate;o.origDelivDate=r.delivDate;if(o.dueDate&&o.dueDate>r.delivDate)flags.push('build date after the delivery date — check');} /*dates phase 2*/
         if(adds)o.adds=adds;
+        if(r.codes)o.codes={...r.codes}; /*cf26*/
         if(isDraw){excluded++;exCounts[why]=(exCounts[why]||0)+1;drawQ.push({o,why,unsched:!!(r.dueBad&&!isHoldC),flags:flags.slice(),seen:(DB.drawSeen||{})[r.key]||null});return;}
         newOrders.push(o);impJobs.push(o);
         if(r.dupInfo)dups.push({wo:o.wo,...r.dupInfo});
@@ -11986,6 +12019,7 @@ function analyzeImport(input,source){
       }
       if(value!==undefined&&Math.abs((+ex.value||0)-value)>0.004){set.value=Math.round(value*100)/100;what.push('value: €'+Math.round(+ex.value||0).toLocaleString()+' → €'+Math.round(value).toLocaleString());}
       if(adds&&JSON.stringify(adds)!==JSON.stringify(ex.adds||{}))fill.adds=adds;
+      if(r.codes){const c2={...(ex.codes||{}),...r.codes};if(JSON.stringify(c2)!==JSON.stringify(ex.codes||{}))fill.codes=c2;} /*cf26: the note of what was folded in*/
       // step: the planner only ever moves forward
       const ps=String(ex.step||'').trim();
       let newStep=ps;
@@ -12056,7 +12090,7 @@ function analyzeImport(input,source){
       }
       if(isDrawC&&!ex.shippedAt)flags.push('check: Cienapps shows this job at drawing stage — kept on the board');
       if(isWOD)flags.push('check: WO-D (drawing work order) — kept on the board');
-      if(r.synth)flags.push('addition only — base line not in this file');
+      if(r.synth&&r.adds)flags.push('addition only — base line not in this file');
       if(r.dupInfo)dups.push({wo:ex.wo,...r.dupInfo});
       if(flags.length)flagged.push({wo:ex.wo,title:ex.title||'',why:flags.join(' · ')});
       if(Object.keys(fill).length)fills.push({wo:ex.wo,key:r.key,set:fill});
@@ -12074,7 +12108,7 @@ function analyzeImport(input,source){
     drawQ.sort((a,b)=>(!!a.seen-!!b.seen)||String(a.o.dueDate||'9').localeCompare(String(b.o.dueDate||'9'))||String(a.o.wo).localeCompare(String(b.o.wo))); // new ones first, then earliest due
     return{source:source||'file',input,pre,oldDates,delivQ,drawQ,pMerge,dups,skipped:input.skipped||[],marks,unsched,autoTag,newOrders,updates,fills,povs,synced,shipped,inTransit,dispGaps,flagged,folds:input.folds||[],stepDiffs,exCounts,
       removals:[],backfills:[],
-      counts:{added,updated,skipped:unchanged,noWo:skip.noWo||0,totals:skip.totals||0,snag:skip.snag||0,excluded,shipped:shipped.length,folded:(input.folds||[]).length,rows:input.rows||recs.length}};
+      counts:{added,updated,skipped:unchanged,noWo:skip.noWo||0,totals:skip.totals||0,snag:skip.snag||0,excluded,shipped:shipped.length,folded:(input.folds||[]).filter(f=>!f.code).length,coded:(input.folds||[]).filter(f=>f.code).length,rows:input.rows||recs.length}};
 }
 /* (Garry 17 Nov: "review every work order at drawing stage to decide whether or not to bring into planner") NEW work orders at
    drawing stage (or WO-D) are listed in the import preview, each with a "bring in" tick (unticked = left out, as before).
@@ -12121,7 +12155,7 @@ function renderImportPreview(plan){
   el.innerHTML=`<div style="margin-top:14px">
     <div style="background:#eaf2ff;border:2px solid #1a56db;border-radius:8px;padding:12px 15px;margin-bottom:12px">
       <div style="font-size:14px;font-weight:800;color:#14335c;margin-bottom:4px">Import preview — nothing has changed yet</div>
-      <div style="font-size:13px;color:#14335c">${c.added} new · ${c.updated} updated · ${c.skipped} unchanged · ${plan.shipped.length} to 📦 Shipped${c.folded?` · ${c.folded} addition${c.folded!==1?'s':''} folded in`:''}${(plan.autoTag||[]).length?` · <b>${plan.autoTag.length} auto-tagged for delivery</b>`:''}${(plan.marks||[]).length?` · ${plan.marks.length} marked installed/complete (Cienapps 10/11)`:''}${plan.flagged.length?` · <b>${plan.flagged.length} flagged</b>`:''} · <b>nothing is removed</b></div>
+      <div style="font-size:13px;color:#14335c">${c.added} new · ${c.updated} updated · ${c.skipped} unchanged · ${plan.shipped.length} to 📦 Shipped${c.coded?` · ${c.coded} BI / PF / E line${c.coded!==1?'s':''} folded into the main WO`:''}${c.folded?` · ${c.folded} addition${c.folded!==1?'s':''} folded in`:''}${(plan.autoTag||[]).length?` · <b>${plan.autoTag.length} auto-tagged for delivery</b>`:''}${(plan.marks||[]).length?` · ${plan.marks.length} marked installed/complete (Cienapps 10/11)`:''}${plan.flagged.length?` · <b>${plan.flagged.length} flagged</b>`:''} · <b>nothing is removed</b></div>
       ${skips.length?`<div style="font-size:12px;color:#14335c;opacity:.8;margin-top:3px">${skips.join(' · ')}</div>`:''}
       ${(plan.oldDates||[]).length?`<div id="imp-olddates" style="font-size:12px;color:#14335c;margin-top:3px" title="${escA(plan.oldDates.slice(0,40).join(', '))}">📅 ${plan.oldDates.length} job${plan.oldDates.length!==1?'s':''}: Cienapps still has the old due date — the planner's date is kept (see Export Changes → Dates to change in Cienapps)</div>`:''}
       ${nProc?`<div id="imp-proc" style="font-size:13px;color:#7a4a00;font-weight:700;margin-top:4px">📋 ${nProc} work order${nProc!==1?'s':''} newly processed with no cutting list — after Apply you'll be asked to issue ${nProc!==1?'them':'it'}</div>`:''}
@@ -12166,7 +12200,8 @@ function renderImportPreview(plan){
       ${sd.length>40?`<div style="font-size:11px;color:#8a6d00">…and ${sd.length-40} more</div>`:''}`:''}
     </div>`:''}
     ${section('📦 Moving to the Shipped tab — shipped/invoiced in Cienapps (off the Capacity Board; kept until installation is complete)','#b9cdec','#eef3fb',plan.shipped,s=>line(s.wo,s.title,escA(sh(s.cs))+(s.onVan?' · <b>stays on Deliveries until the driver confirms</b>':'')),15)}
-    ${section('➕ Additions — A/C lines folded into their base work order','#c9b6f0','#f6f2fd',plan.folds,f=>line(f.wo,f.title,'→ '+escA(f.base)+' · +€'+Math.round(f.value||0).toLocaleString()+(f.hours!=null?' · +'+f.hours+'h':'')),15)}
+    ${section('➕ Additions — A/C lines folded into their base work order','#c9b6f0','#f6f2fd',(plan.folds||[]).filter(f=>!f.code),f=>line(f.wo,f.title,'→ '+escA(f.base)+' · +€'+Math.round(f.value||0).toLocaleString()+(f.hours!=null?' · +'+f.hours+'h':'')),15)}
+    ${section('🔗 Same job twice — WO-BI- / WO-PF- / WO-E- lines folded into their main work order (value counted once)','#b7cdea','#eef6ff',(plan.folds||[]).filter(f=>f.code),f=>line(f.wo,f.title,'→ '+escA(f.base)+' · not added as a job of its own'),15)}
     ${(plan.dups||[]).length?`<div id="imp-dups" style="background:#fdf3f2;border:1px solid #e57368;border-radius:8px;padding:10px 13px;margin-bottom:10px">
       <div style="font-size:13px;font-weight:700;margin-bottom:6px">⧉ Same WO on more than one line — combined into one job</div>
       ${plan.dups.slice(0,30).map(d=>`<div style="font-size:12px;padding:3px 0;border-bottom:1px solid #f5d0cc"><b style="font-family:monospace">${escA(d.wo)}</b> — lines ${escA(d.lines.join(', '))}${d.parts.map(p=>`<div style="padding-left:14px">${escA(p)}</div>`).join('')}</div>`).join('')}
@@ -12390,7 +12425,8 @@ function applyImport(plan){
     </div>`;
     if(el&&V2()){LTI.afterImp=true;ltiBind();}
     if(V2()&&plan.pmDec&&Object.keys(plan.pmDec).length)PMERGE_RUN=pMergeAll(plan.pmDec,(plan.newOrders||[]).map(o=>woKey(o.wo))); /*L4b*/
-    if(V2()&&seqVis()){const pmr=plan.pmDec&&Object.keys(plan.pmDec).length?PMERGE_RUN:null; /*B10: after the P-number merge, the WOs take over their waiting rows*/
+    if(V2())CODEFOLD_RUN=Promise.resolve(plan.pmDec&&Object.keys(plan.pmDec).length?PMERGE_RUN:null).catch(()=>{}).then(()=>codeFoldAll()).catch(e=>{console.warn('Coded work orders: '+(e&&e.message));return[];}); /*cf26: after the P-number merges*/
+    if(V2()&&seqVis()){const pmr=CODEFOLD_RUN; /*B10 (cf26: after the coded jobs are folded too): after the P-number merge, the WOs take over their waiting rows*/
       SEQ_REC_RUN=Promise.resolve(pmr).catch(()=>{}).then(()=>seqReconcile(seqProjsWithRows(),new Set(fresh.map(o=>woKey(o.wo))))).then(r=>{seqRecShow(r);return r;}).catch(e=>{console.warn('Sequence matching: '+(e&&e.message));return null;});}
     toast(`Import applied — ${fresh.length} added, ${(plan.updates||[]).length} updated${nShip?', '+nShip+' to Shipped':''}`);
 }
@@ -13463,6 +13499,17 @@ function pMergeDec(){const d={},byW={};
   if(bp){alert(bp+' is ticked to merge into '+d[bp].join(' and ')+'.\n\nA P-number merges into ONE work order — untick the others. Nothing was imported yet.');return null;}
   if(bw){alert(byW[bw].join(' and ')+' are both ticked to merge into '+bw+'.\n\nOnly one P-number can merge into a work order — untick the other (if both are for the same house, sort the lists out first). Nothing was imported yet.');return null;}
   return d;}
+/* cf26: coded jobs ALREADY on the board whose main work order is live on the board → folded into it (after every import, lists on).
+   Refused (and said) when both have a live cutting list; a coded job that is loaded / on the road / delivered is left alone. */
+function codeFoldPairs(){const bm=boardMap();return DB.orders.filter(o=>{const k=codeBaseKey(o.wo),b=k&&bm.get(k);return !!b&&b!==o&&pLive(b)&&!isOnHold(b)&&pLive(o)&&!o.delLoadedAt&&!o.delDispAt;}).map(o=>({p:o.wo,w:bm.get(codeBaseKey(o.wo)).wo}));}
+async function codeFoldAll(){if(!V2())return[];const prs=codeFoldPairs();if(!prs.length)return[];const by=lqBy('')||'(import)',out=[];
+  for(const x of prs){try{out.push(await pMerge(x.p,x.w,by,false,true));}catch(e){out.push({p:x.p,w:x.w,ok:false,why:e.message});}}
+  if(out.some(x=>x.ok))sched();
+  const el=document.getElementById('iprev'),h=`<div id="imp-cfres" style="margin-top:10px;background:#eef6ff;border:1px solid #b7cdea;border-radius:8px;padding:8px 12px;font-size:13px">${out.map(x=>x.ok?`<div>🔗 <b>${escA(x.p)}</b> folded into <b>${escA(x.w)}</b> — one job, value counted once${x.notes&&x.notes.length?` · ${escA(x.notes.join(' · '))}`:''}</div>`:`<div style="color:#b42318">✕ <b>${escA(x.p)}</b> NOT folded into ${escA(x.w)}: ${escA(x.why||'?')}</div>`).join('')}</div>`;
+  if(el&&tab==='i')el.insertAdjacentHTML('beforeend',h);else try{render();}catch(e){}
+  const n=out.filter(x=>x.ok).length,bad=out.length-n;toast(n+' duplicate work order'+(n!==1?'s':'')+' (BI / PF / E) folded into the main WO'+(bad?' · '+bad+' NOT folded — see the import screen':''),!!bad);
+  return out;}
+let CODEFOLD_RUN=null;
 async function pMergeAll(dec,fresh){const by=lqBy(''),out=[],nw=new Set(fresh||[]);
   for(const [P,ws] of Object.entries(dec||{})){const W=(ws||[])[0];if(!W)continue;
     try{out.push(await pMerge(P,W,by,nw.has(woKey(W))));}catch(e){out.push({p:P,w:W,ok:false,why:e.message});}}
@@ -13510,17 +13557,18 @@ async function preCarry(drop,keep,woRowId,W,by){
   await preWrite(keep.id,patch,by); // history: carried by the person merging; processed_by stays Johnny
   return 'Pre-production: '+what.join(' and ')+' carried onto the kept sequence row';
 }
-async function pMerge(P,W,by,wNew){
+async function pMerge(P,W,by,wNew,code){ /*cf26: code = true folds a coded work order (WO-BI- …) already on the board into its main work order — same moves (lists, booking, sequence row, history, full copy kept), but the main job keeps its own step, week, hours and dates*/
   const find=w=>DB.orders.find(o=>woKey(o.wo)===woKey(w));
   let p=find(P),w=find(W);
   if(!p)return{p:P,w:W,ok:false,why:(DB.pMerged||[]).some(x=>x.wo===P&&woKey(x.into)===woKey(W))?'already merged (another PC)':P+' is no longer in the planner'};
   if(!w)return{p:P,w:W,ok:false,why:W+' is not in the planner'};
-  if(!pIsP(p.wo)||pIsP(w.wo))return{p:P,w:W,ok:false,why:'only a P-number merges into a Cienapps WO'};
+  if(!code&&(!pIsP(p.wo)||pIsP(w.wo)))return{p:P,w:W,ok:false,why:'only a P-number merges into a Cienapps WO'};
+  if(code&&codeBaseKey(p.wo)!==woKey(w.wo))return{p:P,w:W,ok:false,why:P+' is not a coded line of '+W};
   if(!pLive(w))return{p:P,w:W,ok:false,why:W+' is already shipped or delivered'};
-  try{const row=await fetchMain(),t=((row&&row.settings&&row.settings.pMerged)||[]).find(x=>x&&x.wo===P); /*attack9 M3b: another screen may have merged it a moment ago*/
+  if(!code)try{const row=await fetchMain(),t=((row&&row.settings&&row.settings.pMerged)||[]).find(x=>x&&x.wo===P); /*attack9 M3b: another screen may have merged it a moment ago*/
     if(t||(row&&Array.isArray(row.orders)&&!row.orders.some(o=>o&&o.wo===P)&&row.orders.some(o=>(o&&o.pFrom||[]).some(x=>x&&x.wo===P))))return{p:P,w:W,ok:false,already:true,why:'already merged'+(t&&t.by?' by '+t.by:'')+' on another screen — nothing done again'};}catch(e){}
   p=find(P);w=find(W);if(!p||!w)return{p:P,w:W,ok:false,why:'changed on another screen meanwhile — import again'};
-  const m=keyMatch(jobKey(p),jobKey(w));if(m.r==='different'||!pKindsMeet(p.title,w.title))return{p:P,w:W,ok:false,why:'not the same house ('+m.why+')'};
+  const m=code?{r:'same'}:keyMatch(jobKey(p),jobKey(w));if(!code&&(m.r==='different'||!pKindsMeet(p.title,w.title)))return{p:P,w:W,ok:false,why:'not the same house ('+m.why+')'};
   // the cutting lists — asked of the database, never just this screen's copy: one live list per WO
   let pl,wl;try{pl=await lsLiveFor(p.wo);wl=await lsLiveFor(w.wo);}catch(e){return{p:P,w:W,ok:false,why:'the cutting lists could not be checked ('+e.message+') — nothing changed; it is offered again on the next import'};}
   if(pl.length&&wl.length)return{p:P,w:W,ok:false,why:'both have a live cutting list ("'+pl[0].name+'" and "'+wl[0].name+'") — archive one first, then import again'};
@@ -13528,6 +13576,7 @@ async function pMerge(P,W,by,wNew){
   const at=nowISO(),snap=JSON.parse(JSON.stringify(p)),notes=[];
   pl.forEach(l=>{listTag(l,w.wo,true,by);listTag(l,p.wo,false,by);});
   if(pl.length)notes.push('list '+pl.map(l=>'"'+l.name+'"').join(', ')+' moved');
+  if(!code){ // (a coded line never changes the main job's step, week, hours or dates)
   // step: the further on of the two
   if(isShipped(p)){w.step=p.step;['shippedAt','shippedStep','installedAt','completeAt','completeBy','stepHand'].forEach(k=>{if(p[k]!=null&&w[k]==null)w[k]=p[k];});notes.push(P+' was already shipped — '+W+' is shipped too');} /*attack9 M9*/
   else{const sc=p.step&&w.step?stepCmp(p.step,w.step):null;if(sc!==null&&sc>0&&!stepIsShipped(p.step)){w.step=p.step;storeStamp(w,at);notes.push('step '+stepShort(p.step)+' (the planner was further on)');}}
@@ -13541,21 +13590,34 @@ async function pMerge(P,W,by,wNew){
     else notes.push(W+'\'s own moved due date kept ('+P+' had '+fmt(p.dueDate)+')');}
   if(p.delivDate&&p.delivDate!==(w.delivDate||'')&&!w.delivKeep){w.delivKeep=w.delivDate||'-';w.delivDate=p.delivDate;}
   w.dueHist=(w.dueHist||[]).concat(p.dueHist||[]).sort((a,b)=>String(a.at||'').localeCompare(String(b.at||''))).slice(-DUE_HIST_MAX);if(!w.dueHist.length)delete w.dueHist;
+  }
+  else{ /*cf26b: the coded line's own week / dates / hours / step / value are NOT taken — but never dropped without a word*/
+    const d=[],dt=x=>/^\d{4}-\d\d-\d\d/.test(String(x))?fmt(x):String(x);
+    if(p.plannedWeek&&p.plannedWeek!==(w.plannedWeek||''))d.push('week '+dt(p.plannedWeek));
+    if(p.dueDate&&p.dueDate!==(w.dueDate||''))d.push('due '+dt(p.dueDate));
+    if(p.delivDate&&p.delivDate!==(w.delivDate||''))d.push('delivery '+dt(p.delivDate));
+    if(hSrc(p)==='hand'&&p.hours!=null&&+p.hours!==+w.hours)d.push((+p.hours)+' h typed by hand');
+    {const sc=p.step&&w.step?stepCmp(p.step,w.step):null;if(sc!==null&&sc>0)d.push('step '+stepShort(p.step));}
+    if((+p.value||0)!==(+w.value||0))d.push('value €'+(+p.value||0).toLocaleString('en-IE'));
+    if(d.length)notes.push('⚠ '+P+' had '+d.join(', ')+' — NOT taken, '+W+' keeps its own (change '+W+' if that was wanted)');
+  }
   // delivery booking: the WO's own wins when both are booked
   if(pmBooked(p)&&pmBooked(w))notes.push('⚠ both were booked for delivery — '+W+'\'s booking kept, '+P+'\'s was '+[p.delDay,vehLbl(p.delVeh)].filter(Boolean).join(' ')+' (check Deliveries)');
   else if(pmBooked(p))PM_DEL.forEach(k=>{if(p[k]!=null&&p[k]!=='')w[k]=p[k];});
-  else if(p.delv&&!w.delv)w.delv=true;
+  else if(!code&&p.delv&&!w.delv)w.delv=true; /*cf26b: a coded line further on never tags the main job for delivery*/
   // any other planner field the WO doesn't have yet
-  Object.keys(p).forEach(k=>{if(PM_SKIP.has(k)||PM_DEL.includes(k))return;if((w[k]==null||w[k]===''||w[k]===false)&&p[k]!=null&&p[k]!==''&&p[k]!==false)w[k]=p[k];});
+  Object.keys(p).forEach(k=>{if(PM_SKIP.has(k)||PM_DEL.includes(k)||(code&&CODE_SKIP.has(k)))return;if((w[k]==null||w[k]===''||w[k]===false)&&p[k]!=null&&p[k]!==''&&p[k]!==false)w[k]=p[k];});
   if(p.notes&&!String(w.notes||'').includes(p.notes))w.notes=[w.notes,p.notes].filter(Boolean).join(' · ');
   // history: both logs, in time order, then the merge line
+  {const seen=new Set((w.log||[]).map(x=>String(x.at)+'|'+String(x.what)));p.log=(p.log||[]).filter(x=>!seen.has(String(x.at)+'|['+P+'] '+(x.what||'')));} // (cf26) a job folded a second time (brought back by an out-of-date screen) does not double its history
   w.log=(w.log||[]).concat((p.log||[]).map(x=>({...x,what:'['+P+'] '+(x.what||'')}))).sort((a,b)=>String(a.at||'').localeCompare(String(b.at||''))).slice(-60);
   // the sequence row (PM sequence installed): the same row is handed to the WO, so its place and Johnny's tick stay
   if(seqVis())notes.push(...await pMergeSeq(P,w.wo,by));
   // retire the P-job: a full copy stays on the WO (permanent) and in settings pMerged
-  w.pFrom=(w.pFrom||[]).concat([{wo:P,at,by,job:snap}]);
-  DB.pMerged=(DB.pMerged||[]).concat([{at,by,wo:P,into:w.wo,why:'Cienapps WO for the same house (L4b)',job:snap}]).slice(-300);
-  logEdit(w,P+' (planner P-number for this house) merged into '+w.wo+(notes.length?': '+notes.join(' · '):'')+' — its full copy is kept on this job',by);
+  w.pFrom=(w.pFrom||[]).concat((code&&(w.pFrom||[]).filter(x=>x&&x.wo===P).length>=3)?[]:[{wo:P,at,by,job:snap,...(code?{code:true}:{})}]); // (cf26) the FIRST full copy is never replaced; at most three copies of one coded job
+  if(code){w.codes={...(w.codes||{}),[woKey(P)]:{wo:P,title:snap.title||'',step:snap.step||'',value:+snap.value||0}};}
+  else DB.pMerged=(DB.pMerged||[]).concat([{at,by,wo:P,into:w.wo,why:'Cienapps WO for the same house (L4b)',job:snap}]).slice(-300);
+  logEdit(w,P+(code?' (the same job under a second Cienapps number) folded into ':' (planner P-number for this house) merged into ')+w.wo+(notes.length?': '+notes.join(' · '):'')+' — its full copy is kept on this job',by);
   const i=DB.orders.indexOf(p);if(i>=0)DB.orders.splice(i,1);
   delete orig[P];delete origStep[P];grpSel.delete(P);cleanGroups();
   if(seqVis())try{await lsPoll();}catch(e){}
