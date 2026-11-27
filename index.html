@@ -1254,14 +1254,22 @@ function pMergedTidy(orders,settings,N){
   if(!tomb.size)return;
   for(let i=orders.length-1;i>=0;i--){const od=orders[i],t=tomb.get(od&&od.wo);if(!t||!(/^P-\d+$/.test(String(od.wo))||t.code)||od.wo===t.into)continue; /*cf26b: a folded coded job (WO-BI- …) brought back by an out-of-date screen is taken out again at once — never two jobs for one unit*/
     if(!t.code&&t.job&&c0(t.job)&&c0(od)&&c0(t.job)!==c0(od))continue; // another job with the same number — not the merged one
+    let late='';
+    if(t.code){const w=orders.find(x=>x.wo===t.into);if(w){ /*cf26c: what the out-of-date screen did to a folded coded job is not thrown away — van ticks, site-ready and its note go to the main job, and a copy is kept*/
+      const c=[],tk=['delLoadedAt','delDispAt','delDelivAt','delDone','ldBy','delivBy'].filter(k=>od[k]&&!w[k]);
+      if(tk.length){tk.forEach(k=>{w[k]=od[k];});['delVeh','delDay','delWk'].forEach(k=>{if(od[k]&&!w[k])w[k]=od[k];});w.delv=true;c.push(od.delDelivAt?'delivered tick':od.delDispAt?'on-the-road tick':'loaded tick');}
+      if(od.siteOk&&!w.siteOk){w.siteOk=od.siteOk;c.push('site-ready');}
+      if(od.notes&&!String(w.notes||'').includes(od.notes)){w.notes=[w.notes,od.notes].filter(Boolean).join(' · ');c.push('note');}
+      if((w.pFrom||[]).filter(x=>x&&x.wo===od.wo).length<4)w.pFrom=(w.pFrom||[]).concat([{wo:od.wo,at:new Date().toISOString(),by:'(out-of-date screen)',job:JSON.parse(JSON.stringify(od)),code:true,late:true}]);
+      late=(c.length?' — carried across: '+c.join(', '):'')+'; a copy of what that screen had is kept on this job';}}
     orders.splice(i,1);
     for(let j=N.length-1;j>=0;j--)if(N[j].path[0]==='orders'&&String(N[j].path[1]).replace(/^wo:/,'').replace(/#\d+$/,'')===od.wo)N.splice(j,1);
     N.push({path:['orders','wo:'+od.wo],gone:'merged',pm:true,into:t.into,by:t.by||''});
-    const w=orders.find(x=>x.wo===t.into);if(w)logEdit(w,'An out-of-date screen changed '+od.wo+' after it was merged into '+t.into+' — that change was NOT kept (make it on '+t.into+')','(auto-merge)');}
+    const w=orders.find(x=>x.wo===t.into);if(w)logEdit(w,'An out-of-date screen changed '+od.wo+' after it was merged into '+t.into+(late?' — check '+t.into+late:' — that change was NOT kept (make it on '+t.into+')'),'(auto-merge)');}
   // M3b: one copy of each merge
   if(Array.isArray(settings.pMerged)){const seen=new Set();settings.pMerged=settings.pMerged.filter(x=>{const k=x&&x.wo+'>'+x.into;if(seen.has(k))return false;seen.add(k);return true;});}
   orders.forEach(od=>{if(!Array.isArray(od.pFrom)||!od.pFrom.length)return;
-    const seen=new Set();od.pFrom=od.pFrom.filter(x=>{if(!x||seen.has(x.wo))return false;seen.add(x.wo);return true;});
+    const seen=new Set();od.pFrom=od.pFrom.filter(x=>{const k=x&&x.wo+(x.late?'|late':'');if(!x||seen.has(k))return false;seen.add(k);return true;}); /*cf26c: plus at most one 'late' copy (what an out-of-date screen had)*/
     const ml=new Map();(od.log||[]).forEach(x=>{const m=/^(P-\d+) \(planner P-number for this house\) merged into /.exec(String(x&&x.what||''));if(!m)return;
       const k=m[1],p=ml.get(k);if(!p||(/⚠/.test(p.what)&&!/⚠/.test(x.what))||(!!/⚠/.test(p.what)===!!/⚠/.test(x.what)&&String(x.at)<String(p.at)))ml.set(k,x);});
     if(ml.size){const keep=new Set(ml.values());od.log=od.log.filter(x=>{const m=/^(P-\d+) \(planner P-number for this house\) merged into /.exec(String(x&&x.what||''));return !m||keep.has(x);});}

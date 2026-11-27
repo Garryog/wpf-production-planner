@@ -46,8 +46,27 @@ const get = (p, wo) => p.evaluate(wo => { const o = DB.orders.find(x => x.wo ===
     const sv = S2.row.orders, m = sv.find(x => x.wo === 'WO-6000-1') || {};
     rec('H2 the out-of-date screen\'s save does NOT bring WO-BI-6000-1 back — still one job for the unit', sv.map(x => x.wo).join() === 'WO-6000-1', sv.map(x => x.wo + ' ' + [x.delVeh, x.delDay].join('/')).join(' | '));
     rec('H2 one van booking, the main job\'s (Volvo Thu) — not a second one on Fri', m.delVeh === 'VOLVO' && m.delDay === 'Thu', [m.delVeh, m.delDay].join('/'));
-    rec('H2 the main job\'s history says the out-of-date change was NOT kept', (m.log || []).some(x => /out-of-date screen changed WO-BI-6000-1/.test(x.what) && /NOT kept/.test(x.what)), JSON.stringify((m.log || []).map(x => x.what)).slice(-300));
+    rec('H2 the main job\'s history says an out-of-date screen changed it, and a copy of what that screen had is kept', (m.log || []).some(x => /out-of-date screen changed WO-BI-6000-1/.test(x.what) && /copy of what that screen had is kept/.test(x.what)) && (m.pFrom || []).some(x => x.late && x.job && x.job.delDay === 'Fri'), JSON.stringify((m.log || []).map(x => x.what)).slice(-300));
     rec('H2 PC B\'s own screen drops the coded job too', !/WO-BI-6000-1/.test(await jobs(b)), await jobs(b));
+
+    // ---------- N1: the out-of-date screen is the DRIVER's — he marks the folded coded job loaded, on the road, delivered, and types a note
+    const r4 = X.v2Row(); r4.orders = [ord('WO-6100-1', { unit: '61' }), ord('WO-BI-6100-1', { unit: '61', delv: true, delVeh: 'VOLVO', delDay: 'Thu', delWk: '2026-12-07' })];
+    const S4 = X.makeServer(r4);
+    const a4 = (await X.dev(browser, S4, 'office')).page; await asks(a4);
+    const b4 = (await X.dev(browser, S4, 'office')).page; await asks(b4);
+    for (const q of [a4, b4]) await q.evaluate(async () => { lsReset(); await lsLoad(); sessionStorage.setItem('wpfWho', 'Ann'); });
+    await H.importAoa(a4, [HDR, row('WO-6100-1', 'NO 61', '5. WORK ORDER PROCESSED'), row('WO-BI-6100-1', 'NO 61 BI', '5. WORK ORDER PROCESSED')]);
+    await apply(a4); await sleep(3000);
+    await b4.evaluate(async () => { const o = DB.orders.find(x => x.wo === 'WO-BI-6100-1'); const n = new Date().toISOString(); o.delLoadedAt = n; o.delDispAt = n; o.delDelivAt = n; o.delDone = true; o.delivBy = 'Pat'; o.notes = 'gate code 4411'; logEdit(o, 'delivered', 'Pat'); await saveDB(); });
+    await sleep(3000);
+    const s4 = S4.row.orders, m4 = s4.find(x => x.wo === 'WO-6100-1') || {};
+    rec('N1 still one job for the unit after the driver\'s out-of-date save', s4.map(x => x.wo).join() === 'WO-6100-1', s4.map(x => x.wo).join());
+    rec('N1 the driver\'s loaded / on the road / delivered ticks are on the main job (not lost)', !!m4.delLoadedAt && !!m4.delDispAt && !!m4.delDelivAt && m4.delDone === true && m4.delivBy === 'Pat', JSON.stringify([m4.delLoadedAt, m4.delDelivAt, m4.delDone, m4.delivBy]));
+    rec('N1 his note is on the main job', /gate code 4411/.test(m4.notes || ''), m4.notes);
+    rec('N1 the history says what was carried across, and the copy is kept', (m4.log || []).some(x => /carried across: delivered tick, note/.test(x.what)) && (m4.pFrom || []).some(x => x.late && x.job.notes === 'gate code 4411'), JSON.stringify((m4.log || []).map(x => x.what)).slice(-260));
+    await a4.evaluate(async () => { try { await pollNow(); } catch (e) {} }).catch(() => {}); await sleep(2500);
+    const n4 = S4.row.orders.find(x => x.wo === 'WO-6100-1') || {};
+    rec('N1 no pile-up: one late copy only after the other PC catches up', (n4.pFrom || []).filter(x => x.late).length === 1 && S4.row.orders.length === 1, (n4.pFrom || []).length);
 
     // ---------- matching: WO-E folds; near-miss numbers and look-alike prefixes do not; lower case + trailing space folds
     const r3 = X.v2Row(); r3.orders = [ord('WO-7000-10', { unit: '10' }), ord('WO-7000-2', { unit: '2' })];
