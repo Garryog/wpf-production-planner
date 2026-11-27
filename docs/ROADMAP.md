@@ -225,7 +225,7 @@ Garry's words: "this is messy they are all over lapping, you can drop the value 
 - **PM marks Installed on his phone** from his sequence table; updates everywhere, goes on Export Changes.
 - **Driver confirms delivery → step JOB SHIPPED** if not already, logged under the driver, on Export Changes, shows on Shipped at once.
 - **Shipped report**: pick from/to dates → every job shipped in the period with project, PM, value, invoiced status, total, Excel download.
-- **PM sequence**: shipped rows stay but grey out and are hidden by default ("show finished"); later the base for installation management (install date, fitters, site snags, sign-off) — a separate phase, not now.
+- ~~**PM sequence**: shipped rows stay but grey out and are hidden by default ("show finished"); later the base for installation management~~ — REPLACED 27 Nov (see "Project sequence — shipped drop off" below): shipped rows drop off completely, no "show finished"; installation management (install date, fitters, site snags, sign-off) will start from the **Shipped tab**, not the sequence — a separate phase, not now.
 - **Johnny's CNC Schedule (later, CNC job)**: read from SharePoint on a schedule; strike-through = office processing done (CNC files), NOT cut. Mark jobs taken into the planner with an extra "In planner" tick column — tested on a COPY of his .xlsm first, never write colours into his file.
 ### Release in small pieces + Job A answers (12 Nov 2026, Garry)
 - **Releases go out as small pieces.** Order: (1) the Cutting Lists project filter (PR #2, branch feature/lists-project-filter); (2) **Job A — Dates & deliveries on its own**, branch `release/deliveries-weeks`, for Garry to merge on **Mon 16 Nov**; (3) Job B (project details, PM sequence, pre-production pool) later, in its own pieces. This replaces the Manager's 11 Nov condition "release Job A with Job B" (decision C → Job A on its own first).
@@ -498,5 +498,25 @@ house until the next import) — to be closed in this release.
   exported drops off Export Changes when it is folded (the WO-BI- order in Cienapps keeps its old step); the import preview does
   not show a coded line's value when it differs from the main job's (the fold result does).
 - **Project sequence (Garry 26 Nov, NOT BUILT YET):** numbering always 1 upwards; a job's number ("#7") shown beside the work order
-  everywhere the WO shows; a shipped job drops off the table and the rest renumber; shipped rows behind a "Show shipped (n)" link.
+  everywhere the WO shows; a shipped job drops off the table and the rest renumber. (The "Show shipped (n)" link is dropped — 27 Nov below.)
 - **Build order (Garry 26 Nov):** 1) coded work orders, 2) sequence numbers, 3) Saw and Stores day buttons + missed lists.
+
+### 27 Nov 2026 (Garry) — Project sequence: shipped jobs drop off, real steps, one source (BUILT, branch feature/seq-steps-shipped)
+Plan: docs/PLAN-seq-steps-shipped.md (approved 27 Nov, all three key questions = the recommended default). Replaces the 12 Nov
+"show finished" line and the 26 Nov "Show shipped (n)" link.
+- A work order that has **shipped or been delivered** leaves the sequence completely and the rest renumber 1, 2, 3… — no "show
+  finished" link. "Finished" is the app's one rule (`woFinished`: on the Shipped tab, Cienapps step 9 / 10 / 11, or delivered;
+  a job brought back from Shipped is live again until delivered again). Screen only: nothing in the database sequence is changed.
+- Finished rows count nowhere on the sequence: numbering, tick bar / Whole house / Whole block / From here down / Spread, moves
+  and Move to #, "put them under row #" on a Cienapps file, PM nudges, the "dates differ" box, "taken out", the pre-production pool.
+- A project whose rows have all shipped says "All n work orders in this sequence have shipped" — Start is not offered again; new
+  WOs from the next import still land 🆕. A Cienapps-file line for a shipped house is still skipped (= "shipped — WO-x").
+- On-hold jobs stay (⏸ ON HOLD beside the step badge). Brought back from Shipped → back in its old place with "↩ back from Shipped".
+- Progress column = the job's planner step badge (same as board / Deliveries) + Deliveries status (🚚 to plan · 🚚 van + day ·
+  LOADED / DISPATCHED + time · in store) + the board's list chips (📋 no list, red when late · 📷 photo list · 📋 list ready ·
+  ⊘ no list needed; check chips only with "lists must be checked" on). The old "processed / cut" words are gone (Q3 — the
+  processed tick stays in Johnny's pool).
+- Floor / Unit / Name show the job's own values (a ✎ correction shows at once); a different upload-line name is small and grey
+  underneath. Build also shows the board week. Moved = the board's "🔁 moved n×" button (tap for history).
+- Installation management, when it comes, starts from the **Shipped tab** (not the sequence).
+- No Supabase change.
