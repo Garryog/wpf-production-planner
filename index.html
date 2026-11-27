@@ -4681,7 +4681,7 @@ function preKey(x){const p=x.r&&LST.sp.get(x.r.id),k=p&&p.pre_key!=null&&p.pre_k
 function preRows(){
   const wks=preWksDev(),t=todayLocal(),lim=addDayISO(t,7*wks),amb=addDayISO(t,7*preWks()),M=seqMaps(),out=[],had=new Set(),cnt={undated:0,nodue:0};
   const pnm=pid=>{const p=pid&&LST.p.get(pid);return p?String(p.name||''):'';};
-  const gone=o=>isShipped(o)||isOnHold(o)||!!o.delDone||dStage(o)==='deliv'||woCut(o);
+  const gone=o=>woFinished(o)||isOnHold(o)||woCut(o); // finished = the one rule (as the sequence)
   const add=(r,o,pid)=>{const due=preDue(r,o);if(!due){if(o)cnt.nodue++;else cnt.undated++;return;}if(due>lim)return;
     const cut=cncCutBy(due),pr=preProcessed(r,o);
     out.push({k:o?'W:'+seqWoK(o.wo):'R:'+r.id,r:r||null,o:o||null,pid:pid||'',pn:pnm(pid),pos:r?(+r.pos||0):1e9,due,cut,est:!o,pr,red:!pr.on&&t>cut,amber:!pr.on&&t<=cut&&due<=amb});};
@@ -4948,7 +4948,7 @@ function seqProgress(o,r){if(!o)return[];const n=stepNo(o.step),dl=dStage(o)==='
   return[['list',lst],['processed',(n!=null&&n>=5&&n<=11)||!!(pre&&pre.processed)],['cut',woCut(o)],['assembled',n!=null&&n>=7&&n<=11],
     ['in store',stepForDelivery(o.step)&&!o.delDay&&!isShipped(o)&&!dl],['on a van',!!o.delDay&&!dl],['delivered',dl]];}
 function seqProgHTML(o,r){const p=seqProgress(o,r);if(!p.length)return'';return p.map(([l,ok])=>`<span class="seq-pg${ok?' ok':''}">${escA(l)} ${ok?'✓':'—'}</span>`).join('');}
-function seqJobsToStart(pid){return DB.orders.filter(o=>!o.manual&&o.wo&&!isShipped(o)&&!o.delDone&&dStage(o)!=='deliv'&&specPidOfWO(o)===pid&&!seqWoRow(o.wo))
+function seqJobsToStart(pid){return DB.orders.filter(o=>!o.manual&&o.wo&&!seqDone(o)&&specPidOfWO(o)===pid&&!seqWoRow(o.wo))
   .sort((a,b)=>String(a.dueDate||'9999').localeCompare(String(b.dueDate||'9999'))||woCmp(a,b));}
 // A project's rows straight from the database (after this screen changed them, or a refusal said "stale")
 async function seqFresh(pid){const d=await lsGet('project_seq?select=*&project_id=eq.'+encodeURIComponent(pid));lsPut('project_seq',d,true);seqMapsDrop();}
@@ -5756,7 +5756,7 @@ function seqWoGone(){const m=new Map();LST.sq.forEach(r=>{if(r.state!=='removed'
 var SEQ_NR=null; // var: seqMapsDrop (earlier in the file) may clear it
 function seqJobsNoRow(pid){
   if(!SEQ_NR){SEQ_NR=new Map();const gone=seqWoGone();
-    DB.orders.forEach(o=>{if(!o||!o.wo||o.manual||pIsP(o.wo)||isShipped(o)||o.delDone||dStage(o)==='deliv'||seqWoRow(o.wo))return;
+    DB.orders.forEach(o=>{if(!o||!o.wo||o.manual||pIsP(o.wo)||seqDone(o)||seqWoRow(o.wo))return;
       const p=keyProj(o);if(!p||(gone.get(p)&&gone.get(p).has(seqWoK(o.wo))))return;if(!SEQ_NR.has(p))SEQ_NR.set(p,[]);SEQ_NR.get(p).push(o);});
     setTimeout(()=>{SEQ_NR=null;},0);}
   return(SEQ_NR.get(pid)||[]).slice();
@@ -5867,7 +5867,7 @@ function seqConfirmHTML(pid){
 }
 // attack12 M5: rows taken out by hand whose WO is still a live job with no live row — shown grey, one tap puts the row back (seq_restore)
 function seqTakenOut(pid){const seen=new Set();return[...LST.sq.values()].filter(r=>r.project_id===pid&&r.state==='removed'&&r.wo&&!seqRmDouble(r)).sort((a,b)=>String(b.updated_at||'').localeCompare(String(a.updated_at||'')))
-  .filter(r=>{const k=seqWoK(r.wo);if(seen.has(k))return false;seen.add(k);const o=DB.orders.find(x=>seqWoK(x.wo)===k);return !!o&&pLive(o)&&!isShipped(o)&&!seqWoRow(r.wo);});}
+  .filter(r=>{const k=seqWoK(r.wo);if(seen.has(k))return false;seen.add(k);const o=DB.orders.find(x=>seqWoK(x.wo)===k);return !!o&&!seqDone(o)&&!seqWoRow(r.wo);});}
 function seqCfBind(root,pid,redraw){
   root.querySelectorAll('[data-seqput]').forEach(b=>b.onclick=()=>seqCfDo(pid,redraw,async()=>{const r=LST.sq.get(b.dataset.seqput);if(!r)return;
     const a=await lsRpc('seq_restore',{p_id:r.id,p_expect:+r.version||1,p_by:lqBy(''),p_why:'put back'});toast(a&&a.ok?(r.wo+' put back at the bottom'):'Not put back — '+(SEQ_CF_ERR[a&&a.err]||(a&&a.err)||'no answer'),!(a&&a.ok));}));
@@ -5884,7 +5884,7 @@ function seqCfBind(root,pid,redraw){
 function seqAgreeDay(X){for(let i=0;i<14&&!isDelivDay(X);i++)X=addDayISO(X,1);return X;}
 const seqDayLbl=d=>new Date(d+'T12:00:00').toLocaleDateString('en-IE',{weekday:'short',day:'numeric',month:'short'}).replace(',','');
 const SEQ_AGREE_WHY='Sequence date — set before the WO existed';
-function seqAgreeRows(pid){return seqRows(pid).filter(r=>{if(!r.wo||!r.req_date)return false;const o=seqJob(r);return !!o&&pLive(o)&&String(r.req_date).slice(0,10)!==(o.delivDate||'');});}
+function seqAgreeRows(pid){return seqRows(pid).filter(r=>{if(!r.wo||!r.req_date)return false;const o=seqJob(r);return !!o&&!seqDone(o)&&String(r.req_date).slice(0,10)!==(o.delivDate||'');});}
 function seqAgreeHTML(pid){
   if(!seqCanEdit(pid))return'';const a=seqAgreeRows(pid);if(!a.length)return'';
   return `<div class="seq-cf seq-agree" id="seq-agree"><div class="seq-cfh">📅 Dates to agree (${a.length}) — the row had its own date before the WO existed</div>${a.slice(0,SEQ_CF_MAX).map(r=>{const o=seqJob(r),rd=String(r.req_date).slice(0,10),cd=o.delivDate||'';
@@ -5968,8 +5968,8 @@ document.addEventListener('click',e=>{const b=e.target&&e.target.closest&&e.targ
 function seqNudges(){
   const today=todayLocal(),old=addDayISO(today,-7*seqWaitWks()),n={nodate:0,past:0,wait:0,waitOld:0,place:0,conf:0},by={};
   const mine=pmMineAny(); /*attack8 5b: the nudges are about HIS projects, even with "All projects" ticked*/
-  lsProjects().filter(p=>mine?pmMine(p.id):pmShows(p.id)).forEach(p=>seqRows(p.id).forEach(r=>{const o=seqJob(r),d=seqRowDate(r,o),done=o&&(dStage(o)==='deliv'||o.delDone||isShipped(o));let hit=false;
-    if(!d&&!done){n.nodate++;hit=true;}else if(d&&d<today&&!done){n.past++;hit=true;}
+  lsProjects().filter(p=>mine?pmMine(p.id):pmShows(p.id)).forEach(p=>seqRows(p.id).forEach(r=>{const o=seqJob(r),d=seqRowDate(r,o);let hit=false; // seqRows: finished jobs are already off
+    if(!d){n.nodate++;hit=true;}else if(d<today){n.past++;hit=true;}
     if(!r.wo){n.wait++;hit=true;if(seqWaitOld(r))n.waitOld++; /*attack12b L1: the same Irish-local-date rule as the ⏳ flag*/}
     if(r.is_new){n.place++;hit=true;}
     if(hit)by[p.id]=(by[p.id]||0)+1;}));
