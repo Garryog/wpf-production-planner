@@ -4976,8 +4976,8 @@ function seqPageHTML(pid){
     const req=d?`<span class="${o&&!o.delivDate?'seq-grey':''}" title="${o?(o.delivDate?'Delivery date':'No delivery date yet — this is the build date'):'Required date (set before the WO exists)'}">${escA(dShort(d))}</span>${fx?' 🔒':''}`:'<span class="seq-grey">—</span>';
     return `<tr class="seq-r${fx?' seq-fixed':''}${r.is_new?' seq-new':''}" data-seqr="${escA(r.id)}"${can?' draggable="true"':''}>
       ${can?`<td class="seq-hd" title="${fx?'Fixed — inside the next '+seqFixedDays()+' days':'Drag to move'}">⠿</td><td class="seq-tk"><input type="checkbox" data-seqtick="${escA(r.id)}"${tk.has(r.id)?' checked':''} title="Tick for the date tools"></td>`:''}<td class="seq-n" data-l="#">${i+1}</td><td data-l="WO">${wo}${r.is_new?' <span class="seq-newb">🆕 new — place in sequence</span>':''}${(q=>q?`<div class="seq-rq" data-seqrq="${escA(q.id)}">✋ request sent — ${escA(seqReqSum(q))} · “${escA(seqReqWhy(q))}” · ${escA(q.asked_by||'')}${ROLE==='pm'&&can?` <button class="btn btn-s" data-seqrqw="${escA(q.id)}">Withdraw</button>`:''}</div>`:'')(seqReqOfRow(r.id))}</td>
-      <td data-l="Floor">${escA(r.floor||(o&&o.floor)||'')}</td><td data-l="Unit">${escA(r.unit||(o&&o.unit)||'')}</td><td data-l="Product">${escA(r.product||'')}</td>
-      <td data-l="Name">${escA(r.name||r.descr||(o&&o.title)||'')}</td><td data-l="Required">${req}${can&&(o||!r.wo)?` <button class="btn btn-s seq-dt" data-seqdate="${escA(r.id)}" title="${fx&&ROLE==='pm'?'Inside the fixed window — needs the Production Manager':'Change the required (delivery) date'}">📅</button>`:''}</td><td data-l="Build">${o&&o.dueDate?escA(dShort(o.dueDate)):'<span class="seq-grey">—</span>'}</td>
+      <td data-l="Floor">${escA(seqFlr(r,o))}</td><td data-l="Unit">${escA(seqUnt(r,o))}</td><td data-l="Product">${escA(r.product||'')}</td>
+      <td data-l="Name">${o?`${escA(o.title||'')}${r.name&&keyTxt(r.name)!==keyTxt(o.title)?`<div class="seq-grey" style="font-size:11px" title="The name on the Cienapps upload file line">${escA(r.name)}</div>`:''}`:escA(r.name||r.descr||'')}</td><td data-l="Required">${req}${can&&(o||!r.wo)?` <button class="btn btn-s seq-dt" data-seqdate="${escA(r.id)}" title="${fx&&ROLE==='pm'?'Inside the fixed window — needs the Production Manager':'Change the required (delivery) date'}">📅</button>`:''}</td><td data-l="Build">${o&&o.dueDate?escA(dShort(o.dueDate)):'<span class="seq-grey">—</span>'}</td>
       <td data-l="Progress" class="seq-prog">${o?seqProgHTML(o,lnMap.get(o.wo)):''}</td><td data-l="Moved">${mv?`<span class="dm-chip" title="Due date changed ${mv} time${mv!==1?'s':''}">🔁 ${mv}×</span>`:''}</td>
       ${can?`<td class="seq-mv"><button class="btn btn-s" data-sequp="${escA(r.id)}" title="Up one"${i?'':' disabled'}>▲</button><button class="btn btn-s" data-seqdn="${escA(r.id)}" title="Down one"${i<rows.length-1?'':' disabled'}>▼</button><button class="btn btn-s" data-seqto="${escA(r.id)}" title="Move to a position number"># Move to…</button></td>`:''}</tr>`;};
   return `<div class="exp-panel seq-pg-wrap" id="seq-pg" data-pid="${escA(pid)}">
@@ -5010,7 +5010,7 @@ function seqBind(root,pid,redraw){
     if(k==='clear'){tk.clear();return redraw();}
     const on=rows.filter(r=>tk.has(r.id));if(!on.length)return toast('Tick a row first');
     if(k==='house'){const hs=new Set(on.map(seqHouseOf).filter(Boolean));rows.forEach(r=>{if(hs.has(seqHouseOf(r)))tk.add(r.id);});}
-    else if(k==='block'){const fl=new Set(on.map(r=>seqKey(r.floor||((seqJob(r)||{}).floor))).filter(Boolean));rows.forEach(r=>{if(fl.has(seqKey(r.floor||((seqJob(r)||{}).floor))))tk.add(r.id);});}
+    else if(k==='block'){const fl=new Set(on.map(r=>seqKey(seqFlr(r))).filter(Boolean));rows.forEach(r=>{if(fl.has(seqKey(seqFlr(r))))tk.add(r.id);});}
     else if(k==='down'){const i=rows.findIndex(r=>tk.has(r.id));rows.slice(i).forEach(r=>tk.add(r.id));}
     redraw();});
   root.querySelectorAll('[data-seqtool]').forEach(b=>b.onclick=()=>{const ids=seqRows(pid).filter(r=>tk.has(r.id)).map(r=>r.id);if(!ids.length)return toast('Tick the rows first');seqDateDlg(pid,ids,b.dataset.seqtool,redraw);});
@@ -5034,7 +5034,11 @@ function seqBind(root,pid,redraw){
 }
 /* ---------- Reorder (B6b): every move goes through seq_move — the database checks the versions this screen read, renumbers
    1..n and logs who moved what from where to where. "stale" = another PC changed the list since: reload and say so. ---------- */
-function seqHouseOf(r){const o=seqJob(r),f=seqKey(r.floor||(o&&o.floor)),u=seqKey(r.unit||(o&&o.unit));return f||u?f+'|'+u:'';}
+/* Garry 27 Nov: a matched row shows (and groups by) its JOB's floor / unit / title, as the board does — a ✎ correction follows at once;
+   a waiting row or a WO not in the planner keeps the row's own. seqLk / seqHk and the database keys are not changed. */
+function seqFlr(r,o){o=o===undefined?seqJob(r):o;return o?fuF(o):String(r.floor||'');}
+function seqUnt(r,o){o=o===undefined?seqJob(r):o;return o?fuU(o):String(r.unit||'');}
+function seqHouseOf(r){const o=seqJob(r),f=seqKey(seqFlr(r,o)),u=seqKey(seqUnt(r,o));return f||u?f+'|'+u:'';}
 function seqMoveReq(pid,id,how,redraw){
   if(!seqCanEdit(pid))return toast('Read-only — only the project\'s PM, the office or the Production Manager change the sequence');
   const rows=seqRows(pid),me=rows.find(r=>r.id===id);if(!me)return;
