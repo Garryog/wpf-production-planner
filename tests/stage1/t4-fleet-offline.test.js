@@ -30,7 +30,7 @@ const base = () => ({ id: 'main', version: 1, orders: [H.order({ wo: 'WO-1' }), 
     const S = makeServer(base());
     const A = await device(browser, S, { name: 'A' }, { role: 'saw' });
     A.dev.offline = true;
-    await A.page.evaluate(async () => { const si = Storage.prototype.setItem; Storage.prototype.setItem = function (k, v) { if (String(k).indexOf('wpfPending') === 0) throw new DOMException('QuotaExceededError', 'QuotaExceededError'); return si.call(this, k, v); }; for (let i = 0; i < 20; i++) DB.listRow.L['t' + i] = { m: 'saw' }; sched(); await saveDB(); });
+    await A.page.evaluate(async () => { try{Object.defineProperty(window,'indexedDB',{get(){return undefined;},configurable:true});}catch(e){} try{PIDB.db=Promise.resolve(null);}catch(e){} /*s26: no large store either — nowhere on this device to keep a copy*/ const si = Storage.prototype.setItem; Storage.prototype.setItem = function (k, v) { if (String(k).indexOf('wpfPending') === 0) throw new DOMException('QuotaExceededError', 'QuotaExceededError'); return si.call(this, k, v); }; for (let i = 0; i < 20; i++) DB.listRow.L['t' + i] = { m: 'saw' }; sched(); await saveDB(); });
     const st = await A.page.evaluate(() => ({ bar: document.getElementById('savebar').hidden ? '' : document.getElementById('savebar').textContent, pend: (Object.keys(localStorage).filter(k => k.indexOf('wpfPending') === 0).map(k => localStorage.getItem(k)).join('') || null) }));
     rec('storage full: user is NOT told "kept on this device" when it is not', !(st.bar && /kept on this device/.test(st.bar) && !st.pend), 'bar="' + st.bar.slice(0, 70) + '" pend=' + (st.pend ? 'yes' : 'null'));
     await A.close();
