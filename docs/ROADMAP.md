@@ -486,6 +486,17 @@ house until the next import) — to be closed in this release.
   new job, even after the main job ships; its site-ready mark, cut tick, notes, list and delivery booking move to the main job,
   its "no list needed" mark does not; the first full copy is always kept on the main job. Known gap: an out-of-date screen can bring
   a folded coded job back until the next import folds it again (close old screens on go-live).
+- **Coded work orders — independent review, 27 Nov (Garry: "import can wait"):** two High findings fixed. (1) An out-of-date screen
+  can no longer bring a folded coded job back: it is taken out again at once; the driver's loaded / on-the-road / delivered ticks,
+  site-ready and note from that screen go to the main job, one copy of what the screen had is kept, the history says so. (This
+  closes the known gap above.) (2) The fold names what the coded job had that was NOT taken (week, due, delivery date, hand-typed
+  hours, step, value) on the import screen and in the job history. Also: a coded line further on no longer tags the main job for
+  delivery. Tests `cf26b-fold-review` 21/21, `cf26-code-fold` 24/24. **Full suite (414 files, fake database): 10,673 pass / 223
+  fail; every failing file re-run on live `main` — no check fails here that passes on live** (one two-PC timing check differed in
+  the big run and fails on live too when run alone). Re-review: GO WITH CONDITIONS. Still open, for Garry: with the new lists
+  switched OFF, pairs already on the board are not folded (live has lists on); a week / step change on a WO-BI- job not yet
+  exported drops off Export Changes when it is folded (the WO-BI- order in Cienapps keeps its old step); the import preview does
+  not show a coded line's value when it differs from the main job's (the fold result does).
 - **Project sequence (Garry 26 Nov, NOT BUILT YET):** numbering always 1 upwards; a job's number ("#7") shown beside the work order
   everywhere the WO shows; a shipped job drops off the table and the rest renumber; shipped rows behind a "Show shipped (n)" link.
 - **Build order (Garry 26 Nov):** 1) coded work orders, 2) sequence numbers, 3) Saw and Stores day buttons + missed lists.
