@@ -1,3 +1,4 @@
+// (Re-pointed 20 Nov 2026 to Garry's d20 rule: a shipped job keeps its van/day/week on the job but is OFF 🚚 Deliveries — bookOk checks that.)
 // Merge attack B (Tester, 13 Nov 2026): Cienapps import behind / level / ahead of a job set to JOB SHIPPED / INSTALLED by hand
 // (S1, main) that has a van booking (Deliveries weeks release). Also bring-back then a real "shipped" import, a job with no
 // Cienapps step on record, and a preview worked out BEFORE the hand-ship and applied after (the import's "Apply" re-check).
@@ -26,7 +27,7 @@ const REF = process.env.MERGE_REF || '';
     for (const wo of [A1, A2, A3, A4, A5, A7, A8]) await pick(p, wo, '9. JOB SHIPPED');
     await pick(p, A6, '10. INSTALLED TO BE INVOICE');
     const before = {}; for (const wo of ids) before[wo] = await job(p, wo);
-    const bookOk = (a, b) => a.veh === b.veh && a.day === b.day && a.wk === b.wk && a.onDel === 1;
+    const bookOk = (a, b) => a.veh === b.veh && a.day === b.day && a.wk === b.wk && a.delv && a.onDel === (a.sh ? 0 : 1); // d20: shipped = booking kept, off Deliveries
     const imp = (wo, step) => [wo, 'House ' + wo, 'CAIRN', XD('2026-11-13'), step, 1000];
     const pl = await importRows(p, [imp(A1, '8. PALLETED'), imp(A2, '7. ASSEMBLY COMPLETE'), imp(A3, '9. JOB SHIPPED'), imp(A4, '10. INSTALLED TO BE INVOICE'),
       imp(A5, '11. COMPLETED AND INVOICED'), imp(A6, '9. JOB SHIPPED')]);
@@ -37,7 +38,7 @@ const REF = process.env.MERGE_REF || '';
     rec('import level (9): stepHand cleared (Cienapps\' now), still shipped, booking untouched, off Export Changes', J[A3].step === '9. JOB SHIPPED' && J[A3].sh && !J[A3].hand && bookOk(J[A3], before[A3]) && !chg.includes(A3), JSON.stringify({ j: J[A3], chg }));
     rec('import ahead (10): step 10, installed, stepHand cleared, booking untouched', J[A4].step === '10. INSTALLED TO BE INVOICE' && J[A4].inst && !J[A4].hand && bookOk(J[A4], before[A4]), JSON.stringify(J[A4]));
     const a5 = await p.evaluate(wo => { const o = DB.orders.find(x => x.wo === wo); return { done: !!o.completeAt, by: o.completeBy, onDel: delAll().includes(o) }; }, A5);
-    rec('import ahead (11): step 11, complete (Cienapps), booking untouched — still on its van until the driver confirms', J[A5].step === '11. COMPLETED AND INVOICED' && a5.done && bookOk(J[A5], before[A5]) && a5.onDel, JSON.stringify({ j: J[A5], a5 }));
+    rec('import ahead (11): step 11, complete (Cienapps), booking kept on the job — off Deliveries (d20)', J[A5].step === '11. COMPLETED AND INVOICED' && a5.done && bookOk(J[A5], before[A5]) && !a5.onDel, JSON.stringify({ j: J[A5], a5 }));
     rec('hand-set 10, import behind (9): stays 10 installed, booking untouched', J[A6].step === '10. INSTALLED TO BE INVOICE' && J[A6].inst && bookOk(J[A6], before[A6]), JSON.stringify(J[A6]));
     rec('preview: A1/A2/A6 listed "planner is ahead"', (pl.stepDiffs || []).filter(x => /planner is ahead/.test(x.why)).map(x => x.wo).sort().join() === [A1, A2, A6].join(), JSON.stringify(pl.stepDiffs));
     rec('preview: hand-shipped jobs not in the "on a van / not dispatched" warnings (already shipped)', !(pl.inTransit || []).some(x => ids.includes(x.wo)) && !(pl.dispGaps || []).some(x => ids.includes(x.wo)), JSON.stringify({ it: pl.inTransit, dg: pl.dispGaps }));
